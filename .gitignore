@@ -1,0 +1,6 @@
+# 챔피언 3D 모델(*.glb)은 용량이 커서(챔피언당 5~20MB) 저장소에 커밋하지
+# 않는다 - README.md의 "GLB 모델 파일" 절 참고. index.html의 "GLB 교체"
+# 화면에서 직접 불러와서 쓴다.
+*.glb
+*.gltf
+node_modules/

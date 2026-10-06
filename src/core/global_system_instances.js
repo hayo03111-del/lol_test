@@ -11,6 +11,12 @@ const targetRing = new TargetRing(scene);
 const rangeIndicators = new RangeIndicatorSystem(scene);
 const rangeIndicatorCheckboxEl = document.getElementById('rangeIndicatorCheckbox');
 if (rangeIndicatorCheckboxEl) rangeIndicatorCheckboxEl.addEventListener('change', () => rangeIndicators.setVisible(rangeIndicatorCheckboxEl.checked));
+// 시야 시스템(전장의 안개) - 범용 인스턴스 하나를 여기서 만들어 animate()
+// 루프(champion_glb_loader.js)에서 매 프레임 update()를 호출한다. 다른
+// 전역 시스템(vfx/projectiles/rangeIndicators)과 동일한 패턴.
+const visionSystem = new VisionSystem(scene);
+const visionSystemCheckboxEl = document.getElementById('visionSystemCheckbox');
+if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', () => visionSystem.setEnabled(visionSystemCheckboxEl.checked));
 var controller = null;
 let championRoot = null;
 let currentChampion = null; // { fileName, resolver, actionData, boundsRadius }

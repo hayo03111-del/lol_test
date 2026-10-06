@@ -68,6 +68,17 @@ const SKILL_TIMING_DATABASE = {
     E: { eventTime: 0.242, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     R: { eventTime: 0.242, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
   },
+  // 애쉬 W(일제 사격)/E(매 날리기)/R(마법의 수정화살): 정확한 공식 Cast
+  // Time을 확인하지 못해(README 참고) champion_data.js의 castTimeSec
+  // 근사값을 그대로 사용한다. R 등록은 부수 효과로 hasRChannel도 false로
+  // 고정한다 - 이 GLB에 "Channel"/"Channel_Wndup" 클립이 있어도 실제
+  // 애쉬 R은 윈드업->채널 3단계가 아니라 짧은 단일 캐스트형이므로 3단계
+  // 채널 로직이 걸리면 안 된다(바루스 R과 동일한 이유).
+  ashe: {
+    W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+    E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+    R: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+  },
 };
 
 // buildActionData()가 만든 애니메이션-길이 기반 기본값 위에, 공식 Cast
@@ -113,6 +124,7 @@ const MODEL_SCALE_MULTIPLIERS = {
   yone: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
   ezreal: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
   varus: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
+  ashe: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
 };
 
 // championId(식별 실패 시 null 포함)로 고정 Multiplier를 조회한다.
@@ -144,6 +156,7 @@ const CHAMPION_ALIASES = {
   'chogath':'chogath', '초가스':'chogath', 'chogat':'chogath',
   'ezreal':'ezreal', '이즈리얼':'ezreal',
   'varus':'varus', '바루스':'varus',
+  'ashe':'ashe', '애쉬':'ashe',
 };
 
 function normalizeChampionToken(s) {

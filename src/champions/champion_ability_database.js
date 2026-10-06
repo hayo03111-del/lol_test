@@ -397,5 +397,29 @@ const championAbilityDatabase = {
     moveAnimationNames: ['Run'],
     attackAnimationNames: ['Attack1', 'Attack2'],
   },
+  // 실제 애쉬.glb(사용자 업로드본, 87노드/24클립) 기준으로 확인한 정확
+  // 클립명(Attack1/Attack2/Crit/Death/Idle1~5/Laugh/Run/Run2/Run3/Spell1/
+  // Spell1_In/Spell2/Spell3/Spell4/Taunt/Channel/Channel_Wndup/Dance/Joke/
+  // ashe_taunt.anm). Q(궁사의 집중)는 실제 게임에서도 별도 시전 모션이
+  // 없는 순수 유틸(집중 소모 + 버프)이지만, 이 GLB에는 "Spell1"/"Spell1_In"
+  // 클립이 존재해서 궁사의 집중을 활성화하는 순간과 그 상태에서 나가는
+  // 강화 다발 공격(_asheFireFlurry)의 연출용으로 등록해둔다(실제 캐스트
+  // 락/애니메이션 강제 재생 로직에는 쓰이지 않는다 - ashe.js의
+  // _asheCastQ는 애니메이션을 재생하지 않는 순수 상태 전환이다). W(일제
+  // 사격)/E(매 날리기)/R(마법의 수정화살)은 각각 Spell2/Spell3/Spell4
+  // 단일 클립. 이 GLB에도 "Channel"/"Channel_Wndup" 클립이 있지만,
+  // 바루스 R과 동일한 이유(실제 공식 R 시전 시간은 짧은 단일 캐스트형이지
+  // 윈드업->채널 3단계 궁이 아님)로 R에 연결하지 않는다 -
+  // skill_timing_database.js의 SKILL_TIMING_DATABASE.ashe.R 등록으로
+  // hasRChannel 자동 추정을 꺼서 막는다.
+  ashe: {
+    Q: { animationNames: ['Spell1', 'Spell1_In'], animationPatterns: [/^spell1/i, /ranger.?s?[_ ]?focus/i] },
+    W: { animationNames: ['Spell2'], animationPatterns: [/^spell2$/i, /volley/i] },
+    E: { animationNames: ['Spell3'], animationPatterns: [/^spell3$/i, /hawk[_ ]?shot/i] },
+    R: { animationNames: ['Spell4'], animationPatterns: [/^spell4$/i, /enchanted[_ ]?crystal[_ ]?arrow/i] },
+    idleAnimationNames: ['Idle1'],
+    moveAnimationNames: ['Run'],
+    attackAnimationNames: ['Attack1', 'Attack2'],
+  },
 };
 

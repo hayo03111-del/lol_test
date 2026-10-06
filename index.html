@@ -465,6 +465,7 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
   <div class="panelHeader"><b>설정</b><span class="panelCollapseBtn">─</span></div>
   <div class="panelBody">
   <label><input type="checkbox" id="rangeIndicatorCheckbox"> 사거리 표시 (V)</label>
+  <label style="margin-top:4px;"><input type="checkbox" id="visionSystemCheckbox" checked> 시야 시스템(전장의 안개)</label>
   <label style="margin-top:4px;"><input type="checkbox" id="dummyPlaceCheckbox"> 더미 설치 모드 (P)</label>
   <button id="clearDummiesBtn" style="margin-top:4px;width:100%;">설치한 허수아비 전부 제거</button>
   <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">
@@ -2497,6 +2498,106 @@ const CHAMPION_DATA = {
       damageType: 'MAGICAL',
     },
   },
+  // 애쉬(Ashe): 사용자가 제공한 실제 애쉬.glb(87노드/24클립, 사용자 업로드본)로
+  // 모션을 구현했다. 이 세션도 조직 네트워크 정책상 wiki.leagueoflegends.com/
+  // leagueoflegends.fandom.com/mobafire.com/공식 KR 챔피언 페이지 전부
+  // EGRESS_BLOCKED라 실시간 툴팁 원문 전체 대조는 하지 못했다 - 대신
+  // WebSearch 스니펫으로 얻을 수 있었던 조각 정보를 교차 확인해 최대한
+  // 반영했고, 그마저도 확인이 안 된 수치는 이 프로젝트의 "수치 임의
+  // 발명 금지" 원칙에 따라 명시적으로 근사값임을 밝혀둔다(정확한 최신
+  // 패치 수치는 실제 위키 접근이 가능해지면 다시 검증이 필요하다 - README
+  // 참고).
+  // - 기본 스탯: 오랫동안 거의 변하지 않은 것으로 널리 알려진 애쉬의 표준
+  //   스탯(사거리 600 - 원거리 챔피언 중 최장급, 공격속도 성장치가 유독
+  //   낮은 것이 특징)을 사용했다. HP5/마나5는 다른 챔피언과 동일한 관례로
+  //   "5초당" 수치를 그대로 저장한다.
+  // - 패시브(서리 화살): WebSearch 스니펫(Fandom 미러)에서 "5-35%(레벨
+  //   비례) 둔화 + 궁사의 집중 활성 중 +20%, 치명타는 추가 피해 대신
+  //   40-60%(레벨 비례)의 강화 둔화(1초에 걸쳐 일반 세기로 감쇠)"를
+  //   확인했다. 감쇠(decay) 부분은 이 프로젝트의 SLOW 상태이상 시스템이
+  //   지속시간 동안 감쇠하는 기능이 아직 없어 고정 세기로 근사한다.
+  // - Q(궁사의 집중): WebSearch에서 확인한 현재(리워크 이후) 버전 수치 -
+  //   평타 4중첩(공격마다 갱신), 최대 중첩에서 사용하면 6초간 공격속도
+  //   20/30/40/50/60%를 얻고, 그 동안의 "첫" 평타가 6발의 화살로 갈라져
+  //   나가며 총 132/138/144/150/156%의 물리 피해를 맞은 대상들이 나눠
+  //   받는다(대상이 하나뿐이면 그 하나가 전부 받음).
+  // - W(일제 사격)/E(매 날리기): 쿨다운/피해량(W)은 WebSearch 스니펫으로
+  //   확인했으나 사거리/폭(W)과 사거리/재사용형태(E)는 스니펫마다 다른
+  //   패치의 수치가 섞여 나와 신뢰도 높은 확정을 하지 못했다 - 오랫동안
+  //   널리 알려진 근사값(사거리 등)을 사용하고 아래 각 필드 주석에 근사
+  //   여부를 명시했다. E는 순수 정찰(시야) 스킬인데, 이 프로젝트에 새로
+  //   추가한 시야 시스템(src/core/vision_system.js)을 통해 실제로 해당
+  //   지점에 실제로 시야를 밝힌다(비행 경로 자체의 실시간 시야까지는
+  //   구현하지 않음 - 도착 지점 기준 원형 시야로 근사).
+  // - R(마법의 수정화살): 전 맵 사거리(Global) 스킬샷이라는 점, 기절
+  //   지속시간이 비행 거리에 비례한다는 점, 주 대상 외 주변 적도 같은
+  //   피해를 받지만 기절은 걸리지 않는다는 점을 WebSearch로 확인했다.
+  //   "Global" 사거리는 이 프로젝트에서 이미 이즈리얼 R(정조준 사격,
+  //   ezreal.js의 _ezrealCastR/range||20000)이 쓰는 관례(20000)를 그대로
+  //   재사용한다 - 새로운 "글로벌 사거리" 개념을 따로 만들지 않는다.
+  ashe: {
+    displayName: '애쉬',
+    stats: {
+      hp: 610, hpGrowth: 99, hpRegen: 3.75, hpRegenGrowth: 0.65,
+      ad: 59, adGrowth: 3.3, attackSpeed: 0.658, attackSpeedGrowthPercent: 1.0,
+      armor: 26, armorGrowth: 4.45, mr: 30, mrGrowth: 1.3,
+      range: 600, moveSpeed: 325, mana: 280, manaGrowth: 35, manaRegen: 6.75, manaRegenGrowth: 0.65,
+    },
+    passive: {
+      name: '서리 화살',
+      desc: '애쉬의 기본 공격은 대상을 둔화시킨다. 치명타는 추가 피해 대신 훨씬 강한 둔화를 적용한다(1초에 걸쳐 원래 세기로 감쇠).',
+      slowByLevel: { breakpoints: [1, 6, 11, 16], values: [5, 15, 25, 35] },
+      qActiveBonusSlowPercent: 20, // 궁사의 집중(Q) 활성 중 추가 둔화
+      critSlowByLevel: { breakpoints: [1, 6, 11, 16], values: [40, 45, 50, 60] },
+      slowDurationSec: 1.0,
+      // 매 기본 공격마다 짧은(1초) 시야를 대상 방향으로 부여 - 공식 설명
+      // "기본 공격이 짧은 시야를 부여한다"를 새 시야 시스템(vision_system.js)에
+      // 연결한 것. 공식 수치(반경) 미확인이라 근사값.
+      attackVisionRadius: 500, attackVisionDurationSec: 1.0,
+    },
+    Q: {
+      name: '궁사의 집중',
+      desc: '기본 공격마다 집중 중첩을 얻는다(최대 4중첩, 공격할 때마다 지속시간 갱신). 최대 중첩에서 사용하면 중첩을 모두 소모해 6초간 공격 속도를 얻고, 그 동안의 첫 기본 공격이 강력한 다발 공격(화살 6발)으로 바뀌어 총 피해를 맞은 대상들에게 나누어 입힌다.',
+      maxStacks: 4, stackWindowSec: 4.0, buffDurationSec: 6.0,
+      attackSpeedPercentByLevel: [20, 30, 40, 50, 60],
+      flurryArrowCount: 6,
+      flurryTotalAdPercentByLevel: [132, 138, 144, 150, 156],
+      flurrySpreadRange: 400, // 다발 공격이 여러 대상을 나눠 맞히는 탐색 반경(공식 수치 미확인 - 근사)
+      flurryMissileSpeed: 3200,
+      cooldown: 0, mana: 0, // 재사용 대기시간/마나 없음 - 4중첩 확보가 실제 사용 제약
+      damageType: 'PHYSICAL',
+    },
+    W: {
+      name: '일제 사격',
+      desc: '전방에 부채꼴로 여러 발의 화살을 발사한다. 화살들은 서로 다른 대상을 노리지만, 한 대상은 한 번만 피해를 입는다.',
+      cooldown: [18, 17, 16, 15, 14], mana: [50, 60, 70, 80, 90], // 마나 수치는 공식 확인 못함 - 유사 포크류 스킬 관례로 근사
+      range: 1200, coneAngleDeg: 46, // 사거리/각도는 공식 확인 못함 - 널리 알려진 근사값
+      damageByLevel: [25, 45, 65, 85, 105], bonusAdRatio: 1.2,
+      castTimeSec: 0.25,
+      damageType: 'PHYSICAL',
+    },
+    E: {
+      name: '매 날리기',
+      desc: '매의 영혼을 지정한 위치로 보내 경로와 도착 지점의 시야를 밝힌다. 피해를 주지 않는 순수 정찰 스킬이다.',
+      cooldown: [20, 18, 16, 14, 12], mana: 40, // 공식 쿨다운은 2중첩 재충전형이나, 이 엔진에 공용 "충전" 자원 시스템이 없어 단일 쿨다운으로 근사
+      range: 4000, missileSpeed: 1700,
+      visionRadius: 900, visionDurationSec: 5.0,
+      castTimeSec: 0.25,
+    },
+    R: {
+      name: '마법의 수정화살',
+      desc: '전 맵 사거리로 거대한 얼음 화살을 발사한다. 처음 맞힌 적 챔피언에게 마법 피해를 입히고 기절시키며(비행 거리가 길수록 기절 시간 증가), 주변의 다른 적에게도 같은 피해를 입히지만 기절은 걸지 않는다.',
+      cooldown: [120, 100, 80], mana: [150, 175, 200],
+      range: 20000, // "글로벌" 사거리 - ezreal.js의 R(정조준 사격)과 동일한 관례(20000) 재사용
+      missileSpeed: 1650, width: 130,
+      damageByLevel: [200, 400, 600], apRatio: 1.2,
+      splashDamagePercent: 100, splashRadius: 400,
+      minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 20000,
+      castTimeSec: 0.5,
+      visionRadius: 900, visionDurationSec: 3.0, // 비행 경로/명중 지점에도 짧은 시야(공식 설명: "1초간 경로의 시야를 밝힌다" - 근사)
+      damageType: 'MAGICAL',
+    },
+  },
  };
 
 // 스킬레벨(Q/W/E/R 1~5, R 1~3) 배열에서 값을 꺼낸다. 스칼라면 그대로 반환.
@@ -3093,6 +3194,30 @@ const championAbilityDatabase = {
     moveAnimationNames: ['Run'],
     attackAnimationNames: ['Attack1', 'Attack2'],
   },
+  // 실제 애쉬.glb(사용자 업로드본, 87노드/24클립) 기준으로 확인한 정확
+  // 클립명(Attack1/Attack2/Crit/Death/Idle1~5/Laugh/Run/Run2/Run3/Spell1/
+  // Spell1_In/Spell2/Spell3/Spell4/Taunt/Channel/Channel_Wndup/Dance/Joke/
+  // ashe_taunt.anm). Q(궁사의 집중)는 실제 게임에서도 별도 시전 모션이
+  // 없는 순수 유틸(집중 소모 + 버프)이지만, 이 GLB에는 "Spell1"/"Spell1_In"
+  // 클립이 존재해서 궁사의 집중을 활성화하는 순간과 그 상태에서 나가는
+  // 강화 다발 공격(_asheFireFlurry)의 연출용으로 등록해둔다(실제 캐스트
+  // 락/애니메이션 강제 재생 로직에는 쓰이지 않는다 - ashe.js의
+  // _asheCastQ는 애니메이션을 재생하지 않는 순수 상태 전환이다). W(일제
+  // 사격)/E(매 날리기)/R(마법의 수정화살)은 각각 Spell2/Spell3/Spell4
+  // 단일 클립. 이 GLB에도 "Channel"/"Channel_Wndup" 클립이 있지만,
+  // 바루스 R과 동일한 이유(실제 공식 R 시전 시간은 짧은 단일 캐스트형이지
+  // 윈드업->채널 3단계 궁이 아님)로 R에 연결하지 않는다 -
+  // skill_timing_database.js의 SKILL_TIMING_DATABASE.ashe.R 등록으로
+  // hasRChannel 자동 추정을 꺼서 막는다.
+  ashe: {
+    Q: { animationNames: ['Spell1', 'Spell1_In'], animationPatterns: [/^spell1/i, /ranger.?s?[_ ]?focus/i] },
+    W: { animationNames: ['Spell2'], animationPatterns: [/^spell2$/i, /volley/i] },
+    E: { animationNames: ['Spell3'], animationPatterns: [/^spell3$/i, /hawk[_ ]?shot/i] },
+    R: { animationNames: ['Spell4'], animationPatterns: [/^spell4$/i, /enchanted[_ ]?crystal[_ ]?arrow/i] },
+    idleAnimationNames: ['Idle1'],
+    moveAnimationNames: ['Run'],
+    attackAnimationNames: ['Attack1', 'Attack2'],
+  },
 };
 
 
@@ -3177,6 +3302,17 @@ const SKILL_TIMING_DATABASE = {
     E: { eventTime: 0.242, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     R: { eventTime: 0.242, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
   },
+  // 애쉬 W(일제 사격)/E(매 날리기)/R(마법의 수정화살): 정확한 공식 Cast
+  // Time을 확인하지 못해(README 참고) champion_data.js의 castTimeSec
+  // 근사값을 그대로 사용한다. R 등록은 부수 효과로 hasRChannel도 false로
+  // 고정한다 - 이 GLB에 "Channel"/"Channel_Wndup" 클립이 있어도 실제
+  // 애쉬 R은 윈드업->채널 3단계가 아니라 짧은 단일 캐스트형이므로 3단계
+  // 채널 로직이 걸리면 안 된다(바루스 R과 동일한 이유).
+  ashe: {
+    W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+    E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+    R: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+  },
 };
 
 // buildActionData()가 만든 애니메이션-길이 기반 기본값 위에, 공식 Cast
@@ -3222,6 +3358,7 @@ const MODEL_SCALE_MULTIPLIERS = {
   yone: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
   ezreal: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
   varus: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
+  ashe: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
 };
 
 // championId(식별 실패 시 null 포함)로 고정 Multiplier를 조회한다.
@@ -3253,6 +3390,7 @@ const CHAMPION_ALIASES = {
   'chogath':'chogath', '초가스':'chogath', 'chogat':'chogath',
   'ezreal':'ezreal', '이즈리얼':'ezreal',
   'varus':'varus', '바루스':'varus',
+  'ashe':'ashe', '애쉬':'ashe',
 };
 
 function normalizeChampionToken(s) {
@@ -3554,6 +3692,14 @@ function buildActionData(resolver, abilityResolver) {
     const existing = vAttackNames.filter((n) => resolver.clipByName(n));
     if (existing.length) attackVariants = existing;
   }
+  // 애쉬 평타도 실제로는 Attack1/Attack2 2종류뿐이다(실제 애쉬.glb 24클립
+  // 확인) - 등록하지 않으면 요네/이즈리얼/아리/바루스와 동일한 유형의
+  // "존재하지 않는 3번째 평타" 버그가 생긴다.
+  if (abilityResolver.championId === 'ashe') {
+    const asheAttackNames = championAbilityDatabase.ashe.attackAnimationNames || [];
+    const existing = asheAttackNames.filter((n) => resolver.clipByName(n));
+    if (existing.length) attackVariants = existing;
+  }
   // 버그 수정(실제 GLB로 직접 확인함 - 1차 수정에서 실수했던 부분을
   // duration까지 확인하고 정정함): 범용 "attack" 역할 매칭은 이름에
   // "attack1"/"attack2"가 들어간 클립을 전부 같은 점수(100점)로 채점하고
@@ -3771,6 +3917,17 @@ function buildActionData(resolver, abilityResolver) {
     const vdb = championAbilityDatabase.varus;
     if (resolver.clipByName(vdb.idleAnimationNames?.[0])) data.idle = { clips: [vdb.idleAnimationNames[0]] };
     if (resolver.clipByName(vdb.moveAnimationNames?.[0])) data.move = { clips: [vdb.moveAnimationNames[0]] };
+  }
+
+  // 애쉬 정지 모션 - 범용 "idle" 역할 자동 채점은 이름에 "idle"이 들어간
+  // 클립(Idle1~Idle5)을 전부 동점으로 묶는다. 실제 유휴 루프(Idle1)로
+  // 고정한다(Idle2~5는 감정표현 변형으로 추정 - 아리/바루스와 동일한
+  // 유형의 잠재 버그를 미리 예방). 이동 클립도 "Run"/"Run2"/"Run3" 3종류가
+  // 있어(용도 구분 자료 없음) 기본 이동 루프로 "Run"을 고정한다.
+  if (abilityResolver.championId === 'ashe') {
+    const adb = championAbilityDatabase.ashe;
+    if (resolver.clipByName(adb.idleAnimationNames?.[0])) data.idle = { clips: [adb.idleAnimationNames[0]] };
+    if (resolver.clipByName(adb.moveAnimationNames?.[0])) data.move = { clips: [adb.moveAnimationNames[0]] };
   }
 
   // 야스오 정지 모션은 사용자가 지정한 Idle1_Raw를 고정 사용한다(요청 9:
@@ -6436,6 +6593,224 @@ class TargetRing {
 // 폴백한다(대부분의 타겟형 스킬은 "캐스트 가능 거리"를 원으로 보여주는
 // 것으로 충분하다 - 예: R 궁극기, 세트 Q/자기강화형).
 
+/* ===== src/core/vision_system.js ===== */
+/* ============================================================
+   VISION SYSTEM (시야 시스템 / 전장의 안개)
+   ------------------------------------------------------------
+   실제 LoL의 핵심 규칙 "시야 밖의 적은 보이지 않는다"를 재현하는
+   범용 시스템이다. 플레이어 챔피언이 지속적인 시야 공급원이고, 스킬이
+   (애쉬 E/R처럼) 임시 시야 공급원을 추가로 등록할 수 있다. 매 프레임
+   모든 적 유닛(더미/미니언/포탑/억제기/넥서스 - getAllEnemyUnits()가
+   반환하는 전부)이 "어떤 공급원이든 범위 안에 있는가"만 판정해서
+   보이거나(mesh/라벨 표시) 안개에 가려진다(숨김).
+
+   튜닝 포인트: 아래 VISION_CONFIG 객체 하나에 모든 수치가 모여있다.
+   실제 인게임 수치에 더 가깝게 맞추고 싶으면 이 객체 값만 바꾸면
+   되고, 다른 코드(VisionSystem 클래스 자체나 각 챔피언 파일)는 전혀
+   건드릴 필요가 없다 - 이 프로젝트 전반의 "데이터와 로직을 분리한다"
+   원칙을 그대로 따른다.
+
+   범위상 생략한 부분(수치/기능을 지어내지 않고 명시적으로 생략 - 이
+   프로젝트의 기존 원칙 그대로):
+   - 덤불(Brush)에 의한 근접 은신은 구현하지 않는다(이 맵에 덤불
+     오브젝트/판정 자체가 없음).
+   - 벽에 의한 시야 차단(라인오브사이트)은 구현하지 않는다 - 순수
+     원형(반경) 판정만 사용한다. 실제 LoL도 평지에서는 대부분 원형에
+     가깝게 동작하므로, 이 데모(단일 라인/사거리 연습용)에는 충분한
+     근사다.
+   - 와드(제어/일반 와드) 설치 기능은 없다 - 이 데모는 아이템/소환사
+     주문 시스템 자체가 없어 와드를 살 방법이 없다(다른 챔피언들의
+     아이템 생략과 동일한 원칙). grantVision()은 챔피언 스킬(애쉬 E/R
+     등)이 임시 시야를 등록하는 범용 진입점이라, 나중에 와드 같은
+     개념을 추가하고 싶다면 이 함수를 그대로 재사용하면 된다.
+   - 팀 단위 공유 시야는 없다 - 이 데모는 플레이어 챔피언 하나만 조작
+     하는 싱글플레이 구조라(다른 시스템들과 동일한 전제) "내 시야"가
+     곧 "우리 팀 시야"다.
+   ============================================================ */
+const VISION_CONFIG = {
+  // 챔피언 기본 시야 반경(LoL 원본 단위). 실제 게임은 챔피언마다 약간
+  // 다르지만(대략 1200 전후가 표준) 이 데모는 조작 중인 챔피언 하나
+  // 기준으로 공용 기본값 하나를 쓴다. 특정 챔피언만 다르게 주고 싶으면
+  // championSightOverride에 championId: 값을 추가하면 된다(다른 코드는
+  // 건드릴 필요 없음).
+  championSightRange: 1200,
+  championSightOverride: {
+    // 예시: ashe: 1200,
+  },
+  // 안개 밖(미시야) 적 표시 방식.
+  //  - 'hide': 완전히 숨김(실제 LoL과 가장 가까움, 기본값)
+  //  - 'dim' : 투명도만 낮춰서 흐리게(위치를 계속 참고하고 싶은
+  //            연습/디버그 용도 - 켜고 싶으면 이 값만 바꾸면 됨)
+  fogMode: 'hide',
+  dimOpacity: 0.12,
+  // 시야 판정과 완전히 별개인 "순수 시각 효과" 설정 - 바닥에 그리는
+  // 안개 오버레이. 끄고 싶으면 enabled:false 하나만 바꾸면 된다.
+  fogOverlay: {
+    enabled: true,
+    textureSize: 256, // 해상도(낮을수록 가볍고 경계가 부드럽다)
+    darkness: 0.75, // 미시야 지역의 불투명도(0=투명, 1=완전 검정)
+    edgeSoftness: 0.4, // 시야 경계가 부드럽게 퍼지는 비율(0=칼같은 경계, 1=중심부터 서서히)
+  },
+};
+
+class VisionSystem {
+  constructor(scene) {
+    this.scene = scene;
+    this.enabled = true;
+    // 임시 시야 공급원 배열 - {position: THREE.Vector3, lolRadius, expiresAt}.
+    // grantVision()으로 추가되고, update()가 매 프레임 만료분을 정리한다.
+    this.temporarySources = [];
+    this._visibleCache = new Set();
+    this._fogCanvas = null; this._fogCtx = null; this._fogTexture = null; this._fogMesh = null;
+    this._worldHalf = (typeof groundSize !== 'undefined' ? groundSize : 280) / 2;
+    if (VISION_CONFIG.fogOverlay.enabled) this._buildFogOverlay();
+  }
+
+  _buildFogOverlay() {
+    const size = VISION_CONFIG.fogOverlay.textureSize;
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    this._fogCanvas = canvas;
+    this._fogCtx = canvas.getContext('2d');
+    this._fogTexture = new THREE.CanvasTexture(canvas);
+    const half = this._worldHalf;
+    const geo = new THREE.PlaneGeometry(half * 2, half * 2);
+    geo.rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({
+      map: this._fogTexture, transparent: true, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    });
+    this._fogMesh = new THREE.Mesh(geo, mat);
+    this._fogMesh.position.y = 0.06; // 바닥/그리드보다 살짝 위, 캐릭터/소품보다는 아래
+    this._fogMesh.renderOrder = 2;
+    this.scene.add(this._fogMesh);
+  }
+
+  // 챔피언 스킬(애쉬 E/R 등)이 임시 시야를 등록하는 범용 진입점.
+  // position: THREE.Vector3(world), lolRadius: LoL 원본 단위 반경,
+  // durationSec: 지속시간(초).
+  grantVision(position, lolRadius, durationSec) {
+    if (!position || !lolRadius || !durationSec) return;
+    this.temporarySources.push({
+      position: position.clone(), lolRadius,
+      expiresAt: performance.now() + durationSec * 1000,
+    });
+  }
+
+  setEnabled(v) {
+    this.enabled = v;
+    if (this._fogMesh) this._fogMesh.visible = v && VISION_CONFIG.fogOverlay.enabled;
+    if (!v) this._revealAll();
+  }
+
+  _revealAll() {
+    for (const u of getAllEnemyUnits()) this._setUnitVisible(u, true);
+    this._visibleCache = new Set(getAllEnemyUnits());
+  }
+
+  _setUnitVisible(unit, visible) {
+    if (!unit) return;
+    if (VISION_CONFIG.fogMode === 'dim') {
+      this._applyDim(unit, visible);
+      return;
+    }
+    if (unit.mesh) unit.mesh.visible = visible;
+    else if (unit.model) unit.model.visible = visible;
+    else if (unit.group) unit.group.visible = visible;
+    if (unit.labelDiv) unit.labelDiv.style.display = visible ? '' : 'none';
+  }
+
+  // dim 모드: mesh를 숨기지 않고 재질 투명도만 낮춘다(위치를 계속 볼 수
+  // 있는 디버그/연습용 - 실제 LoL 동작과는 다르다는 점을 분명히 하기
+  // 위해 기본값은 'hide'다).
+  _applyDim(unit, visible) {
+    const root = unit.mesh || unit.model || unit.group;
+    if (!root) return;
+    if (unit._visionDimApplied === visible) return; // 이미 같은 상태면 재귀적으로 다시 안 깔음
+    unit._visionDimApplied = visible;
+    root.traverse((o) => {
+      if (!o.material) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        if (m._visionOriginalOpacity == null) { m._visionOriginalOpacity = m.opacity; m._visionOriginalTransparent = m.transparent; }
+        m.transparent = true;
+        m.opacity = visible ? m._visionOriginalOpacity : VISION_CONFIG.dimOpacity;
+      }
+    });
+    if (unit.labelDiv) unit.labelDiv.style.opacity = visible ? '1' : '0.25';
+  }
+
+  update(controller, dt) {
+    if (!this.enabled) return;
+    const now = performance.now();
+    if (this.temporarySources.length) {
+      this.temporarySources = this.temporarySources.filter((s) => s.expiresAt > now);
+    }
+
+    const sources = [];
+    if (controller && controller.root && controller.hp > 0 && controller.state !== STATE.DEAD) {
+      const override = VISION_CONFIG.championSightOverride[controller.championId];
+      const range = override != null ? override : VISION_CONFIG.championSightRange;
+      sources.push({ position: controller.root.position, lolRadius: range });
+    }
+    for (const s of this.temporarySources) sources.push(s);
+
+    // 조작 중인 챔피언이 없거나(초기 로딩 전) 죽어서 시야 공급원이 하나도
+    // 없으면, 맵 전체를 안개로 덮는 대신 전부 보이게 한다 - 전투 연습
+    // 도구로서 "아직 아무도 안 보인다"보다 "일단 다 보인다"가 더 자연스러운
+    // 기본 상태다(실제 LoL 규칙과는 다르지만, 조작할 챔피언이 아예 없는
+    // 상태는 실제 게임에 없는 상황이라 임의로 하나 정한 것일 뿐이다).
+    if (!sources.length) {
+      this._revealAll();
+      if (this._fogCtx) { this._fogCtx.clearRect(0, 0, this._fogCanvas.width, this._fogCanvas.height); this._fogTexture.needsUpdate = true; }
+      return;
+    }
+
+    const nowVisible = new Set();
+    for (const u of getAllEnemyUnits()) {
+      let visible = false;
+      for (const s of sources) {
+        if (isInCircle(u, s.position, lolRangeToWorld(s.lolRadius))) { visible = true; break; }
+      }
+      if (visible) nowVisible.add(u);
+    }
+    // 변경된 유닛만 실제로 표시 상태를 건드린다(매 프레임 불필요하게
+    // mesh.visible/DOM style을 다시 쓰지 않도록).
+    for (const u of getAllEnemyUnits()) {
+      const was = this._visibleCache.has(u);
+      const is = nowVisible.has(u);
+      if (was !== is) this._setUnitVisible(u, is);
+    }
+    this._visibleCache = nowVisible;
+
+    if (this._fogCtx) this._renderFogTexture(sources);
+  }
+
+  _renderFogTexture(sources) {
+    const ctx = this._fogCtx;
+    const size = this._fogCanvas.width;
+    const cfg = VISION_CONFIG.fogOverlay;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = `rgba(0,0,0,${cfg.darkness})`;
+    ctx.fillRect(0, 0, size, size);
+    ctx.globalCompositeOperation = 'destination-out';
+    const half = this._worldHalf;
+    for (const s of sources) {
+      const worldR = lolRangeToWorld(s.lolRadius);
+      const cx = ((s.position.x + half) / (half * 2)) * size;
+      const cy = ((s.position.z + half) / (half * 2)) * size;
+      const r = Math.max(1, (worldR / (half * 2)) * size);
+      const grad = ctx.createRadialGradient(cx, cy, r * (1 - cfg.edgeSoftness), cx, cy, r);
+      grad.addColorStop(0, 'rgba(0,0,0,1)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    this._fogTexture.needsUpdate = true;
+  }
+}
+
 /* ===== src/animation/attack_sequence.js ===== */
 /* ============================================================
    0-A1c. ATTACK SEQUENCE (요청: 평타 모션 순서를 별도 데이터로 관리)
@@ -6489,6 +6864,11 @@ const ATTACK_SEQUENCE_OVERRIDES = {
   // 바루스: 실제 존재하는 평타 클립은 Attack1/Attack2 2종류뿐이다(위
   // action_timing.js의 바루스 attackVariants 강제 고정 주석 참고).
   varus: ['attack1', 'attack2'],
+  // 애쉬: 실제 존재하는 평타 클립도 Attack1/Attack2 2종류뿐이다(위
+  // action_timing.js의 애쉬 attackVariants 강제 고정 주석 참고) - 등록하지
+  // 않으면 존재하지 않는 "3번째 평타" 자리에 중복 클립이 들어가는, 다른
+  // 챔피언들과 동일한 유형의 버그가 생긴다.
+  ashe: ['attack1', 'attack2'],
 };
 // 시퀀스 배열에서의 위치를 챔피언 고유의 "손/방향" 의미로 변환한다.
 // 새 챔피언이 추가되면 이 매핑만 확장하면 된다 - 애니메이션 선택 로직
@@ -6553,6 +6933,16 @@ const SKILL_HITBOX_SHAPE = {
   varus: {
     Q: { type: 'line', halfWidthWorld: lolRangeToWorld(75) * 0.5 },
     R: { type: 'line', halfWidthWorld: lolRangeToWorld(450) * 0.5 },
+  },
+  // 애쉬 W(일제 사격)는 부채꼴로 퍼지는 다중 화살이라 원이 아니라 콘(cone)
+  // 형태로 그린다(champion_data.js의 ashe.W.coneAngleDeg와 동일한 값).
+  // R(마법의 수정화살)은 화살이므로 직선(line) 실루엣으로 그린다 - 다만
+  // 사거리가 "글로벌"(20000)이라 그대로 그리면 지나치게 길어지므로, 아래
+  // RangeIndicatorSystem.update()의 애쉬 R 전용 분기가 표시용 사거리만
+  // 맵 크기에 맞춰 클램프한다(실제 판정 사거리 자체는 그대로 20000).
+  ashe: {
+    W: { type: 'cone', angleDeg: 46 },
+    R: { type: 'line', halfWidthWorld: lolRangeToWorld(130) * 0.5 },
   },
 };
 // 세트 W처럼 형태 자체가 챔피언 고유 파라미터(centerHalfWidth 등)를 쓰는
@@ -6677,7 +7067,12 @@ class RangeIndicatorSystem {
     this.centerLaneMesh.visible = false;
     for (const slot of ['Q', 'W', 'E', 'R']) {
       let range = null;
-      if (cd && cd[slot]) {
+      if (ctrl.championId === 'ashe' && slot === 'R' && cd && cd.R) {
+        // 애쉬 R은 실제 사거리가 "글로벌"(20000)이라 그대로 표시하면 화면
+        // 밖까지 화살이 그려진다 - 판정용 사거리(cd.R.range)는 그대로 두고,
+        // 표시만 이 맵의 실제 이동 가능 거리에 맞춰 클램프한다.
+        range = Math.min(cd.R.range || 20000, 12000);
+      } else if (cd && cd[slot]) {
         const data = cd[slot];
         const lvl = Math.max(1, (ctrl.skillLevels && ctrl.skillLevels[slot]) || 1);
         // range/range1/rangeBase(+rangePerStack) 등 챔피언마다 다른 필드명을
@@ -7057,6 +7452,21 @@ class CharacterController {
     // 도달) 즉시 null로 정리된다(_varusReleaseQ 참고). lv는 패시브(살아있는
     // 복수)의 대상별 공격 속도 램프업 진행 상태(_varusLvTick 참고).
     this._varus = { qCharge: null, lv: { target: null, rampStartAt: 0, lastHitAt: 0 } };
+    // 애쉬 전용 상태: focusStacks/focusExpiresAt은 패시브 안에 포함된
+    // "집중"(Q 궁사의 집중) 자원 - 기본 공격마다 쌓이고(최대 4), 일정
+    // 시간(stackWindowSec) 안에 다시 공격하지 않으면 만료된다(_asheUpdate
+    // 참고). qActiveUntil은 Q를 발동해 얻은 공격 속도 버프가 유효한 동안의
+    // 만료 시각, flurryPending은 "다음 기본 공격 한 번이 다발 공격(화살
+    // 6발)으로 바뀌어야 하는가"를 나타낸다(_beginAttackSwing이 확인).
+    // wPending/ePending/rPending/rTravel은 각각 W(부채꼴 판정 지연)/E(정찰
+    // 착탄 지연)/R(발사 지연)/R(전 맵 사거리 관통 광선 - 이즈리얼 R의
+    // rTravel과 동일한 패턴)이 매 프레임 dt로 진행하는 상태다(실제 시계
+    // setTimeout을 쓰지 않는다 - 일시정지 중에도 흘러가는 문제 예방).
+    this._ashe = {
+      focusStacks: 0, focusExpiresAt: 0,
+      qActiveUntil: 0, flurryPending: false,
+      wPending: null, ePending: null, rPending: null, rTravel: null,
+    };
     this.champLevel = 1;
     // 요청("LoL 경험치 및 레벨 시스템 구현") - currentExp는 챔피언 레벨
     // 시스템(champion.currentExp)에서 쓰는 "현재 레벨 내 누적치"다(전체
@@ -7216,6 +7626,14 @@ class CharacterController {
     // qCharge 자동 발사 타이머/R 확산 interval을 정리했으므로 여기서는
     // 데이터 객체만 새로 만들면 된다).
     this._varus = { qCharge: null, lv: { target: null, rampStartAt: 0, lastHitAt: 0 } };
+    // 애쉬도 교체 순간 완전히 초기화한다 - 다른 챔피언으로 바뀌었는데
+    // 집중 스택/궁사의 집중 버프/진행 중이던 W·E·R 지연 상태가 남아있으면
+    // 안 된다(바루스/아리와 동일한 원칙).
+    this._ashe = {
+      focusStacks: 0, focusExpiresAt: 0,
+      qActiveUntil: 0, flurryPending: false,
+      wPending: null, ePending: null, rPending: null, rTravel: null,
+    };
     this._dashState = null;
     this._rRecastReadyUntil = 0;
     this.bonusAD = 0;
@@ -8381,8 +8799,12 @@ class CharacterController {
   // 기본 공격이 실제로 명중했을 때 공통 진입점. overrideId는 이번 스윙이
   // attackOverride였다면 그 슬롯 id('Q'=가렌 결정타 강화평타, 'W'=다리우스
   // 마비의 일격 강화평타)이고, 일반 평타면 null이다.
-  _onBasicAttackHit(target, overrideId, wouldKill, attackHand) {
+  _onBasicAttackHit(target, overrideId, wouldKill, attackHand, isCritical) {
     if (!target) return;
+    // 애쉬 패시브(서리 화살): 기본 공격마다 대상을 둔화시킨다(치명타면
+    // 더 강한 둔화로 대체). Q(궁사의 집중)의 다발 공격(_asheFireFlurry)은
+    // 다중 대상이라 이 단일 대상 훅을 거치지 않고 자체적으로 처리한다.
+    if (this.championId === 'ashe') this._asheOnBasicAttackHit(target, isCritical);
     if (this.championId === 'nilah') this._nilahOnBasicAttackHit(target, target._lastDamageTakenAmount || 0, wouldKill);
     if (this.championId === 'renekton') this._renektonOnBasicAttackHit(target);
     // 아리: 여우불의 "아리가 공격한 적" 우선순위 판정에 쓸 마지막 평타
@@ -9104,6 +9526,19 @@ class CharacterController {
         // 온힛 판정과 무관하게 "스윙이 실제로 발생"할 때 토글해야 하므로 여기서.
         const yoneAzakana = this.championId === 'yone' && this._yoneIsAzakanaSwing();
         if (this.championId === 'yone') this._yoneAdvanceSwordState();
+        // 애쉬 Q(궁사의 집중) 다발 공격: 최대 집중을 소모해 Q를 사용한 뒤
+        // 나가는 "첫" 기본 공격은 평범한 단일 대상 공격이 아니라, 6발의
+        // 화살로 갈라져 여러 대상에게 나뉘어 명중하는 다발 공격이다. 이
+        // 스윙은 다중 대상이라 아래의 단일 대상 attackResult/투사체 경로와
+        // _onBasicAttackHit()을 전혀 거치지 않고 완전히 분리된 전용 함수
+        // (_asheFireFlurry)로 처리한다(요네 아자카나 분기와 동일한 위치의
+        // "이번 스윙이 특수한가" 확인).
+        if (this.championId === 'ashe' && this._ashe && this._ashe.flurryPending) {
+          this._ashe.flurryPending = false;
+          vfx.spawn('basicAttack', originPos, dirToTarget);
+          this._asheFireFlurry(target, originPos, dirToTarget, willCrit);
+          return;
+        }
         const attackResult = {
           rawDamage: this.stats.attackDamage,
           damageType: DAMAGE_TYPE.PHYSICAL,
@@ -9139,12 +9574,12 @@ class CharacterController {
               if (t.isMinion) {
                 const wouldKill = t.hp > 0 && t.hp <= calculateDamage({ ...attackResult, target: t });
                 applyDamageToMinion(t, attackResult, true);
-                this._onBasicAttackHit(t, overrideId, wouldKill, attackHand);
+                this._onBasicAttackHit(t, overrideId, wouldKill, attackHand, willCrit);
                 return;
               }
               if (t.isInhibitor) { applyDamageToInhibitor(t, attackResult); return; }
               if (t.isNexus) { applyDamageToNexus(t, attackResult); return; }
-              const wouldKill = t.hp > 0 && t.hp <= attackResult.rawDamage; applyDamage(t, attackResult); this._onBasicAttackHit(t, overrideId, wouldKill);
+              const wouldKill = t.hp > 0 && t.hp <= attackResult.rawDamage; applyDamage(t, attackResult); this._onBasicAttackHit(t, overrideId, wouldKill, null, willCrit);
             },
           });
         } else if (target.hp > 0) {
@@ -9153,7 +9588,7 @@ class CharacterController {
           if (target.isMinion) {
             const wouldKill = target.hp > 0 && target.hp <= calculateDamage({ ...attackResult, target });
             applyDamageToMinion(target, attackResult, true);
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand);
+            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
             return;
           }
           if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); return; }
@@ -9161,11 +9596,11 @@ class CharacterController {
           if (attackResult.yoneAzakana) {
             const wouldKill = target.hp > 0 && target.hp <= attackResult.rawDamage;
             this._yoneApplyAlternatingAttackDamage(target, attackResult);
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand);
+            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
           } else {
             const wouldKill = target.hp > 0 && target.hp <= attackResult.rawDamage;
             applyDamage(target, attackResult);
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand);
+            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
           }
         }
       },
@@ -9390,6 +9825,19 @@ class CharacterController {
       return;
     }
 
+    // 애쉬 Q(궁사의 집중)도 동일한 이유로 게이트를 우회한다 - 실제 게임에서
+    // 별도 시전 모션이 없는 순수 상태 스킬(집중 스택 소모 + 공격 속도
+    // 버프 + 다음 평타 강화 예약)이라, 무엇을 하고 있든(평타 WINDUP/
+    // RECOVERY 등) 즉시 사용 가능해야 한다. _asheCastQ는 currentActionKey/
+    // currentPhase를 전혀 건드리지 않으므로, 게이트를 우회해도 진행 중이던
+    // 다른 행동의 상태를 손상시키지 않는다(가렌/모데카이저/다리우스 W와
+    // 동일한 안전성 근거). 실제 사용 가능 여부(4중첩 확보/침묵)는
+    // _asheCastQ 내부에서 그대로 확인한다.
+    if (this.championId === 'ashe' && slot === 'Q') {
+      this._dispatchCast(slot, mouseWorldPoint, false);
+      return;
+    }
+
     // 스킬 우선순위: 다리우스/가렌도 기본 공격보다 스킬을 우선한다.
     // 기본 공격 계열(attack*/crit) 진행 중에 Q/W/E/R 입력이 들어오면
     // 평타의 남은 타이머/상태를 즉시 정리하고 스킬을 바로 시작한다.
@@ -9569,6 +10017,16 @@ class CharacterController {
     // 바루스 R(속박의 사슬)도 마우스 방향으로 나가는 직선 스킬샷이라
     // 요네/이즈리얼/아리 R과 동일한 이유로 mouseWorldPoint를 그대로 전달한다.
     if (this.championId === 'varus' && slot === 'R') return this._varusCastR(mouseWorldPoint, free);
+    // 애쉬 Q(궁사의 집중)는 방향이 필요 없는 자기 자신 대상 상태 스킬이고,
+    // W(일제 사격)/E(매 날리기)/R(마법의 수정화살)은 전부 마우스 방향으로
+    // 나가는 스킬샷이라 요네/이즈리얼/아리/바루스 R과 동일한 이유로
+    // mouseWorldPoint를 그대로 전달한다.
+    if (this.championId === 'ashe') {
+      if (slot === 'Q') return this._asheCastQ(free);
+      if (slot === 'W') return this._asheCastW(mouseWorldPoint, free);
+      if (slot === 'E') return this._asheCastE(mouseWorldPoint, free);
+      if (slot === 'R') return this._asheCastR(mouseWorldPoint, free);
+    }
     if (free && this.playSkillAnimationSequence(slot, { mouseWorldPoint, free })) return;
     switch (slot) {
       case 'Q': return this._castQ(mouseWorldPoint, free);
@@ -11052,6 +11510,16 @@ class CharacterController {
       this._varus.lv = { target: null, rampStartAt: 0, lastHitAt: 0 };
       this.bonusAD = 0;
     }
+    // 애쉬도 동일한 이유로 사망 시 정리한다: 집중 스택/궁사의 집중 버프가
+    // 부활 직후까지 남아 공짜로 강화 다발 공격이 나가면 안 되고, 진행
+    // 중이던 W/E/R 판정 지연이나 R의 전 맵 관통 광선도 죽는 순간 즉시
+    // 정리해야 한다.
+    if (this.championId === 'ashe' && this._ashe) {
+      this._ashe.focusStacks = 0; this._ashe.focusExpiresAt = 0;
+      this._ashe.qActiveUntil = 0; this._ashe.flurryPending = false;
+      this._ashe.wPending = null; this._ashe.ePending = null; this._ashe.rPending = null; this._ashe.rTravel = null;
+      clearStatus(this, 'asheRangersFocus');
+    }
     this.currentActionKey = null; this.currentPhase = null;
     this.targetPos = null; this.currentTarget = null; this.pendingMove = null; this.pendingCast = null;
     targetRing.clear();
@@ -11298,6 +11766,7 @@ class CharacterController {
     this._ezrealUpdate(dt);
     this._ahriUpdate(dt);
     this._varusUpdate(dt);
+    this._asheUpdate(dt);
   }
 }
 /* ===== src/champions/darius.js ===== */
@@ -17940,6 +18409,427 @@ CharacterController.prototype._varusUpdate = function(dt) {
   if (this._varus.qCharge && isCrowdControlled(this)) this._varusReleaseQ();
 };
 
+/* ===== src/champions/ashe.js ===== */
+/* ============================================================
+   애쉬(Ashe) 전투 로직
+   ------------------------------------------------------------
+   다른 챔피언들(바루스/이즈리얼/아리 등)과 동일한 패턴 - CharacterController.
+   prototype 확장으로 챔피언 전용 메서드를 분리하고, character_controller.js의
+   _beginAttackSwing/_onBasicAttackHit/castAbility/_dispatchCast/_die()/
+   update() 해당 지점에서 championId === 'ashe'면 이 파일의 커스텀 함수로
+   위임한다(공용 Controller 코드를 직접 뒤섞지 않는다는 이 프로젝트의
+   원칙 그대로).
+
+   사용자가 제공한 실제 애쉬.glb(87노드/24클립)로 모션을 구현했다. 이
+   세션은 조직 네트워크 정책상 wiki.leagueoflegends.com/leagueoflegends.
+   fandom.com/mobafire.com/공식 KR 챔피언 페이지 전부 EGRESS_BLOCKED라
+   실시간 툴팁 원문 전체 대조는 하지 못했다 - 대신 WebSearch 스니펫으로
+   교차 확인 가능했던 수치만 반영했고, champion_data.js의 ashe 항목
+   상단 주석에 어떤 부분이 확인됐고 어떤 부분이 명시적 근사인지
+   정리해뒀다(README도 참고).
+
+   E(매 날리기)/R(마법의 수정화살)은 이 프로젝트에 새로 추가한 시야
+   시스템(src/core/vision_system.js)에 연결되어 실제로 해당 지점의
+   시야를 밝힌다 - visionSystem.grantVision(위치, 반경, 지속시간)이
+   유일한 연결 지점이고, 수치는 전부 champion_data.js의 ashe
+   (visionRadius/visionDurationSec)에서 가져오므로 튜닝이 쉽다.
+
+   구현 범위상 명시적으로 근사/생략한 부분(수치를 지어내지 않고 명시적으로
+   근사한 것 - 이 프로젝트의 기존 원칙 그대로):
+   - E의 "경로"에 대한 실시간 시야는 구현하지 않았다 - 도착 지점에서만
+     원형 시야를 부여한다(champion_data.js 주석 참고).
+   - 패시브(서리 화살)의 치명타 강화 둔화는 실제로는 1초에 걸쳐 원래
+     세기로 감쇠하지만, 이 프로젝트의 SLOW 상태이상 시스템에는 아직 감쇠
+     기능이 없어 고정 세기로 근사한다.
+   - W(일제 사격)의 정확한 사거리/폭(각도)과 마나 비용은 이번 세션에
+     실시간으로 재검증하지 못해 널리 알려진 근사값을 사용했다.
+   ============================================================ */
+
+/* ---------------------------------------------------------------
+   공용 - 살아있는지 확인(바루스 BUG 25와 동일한 이유 - UI 비활성화만
+   믿지 않고 각 캐스트 함수 자체가 직접 검증한다)
+   --------------------------------------------------------------- */
+CharacterController.prototype._asheIsAlive = function() {
+  return this.hp > 0 && this.state !== STATE.DEAD && this.state !== STATE.RESPAWN;
+};
+
+/* ---------------------------------------------------------------
+   패시브 - 서리 화살(Frost Shot)
+   --------------------------------------------------------------- */
+
+CharacterController.prototype._asheApplyFrostShot = function(target, isCritical) {
+  if (!target || target.hp <= 0) return;
+  const p = this._champData().passive;
+  const lvl = this.champLevel || 1;
+  let slowPercent;
+  if (isCritical) {
+    slowPercent = valueByBreakpoints(p.critSlowByLevel, lvl);
+  } else {
+    slowPercent = valueByBreakpoints(p.slowByLevel, lvl);
+    if (this._ashe && performance.now() < (this._ashe.qActiveUntil || 0)) {
+      slowPercent += p.qActiveBonusSlowPercent || 0;
+    }
+  }
+  slowPercent = Math.max(0, Math.min(90, slowPercent)); // 안전 상한 - 공식 상한 수치가 아니라 다른 챔피언 슬로우들과 동일한 엔진 관례
+  applyStatus(target, { id: 'asheFrostShot', type: 'SLOW', duration: p.slowDurationSec || 1.0, value: slowPercent / 100, source: this });
+  vfx.spawn('hit', getWorldPosition(target)?.clone() || target.mesh.position.clone(), undefined, { color: 0xbfe8ff });
+};
+
+// 기본 공격 명중 공통 훅(_onBasicAttackHit) - 서리 화살 둔화 적용 +
+// 궁사의 집중(Q) 스택 획득. Q의 다발 공격(_asheFireFlurry)은 다중 대상이라
+// 이 단일 대상 훅을 거치지 않고 완전히 분리 처리하므로, 여기서는 항상
+// "일반 평타"만 다룬다 - 다발 공격 때문에 스택이 이중으로 쌓일 걱정이 없다.
+CharacterController.prototype._asheOnBasicAttackHit = function(target, isCritical) {
+  if (!target) return;
+  this._asheApplyFrostShot(target, isCritical);
+  const q = this._champData().Q;
+  const maxStacks = q.maxStacks || 4;
+  this._ashe.focusStacks = Math.min(maxStacks, (this._ashe.focusStacks || 0) + 1);
+  this._ashe.focusExpiresAt = performance.now() + (q.stackWindowSec || 4) * 1000;
+};
+
+/* ---------------------------------------------------------------
+   Q(궁사의 집중) - 스택 소모형 자기 자신 대상 상태 스킬
+   --------------------------------------------------------------- */
+
+CharacterController.prototype._asheCastQ = function(free = false) {
+  if (!this._asheIsAlive()) return; // BUG 25와 동일한 이유
+  if (isSilenced(this)) return;
+  const q = this._champData().Q;
+  const maxStacks = q.maxStacks || 4;
+  if ((this._ashe.focusStacks || 0) < maxStacks) {
+    const msg = `Q - 궁사의 집중 스택 부족 (${this._ashe.focusStacks || 0}/${maxStacks})`;
+    console.log(`[SKILL BLOCKED] ${msg}`);
+    showSkillToast(msg);
+    return;
+  }
+  if (!this._payCost('Q', free)) return; // 쿨다운/마나는 0 - 실제 제약은 위 스택 게이트
+  this._ashe.focusStacks = 0;
+  this._ashe.focusExpiresAt = 0;
+  const lvl = Math.max(1, this.skillLevels.Q || 1);
+  const asPercent = skillVal(q.attackSpeedPercentByLevel, lvl);
+  const durationSec = q.buffDurationSec || 6.0;
+  applyStatus(this, { id: 'asheRangersFocus', type: 'AS_BUFF', duration: durationSec, value: asPercent / 100 });
+  this._ashe.qActiveUntil = performance.now() + durationSec * 1000;
+  this._ashe.flurryPending = true; // 다음 기본 공격 한 번이 다발 공격(화살 6발)으로 바뀐다
+  vfx.spawn('hit', this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 1.2, 0)), undefined, { color: 0xbfe8ff });
+  debugSkillHit('Ashe Q (궁사의 집중 발동)', this, { attackSpeedPercent: asPercent, durationSec });
+};
+
+// Q로 강화된 첫 기본 공격 - character_controller.js의 _beginAttackSwing()이
+// flurryPending을 확인해 일반 단일 대상 공격 대신 이 함수를 호출한다.
+CharacterController.prototype._asheFireFlurry = function(originalTarget, originPos, dirToTarget, willCrit) {
+  const q = this._champData().Q;
+  const lvl = Math.max(1, this.skillLevels.Q || 1);
+  const totalDamage = (skillVal(q.flurryTotalAdPercentByLevel, lvl) / 100) * this.stats.attackDamage;
+  const arrowCount = q.flurryArrowCount || 6;
+  const center = (originalTarget && originalTarget.hp > 0) ? (getWorldPosition(originalTarget) || originPos) : originPos;
+  let targets = findEnemiesInRadius(center, q.flurrySpreadRange || 400).map((h) => h.unit);
+  if (!targets.length && originalTarget && originalTarget.hp > 0) targets = [originalTarget];
+  targets = targets.slice(0, arrowCount);
+  if (!targets.length) {
+    debugSkillMiss('Ashe Q (다발 공격)', '사거리 내 대상 없음');
+    return;
+  }
+  const perArrow = totalDamage / arrowCount;
+  const baseArrows = Math.floor(arrowCount / targets.length);
+  const extra = arrowCount % targets.length;
+  targets.forEach((t, i) => {
+    const arrows = baseArrows + (i < extra ? 1 : 0);
+    if (arrows <= 0) return;
+    const dmg = perArrow * arrows;
+    projectiles.spawn({
+      from: originPos, target: t, speed: q.flurryMissileSpeed ? lolRangeToWorld(q.flurryMissileSpeed) : this.stats.projectileSpeed * 2,
+      color: 0xbfe8ff, realmId: this.realmId,
+      onHit: (u) => {
+        if (u.isTurret) { applyDamageToTurret(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, { isRanged: true, source: this }); return; }
+        if (u.isMinion) { applyDamageToMinion(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true); this._asheApplyFrostShot(u, willCrit); return; }
+        if (u.isInhibitor) { applyDamageToInhibitor(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
+        if (u.isNexus) { applyDamageToNexus(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
+        applyDamage(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
+        this._asheApplyFrostShot(u, willCrit);
+        debugSkillHit('Ashe Q (다발 공격)', u, { arrows, dmg: dmg.toFixed(1) });
+      },
+    });
+  });
+};
+
+/* ---------------------------------------------------------------
+   W(일제 사격) - 부채꼴 다중 대상 스킬샷(대상별 단일 판정)
+   --------------------------------------------------------------- */
+
+CharacterController.prototype._asheCastW = function(mouseWorldPoint, free = false) {
+  if (!this._asheIsAlive()) return;
+  if (isSilenced(this) || isCrowdControlled(this)) return;
+  const w = this._champData().W;
+  const dir = mouseWorldPoint
+    ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
+    : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+  if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
+  dir.normalize();
+  if (!this._payCost('W', free)) return;
+  this.faceDirectionInstant(dir);
+  this._clearActionTimers();
+  this.currentActionKey = 'asheW'; this.currentPhase = 'STARTUP'; this.phaseCancelable = true;
+  this.setState(STATE.W_CAST);
+  this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
+  const castTime = w.castTimeSec != null ? w.castTimeSec : 0.25; // SKILL_TIMING_DATABASE.ashe.W와 동일
+  this._ashe.wPending = {
+    dir: dir.clone(), lvl: Math.max(1, this.skillLevels.W || 1),
+    remainingFireSec: castTime, remainingRecoverySec: castTime + 0.15,
+    fireDone: false, recoveryDone: false,
+  };
+};
+
+CharacterController.prototype._asheResolveWImpact = function(p) {
+  const w = this._champData().W;
+  const origin = this.root.position.clone();
+  const hits = findEnemiesInRadius(origin, w.range || 1200, { forward: p.dir, maxAngleDeg: (w.coneAngleDeg || 46) / 2 });
+  if (!hits.length) { debugSkillMiss('Ashe W (일제 사격)', '부채꼴 범위 내 대상 없음'); return; }
+  const raw = skillVal(w.damageByLevel, p.lvl) + (w.bonusAdRatio || 0) * this._getBonusAD();
+  for (const { unit } of hits) {
+    if (!unit || unit.hp <= 0) continue;
+    if (unit.isTurret) { applyDamageToTurret(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, { isRanged: true, source: this }); continue; }
+    if (unit.isMinion) { applyDamageToMinion(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true); this._asheApplyFrostShot(unit, false); continue; }
+    if (unit.isInhibitor) { applyDamageToInhibitor(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); continue; }
+    if (unit.isNexus) { applyDamageToNexus(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); continue; }
+    applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
+    this._asheApplyFrostShot(unit, false);
+    vfx.spawn('hit', getWorldPosition(unit)?.clone() || unit.mesh.position.clone(), undefined, { color: 0xbfe8ff });
+    debugSkillHit('Ashe W (일제 사격)', unit);
+  }
+};
+
+/* ---------------------------------------------------------------
+   E(매 날리기) - 순수 정찰(비피해) 스킬 - 실제 시야 시스템에 연결됨
+   --------------------------------------------------------------- */
+
+CharacterController.prototype._asheCastE = function(mouseWorldPoint, free = false) {
+  if (!this._asheIsAlive()) return;
+  if (isSilenced(this)) return;
+  const e = this._champData().E;
+  const dir = mouseWorldPoint
+    ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
+    : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+  const rawDist = dir.length();
+  if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
+  dir.normalize();
+  if (!this._payCost('E', free)) return;
+  this.faceDirectionInstant(dir);
+  this._clearActionTimers();
+  this.currentActionKey = 'asheE'; this.currentPhase = 'STARTUP'; this.phaseCancelable = true;
+  this.setState(STATE.E_CAST);
+  this.playFirstAvailable(['Spell3'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
+
+  const worldRange = lolRangeToWorld(e.range || 4000);
+  const dist = Math.min(rawDist || worldRange, worldRange);
+  const targetPoint = this.root.position.clone().addScaledVector(dir, dist);
+  const castTime = e.castTimeSec != null ? e.castTimeSec : 0.25; // SKILL_TIMING_DATABASE.ashe.E와 동일
+  const flightSec = e.missileSpeed ? dist / lolRangeToWorld(e.missileSpeed) : 1.0;
+  this._ashe.ePending = {
+    targetPoint: targetPoint.clone(),
+    remainingArriveSec: flightSec, remainingRecoverySec: castTime + 0.15,
+    arriveDone: false, recoveryDone: false,
+  };
+  debugSkillHit('Ashe E (매 날리기 - 정찰)', this, { dist: worldDistanceToLol(dist).toFixed(0) });
+};
+
+// 매가 목적지에 도착했을 때 - 실제 시야 시스템(visionSystem)에 임시
+// 시야 공급원을 등록한다(이 데모의 핵심 "진짜 정찰" 기능).
+CharacterController.prototype._asheResolveEArrival = function(p) {
+  const e = this._champData().E;
+  if (typeof visionSystem !== 'undefined' && visionSystem) {
+    visionSystem.grantVision(p.targetPoint, e.visionRadius || 900, e.visionDurationSec || 5.0);
+  }
+  vfx.spawn('hit', p.targetPoint.clone(), undefined, { color: 0xd8f3ff });
+  debugSkillHit('Ashe E (매 날리기 - 도착/시야 확보)', this);
+};
+
+/* ---------------------------------------------------------------
+   R(마법의 수정화살) - 전 맵 사거리(Global) 관통형 스킬샷
+   --------------------------------------------------------------- */
+
+CharacterController.prototype._asheStunDurationForDistance = function(lolDistance) {
+  const r = this._champData().R;
+  const minSec = r.minStunSec != null ? r.minStunSec : 1.0;
+  const maxSec = r.maxStunSec != null ? r.maxStunSec : 3.5;
+  const maxDist = r.maxStunLolDistance || r.range || 20000;
+  const frac = Math.max(0, Math.min(1, lolDistance / maxDist));
+  return minSec + (maxSec - minSec) * frac;
+};
+
+CharacterController.prototype._asheCastR = function(mouseWorldPoint, free = false) {
+  if (!this._asheIsAlive()) return;
+  if (isSilenced(this) || isCrowdControlled(this)) return;
+  const r = this._champData().R;
+  const dir = mouseWorldPoint
+    ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
+    : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+  if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
+  dir.normalize();
+  if (!this._payCost('R', free)) return;
+  this.faceDirectionInstant(dir);
+  this._clearActionTimers();
+  this.currentActionKey = 'asheR'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
+  this.setState(STATE.R_CAST);
+  this.playFirstAvailable(['Spell4'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
+
+  const castTime = r.castTimeSec != null ? r.castTimeSec : 0.5; // SKILL_TIMING_DATABASE.ashe.R과 동일
+  this._ashe.rPending = {
+    dir: dir.clone(), remainingFireSec: castTime, remainingRecoverySec: castTime + 0.2,
+    fireDone: false, recoveryDone: false,
+  };
+};
+
+CharacterController.prototype._asheResolveRFire = function(p) {
+  const r = this._champData().R;
+  this.currentPhase = 'ACTIVE';
+  const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
+  this._ashe.rTravel = {
+    dir: p.dir.clone(), pos: origin.clone(),
+    maxDist: lolRangeToWorld(r.range || 20000),
+    halfWidth: lolRangeToWorld(r.width || 130) * 0.5,
+    speed: lolRangeToWorld(r.missileSpeed || 1650),
+    traveled: 0, vfxAccum: 0,
+  };
+  vfx.spawn('hit', origin.clone(), undefined, { color: 0x9fd7ff });
+};
+
+// 매 프레임 R 광선 진행. 첫 적 챔피언에 닿으면 즉시 명중 처리하고 스스로를
+// 정리한다(이즈리얼 R처럼 계속 날아가며 여러 명을 관통하지 않는다).
+CharacterController.prototype._asheTickRTravel = function(dt) {
+  const travel = this._ashe && this._ashe.rTravel;
+  if (!travel) return;
+  const remaining = Math.max(0, travel.maxDist - travel.traveled);
+  const step = Math.min(remaining, Math.max(0, travel.speed * dt));
+  travel.pos.addScaledVector(travel.dir, step);
+  travel.traveled += step;
+
+  travel.vfxAccum = (travel.vfxAccum || 0) + dt;
+  if (travel.vfxAccum >= 0.05) {
+    travel.vfxAccum = 0;
+    vfx.spawn('hit', travel.pos.clone(), undefined, { color: 0x9fd7ff });
+  }
+
+  for (const u of getAllEnemyUnits()) {
+    if (!u || u.hp <= 0 || !u.isChampion) continue; // 미니언/포탑/억제기/넥서스는 무시하고 통과(공식 설명 그대로)
+    if (isInCircle(u, travel.pos, travel.halfWidth)) {
+      this._asheResolveRHit(u, travel);
+      this._ashe.rTravel = null;
+      return;
+    }
+  }
+  if (travel.traveled >= travel.maxDist - 1e-4) {
+    debugSkillMiss('Ashe R (마법의 수정화살)', '사거리 끝까지 아무 챔피언도 맞히지 못함');
+    this._ashe.rTravel = null;
+  }
+};
+
+// 주 대상 명중 처리(피해+기절) + 주변 적 스플래시(피해만, 기절 없음) +
+// 명중 지점 임시 시야.
+CharacterController.prototype._asheResolveRHit = function(primary, travel) {
+  const r = this._champData().R;
+  const lvl = Math.max(1, this.skillLevels.R || 1);
+  const raw = skillVal(r.damageByLevel, lvl) + (r.apRatio || 0) * (this.stats.abilityPower || 0);
+  const lolDistance = worldDistanceToLol(travel.traveled);
+  const stunSec = this._asheStunDurationForDistance(lolDistance);
+
+  applyDamage(primary, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+  applyStatus(primary, { id: 'asheR_stun', type: 'STUN', duration: stunSec, value: 0, source: this });
+  vfx.spawn('hit', getWorldPosition(primary)?.clone() || primary.mesh.position.clone(), undefined, { color: 0x9fd7ff });
+  debugSkillHit('Ashe R (마법의 수정화살 - 주 대상)', primary, { stunSec: stunSec.toFixed(2), lolDistance: lolDistance.toFixed(0) });
+
+  if (typeof visionSystem !== 'undefined' && visionSystem) {
+    visionSystem.grantVision(travel.pos, r.visionRadius || 900, r.visionDurationSec || 3.0);
+  }
+
+  const splashRadius = lolRangeToWorld(r.splashRadius || 400);
+  const splashMult = (r.splashDamagePercent != null ? r.splashDamagePercent : 100) / 100;
+  for (const u of getAllEnemyUnits()) {
+    if (!u || u === primary || u.hp <= 0) continue;
+    if (!isInCircle(u, travel.pos, splashRadius)) continue;
+    applyDamage(u, { rawDamage: raw * splashMult, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0x9fd7ff });
+    debugSkillHit('Ashe R (마법의 수정화살 - 주변 피해)', u);
+  }
+};
+
+/* ---------------------------------------------------------------
+   매 프레임 훅
+   --------------------------------------------------------------- */
+
+CharacterController.prototype._asheUpdate = function(dt) {
+  if (this.championId !== 'ashe' || !this._ashe) return;
+  const now = performance.now();
+
+  if (this._ashe.focusStacks > 0 && now >= this._ashe.focusExpiresAt) {
+    this._ashe.focusStacks = 0;
+  }
+  if (this._ashe.qActiveUntil && now >= this._ashe.qActiveUntil) {
+    this._ashe.qActiveUntil = 0;
+    this._ashe.flurryPending = false;
+  }
+
+  if (this._ashe.wPending) {
+    const p = this._ashe.wPending;
+    if (!p.fireDone) {
+      p.remainingFireSec -= dt;
+      if (p.remainingFireSec <= 0) {
+        p.fireDone = true;
+        if (this.currentActionKey === 'asheW') this._asheResolveWImpact(p);
+      }
+    }
+    if (!p.recoveryDone) {
+      p.remainingRecoverySec -= dt;
+      if (p.remainingRecoverySec <= 0) {
+        p.recoveryDone = true;
+        if (this.currentActionKey === 'asheW') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+      }
+    }
+    if (p.fireDone && p.recoveryDone) this._ashe.wPending = null;
+  }
+
+  if (this._ashe.ePending) {
+    const p = this._ashe.ePending;
+    if (!p.arriveDone) {
+      p.remainingArriveSec -= dt;
+      if (p.remainingArriveSec <= 0) {
+        p.arriveDone = true;
+        if (this.currentActionKey === 'asheE') this._asheResolveEArrival(p);
+      }
+    }
+    if (!p.recoveryDone) {
+      p.remainingRecoverySec -= dt;
+      if (p.remainingRecoverySec <= 0) {
+        p.recoveryDone = true;
+        if (this.currentActionKey === 'asheE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+      }
+    }
+    if (p.arriveDone && p.recoveryDone) this._ashe.ePending = null;
+  }
+
+  if (this._ashe.rPending) {
+    const p = this._ashe.rPending;
+    if (!p.fireDone) {
+      p.remainingFireSec -= dt;
+      if (p.remainingFireSec <= 0) {
+        p.fireDone = true;
+        if (this.currentActionKey === 'asheR') this._asheResolveRFire(p);
+      }
+    }
+    if (!p.recoveryDone) {
+      p.remainingRecoverySec -= dt;
+      if (p.remainingRecoverySec <= 0) {
+        p.recoveryDone = true;
+        if (this.currentActionKey === 'asheR') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+      }
+    }
+    if (p.fireDone && p.recoveryDone) this._ashe.rPending = null;
+  }
+
+  this._asheTickRTravel(dt);
+};
+
 /* ===== src/core/controller_post_class_helpers.js ===== */
 /* ============================================================
    2. UI HELPERS
@@ -18120,6 +19010,21 @@ function updateSkillUI(cooldowns) {
       continue;
     }
     if (chargesEl) chargesEl.remove(); // 충전 배지는 닐라 E 전용 - 다른 슬롯/챔피언에는 남기지 않는다
+    // 애쉬 Q(궁사의 집중): 쿨다운/마나가 항상 0이라(실제 제약은 4중첩
+    // 확보) 아래 범용 쿨다운 표시만으로는 항상 "사용 가능"으로 보인다 -
+    // 실제 집중 스택(0~4)을 그대로 배지로 보여주고, 4중첩을 채웠을 때만
+    // 'ready'로 표시한다(닐라 E의 충전 배지와 동일한 .charges 요소 재사용).
+    if (key === 'Q' && typeof controller !== 'undefined' && controller && controller.championId === 'ashe' && controller._ashe) {
+      const maxStacks = (controller._champData().Q.maxStacks) || 4;
+      const stacks = controller._ashe.focusStacks || 0;
+      let stacksEl = document.createElement('div');
+      stacksEl.className = 'charges';
+      stacksEl.textContent = `${stacks}/${maxStacks}`;
+      slot.appendChild(stacksEl);
+      slot.classList.toggle('ready', stacks >= maxStacks);
+      slot.classList.toggle('empowered', !!(performance.now() < (controller._ashe.qActiveUntil || 0)));
+      continue;
+    }
     const remaining = cooldowns[key];
     if (remaining > 0) {
       if (!cdEl) { cdEl = document.createElement('div'); cdEl.className = 'cd'; slot.appendChild(cdEl); }
@@ -20600,6 +21505,12 @@ const targetRing = new TargetRing(scene);
 const rangeIndicators = new RangeIndicatorSystem(scene);
 const rangeIndicatorCheckboxEl = document.getElementById('rangeIndicatorCheckbox');
 if (rangeIndicatorCheckboxEl) rangeIndicatorCheckboxEl.addEventListener('change', () => rangeIndicators.setVisible(rangeIndicatorCheckboxEl.checked));
+// 시야 시스템(전장의 안개) - 범용 인스턴스 하나를 여기서 만들어 animate()
+// 루프(champion_glb_loader.js)에서 매 프레임 update()를 호출한다. 다른
+// 전역 시스템(vfx/projectiles/rangeIndicators)과 동일한 패턴.
+const visionSystem = new VisionSystem(scene);
+const visionSystemCheckboxEl = document.getElementById('visionSystemCheckbox');
+if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', () => visionSystem.setEnabled(visionSystemCheckboxEl.checked));
 var controller = null;
 let championRoot = null;
 let currentChampion = null; // { fileName, resolver, actionData, boundsRadius }
@@ -22320,6 +23231,7 @@ function animate() {
     projectiles.update(dt);
     targetRing.update(dt);
     rangeIndicators.update(controller);
+    visionSystem.update(controller, dt);
     // 최적화(문서 4-22/23절 "DOM 업데이트를 매 프레임 하지 마라") - 디버그
     // 패널은 매 프레임 innerHTML 전체를 새로 만들어서 매초 60번씩 DOM을
     // 다시 그리고 있었다. 사람이 읽는 숫자 패널이라 60Hz 정밀도가 전혀

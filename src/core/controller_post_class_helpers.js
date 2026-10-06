@@ -177,6 +177,21 @@ function updateSkillUI(cooldowns) {
       continue;
     }
     if (chargesEl) chargesEl.remove(); // 충전 배지는 닐라 E 전용 - 다른 슬롯/챔피언에는 남기지 않는다
+    // 애쉬 Q(궁사의 집중): 쿨다운/마나가 항상 0이라(실제 제약은 4중첩
+    // 확보) 아래 범용 쿨다운 표시만으로는 항상 "사용 가능"으로 보인다 -
+    // 실제 집중 스택(0~4)을 그대로 배지로 보여주고, 4중첩을 채웠을 때만
+    // 'ready'로 표시한다(닐라 E의 충전 배지와 동일한 .charges 요소 재사용).
+    if (key === 'Q' && typeof controller !== 'undefined' && controller && controller.championId === 'ashe' && controller._ashe) {
+      const maxStacks = (controller._champData().Q.maxStacks) || 4;
+      const stacks = controller._ashe.focusStacks || 0;
+      let stacksEl = document.createElement('div');
+      stacksEl.className = 'charges';
+      stacksEl.textContent = `${stacks}/${maxStacks}`;
+      slot.appendChild(stacksEl);
+      slot.classList.toggle('ready', stacks >= maxStacks);
+      slot.classList.toggle('empowered', !!(performance.now() < (controller._ashe.qActiveUntil || 0)));
+      continue;
+    }
     const remaining = cooldowns[key];
     if (remaining > 0) {
       if (!cdEl) { cdEl = document.createElement('div'); cdEl.className = 'cd'; slot.appendChild(cdEl); }

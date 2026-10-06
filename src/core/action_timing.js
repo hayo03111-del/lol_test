@@ -86,6 +86,14 @@ function buildActionData(resolver, abilityResolver) {
     const existing = vAttackNames.filter((n) => resolver.clipByName(n));
     if (existing.length) attackVariants = existing;
   }
+  // 애쉬 평타도 실제로는 Attack1/Attack2 2종류뿐이다(실제 애쉬.glb 24클립
+  // 확인) - 등록하지 않으면 요네/이즈리얼/아리/바루스와 동일한 유형의
+  // "존재하지 않는 3번째 평타" 버그가 생긴다.
+  if (abilityResolver.championId === 'ashe') {
+    const asheAttackNames = championAbilityDatabase.ashe.attackAnimationNames || [];
+    const existing = asheAttackNames.filter((n) => resolver.clipByName(n));
+    if (existing.length) attackVariants = existing;
+  }
   // 버그 수정(실제 GLB로 직접 확인함 - 1차 수정에서 실수했던 부분을
   // duration까지 확인하고 정정함): 범용 "attack" 역할 매칭은 이름에
   // "attack1"/"attack2"가 들어간 클립을 전부 같은 점수(100점)로 채점하고
@@ -303,6 +311,17 @@ function buildActionData(resolver, abilityResolver) {
     const vdb = championAbilityDatabase.varus;
     if (resolver.clipByName(vdb.idleAnimationNames?.[0])) data.idle = { clips: [vdb.idleAnimationNames[0]] };
     if (resolver.clipByName(vdb.moveAnimationNames?.[0])) data.move = { clips: [vdb.moveAnimationNames[0]] };
+  }
+
+  // 애쉬 정지 모션 - 범용 "idle" 역할 자동 채점은 이름에 "idle"이 들어간
+  // 클립(Idle1~Idle5)을 전부 동점으로 묶는다. 실제 유휴 루프(Idle1)로
+  // 고정한다(Idle2~5는 감정표현 변형으로 추정 - 아리/바루스와 동일한
+  // 유형의 잠재 버그를 미리 예방). 이동 클립도 "Run"/"Run2"/"Run3" 3종류가
+  // 있어(용도 구분 자료 없음) 기본 이동 루프로 "Run"을 고정한다.
+  if (abilityResolver.championId === 'ashe') {
+    const adb = championAbilityDatabase.ashe;
+    if (resolver.clipByName(adb.idleAnimationNames?.[0])) data.idle = { clips: [adb.idleAnimationNames[0]] };
+    if (resolver.clipByName(adb.moveAnimationNames?.[0])) data.move = { clips: [adb.moveAnimationNames[0]] };
   }
 
   // 야스오 정지 모션은 사용자가 지정한 Idle1_Raw를 고정 사용한다(요청 9:

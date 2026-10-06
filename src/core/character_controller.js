@@ -137,6 +137,21 @@ class CharacterController {
     // 도달) 즉시 null로 정리된다(_varusReleaseQ 참고). lv는 패시브(살아있는
     // 복수)의 대상별 공격 속도 램프업 진행 상태(_varusLvTick 참고).
     this._varus = { qCharge: null, lv: { target: null, rampStartAt: 0, lastHitAt: 0 } };
+    // 애쉬 전용 상태: focusStacks/focusExpiresAt은 패시브 안에 포함된
+    // "집중"(Q 궁사의 집중) 자원 - 기본 공격마다 쌓이고(최대 4), 일정
+    // 시간(stackWindowSec) 안에 다시 공격하지 않으면 만료된다(_asheUpdate
+    // 참고). qActiveUntil은 Q를 발동해 얻은 공격 속도 버프가 유효한 동안의
+    // 만료 시각, flurryPending은 "다음 기본 공격 한 번이 다발 공격(화살
+    // 6발)으로 바뀌어야 하는가"를 나타낸다(_beginAttackSwing이 확인).
+    // wPending/ePending/rPending/rTravel은 각각 W(부채꼴 판정 지연)/E(정찰
+    // 착탄 지연)/R(발사 지연)/R(전 맵 사거리 관통 광선 - 이즈리얼 R의
+    // rTravel과 동일한 패턴)이 매 프레임 dt로 진행하는 상태다(실제 시계
+    // setTimeout을 쓰지 않는다 - 일시정지 중에도 흘러가는 문제 예방).
+    this._ashe = {
+      focusStacks: 0, focusExpiresAt: 0,
+      qActiveUntil: 0, flurryPending: false,
+      wPending: null, ePending: null, rPending: null, rTravel: null,
+    };
     this.champLevel = 1;
     // 요청("LoL 경험치 및 레벨 시스템 구현") - currentExp는 챔피언 레벨
     // 시스템(champion.currentExp)에서 쓰는 "현재 레벨 내 누적치"다(전체
@@ -296,6 +311,14 @@ class CharacterController {
     // qCharge 자동 발사 타이머/R 확산 interval을 정리했으므로 여기서는
     // 데이터 객체만 새로 만들면 된다).
     this._varus = { qCharge: null, lv: { target: null, rampStartAt: 0, lastHitAt: 0 } };
+    // 애쉬도 교체 순간 완전히 초기화한다 - 다른 챔피언으로 바뀌었는데
+    // 집중 스택/궁사의 집중 버프/진행 중이던 W·E·R 지연 상태가 남아있으면
+    // 안 된다(바루스/아리와 동일한 원칙).
+    this._ashe = {
+      focusStacks: 0, focusExpiresAt: 0,
+      qActiveUntil: 0, flurryPending: false,
+      wPending: null, ePending: null, rPending: null, rTravel: null,
+    };
     this._dashState = null;
     this._rRecastReadyUntil = 0;
     this.bonusAD = 0;
@@ -1461,8 +1484,12 @@ class CharacterController {
   // 기본 공격이 실제로 명중했을 때 공통 진입점. overrideId는 이번 스윙이
   // attackOverride였다면 그 슬롯 id('Q'=가렌 결정타 강화평타, 'W'=다리우스
   // 마비의 일격 강화평타)이고, 일반 평타면 null이다.
-  _onBasicAttackHit(target, overrideId, wouldKill, attackHand) {
+  _onBasicAttackHit(target, overrideId, wouldKill, attackHand, isCritical) {
     if (!target) return;
+    // 애쉬 패시브(서리 화살): 기본 공격마다 대상을 둔화시킨다(치명타면
+    // 더 강한 둔화로 대체). Q(궁사의 집중)의 다발 공격(_asheFireFlurry)은
+    // 다중 대상이라 이 단일 대상 훅을 거치지 않고 자체적으로 처리한다.
+    if (this.championId === 'ashe') this._asheOnBasicAttackHit(target, isCritical);
     if (this.championId === 'nilah') this._nilahOnBasicAttackHit(target, target._lastDamageTakenAmount || 0, wouldKill);
     if (this.championId === 'renekton') this._renektonOnBasicAttackHit(target);
     // 아리: 여우불의 "아리가 공격한 적" 우선순위 판정에 쓸 마지막 평타
@@ -2184,6 +2211,19 @@ class CharacterController {
         // 온힛 판정과 무관하게 "스윙이 실제로 발생"할 때 토글해야 하므로 여기서.
         const yoneAzakana = this.championId === 'yone' && this._yoneIsAzakanaSwing();
         if (this.championId === 'yone') this._yoneAdvanceSwordState();
+        // 애쉬 Q(궁사의 집중) 다발 공격: 최대 집중을 소모해 Q를 사용한 뒤
+        // 나가는 "첫" 기본 공격은 평범한 단일 대상 공격이 아니라, 6발의
+        // 화살로 갈라져 여러 대상에게 나뉘어 명중하는 다발 공격이다. 이
+        // 스윙은 다중 대상이라 아래의 단일 대상 attackResult/투사체 경로와
+        // _onBasicAttackHit()을 전혀 거치지 않고 완전히 분리된 전용 함수
+        // (_asheFireFlurry)로 처리한다(요네 아자카나 분기와 동일한 위치의
+        // "이번 스윙이 특수한가" 확인).
+        if (this.championId === 'ashe' && this._ashe && this._ashe.flurryPending) {
+          this._ashe.flurryPending = false;
+          vfx.spawn('basicAttack', originPos, dirToTarget);
+          this._asheFireFlurry(target, originPos, dirToTarget, willCrit);
+          return;
+        }
         const attackResult = {
           rawDamage: this.stats.attackDamage,
           damageType: DAMAGE_TYPE.PHYSICAL,
@@ -2219,12 +2259,12 @@ class CharacterController {
               if (t.isMinion) {
                 const wouldKill = t.hp > 0 && t.hp <= calculateDamage({ ...attackResult, target: t });
                 applyDamageToMinion(t, attackResult, true);
-                this._onBasicAttackHit(t, overrideId, wouldKill, attackHand);
+                this._onBasicAttackHit(t, overrideId, wouldKill, attackHand, willCrit);
                 return;
               }
               if (t.isInhibitor) { applyDamageToInhibitor(t, attackResult); return; }
               if (t.isNexus) { applyDamageToNexus(t, attackResult); return; }
-              const wouldKill = t.hp > 0 && t.hp <= attackResult.rawDamage; applyDamage(t, attackResult); this._onBasicAttackHit(t, overrideId, wouldKill);
+              const wouldKill = t.hp > 0 && t.hp <= attackResult.rawDamage; applyDamage(t, attackResult); this._onBasicAttackHit(t, overrideId, wouldKill, null, willCrit);
             },
           });
         } else if (target.hp > 0) {
@@ -2233,7 +2273,7 @@ class CharacterController {
           if (target.isMinion) {
             const wouldKill = target.hp > 0 && target.hp <= calculateDamage({ ...attackResult, target });
             applyDamageToMinion(target, attackResult, true);
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand);
+            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
             return;
           }
           if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); return; }
@@ -2241,11 +2281,11 @@ class CharacterController {
           if (attackResult.yoneAzakana) {
             const wouldKill = target.hp > 0 && target.hp <= attackResult.rawDamage;
             this._yoneApplyAlternatingAttackDamage(target, attackResult);
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand);
+            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
           } else {
             const wouldKill = target.hp > 0 && target.hp <= attackResult.rawDamage;
             applyDamage(target, attackResult);
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand);
+            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
           }
         }
       },
@@ -2470,6 +2510,19 @@ class CharacterController {
       return;
     }
 
+    // 애쉬 Q(궁사의 집중)도 동일한 이유로 게이트를 우회한다 - 실제 게임에서
+    // 별도 시전 모션이 없는 순수 상태 스킬(집중 스택 소모 + 공격 속도
+    // 버프 + 다음 평타 강화 예약)이라, 무엇을 하고 있든(평타 WINDUP/
+    // RECOVERY 등) 즉시 사용 가능해야 한다. _asheCastQ는 currentActionKey/
+    // currentPhase를 전혀 건드리지 않으므로, 게이트를 우회해도 진행 중이던
+    // 다른 행동의 상태를 손상시키지 않는다(가렌/모데카이저/다리우스 W와
+    // 동일한 안전성 근거). 실제 사용 가능 여부(4중첩 확보/침묵)는
+    // _asheCastQ 내부에서 그대로 확인한다.
+    if (this.championId === 'ashe' && slot === 'Q') {
+      this._dispatchCast(slot, mouseWorldPoint, false);
+      return;
+    }
+
     // 스킬 우선순위: 다리우스/가렌도 기본 공격보다 스킬을 우선한다.
     // 기본 공격 계열(attack*/crit) 진행 중에 Q/W/E/R 입력이 들어오면
     // 평타의 남은 타이머/상태를 즉시 정리하고 스킬을 바로 시작한다.
@@ -2649,6 +2702,16 @@ class CharacterController {
     // 바루스 R(속박의 사슬)도 마우스 방향으로 나가는 직선 스킬샷이라
     // 요네/이즈리얼/아리 R과 동일한 이유로 mouseWorldPoint를 그대로 전달한다.
     if (this.championId === 'varus' && slot === 'R') return this._varusCastR(mouseWorldPoint, free);
+    // 애쉬 Q(궁사의 집중)는 방향이 필요 없는 자기 자신 대상 상태 스킬이고,
+    // W(일제 사격)/E(매 날리기)/R(마법의 수정화살)은 전부 마우스 방향으로
+    // 나가는 스킬샷이라 요네/이즈리얼/아리/바루스 R과 동일한 이유로
+    // mouseWorldPoint를 그대로 전달한다.
+    if (this.championId === 'ashe') {
+      if (slot === 'Q') return this._asheCastQ(free);
+      if (slot === 'W') return this._asheCastW(mouseWorldPoint, free);
+      if (slot === 'E') return this._asheCastE(mouseWorldPoint, free);
+      if (slot === 'R') return this._asheCastR(mouseWorldPoint, free);
+    }
     if (free && this.playSkillAnimationSequence(slot, { mouseWorldPoint, free })) return;
     switch (slot) {
       case 'Q': return this._castQ(mouseWorldPoint, free);
@@ -4132,6 +4195,16 @@ class CharacterController {
       this._varus.lv = { target: null, rampStartAt: 0, lastHitAt: 0 };
       this.bonusAD = 0;
     }
+    // 애쉬도 동일한 이유로 사망 시 정리한다: 집중 스택/궁사의 집중 버프가
+    // 부활 직후까지 남아 공짜로 강화 다발 공격이 나가면 안 되고, 진행
+    // 중이던 W/E/R 판정 지연이나 R의 전 맵 관통 광선도 죽는 순간 즉시
+    // 정리해야 한다.
+    if (this.championId === 'ashe' && this._ashe) {
+      this._ashe.focusStacks = 0; this._ashe.focusExpiresAt = 0;
+      this._ashe.qActiveUntil = 0; this._ashe.flurryPending = false;
+      this._ashe.wPending = null; this._ashe.ePending = null; this._ashe.rPending = null; this._ashe.rTravel = null;
+      clearStatus(this, 'asheRangersFocus');
+    }
     this.currentActionKey = null; this.currentPhase = null;
     this.targetPos = null; this.currentTarget = null; this.pendingMove = null; this.pendingCast = null;
     targetRing.clear();
@@ -4378,5 +4451,6 @@ class CharacterController {
     this._ezrealUpdate(dt);
     this._ahriUpdate(dt);
     this._varusUpdate(dt);
+    this._asheUpdate(dt);
   }
 }

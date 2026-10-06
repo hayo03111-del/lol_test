@@ -6,7 +6,8 @@
 - `src/rendering/` — 기본 렌더링, 씬, 카메라, 조명, 바닥, VFX, 사거리/타겟 표시
 - `src/animation/` — GLB 애니메이션 역할 탐색, 스킬 매핑, 시퀀스, 평타 순서
 - `src/core/` — 공통 전투/행동권한/타이밍/투사체/상태/레벨 시스템 및 CharacterController 뼈대
-- `src/champions/` — 챔피언별 데이터와 전용 함수. Darius/Garen/Sett/Master Yi/Yasuo/Nilah/Renekton/Cho'Gath/Lee Sin/Mordekaiser/Vex/Ezreal/Ahri/Varus를 별도 파일로 분리
+- `src/champions/` — 챔피언별 데이터와 전용 함수. Darius/Garen/Sett/Master Yi/Yasuo/Nilah/Renekton/Cho'Gath/Lee Sin/Mordekaiser/Vex/Ezreal/Ahri/Varus/Ashe를 별도 파일로 분리
+- `src/core/vision_system.js` — 시야 시스템(전장의 안개). 범용 수치는 전부 `VISION_CONFIG` 하나에 모여있다(아래 "시야 시스템" 절 참고).
 - `src/world/` — 더미, 미니언, 포탑, 죽음의 세계, 칼바람 나락
 - `src/loader/` — GLB 교체/로딩/정리
 - `assets/ezreal/*.png` — 이즈리얼 Q 전용 VFX 텍스처(실제 커뮤니티드래곤 원본)
@@ -132,3 +133,29 @@ E 항목에 데이터 필드(`charmSkillDamageAmpPercent`/`charmSkillDamageAmpDu
 - **상태이상 시스템 확장**: `01_status_effect_system.js`에 `GRIEVOUS`(자가 회복/재생 약화) 상태 타입과 `getGrievousPercent()` 헬퍼를 추가했다 - 이 프로젝트에 챔피언 간 회복량을 실제로 깎는 공용 `applyHeal()` 진입점이 없어(각 챔피언이 각자 회복 로직을 직접 계산) 이 값을 실제로 소비하는 곳은 아직 없지만, 상태이상 자체는 정확히 걸리고 CC 태그 인프라도 그대로 재사용 가능하다(수치 임의 발명 방지 원칙에 따라 지금 존재하지 않는 회복 파이프라인을 새로 만들지는 않았다).
 - **애니메이션**: 실제 클립명 기준(Attack1/Attack2/Crit/Death/varus_idle1~4.anm/Spell1(+`_Idle`/`_Walk`/`_Fire`)/Spell3/Spell4/Run/Run2/Channel/Channel_Wndup 등)으로 등록했다. 정지 모션은 감정표현 변형(`varus_idle2~4.anm`)이 아니라 진짜 유휴 루프(`varus_idle1.anm`)로, 평타는 실제 2종류(Attack1/Attack2)만 순환하도록 `action_timing.js`/`attack_sequence.js`에 고정했다(아리/이즈리얼 때와 동일한 유형의 잠재 버그를 미리 예방). GLB에 `Channel`/`Channel_Wndup` 클립이 있지만, 바루스 R의 실제 공식 시전 시간(bin `mCastTime`≈0.24초)은 윈드업→채널 3단계가 아니라 즉시 발사형이라 `SKILL_TIMING_DATABASE.varus`에 R을 등록해 `hasRChannel` 자동 추정 자체를 꺼서 3단계 채널 로직이 걸리지 않게 막았다.
 - **검증 방법의 한계**: 이 세션은 `cdn.jsdelivr.net`(three.js CDN)에 대한 아웃바운드 접속도 조직 정책으로 차단돼 있어(`__agentproxy/status`의 `recentRelayFailures`에서 403 정책 거부로 확인) 실제 브라우저에서 GLB를 불러와 눈으로 확인하는 전 과정 테스트는 하지 못했다. 대신 `node --check`로 문법을 검증하고, `champion_data.js`/`champion_ability_database.js`/`varus.js` 사이의 모든 필드명을 교차 확인했으며, 핵심 수치 공식(Q 충전 보간, W 오한 소모 피해/재사용 대기시간 감소, 패시브 공격 속도 램프)은 별도 Node 스크립트로 대표값을 넣어 계산 결과가 의도한 범위(예: 최소 충전 피해=최대 충전 피해의 정확히 66.7%, 오한 소모 재사용 대기시간 감소가 39~58.5% 범위 안)에 들어오는지 확인했다. 실제 게임처럼 화면에서 직접 조작해보는 검증은 아직 못 했다는 점을 밝혀둔다 - 애니메이션 클립 매핑이나 수치 해석에 오차가 있다면 추가 확인 후 바로잡을 수 있다.
+
+## 애쉬(Ashe) 추가
+
+실제 애쉬.glb(87노드/24클립, 사용자 업로드본)로 패시브(서리 화살)/Q(궁사의 집중)/W(일제 사격)/E(매 날리기)/R(마법의 수정화살)과 모션을 새로 구현했다(`src/champions/ashe.js`, `CHAMPION_DATA.ashe`/`championAbilityDatabase.ashe`). 이 세션도 조직 네트워크 정책상 위키/나무위키/mobafire/공식 KR 챔피언 페이지 전부 접근이 막혀 있어 WebSearch 스니펫으로 교차 확인 가능했던 수치만 반영했고, 확인 못한 값은 `champion_data.js`의 ashe 항목 주석에 명시적으로 근사값임을 밝혀뒀다.
+
+- **패시브(서리 화살)**: 기본 공격마다 대상을 둔화시킨다(레벨 구간 5~35%, 궁사의 집중 활성 중 +20%). 치명타는 추가 피해 대신 훨씬 강한 둔화(40~60%)로 대체된다.
+- **Q(궁사의 집중)**: 별도 시전 모션이 없는 순수 상태 스킬(가렌/다리우스 W와 동일한 유형)로 구현했다. 기본 공격마다 집중 중첩을 얻고(최대 4), 최대 중첩에서 사용하면 6초간 공격 속도(레벨별 20~60%)를 얻으며 그 동안의 첫 기본 공격이 다발 공격(화살 6발, 총 AD 비율을 사거리 내 여러 대상에 분배)으로 바뀐다.
+- **W(일제 사격)**: 전방 부채꼴(`findEnemiesInRadius`의 forward/maxAngleDeg) 안의 모든 적에게 물리 피해+둔화, 대상당 정확히 한 번만 판정한다.
+- **E(매 날리기)**: 피해 없는 순수 정찰 스킬 - 위에서 설명한 새 시야 시스템에 실제로 연결되어, 도착 지점에 진짜로 시야를 밝힌다.
+- **R(마법의 수정화살)**: 전 맵 사거리(Global, 이즈리얼 R과 동일한 `range||20000` 관례 재사용) 관통형 스킬샷. 이즈리얼 R의 `rTravel`(매 프레임 진행하는 광선) 패턴을 재사용하되, 미니언/구조물은 통과하고 첫 적 챔피언에 닿는 즉시 멈춘다. 명중 시 마법 피해+기절(비행 거리에 비례해 1~3.5초)을 주고, 명중 지점 주변에도 같은 피해(기절 제외)와 짧은 시야를 부여한다.
+- **애니메이션**: 실제 클립명(Attack1/Attack2/Crit/Death/Idle1~5/Run/Run2/Run3/Spell1~4/Spell1_In/Channel/Channel_Wndup 등) 기준으로 등록했다. 평타는 실제 2종류(Attack1/Attack2)만 순환하도록 고정했고, `Channel`/`Channel_Wndup` 클립이 있어도 바루스 R과 동일한 이유로 R에 연결하지 않았다(`SKILL_TIMING_DATABASE.ashe.R`로 `hasRChannel` 자동 추정을 꺼서 막음).
+
+## 바루스/이즈리얼/아리 프로젝트 통합 + 애쉬 추가
+
+사용자가 서로 다른 시점에 저장된 3개의 스냅샷(`leagueoflegendahri.zip` - 아리 추가 직후, `darius_modular_project_v9_with_ezreal.zip` - 다리우스 기반 + 이즈리얼 추가, `varus_project.zip` - 바루스 추가 + 그 이전 아리/이즈리얼 수정사항까지 전부 포함)을 제공했다. 세 파일 전체를 비교한 결과 `varus_project.zip`이 나머지 둘의 모든 파일을 내용까지 포함하는 완전한 상위 호환 스냅샷임을 확인했다(세 zip 모두 동일 프로젝트의 서로 다른 체크포인트 - 파일 목록 diff와 공용 파일 크기(character_controller.js/champion_ability_database.js/ezreal.js/ahri.js) 비교로 교차 검증). 즉 "바루스+이즈리얼+아리 통합"은 `varus_project.zip` 자체가 이미 끝낸 상태였고, 이 세션에서는 그 위에 애쉬를 새로 얹었다.
+
+이 `varus_project.zip`은 이전 세션에서 작업했던 "varus_project_fixed_2.zip"보다 더 이른 시점의 바루스 구현(살아있는 복수 패시브가 이벤트 기반이 아니라 평타 지속 시 서서히 오르는 공격속도 램프 방식, `범위 표시(RangeIndicatorSystem)` 코드가 아직 `range_indicator.js`로 역이식되지 않고 `attack_sequence.js`에 섞여 있는 상태 등)을 담고 있다 - 그 차이를 그대로 인정하고 이 스냅샷을 기준으로 애쉬를 통합했다(다른 세션의 더 발전된 바루스 구현을 임의로 끼워 넣지 않음 - 사용자가 실제로 제공한 자료를 기준으로 작업한다는 원칙).
+
+## 시야 시스템(Vision System) 추가
+
+실제 LoL의 핵심 규칙인 "시야 밖의 적은 보이지 않는다"를 재현하는 범용 시스템을 `src/core/vision_system.js`에 새로 만들었다. 조작 중인 챔피언이 지속적인 시야 공급원이고, 애쉬 E(매 날리기)/R(마법의 수정화살)처럼 스킬이 임시 시야를 추가로 등록할 수 있다(`visionSystem.grantVision(위치, 반경, 지속시간)`). 매 프레임 모든 적 유닛(더미/미니언/포탑/억제기/넥서스)이 "어떤 시야 공급원이든 범위 안에 있는가"만 판정해서 3D 모델/머리 위 라벨을 보이거나 숨긴다. 바닥에는 안개 오버레이(동적 캔버스 텍스처)를 그려서 실제로 시야가 좁혀지는 게 눈에 보이게 했다.
+
+- **튜닝 포인트**: 모든 수치가 `VISION_CONFIG` 객체 하나(`vision_system.js` 상단)에 모여있다 - 챔피언 기본 시야 반경(`championSightRange`, 기본 1200 - 실제 LoL 챔피언들의 표준 시야 반경과 비슷한 값), 챔피언별 재정의(`championSightOverride`), 안개 표시 방식(`fogMode: 'hide'|'dim'`), 안개 오버레이의 해상도/불투명도/경계 부드러움(`fogOverlay`). 실제 인게임 수치에 더 가깝게 맞추고 싶으면 이 객체 값만 바꾸면 되고 클래스 로직이나 각 챔피언 파일은 전혀 건드릴 필요가 없다.
+- **UI**: 설정 패널에 "시야 시스템(전장의 안개)" 체크박스를 추가했다(기본 켜짐) - 꺼서 기존처럼 모든 적을 항상 보이는 상태로 되돌릴 수 있다.
+- **명시적으로 생략한 부분**(수치/기능을 지어내지 않고 생략 - 이 프로젝트의 기존 원칙): 덤불에 의한 근접 은신, 벽에 의한 시야 차단(라인오브사이트) - 이 맵에는 덤불/벽 판정 자체가 없어 순수 원형(반경) 판정만 사용한다. 와드 설치 기능도 없다(이 데모에 아이템/소환사 주문 시스템 자체가 없어 다른 챔피언들의 아이템 생략과 동일한 원칙) - `grantVision()`은 범용 진입점이라 나중에 와드 개념을 추가해도 그대로 재사용할 수 있다.
+- **검증**: 이번 세션은 (이전 세션들과 달리) `registry.npmjs.org`를 통해 `three.js`를 로컬로 내려받고 헤드리스 Chromium(Playwright)으로 실제로 페이지를 띄워볼 수 있었다 - WebGL 렌더링이 정상 동작하고 콘솔에 JS 예외가 0건인 것을 확인했다(이는 `CHAMPION_DATA.ashe`/`championAbilityDatabase.ashe`/`VisionSystem` 클래스를 포함한 전체 모듈이 문법 오류 없이 로드 시점에 한 번 전부 실행됐다는 뜻이다). 다만 사용자가 제공했던 실제 애쉬 GLB 파일은 이 세션의 업로드 폴더에 더 이상 없어서(별도 세션/컨테이너였음), 실제 GLB를 불러와 Q/W/E/R을 직접 눌러보며 시야가 걷히는 것까지 두 눈으로 확인하는 end-to-end 테스트는 하지 못했다 - 원래 사용하던 애쉬 GLB 파일을 "GLB 교체" 화면에서 불러오면 그대로 이어서 쓸 수 있다.

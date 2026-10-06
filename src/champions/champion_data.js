@@ -1001,6 +1001,106 @@ const CHAMPION_DATA = {
       damageType: 'MAGICAL',
     },
   },
+  // 애쉬(Ashe): 사용자가 제공한 실제 애쉬.glb(87노드/24클립, 사용자 업로드본)로
+  // 모션을 구현했다. 이 세션도 조직 네트워크 정책상 wiki.leagueoflegends.com/
+  // leagueoflegends.fandom.com/mobafire.com/공식 KR 챔피언 페이지 전부
+  // EGRESS_BLOCKED라 실시간 툴팁 원문 전체 대조는 하지 못했다 - 대신
+  // WebSearch 스니펫으로 얻을 수 있었던 조각 정보를 교차 확인해 최대한
+  // 반영했고, 그마저도 확인이 안 된 수치는 이 프로젝트의 "수치 임의
+  // 발명 금지" 원칙에 따라 명시적으로 근사값임을 밝혀둔다(정확한 최신
+  // 패치 수치는 실제 위키 접근이 가능해지면 다시 검증이 필요하다 - README
+  // 참고).
+  // - 기본 스탯: 오랫동안 거의 변하지 않은 것으로 널리 알려진 애쉬의 표준
+  //   스탯(사거리 600 - 원거리 챔피언 중 최장급, 공격속도 성장치가 유독
+  //   낮은 것이 특징)을 사용했다. HP5/마나5는 다른 챔피언과 동일한 관례로
+  //   "5초당" 수치를 그대로 저장한다.
+  // - 패시브(서리 화살): WebSearch 스니펫(Fandom 미러)에서 "5-35%(레벨
+  //   비례) 둔화 + 궁사의 집중 활성 중 +20%, 치명타는 추가 피해 대신
+  //   40-60%(레벨 비례)의 강화 둔화(1초에 걸쳐 일반 세기로 감쇠)"를
+  //   확인했다. 감쇠(decay) 부분은 이 프로젝트의 SLOW 상태이상 시스템이
+  //   지속시간 동안 감쇠하는 기능이 아직 없어 고정 세기로 근사한다.
+  // - Q(궁사의 집중): WebSearch에서 확인한 현재(리워크 이후) 버전 수치 -
+  //   평타 4중첩(공격마다 갱신), 최대 중첩에서 사용하면 6초간 공격속도
+  //   20/30/40/50/60%를 얻고, 그 동안의 "첫" 평타가 6발의 화살로 갈라져
+  //   나가며 총 132/138/144/150/156%의 물리 피해를 맞은 대상들이 나눠
+  //   받는다(대상이 하나뿐이면 그 하나가 전부 받음).
+  // - W(일제 사격)/E(매 날리기): 쿨다운/피해량(W)은 WebSearch 스니펫으로
+  //   확인했으나 사거리/폭(W)과 사거리/재사용형태(E)는 스니펫마다 다른
+  //   패치의 수치가 섞여 나와 신뢰도 높은 확정을 하지 못했다 - 오랫동안
+  //   널리 알려진 근사값(사거리 등)을 사용하고 아래 각 필드 주석에 근사
+  //   여부를 명시했다. E는 순수 정찰(시야) 스킬인데, 이 프로젝트에 새로
+  //   추가한 시야 시스템(src/core/vision_system.js)을 통해 실제로 해당
+  //   지점에 실제로 시야를 밝힌다(비행 경로 자체의 실시간 시야까지는
+  //   구현하지 않음 - 도착 지점 기준 원형 시야로 근사).
+  // - R(마법의 수정화살): 전 맵 사거리(Global) 스킬샷이라는 점, 기절
+  //   지속시간이 비행 거리에 비례한다는 점, 주 대상 외 주변 적도 같은
+  //   피해를 받지만 기절은 걸리지 않는다는 점을 WebSearch로 확인했다.
+  //   "Global" 사거리는 이 프로젝트에서 이미 이즈리얼 R(정조준 사격,
+  //   ezreal.js의 _ezrealCastR/range||20000)이 쓰는 관례(20000)를 그대로
+  //   재사용한다 - 새로운 "글로벌 사거리" 개념을 따로 만들지 않는다.
+  ashe: {
+    displayName: '애쉬',
+    stats: {
+      hp: 610, hpGrowth: 99, hpRegen: 3.75, hpRegenGrowth: 0.65,
+      ad: 59, adGrowth: 3.3, attackSpeed: 0.658, attackSpeedGrowthPercent: 1.0,
+      armor: 26, armorGrowth: 4.45, mr: 30, mrGrowth: 1.3,
+      range: 600, moveSpeed: 325, mana: 280, manaGrowth: 35, manaRegen: 6.75, manaRegenGrowth: 0.65,
+    },
+    passive: {
+      name: '서리 화살',
+      desc: '애쉬의 기본 공격은 대상을 둔화시킨다. 치명타는 추가 피해 대신 훨씬 강한 둔화를 적용한다(1초에 걸쳐 원래 세기로 감쇠).',
+      slowByLevel: { breakpoints: [1, 6, 11, 16], values: [5, 15, 25, 35] },
+      qActiveBonusSlowPercent: 20, // 궁사의 집중(Q) 활성 중 추가 둔화
+      critSlowByLevel: { breakpoints: [1, 6, 11, 16], values: [40, 45, 50, 60] },
+      slowDurationSec: 1.0,
+      // 매 기본 공격마다 짧은(1초) 시야를 대상 방향으로 부여 - 공식 설명
+      // "기본 공격이 짧은 시야를 부여한다"를 새 시야 시스템(vision_system.js)에
+      // 연결한 것. 공식 수치(반경) 미확인이라 근사값.
+      attackVisionRadius: 500, attackVisionDurationSec: 1.0,
+    },
+    Q: {
+      name: '궁사의 집중',
+      desc: '기본 공격마다 집중 중첩을 얻는다(최대 4중첩, 공격할 때마다 지속시간 갱신). 최대 중첩에서 사용하면 중첩을 모두 소모해 6초간 공격 속도를 얻고, 그 동안의 첫 기본 공격이 강력한 다발 공격(화살 6발)으로 바뀌어 총 피해를 맞은 대상들에게 나누어 입힌다.',
+      maxStacks: 4, stackWindowSec: 4.0, buffDurationSec: 6.0,
+      attackSpeedPercentByLevel: [20, 30, 40, 50, 60],
+      flurryArrowCount: 6,
+      flurryTotalAdPercentByLevel: [132, 138, 144, 150, 156],
+      flurrySpreadRange: 400, // 다발 공격이 여러 대상을 나눠 맞히는 탐색 반경(공식 수치 미확인 - 근사)
+      flurryMissileSpeed: 3200,
+      cooldown: 0, mana: 0, // 재사용 대기시간/마나 없음 - 4중첩 확보가 실제 사용 제약
+      damageType: 'PHYSICAL',
+    },
+    W: {
+      name: '일제 사격',
+      desc: '전방에 부채꼴로 여러 발의 화살을 발사한다. 화살들은 서로 다른 대상을 노리지만, 한 대상은 한 번만 피해를 입는다.',
+      cooldown: [18, 17, 16, 15, 14], mana: [50, 60, 70, 80, 90], // 마나 수치는 공식 확인 못함 - 유사 포크류 스킬 관례로 근사
+      range: 1200, coneAngleDeg: 46, // 사거리/각도는 공식 확인 못함 - 널리 알려진 근사값
+      damageByLevel: [25, 45, 65, 85, 105], bonusAdRatio: 1.2,
+      castTimeSec: 0.25,
+      damageType: 'PHYSICAL',
+    },
+    E: {
+      name: '매 날리기',
+      desc: '매의 영혼을 지정한 위치로 보내 경로와 도착 지점의 시야를 밝힌다. 피해를 주지 않는 순수 정찰 스킬이다.',
+      cooldown: [20, 18, 16, 14, 12], mana: 40, // 공식 쿨다운은 2중첩 재충전형이나, 이 엔진에 공용 "충전" 자원 시스템이 없어 단일 쿨다운으로 근사
+      range: 4000, missileSpeed: 1700,
+      visionRadius: 900, visionDurationSec: 5.0,
+      castTimeSec: 0.25,
+    },
+    R: {
+      name: '마법의 수정화살',
+      desc: '전 맵 사거리로 거대한 얼음 화살을 발사한다. 처음 맞힌 적 챔피언에게 마법 피해를 입히고 기절시키며(비행 거리가 길수록 기절 시간 증가), 주변의 다른 적에게도 같은 피해를 입히지만 기절은 걸지 않는다.',
+      cooldown: [120, 100, 80], mana: [150, 175, 200],
+      range: 20000, // "글로벌" 사거리 - ezreal.js의 R(정조준 사격)과 동일한 관례(20000) 재사용
+      missileSpeed: 1650, width: 130,
+      damageByLevel: [200, 400, 600], apRatio: 1.2,
+      splashDamagePercent: 100, splashRadius: 400,
+      minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 20000,
+      castTimeSec: 0.5,
+      visionRadius: 900, visionDurationSec: 3.0, // 비행 경로/명중 지점에도 짧은 시야(공식 설명: "1초간 경로의 시야를 밝힌다" - 근사)
+      damageType: 'MAGICAL',
+    },
+  },
  };
 
 // 스킬레벨(Q/W/E/R 1~5, R 1~3) 배열에서 값을 꺼낸다. 스칼라면 그대로 반환.

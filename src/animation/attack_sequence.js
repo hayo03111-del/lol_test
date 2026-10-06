@@ -50,6 +50,11 @@ const ATTACK_SEQUENCE_OVERRIDES = {
   // 바루스: 실제 존재하는 평타 클립은 Attack1/Attack2 2종류뿐이다(위
   // action_timing.js의 바루스 attackVariants 강제 고정 주석 참고).
   varus: ['attack1', 'attack2'],
+  // 애쉬: 실제 존재하는 평타 클립도 Attack1/Attack2 2종류뿐이다(위
+  // action_timing.js의 애쉬 attackVariants 강제 고정 주석 참고) - 등록하지
+  // 않으면 존재하지 않는 "3번째 평타" 자리에 중복 클립이 들어가는, 다른
+  // 챔피언들과 동일한 유형의 버그가 생긴다.
+  ashe: ['attack1', 'attack2'],
 };
 // 시퀀스 배열에서의 위치를 챔피언 고유의 "손/방향" 의미로 변환한다.
 // 새 챔피언이 추가되면 이 매핑만 확장하면 된다 - 애니메이션 선택 로직
@@ -114,6 +119,16 @@ const SKILL_HITBOX_SHAPE = {
   varus: {
     Q: { type: 'line', halfWidthWorld: lolRangeToWorld(75) * 0.5 },
     R: { type: 'line', halfWidthWorld: lolRangeToWorld(450) * 0.5 },
+  },
+  // 애쉬 W(일제 사격)는 부채꼴로 퍼지는 다중 화살이라 원이 아니라 콘(cone)
+  // 형태로 그린다(champion_data.js의 ashe.W.coneAngleDeg와 동일한 값).
+  // R(마법의 수정화살)은 화살이므로 직선(line) 실루엣으로 그린다 - 다만
+  // 사거리가 "글로벌"(20000)이라 그대로 그리면 지나치게 길어지므로, 아래
+  // RangeIndicatorSystem.update()의 애쉬 R 전용 분기가 표시용 사거리만
+  // 맵 크기에 맞춰 클램프한다(실제 판정 사거리 자체는 그대로 20000).
+  ashe: {
+    W: { type: 'cone', angleDeg: 46 },
+    R: { type: 'line', halfWidthWorld: lolRangeToWorld(130) * 0.5 },
   },
 };
 // 세트 W처럼 형태 자체가 챔피언 고유 파라미터(centerHalfWidth 등)를 쓰는
@@ -238,7 +253,12 @@ class RangeIndicatorSystem {
     this.centerLaneMesh.visible = false;
     for (const slot of ['Q', 'W', 'E', 'R']) {
       let range = null;
-      if (cd && cd[slot]) {
+      if (ctrl.championId === 'ashe' && slot === 'R' && cd && cd.R) {
+        // 애쉬 R은 실제 사거리가 "글로벌"(20000)이라 그대로 표시하면 화면
+        // 밖까지 화살이 그려진다 - 판정용 사거리(cd.R.range)는 그대로 두고,
+        // 표시만 이 맵의 실제 이동 가능 거리에 맞춰 클램프한다.
+        range = Math.min(cd.R.range || 20000, 12000);
+      } else if (cd && cd[slot]) {
         const data = cd[slot];
         const lvl = Math.max(1, (ctrl.skillLevels && ctrl.skillLevels[slot]) || 1);
         // range/range1/rangeBase(+rangePerStack) 등 챔피언마다 다른 필드명을
