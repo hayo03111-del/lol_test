@@ -1,0 +1,1 @@
+runtime.js is embedded into ../index.html so the project can run directly from file:// in Chrome without local ES-module CORS errors.
