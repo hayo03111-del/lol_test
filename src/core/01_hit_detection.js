@@ -61,6 +61,23 @@ function getAllEnemyUnits() {
   }
   return list;
 }
+// 시야 시스템(vision_system.js) 연동 - "실제로 보이는" 적만 타게팅/
+// 클릭/논타겟 스킬 판정 대상으로 쓴다. getAllEnemyUnits() 자체는 건드리지
+// 않는다(VisionSystem.update()가 "누가 보여야 하는가"를 판정할 때
+// getAllEnemyUnits()의 원본(가공 전) 목록을 그대로 써야 하므로 - 이미
+// 걸러진 목록을 입력으로 받으면 한 번 시야 밖으로 나간 유닛은 다시 시야
+// 안에 들어와도 영원히 걸러져 나오지 못하는 순환 참조 버그가 생긴다).
+// 대신 이 함수 하나를 "플레이어가 실제로 타게팅할 수 있는 적" 전용
+// 진입점으로 따로 두고, 아래 findEnemiesInRadius/findFirstInLine과
+// global_system_instances.js의 클릭 타게팅(getEnemyHit)만 이 함수를
+// 쓴다 - 그 외 챔피언 전용 커스텀 로직(바루스 R 확산, 아리 매혹 우선순위
+// 탐색, 이즈리얼 R 관통 등)은 각자 getAllEnemyUnits()를 직접 쓰므로 이번
+// 시야 시스템 추가 범위에는 포함되지 않는다(명시적 한계 - README 참고).
+function getTargetableEnemyUnits() {
+  const all = getAllEnemyUnits();
+  if (typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled) return all;
+  return all.filter((u) => visionSystem.isVisible(u));
+}
 // 자기중심 범위(Self-centered Area) 판정 - 다리우스 Q, 가렌 E 등.
 // forward/maxAngleDeg를 주면 부채꼴(정면 기준 각도 제한)로도 쓸 수 있다.
 // (Range/Distance 시스템의 isInCircle/isInCone 위에서 동작 - 판정 로직
@@ -69,7 +86,7 @@ function getAllEnemyUnits() {
 function findEnemiesInRadius(center, lolRadius, { forward = null, maxAngleDeg = null } = {}) {
   const radius = lolRangeToWorld(lolRadius); // 버그 수정: 지금까지 LoL 원본 반경(예: 900)을 그대로 world 반경으로 썼다
   const hits = [];
-  for (const u of getAllEnemyUnits()) {
+  for (const u of getTargetableEnemyUnits()) {
     const inShape = (forward && maxAngleDeg != null) ? isInCone(u, center, forward, radius, maxAngleDeg) : isInCircle(u, center, radius);
     if (!inShape) continue;
     hits.push({ unit: u, distance: getHorizontalDistance(getWorldPosition(u), center) });
@@ -85,7 +102,7 @@ function findEnemiesInRadius(center, lolRadius, { forward = null, maxAngleDeg = 
 function findFirstInLine(origin, dir, lolRange, halfWidth) {
   const range = lolRangeToWorld(lolRange); // 버그 수정: LoL 원본 사거리를 그대로 world 거리로 썼다
   let best = null;
-  for (const u of getAllEnemyUnits()) {
+  for (const u of getTargetableEnemyUnits()) {
     const p = getWorldPosition(u);
     const r = getCollisionRadius(u);
     const toTarget = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);

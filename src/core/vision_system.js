@@ -101,6 +101,15 @@ class VisionSystem {
     });
   }
 
+  // 특정 유닛이 지금 시야 안에 있는지(= 타게팅/클릭/스킬 판정에 노출돼도
+  // 되는지) 조회하는 공용 진입점. 시스템이 꺼져 있으면 항상 true(기존
+  // 동작 그대로). getAllEnemyUnits()를 매번 다시 돌리지 않고 update()가
+  // 매 프레임 갱신해두는 캐시(_visibleCache)를 그대로 읽기만 한다.
+  isVisible(unit) {
+    if (!this.enabled) return true;
+    return this._visibleCache.has(unit);
+  }
+
   setEnabled(v) {
     this.enabled = v;
     if (this._fogMesh) this._fogMesh.visible = v && VISION_CONFIG.fogOverlay.enabled;

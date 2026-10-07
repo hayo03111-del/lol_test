@@ -1287,7 +1287,7 @@ class CharacterController {
     if (!origin) return null;
     const maxRange = Math.max(this.attackOrderRetargetRadius, lolRangeToWorld(this.stats.attackRange || 0) * 3);
     let best = null, bestDist = Infinity;
-    const candidates = typeof getAllEnemyUnits === 'function' ? getAllEnemyUnits() : [];
+    const candidates = typeof getTargetableEnemyUnits === 'function' ? getTargetableEnemyUnits() : [];
     for (const candidate of candidates) {
       if (!candidate || candidate === this || candidate.hp <= 0 || candidate.isDead || candidate.destroyed || candidate.isUntargetable) continue;
       if (!canRealmInteract(this, candidate)) continue;

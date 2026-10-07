@@ -60,7 +60,11 @@ function getEnemyHit(clientX, clientY) {
   // isUntargetable이라 getAllEnemyUnits() 자체에서 이미 제외된다(요청 6/43).
   // BLUE(플레이어 자신의 진영)는 애초에 getAllEnemyUnits()에 들어가지
   // 않으므로 실수로 아군을 클릭해 공격하는 일도 자동으로 방지된다.
-  const candidates = getAllEnemyUnits();
+  // 시야 시스템 연동: 지금 실제로 보이는 적만 클릭 대상 후보로 삼는다
+  // (getAllEnemyUnits()가 아니라 getTargetableEnemyUnits()를 쓴다 -
+  // 01_hit_detection.js 참고). 시스템이 꺼져 있으면 기존과 완전히 동일하게
+  // 동작한다.
+  const candidates = getTargetableEnemyUnits();
   if (!candidates.length) return null;
   mouseNDC.x = (clientX / window.innerWidth) * 2 - 1;
   mouseNDC.y = -(clientY / window.innerHeight) * 2 + 1;
