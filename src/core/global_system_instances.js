@@ -57,7 +57,21 @@ function _itemStatsSummary(item) {
   if (item.cleavePassive) parts.push(`쪼개기(평타 시 주변에 근거리 ${Math.round(item.cleavePassive.meleePercent * 100)}%｜원거리 ${Math.round(item.cleavePassive.rangedPercent * 100)}% 물리 피해)`);
   if (item.activeAbility) parts.push(`사용 시 "${item.activeAbility.nameKo}": 주변 적에게 공격력 ${Math.round(item.activeAbility.percentAD * 100)}% 물리 피해(재사용 대기시간 ${item.activeAbility.cooldownSec}초)`);
   if (item.spellbladePassive) parts.push(`주문 검: 스킬 사용 후 다음 평타에 공격력 ${Math.round(item.spellbladePassive.bonusAdPercent * 100)}% 추가 물리 피해(자체 재사용 대기시간 ${item.spellbladePassive.procCooldownSec}초)`);
-  if (item.burnOnDamagePassive) parts.push(`발화(피해 시 ${item.burnOnDamagePassive.durationSec}초간 매초 ${item.burnOnDamagePassive.dmgPerSec} 마법 고정 피해)`);
+  if (item.burnOnDamagePassive) parts.push(`발화(피해 시 ${item.burnOnDamagePassive.durationSec}초간 매초 ${item.burnOnDamagePassive.dmgPerSec}(몬스터 ${item.burnOnDamagePassive.monsterDmgPerSec}) 마법 고정 피해)`);
+  // 버그 수정(QA 요청 "효과가 제대로 적용되게 해줘"): 아래 패시브들은
+  // item_system.js에 실제로 구현/테스트까지 돼 있었지만, 이 함수가 각
+  // 라운드마다 새로 추가된 설명을 전부 따라가지 못해 상점 툴팁에 전혀
+  // 나타나지 않고 있었다(스탯 뒤에 아무 설명도 없으면 "효과가 적용 안
+  // 된다"고 오해하기 쉽다) - 실제 로직은 그대로 두고 설명만 보강한다.
+  if (item.manaRegenPassive) { const p = item.manaRegenPassive; parts.push(`흡수(매초 마나 ${p.baseManaPerSec} 회복, 전투 중 ${p.combatWindowSec}초간 매초 ${p.combatManaPerSec}로 증가, 마나가 없으면 대신 체력 ${Math.round(p.noManaHpRegenPercent * 100)}% 회복)`); }
+  if (item.regenPassive) { const p = item.regenPassive; parts.push(`인내의 집중력(평시 ${p.tickSec}초마다 체력 ${p.hpPerTick} 회복)`); }
+  if (item.champDamageRegen) { const p = item.champDamageRegen; parts.push(`인내의 집중력(전투 중 피격 후 ${p.durationSec}초 동안 최대 근접 ${p.meleeMaxHp}｜원거리 ${p.rangedMaxHp} 체력 회복)`); }
+  if (item.harvestPassive) { const p = item.harvestPassive; parts.push(`수확(미니언 처치 시 골드 ${p.minionGoldPerKill}, 최대 ${p.minionGoldCap}까지 누적 시 ${p.bonusGoldAtCap} 추가 지급)`); }
+  if (item.gloryPassive) { const p = item.gloryPassive; parts.push(`영광(챔피언 처치 관여 시 중첩당 주문력 +${p.apPerStack}, 최대 ${p.maxStacks}중첩, 사망 시 ${p.deathLossStacks}중첩 소실)`); }
+  if (item.manaCirculationPassive) { const p = item.manaCirculationPassive; parts.push(`마나순환(적중 시 최대 마나 +${p.maxManaPerHit}｜챔피언 +${p.maxManaPerChampionHit}, 누적 최대 ${p.maxManaCap}, 충전 ${p.maxCharges}회/${p.rechargeSec}초)`); }
+  if (item.slaughterPassive) { const p = item.slaughterPassive; parts.push(`학살(챔피언 처치 관여 시 중첩당 흡혈 +${(p.vampPerStack * 100).toFixed(1)}%, 최대 ${p.maxStacks}중첩)`); }
+  if (item.manaSpentToHealPercent) parts.push(`영원(스킬 사용 시 소모 마나의 ${Math.round(item.manaSpentToHealPercent * 100)}%만큼 체력 회복, 초당 최대 ${item.manaSpentHealCapPerSec} HP)`);
+  if (item.carryoverMoveSpeedOnUpgrade) parts.push(`다른 신발로 바꿔도 이동 속도 +${item.carryoverMoveSpeedOnUpgrade} 효과 유지`);
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
@@ -99,8 +113,14 @@ function renderShopPanel() {
     nameEl.title = _itemStatsSummary(item) + (item.priceGuessed ? ' · *가격은 원문 누락으로 실제 LoL 가격 사용' : '');
     const btn = document.createElement('button');
     const alreadyWorn = item.isBoots && controller && controller.boots && controller.boots.id === itemId;
+    // 버그 수정(QA 요청): "unaffordable"(이름 회색 처리)만 하고 버튼 자체는
+    // 계속 눌러지는 상태였다 - 클릭해도 buyItem()이 조용히 console.warn만
+    // 찍고 아무 일도 안 일어나니 "눌렀는데 효과가 안 적용된다"로 보일 수
+    // 있었다. 골드가 부족하면 버튼도 함께 비활성화해서 클릭 가능 여부와
+    // 회색 표시가 항상 일치하게 한다.
+    const cannotAfford = controller && (controller.gold || 0) < payCost;
     btn.textContent = alreadyWorn ? '장착됨' : canBuild ? '조합' : (item.isBoots ? '착용' : '구매');
-    btn.disabled = !!alreadyWorn;
+    btn.disabled = !!alreadyWorn || !!cannotAfford;
     btn.title = nameEl.title;
     btn.addEventListener('click', () => { if (typeof buildOrBuyItem === 'function' && controller) buildOrBuyItem(controller, itemId); });
     row.appendChild(nameEl);
