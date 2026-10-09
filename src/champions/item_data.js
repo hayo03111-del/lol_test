@@ -477,6 +477,73 @@ const ITEM_DATA = {
     // "체력이 30% 아래일 경우 최대 응징 추가 효과가 적용됩니다").
     vengeancePassive: { maxAdPercent: 0.12, maxAtHpPercent: 0.30 },
   },
+
+  // [전설급 아이템] 3차분 - 거대한히드라~수호천사(원문 760~812줄). "강철인장"
+  // (죽음의무도/수호천사의 하위템 중 하나)은 2차분에서 이미 발견한 가격
+  // 모순(1100원인데 하위템 합이 1950원) 때문에 그때부터 ITEM_DATA에 없는
+  // 상태다 - 그 두 아이템은 recipe 없이(직접 구매만) 반영한다(가짜 숫자를
+  // 채워 넣지 않는다는 원칙 그대로 유지).
+  giantsBelt: { id: 'giantsBelt', nameKo: '거인의 허리띠', cost: 900, recipe: ['rubyCrystal'], stats: { maxHp: 350 } },
+
+  // 거대한히드라/발걸음분쇄기 공용 "쪼개기" - 기본 공격 적중 시 대상 본인에게
+  // 최대체력 비례 추가 물리 피해 + "대상 뒤의 적들"에게 더 센 최대체력
+  // 비례 물리 피해. 방향성("대상 뒤")은 이 프로젝트에 적 전용 좌표/진행
+  // 방향 판정이 없어 티아맷 쪼개기와 동일한 "주변 반경" 판정으로 근사한다
+  // (명시적 근사 - item_system.js 주석 참고). 구조물에는 적용하지 않는다(원문 그대로).
+  titanicHydra: {
+    id: 'titanicHydra', nameKo: '거대한히드라', cost: 3300, recipe: ['tiamat', 'tunnelers', 'giantsBelt'],
+    stats: { attackDamage: 40, maxHp: 600 },
+    cleaveMaxHpPassive: { meleeTargetPercent: 0.01, rangedTargetPercent: 0.005, meleeSplashPercent: 0.03, rangedSplashPercent: 0.015, radius: 400 },
+    // 거대한 초승달 - 즉시 피해를 주는 게 아니라 "다음 쪼개기"를 강화하는
+    // 무장형 액티브(광휘의 검 스펠블레이드와 비슷한 "다음 평타 강화" 구조를
+    // 재사용) - 10초 재사용대기시간.
+    empoweredCleaveActive: { nameKo: '거대한 초승달', cooldownSec: 10, meleeTargetBonusPercent: 0.04, rangedTargetBonusPercent: 0.02, meleeSplashBonusPercent: 0.09, rangedSplashBonusPercent: 0.045 },
+  },
+  // 발걸음분쇄기 - 같은 "쪼개기" 패시브에 공격속도까지 추가되고, 액티브는
+  // 즉시 발동형(범위 피해+둔화+적중당 이동속도 증가)으로 다르다.
+  hydraOfHeroism: {
+    id: 'hydraOfHeroism', nameKo: '발걸음분쇄기', cost: 3300, recipe: ['tiamat', 'devourerAxe', 'dagger'],
+    stats: { attackDamage: 40, attackSpeedPercent: 0.25, maxHp: 450 },
+    cleaveMaxHpPassive: { meleeTargetPercent: 0.01, rangedTargetPercent: 0.005, meleeSplashPercent: 0.03, rangedSplashPercent: 0.015, radius: 400 },
+    // 파괴의 충격파 - 즉시 범위 물리 피해 + 35% 둔화 + 맞은 챔피언 하나당
+    // 35% 추가 이동속도(3초에 걸쳐 감소) - 재사용대기시간 15초.
+    shockwaveActive: { nameKo: '파괴의 충격파', cooldownSec: 15, meleePercentAD: 0.80, rangedPercentAD: 0.40, radius: 400, slowPercent: 0.35, slowDurationSec: 2.0, msPerChampionHitPercent: 0.35, msDurationSec: 3.0 },
+  },
+
+  sterakssGage: {
+    id: 'sterakssGage', nameKo: '스테락의도전', cost: 3200, recipe: ['pickaxe', 'tunnelers', 'rubyCrystal'],
+    stats: { maxHp: 400 },
+    tenacityPercent: 0.20,
+    // 잡아채는 발톱 - "기본 50%의 추가 공격력"은 챔피언 기본(레벨) 공격력의
+    // 50%를 보너스 공격력으로 얻는다는 뜻으로 해석했다(마나무네 "경탄"과
+    // 동일한 이유로 computeChampionStats()에서 기본 공격력을 다시 구해 쓴다).
+    bonusAdPercentOfBaseAd: 0.50,
+    // 생명선 - 멜모셔스의 아귀와 달리 피해 종류를 가리지 않는다(원문에
+    // "마법 피해로"라는 제한이 없음 - "피해를 입으면"). 보호막은 추가 체력
+    // 비례(정액+비례 없이 추가 체력의 60% 그 자체), 4.5초에 걸쳐 점차
+    // 감소한다. "8초간 크기 10% 증가"는 순수 시각 효과라 생략한다.
+    lifelinePassive: { hpThresholdPercent: 0.30, icdSec: 90, shieldDurationSec: 3.0, shieldDecaySec: 4.5, bonusHpShieldPercent: 0.60 },
+  },
+
+  // 죽음의무도 - 강철인장이 ITEM_DATA에 없어 recipe 없이(직접 구매만) 반영한다.
+  deathsDance: {
+    id: 'deathsDance', nameKo: '죽음의무도', cost: 3300,
+    stats: { attackDamage: 60, armor: 50, abilityHaste: 15 },
+    // 고통 무시 - 받는 피해의 일부(근접 30%｜원거리 10%)를 즉시 받는 대신
+    // 3초에 걸쳐 나눠 받는다. 반항 - 피해를 입힌 챔피언이 3초 안에 죽으면
+    // 그 지속 피해가 사라지고 2초에 걸쳐 추가 공격력 75%만큼 회복한다.
+    ignorePainPassive: { meleeDeferPercent: 0.30, rangedDeferPercent: 0.10, deferDurationSec: 3.0 },
+    defiancePassive: { windowSec: 3.0, healBonusAdPercent: 0.75, healDurationSec: 2.0 },
+  },
+  // 수호천사 - 역시 강철인장이 ITEM_DATA에 없어 recipe 없이 반영한다.
+  guardianAngel: {
+    id: 'guardianAngel', nameKo: '수호천사', cost: 3200,
+    stats: { attackDamage: 55, armor: 45 },
+    // 환생 - 치명적인 피해를 받아도 쓰러지지 않고 4초간 경직(무적+대상 지정
+    // 불가, 기존 isUntargetable 재사용)된 뒤 체력 50%/마나 100% 회복.
+    // 재사용대기시간 300초.
+    revivePassive: { stasisDurationSec: 4.0, icdSec: 300, healHpPercent: 0.50, healMpPercent: 1.0 },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -490,6 +557,7 @@ const ITEM_ORDER = [
   'executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons',
   'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard',
   'trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'muramana', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail',
+  'giantsBelt', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -500,7 +568,7 @@ const ITEM_CATEGORIES = [
   // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
   // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
   // 하나에서 같이 보여준다.
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt'] },
   // 무라마나는 마나무네가 변신해서만 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
-  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail'] },
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel'] },
 ];

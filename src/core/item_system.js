@@ -107,6 +107,15 @@ function recomputeItemStats(ctrl) {
     const totalMaxMp = (baseStats ? baseStats.maxMp : 0) + (ctrl.itemBonusMana || 0);
     ctrl.itemBonusAD += totalMaxMp * ITEM_DATA[aweSlot.id].aweBonusAdPercentOfMana;
   }
+  // 스테락의도전(잡아채는 발톱) - "기본 50%의 추가 공격력"은 챔피언 기본
+  // 공격력의 50%를 보너스 공격력으로 얻는다는 뜻 - 경탄과 동일한 이유로
+  // computeChampionStats()에서 (레벨별로 자라는) 기본 공격력을 다시 구해 쓴다.
+  const sterakSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].bonusAdPercentOfBaseAd);
+  if (sterakSlot) {
+    const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
+    const baseAd = baseStats ? baseStats.attackDamage : 0;
+    ctrl.itemBonusAD += baseAd * ITEM_DATA[sterakSlot.id].bonusAdPercentOfBaseAd;
+  }
   ctrl.recomputeStats();
 }
 
@@ -309,6 +318,11 @@ function useItem(ctrl, slotIndex) {
   // 활성 사용 아이템(티아맷의 "초승달" 등) - 중첩/충전 소모가 없는 대신
   // 아이템 자체 쿨다운이 있다. 소비 아이템과 분기를 분리한다.
   if (item.activeAbility) return _useActiveAbilityItem(ctrl, item);
+  // 거대한히드라(거대한 초승달) - 즉시 피해가 아니라 "다음 쪼개기 한 번"을
+  // 강화하는 무장형 액티브.
+  if (item.empoweredCleaveActive) return _useEmpoweredCleaveActive(ctrl, item);
+  // 발걸음분쇄기(파괴의 충격파) - 즉시 발동형 범위 피해+둔화+이동속도.
+  if (item.shockwaveActive) return _useShockwaveActive(ctrl, item);
   // 제어 와드 - 인벤토리 중첩 소모형이지만 회복이 아니라 와드 설치가
   // 목적이라 별도 함수로 분리한다(투명 와드의 placeWard()와 유사한 구조,
   // 다만 트린켓 전용 슬롯이 아니라 6칸 인벤토리를 쓴다).
@@ -352,6 +366,51 @@ function _useActiveAbilityItem(ctrl, item) {
     }
   }
   console.log(`[ITEM] ${item.nameKo}(${item.activeAbility.nameKo}) 사용`);
+  return true;
+}
+
+// 거대한히드라 "거대한 초승달" - 즉시 피해를 주지 않고, 다음 쪼개기 한
+// 번(기본 공격 1회)의 대상/주변 피해량을 강화하는 무장(armed) 상태로
+// 만든다(광휘의 검 스펠블레이드 "다음 평타 강화" 구조를 재사용).
+function _useEmpoweredCleaveActive(ctrl, item) {
+  const now = performance.now();
+  ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
+  const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
+  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  ctrl._itemActiveCooldownUntil[item.id] = now + item.empoweredCleaveActive.cooldownSec * 1000;
+  ctrl._itemEmpoweredCleaveArmed = true;
+  console.log(`[ITEM] ${item.nameKo}(${item.empoweredCleaveActive.nameKo}) 무장`);
+  return true;
+}
+
+// 발걸음분쇄기 "파괴의 충격파" - 즉시 발동형 범위 물리 피해 + 챔피언
+// 대상 둔화 + 맞은 챔피언 수에 비례한 자신의 이동속도 증가(3초에 걸쳐
+// 선형 감쇠 - 01_status_effect_system.js의 MS_BUFF decayLinear 재사용).
+function _useShockwaveActive(ctrl, item) {
+  const now = performance.now();
+  ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
+  const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
+  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  const p = item.shockwaveActive;
+  ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
+  const isMelee = _itemIsMelee(ctrl);
+  const raw = (isMelee ? p.meleePercentAD : p.rangedPercentAD) * (ctrl.stats.attackDamage || 0);
+  let championHits = 0;
+  if (raw > 0 && typeof findEnemiesInRadius === 'function') {
+    const hits = findEnemiesInRadius(ctrl.root.position, p.radius);
+    for (const { unit } of hits) {
+      if (!unit || unit.hp <= 0 || unit.isTurret || unit.isInhibitor || unit.isNexus) continue; // 구조물 제외(원문 그대로)
+      applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      if (unit.isChampion && typeof applyStatus === 'function') {
+        applyStatus(unit, { id: 'itemHydraShockwaveSlow', type: 'SLOW', duration: p.slowDurationSec, value: p.slowPercent, source: ctrl });
+        championHits += 1;
+      }
+    }
+  }
+  if (championHits > 0 && typeof applyStatus === 'function') {
+    applyStatus(ctrl, { id: 'itemHydraShockwaveMs', type: 'MS_BUFF', duration: p.msDurationSec, value: championHits * p.msPerChampionHitPercent, decayLinear: true });
+  }
+  console.log(`[ITEM] ${item.nameKo}(${p.nameKo}) 사용 - 챔피언 ${championHits}명 적중`);
   return true;
 }
 
@@ -445,6 +504,33 @@ function itemSystemTick(ctrl, dt) {
   }
   ctrl._itemTempVampPercent = (ctrl._itemMawOmnivampUntil && now < ctrl._itemMawOmnivampUntil)
     ? ITEM_DATA.maw.lifelinePassive.omnivampPercentAfterTrigger : 0;
+  // 스테락의도전(생명선) - 맞지 않아도 4.5초에 걸쳐 보호막이 녹아내린다.
+  // ctrl.shield는 여러 아이템이 공유하는 단일 필드라 "줄어드는 상한선"
+  // 역할만 한다 - 실제로 흡수에 쓰여 이미 그보다 작아져 있으면 그대로 둔다
+  // (한계(명시): 이 시점에 다른 아이템의 보호막이 이 상한보다 커도 함께
+  // 깎일 수 있다 - ctrl.shield가 아이템 출처를 구분하지 않는 기존 공용
+  // 필드라는 설계를 그대로 따른 결과).
+  if (ctrl._itemSterakShieldState) {
+    const st = ctrl._itemSterakShieldState;
+    const remainFrac = Math.max(0, 1 - (now - st.startedAt) / 1000 / st.decaySec);
+    const cap = st.maxAmount * remainFrac;
+    if (cap <= 0.01) { ctrl._itemSterakShieldState = null; ctrl.shield = Math.min(ctrl.shield || 0, 0); }
+    else if ((ctrl.shield || 0) > cap) { ctrl.shield = cap; }
+  }
+  // 죽음의무도(고통 무시) - 지연 피해 묶음 진행.
+  _itemTickDeathsDanceDot(ctrl, dt);
+  // 수호천사(환생) - 경직 시간이 끝나면 대상 지정 불가를 풀고 체력 50%/
+  // 마나 100%로 부활시킨다("회복"이 아니라 그 비율로 직접 맞춘다 - 실제
+  // LoL 수호천사도 더하는 게 아니라 그 비율로 부활시킨다).
+  if (ctrl._itemGuardianAngelStasisUntil && now >= ctrl._itemGuardianAngelStasisUntil) {
+    ctrl._itemGuardianAngelStasisUntil = 0;
+    ctrl.isUntargetable = false;
+    const p = ITEM_DATA.guardianAngel.revivePassive;
+    ctrl.hp = (ctrl.maxHp || 0) * p.healHpPercent;
+    if ((ctrl.maxMp || 0) > 0) ctrl.mp = (ctrl.maxMp || 0) * p.healMpPercent;
+    updateBars(ctrl);
+    console.log('[ITEM] 수호천사 - 환생 종료(체력/마나 회복)');
+  }
   // 지배자의 피갑옷(폭정/응징) - 체력 비율에 따라 매 순간 바뀌는 동적
   // 공격력 보너스라 recomputeItemStats()(구매/판매 시에만 재계산)가 아니라
   // 여기서 매 프레임 다시 계산한다. 소지하지 않으면 0으로 되돌린다.
@@ -534,24 +620,96 @@ function applyItemPhysicalVamp(source, finalDmg, damageType) {
 // 피해를 받으면(이미 있는 보호막은 먼저 그 피해를 흡수한다고 가정하고
 // 계산) 2.5초간 보호막 + 전투가 끝날 때까지(이 프로젝트엔 "전투 이탈"
 // 판정이 없어 보호막과 같은 길이로 근사) 모든 피해 흡혈 10%.
-function itemOnTakeDamage(ctrl, incomingDamage, damageType) {
-  if (!ctrl || damageType !== DAMAGE_TYPE.MAGICAL) return;
-  const slot = (ctrl.items || []).find((s) => s.id === 'maw');
-  if (!slot) return;
-  const p = ITEM_DATA.maw.lifelinePassive;
+// 피해를 "받기" 직전에 불리는 공용 훅(character_controller.js의
+// takeDamage()가 방어력/마법저항 감소까지 적용한 remaining 값을 넘긴다).
+// 원래는 멜모셔스의 아귀(마법 피해 전용) 하나만 있어 void 반환이었지만,
+// 죽음의무도(고통 무시)가 "받는 피해 일부를 지연 피해로 돌린다"는, 실제로
+// 이번에 받는 피해량 자체를 바꿔야 하는 효과라서 반환값을 쓰는 구조로
+// 바꿨다 - 호출부(takeDamage())는 `itemOnTakeDamage(...) ?? remaining`로
+// undefined(아무것도 안 바꿈)와 "새 피해량"을 모두 안전하게 받는다.
+function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
+  if (!ctrl) return incomingDamage;
+  let remaining = incomingDamage;
   const now = performance.now();
-  if ((ctrl._itemMawIcdUntil || 0) > now) return;
-  const hpAfter = (ctrl.hp || 0) - Math.max(0, incomingDamage - (ctrl.shield || 0));
-  if (hpAfter >= (ctrl.maxHp || 0) * p.hpThresholdPercent) return; // 30% 밑으로 떨어질 만큼이 아니면 발동 안 함
-  ctrl._itemMawIcdUntil = now + p.icdSec * 1000;
-  const isMelee = _itemIsMelee(ctrl);
-  const shieldBase = isMelee ? p.meleeShieldBase : p.rangedShieldBase;
-  const shieldBonusPercent = isMelee ? p.meleeShieldBonusAdPercent : p.rangedShieldBonusAdPercent;
-  const shieldAmt = shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent;
-  ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
-  ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
-  ctrl._itemMawOmnivampUntil = now + p.omnivampDurationSec * 1000;
-  console.log('[ITEM] 멜모셔스의 아귀 - 생명선 발동');
+
+  // 멜모셔스의 아귀 - 생명선(마법 피해 전용, 원문 그대로).
+  const mawSlot = (ctrl.items || []).find((s) => s.id === 'maw');
+  if (mawSlot && damageType === DAMAGE_TYPE.MAGICAL && (ctrl._itemMawIcdUntil || 0) <= now) {
+    const p = ITEM_DATA.maw.lifelinePassive;
+    const hpAfter = (ctrl.hp || 0) - Math.max(0, remaining - (ctrl.shield || 0));
+    if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
+      ctrl._itemMawIcdUntil = now + p.icdSec * 1000;
+      const isMelee = _itemIsMelee(ctrl);
+      const shieldBase = isMelee ? p.meleeShieldBase : p.rangedShieldBase;
+      const shieldBonusPercent = isMelee ? p.meleeShieldBonusAdPercent : p.rangedShieldBonusAdPercent;
+      const shieldAmt = shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent;
+      ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
+      ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
+      ctrl._itemMawOmnivampUntil = now + p.omnivampDurationSec * 1000;
+      console.log('[ITEM] 멜모셔스의 아귀 - 생명선 발동');
+    }
+  }
+
+  // 스테락의도전 - 생명선. 멜모셔스의 아귀와 달리 피해 종류를 가리지
+  // 않는다(원문에 "마법 피해로"라는 제한이 없음). 보호막은 추가 체력의
+  // 60% 그 자체(정액+비례 조합이 아님)이고, 맞지 않아도 4.5초에 걸쳐
+  // 점차 녹아내린다(itemSystemTick()의 _itemSterakShieldState가 담당).
+  const sterakSlot = (ctrl.items || []).find((s) => s.id === 'sterakssGage');
+  if (sterakSlot && (ctrl._itemSterakIcdUntil || 0) <= now) {
+    const p = ITEM_DATA.sterakssGage.lifelinePassive;
+    const hpAfter = (ctrl.hp || 0) - Math.max(0, remaining - (ctrl.shield || 0));
+    if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
+      ctrl._itemSterakIcdUntil = now + p.icdSec * 1000;
+      const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
+      const shieldAmt = bonusHp * p.bonusHpShieldPercent;
+      ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
+      ctrl._itemSterakShieldState = { maxAmount: shieldAmt, startedAt: now, decaySec: p.shieldDecaySec };
+      console.log('[ITEM] 스테락의도전 - 생명선 발동');
+    }
+  }
+
+  // 죽음의무도 - 고통 무시. 받는 피해의 일부(근접 30%｜원거리 10%)를
+  // 즉시 받는 대신 3초에 걸쳐 나눠 받는 지연 피해로 돌린다. 여러 번
+  // 맞으면 각 타격이 독립된 지연 피해 묶음을 만든다(겹쳐 쌓인다 - 원문에
+  // "기존 묶음과 합쳐진다" 같은 언급이 없어 가장 단순하고 안전한 해석).
+  const ddSlot = (ctrl.items || []).find((s) => s.id === 'deathsDance');
+  if (ddSlot && remaining > 0) {
+    const p = ITEM_DATA.deathsDance.ignorePainPassive;
+    const isMelee = _itemIsMelee(ctrl);
+    const deferPercent = isMelee ? p.meleeDeferPercent : p.rangedDeferPercent;
+    const deferredAmount = remaining * deferPercent;
+    if (deferredAmount > 0) {
+      remaining -= deferredAmount;
+      ctrl._itemDeathsDanceDot = ctrl._itemDeathsDanceDot || [];
+      ctrl._itemDeathsDanceDot.push({
+        perSec: deferredAmount / p.deferDurationSec,
+        remainingSec: p.deferDurationSec,
+        sourceKey: source ? _itemTargetKey(source) : null,
+      });
+    }
+  }
+
+  return remaining;
+}
+
+// 죽음의무도(고통 무시)의 지연 피해 묶음을 매 프레임 진행한다 - 아이템을
+// 팔아도 이미 걸린 지연 피해는 끝까지 간다는 원칙은 다른 지속 효과
+// (_itemTickActiveHeals 등)와 동일하다. 이 지연 피해는 takeDamage()를
+// 다시 거치지 않고 직접 hp를 깎는다(이미 방어력/마법저항 감소까지 끝난
+// "최종" 피해량이므로 또 감소를 적용하면 이중 적용이 된다).
+function _itemTickDeathsDanceDot(ctrl, dt) {
+  if (!ctrl._itemDeathsDanceDot || !ctrl._itemDeathsDanceDot.length) return;
+  for (const dot of ctrl._itemDeathsDanceDot) {
+    const step = Math.min(dt, dot.remainingSec);
+    ctrl.hp = Math.max(0, (ctrl.hp || 0) - dot.perSec * step);
+    dot.remainingSec -= step;
+  }
+  ctrl._itemDeathsDanceDot = ctrl._itemDeathsDanceDot.filter((d) => d.remainingSec > 1e-6);
+  // 한계(명시): 수호천사(환생)는 takeDamage()의 "치명적 피해 직전" 지점만
+  // 가로채므로, 이 지연 피해로 죽는 경우는 환생이 발동하지 않는다(지연
+  // 피해는 takeDamage()를 거치지 않는 별도 경로이기 때문 - item_data.js/
+  // README의 다른 명시적 근사들과 동일한 성격의 한계).
+  if (ctrl.hp <= 0 && ctrl.state !== STATE.DEAD && typeof ctrl._die === 'function') ctrl._die();
 }
 
 // 피해 1건을 처리하는 공용 훅 - applyDamage()(챔피언/더미)와
@@ -741,12 +899,62 @@ function itemOnChampionTakedown(ctrl) {
   if (changed) recomputeItemStats(ctrl);
 }
 
-// 암흑의 인장(영광) - 사망 시 중첩 소실(_die()에서 호출).
+// 암흑의 인장(영광) - 사망 시 중첩 소실(_die()에서 호출). 죽음의무도
+// (반항)의 "상대가 죽으면" 판정도 같은 진입점에서 함께 처리한다.
 function itemOnChampionDeath(ctrl) {
-  if (!ctrl || !(ctrl._itemGloryStacks > 0)) return;
-  const p = ITEM_DATA.darkSeal.gloryPassive;
-  ctrl._itemGloryStacks = Math.max(0, ctrl._itemGloryStacks - p.deathLossStacks);
-  recomputeItemStats(ctrl);
+  if (ctrl && ctrl._itemGloryStacks > 0) {
+    const p = ITEM_DATA.darkSeal.gloryPassive;
+    ctrl._itemGloryStacks = Math.max(0, ctrl._itemGloryStacks - p.deathLossStacks);
+    recomputeItemStats(ctrl);
+  }
+  // 죽음의무도(반항) - "피해를 입힌 챔피언이 3초 안에 죽으면" 그 지연
+  // 피해가 사라지고 대신 추가 공격력 75%만큼 2초에 걸쳐 회복한다. 이
+  // 프로젝트는 플레이어를 공격하는 적 AI가 없는 구조라(itemOnChampionTakedown
+  // 위 주석 참고 - 어시스트와 동일한 성격의 한계) 실제 플레이로는 이
+  // 조건이 발생하지 않지만, 향후 적 AI가 추가되면 자동으로 맞물리도록
+  // 범용 훅으로 둔다. 전역 controller(이 데모에서 아이템을 실제로 장착할
+  // 수 있는 유일한 캐릭터)를 대상으로, 방금 죽은 이 ctrl이 남긴 지연
+  // 피해 묶음이 있는지 확인한다 - 지연 피해 자체가 정확히 3초(원문의
+  // 반항 판정 시간과 동일)만 유지되므로, "아직 배열에 남아있다"는 것
+  // 자체가 곧 "3초 이내"라는 뜻이라 별도 타임스탬프 비교가 필요 없다.
+  const deadKey = ctrl ? _itemTargetKey(ctrl) : null;
+  if (deadKey == null) return;
+  if (typeof controller === 'undefined' || !controller || controller === ctrl) return;
+  if (!controller._itemDeathsDanceDot || !controller._itemDeathsDanceDot.length) return;
+  const before = controller._itemDeathsDanceDot.length;
+  controller._itemDeathsDanceDot = controller._itemDeathsDanceDot.filter((d) => d.sourceKey !== deadKey);
+  if (controller._itemDeathsDanceDot.length === before) return; // 이 ctrl에게서 받은 지연 피해가 없었음
+  const p = ITEM_DATA.deathsDance.defiancePassive;
+  const healTotal = _itemBonusAD(controller) * p.healBonusAdPercent;
+  if (healTotal > 0) {
+    controller._itemActiveHeals = controller._itemActiveHeals || [];
+    controller._itemActiveHeals.push({ perSec: healTotal / p.healDurationSec, remainingSec: p.healDurationSec });
+  }
+  console.log('[ITEM] 죽음의무도 - 반항 발동(지연 피해 제거 + 회복)');
+}
+
+// 수호천사 - 환생. takeDamage()에서 "이번 피해로 hp가 0 이하가 됐다"고
+// 판정된 직후, _die()를 부르기 "직전"에 호출한다(치명적 피해 1회만
+// 가로채는 구조 - 리메이크 전 "치명적 피해를 막는" 아이템들과 동일한
+// 지점). 쿨다운 안이거나 아이템이 없으면 false를 반환해 평소처럼 죽는다.
+function itemOnLethalDamage(ctrl) {
+  if (!ctrl) return false;
+  const slot = (ctrl.items || []).find((s) => s.id === 'guardianAngel');
+  if (!slot) return false;
+  const p = ITEM_DATA.guardianAngel.revivePassive;
+  const now = performance.now();
+  if ((ctrl._itemGuardianAngelIcdUntil || 0) > now) return false;
+  ctrl._itemGuardianAngelIcdUntil = now + p.icdSec * 1000;
+  // 경직 - 기존 isUntargetable(알파 스트라이크 등 다른 챔피언이 이미
+  // 쓰던 "모든 피격 판정에서 확인" 플래그)을 그대로 재사용하면 추가
+  // 무적/대상 지정 불가 코드를 새로 짤 필요가 없다(takeDamage() 맨 위의
+  // `if (this.isUntargetable) return;`). hp를 0으로 두면 다른 곳에서
+  // "이미 죽었다"고 오해할 수 있어 1로 고정해둔다.
+  ctrl.hp = 1;
+  ctrl.isUntargetable = true;
+  ctrl._itemGuardianAngelStasisUntil = now + p.stasisDurationSec * 1000;
+  console.log('[ITEM] 수호천사 - 환생 발동(경직 시작)');
+  return true;
 }
 
 /* ============================================================
@@ -939,6 +1147,42 @@ function _itemBonusAD(ctrl) { return (ctrl.itemBonusAD || 0) + (ctrl.bonusAD || 
 function _itemIsMelee(ctrl) { return !!(ctrl.stats && ctrl.stats.attackRange <= 300); }
 function _itemIsStructure(u) { return !!(u && (u.isTurret || u.isInhibitor || u.isNexus)); }
 
+// 거대한히드라/발걸음분쇄기 공용 "쪼개기" - 대상에게 자신의 최대 체력
+// 비례 추가 물리 피해 + "대상 뒤의 적들"에게 더 센 최대 체력 비례 물리
+// 피해(실제 LoL 거대한히드라도 대상이 아니라 "자신의" 최대 체력이 기준).
+// 방향성("대상 뒤")은 이 프로젝트에 적 전용 좌표/진행 방향 판정이 없어
+// 티아맷 쪼개기와 동일한 "주변 반경" 판정으로 근사한다(명시적 근사).
+// 구조물에는 적용하지 않는다(원문: "구조물에는 쪼개기의 충격파가 발동되지
+// 않습니다"). 거대한히드라의 "거대한 초승달"이 무장돼 있으면 다음 쪼개기
+// 한 번만 수치를 강화하고 소모한다.
+function _itemCleaveOnHit(ctrl, target) {
+  if (!target || _itemIsStructure(target)) return;
+  const slot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].cleaveMaxHpPassive);
+  if (!slot) return;
+  const item = ITEM_DATA[slot.id];
+  const p = item.cleaveMaxHpPassive;
+  const isMelee = _itemIsMelee(ctrl);
+  let targetPercent = isMelee ? p.meleeTargetPercent : p.rangedTargetPercent;
+  let splashPercent = isMelee ? p.meleeSplashPercent : p.rangedSplashPercent;
+  if (ctrl._itemEmpoweredCleaveArmed && item.empoweredCleaveActive) {
+    ctrl._itemEmpoweredCleaveArmed = false;
+    const ep = item.empoweredCleaveActive;
+    targetPercent += isMelee ? ep.meleeTargetBonusPercent : ep.rangedTargetBonusPercent;
+    splashPercent += isMelee ? ep.meleeSplashBonusPercent : ep.rangedSplashBonusPercent;
+  }
+  const basis = ctrl.maxHp || 0;
+  const targetRaw = targetPercent * basis;
+  if (targetRaw > 0) applyDamage(target, { rawDamage: targetRaw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+  const splashRaw = splashPercent * basis;
+  if (splashRaw > 0 && typeof findEnemiesInRadius === 'function') {
+    const hits = findEnemiesInRadius(target.mesh ? target.mesh.position : ctrl.root.position, p.radius);
+    for (const { unit } of hits) {
+      if (!unit || unit === target || unit.hp <= 0 || _itemIsStructure(unit)) continue;
+      applyDamage(unit, { rawDamage: splashRaw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    }
+  }
+}
+
 // _onBasicAttackHit()에서 호출 - 광휘의 검/삼위일체가 무장돼 있으면
 // 소모하며 추가 물리 피해를 입히고, 티아맷을 들고 있으면 매 평타마다
 // 주변 적에게 쪼개기(물리 피해)를 입힌다. 대상 종류를 가리지 않는
@@ -969,6 +1213,11 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
       }
     }
   }
+
+  // 거대한히드라/발걸음분쇄기 공용 "쪼개기" - 티아맷 쪼개기와 별개 필드
+  // (cleaveMaxHpPassive, 대상이 아니라 "자신의" 최대 체력 비례 - 실제
+  // 거대한히드라도 자기 최대 체력 기준이다).
+  _itemCleaveOnHit(ctrl, target);
 
   // 가속(삼위일체)/분노(탐식의 망치) - 기본 공격 시 2초간 이동속도
   // +20(고정 수치) - MS_BUFF_FLAT 재사용. 대상 제한 없음(원문 그대로).

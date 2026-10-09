@@ -4232,10 +4232,13 @@ class CharacterController {
     let reduction = getDamageReductionPercent(this);
     if (damageType === DAMAGE_TYPE.MAGICAL) reduction = Math.max(reduction, getMagicDamageReductionPercent(this));
     let remaining = Math.max(0, dmg) * (1 - Math.min(1, Math.max(0, reduction))); // 일반 피해감소 + 닐라 W 마법피해감소
-    // 아이템 패시브(멜모셔스의 아귀 - 생명선) - 이 피해로 체력이 30% 밑으로
-    // "떨어질" 보호막을 먼저 걸어서, 바로 아래 shield 흡수 로직이 이번
-    // 피해도 함께 받아낼 수 있게 한다(실제 LoL도 피해가 적용되기 직전에 발동).
-    if (typeof itemOnTakeDamage === 'function') itemOnTakeDamage(this, remaining, damageType);
+    // 아이템 패시브(멜모셔스의 아귀/스테락의도전 - 생명선) - 이 피해로
+    // 체력이 문턱 밑으로 "떨어질" 보호막을 먼저 걸어서, 바로 아래 shield
+    // 흡수 로직이 이번 피해도 함께 받아낼 수 있게 한다(실제 LoL도 피해가
+    // 적용되기 직전에 발동). 죽음의무도(고통 무시)는 받는 피해 자체를
+    // 바꾸므로(일부를 지연 피해로 돌림) 반환값을 그대로 remaining에
+    // 반영한다 - `?? remaining`으로 다른 효과들의 기존 void 반환과도 안전하게 호환.
+    if (typeof itemOnTakeDamage === 'function') remaining = itemOnTakeDamage(this, remaining, damageType, source) ?? remaining;
     // 버그 수정(세트 패시브 문서 4절 "실제로 HP에 적용된 피해를 기준으로
     // 한다"): 예전에는 Shield로 흡수되기 전의 remaining을 그대로 투지
     // 계산에 넘겨서, Shield가 300 있는 상태에서 500 피해를 받아 실제로는
@@ -4261,7 +4264,12 @@ class CharacterController {
     }
     this.hp = Math.max(0, this.hp - remaining);
     updateBars(this);
-    if (this.hp <= 0) this._die();
+    if (this.hp <= 0) {
+      // 수호천사(환생) - 치명적 피해 1회를 가로채 죽음을 취소한다. 쿨다운
+      // 중이거나 아이템이 없으면 false를 반환해 평소처럼 죽는다.
+      if (typeof itemOnLethalDamage === 'function' && itemOnLethalDamage(this)) { updateBars(this); return; }
+      this._die();
+    }
   }
   _die() {
     // 암흑의 인장(영광) - 사망 시 중첩 소실. 이 데모는 플레이어를 공격하는
