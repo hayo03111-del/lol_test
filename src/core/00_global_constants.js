@@ -424,6 +424,15 @@ function applyDamage(target, result) {
   if (target.isNexus) return applyDamageToNexus(target, result);
   const finalDmg = calculateDamage({ ...result, target });
   target._lastDamageTakenAmount = finalDmg;
+  // 아이템 패시브 공용 훅(item_system.js) - 모든 피해 흡혈(도란의 검/활)과
+  // "챔피언에게 피해를 입힌/입은 시각" 타임스탬프(도란의 반지/방패)는
+  // 구조물이 아닌 챔피언/더미 피해 경로에서만 다룬다(구조물 피해는 실제
+  // LoL처럼 흡혈이 붙지 않음).
+  if (result.source && typeof result.source.championId === 'string') {
+    if (typeof applyItemVamp === 'function') applyItemVamp(result.source, finalDmg);
+    if (target.isChampion) result.source._itemLastDealtChampionDamageAt = performance.now();
+    if (typeof target._itemLastTookChampionDamageAt !== 'undefined') target._itemLastTookChampionDamageAt = performance.now();
+  }
   // 요청(처형 시스템): 이 피해로 대상이 실제로 죽는지를 데미지 적용 "전"에
   // 먼저 판정한다 - 학습용 더미는 damageEnemy()에서 2% 바닥에 멈추도록
   // 되어 있어서 target.hp가 실제로 0이 되지는 않지만, 그 floor 처리가

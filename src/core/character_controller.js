@@ -205,6 +205,18 @@ class CharacterController {
     // 칼바람 포탑 시스템(destroyTurret 참고) - 팀/골드 시스템이 따로
     // 없어 "아군 전원에게 지급"을 지금은 플레이어 자신의 누적치로 대신한다.
     this.gold = 0;
+    // 아이템 시스템(item_system.js) - 장착한 아이템 id 배열(최대 6칸, 실제
+    // LoL 인벤토리와 동일). itemBonus*는 recomputeItemStats()(items 배열이
+    // 바뀔 때만 호출)가 채우는 합산값이고, recomputeStats()/update()가 그
+    // 값을 읽어 실제 stats에 반영한다. _itemLastDealtChampionDamageAt/
+    // _itemLastTookChampionDamageAt은 도란의 반지(전투 중 마나 회복 증가)/
+    // 도란의 방패(피격 후 회복) 같은 "최근 전투 여부"가 필요한 아이템
+    // 패시브를 위한 범용 타임스탬프 - applyDamage()가 채운다.
+    this.items = [];
+    this.itemBonusAD = 0; this.itemBonusAP = 0; this.itemBonusMaxHp = 0; this.itemBonusMana = 0;
+    this.itemBonusArmor = 0; this.itemBonusMr = 0; this.itemBonusAttackSpeedPercent = 0;
+    this.itemAllDamageVampPercent = 0; this.itemMinionBonusDamage = 0;
+    this._itemLastDealtChampionDamageAt = 0; this._itemLastTookChampionDamageAt = 0;
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -376,13 +388,21 @@ class CharacterController {
     const base = this.championId && computeChampionStats(this.championId, this.champLevel);
     if (base) {
       const hpPct = this.maxHp ? this.hp / this.maxHp : 1; // 최대체력이 바뀌어도(초가스 R 포식 등) 현재 비율을 유지한 채 재계산
-      this.maxHp = base.maxHp + (this.bonusMaxHp || 0); this.maxMp = base.maxMp;
+      // 아이템 시스템(item_system.js) 연동 - itemBonus* 필드는 recomputeItemStats()가
+      // this.items 배열(장착한 아이템 id 목록)을 합산해서 채워두는 값이다.
+      // 기존 bonusAD/bonusArmor/bonusMr/bonusMaxHp(챔피언 전용 임시 버프 필드 -
+      // 다리우스 Q 과다출혈, 모데카이저 R 보호막 등)와는 완전히 분리된 별도
+      // 필드라서, 챔피언을 바꾸거나 임시 버프가 만료될 때 저 필드들을 0으로
+      // 되돌려도 아이템으로 산 영구 스탯은 전혀 영향을 받지 않는다.
+      this.maxHp = base.maxHp + (this.bonusMaxHp || 0) + (this.itemBonusMaxHp || 0);
+      this.maxMp = base.maxMp + (this.itemBonusMana || 0);
       this.hpRegen = base.hpRegen; this.mpRegen = base.mpRegen;
-      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0);
+      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0);
+      this.stats.abilityPower = (this.itemBonusAP || 0);
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
-      this.stats.armor = base.armor + (this.bonusArmor || 0);
+      this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0);
       this.stats.baseArmor = base.armor;
-      this.stats.magicResist = base.magicResist + (this.bonusMr || 0);
+      this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0);
       this.stats.attackRange = base.attackRange;
       this.stats.baseMoveSpeed = base.baseMoveSpeed;
       this.hp = Math.min(this.hp || this.maxHp * hpPct, this.maxHp);
@@ -1486,6 +1506,13 @@ class CharacterController {
   // 마비의 일격 강화평타)이고, 일반 평타면 null이다.
   _onBasicAttackHit(target, overrideId, wouldKill, attackHand, isCritical) {
     if (!target) return;
+    // 아이템 패시브 "도움의 손길"(도란의 반지/방패/투구 공용) - 미니언
+    // 기본 공격 시 고정 추가 물리 피해. applyDamageToMinion()이 이미
+    // 기본 공격 피해를 적용한 "뒤"이므로 여기서는 보너스 피해만 별도로
+    // 더해 넣는다(챔피언 전용 로직과 무관한 범용 훅).
+    if (target.isMinion && this.itemMinionBonusDamage > 0) {
+      applyDamageToMinion(target, { rawDamage: this.itemMinionBonusDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true);
+    }
     // 애쉬 패시브(서리 화살): 기본 공격마다 대상을 둔화시킨다(치명타면
     // 더 강한 둔화로 대체). Q(궁사의 집중)의 다발 공격(_asheFireFlurry)은
     // 다중 대상이라 이 단일 대상 훅을 거치지 않고 자체적으로 처리한다.
@@ -4418,7 +4445,7 @@ class CharacterController {
       if (!movingTowardEnemy) msBuff = 0;
     }
     this.stats.percentMoveSpeedBonus = msBuff;
-    this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this);
+    this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
     this._garenPassiveTick(dt);
     this._settPassiveTick(dt);
@@ -4452,5 +4479,6 @@ class CharacterController {
     this._ahriUpdate(dt);
     this._varusUpdate(dt);
     this._asheUpdate(dt);
+    if (typeof itemSystemTick === 'function') itemSystemTick(this, dt);
   }
 }

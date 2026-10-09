@@ -180,6 +180,31 @@
   #rangeIndicatorToggle button:hover { background:#3a3a45; }
   #rangeIndicatorToggle.collapsed .panelBody { display:none; }
 
+  /* 요청("아이템을 추가할거야") - 상점/인벤토리 패널. #hud(하단 바, 118px)와
+     겹치지 않도록 화면 좌측 하단에 띄운다. buyItem()은 기지 구역
+     (isPositionInBaseZone) 안에서만 실제로 구매를 허용하므로, 이 패널 자체는
+     항상 보이되 범위 밖에서 누르면 콘솔 경고와 함께 조용히 실패한다. */
+  #shopPanel {
+    position:fixed; left:14px; bottom:128px; z-index:10; color:#bbb; font-size:11px;
+    background:rgba(10,10,15,0.55); padding:6px 12px; border-radius:6px;
+    border:1px solid #2a2a35; user-select:none; width:220px;
+  }
+  #shopPanel.collapsed .panelBody { display:none; }
+  #shopPanel .shopItemRow { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:4px; }
+  #shopPanel .shopItemName { flex:1; }
+  #shopPanel .shopItemRow button {
+    background:#2a2a35; color:#ccc; border:1px solid #3a3a45; border-radius:4px;
+    padding:3px 8px; font-size:10px; cursor:pointer; white-space:nowrap;
+  }
+  #shopPanel .shopItemRow button:hover { background:#3a3a45; }
+  #inventoryRow { display:flex; gap:4px; margin-top:8px; padding-top:8px; border-top:1px solid #2a2a35; flex-wrap:wrap; }
+  .invSlot {
+    width:28px; height:28px; background:#1b1b22; border:1px solid #3a3a45; border-radius:4px;
+    display:flex; align-items:center; justify-content:center; font-size:9px; color:#ccc; cursor:pointer;
+  }
+  .invSlot:hover { background:#2a2a35; }
+  .invSlot.empty { cursor:default; }
+
   /* 요청("상태창들 싹다 접을 수 있게") - helpBox/rangeIndicatorToggle
      공용 접기 헤더. 제목 줄만 항상 보이고, 클릭하면 나머지 내용이
      통째로 접힌다(championPanel의 기존 토글 버튼과 같은 원리). */
@@ -489,6 +514,18 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
     <input type="file" id="minionAssetFileInput" accept=".glb" multiple style="display:none;">
     <div id="minionAssetStatus" style="font-size:9px;color:#7a7;margin-top:4px;line-height:1.5;white-space:pre-line;"></div>
   </div>
+  </div>
+</div>
+
+<div id="shopPanel">
+  <div class="panelHeader"><b>상점 (기지 구역 안에서만 구매)</b><span class="panelCollapseBtn">─</span></div>
+  <div class="panelBody">
+    <div class="shopItemRow"><span class="shopItemName">도란의 검 (450)</span><button data-item-id="doransBlade">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">도란의 반지 (400)</span><button data-item-id="doransRing">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">도란의 방패 (450)</span><button data-item-id="doransShield">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">도란의 활 (400)</span><button data-item-id="doransBow">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">도란의 투구 (450)</span><button data-item-id="doransHelm">구매</button></div>
+    <div id="inventoryRow"></div>
   </div>
 </div>
 
@@ -1070,6 +1107,15 @@ function applyDamage(target, result) {
   if (target.isNexus) return applyDamageToNexus(target, result);
   const finalDmg = calculateDamage({ ...result, target });
   target._lastDamageTakenAmount = finalDmg;
+  // 아이템 패시브 공용 훅(item_system.js) - 모든 피해 흡혈(도란의 검/활)과
+  // "챔피언에게 피해를 입힌/입은 시각" 타임스탬프(도란의 반지/방패)는
+  // 구조물이 아닌 챔피언/더미 피해 경로에서만 다룬다(구조물 피해는 실제
+  // LoL처럼 흡혈이 붙지 않음).
+  if (result.source && typeof result.source.championId === 'string') {
+    if (typeof applyItemVamp === 'function') applyItemVamp(result.source, finalDmg);
+    if (target.isChampion) result.source._itemLastDealtChampionDamageAt = performance.now();
+    if (typeof target._itemLastTookChampionDamageAt !== 'undefined') target._itemLastTookChampionDamageAt = performance.now();
+  }
   // 요청(처형 시스템): 이 피해로 대상이 실제로 죽는지를 데미지 적용 "전"에
   // 먼저 판정한다 - 학습용 더미는 damageEnemy()에서 2% 바닥에 멈추도록
   // 되어 있어서 target.hp가 실제로 0이 되지는 않지만, 그 floor 처리가
@@ -2655,6 +2701,48 @@ function computeChampionStats(championId, level) {
 }
 
 
+
+/* ===== src/champions/item_data.js ===== */
+// 아이템 시스템 - 1차분(도란 시리즈 5종). 사용자가 보내준 한국어 아이템
+// 텍스트 원문(도란의 검/반지/방패/활/투구)의 수치를 그대로 옮긴다.
+// stats는 recomputeItemStats()(item_system.js)가 그대로 합산해 itemBonus*
+// 필드에 반영하고, 그 외 패시브(흡혈/도움의 손길/재생)는 item_system.js의
+// 전용 틱/훅 함수들이 아이템별 설정 객체를 읽어 처리한다.
+const ITEM_DATA = {
+  doransBlade: {
+    id: 'doransBlade', nameKo: '도란의 검', cost: 450,
+    stats: { attackDamage: 10, maxHp: 80 },
+    allDamageVampPercent: 0.025, // 모든 피해 흡혈 2.5%
+  },
+  doransRing: {
+    id: 'doransRing', nameKo: '도란의 반지', cost: 400,
+    stats: { abilityPower: 18, maxHp: 90 },
+    minionBonusDamage: 5, // 도움의 손길
+    // 흡수: 매초 1마나 회복, 챔피언에게 피해를 입힌 후 5초간 매초 2마나로
+    // 증가. 마나를 회복할 수 없으면(마나 없음/풀마나) 대신 그 수치의 45%만큼 체력 회복.
+    manaRegenPassive: { baseManaPerSec: 1, combatManaPerSec: 2, combatWindowSec: 5, noManaHpRegenPercent: 0.45 },
+  },
+  doransShield: {
+    id: 'doransShield', nameKo: '도란의 방패', cost: 450,
+    stats: { maxHp: 110 },
+    minionBonusDamage: 5, // 도움의 손길
+    regenPassive: { hpPerTick: 4, tickSec: 5 }, // 인내의 집중력(평시)
+    // 인내의 집중력(전투): 챔피언에게 피해를 입으면 8초 동안 최대
+    // (근거리 40 | 원거리 30)의 체력을 회복(평시 재생을 대체).
+    champDamageRegen: { durationSec: 8, meleeMaxHp: 40, rangedMaxHp: 30 },
+  },
+  doransBow: {
+    id: 'doransBow', nameKo: '도란의 활', cost: 400,
+    stats: { attackDamage: 8, attackSpeedPercent: 0.15 },
+    allDamageVampPercent: 0.015, // 모든 피해 흡혈 1.5%
+  },
+  doransHelm: {
+    id: 'doransHelm', nameKo: '도란의 투구', cost: 450,
+    stats: { maxHp: 150, armor: 8, magicResist: 8 },
+    minionBonusDamage: 5, // 도움의 손길
+  },
+};
+const ITEM_ORDER = ['doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm'];
 
 /* ===== src/animation/animation_role_resolver.js ===== */
 /* ============================================================
@@ -7546,6 +7634,18 @@ class CharacterController {
     // 칼바람 포탑 시스템(destroyTurret 참고) - 팀/골드 시스템이 따로
     // 없어 "아군 전원에게 지급"을 지금은 플레이어 자신의 누적치로 대신한다.
     this.gold = 0;
+    // 아이템 시스템(item_system.js) - 장착한 아이템 id 배열(최대 6칸, 실제
+    // LoL 인벤토리와 동일). itemBonus*는 recomputeItemStats()(items 배열이
+    // 바뀔 때만 호출)가 채우는 합산값이고, recomputeStats()/update()가 그
+    // 값을 읽어 실제 stats에 반영한다. _itemLastDealtChampionDamageAt/
+    // _itemLastTookChampionDamageAt은 도란의 반지(전투 중 마나 회복 증가)/
+    // 도란의 방패(피격 후 회복) 같은 "최근 전투 여부"가 필요한 아이템
+    // 패시브를 위한 범용 타임스탬프 - applyDamage()가 채운다.
+    this.items = [];
+    this.itemBonusAD = 0; this.itemBonusAP = 0; this.itemBonusMaxHp = 0; this.itemBonusMana = 0;
+    this.itemBonusArmor = 0; this.itemBonusMr = 0; this.itemBonusAttackSpeedPercent = 0;
+    this.itemAllDamageVampPercent = 0; this.itemMinionBonusDamage = 0;
+    this._itemLastDealtChampionDamageAt = 0; this._itemLastTookChampionDamageAt = 0;
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -7717,13 +7817,21 @@ class CharacterController {
     const base = this.championId && computeChampionStats(this.championId, this.champLevel);
     if (base) {
       const hpPct = this.maxHp ? this.hp / this.maxHp : 1; // 최대체력이 바뀌어도(초가스 R 포식 등) 현재 비율을 유지한 채 재계산
-      this.maxHp = base.maxHp + (this.bonusMaxHp || 0); this.maxMp = base.maxMp;
+      // 아이템 시스템(item_system.js) 연동 - itemBonus* 필드는 recomputeItemStats()가
+      // this.items 배열(장착한 아이템 id 목록)을 합산해서 채워두는 값이다.
+      // 기존 bonusAD/bonusArmor/bonusMr/bonusMaxHp(챔피언 전용 임시 버프 필드 -
+      // 다리우스 Q 과다출혈, 모데카이저 R 보호막 등)와는 완전히 분리된 별도
+      // 필드라서, 챔피언을 바꾸거나 임시 버프가 만료될 때 저 필드들을 0으로
+      // 되돌려도 아이템으로 산 영구 스탯은 전혀 영향을 받지 않는다.
+      this.maxHp = base.maxHp + (this.bonusMaxHp || 0) + (this.itemBonusMaxHp || 0);
+      this.maxMp = base.maxMp + (this.itemBonusMana || 0);
       this.hpRegen = base.hpRegen; this.mpRegen = base.mpRegen;
-      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0);
+      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0);
+      this.stats.abilityPower = (this.itemBonusAP || 0);
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
-      this.stats.armor = base.armor + (this.bonusArmor || 0);
+      this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0);
       this.stats.baseArmor = base.armor;
-      this.stats.magicResist = base.magicResist + (this.bonusMr || 0);
+      this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0);
       this.stats.attackRange = base.attackRange;
       this.stats.baseMoveSpeed = base.baseMoveSpeed;
       this.hp = Math.min(this.hp || this.maxHp * hpPct, this.maxHp);
@@ -8827,6 +8935,13 @@ class CharacterController {
   // 마비의 일격 강화평타)이고, 일반 평타면 null이다.
   _onBasicAttackHit(target, overrideId, wouldKill, attackHand, isCritical) {
     if (!target) return;
+    // 아이템 패시브 "도움의 손길"(도란의 반지/방패/투구 공용) - 미니언
+    // 기본 공격 시 고정 추가 물리 피해. applyDamageToMinion()이 이미
+    // 기본 공격 피해를 적용한 "뒤"이므로 여기서는 보너스 피해만 별도로
+    // 더해 넣는다(챔피언 전용 로직과 무관한 범용 훅).
+    if (target.isMinion && this.itemMinionBonusDamage > 0) {
+      applyDamageToMinion(target, { rawDamage: this.itemMinionBonusDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true);
+    }
     // 애쉬 패시브(서리 화살): 기본 공격마다 대상을 둔화시킨다(치명타면
     // 더 강한 둔화로 대체). Q(궁사의 집중)의 다발 공격(_asheFireFlurry)은
     // 다중 대상이라 이 단일 대상 훅을 거치지 않고 자체적으로 처리한다.
@@ -11759,7 +11874,7 @@ class CharacterController {
       if (!movingTowardEnemy) msBuff = 0;
     }
     this.stats.percentMoveSpeedBonus = msBuff;
-    this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this);
+    this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
     this._garenPassiveTick(dt);
     this._settPassiveTick(dt);
@@ -11793,6 +11908,7 @@ class CharacterController {
     this._ahriUpdate(dt);
     this._varusUpdate(dt);
     this._asheUpdate(dt);
+    if (typeof itemSystemTick === 'function') itemSystemTick(this, dt);
   }
 }
 /* ===== src/champions/darius.js ===== */
@@ -21459,7 +21575,15 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
   // "방금 플레이어가 나를 공격했다"고 착각해 요청 20-A 2순위(자신을
   // 공격 중인 적 챔피언) 판정이 잘못 발동한다. 실제로 플레이어(챔피언)가
   // 원인일 때만(fromPlayer===true) 갱신한다.
-  if (fromPlayer) { minion.lastAttackedByPlayerAt = performance.now(); if (typeof controller !== 'undefined' && controller) minion._lastHitBy = controller; }
+  if (fromPlayer) {
+    minion.lastAttackedByPlayerAt = performance.now();
+    if (typeof controller !== 'undefined' && controller) {
+      minion._lastHitBy = controller;
+      // 아이템 패시브 "모든 피해 흡혈"(도란의 검/활) - 미니언 피해도 실제
+      // LoL처럼 흡혈 대상에 포함된다(구조물 피해만 제외).
+      if (typeof applyItemVamp === 'function') applyItemVamp(controller, finalDmg);
+    }
+  }
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }
   // 요청("미니언 모션 최소 요구: Idle/Move/Attack/Hit/Death, 우선순위
   // Death>Attack>Hit>Move>Idle") - 피격 애니메이션을 재생한다. 짧은 창
@@ -21517,6 +21641,130 @@ let placedDummies = []; // 요청: 사용자가 직접 설치하는 추가 허�
 let dummyPlaceMode = false;
 
 
+/* ===== src/core/item_system.js ===== */
+// 아이템 시스템 - 구매/판매/스탯 합산/틱형 패시브(재생·마나회복).
+// 기존 챔피언 전용 임시 버프 필드(bonusAD 등)와 완전히 분리된 itemBonus*
+// 필드를 recomputeStats()가 읽어가므로, 여기서는 "합산해서 채워 넣기"와
+// "값이 바뀔 때 recomputeStats() 재호출"만 책임진다.
+
+function recomputeItemStats(ctrl) {
+  if (!ctrl) return;
+  ctrl.itemBonusAD = 0; ctrl.itemBonusAP = 0; ctrl.itemBonusMaxHp = 0; ctrl.itemBonusMana = 0;
+  ctrl.itemBonusArmor = 0; ctrl.itemBonusMr = 0; ctrl.itemBonusAttackSpeedPercent = 0;
+  ctrl.itemAllDamageVampPercent = 0; ctrl.itemMinionBonusDamage = 0;
+  for (const itemId of (ctrl.items || [])) {
+    const item = ITEM_DATA[itemId];
+    if (!item) continue;
+    const s = item.stats || {};
+    ctrl.itemBonusAD += s.attackDamage || 0;
+    ctrl.itemBonusAP += s.abilityPower || 0;
+    ctrl.itemBonusMaxHp += s.maxHp || 0;
+    ctrl.itemBonusMana += s.mana || 0;
+    ctrl.itemBonusArmor += s.armor || 0;
+    ctrl.itemBonusMr += s.magicResist || 0;
+    ctrl.itemBonusAttackSpeedPercent += s.attackSpeedPercent || 0;
+    ctrl.itemAllDamageVampPercent += item.allDamageVampPercent || 0;
+    ctrl.itemMinionBonusDamage += item.minionBonusDamage || 0;
+  }
+  ctrl.recomputeStats();
+}
+
+// 상점 - 요청대로 "기지 구역(isPositionInBaseZone) 안에서만" 구매 가능.
+// BLUE가 플레이어 진영이라는 이 데모의 고정 전제를 그대로 따른다(turret_system.js
+// 의 BASE_ZONE_RADIUS 주석이 이미 "나중에 만들 상점도 재사용" 의도를 명시해뒀다).
+function buyItem(ctrl, itemId) {
+  const item = ITEM_DATA[itemId];
+  if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
+  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, 'BLUE')) {
+    console.warn('[ITEM] 기지(상점 구역) 안에서만 구매할 수 있습니다.');
+    return false;
+  }
+  if ((ctrl.items || []).length >= 6) { console.warn('[ITEM] 인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
+  if ((ctrl.gold || 0) < item.cost) { console.warn('[ITEM] 골드가 부족합니다.'); return false; }
+  ctrl.gold -= item.cost;
+  ctrl.items.push(itemId);
+  recomputeItemStats(ctrl);
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  return true;
+}
+
+// 판매가 70%(실제 LoL과 동일한 근사치).
+function sellItem(ctrl, slotIndex) {
+  const itemId = ctrl.items && ctrl.items[slotIndex];
+  if (!itemId) return false;
+  const item = ITEM_DATA[itemId];
+  ctrl.items.splice(slotIndex, 1);
+  ctrl.gold = (ctrl.gold || 0) + Math.floor((item.cost || 0) * 0.7);
+  recomputeItemStats(ctrl);
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  return true;
+}
+
+function _itemTickManaRegen(ctrl, item, dt, now) {
+  const p = item.manaRegenPassive;
+  ctrl._itemTick = ctrl._itemTick || {};
+  const key = 'mana_' + item.id;
+  ctrl._itemTick[key] = (ctrl._itemTick[key] || 0) + dt;
+  while (ctrl._itemTick[key] >= 1) {
+    ctrl._itemTick[key] -= 1;
+    const inCombat = (now - (ctrl._itemLastDealtChampionDamageAt || 0)) <= p.combatWindowSec * 1000;
+    const manaPerSec = inCombat ? p.combatManaPerSec : p.baseManaPerSec;
+    if ((ctrl.maxMp || 0) > 0 && ctrl.mp < ctrl.maxMp) {
+      ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + manaPerSec);
+    } else {
+      ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + manaPerSec * p.noManaHpRegenPercent);
+    }
+  }
+}
+
+function _itemTickHpRegen(ctrl, item, dt, now) {
+  // 전투 강화 회복(피격 후 8초)이 활성화된 동안은 평시 재생(5초마다 4) 대신
+  // 이 수치가 대체 적용된다(실제 아이템 설명과 동일한 "대체" 관계).
+  // 버그 수정: `ctrl._itemLastTookChampionDamageAt &&`처럼 진위값으로 검사하면
+  // 그 값이 정확히 0일 때(틱 함수 자체 테스트처럼 now=0에서 "방금 맞음"을
+  // 재현하는 경우 등) false로 취급돼 강화 회복이 누락된다 - 항상 숫자인지만
+  // 확인하고 시간 차 계산으로 판정한다.
+  if (item.champDamageRegen && typeof ctrl._itemLastTookChampionDamageAt === 'number'
+      && (now - ctrl._itemLastTookChampionDamageAt) <= item.champDamageRegen.durationSec * 1000) {
+    const isMelee = !!(ctrl.stats && ctrl.stats.attackRange <= 300);
+    const total = isMelee ? item.champDamageRegen.meleeMaxHp : item.champDamageRegen.rangedMaxHp;
+    const perSec = total / item.champDamageRegen.durationSec;
+    ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + perSec * dt);
+    return;
+  }
+  if (!item.regenPassive) return;
+  ctrl._itemTick = ctrl._itemTick || {};
+  const key = 'hp_' + item.id;
+  ctrl._itemTick[key] = (ctrl._itemTick[key] || 0) + dt;
+  while (ctrl._itemTick[key] >= item.regenPassive.tickSec) {
+    ctrl._itemTick[key] -= item.regenPassive.tickSec;
+    ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + item.regenPassive.hpPerTick);
+  }
+}
+
+// character_controller.js의 update()가 매 프레임 호출(_asheUpdate(dt) 등과
+// 동일한 패턴). 장착 아이템이 없으면 즉시 return해서 평소엔 비용이 0.
+function itemSystemTick(ctrl, dt) {
+  if (!ctrl || !ctrl.items || !ctrl.items.length) return;
+  const now = performance.now();
+  for (const itemId of ctrl.items) {
+    const item = ITEM_DATA[itemId];
+    if (!item) continue;
+    if (item.manaRegenPassive) _itemTickManaRegen(ctrl, item, dt, now);
+    if (item.regenPassive || item.champDamageRegen) _itemTickHpRegen(ctrl, item, dt, now);
+  }
+}
+
+// 모든 피해 흡혈(도란의 검/활) - applyDamage()/applyDamageToMinion() 양쪽에서
+// 공용으로 호출한다(구조물 피해는 실제 LoL처럼 흡혈이 붙지 않으므로 호출하지 않음).
+function applyItemVamp(source, finalDmg) {
+  if (!source || !(source.itemAllDamageVampPercent > 0) || !(finalDmg > 0)) return;
+  if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
+  source.hp = Math.min(source.maxHp, source.hp + finalDmg * source.itemAllDamageVampPercent);
+}
+
 /* ===== src/core/global_system_instances.js ===== */
 /* ============================================================
    4. GLOBAL SYSTEM INSTANCES
@@ -21537,6 +21785,36 @@ if (rangeIndicatorCheckboxEl) rangeIndicatorCheckboxEl.addEventListener('change'
 const visionSystem = new VisionSystem(scene);
 const visionSystemCheckboxEl = document.getElementById('visionSystemCheckbox');
 if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', () => visionSystem.setEnabled(visionSystemCheckboxEl.checked));
+// 상점(요청: "도란의검,도란의방패,도란의반지,도란의활,도란의투구부터 추가") -
+// 구매 버튼은 item_system.js의 buyItem()을 호출만 하고, 기지 구역/골드/
+// 인벤토리 칸 판정은 전부 그 안에서 처리한다(실패 시 콘솔 경고로 조용히 무시).
+document.querySelectorAll('#shopPanel [data-item-id]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (typeof buyItem === 'function' && controller) buyItem(controller, btn.getAttribute('data-item-id'));
+  });
+});
+// 인벤토리 슬롯 표시 - buyItem/sellItem이 아이템을 바꿀 때마다 호출하는
+// 이벤트 기반 갱신 함수(updateGoldDisplay()와 동일한 원칙, 매 프레임 아님).
+function updateItemUI(ctrl) {
+  const row = document.getElementById('inventoryRow');
+  if (!row) return;
+  row.innerHTML = '';
+  const items = (ctrl && ctrl.items) || [];
+  for (let i = 0; i < 6; i++) {
+    const slot = document.createElement('div');
+    const itemId = items[i];
+    const data = itemId && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[itemId] : null;
+    if (data) {
+      slot.className = 'invSlot';
+      slot.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
+      slot.title = data.nameKo + ' (클릭: 판매, 구매가의 70% 환급)';
+      slot.addEventListener('click', () => { if (typeof sellItem === 'function') sellItem(ctrl, i); });
+    } else {
+      slot.className = 'invSlot empty';
+    }
+    row.appendChild(slot);
+  }
+}
 var controller = null;
 let championRoot = null;
 let currentChampion = null; // { fileName, resolver, actionData, boundsRadius }
@@ -22040,6 +22318,8 @@ async function bootstrapChampion(gltf, fileName) {
   controller.skillAnimStore = skillAnimStore; // Q/W/E/R 다중 애니메이션 시퀀스 저장소(섹션 0-A2)
   controller.abilityResolver = abilityResolver; // 서브 상태/평타 오버라이드가 championAbilityDatabase를 참조하기 위함
   controller.applyChampionData(championId); // 기획안 CHAMPION_DATA 연결 + 1레벨 스탯 적용(섹션 3/13)
+  updateGoldDisplay(); // 아이템/골드는 챔피언 교체에도 유지되므로(생성자 참고) HUD도 그대로 재표시
+  if (typeof updateItemUI === 'function') updateItemUI(controller);
   if (championId === 'renekton' && controller.findAnimation('Idle1')) {
     controller.playFirstAvailable(['Idle1'], { loop: THREE.LoopRepeat, fade: 0 });
   } else if (championId === 'yasuo' && controller.findAnimation('Idle1_Raw')) {
@@ -22577,6 +22857,8 @@ championIdSelectEl.addEventListener('change', () => {
     controller.abilityResolver = currentChampion.abilityResolver;
     controller.applyChampionData(newId);
     controller._returnToLocomotion();
+    updateGoldDisplay();
+    if (typeof updateItemUI === 'function') updateItemUI(controller);
   }
   renderChampionInfoPanel();
   renderAbilityMappingPanel();
@@ -22821,8 +23103,8 @@ document.getElementById('championPanelToggle').addEventListener('click', () => {
 
 // 요청("상태창들 싹다 접을 수 있게") - helpBox/rangeIndicatorToggle는
 // championPanel과 동일한 .collapsed 토글 패턴을 그대로 재사용한다.
-document.querySelectorAll('#helpBox .panelHeader, #rangeIndicatorToggle .panelHeader').forEach((header) => {
-  header.addEventListener('click', () => header.closest('#helpBox, #rangeIndicatorToggle').classList.toggle('collapsed'));
+document.querySelectorAll('#helpBox .panelHeader, #rangeIndicatorToggle .panelHeader, #shopPanel .panelHeader').forEach((header) => {
+  header.addEventListener('click', () => header.closest('#helpBox, #rangeIndicatorToggle, #shopPanel').classList.toggle('collapsed'));
 });
 // debugPanel은 매 프레임 내용이 통째로 다시 그려지므로(updateDebugPanel),
 // 버튼을 그 안에 두지 않고 별도 요소로 만들어 기존 F1 토글과 같은

@@ -17,6 +17,36 @@ if (rangeIndicatorCheckboxEl) rangeIndicatorCheckboxEl.addEventListener('change'
 const visionSystem = new VisionSystem(scene);
 const visionSystemCheckboxEl = document.getElementById('visionSystemCheckbox');
 if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', () => visionSystem.setEnabled(visionSystemCheckboxEl.checked));
+// 상점(요청: "도란의검,도란의방패,도란의반지,도란의활,도란의투구부터 추가") -
+// 구매 버튼은 item_system.js의 buyItem()을 호출만 하고, 기지 구역/골드/
+// 인벤토리 칸 판정은 전부 그 안에서 처리한다(실패 시 콘솔 경고로 조용히 무시).
+document.querySelectorAll('#shopPanel [data-item-id]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (typeof buyItem === 'function' && controller) buyItem(controller, btn.getAttribute('data-item-id'));
+  });
+});
+// 인벤토리 슬롯 표시 - buyItem/sellItem이 아이템을 바꿀 때마다 호출하는
+// 이벤트 기반 갱신 함수(updateGoldDisplay()와 동일한 원칙, 매 프레임 아님).
+function updateItemUI(ctrl) {
+  const row = document.getElementById('inventoryRow');
+  if (!row) return;
+  row.innerHTML = '';
+  const items = (ctrl && ctrl.items) || [];
+  for (let i = 0; i < 6; i++) {
+    const slot = document.createElement('div');
+    const itemId = items[i];
+    const data = itemId && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[itemId] : null;
+    if (data) {
+      slot.className = 'invSlot';
+      slot.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
+      slot.title = data.nameKo + ' (클릭: 판매, 구매가의 70% 환급)';
+      slot.addEventListener('click', () => { if (typeof sellItem === 'function') sellItem(ctrl, i); });
+    } else {
+      slot.className = 'invSlot empty';
+    }
+    row.appendChild(slot);
+  }
+}
 var controller = null;
 let championRoot = null;
 let currentChampion = null; // { fileName, resolver, actionData, boundsRadius }

@@ -721,7 +721,15 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
   // "방금 플레이어가 나를 공격했다"고 착각해 요청 20-A 2순위(자신을
   // 공격 중인 적 챔피언) 판정이 잘못 발동한다. 실제로 플레이어(챔피언)가
   // 원인일 때만(fromPlayer===true) 갱신한다.
-  if (fromPlayer) { minion.lastAttackedByPlayerAt = performance.now(); if (typeof controller !== 'undefined' && controller) minion._lastHitBy = controller; }
+  if (fromPlayer) {
+    minion.lastAttackedByPlayerAt = performance.now();
+    if (typeof controller !== 'undefined' && controller) {
+      minion._lastHitBy = controller;
+      // 아이템 패시브 "모든 피해 흡혈"(도란의 검/활) - 미니언 피해도 실제
+      // LoL처럼 흡혈 대상에 포함된다(구조물 피해만 제외).
+      if (typeof applyItemVamp === 'function') applyItemVamp(controller, finalDmg);
+    }
+  }
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }
   // 요청("미니언 모션 최소 요구: Idle/Move/Attack/Hit/Death, 우선순위
   // Death>Attack>Hit>Move>Idle") - 피격 애니메이션을 재생한다. 짧은 창

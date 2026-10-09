@@ -244,6 +244,8 @@ async function bootstrapChampion(gltf, fileName) {
   controller.skillAnimStore = skillAnimStore; // Q/W/E/R 다중 애니메이션 시퀀스 저장소(섹션 0-A2)
   controller.abilityResolver = abilityResolver; // 서브 상태/평타 오버라이드가 championAbilityDatabase를 참조하기 위함
   controller.applyChampionData(championId); // 기획안 CHAMPION_DATA 연결 + 1레벨 스탯 적용(섹션 3/13)
+  updateGoldDisplay(); // 아이템/골드는 챔피언 교체에도 유지되므로(생성자 참고) HUD도 그대로 재표시
+  if (typeof updateItemUI === 'function') updateItemUI(controller);
   if (championId === 'renekton' && controller.findAnimation('Idle1')) {
     controller.playFirstAvailable(['Idle1'], { loop: THREE.LoopRepeat, fade: 0 });
   } else if (championId === 'yasuo' && controller.findAnimation('Idle1_Raw')) {
@@ -781,6 +783,8 @@ championIdSelectEl.addEventListener('change', () => {
     controller.abilityResolver = currentChampion.abilityResolver;
     controller.applyChampionData(newId);
     controller._returnToLocomotion();
+    updateGoldDisplay();
+    if (typeof updateItemUI === 'function') updateItemUI(controller);
   }
   renderChampionInfoPanel();
   renderAbilityMappingPanel();
@@ -1025,8 +1029,8 @@ document.getElementById('championPanelToggle').addEventListener('click', () => {
 
 // 요청("상태창들 싹다 접을 수 있게") - helpBox/rangeIndicatorToggle는
 // championPanel과 동일한 .collapsed 토글 패턴을 그대로 재사용한다.
-document.querySelectorAll('#helpBox .panelHeader, #rangeIndicatorToggle .panelHeader').forEach((header) => {
-  header.addEventListener('click', () => header.closest('#helpBox, #rangeIndicatorToggle').classList.toggle('collapsed'));
+document.querySelectorAll('#helpBox .panelHeader, #rangeIndicatorToggle .panelHeader, #shopPanel .panelHeader').forEach((header) => {
+  header.addEventListener('click', () => header.closest('#helpBox, #rangeIndicatorToggle, #shopPanel').classList.toggle('collapsed'));
 });
 // debugPanel은 매 프레임 내용이 통째로 다시 그려지므로(updateDebugPanel),
 // 버튼을 그 안에 두지 않고 별도 요소로 만들어 기존 F1 토글과 같은

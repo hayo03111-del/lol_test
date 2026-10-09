@@ -5,6 +5,7 @@
     "src/core/01_status_effect_system.js",
     "src/core/01_hit_detection.js",
     "src/champions/champion_data.js",
+    "src/champions/item_data.js",
     "src/animation/animation_role_resolver.js",
     "src/champions/champion_ability_database.js",
     "src/rendering/model_scale.js",
@@ -49,6 +50,7 @@
     "src/world/mordekaiser_death_realm.js",
     "src/world/minion_system.js",
     "src/core/exp_level_system.js",
+    "src/core/item_system.js",
     "src/core/global_system_instances.js",
     "src/loader/champion_glb_loader.js"
   ]
