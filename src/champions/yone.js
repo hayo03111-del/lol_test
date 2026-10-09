@@ -395,7 +395,7 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
       this._yonePlayExitTransition(['Spell1C_ToIdle'], ['Spell1C_ToWalk_0', 'Spell1C_ToWalk_90', 'Spell1C_ToWalk_-90'], doneEmpowered);
     }, Math.max(0, castTime) * 1000);
     this._actionTimers.push(timer);
-    if (!free) this.cooldowns.Q = this._yoneQCooldown();
+    if (!free) this.cooldowns.Q = abilityHasteCooldown(this, this._yoneQCooldown());
     return;
   }
 
@@ -431,7 +431,7 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
     this._yonePlayExitTransition([], ['Yone_Spell1A_toWalk01.anm'], doneNormalQ);
   }, Math.max(0, castTime) * 1000);
   this._actionTimers.push(timer);
-  if (!free) this.cooldowns.Q = this._yoneQCooldown();
+  if (!free) this.cooldowns.Q = abilityHasteCooldown(this, this._yoneQCooldown());
 };
 
 /* ---------------- W: 영혼 가르기 ---------------- */
@@ -494,7 +494,7 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
     this._yonePlayExitTransition(['Spell2_ToIdle'], ['Spell2_ToRun'], doneW);
   }, Math.max(0, castTime) * 1000);
   this._actionTimers.push(timer);
-  if (!free) this.cooldowns.W = this._yoneWCooldown();
+  if (!free) this.cooldowns.W = abilityHasteCooldown(this, this._yoneWCooldown());
 };
 
 /* ---------------- E: 영혼해방 - 육체/영혼 분리 시각효과 ---------------- */
@@ -732,7 +732,7 @@ CharacterController.prototype._yoneCastE = function(mouseWorldPoint, free = fals
     this._actionTimers.push(t);
   }
   vfx.spawn('e', this.root.position.clone(), dir);
-  if (!free) this.cooldowns.E = this._yoneLevelValue(e.cooldown, eLevel);
+  if (!free) this.cooldowns.E = abilityHasteCooldown(this, this._yoneLevelValue(e.cooldown, eLevel));
 };
 
 CharacterController.prototype._yoneRecastE = function() {
@@ -896,7 +896,7 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
     this._actionTimers.push(rec);
   }, Math.max(0, castTime) * 1000);
   this._actionTimers.push(timer);
-  if (!free) this.cooldowns.R = this._yoneLevelValue(r.cooldown, rLevel);
+  if (!free) this.cooldowns.R = abilityHasteCooldown(this, this._yoneLevelValue(r.cooldown, rLevel));
 };
 
 /* ---------------- 매 프레임 tick ---------------- */

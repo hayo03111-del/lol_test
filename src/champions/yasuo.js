@@ -184,7 +184,7 @@ CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false
         if (tornadoNow) vfx.spawn('q', this.root.position.clone(), dir, { tornado:true, size:1.25 });
       }, Math.max(20, castNow * 1000));
       this._actionTimers.push(timer);
-      if (!free) this.cooldowns.Q = this._yasuoQCooldown();
+      if (!free) this.cooldowns.Q = abilityHasteCooldown(this, this._yasuoQCooldown());
       return;
     }
     const tornado = stackBefore >= 2;
@@ -206,7 +206,7 @@ CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false
       for (const t of unique) this._yasuoApplyQHit(t, { tornado:false, circle:false });
       if (unique.length) { this._yasuo.qStacks = Math.min(2, stackBefore + 1); if (window.yasuoSetQStacks) window.yasuoSetQStacks(this._yasuo.qStacks); this._yasuo.qStackExpiresAt = performance.now() + q.stackDuration*1000; }
     },});
-    const cd = this._yasuoQCooldown(); if (!free) this.cooldowns.Q = cd;
+    const cd = this._yasuoQCooldown(); if (!free) this.cooldowns.Q = abilityHasteCooldown(this, cd);
   
 };
 
@@ -222,7 +222,7 @@ CharacterController.prototype._yasuoCastW = function(mouseWorldPoint, free=false
     const clip=this.findAnimation(anim); const dur=clip?clip.duration:0.35;
     this.currentActionKey='yasuoW'; this.currentPhase='ACTIVE'; this.setState(STATE.W_CAST);
     this.runAction('yasuoW',STATE.W_CAST,{faceDir:dir,startupOverride:Math.min(0.25,dur),recoveryOverride:Math.max(0.05,dur-Math.min(0.25,dur)),dataOverride:{clips:[anim],startup:Math.min(0.25,dur),recovery:Math.max(0.05,dur-Math.min(0.25,dur)),cancelToMove:false,cancelToSpell:false,cancelable:false,dmg:0},onFire:()=>{ this._yasuoCreateWindwall(dir,width); }});
-    if(!free) this.cooldowns.W=this._yasuoLevelValue(w.cooldown,lvl);
+    if(!free) this.cooldowns.W=abilityHasteCooldown(this, this._yasuoLevelValue(w.cooldown,lvl));
   
 };
 
@@ -364,7 +364,7 @@ CharacterController.prototype._yasuoCastE = function(mouseWorldPoint, free=false
     const finishTimer = setTimeout(() => { this._yasuoFinishEDash(); }, (this._yasuo.eDashDuration + 0.08) * 1000);
     this._actionTimers.push(finishTimer);
 
-    if (!free) this.cooldowns.E = this._yasuoLevelValue(e.cooldown, lvl);
+    if (!free) this.cooldowns.E = abilityHasteCooldown(this, this._yasuoLevelValue(e.cooldown, lvl));
   
 };
 
@@ -491,7 +491,7 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
       }
     });
 
-    if(!free) this.cooldowns.R=this._yasuoLevelValue(r.cooldown,lvl);
+    if(!free) this.cooldowns.R=abilityHasteCooldown(this, this._yasuoLevelValue(r.cooldown,lvl));
   
 };
 

@@ -141,7 +141,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
     const dir = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, origin).setY(0) : (this.currentTarget ? new THREE.Vector3().subVectors(this.currentTarget.mesh.position, origin).setY(0) : (this.moveDir.lengthSq() > 0 ? this.moveDir.clone() : new THREE.Vector3(0, 0, 1)));
     if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1); else dir.normalize();
     if (!free && this.mp < q.energy1) { debugSkillMiss('Lee Sin Q', '기력 부족'); return; }
-    if (!free) { this.mp -= q.energy1; this.cooldowns.Q = skillVal(q.cooldown, Math.max(1, this.skillLevels.Q || 1)); updateBars(this); }
+    if (!free) { this.mp -= q.energy1; this.cooldowns.Q = abilityHasteCooldown(this, skillVal(q.cooldown, Math.max(1, this.skillLevels.Q || 1))); updateBars(this); }
     // Q 음파 시전 순간, 투사체가 날아가는 방향을 즉시 바라본다.
     // 마우스 커서로 계산한 dir과 동일한 방향을 사용하므로 모델의 정면과
     // 실제 음파 투사 방향이 항상 일치한다.
@@ -206,7 +206,7 @@ CharacterController.prototype._leesinCastW = function(free) {
     }
     if (!this.canStartNewAction()) return;
     if (!free && this.mp < w.energy1) { debugSkillMiss('Lee Sin W', '기력 부족'); return; }
-    if (!free) { this.mp -= w.energy1; this.cooldowns.W = w.cooldown; updateBars(this); }
+    if (!free) { this.mp -= w.energy1; this.cooldowns.W = abilityHasteCooldown(this, w.cooldown); updateBars(this); }
     this._clearLeeSinAnimTimer();
     this._playLeeSinClip(['Spell2']);
     this._queueLeeSinReturnClip(['Spell2_Toldle'], ['Spell2']);
@@ -239,7 +239,7 @@ CharacterController.prototype._leesinCastE = function(free) {
     }
     if (!this.canStartNewAction()) return;
     if (!free && this.mp < e.energy1) { debugSkillMiss('Lee Sin E', '기력 부족'); return; }
-    if (!free) { this.mp -= e.energy1; this.cooldowns.E = e.cooldown; updateBars(this); }
+    if (!free) { this.mp -= e.energy1; this.cooldowns.E = abilityHasteCooldown(this, e.cooldown); updateBars(this); }
     this._clearLeeSinAnimTimer();
     this._playLeeSinLockedClip('leesinE', ['Spell3']);
     vfx.spawn('e', this.root.position.clone());

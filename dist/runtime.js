@@ -12398,7 +12398,7 @@ CharacterController.prototype._renektonApplyQHit = function(target, empowered, r
 CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=false) { 
     const q=this._renektonData().Q;
     if (!free && (this.cooldowns.Q>0 || this.state===STATE.DEAD || isSilenced(this))) return;
-    if (!free) { this.cooldowns.Q=q.cooldown; }
+    if (!free) { this.cooldowns.Q=abilityHasteCooldown(this, q.cooldown); }
     const empowered = !free && this._renekton.rage >= 50;
     if (empowered) this._renekton.rage -= 50;
     this._clearActionTimers();
@@ -12428,7 +12428,7 @@ CharacterController.prototype._renektonCastW = function(mouseWorldPoint, free=fa
     const w=this._renektonData().W;
     if (this._renekton.wArmed && !free) { this._renekton.wArmed=false; this._renekton.wEmpowered=false; return; }
     if (!free && (this.cooldowns.W>0 || this.state===STATE.DEAD || isSilenced(this))) return;
-    if (!free) this.cooldowns.W=skillVal(w.cooldown,this.skillLevels.W||1);
+    if (!free) this.cooldowns.W=abilityHasteCooldown(this, skillVal(w.cooldown,this.skillLevels.W||1));
     const empowered = !free && this._renekton.rage>=50;
     if (empowered) this._renekton.rage-=50;
     this._renekton.wArmed=true; this._renekton.wEmpowered=empowered;
@@ -12512,7 +12512,7 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
     const isSecond=this._renekton.eSecondReadyUntil>now;
     if (!isSecond) {
       if(!free && (this.cooldowns.E>0 || this.state===STATE.DEAD || isSilenced(this))) return;
-      if(!free) this.cooldowns.E=skillVal(e.cooldown,this.skillLevels.E||1);
+      if(!free) this.cooldowns.E=abilityHasteCooldown(this, skillVal(e.cooldown,this.skillLevels.E||1));
     }
     let dir=mouseWorldPoint?new THREE.Vector3().subVectors(mouseWorldPoint,this.root.position).setY(0):new THREE.Vector3(0,0,1).applyQuaternion(this.root.quaternion);
     if(dir.lengthSq()<1e-8)dir.set(0,0,1);dir.normalize();
@@ -12548,7 +12548,7 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
 CharacterController.prototype._renektonCastR = function(free=false) { 
     const r=this._renektonData().R;
     if(!free && (this.cooldowns.R>0 || this.state===STATE.DEAD || isSilenced(this))) return;
-    if(!free)this.cooldowns.R=skillVal(r.cooldown,this.skillLevels.R||1);
+    if(!free)this.cooldowns.R=abilityHasteCooldown(this, skillVal(r.cooldown,this.skillLevels.R||1));
     if(this._renekton.rActive)return;
     const lvl=this.skillLevels.R||1;
     if(!free){
@@ -12807,7 +12807,7 @@ CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false
         if (tornadoNow) vfx.spawn('q', this.root.position.clone(), dir, { tornado:true, size:1.25 });
       }, Math.max(20, castNow * 1000));
       this._actionTimers.push(timer);
-      if (!free) this.cooldowns.Q = this._yasuoQCooldown();
+      if (!free) this.cooldowns.Q = abilityHasteCooldown(this, this._yasuoQCooldown());
       return;
     }
     const tornado = stackBefore >= 2;
@@ -12829,7 +12829,7 @@ CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false
       for (const t of unique) this._yasuoApplyQHit(t, { tornado:false, circle:false });
       if (unique.length) { this._yasuo.qStacks = Math.min(2, stackBefore + 1); if (window.yasuoSetQStacks) window.yasuoSetQStacks(this._yasuo.qStacks); this._yasuo.qStackExpiresAt = performance.now() + q.stackDuration*1000; }
     },});
-    const cd = this._yasuoQCooldown(); if (!free) this.cooldowns.Q = cd;
+    const cd = this._yasuoQCooldown(); if (!free) this.cooldowns.Q = abilityHasteCooldown(this, cd);
   
 };
 
@@ -12845,7 +12845,7 @@ CharacterController.prototype._yasuoCastW = function(mouseWorldPoint, free=false
     const clip=this.findAnimation(anim); const dur=clip?clip.duration:0.35;
     this.currentActionKey='yasuoW'; this.currentPhase='ACTIVE'; this.setState(STATE.W_CAST);
     this.runAction('yasuoW',STATE.W_CAST,{faceDir:dir,startupOverride:Math.min(0.25,dur),recoveryOverride:Math.max(0.05,dur-Math.min(0.25,dur)),dataOverride:{clips:[anim],startup:Math.min(0.25,dur),recovery:Math.max(0.05,dur-Math.min(0.25,dur)),cancelToMove:false,cancelToSpell:false,cancelable:false,dmg:0},onFire:()=>{ this._yasuoCreateWindwall(dir,width); }});
-    if(!free) this.cooldowns.W=this._yasuoLevelValue(w.cooldown,lvl);
+    if(!free) this.cooldowns.W=abilityHasteCooldown(this, this._yasuoLevelValue(w.cooldown,lvl));
   
 };
 
@@ -12987,7 +12987,7 @@ CharacterController.prototype._yasuoCastE = function(mouseWorldPoint, free=false
     const finishTimer = setTimeout(() => { this._yasuoFinishEDash(); }, (this._yasuo.eDashDuration + 0.08) * 1000);
     this._actionTimers.push(finishTimer);
 
-    if (!free) this.cooldowns.E = this._yasuoLevelValue(e.cooldown, lvl);
+    if (!free) this.cooldowns.E = abilityHasteCooldown(this, this._yasuoLevelValue(e.cooldown, lvl));
   
 };
 
@@ -13114,7 +13114,7 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
       }
     });
 
-    if(!free) this.cooldowns.R=this._yasuoLevelValue(r.cooldown,lvl);
+    if(!free) this.cooldowns.R=abilityHasteCooldown(this, this._yasuoLevelValue(r.cooldown,lvl));
   
 };
 
@@ -13606,7 +13606,7 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
       this._yonePlayExitTransition(['Spell1C_ToIdle'], ['Spell1C_ToWalk_0', 'Spell1C_ToWalk_90', 'Spell1C_ToWalk_-90'], doneEmpowered);
     }, Math.max(0, castTime) * 1000);
     this._actionTimers.push(timer);
-    if (!free) this.cooldowns.Q = this._yoneQCooldown();
+    if (!free) this.cooldowns.Q = abilityHasteCooldown(this, this._yoneQCooldown());
     return;
   }
 
@@ -13642,7 +13642,7 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
     this._yonePlayExitTransition([], ['Yone_Spell1A_toWalk01.anm'], doneNormalQ);
   }, Math.max(0, castTime) * 1000);
   this._actionTimers.push(timer);
-  if (!free) this.cooldowns.Q = this._yoneQCooldown();
+  if (!free) this.cooldowns.Q = abilityHasteCooldown(this, this._yoneQCooldown());
 };
 
 /* ---------------- W: 영혼 가르기 ---------------- */
@@ -13705,7 +13705,7 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
     this._yonePlayExitTransition(['Spell2_ToIdle'], ['Spell2_ToRun'], doneW);
   }, Math.max(0, castTime) * 1000);
   this._actionTimers.push(timer);
-  if (!free) this.cooldowns.W = this._yoneWCooldown();
+  if (!free) this.cooldowns.W = abilityHasteCooldown(this, this._yoneWCooldown());
 };
 
 /* ---------------- E: 영혼해방 - 육체/영혼 분리 시각효과 ---------------- */
@@ -13943,7 +13943,7 @@ CharacterController.prototype._yoneCastE = function(mouseWorldPoint, free = fals
     this._actionTimers.push(t);
   }
   vfx.spawn('e', this.root.position.clone(), dir);
-  if (!free) this.cooldowns.E = this._yoneLevelValue(e.cooldown, eLevel);
+  if (!free) this.cooldowns.E = abilityHasteCooldown(this, this._yoneLevelValue(e.cooldown, eLevel));
 };
 
 CharacterController.prototype._yoneRecastE = function() {
@@ -14107,7 +14107,7 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
     this._actionTimers.push(rec);
   }, Math.max(0, castTime) * 1000);
   this._actionTimers.push(timer);
-  if (!free) this.cooldowns.R = this._yoneLevelValue(r.cooldown, rLevel);
+  if (!free) this.cooldowns.R = abilityHasteCooldown(this, this._yoneLevelValue(r.cooldown, rLevel));
 };
 
 /* ---------------- 매 프레임 tick ---------------- */
@@ -14473,7 +14473,7 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
     if (isSilenced(this)) return;
     if (!free && this.cooldowns.Q > 0) return;
     if (!this._payCost('Q', free)) return;
-    if (!free) this.cooldowns.Q = q.cooldown;
+    if (!free) this.cooldowns.Q = abilityHasteCooldown(this, q.cooldown);
 
     const dashPath = this._nilah.eDash ? { from:this._nilah.eDash.from.clone(), to:this._nilah.eDash.to.clone() } : null;
     const preserveDash = !!dashPath;
@@ -14581,7 +14581,7 @@ CharacterController.prototype._nilahCastW = function(mouseWorldPoint, free=false
     if (isSilenced(this)) return;
     if (!free && this.cooldowns.W>0) return;
     if (!this._payCost('W', free)) return;
-    if (!free) this.cooldowns.W=skillVal(w.cooldown,lvl);
+    if (!free) this.cooldowns.W=abilityHasteCooldown(this, skillVal(w.cooldown,lvl));
     const dur=w.duration;
     // 데이터 추가(ExtensionBonus 구현용): 아군 공유 지속시간을 "닐라 본인의
     // W가 몇 초 남았는가" 기준으로 늘리려면 시전 시각을 알아야 한다.
@@ -14695,7 +14695,7 @@ CharacterController.prototype._nilahCastE = function(mouseWorldPoint, free=false
       this.phaseCancelable = false;
     }
     if(!this._payCost('E',free)) return;
-    if(!free){ this._nilah.eCharges--; this._nilah.eRechargeAt.push(now+skillVal(e.rechargeTime,lvl)*1000); this.cooldowns.E=0; }
+    if(!free){ this._nilah.eCharges--; this._nilah.eRechargeAt.push(now+abilityHasteCooldown(this, skillVal(e.rechargeTime,lvl))*1000); this.cooldowns.E=0; }
     const start=this.root.position.clone(); const targetPos=getWorldPosition(target).clone();
     // 버그 수정("E가 적한테 닿으면 남은 거리만큼 안 간다"): 원작 E는
     // 대상까지의 거리와 무관하게 항상 고정 거리(DashTotalDistance=600)를
@@ -14727,7 +14727,7 @@ CharacterController.prototype._nilahCastR = function(free=false) {
     if(isSilenced(this)) return;
     if(!free && this.cooldowns.R>0) return;
     if(!this._payCost('R',free)) return;
-    if(!free)this.cooldowns.R=skillVal(r.cooldown,lvl);
+    if(!free)this.cooldowns.R=abilityHasteCooldown(this, skillVal(r.cooldown,lvl));
     if(this._nilah.rSeq) return;
     this._clearActionTimers(); this.currentActionKey='nilahR'; this.currentPhase='STARTUP'; this.setState(STATE.R_CAST); this.phaseCancelable=false;
     const startup=0.16;
@@ -16037,7 +16037,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
     const dir = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, origin).setY(0) : (this.currentTarget ? new THREE.Vector3().subVectors(this.currentTarget.mesh.position, origin).setY(0) : (this.moveDir.lengthSq() > 0 ? this.moveDir.clone() : new THREE.Vector3(0, 0, 1)));
     if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1); else dir.normalize();
     if (!free && this.mp < q.energy1) { debugSkillMiss('Lee Sin Q', '기력 부족'); return; }
-    if (!free) { this.mp -= q.energy1; this.cooldowns.Q = skillVal(q.cooldown, Math.max(1, this.skillLevels.Q || 1)); updateBars(this); }
+    if (!free) { this.mp -= q.energy1; this.cooldowns.Q = abilityHasteCooldown(this, skillVal(q.cooldown, Math.max(1, this.skillLevels.Q || 1))); updateBars(this); }
     // Q 음파 시전 순간, 투사체가 날아가는 방향을 즉시 바라본다.
     // 마우스 커서로 계산한 dir과 동일한 방향을 사용하므로 모델의 정면과
     // 실제 음파 투사 방향이 항상 일치한다.
@@ -16102,7 +16102,7 @@ CharacterController.prototype._leesinCastW = function(free) {
     }
     if (!this.canStartNewAction()) return;
     if (!free && this.mp < w.energy1) { debugSkillMiss('Lee Sin W', '기력 부족'); return; }
-    if (!free) { this.mp -= w.energy1; this.cooldowns.W = w.cooldown; updateBars(this); }
+    if (!free) { this.mp -= w.energy1; this.cooldowns.W = abilityHasteCooldown(this, w.cooldown); updateBars(this); }
     this._clearLeeSinAnimTimer();
     this._playLeeSinClip(['Spell2']);
     this._queueLeeSinReturnClip(['Spell2_Toldle'], ['Spell2']);
@@ -16135,7 +16135,7 @@ CharacterController.prototype._leesinCastE = function(free) {
     }
     if (!this.canStartNewAction()) return;
     if (!free && this.mp < e.energy1) { debugSkillMiss('Lee Sin E', '기력 부족'); return; }
-    if (!free) { this.mp -= e.energy1; this.cooldowns.E = e.cooldown; updateBars(this); }
+    if (!free) { this.mp -= e.energy1; this.cooldowns.E = abilityHasteCooldown(this, e.cooldown); updateBars(this); }
     this._clearLeeSinAnimTimer();
     this._playLeeSinLockedClip('leesinE', ['Spell3']);
     vfx.spawn('e', this.root.position.clone());

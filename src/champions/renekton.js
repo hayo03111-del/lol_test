@@ -112,7 +112,7 @@ CharacterController.prototype._renektonApplyQHit = function(target, empowered, r
 CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=false) { 
     const q=this._renektonData().Q;
     if (!free && (this.cooldowns.Q>0 || this.state===STATE.DEAD || isSilenced(this))) return;
-    if (!free) { this.cooldowns.Q=q.cooldown; }
+    if (!free) { this.cooldowns.Q=abilityHasteCooldown(this, q.cooldown); }
     const empowered = !free && this._renekton.rage >= 50;
     if (empowered) this._renekton.rage -= 50;
     this._clearActionTimers();
@@ -142,7 +142,7 @@ CharacterController.prototype._renektonCastW = function(mouseWorldPoint, free=fa
     const w=this._renektonData().W;
     if (this._renekton.wArmed && !free) { this._renekton.wArmed=false; this._renekton.wEmpowered=false; return; }
     if (!free && (this.cooldowns.W>0 || this.state===STATE.DEAD || isSilenced(this))) return;
-    if (!free) this.cooldowns.W=skillVal(w.cooldown,this.skillLevels.W||1);
+    if (!free) this.cooldowns.W=abilityHasteCooldown(this, skillVal(w.cooldown,this.skillLevels.W||1));
     const empowered = !free && this._renekton.rage>=50;
     if (empowered) this._renekton.rage-=50;
     this._renekton.wArmed=true; this._renekton.wEmpowered=empowered;
@@ -226,7 +226,7 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
     const isSecond=this._renekton.eSecondReadyUntil>now;
     if (!isSecond) {
       if(!free && (this.cooldowns.E>0 || this.state===STATE.DEAD || isSilenced(this))) return;
-      if(!free) this.cooldowns.E=skillVal(e.cooldown,this.skillLevels.E||1);
+      if(!free) this.cooldowns.E=abilityHasteCooldown(this, skillVal(e.cooldown,this.skillLevels.E||1));
     }
     let dir=mouseWorldPoint?new THREE.Vector3().subVectors(mouseWorldPoint,this.root.position).setY(0):new THREE.Vector3(0,0,1).applyQuaternion(this.root.quaternion);
     if(dir.lengthSq()<1e-8)dir.set(0,0,1);dir.normalize();
@@ -262,7 +262,7 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
 CharacterController.prototype._renektonCastR = function(free=false) { 
     const r=this._renektonData().R;
     if(!free && (this.cooldowns.R>0 || this.state===STATE.DEAD || isSilenced(this))) return;
-    if(!free)this.cooldowns.R=skillVal(r.cooldown,this.skillLevels.R||1);
+    if(!free)this.cooldowns.R=abilityHasteCooldown(this, skillVal(r.cooldown,this.skillLevels.R||1));
     if(this._renekton.rActive)return;
     const lvl=this.skillLevels.R||1;
     if(!free){

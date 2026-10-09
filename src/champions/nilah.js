@@ -341,7 +341,7 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
     if (isSilenced(this)) return;
     if (!free && this.cooldowns.Q > 0) return;
     if (!this._payCost('Q', free)) return;
-    if (!free) this.cooldowns.Q = q.cooldown;
+    if (!free) this.cooldowns.Q = abilityHasteCooldown(this, q.cooldown);
 
     const dashPath = this._nilah.eDash ? { from:this._nilah.eDash.from.clone(), to:this._nilah.eDash.to.clone() } : null;
     const preserveDash = !!dashPath;
@@ -449,7 +449,7 @@ CharacterController.prototype._nilahCastW = function(mouseWorldPoint, free=false
     if (isSilenced(this)) return;
     if (!free && this.cooldowns.W>0) return;
     if (!this._payCost('W', free)) return;
-    if (!free) this.cooldowns.W=skillVal(w.cooldown,lvl);
+    if (!free) this.cooldowns.W=abilityHasteCooldown(this, skillVal(w.cooldown,lvl));
     const dur=w.duration;
     // 데이터 추가(ExtensionBonus 구현용): 아군 공유 지속시간을 "닐라 본인의
     // W가 몇 초 남았는가" 기준으로 늘리려면 시전 시각을 알아야 한다.
@@ -563,7 +563,7 @@ CharacterController.prototype._nilahCastE = function(mouseWorldPoint, free=false
       this.phaseCancelable = false;
     }
     if(!this._payCost('E',free)) return;
-    if(!free){ this._nilah.eCharges--; this._nilah.eRechargeAt.push(now+skillVal(e.rechargeTime,lvl)*1000); this.cooldowns.E=0; }
+    if(!free){ this._nilah.eCharges--; this._nilah.eRechargeAt.push(now+abilityHasteCooldown(this, skillVal(e.rechargeTime,lvl))*1000); this.cooldowns.E=0; }
     const start=this.root.position.clone(); const targetPos=getWorldPosition(target).clone();
     // 버그 수정("E가 적한테 닿으면 남은 거리만큼 안 간다"): 원작 E는
     // 대상까지의 거리와 무관하게 항상 고정 거리(DashTotalDistance=600)를
@@ -595,7 +595,7 @@ CharacterController.prototype._nilahCastR = function(free=false) {
     if(isSilenced(this)) return;
     if(!free && this.cooldowns.R>0) return;
     if(!this._payCost('R',free)) return;
-    if(!free)this.cooldowns.R=skillVal(r.cooldown,lvl);
+    if(!free)this.cooldowns.R=abilityHasteCooldown(this, skillVal(r.cooldown,lvl));
     if(this._nilah.rSeq) return;
     this._clearActionTimers(); this.currentActionKey='nilahR'; this.currentPhase='STARTUP'; this.setState(STATE.R_CAST); this.phaseCancelable=false;
     const startup=0.16;
