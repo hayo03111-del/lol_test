@@ -716,6 +716,9 @@ function updateGoldDisplay() {
   if (typeof updateDebugPanel === 'function') updateDebugPanel();
   const el = document.getElementById('goldAmount');
   if (el && controller) el.textContent = Math.floor(controller.gold || 0).toLocaleString();
+  // 미니언/포탑 처치처럼 아이템 구매 없이 골드만 바뀌는 경우에도 상점의
+  // "구매 가능 여부" 표시(unaffordable 회색 처리)가 따라오도록 갱신한다.
+  if (typeof renderShopPanel === 'function') renderShopPanel();
 }
 
 // 넥서스(요청 문서 5절) - 양 진영(RED/BLUE) 각각 실제 HP/team/구조물

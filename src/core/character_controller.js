@@ -230,12 +230,17 @@ class CharacterController {
     this._itemTick = {};
     this.itemBonusCritChance = 0; this.itemBonusAbilityHaste = 0;
     this.itemBonusHpRegenPercent = 0; this.itemBonusMpRegenPercent = 0;
+    this.itemBonusMoveSpeedLol = 0; this.itemBonusMagicPenFlat = 0;
+    this.itemSlowResistPercent = 0; this.itemTenacityPercent = 0; this._itemSlaughterStacks = 0;
     // 트린켓(투명 와드) - 6칸 인벤토리와 별개인 전용 슬롯. 실제 LoL처럼
     // 골드로 사지 않고 기본 장착되어 있다(gold/items와 동일하게 챔피언을
     // 바꿔도 유지 - applyChampionData()는 건드리지 않는다). _placedWards는
     // 현재 설치돼 있는 와드 마커(메시+만료 시각) 목록.
     this.trinket = { id: 'stealthWard', charges: 2 };
     this._placedWards = [];
+    // 신발 - "하나밖에 사지 못한다"는 원문 그대로 6칸 인벤토리와 별개인
+    // 전용 슬롯 하나만 쓴다(트린켓과 동일한 구조). 기본값은 미착용(null).
+    this.boots = null;
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -430,7 +435,10 @@ class CharacterController {
       // 문제없다(최대 한 프레임짜리 눈에 띄지 않는 과도 상태).
       this.stats.critChance = (this.itemBonusCritChance || 0);
       this.stats.attackRange = base.attackRange;
-      this.stats.baseMoveSpeed = base.baseMoveSpeed;
+      // 신발(이동속도) - item_data.js에 LoL 원본 단위로 저장해뒀으므로
+      // base.baseMoveSpeed와 동일하게 여기서 한 번만 lolRangeToWorld()로
+      // 변환한다(기본 이동속도 자체가 이미 그 변환을 거친 값이라 단위를 맞춤).
+      this.stats.baseMoveSpeed = base.baseMoveSpeed + lolRangeToWorld(this.itemBonusMoveSpeedLol || 0);
       this.hp = Math.min(this.hp || this.maxHp * hpPct, this.maxHp);
       this.mp = Math.min(this.mp || this.maxMp, this.maxMp);
     }

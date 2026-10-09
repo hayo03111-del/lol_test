@@ -383,7 +383,7 @@ const DAMAGE_TYPE = { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' };
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
 // 넘어온다 - 여기서 다시 굴리지 않는다(같은 공격 인스턴스의 결과가 명중
 // 시점에 바뀌면 안 되므로).
-function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0 }) {
+function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0 }) {
   let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critMultiplier) : 1);
   if (damageType === DAMAGE_TYPE.PHYSICAL) {
     let armor = (target && (target.armor ?? target.stats?.armor)) || 0;
@@ -397,7 +397,14 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 없었다 - 모데카이저 E 패시브("마법 관통력을 얻습니다")가 magicPenPercent를
     // 세팅만 하고 실제로 아무 데도 쓰이지 않아 완전히 무효과였다. PHYSICAL의
     // armorPenPercent와 동일한 방식으로 마법저항력에 반영한다.
-    const mr = (target && (target.magicResist ?? target.stats?.magicResist)) || 0;
+    let mr = (target && (target.magicResist ?? target.stats?.magicResist)) || 0;
+    // 아이템 패시브(마법사의 신발 - 고정 마법 관통력) - 고정 관통은 항상
+    // 퍼센트 관통보다 먼저 적용한다(실제 LoL 공식과 동일 순서). `source`가
+    // 없는 호출(대부분의 스킬 피해 호출)은 흡혈/영광 처치 훅과 동일한
+    // 이유로 전역 `controller`(이 데모의 유일한 챔피언 피해원)로 대체한다.
+    const atk = source || (typeof controller !== 'undefined' ? controller : null);
+    const flatMagicPen = (atk && atk.itemBonusMagicPenFlat) || 0;
+    mr = Math.max(0, mr - flatMagicPen);
     const effectiveMr = mr * (1 - Math.max(0, Math.min(1, magicPenPercent)));
     dmg *= 100 / (100 + Math.max(0, effectiveMr));
     dmg *= 1 - getMagicDamageReductionPercent(target);

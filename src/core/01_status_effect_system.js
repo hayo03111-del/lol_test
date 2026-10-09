@@ -46,7 +46,22 @@ function applyStatus(target, effect) {
     return null;
   }
   const now = performance.now();
-  const rec = { ...effect, expiresAt: now + Math.max(0, effect.duration) * 1000, _tickAccum: 0 };
+  // 아이템 패시브(헤르메스의 발걸음 - 강인함/신속의 장화 - 둔화 저항)를
+  // 이 공용 진입점 한 곳에서 처리한다 - 어떤 챔피언이 걸든, 어떤 스킬이
+  // 걸든 전부 자동으로 적용된다(개별 스킬 코드를 손댈 필요 없음, 요청
+  // 20-C/처형 시스템과 동일한 원칙). 강인함은 "기절/속박/침묵/매혹" 같은
+  // 행동 불가 CC의 지속시간을 깎는다 - 원문 그대로 공중에 뜸(KNOCKUP)/
+  // 제압(SUPPRESSION)에는 적용하지 않는다. 둔화 저항은 지속시간이 아니라
+  // 세기(value) 자체를 깎는다(실제 "둔화 저항"의 의미와 동일).
+  let effDuration = effect.duration;
+  let effValue = effect.value;
+  if (target && target.itemTenacityPercent > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM'].includes(effect.type)) {
+    effDuration = effDuration * (1 - target.itemTenacityPercent);
+  }
+  if (target && target.itemSlowResistPercent > 0 && effect.type === 'SLOW') {
+    effValue = effValue * (1 - target.itemSlowResistPercent);
+  }
+  const rec = { ...effect, duration: effDuration, value: effValue, expiresAt: now + Math.max(0, effDuration) * 1000, _tickAccum: 0 };
   if (effect.type === 'KNOCKUP') {
     const base = target.mesh?.position?.y ?? 0;
     target._yasuoAirborne = { baseY: base, elapsed: 0, duration: Math.max(0.05, effect.duration), height: effect.airborneHeight ?? 1.6 };
@@ -54,7 +69,7 @@ function applyStatus(target, effect) {
   const idx = target.statusEffects.findIndex((e) => e.id === effect.id);
   if (idx >= 0) target.statusEffects[idx] = rec; else target.statusEffects.push(rec);
   if (CC_TYPES.has(effect.type)) {
-    console.log(`[CC]\nTarget: ${unitLabel(target)}\nType: ${effect.type}\nDuration: ${effect.duration}`);
+    console.log(`[CC]\nTarget: ${unitLabel(target)}\nType: ${effect.type}\nDuration: ${effDuration}`); // 강인함 적용 후 실제 지속시간(디버깅 혼동 방지)
     refreshUnitCcTags(target);
     // 버그 수정(가렌 패시브 "끈질긴 방어자" - 곧 추가될 멀티플레이 대비):
     // passiveState에 lastEnemySkillHitAt 필드가 이미 선언돼 있었지만

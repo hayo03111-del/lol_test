@@ -115,10 +115,52 @@ const ITEM_DATA = {
   sapphireCrystal: { id: 'sapphireCrystal', nameKo: '사파이어 수정', cost: 300, stats: { mana: 300 } },
   needlesslyLargeRod: { id: 'needlesslyLargeRod', nameKo: '쓸데없이 큰 지팡이', cost: 1200, stats: { abilityPower: 65 } },
   faerieCharm: { id: 'faerieCharm', nameKo: '요정의 부적', cost: 200, stats: { mpRegenPercent: 0.5 } },
-  rejuvenationBead: { id: 'rejuvenationBead', nameKo: '원기 회복의 구슬', cost: 150, stats: { hpRegenPercent: 1.0 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  rejuvenationBead: { id: 'rejuvenationBead', nameKo: '원기 회복의 구슬', cost: 150, stats: { hpRegenPercent: 1.0 }, priceGuessed: true }, // 가격 원문 누락 - 실제 LoL 가격 사용
   amplifyingTome: { id: 'amplifyingTome', nameKo: '증폭의 고사', cost: 400, stats: { abilityPower: 20 } },
-  chainVest: { id: 'chainVest', nameKo: '천갑옷', cost: 800, stats: { armor: 15 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
-  bfSword: { id: 'bfSword', nameKo: 'B.F. 대검', cost: 1300, stats: { attackDamage: 40 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  chainVest: { id: 'chainVest', nameKo: '천갑옷', cost: 800, stats: { armor: 15 }, priceGuessed: true }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  bfSword: { id: 'bfSword', nameKo: 'B.F. 대검', cost: 1300, stats: { attackDamage: 40 }, priceGuessed: true }, // 가격 원문 누락 - 실제 LoL 가격 사용
+
+  // [신발] - "신발은 하나밖에 사지 못한다"(원문) - 6칸 인벤토리와 완전히
+  // 별개인 전용 슬롯(ctrl.boots, 트린켓과 동일한 구조)에 들어간다. 다른
+  // 신발을 사면 기존 신발은 자동으로 "교체"되어 전액 환급된다(판매가
+  // 아니라 업그레이드 개념 - item_system.js의 buyBoots() 참고).
+  // moveSpeed는 다른 stats와 달리 LoL 원본 단위 그대로 둔다 -
+  // recomputeStats()에서 lolRangeToWorld()로 변환해 더한다(기본 이동속도
+  // 자체가 그 변환을 거쳐 월드 단위로 저장되는 것과 동일한 원칙).
+  boots: { id: 'boots', nameKo: '장화', cost: 300, stats: { moveSpeed: 25 }, isBoots: true },
+  // 약간 신비한 신발: 원문에 가격이 없다. "조합 시 장화 대신 쓸 수 있고
+  // 그 효과가 상위 신발에도 유지된다"는 조합 전용 메커니즘은 이 프로젝트에
+  // 아이템 조합(하위템 자동 소모) 시스템 자체가 없어 구현하지 않았다 -
+  // 기본 이동속도(25+10)만 가진 장화의 대체 버전으로 단순화했다.
+  slightlyMagicalBoots: { id: 'slightlyMagicalBoots', nameKo: '약간 신비한 신발', cost: 300, stats: { moveSpeed: 35 }, isBoots: true, priceGuessed: true },
+  berserkersGreaves: { id: 'berserkersGreaves', nameKo: '광전사의 군화', cost: 1100, stats: { attackSpeedPercent: 0.30, moveSpeed: 45 }, isBoots: true },
+  sorcerersShoes: { id: 'sorcerersShoes', nameKo: '마법사의 신발', cost: 1100, stats: { magicPenFlat: 12, moveSpeed: 45 }, isBoots: true },
+  // 명석함의 아이오니아 장화 - "아이오니아의 통찰"(소환사 주문 가속 +10)은
+  // 이 프로젝트에 소환사 주문 시스템 자체가 없어 생략했다(스킬 가속 10은 그대로 적용).
+  ionianBootsOfLucidity: { id: 'ionianBootsOfLucidity', nameKo: '명석함의 아이오니아 장화', cost: 900, stats: { abilityHaste: 10, moveSpeed: 45 }, isBoots: true },
+  // 신속의 장화 - "날쌘 발걸음"(둔화 효과 25% 감소)은 slowResistPercent로
+  // 구현한다(01_status_effect_system.js의 applyStatus()가 SLOW 효과의
+  // 세기 자체를 이 비율만큼 깎는다 - 지속시간이 아니라 세기 감소라는
+  // 실제 "둔화 저항"의 의미와 일치).
+  bootsOfSwiftness: { id: 'bootsOfSwiftness', nameKo: '신속의 장화', cost: 1000, stats: { moveSpeed: 55 }, isBoots: true, slowResistPercent: 0.25 },
+  // 판금 장화 - "판금"(기본 공격으로 받는 피해 10% 감소)은 이 1인 연습
+  // 시뮬레이터에 플레이어를 공격하는 AI 자체가 없어 트리거될 상황이 없다
+  // (도란의 방패 "피격 후 회복"과 동일한 이유) - 데이터만 두고 실제 피해
+  // 감소 훅은 연결하지 않았다.
+  platedSteelcaps: { id: 'platedSteelcaps', nameKo: '판금 장화', cost: 1200, stats: { armor: 25, moveSpeed: 45 }, isBoots: true, reducedBasicAttackDamagePercent: 0.10 },
+  // 헤르메스의 발걸음 - "강인함 30%"는 tenacityPercent로 구현한다
+  // (applyStatus()가 기절/도발/공포/침묵/변이 등 행동 불가 CC의 지속시간을
+  // 이 비율만큼 깎는다 - 원문 그대로 "공중에 뜨거나(KNOCKUP) 제압
+  // (SUPPRESSION) 당했을 때는 효과 없음"을 반영해 그 둘은 제외한다).
+  mercurysTreads: { id: 'mercurysTreads', nameKo: '헤르메스의 발걸음', cost: 1250, stats: { magicResist: 20, moveSpeed: 45 }, isBoots: true, tenacityPercent: 0.30 },
+  // 탐욕의 군화 - "학살"(챔피언 처치 관여 시 흡혈 0.6%씩 최대 10중첩)은
+  // 암흑의 인장(영광)과 동일한 처형 판정 지점(itemOnChampionTakedown)을
+  // 재사용해서 구현한다.
+  bootsOfGreed: {
+    id: 'bootsOfGreed', nameKo: '탐욕의 군화', cost: 1000, stats: { moveSpeed: 45 }, isBoots: true,
+    allDamageVampPercent: 0.04,
+    slaughterPassive: { vampPerStack: 0.006, maxStacks: 10 },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -126,4 +168,13 @@ const ITEM_ORDER = [
   'pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak',
   'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod',
   'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword',
+  'boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes',
+  'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed',
+];
+// 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
+const ITEM_CATEGORIES = [
+  { id: 'starter', nameKo: '시작 아이템', items: ['doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm', 'cull', 'darkSeal', 'tearOfGoddess'] },
+  { id: 'consumable', nameKo: '소모품', items: ['healthPotion', 'refillablePotion'] }, // 투명 와드(트린켓)는 상점에서 사는 게 아니라 기본 장착 - 아래 트린켓 슬롯에 표시
+  { id: 'basic', nameKo: '기본 아이템', items: ['pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak', 'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod', 'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword'] },
+  { id: 'boots', nameKo: '신발', items: ['boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes', 'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed'] },
 ];

@@ -17,9 +17,13 @@ function recomputeItemStats(ctrl) {
   ctrl.itemAllDamageVampPercent = 0; ctrl.itemMinionBonusDamage = 0; ctrl.itemOnHitHeal = 0;
   ctrl.itemBonusCritChance = 0; ctrl.itemBonusAbilityHaste = 0;
   ctrl.itemBonusHpRegenPercent = 0; ctrl.itemBonusMpRegenPercent = 0;
-  for (const slot of (ctrl.items || [])) {
-    const item = ITEM_DATA[slot.id];
-    if (!item) continue;
+  // moveSpeed/magicPenFlat/슬로우저항/강인함은 신발(장화류)에서만 나오는
+  // 값이지만, 범용 필드로 둔다(나중에 다른 아이템도 같은 스탯을 가질 수
+  // 있으므로 "신발 전용"으로 하드코딩하지 않는다).
+  ctrl.itemBonusMoveSpeedLol = 0; ctrl.itemBonusMagicPenFlat = 0;
+  ctrl.itemSlowResistPercent = 0; ctrl.itemTenacityPercent = 0;
+  const applyOne = (item) => {
+    if (!item) return;
     const s = item.stats || {};
     ctrl.itemBonusAD += s.attackDamage || 0;
     ctrl.itemBonusAP += s.abilityPower || 0;
@@ -32,15 +36,26 @@ function recomputeItemStats(ctrl) {
     ctrl.itemBonusAbilityHaste += s.abilityHaste || 0;
     ctrl.itemBonusHpRegenPercent += s.hpRegenPercent || 0;
     ctrl.itemBonusMpRegenPercent += s.mpRegenPercent || 0;
+    ctrl.itemBonusMoveSpeedLol += s.moveSpeed || 0;
+    ctrl.itemBonusMagicPenFlat += s.magicPenFlat || 0;
     ctrl.itemAllDamageVampPercent += item.allDamageVampPercent || 0;
     ctrl.itemMinionBonusDamage += item.minionBonusDamage || 0;
     ctrl.itemOnHitHeal += item.onHitHeal || 0;
+    // 신속의 장화(둔화 저항)/헤르메스의 발걸음(강인함) - 둘 다 "더 센 쪽
+    // 하나만 적용"이 아니라 실제 LoL처럼 단순 합산(이 데모엔 둘 다 가질
+    // 방법이 마땅치 않아 사실상 하나만 적용되지만, 합산해도 안전하다).
+    ctrl.itemSlowResistPercent += item.slowResistPercent || 0;
+    ctrl.itemTenacityPercent += item.tenacityPercent || 0;
     // 암흑의 인장(영광)의 동적 주문력 - 아이템을 들고 있을 때만 적용된다
     // (팔면 중첩 자체는 남아있어도 더 이상 스탯에 반영되지 않는다).
     if (item.gloryPassive) ctrl.itemBonusAP += (ctrl._itemGloryStacks || 0) * item.gloryPassive.apPerStack;
+    // 탐욕의 군화(학살)의 동적 흡혈 - 중첩당 0.6%씩 추가.
+    if (item.slaughterPassive) ctrl.itemAllDamageVampPercent += (ctrl._itemSlaughterStacks || 0) * item.slaughterPassive.vampPerStack;
     // 여신의 눈물(마나순환)으로 이미 얻은 최대 마나 - 누적값을 그대로 더한다.
     if (item.manaCirculationPassive && ctrl._itemTearState) ctrl.itemBonusMana += ctrl._itemTearState.gained || 0;
-  }
+  };
+  for (const slot of (ctrl.items || [])) applyOne(ITEM_DATA[slot.id]);
+  if (ctrl.boots) applyOne(ITEM_DATA[ctrl.boots.id]);
   ctrl.recomputeStats();
 }
 
@@ -70,6 +85,13 @@ function buyItem(ctrl, itemId) {
     console.warn('[ITEM] 기지(상점 구역) 안에서만 구매할 수 있습니다.');
     return false;
   }
+  // 신발은 "하나밖에 사지 못한다"(원문) - 6칸 인벤토리가 아니라 전용
+  // boots 슬롯으로 간다(buyBoots()가 기존 신발 교체/환급까지 처리).
+  if (item.isBoots) return _buyBoots(ctrl, item);
+  // 트린켓(투명 와드)은 상점에서 구매하는 게 아니라 기본 장착이다 -
+  // 방어적 가드(ITEM_CATEGORIES에서 이미 제외했지만, 실수로 다시
+  // 노출되더라도 6칸 인벤토리를 공짜로 채우는 경로로 새지 않게 막는다).
+  if (item.trinket) { console.warn('[ITEM] 트린켓은 상점에서 구매하지 않습니다(기본 장착).'); return false; }
   if ((ctrl.gold || 0) < item.cost) { console.warn('[ITEM] 골드가 부족합니다.'); return false; }
   ctrl.items = ctrl.items || [];
   if (item.maxStack) {
@@ -117,6 +139,38 @@ function sellItem(ctrl, slotIndex) {
   if (!item) return false;
   ctrl.items.splice(slotIndex, 1);
   ctrl.gold = (ctrl.gold || 0) + Math.floor((item.cost || 0) * (slot.count || 1) * 0.7);
+  recomputeItemStats(ctrl);
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  return true;
+}
+
+// 신발 전용 구매 - "신발은 하나밖에 사지 못한다"(원문)를 그대로 따라
+// 6칸 인벤토리가 아니라 ctrl.boots 전용 슬롯 하나만 쓴다. 이미 다른
+// 신발을 신고 있으면 "교체"로 취급해 기존 신발 가격을 전액 환급한다
+// (판매가 아니라 업그레이드 개념이므로 70%가 아니라 100%).
+function _buyBoots(ctrl, item) {
+  if (ctrl.boots && ctrl.boots.id === item.id) { console.warn('[ITEM] 이미 장착 중인 신발입니다.'); return false; }
+  if ((ctrl.gold || 0) < item.cost) { console.warn('[ITEM] 골드가 부족합니다.'); return false; }
+  if (ctrl.boots) {
+    const old = ITEM_DATA[ctrl.boots.id];
+    ctrl.gold += (old && old.cost) || 0;
+  }
+  ctrl.gold -= item.cost;
+  ctrl.boots = { id: item.id };
+  recomputeItemStats(ctrl);
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  return true;
+}
+
+// 신발 판매(70%, 다른 일반 아이템과 동일한 판매 규칙) - 교체가 아니라
+// 그냥 벗어서 파는 경우(버튼/슬롯 클릭)에 쓴다.
+function sellBoots(ctrl) {
+  if (!ctrl || !ctrl.boots) return false;
+  const item = ITEM_DATA[ctrl.boots.id];
+  ctrl.boots = null;
+  ctrl.gold = (ctrl.gold || 0) + Math.floor(((item && item.cost) || 0) * 0.7);
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
@@ -280,15 +334,24 @@ function itemOnMinionKillByPlayer(ctrl) {
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
 }
 
-// 암흑의 인장(영광) - 챔피언 처치 관여 시 중첩 획득(applyDamage()의 처형
-// 판정 지점에서 호출). 어시스트는 "아군 챔피언" 개념이 없는 이 데모 구조상
-// 구현하지 않는다(item_data.js 주석 참고).
+// 챔피언 처치 관여 시 중첩을 얻는 아이템들(암흑의 인장의 영광, 탐욕의
+// 군화의 학살) - applyDamage()의 처형 판정 지점에서 호출한다. 어시스트는
+// "아군 챔피언" 개념이 없는 이 데모 구조상 구현하지 않는다(item_data.js 주석 참고).
 function itemOnChampionTakedown(ctrl) {
-  const slot = (ctrl.items || []).find((s) => s.id === 'darkSeal');
-  if (!slot) return;
-  const p = ITEM_DATA.darkSeal.gloryPassive;
-  ctrl._itemGloryStacks = Math.min(p.maxStacks, (ctrl._itemGloryStacks || 0) + p.takedownStacks);
-  recomputeItemStats(ctrl);
+  if (!ctrl) return;
+  let changed = false;
+  const darkSealSlot = (ctrl.items || []).find((s) => s.id === 'darkSeal');
+  if (darkSealSlot) {
+    const p = ITEM_DATA.darkSeal.gloryPassive;
+    ctrl._itemGloryStacks = Math.min(p.maxStacks, (ctrl._itemGloryStacks || 0) + p.takedownStacks);
+    changed = true;
+  }
+  if (ctrl.boots && ctrl.boots.id === 'bootsOfGreed') {
+    const p = ITEM_DATA.bootsOfGreed.slaughterPassive;
+    ctrl._itemSlaughterStacks = Math.min(p.maxStacks, (ctrl._itemSlaughterStacks || 0) + 1);
+    changed = true;
+  }
+  if (changed) recomputeItemStats(ctrl);
 }
 
 // 암흑의 인장(영광) - 사망 시 중첩 소실(_die()에서 호출).

@@ -17,20 +17,87 @@ if (rangeIndicatorCheckboxEl) rangeIndicatorCheckboxEl.addEventListener('change'
 const visionSystem = new VisionSystem(scene);
 const visionSystemCheckboxEl = document.getElementById('visionSystemCheckbox');
 if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', () => visionSystem.setEnabled(visionSystemCheckboxEl.checked));
-// 상점(요청: "도란의검,도란의방패,도란의반지,도란의활,도란의투구부터 추가") -
-// 구매 버튼은 item_system.js의 buyItem()을 호출만 하고, 기지 구역/골드/
-// 인벤토리 칸 판정은 전부 그 안에서 처리한다(실패 시 콘솔 경고로 조용히 무시).
-document.querySelectorAll('#shopPanel [data-item-id]').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    if (typeof buyItem === 'function' && controller) buyItem(controller, btn.getAttribute('data-item-id'));
-  });
-});
+// 상점(요청 "상점 시스템 싹다 구현해줘") - 아이템이 계속 늘어나면서
+// 한 줄짜리 목록으로는 더 이상 관리가 안 돼서, item_data.js의
+// ITEM_CATEGORIES를 기준으로 탭(시작 아이템/소모품/기본 아이템/신발)을
+// 나눠 그린다. 구매 버튼은 item_system.js의 buyItem()을 호출만 하고,
+// 기지 구역/골드/인벤토리 칸/신발 교체 판정은 전부 그 안에서 처리한다
+// (실패 시 콘솔 경고로 조용히 무시). 아이템 설명은 title(hover 툴팁)로
+// 보여준다 - 수치는 ITEM_DATA 그 자체에서 뽑아내므로 아이템이 추가돼도
+// 이 함수를 따로 고칠 필요가 없다.
+function _itemStatsSummary(item) {
+  const parts = [];
+  const s = item.stats || {};
+  if (s.attackDamage) parts.push(`공격력 +${s.attackDamage}`);
+  if (s.abilityPower) parts.push(`주문력 +${s.abilityPower}`);
+  if (s.maxHp) parts.push(`체력 +${s.maxHp}`);
+  if (s.mana) parts.push(`마나 +${s.mana}`);
+  if (s.armor) parts.push(`방어력 +${s.armor}`);
+  if (s.magicResist) parts.push(`마법저항력 +${s.magicResist}`);
+  if (s.attackSpeedPercent) parts.push(`공격 속도 +${Math.round(s.attackSpeedPercent * 100)}%`);
+  if (s.critChance) parts.push(`치명타 확률 +${Math.round(s.critChance * 100)}%`);
+  if (s.abilityHaste) parts.push(`스킬 가속 +${s.abilityHaste}`);
+  if (s.hpRegenPercent) parts.push(`기본 체력 재생 +${Math.round(s.hpRegenPercent * 100)}%`);
+  if (s.mpRegenPercent) parts.push(`기본 마나 재생 +${Math.round(s.mpRegenPercent * 100)}%`);
+  if (s.moveSpeed) parts.push(`이동 속도 +${s.moveSpeed}`);
+  if (s.magicPenFlat) parts.push(`마법 관통력 +${s.magicPenFlat}`);
+  if (item.allDamageVampPercent) parts.push(`모든 피해 흡혈 +${(item.allDamageVampPercent * 100).toFixed(1)}%`);
+  if (item.minionBonusDamage) parts.push(`도움의 손길(미니언 평타 시 +${item.minionBonusDamage} 피해)`);
+  if (item.onHitHeal) parts.push(`적중 시 체력 +${item.onHitHeal} 회복`);
+  if (item.slowResistPercent) parts.push(`둔화 저항 +${Math.round(item.slowResistPercent * 100)}%`);
+  if (item.tenacityPercent) parts.push(`강인함 +${Math.round(item.tenacityPercent * 100)}%`);
+  if (item.consumable) parts.push(`사용 시 ${item.consumable.healDurationSec}초에 걸쳐 체력 ${item.consumable.healAmount} 회복`);
+  if (item.maxCharges && item.trinket) parts.push(`충전량 ${item.maxCharges}회`);
+  if (item.maxStack) parts.push(`최대 ${item.maxStack}개 중첩`);
+  return parts.join(' · ');
+}
+
+let _shopActiveCategory = (typeof ITEM_CATEGORIES !== 'undefined' && ITEM_CATEGORIES[0]) ? ITEM_CATEGORIES[0].id : null;
+function renderShopPanel() {
+  const tabsEl = document.getElementById('shopCategoryTabs');
+  const listEl = document.getElementById('shopItemList');
+  if (!tabsEl || !listEl || typeof ITEM_CATEGORIES === 'undefined') return;
+  tabsEl.innerHTML = '';
+  for (const cat of ITEM_CATEGORIES) {
+    const btn = document.createElement('button');
+    btn.textContent = cat.nameKo;
+    btn.classList.toggle('active', cat.id === _shopActiveCategory);
+    btn.addEventListener('click', () => { _shopActiveCategory = cat.id; renderShopPanel(); });
+    tabsEl.appendChild(btn);
+  }
+  listEl.innerHTML = '';
+  const cat = ITEM_CATEGORIES.find((c) => c.id === _shopActiveCategory) || ITEM_CATEGORIES[0];
+  if (!cat) return;
+  for (const itemId of cat.items) {
+    const item = ITEM_DATA[itemId];
+    if (!item) continue;
+    const row = document.createElement('div');
+    row.className = 'shopItemRow';
+    if (controller && (controller.gold || 0) < item.cost) row.classList.add('unaffordable');
+    const nameEl = document.createElement('span');
+    nameEl.className = 'shopItemName';
+    nameEl.textContent = `${item.nameKo} (${item.cost}${item.priceGuessed ? '*' : ''})`;
+    nameEl.title = _itemStatsSummary(item) + (item.priceGuessed ? ' · *가격은 원문 누락으로 실제 LoL 가격 사용' : '');
+    const btn = document.createElement('button');
+    const alreadyWorn = item.isBoots && controller && controller.boots && controller.boots.id === itemId;
+    btn.textContent = alreadyWorn ? '장착됨' : (item.isBoots ? '착용' : '구매');
+    btn.disabled = !!alreadyWorn;
+    btn.title = nameEl.title;
+    btn.addEventListener('click', () => { if (typeof buyItem === 'function' && controller) buyItem(controller, itemId); });
+    row.appendChild(nameEl);
+    row.appendChild(btn);
+    listEl.appendChild(row);
+  }
+}
+renderShopPanel();
 // 인벤토리 슬롯 표시 - buyItem/sellItem/useItem이 아이템을 바꿀 때마다
 // 호출하는 이벤트 기반 갱신 함수(updateGoldDisplay()와 동일한 원칙, 매
 // 프레임 아님). 소비 아이템(체력/충전형 물약)은 클릭하면 판매 대신
 // 사용되고, 중첩/충전 수를 작은 배지로 함께 표시한다.
 function updateItemUI(ctrl) {
   _updateTrinketUI(ctrl);
+  _updateBootsUI(ctrl);
+  if (typeof renderShopPanel === 'function') renderShopPanel(); // 골드/보유 신발이 바뀌면 상점의 "구매 가능 여부" 표시도 함께 갱신
   const row = document.getElementById('inventoryRow');
   if (!row) return;
   row.innerHTML = '';
@@ -87,6 +154,37 @@ function _updateTrinketUI(ctrl) {
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
     placeWard(ctrl, ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300))));
   });
+  row.appendChild(el);
+  const label = document.createElement('span');
+  label.style.fontSize = '10px'; label.style.color = '#999';
+  label.textContent = data.nameKo;
+  row.appendChild(label);
+}
+// 신발 전용 슬롯 - 트린켓과 동일한 구조(6칸 인벤토리와 별개). 클릭하면
+// 판매(70%)된다 - 다른 신발로 "교체"하고 싶을 때는 상점 신발 탭에서
+// 원하는 신발의 "착용" 버튼을 바로 누르면 된다(buyBoots가 기존 신발을
+// 자동으로 전액 환급 처리).
+function _updateBootsUI(ctrl) {
+  const row = document.getElementById('bootsSlotRow');
+  if (!row) return;
+  row.innerHTML = '';
+  const boots = ctrl && ctrl.boots;
+  const data = boots && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[boots.id] : null;
+  if (!data) {
+    const empty = document.createElement('div');
+    empty.className = 'invSlot empty';
+    row.appendChild(empty);
+    const label = document.createElement('span');
+    label.style.fontSize = '10px'; label.style.color = '#999';
+    label.textContent = '미착용';
+    row.appendChild(label);
+    return;
+  }
+  const el = document.createElement('div');
+  el.className = 'invSlot';
+  el.textContent = data.nameKo.slice(-2);
+  el.title = `${data.nameKo} (클릭: 판매, 구매가의 70% 환급)`;
+  el.addEventListener('click', () => { if (typeof sellBoots === 'function') sellBoots(ctrl); });
   row.appendChild(el);
   const label = document.createElement('span');
   label.style.fontSize = '10px'; label.style.color = '#999';

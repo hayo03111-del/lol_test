@@ -199,7 +199,16 @@
     padding:3px 8px; font-size:10px; cursor:pointer; white-space:nowrap;
   }
   #shopPanel .shopItemRow button:hover { background:#3a3a45; }
-  #inventoryRow { display:flex; gap:4px; margin-top:8px; padding-top:8px; border-top:1px solid #2a2a35; flex-wrap:wrap; }
+  #shopPanel .shopItemRow.unaffordable .shopItemName { color:#777; }
+  .shopTabs { display:flex; flex-wrap:wrap; gap:4px; }
+  .shopTabs button {
+    background:#1b1b22; color:#999; border:1px solid #3a3a45; border-radius:4px;
+    padding:3px 6px; font-size:10px; cursor:pointer;
+  }
+  .shopTabs button.active { background:#2a2a35; color:#c8aa6e; border-color:#4a4a58; }
+  .shopTabs button:hover { background:#2a2a35; }
+  #inventoryRow, #bootsSlotRow { display:flex; gap:4px; margin-top:8px; padding-top:8px; border-top:1px solid #2a2a35; flex-wrap:wrap; }
+  #bootsSlotRow { align-items:center; }
   .invSlot {
     position:relative; width:28px; height:28px; background:#1b1b22; border:1px solid #3a3a45; border-radius:4px;
     display:flex; align-items:center; justify-content:center; font-size:9px; color:#ccc; cursor:pointer;
@@ -529,35 +538,13 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
 <div id="shopPanel">
   <div class="panelHeader"><b>상점 (기지 구역 안에서만 구매)</b><span class="panelCollapseBtn">─</span></div>
   <div class="panelBody">
-    <div class="shopItemRow"><span class="shopItemName">도란의 검 (450)</span><button data-item-id="doransBlade">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">도란의 반지 (400)</span><button data-item-id="doransRing">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">도란의 방패 (450)</span><button data-item-id="doransShield">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">도란의 활 (400)</span><button data-item-id="doransBow">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">도란의 투구 (450)</span><button data-item-id="doransHelm">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">수확의 낫 (450)</span><button data-item-id="cull">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">암흑의 인장 (350)</span><button data-item-id="darkSeal">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">여신의 눈물 (400)</span><button data-item-id="tearOfGoddess">구매</button></div>
-    <div class="shopItemRow" style="margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;"><span class="shopItemName">체력 물약 (50)</span><button data-item-id="healthPotion">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">충전형 물약 (150)</span><button data-item-id="refillablePotion">구매</button></div>
-    <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">기본 아이템</div>
-    <div class="shopItemRow"><span class="shopItemName">곡괭이 (875)</span><button data-item-id="pickaxe">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">단검 (250)</span><button data-item-id="dagger">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">롱소드 (350)</span><button data-item-id="longSword">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">루비 수정 (400)</span><button data-item-id="rubyCrystal">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">빛나는 티끌 (250)</span><button data-item-id="glowingMote">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">마법무효화의 망토 (400)</span><button data-item-id="negatronCloak">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">민첩성의 망토 (600)</span><button data-item-id="cloakOfAgility">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">방출의 마법봉 (850)</span><button data-item-id="blastingWand">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">사파이어 수정 (300)</span><button data-item-id="sapphireCrystal">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">쓸데없이 큰 지팡이 (1200)</span><button data-item-id="needlesslyLargeRod">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">요정의 부적 (200)</span><button data-item-id="faerieCharm">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">원기 회복의 구슬 (150*)</span><button data-item-id="rejuvenationBead">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">증폭의 고사 (400)</span><button data-item-id="amplifyingTome">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">천갑옷 (800*)</span><button data-item-id="chainVest">구매</button></div>
-    <div class="shopItemRow"><span class="shopItemName">B.F. 대검 (1300*)</span><button data-item-id="bfSword">구매</button></div>
-    <div style="font-size:9px;color:#888;">* 원문에 가격이 없어 실제 LoL 가격을 사용</div>
+    <div id="shopCategoryTabs" class="shopTabs"></div>
+    <div id="shopItemList"></div>
+    <div style="font-size:9px;color:#888;margin-top:4px;">* 원문에 가격이 없어 실제 LoL 가격을 사용</div>
     <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">트린켓(기본 장착, 구매 불필요)</div>
     <div id="trinketSlotRow" style="display:flex;align-items:center;gap:8px;"></div>
+    <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">신발(한 켤레만 착용 가능)</div>
+    <div id="bootsSlotRow" style="display:flex;align-items:center;gap:8px;"></div>
     <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">인벤토리</div>
     <div id="inventoryRow"></div>
     <div style="font-size:9px;color:#888;margin-top:4px;">숫자키 1~6: 해당 칸 아이템 사용(물약) · 슬롯 클릭: 사용/판매(70%) · T: 투명 와드 설치</div>
@@ -1101,7 +1088,7 @@ const DAMAGE_TYPE = { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' };
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
 // 넘어온다 - 여기서 다시 굴리지 않는다(같은 공격 인스턴스의 결과가 명중
 // 시점에 바뀌면 안 되므로).
-function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0 }) {
+function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0 }) {
   let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critMultiplier) : 1);
   if (damageType === DAMAGE_TYPE.PHYSICAL) {
     let armor = (target && (target.armor ?? target.stats?.armor)) || 0;
@@ -1115,7 +1102,14 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 없었다 - 모데카이저 E 패시브("마법 관통력을 얻습니다")가 magicPenPercent를
     // 세팅만 하고 실제로 아무 데도 쓰이지 않아 완전히 무효과였다. PHYSICAL의
     // armorPenPercent와 동일한 방식으로 마법저항력에 반영한다.
-    const mr = (target && (target.magicResist ?? target.stats?.magicResist)) || 0;
+    let mr = (target && (target.magicResist ?? target.stats?.magicResist)) || 0;
+    // 아이템 패시브(마법사의 신발 - 고정 마법 관통력) - 고정 관통은 항상
+    // 퍼센트 관통보다 먼저 적용한다(실제 LoL 공식과 동일 순서). `source`가
+    // 없는 호출(대부분의 스킬 피해 호출)은 흡혈/영광 처치 훅과 동일한
+    // 이유로 전역 `controller`(이 데모의 유일한 챔피언 피해원)로 대체한다.
+    const atk = source || (typeof controller !== 'undefined' ? controller : null);
+    const flatMagicPen = (atk && atk.itemBonusMagicPenFlat) || 0;
+    mr = Math.max(0, mr - flatMagicPen);
     const effectiveMr = mr * (1 - Math.max(0, Math.min(1, magicPenPercent)));
     dmg *= 100 / (100 + Math.max(0, effectiveMr));
     dmg *= 1 - getMagicDamageReductionPercent(target);
@@ -1253,7 +1247,22 @@ function applyStatus(target, effect) {
     return null;
   }
   const now = performance.now();
-  const rec = { ...effect, expiresAt: now + Math.max(0, effect.duration) * 1000, _tickAccum: 0 };
+  // 아이템 패시브(헤르메스의 발걸음 - 강인함/신속의 장화 - 둔화 저항)를
+  // 이 공용 진입점 한 곳에서 처리한다 - 어떤 챔피언이 걸든, 어떤 스킬이
+  // 걸든 전부 자동으로 적용된다(개별 스킬 코드를 손댈 필요 없음, 요청
+  // 20-C/처형 시스템과 동일한 원칙). 강인함은 "기절/속박/침묵/매혹" 같은
+  // 행동 불가 CC의 지속시간을 깎는다 - 원문 그대로 공중에 뜸(KNOCKUP)/
+  // 제압(SUPPRESSION)에는 적용하지 않는다. 둔화 저항은 지속시간이 아니라
+  // 세기(value) 자체를 깎는다(실제 "둔화 저항"의 의미와 동일).
+  let effDuration = effect.duration;
+  let effValue = effect.value;
+  if (target && target.itemTenacityPercent > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM'].includes(effect.type)) {
+    effDuration = effDuration * (1 - target.itemTenacityPercent);
+  }
+  if (target && target.itemSlowResistPercent > 0 && effect.type === 'SLOW') {
+    effValue = effValue * (1 - target.itemSlowResistPercent);
+  }
+  const rec = { ...effect, duration: effDuration, value: effValue, expiresAt: now + Math.max(0, effDuration) * 1000, _tickAccum: 0 };
   if (effect.type === 'KNOCKUP') {
     const base = target.mesh?.position?.y ?? 0;
     target._yasuoAirborne = { baseY: base, elapsed: 0, duration: Math.max(0.05, effect.duration), height: effect.airborneHeight ?? 1.6 };
@@ -1261,7 +1270,7 @@ function applyStatus(target, effect) {
   const idx = target.statusEffects.findIndex((e) => e.id === effect.id);
   if (idx >= 0) target.statusEffects[idx] = rec; else target.statusEffects.push(rec);
   if (CC_TYPES.has(effect.type)) {
-    console.log(`[CC]\nTarget: ${unitLabel(target)}\nType: ${effect.type}\nDuration: ${effect.duration}`);
+    console.log(`[CC]\nTarget: ${unitLabel(target)}\nType: ${effect.type}\nDuration: ${effDuration}`); // 강인함 적용 후 실제 지속시간(디버깅 혼동 방지)
     refreshUnitCcTags(target);
     // 버그 수정(가렌 패시브 "끈질긴 방어자" - 곧 추가될 멀티플레이 대비):
     // passiveState에 lastEnemySkillHitAt 필드가 이미 선언돼 있었지만
@@ -2868,10 +2877,52 @@ const ITEM_DATA = {
   sapphireCrystal: { id: 'sapphireCrystal', nameKo: '사파이어 수정', cost: 300, stats: { mana: 300 } },
   needlesslyLargeRod: { id: 'needlesslyLargeRod', nameKo: '쓸데없이 큰 지팡이', cost: 1200, stats: { abilityPower: 65 } },
   faerieCharm: { id: 'faerieCharm', nameKo: '요정의 부적', cost: 200, stats: { mpRegenPercent: 0.5 } },
-  rejuvenationBead: { id: 'rejuvenationBead', nameKo: '원기 회복의 구슬', cost: 150, stats: { hpRegenPercent: 1.0 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  rejuvenationBead: { id: 'rejuvenationBead', nameKo: '원기 회복의 구슬', cost: 150, stats: { hpRegenPercent: 1.0 }, priceGuessed: true }, // 가격 원문 누락 - 실제 LoL 가격 사용
   amplifyingTome: { id: 'amplifyingTome', nameKo: '증폭의 고사', cost: 400, stats: { abilityPower: 20 } },
-  chainVest: { id: 'chainVest', nameKo: '천갑옷', cost: 800, stats: { armor: 15 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
-  bfSword: { id: 'bfSword', nameKo: 'B.F. 대검', cost: 1300, stats: { attackDamage: 40 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  chainVest: { id: 'chainVest', nameKo: '천갑옷', cost: 800, stats: { armor: 15 }, priceGuessed: true }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  bfSword: { id: 'bfSword', nameKo: 'B.F. 대검', cost: 1300, stats: { attackDamage: 40 }, priceGuessed: true }, // 가격 원문 누락 - 실제 LoL 가격 사용
+
+  // [신발] - "신발은 하나밖에 사지 못한다"(원문) - 6칸 인벤토리와 완전히
+  // 별개인 전용 슬롯(ctrl.boots, 트린켓과 동일한 구조)에 들어간다. 다른
+  // 신발을 사면 기존 신발은 자동으로 "교체"되어 전액 환급된다(판매가
+  // 아니라 업그레이드 개념 - item_system.js의 buyBoots() 참고).
+  // moveSpeed는 다른 stats와 달리 LoL 원본 단위 그대로 둔다 -
+  // recomputeStats()에서 lolRangeToWorld()로 변환해 더한다(기본 이동속도
+  // 자체가 그 변환을 거쳐 월드 단위로 저장되는 것과 동일한 원칙).
+  boots: { id: 'boots', nameKo: '장화', cost: 300, stats: { moveSpeed: 25 }, isBoots: true },
+  // 약간 신비한 신발: 원문에 가격이 없다. "조합 시 장화 대신 쓸 수 있고
+  // 그 효과가 상위 신발에도 유지된다"는 조합 전용 메커니즘은 이 프로젝트에
+  // 아이템 조합(하위템 자동 소모) 시스템 자체가 없어 구현하지 않았다 -
+  // 기본 이동속도(25+10)만 가진 장화의 대체 버전으로 단순화했다.
+  slightlyMagicalBoots: { id: 'slightlyMagicalBoots', nameKo: '약간 신비한 신발', cost: 300, stats: { moveSpeed: 35 }, isBoots: true, priceGuessed: true },
+  berserkersGreaves: { id: 'berserkersGreaves', nameKo: '광전사의 군화', cost: 1100, stats: { attackSpeedPercent: 0.30, moveSpeed: 45 }, isBoots: true },
+  sorcerersShoes: { id: 'sorcerersShoes', nameKo: '마법사의 신발', cost: 1100, stats: { magicPenFlat: 12, moveSpeed: 45 }, isBoots: true },
+  // 명석함의 아이오니아 장화 - "아이오니아의 통찰"(소환사 주문 가속 +10)은
+  // 이 프로젝트에 소환사 주문 시스템 자체가 없어 생략했다(스킬 가속 10은 그대로 적용).
+  ionianBootsOfLucidity: { id: 'ionianBootsOfLucidity', nameKo: '명석함의 아이오니아 장화', cost: 900, stats: { abilityHaste: 10, moveSpeed: 45 }, isBoots: true },
+  // 신속의 장화 - "날쌘 발걸음"(둔화 효과 25% 감소)은 slowResistPercent로
+  // 구현한다(01_status_effect_system.js의 applyStatus()가 SLOW 효과의
+  // 세기 자체를 이 비율만큼 깎는다 - 지속시간이 아니라 세기 감소라는
+  // 실제 "둔화 저항"의 의미와 일치).
+  bootsOfSwiftness: { id: 'bootsOfSwiftness', nameKo: '신속의 장화', cost: 1000, stats: { moveSpeed: 55 }, isBoots: true, slowResistPercent: 0.25 },
+  // 판금 장화 - "판금"(기본 공격으로 받는 피해 10% 감소)은 이 1인 연습
+  // 시뮬레이터에 플레이어를 공격하는 AI 자체가 없어 트리거될 상황이 없다
+  // (도란의 방패 "피격 후 회복"과 동일한 이유) - 데이터만 두고 실제 피해
+  // 감소 훅은 연결하지 않았다.
+  platedSteelcaps: { id: 'platedSteelcaps', nameKo: '판금 장화', cost: 1200, stats: { armor: 25, moveSpeed: 45 }, isBoots: true, reducedBasicAttackDamagePercent: 0.10 },
+  // 헤르메스의 발걸음 - "강인함 30%"는 tenacityPercent로 구현한다
+  // (applyStatus()가 기절/도발/공포/침묵/변이 등 행동 불가 CC의 지속시간을
+  // 이 비율만큼 깎는다 - 원문 그대로 "공중에 뜨거나(KNOCKUP) 제압
+  // (SUPPRESSION) 당했을 때는 효과 없음"을 반영해 그 둘은 제외한다).
+  mercurysTreads: { id: 'mercurysTreads', nameKo: '헤르메스의 발걸음', cost: 1250, stats: { magicResist: 20, moveSpeed: 45 }, isBoots: true, tenacityPercent: 0.30 },
+  // 탐욕의 군화 - "학살"(챔피언 처치 관여 시 흡혈 0.6%씩 최대 10중첩)은
+  // 암흑의 인장(영광)과 동일한 처형 판정 지점(itemOnChampionTakedown)을
+  // 재사용해서 구현한다.
+  bootsOfGreed: {
+    id: 'bootsOfGreed', nameKo: '탐욕의 군화', cost: 1000, stats: { moveSpeed: 45 }, isBoots: true,
+    allDamageVampPercent: 0.04,
+    slaughterPassive: { vampPerStack: 0.006, maxStacks: 10 },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -2879,6 +2930,15 @@ const ITEM_ORDER = [
   'pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak',
   'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod',
   'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword',
+  'boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes',
+  'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed',
+];
+// 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
+const ITEM_CATEGORIES = [
+  { id: 'starter', nameKo: '시작 아이템', items: ['doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm', 'cull', 'darkSeal', 'tearOfGoddess'] },
+  { id: 'consumable', nameKo: '소모품', items: ['healthPotion', 'refillablePotion'] }, // 투명 와드(트린켓)는 상점에서 사는 게 아니라 기본 장착 - 아래 트린켓 슬롯에 표시
+  { id: 'basic', nameKo: '기본 아이템', items: ['pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak', 'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod', 'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword'] },
+  { id: 'boots', nameKo: '신발', items: ['boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes', 'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed'] },
 ];
 
 /* ===== src/animation/animation_role_resolver.js ===== */
@@ -7796,12 +7856,17 @@ class CharacterController {
     this._itemTick = {};
     this.itemBonusCritChance = 0; this.itemBonusAbilityHaste = 0;
     this.itemBonusHpRegenPercent = 0; this.itemBonusMpRegenPercent = 0;
+    this.itemBonusMoveSpeedLol = 0; this.itemBonusMagicPenFlat = 0;
+    this.itemSlowResistPercent = 0; this.itemTenacityPercent = 0; this._itemSlaughterStacks = 0;
     // 트린켓(투명 와드) - 6칸 인벤토리와 별개인 전용 슬롯. 실제 LoL처럼
     // 골드로 사지 않고 기본 장착되어 있다(gold/items와 동일하게 챔피언을
     // 바꿔도 유지 - applyChampionData()는 건드리지 않는다). _placedWards는
     // 현재 설치돼 있는 와드 마커(메시+만료 시각) 목록.
     this.trinket = { id: 'stealthWard', charges: 2 };
     this._placedWards = [];
+    // 신발 - "하나밖에 사지 못한다"는 원문 그대로 6칸 인벤토리와 별개인
+    // 전용 슬롯 하나만 쓴다(트린켓과 동일한 구조). 기본값은 미착용(null).
+    this.boots = null;
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -7996,7 +8061,10 @@ class CharacterController {
       // 문제없다(최대 한 프레임짜리 눈에 띄지 않는 과도 상태).
       this.stats.critChance = (this.itemBonusCritChance || 0);
       this.stats.attackRange = base.attackRange;
-      this.stats.baseMoveSpeed = base.baseMoveSpeed;
+      // 신발(이동속도) - item_data.js에 LoL 원본 단위로 저장해뒀으므로
+      // base.baseMoveSpeed와 동일하게 여기서 한 번만 lolRangeToWorld()로
+      // 변환한다(기본 이동속도 자체가 이미 그 변환을 거친 값이라 단위를 맞춤).
+      this.stats.baseMoveSpeed = base.baseMoveSpeed + lolRangeToWorld(this.itemBonusMoveSpeedLol || 0);
       this.hp = Math.min(this.hp || this.maxHp * hpPct, this.maxHp);
       this.mp = Math.min(this.mp || this.maxMp, this.maxMp);
     }
@@ -20406,6 +20474,9 @@ function updateGoldDisplay() {
   if (typeof updateDebugPanel === 'function') updateDebugPanel();
   const el = document.getElementById('goldAmount');
   if (el && controller) el.textContent = Math.floor(controller.gold || 0).toLocaleString();
+  // 미니언/포탑 처치처럼 아이템 구매 없이 골드만 바뀌는 경우에도 상점의
+  // "구매 가능 여부" 표시(unaffordable 회색 처리)가 따라오도록 갱신한다.
+  if (typeof renderShopPanel === 'function') renderShopPanel();
 }
 
 // 넥서스(요청 문서 5절) - 양 진영(RED/BLUE) 각각 실제 HP/team/구조물
@@ -21844,9 +21915,13 @@ function recomputeItemStats(ctrl) {
   ctrl.itemAllDamageVampPercent = 0; ctrl.itemMinionBonusDamage = 0; ctrl.itemOnHitHeal = 0;
   ctrl.itemBonusCritChance = 0; ctrl.itemBonusAbilityHaste = 0;
   ctrl.itemBonusHpRegenPercent = 0; ctrl.itemBonusMpRegenPercent = 0;
-  for (const slot of (ctrl.items || [])) {
-    const item = ITEM_DATA[slot.id];
-    if (!item) continue;
+  // moveSpeed/magicPenFlat/슬로우저항/강인함은 신발(장화류)에서만 나오는
+  // 값이지만, 범용 필드로 둔다(나중에 다른 아이템도 같은 스탯을 가질 수
+  // 있으므로 "신발 전용"으로 하드코딩하지 않는다).
+  ctrl.itemBonusMoveSpeedLol = 0; ctrl.itemBonusMagicPenFlat = 0;
+  ctrl.itemSlowResistPercent = 0; ctrl.itemTenacityPercent = 0;
+  const applyOne = (item) => {
+    if (!item) return;
     const s = item.stats || {};
     ctrl.itemBonusAD += s.attackDamage || 0;
     ctrl.itemBonusAP += s.abilityPower || 0;
@@ -21859,15 +21934,26 @@ function recomputeItemStats(ctrl) {
     ctrl.itemBonusAbilityHaste += s.abilityHaste || 0;
     ctrl.itemBonusHpRegenPercent += s.hpRegenPercent || 0;
     ctrl.itemBonusMpRegenPercent += s.mpRegenPercent || 0;
+    ctrl.itemBonusMoveSpeedLol += s.moveSpeed || 0;
+    ctrl.itemBonusMagicPenFlat += s.magicPenFlat || 0;
     ctrl.itemAllDamageVampPercent += item.allDamageVampPercent || 0;
     ctrl.itemMinionBonusDamage += item.minionBonusDamage || 0;
     ctrl.itemOnHitHeal += item.onHitHeal || 0;
+    // 신속의 장화(둔화 저항)/헤르메스의 발걸음(강인함) - 둘 다 "더 센 쪽
+    // 하나만 적용"이 아니라 실제 LoL처럼 단순 합산(이 데모엔 둘 다 가질
+    // 방법이 마땅치 않아 사실상 하나만 적용되지만, 합산해도 안전하다).
+    ctrl.itemSlowResistPercent += item.slowResistPercent || 0;
+    ctrl.itemTenacityPercent += item.tenacityPercent || 0;
     // 암흑의 인장(영광)의 동적 주문력 - 아이템을 들고 있을 때만 적용된다
     // (팔면 중첩 자체는 남아있어도 더 이상 스탯에 반영되지 않는다).
     if (item.gloryPassive) ctrl.itemBonusAP += (ctrl._itemGloryStacks || 0) * item.gloryPassive.apPerStack;
+    // 탐욕의 군화(학살)의 동적 흡혈 - 중첩당 0.6%씩 추가.
+    if (item.slaughterPassive) ctrl.itemAllDamageVampPercent += (ctrl._itemSlaughterStacks || 0) * item.slaughterPassive.vampPerStack;
     // 여신의 눈물(마나순환)으로 이미 얻은 최대 마나 - 누적값을 그대로 더한다.
     if (item.manaCirculationPassive && ctrl._itemTearState) ctrl.itemBonusMana += ctrl._itemTearState.gained || 0;
-  }
+  };
+  for (const slot of (ctrl.items || [])) applyOne(ITEM_DATA[slot.id]);
+  if (ctrl.boots) applyOne(ITEM_DATA[ctrl.boots.id]);
   ctrl.recomputeStats();
 }
 
@@ -21897,6 +21983,13 @@ function buyItem(ctrl, itemId) {
     console.warn('[ITEM] 기지(상점 구역) 안에서만 구매할 수 있습니다.');
     return false;
   }
+  // 신발은 "하나밖에 사지 못한다"(원문) - 6칸 인벤토리가 아니라 전용
+  // boots 슬롯으로 간다(buyBoots()가 기존 신발 교체/환급까지 처리).
+  if (item.isBoots) return _buyBoots(ctrl, item);
+  // 트린켓(투명 와드)은 상점에서 구매하는 게 아니라 기본 장착이다 -
+  // 방어적 가드(ITEM_CATEGORIES에서 이미 제외했지만, 실수로 다시
+  // 노출되더라도 6칸 인벤토리를 공짜로 채우는 경로로 새지 않게 막는다).
+  if (item.trinket) { console.warn('[ITEM] 트린켓은 상점에서 구매하지 않습니다(기본 장착).'); return false; }
   if ((ctrl.gold || 0) < item.cost) { console.warn('[ITEM] 골드가 부족합니다.'); return false; }
   ctrl.items = ctrl.items || [];
   if (item.maxStack) {
@@ -21944,6 +22037,38 @@ function sellItem(ctrl, slotIndex) {
   if (!item) return false;
   ctrl.items.splice(slotIndex, 1);
   ctrl.gold = (ctrl.gold || 0) + Math.floor((item.cost || 0) * (slot.count || 1) * 0.7);
+  recomputeItemStats(ctrl);
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  return true;
+}
+
+// 신발 전용 구매 - "신발은 하나밖에 사지 못한다"(원문)를 그대로 따라
+// 6칸 인벤토리가 아니라 ctrl.boots 전용 슬롯 하나만 쓴다. 이미 다른
+// 신발을 신고 있으면 "교체"로 취급해 기존 신발 가격을 전액 환급한다
+// (판매가 아니라 업그레이드 개념이므로 70%가 아니라 100%).
+function _buyBoots(ctrl, item) {
+  if (ctrl.boots && ctrl.boots.id === item.id) { console.warn('[ITEM] 이미 장착 중인 신발입니다.'); return false; }
+  if ((ctrl.gold || 0) < item.cost) { console.warn('[ITEM] 골드가 부족합니다.'); return false; }
+  if (ctrl.boots) {
+    const old = ITEM_DATA[ctrl.boots.id];
+    ctrl.gold += (old && old.cost) || 0;
+  }
+  ctrl.gold -= item.cost;
+  ctrl.boots = { id: item.id };
+  recomputeItemStats(ctrl);
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  return true;
+}
+
+// 신발 판매(70%, 다른 일반 아이템과 동일한 판매 규칙) - 교체가 아니라
+// 그냥 벗어서 파는 경우(버튼/슬롯 클릭)에 쓴다.
+function sellBoots(ctrl) {
+  if (!ctrl || !ctrl.boots) return false;
+  const item = ITEM_DATA[ctrl.boots.id];
+  ctrl.boots = null;
+  ctrl.gold = (ctrl.gold || 0) + Math.floor(((item && item.cost) || 0) * 0.7);
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
@@ -22107,15 +22232,24 @@ function itemOnMinionKillByPlayer(ctrl) {
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
 }
 
-// 암흑의 인장(영광) - 챔피언 처치 관여 시 중첩 획득(applyDamage()의 처형
-// 판정 지점에서 호출). 어시스트는 "아군 챔피언" 개념이 없는 이 데모 구조상
-// 구현하지 않는다(item_data.js 주석 참고).
+// 챔피언 처치 관여 시 중첩을 얻는 아이템들(암흑의 인장의 영광, 탐욕의
+// 군화의 학살) - applyDamage()의 처형 판정 지점에서 호출한다. 어시스트는
+// "아군 챔피언" 개념이 없는 이 데모 구조상 구현하지 않는다(item_data.js 주석 참고).
 function itemOnChampionTakedown(ctrl) {
-  const slot = (ctrl.items || []).find((s) => s.id === 'darkSeal');
-  if (!slot) return;
-  const p = ITEM_DATA.darkSeal.gloryPassive;
-  ctrl._itemGloryStacks = Math.min(p.maxStacks, (ctrl._itemGloryStacks || 0) + p.takedownStacks);
-  recomputeItemStats(ctrl);
+  if (!ctrl) return;
+  let changed = false;
+  const darkSealSlot = (ctrl.items || []).find((s) => s.id === 'darkSeal');
+  if (darkSealSlot) {
+    const p = ITEM_DATA.darkSeal.gloryPassive;
+    ctrl._itemGloryStacks = Math.min(p.maxStacks, (ctrl._itemGloryStacks || 0) + p.takedownStacks);
+    changed = true;
+  }
+  if (ctrl.boots && ctrl.boots.id === 'bootsOfGreed') {
+    const p = ITEM_DATA.bootsOfGreed.slaughterPassive;
+    ctrl._itemSlaughterStacks = Math.min(p.maxStacks, (ctrl._itemSlaughterStacks || 0) + 1);
+    changed = true;
+  }
+  if (changed) recomputeItemStats(ctrl);
 }
 
 // 암흑의 인장(영광) - 사망 시 중첩 소실(_die()에서 호출).
@@ -22238,20 +22372,87 @@ if (rangeIndicatorCheckboxEl) rangeIndicatorCheckboxEl.addEventListener('change'
 const visionSystem = new VisionSystem(scene);
 const visionSystemCheckboxEl = document.getElementById('visionSystemCheckbox');
 if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', () => visionSystem.setEnabled(visionSystemCheckboxEl.checked));
-// 상점(요청: "도란의검,도란의방패,도란의반지,도란의활,도란의투구부터 추가") -
-// 구매 버튼은 item_system.js의 buyItem()을 호출만 하고, 기지 구역/골드/
-// 인벤토리 칸 판정은 전부 그 안에서 처리한다(실패 시 콘솔 경고로 조용히 무시).
-document.querySelectorAll('#shopPanel [data-item-id]').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    if (typeof buyItem === 'function' && controller) buyItem(controller, btn.getAttribute('data-item-id'));
-  });
-});
+// 상점(요청 "상점 시스템 싹다 구현해줘") - 아이템이 계속 늘어나면서
+// 한 줄짜리 목록으로는 더 이상 관리가 안 돼서, item_data.js의
+// ITEM_CATEGORIES를 기준으로 탭(시작 아이템/소모품/기본 아이템/신발)을
+// 나눠 그린다. 구매 버튼은 item_system.js의 buyItem()을 호출만 하고,
+// 기지 구역/골드/인벤토리 칸/신발 교체 판정은 전부 그 안에서 처리한다
+// (실패 시 콘솔 경고로 조용히 무시). 아이템 설명은 title(hover 툴팁)로
+// 보여준다 - 수치는 ITEM_DATA 그 자체에서 뽑아내므로 아이템이 추가돼도
+// 이 함수를 따로 고칠 필요가 없다.
+function _itemStatsSummary(item) {
+  const parts = [];
+  const s = item.stats || {};
+  if (s.attackDamage) parts.push(`공격력 +${s.attackDamage}`);
+  if (s.abilityPower) parts.push(`주문력 +${s.abilityPower}`);
+  if (s.maxHp) parts.push(`체력 +${s.maxHp}`);
+  if (s.mana) parts.push(`마나 +${s.mana}`);
+  if (s.armor) parts.push(`방어력 +${s.armor}`);
+  if (s.magicResist) parts.push(`마법저항력 +${s.magicResist}`);
+  if (s.attackSpeedPercent) parts.push(`공격 속도 +${Math.round(s.attackSpeedPercent * 100)}%`);
+  if (s.critChance) parts.push(`치명타 확률 +${Math.round(s.critChance * 100)}%`);
+  if (s.abilityHaste) parts.push(`스킬 가속 +${s.abilityHaste}`);
+  if (s.hpRegenPercent) parts.push(`기본 체력 재생 +${Math.round(s.hpRegenPercent * 100)}%`);
+  if (s.mpRegenPercent) parts.push(`기본 마나 재생 +${Math.round(s.mpRegenPercent * 100)}%`);
+  if (s.moveSpeed) parts.push(`이동 속도 +${s.moveSpeed}`);
+  if (s.magicPenFlat) parts.push(`마법 관통력 +${s.magicPenFlat}`);
+  if (item.allDamageVampPercent) parts.push(`모든 피해 흡혈 +${(item.allDamageVampPercent * 100).toFixed(1)}%`);
+  if (item.minionBonusDamage) parts.push(`도움의 손길(미니언 평타 시 +${item.minionBonusDamage} 피해)`);
+  if (item.onHitHeal) parts.push(`적중 시 체력 +${item.onHitHeal} 회복`);
+  if (item.slowResistPercent) parts.push(`둔화 저항 +${Math.round(item.slowResistPercent * 100)}%`);
+  if (item.tenacityPercent) parts.push(`강인함 +${Math.round(item.tenacityPercent * 100)}%`);
+  if (item.consumable) parts.push(`사용 시 ${item.consumable.healDurationSec}초에 걸쳐 체력 ${item.consumable.healAmount} 회복`);
+  if (item.maxCharges && item.trinket) parts.push(`충전량 ${item.maxCharges}회`);
+  if (item.maxStack) parts.push(`최대 ${item.maxStack}개 중첩`);
+  return parts.join(' · ');
+}
+
+let _shopActiveCategory = (typeof ITEM_CATEGORIES !== 'undefined' && ITEM_CATEGORIES[0]) ? ITEM_CATEGORIES[0].id : null;
+function renderShopPanel() {
+  const tabsEl = document.getElementById('shopCategoryTabs');
+  const listEl = document.getElementById('shopItemList');
+  if (!tabsEl || !listEl || typeof ITEM_CATEGORIES === 'undefined') return;
+  tabsEl.innerHTML = '';
+  for (const cat of ITEM_CATEGORIES) {
+    const btn = document.createElement('button');
+    btn.textContent = cat.nameKo;
+    btn.classList.toggle('active', cat.id === _shopActiveCategory);
+    btn.addEventListener('click', () => { _shopActiveCategory = cat.id; renderShopPanel(); });
+    tabsEl.appendChild(btn);
+  }
+  listEl.innerHTML = '';
+  const cat = ITEM_CATEGORIES.find((c) => c.id === _shopActiveCategory) || ITEM_CATEGORIES[0];
+  if (!cat) return;
+  for (const itemId of cat.items) {
+    const item = ITEM_DATA[itemId];
+    if (!item) continue;
+    const row = document.createElement('div');
+    row.className = 'shopItemRow';
+    if (controller && (controller.gold || 0) < item.cost) row.classList.add('unaffordable');
+    const nameEl = document.createElement('span');
+    nameEl.className = 'shopItemName';
+    nameEl.textContent = `${item.nameKo} (${item.cost}${item.priceGuessed ? '*' : ''})`;
+    nameEl.title = _itemStatsSummary(item) + (item.priceGuessed ? ' · *가격은 원문 누락으로 실제 LoL 가격 사용' : '');
+    const btn = document.createElement('button');
+    const alreadyWorn = item.isBoots && controller && controller.boots && controller.boots.id === itemId;
+    btn.textContent = alreadyWorn ? '장착됨' : (item.isBoots ? '착용' : '구매');
+    btn.disabled = !!alreadyWorn;
+    btn.title = nameEl.title;
+    btn.addEventListener('click', () => { if (typeof buyItem === 'function' && controller) buyItem(controller, itemId); });
+    row.appendChild(nameEl);
+    row.appendChild(btn);
+    listEl.appendChild(row);
+  }
+}
+renderShopPanel();
 // 인벤토리 슬롯 표시 - buyItem/sellItem/useItem이 아이템을 바꿀 때마다
 // 호출하는 이벤트 기반 갱신 함수(updateGoldDisplay()와 동일한 원칙, 매
 // 프레임 아님). 소비 아이템(체력/충전형 물약)은 클릭하면 판매 대신
 // 사용되고, 중첩/충전 수를 작은 배지로 함께 표시한다.
 function updateItemUI(ctrl) {
   _updateTrinketUI(ctrl);
+  _updateBootsUI(ctrl);
+  if (typeof renderShopPanel === 'function') renderShopPanel(); // 골드/보유 신발이 바뀌면 상점의 "구매 가능 여부" 표시도 함께 갱신
   const row = document.getElementById('inventoryRow');
   if (!row) return;
   row.innerHTML = '';
@@ -22308,6 +22509,37 @@ function _updateTrinketUI(ctrl) {
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
     placeWard(ctrl, ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300))));
   });
+  row.appendChild(el);
+  const label = document.createElement('span');
+  label.style.fontSize = '10px'; label.style.color = '#999';
+  label.textContent = data.nameKo;
+  row.appendChild(label);
+}
+// 신발 전용 슬롯 - 트린켓과 동일한 구조(6칸 인벤토리와 별개). 클릭하면
+// 판매(70%)된다 - 다른 신발로 "교체"하고 싶을 때는 상점 신발 탭에서
+// 원하는 신발의 "착용" 버튼을 바로 누르면 된다(buyBoots가 기존 신발을
+// 자동으로 전액 환급 처리).
+function _updateBootsUI(ctrl) {
+  const row = document.getElementById('bootsSlotRow');
+  if (!row) return;
+  row.innerHTML = '';
+  const boots = ctrl && ctrl.boots;
+  const data = boots && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[boots.id] : null;
+  if (!data) {
+    const empty = document.createElement('div');
+    empty.className = 'invSlot empty';
+    row.appendChild(empty);
+    const label = document.createElement('span');
+    label.style.fontSize = '10px'; label.style.color = '#999';
+    label.textContent = '미착용';
+    row.appendChild(label);
+    return;
+  }
+  const el = document.createElement('div');
+  el.className = 'invSlot';
+  el.textContent = data.nameKo.slice(-2);
+  el.title = `${data.nameKo} (클릭: 판매, 구매가의 70% 환급)`;
+  el.addEventListener('click', () => { if (typeof sellBoots === 'function') sellBoots(ctrl); });
   row.appendChild(el);
   const label = document.createElement('span');
   label.style.fontSize = '10px'; label.style.color = '#999';
