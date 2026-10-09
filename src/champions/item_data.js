@@ -128,11 +128,15 @@ const ITEM_DATA = {
   // recomputeStats()에서 lolRangeToWorld()로 변환해 더한다(기본 이동속도
   // 자체가 그 변환을 거쳐 월드 단위로 저장되는 것과 동일한 원칙).
   boots: { id: 'boots', nameKo: '장화', cost: 300, stats: { moveSpeed: 25 }, isBoots: true },
-  // 약간 신비한 신발: 원문에 가격이 없다. "조합 시 장화 대신 쓸 수 있고
-  // 그 효과가 상위 신발에도 유지된다"는 조합 전용 메커니즘은 이 프로젝트에
-  // 아이템 조합(하위템 자동 소모) 시스템 자체가 없어 구현하지 않았다 -
-  // 기본 이동속도(25+10)만 가진 장화의 대체 버전으로 단순화했다.
-  slightlyMagicalBoots: { id: 'slightlyMagicalBoots', nameKo: '약간 신비한 신발', cost: 300, stats: { moveSpeed: 35 }, isBoots: true, priceGuessed: true },
+  // 약간 신비한 신발: 원문에 가격이 없다(명시적 근사 가격). "장화 대신
+  // 조합 재료로 쓸 수 있고, 그렇게 만든 상위 신발도 이 이동속도 상승
+  // 효과를 계속 유지한다" - item_system.js의 _buyBoots()가 "현재 신던
+  // 신발이 이거였는데 다른 신발로 바꾸는 순간" 그 보너스를 영구 플래그
+  // (_itemBootsExtraMoveSpeedLol)로 못박아 넘겨준다(신발을 갈아 신어도 유지).
+  slightlyMagicalBoots: {
+    id: 'slightlyMagicalBoots', nameKo: '약간 신비한 신발', cost: 300, stats: { moveSpeed: 35 }, isBoots: true, priceGuessed: true,
+    carryoverMoveSpeedOnUpgrade: 10,
+  },
   berserkersGreaves: { id: 'berserkersGreaves', nameKo: '광전사의 군화', cost: 1100, stats: { attackSpeedPercent: 0.30, moveSpeed: 45 }, isBoots: true },
   sorcerersShoes: { id: 'sorcerersShoes', nameKo: '마법사의 신발', cost: 1100, stats: { magicPenFlat: 12, moveSpeed: 45 }, isBoots: true },
   // 명석함의 아이오니아 장화 - "아이오니아의 통찰"(소환사 주문 가속 +10)은
@@ -218,19 +222,27 @@ const ITEM_DATA = {
     // 발화 - 챔피언/더미 대상 피해를 입히면(스킬 한정이 원문이지만, 여신의
     // 눈물과 동일한 이유로 평타+스킬 전체 피해를 트리거로 근사했다) 3초간
     // 불태워 매초 5의 마법 고정 피해(이미 있는 DOT 상태이상 타입 - 다리우스
-    // 출혈이 쓰던 것과 동일한 범용 틱 시스템을 재사용). 몬스터(미니언)
-    // 대상의 추가 피해(+10/초)는 이번 범위에서는 생략했다(챔피언/더미 전용).
-    burnOnDamagePassive: { id: 'embersOfFateBurn', durationSec: 3.0, dmgPerSec: 5 },
+    // 출혈이 쓰던 것과 동일한 범용 틱 시스템을 재사용). 몬스터(미니언) 대상은
+    // 매초 15(5+10)의 추가 피해(원문 "몬스터에게는 매초 15의 추가 피해")를
+    // 입힌다 - exp_level_system.js의 updateMinionCombat()에 미니언용
+    // tickStatusEffects() 호출을 새로 추가해서 실제로 틱이 돌게 만들었다
+    // (이 프로젝트에 미니언 DOT를 실제로 진행시키는 코드가 아예 없었다).
+    burnOnDamagePassive: { id: 'embersOfFateBurn', durationSec: 3.0, dmgPerSec: 5, monsterDmgPerSec: 15 },
   },
   catalystOfAeons: {
     id: 'catalystOfAeons', nameKo: '억겁의 카탈리스트', cost: 1300, recipe: ['rubyCrystal', 'sapphireCrystal'],
     stats: { maxHp: 350, mana: 300 },
-    // 영원 - "챔피언에게 피해를 입으면 감소 전 피해량의 7%만큼 마나 회복"만
-    // 구현했다. "스킬 사용 시 소모한 마나의 25%만큼 체력 회복(초당 최대
-    // 20 HoT)" 서브 효과는 "이번 스킬이 정확히 얼마의 마나를 썼는가"를
-    // 챔피언마다 다른 비용 차감 코드를 건드리지 않고는 범용으로 알아낼
-    // 방법이 없어(여신의 눈물 때와 같은 한계) 생략했다 - 명시적 근사.
+    // 영원 - "챔피언에게 피해를 입으면 감소 전 피해량의 7%만큼 마나 회복".
     manaOnDamagePercent: 0.07,
+    // "스킬 사용 시 소모한 마나의 25%만큼 체력 회복(초당 최대 20 HoT)" -
+    // "이번 스킬이 정확히 얼마의 마나를 썼는가"를 안전하게 알아낼 수 있는
+    // 유일한 지점은 character_controller.js의 공용 비용 지불 헬퍼
+    // _payCost()뿐이다(스킬 가속과 동일한 조사 결과 - 가렌/모데카이저/
+    // 세트/초가스/아리/애쉬/바루스/다리우스/이즈리얼/벡스/마스터 이/
+    // 리 신(R)은 전부 이걸 거친다). 렉사이(Q/W)/야스오/닐라/요네는 각자
+    // 파일에서 마나를 직접 차감해 이 지점을 거치지 않으므로 이 아이템의
+    // 이 서브 효과는 그 4개 챔피언에서는 작동하지 않는다(README에 명시).
+    manaSpentToHealPercent: 0.25, manaSpentHealCapPerSec: 20,
   },
 };
 const ITEM_ORDER = [

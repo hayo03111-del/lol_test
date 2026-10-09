@@ -705,6 +705,14 @@ function updateMinionCombat(minion, dt) {
   if (minion.mesh) minion.mesh.visible = true;
   if (minion.mixer) safeMixerUpdate(minion.mixer, dt, `minion:${minion.team}:${minion.type}`);
   updateMinionHealthBarVisibility(minion); // 요청 21-F/21-G: 거리/사망에 따라 표시 여부·투명도 갱신
+  // 버그 수정(운명의 재 발화를 추가하며 발견): tickStatusEffects()(DOT 틱 +
+  // CC 만료 처리)가 지금까지 플레이어/더미에만 호출되고 미니언에는 한
+  // 번도 호출된 적이 없었다 - 미니언에 DOT를 걸어도(다리우스 출혈이
+  // 미니언을 벨 수 있는 스킬이 아직 없어 드러나지 않았던 문제) 최초
+  // 틱 이후로는 실제 피해가 들어가지 않고 상태이상도 만료되지 않은 채
+  // 배열에 계속 남아있었다. dummy_enemy.js 쪽 tickOneDummy()와 동일한
+  // 이유로 여기에도 추가한다.
+  if (typeof tickStatusEffects === 'function') tickStatusEffects(minion, dt);
   if (minion.isDead || minion.hp <= 0) { killMinion(minion); return; }
   updateMinionMovement(minion, dt);
   updateMinionAttack(minion, dt);
@@ -737,6 +745,10 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
       // 포함된다(구조물 피해만 제외).
       if (typeof applyItemVamp === 'function') applyItemVamp(controller, finalDmg);
       if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(controller, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL);
+      // 운명의 재(발화)/여신의 눈물(마나순환) - 챔피언 전용 효과(그리버스/
+      // 카탈리스트 마나 회복)는 itemOnDamageDealt() 내부에서 target.isChampion
+      // 으로 걸러지므로 미니언 대상으로 호출해도 안전하다.
+      if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(controller, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL);
     }
   }
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }

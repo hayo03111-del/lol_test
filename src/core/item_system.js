@@ -71,6 +71,10 @@ function recomputeItemStats(ctrl) {
   };
   for (const slot of (ctrl.items || [])) applyOne(ITEM_DATA[slot.id]);
   if (ctrl.boots) applyOne(ITEM_DATA[ctrl.boots.id]);
+  // 약간 신비한 신발에서 넘어온 이동속도 보너스(carryoverMoveSpeedOnUpgrade) -
+  // 신발을 "신고 있을 때만" 적용된다(둘 다 벗으면 당연히 0, _buyBoots()에서
+  // 영구 플래그로 못박아뒀으므로 지금 신은 신발 종류와 무관하게 계속 더해진다).
+  if (ctrl.boots && ctrl._itemBootsExtraMoveSpeedLol) ctrl.itemBonusMoveSpeedLol += ctrl._itemBootsExtraMoveSpeedLol;
   ctrl.recomputeStats();
 }
 
@@ -229,6 +233,13 @@ function _buyBoots(ctrl, item) {
   if (ctrl.boots) {
     const old = ITEM_DATA[ctrl.boots.id];
     ctrl.gold += (old && old.cost) || 0;
+    // 약간 신비한 신발 "조합해도(다른 신발로 바꿔도) 이동속도 상승 효과는
+    // 계속 유지된다" - 지금 벗는 신발이 그것이었다면, 보너스를 영구
+    // 플래그로 못박아 새 신발에도 계속 적용되게 한다(이후 또 다른 신발로
+    // 갈아 신어도 이 플래그는 그대로 남는다).
+    if (old && old.carryoverMoveSpeedOnUpgrade) {
+      ctrl._itemBootsExtraMoveSpeedLol = Math.max(ctrl._itemBootsExtraMoveSpeedLol || 0, old.carryoverMoveSpeedOnUpgrade);
+    }
   }
   ctrl.gold -= item.cost;
   ctrl.boots = { id: item.id };
@@ -411,10 +422,13 @@ function applyItemPhysicalVamp(source, finalDmg, damageType) {
   source.hp = Math.min(source.maxHp, source.hp + finalDmg * source.itemPhysicalVampPercent);
 }
 
-// 챔피언/더미 대상 피해 1건을 처리하는 공용 훅(applyDamage()에서만 호출 -
-// 미니언/구조물 피해는 애초에 "챔피언에게"라는 조건을 만족하지 못하므로
-// 제외한다). 여신의 눈물(마나순환)/처형인의 대검(그리버스)/억겁의
-// 카탈리스트(피해 시 마나 회복)/운명의 재(발화 DOT)를 전부 여기서 처리한다.
+// 피해 1건을 처리하는 공용 훅 - applyDamage()(챔피언/더미)와
+// applyDamageToMinion()(미니언, fromPlayer일 때만) 양쪽에서 호출한다.
+// 그리버스/마나 회복처럼 "챔피언에게"로 명시된 효과는 함수 내부에서
+// target.isChampion으로 직접 걸러지므로, 미니언 대상으로 호출돼도
+// 안전하게 no-op된다. 여신의 눈물(마나순환)/처형인의 대검(그리버스)/
+// 억겁의 카탈리스트(피해 시 마나 회복)/운명의 재(발화 DOT)를 전부
+// 여기서 처리한다.
 function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
   // 처형인의 대검 - 챔피언 대상 물리 피해에 그리버스(고통스러운 상처)를 건다.
   if (target.isChampion && damageType === DAMAGE_TYPE.PHYSICAL && ctrl.itemGrievousOnHitPercent > 0 && typeof applyStatus === 'function') {
@@ -424,16 +438,19 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
   if (target.isChampion && ctrl.itemManaOnDamagePercent > 0 && (ctrl.maxMp || 0) > 0) {
     ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + finalDmg * ctrl.itemManaOnDamagePercent);
   }
-  // 운명의 재(발화) - 챔피언/더미 대상 피해 전체를 트리거로 근사(item_data.js
-  // 주석 참고). 같은 id로 다시 걸면 지속시간이 갱신될 뿐 중첩되지 않는다
+  // 운명의 재(발화) - 챔피언/더미/미니언 대상 피해 전체를 트리거로 근사
+  // (item_data.js 주석 참고 - "스킬 적중 시"를 평타+스킬 전체로 근사).
+  // 몬스터(미니언) 대상은 원문 그대로 더 센 초당 피해(monsterDmgPerSec)를
+  // 쓴다. 같은 id로 다시 걸면 지속시간이 갱신될 뿐 중첩되지 않는다
   // (01_status_effect_system.js의 upsert 원칙 그대로).
   const embersSlot = (ctrl.items || []).find((s) => s.id === 'embersOfFate');
   if (embersSlot && typeof applyStatus === 'function') {
     const p = ITEM_DATA.embersOfFate.burnOnDamagePassive;
-    applyStatus(target, { id: p.id, type: 'DOT', duration: p.durationSec, totalDamage: p.dmgPerSec * p.durationSec, damageType: DAMAGE_TYPE.MAGICAL, tickInterval: 1.0, source: ctrl });
+    const perSec = target.isMinion ? p.monsterDmgPerSec : p.dmgPerSec;
+    applyStatus(target, { id: p.id, type: 'DOT', duration: p.durationSec, totalDamage: perSec * p.durationSec, damageType: DAMAGE_TYPE.MAGICAL, tickInterval: 1.0, source: ctrl });
   }
-  // 여신의 눈물(마나순환) - 챔피언/더미 대상 피해를 입힐 때마다 충전 1개를
-  // 소모해 최대 마나를 얻는다(챔피언 상대는 2배, 누적 360 한도).
+  // 여신의 눈물(마나순환) - 챔피언/더미/미니언 대상 피해를 입힐 때마다
+  // 충전 1개를 소모해 최대 마나를 얻는다(챔피언 상대는 2배, 누적 360 한도).
   const tearSlot = (ctrl.items || []).find((s) => s.id === 'tearOfGoddess');
   if (tearSlot) {
     const p = ITEM_DATA.tearOfGoddess.manaCirculationPassive;
@@ -462,6 +479,27 @@ function itemOnMinionKillByPlayer(ctrl) {
     console.log('[ITEM] 수확의 낫 한도 도달 - 보너스 골드 +' + p.bonusGoldAtCap);
   }
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+}
+
+// 억겁의 카탈리스트 - "스킬 사용 시 소모한 마나의 25%에 해당하는 체력을
+// 회복합니다. 스킬 사용 1회당 초당 최대 20의 체력을 회복합니다." 기존
+// _itemActiveHeals(HoT) 목록에 등록해 itemSystemTick()이 매 프레임
+// 진행하게 한다 - 속도(초당량)는 20을 넘지 않되, 총량(manaSpent*25%)은
+// 전부 전달해야 하므로 필요하면 1초보다 길게 늘려서 깎아 보낸다.
+// 한계(명시): _payCost()를 거치지 않고 각 챔피언 파일에서 직접
+// this.mp -= ... 로 마나를 깎는 스킬(리 신 Q/W, 야스오, 닐라, 요네)은
+// 이 훅을 타지 않는다 - 스킬 가속(abilityHasteCooldown)과 동일한 한계.
+function itemOnManaSpent(ctrl, manaSpent) {
+  if (!ctrl || !manaSpent || manaSpent <= 0) return;
+  const slot = (ctrl.items || []).find((s) => s.id === 'catalystOfAeons');
+  if (!slot) return;
+  const p = ITEM_DATA.catalystOfAeons;
+  const totalHeal = manaSpent * p.manaSpentToHealPercent;
+  if (totalHeal <= 0) return;
+  const perSec = Math.min(p.manaSpentHealCapPerSec, totalHeal);
+  const remainingSec = totalHeal / perSec;
+  ctrl._itemActiveHeals = ctrl._itemActiveHeals || [];
+  ctrl._itemActiveHeals.push({ perSec, remainingSec });
 }
 
 // 챔피언 처치 관여 시 중첩을 얻는 아이템들(암흑의 인장의 영광, 탐욕의

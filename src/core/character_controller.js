@@ -232,6 +232,10 @@ class CharacterController {
     this.itemBonusHpRegenPercent = 0; this.itemBonusMpRegenPercent = 0;
     this.itemBonusMoveSpeedLol = 0; this.itemBonusMagicPenFlat = 0;
     this.itemSlowResistPercent = 0; this.itemTenacityPercent = 0; this._itemSlaughterStacks = 0;
+    // 약간 신비한 신발 "조합해도(신발을 갈아 신어도) 이동속도 상승 유지" -
+    // 영구 플래그(한번 세팅되면 챔피언을 바꾸거나 신발을 몇 번을 갈아
+    // 신어도 계속 남는다). item_system.js의 _buyBoots()/recomputeItemStats() 참고.
+    this._itemBootsExtraMoveSpeedLol = 0;
     // 트린켓(투명 와드) - 6칸 인벤토리와 별개인 전용 슬롯. 실제 LoL처럼
     // 골드로 사지 않고 기본 장착되어 있다(gold/items와 동일하게 챔피언을
     // 바꿔도 유지 - applyChampionData()는 건드리지 않는다). _placedWards는
@@ -1537,6 +1541,7 @@ class CharacterController {
         return false;
       }
       this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd) : cost.cd;
+      if (cost.mana > 0 && typeof itemOnManaSpent === 'function') itemOnManaSpent(this, cost.mana);
       updateBars(this);
     }
     return true;
