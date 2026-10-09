@@ -12,6 +12,7 @@
 - `src/loader/` — GLB 교체/로딩/정리
 - `assets/ezreal/*.png` — 이즈리얼 Q 전용 VFX 텍스처(실제 커뮤니티드래곤 원본)
 - `dist/runtime.js` — 위 파일들을 원래 실행 순서로 합친 실제 런타임
+- `docs/ADDING_A_CHAMPION.md` — **새 챔피언을 추가하는 전체 체크리스트/템플릿 가이드**. `src/champions/_TEMPLATE.js`(빌드 대상 아님 - 복사해서 쓰는 스켈레톤)와 짝을 이룬다.
 
 ## GLB 모델 파일
 챔피언 3D 모델(`*.glb`)은 용량이 커서(챔피언당 5~20MB) 저장소에 커밋하지 않는다.
