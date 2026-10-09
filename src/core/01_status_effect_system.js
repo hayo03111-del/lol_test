@@ -151,6 +151,18 @@ function getMoveSpeedBuffPercent(target) {
   }
   return v;
 }
+// 전설급 아이템(삼위일체 "가속"/칠흑의양날도끼 "열정" 등)의 "기본 공격/피해를
+// 입히면 N초 동안 이동 속도 +X(퍼센트가 아니라 LoL 원본 고정 수치)" 효과용.
+// MS_BUFF(퍼센트)와 완전히 별개 타입이다 - stats.flatMoveSpeedBonus는
+// character_controller.js에 이미 선언만 돼 있고 지금까지 아무도 채워 넣지
+// 않던 필드였다(getFinalMoveSpeed()는 처음부터 이 필드를 읽고 있었다).
+function getFlatMoveSpeedBuff(target) {
+  if (!target || !target.statusEffects) return 0;
+  const now = performance.now();
+  let v = 0;
+  for (const e of target.statusEffects) if (e.type === 'MS_BUFF_FLAT' && e.expiresAt > now) v = Math.max(v, e.value);
+  return v;
+}
 // 바루스 E(화살비) - "고통스러운 상처"(자가 회복/재생 약화). 범용 상태이상
 // 하나(GRIEVOUS)로 표현해서, 이후 다른 챔피언의 회복 감소 효과도 동일한
 // 타입을 재사용할 수 있게 한다. 이 데모는 챔피언 간 실제 회복량을 감소

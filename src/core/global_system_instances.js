@@ -40,7 +40,9 @@ function _itemStatsSummary(item) {
   if (s.hpRegenPercent) parts.push(`기본 체력 재생 +${Math.round(s.hpRegenPercent * 100)}%`);
   if (s.mpRegenPercent) parts.push(`기본 마나 재생 +${Math.round(s.mpRegenPercent * 100)}%`);
   if (s.moveSpeed) parts.push(`이동 속도 +${s.moveSpeed}`);
+  if (s.moveSpeedPercent) parts.push(`이동 속도 +${Math.round(s.moveSpeedPercent * 100)}%`);
   if (s.magicPenFlat) parts.push(`마법 관통력 +${s.magicPenFlat}`);
+  if (item.armorPenFlat) parts.push(`물리 관통력 +${item.armorPenFlat}`);
   if (item.allDamageVampPercent) parts.push(`모든 피해 흡혈 +${(item.allDamageVampPercent * 100).toFixed(1)}%`);
   if (item.minionBonusDamage) parts.push(`도움의 손길(미니언 평타 시 +${item.minionBonusDamage} 피해)`);
   if (item.onHitHeal) parts.push(`적중 시 체력 +${item.onHitHeal} 회복`);
@@ -85,6 +87,24 @@ function _itemStatsSummary(item) {
     if (e.onHitFlatDamage) parts.push(`챔피언·포탑에 피해 시 고정 피해 +${e.onHitFlatDamage}(챔피언 대상 재사용대기시간 ${e.onHitChampionIcdSec}초)`);
     if (e.championPhysicalVampPercent) parts.push(`챔피언 대상 물리 피해 흡혈 +${Math.round(e.championPhysicalVampPercent * 100)}%`);
   }
+  // 전설급 2차분(삼위일체~지배자의 피갑옷) 패시브 설명.
+  if (item.onHitMoveSpeedFlatPassive) { const p = item.onHitMoveSpeedFlatPassive; parts.push(`가속(기본 공격 시 ${p.durationSec}초간 이동 속도 +${p.amount})`); }
+  if (item.onHitFlatPhysicalPassive) parts.push(`독침(기본 공격 시 고정 물리 피해 +${item.onHitFlatPhysicalPassive})`);
+  if (item.onHitFlatMagicDamage) parts.push(`쪼기(기본 공격 시 고정 마법 피해 +${item.onHitFlatMagicDamage})`);
+  if (item.mistsEdgePassive) { const p = item.mistsEdgePassive; parts.push(`안개의 검(기본 공격 시 적 현재 체력의 근접${Math.round(p.meleePercentCurrentHp * 100)}%｜원거리${Math.round(p.rangedPercentCurrentHp * 100)}% 추가 물리 피해, 미니언·정글 몬스터는 최대 ${p.nonChampionCap})`); }
+  if (item.scurryingStrikePassive) { const p = item.scurryingStrikePassive; parts.push(`할퀴는 그림자(챔피언 ${p.hitsNeeded}회 기본 공격 시 ${Math.round(p.slowPercent * 100)}% 둔화 ${p.slowDurationSec}초, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.everRisingMoonPassive) { const p = item.everRisingMoonPassive; parts.push(`늘 떠오르는 달(${p.windowSec}초 내 별개의 공격/스킬 2회 시 최대 체력 근접${Math.round(p.meleeMaxHpPercent * 100)}%｜원거리${Math.round(p.rangedMaxHpPercent * 100)}% 피해 + 보호막, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.aweBonusAdPercentOfMana) parts.push(`경탄(최대 마나의 ${Math.round(item.aweBonusAdPercentOfMana * 100)}%만큼 추가 공격력)`);
+  if (item.shockPassive) { const p = item.shockPassive; parts.push(`충격(기본 공격 시 마나 ${Math.round(p.onHitManaPercent * 1000) / 10}% 추가 물리, 챔피언 대상 스킬 피해 시 근접 마나${Math.round(p.onAbilityHitMeleeManaPercent * 100)}%｜원거리${Math.round(p.onAbilityHitRangedManaPercent * 100)}% 추가 물리)`); }
+  if (item.transformsInto) parts.push(`최대 마나에 도달하면 ${(ITEM_DATA[item.transformsInto] && ITEM_DATA[item.transformsInto].nameKo) || item.transformsInto}(으)로 변신`);
+  if (item.lifelinePassive) { const p = item.lifelinePassive; parts.push(`생명선(마법 피해로 체력이 ${Math.round(p.hpThresholdPercent * 100)}% 밑으로 떨어질 만큼이면 ${p.shieldDurationSec}초 보호막, 재사용대기시간 ${p.icdSec}초, 발동 후 ${p.omnivampDurationSec}초간 모든 피해 흡혈 +${Math.round(p.omnivampPercentAfterTrigger * 100)}%)`); }
+  if (item.focusedWillPassive) { const p = item.focusedWillPassive; parts.push(`집중된 의지(피해를 입히면 ${p.durationSec}초간 스택당 피해량 +${Math.round(p.percentPerStack * 100)}%, 최대 ${p.maxStacks}중첩)`); }
+  if (item.captainPassive) { const p = item.captainPassive; parts.push(`선장(챔피언·에픽 몬스터 대상 ${p.hitsNeeded}번째 기본 공격마다 추가 물리 피해, 구조물 대상은 배율 증가)`); }
+  if (item.carvePassive) { const p = item.carvePassive; parts.push(`깎아내기(챔피언 물리 피해 시 ${p.durationSec}초간 방어력 -${Math.round(p.shredPerStack * 100)}%, 최대 ${p.maxStacks}중첩)`); }
+  if (item.ragePassive) { const p = item.ragePassive; parts.push(`열정(물리 피해를 입히면 ${p.durationSec}초간 이동 속도 근접+${p.meleeAmount}｜원거리+${p.rangedAmount})`); }
+  if (item.lightshieldStrikePassive) { const p = item.lightshieldStrikePassive; parts.push(`라이트쉴드 타격(챔피언별 ${p.icdPerTargetSec}초마다 첫 기본 공격 시 근접 기본공격력${Math.round(p.meleeBaseAdPercent * 100)}%｜원거리${Math.round(p.rangedBaseAdPercent * 100)}% + 잃은 체력 ${Math.round(p.missingHpHealPercent * 100)}%만큼 체력 회복)`); }
+  if (item.tyrannyPassive) parts.push(`폭정(추가 체력의 ${(item.tyrannyPassive.bonusHpToAdPercent * 100).toFixed(1)}%만큼 추가 공격력)`);
+  if (item.vengeancePassive) { const p = item.vengeancePassive; parts.push(`응징(잃은 체력에 비례해 공격력 최대 ${Math.round(p.maxAdPercent * 100)}% 증가, 체력 ${Math.round(p.maxAtHpPercent * 100)}%에서 최대치 도달)`); }
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;

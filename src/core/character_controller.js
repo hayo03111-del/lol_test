@@ -238,6 +238,7 @@ class CharacterController {
     this.itemBonusCritChance = 0; this.itemBonusAbilityHaste = 0;
     this.itemBonusHpRegenPercent = 0; this.itemBonusMpRegenPercent = 0;
     this.itemBonusMoveSpeedLol = 0; this.itemBonusMagicPenFlat = 0;
+    this.itemBonusMoveSpeedPercent = 0; this.itemBonusArmorPenFlat = 0;
     this.itemSlowResistPercent = 0; this.itemTenacityPercent = 0; this._itemSlaughterStacks = 0;
     // 약간 신비한 신발 "조합해도(신발을 갈아 신어도) 이동속도 상승 유지" -
     // 영구 플래그(한번 세팅되면 챔피언을 바꾸거나 신발을 몇 번을 갈아
@@ -259,6 +260,17 @@ class CharacterController {
     this.itemGrievousOnHitPercent = 0; this.itemGrievousOnHitDurationSec = 0;
     this.itemPhysicalVampPercent = 0; this.itemBonusArmorPenMultiplier = 1; this.itemManaOnDamagePercent = 0;
     this._itemSheenArmed = false; this._itemSheenReadyAt = 0; this._itemActiveCooldownUntil = {};
+    this._itemActiveElixir = null; // 영약(강철/마법/분노) 상호 배타적 상태
+    // 전설급 아이템 2차분(삼위일체~지배자의 피갑옷) 전용 상태.
+    // itemSpellDamageAmpPercent(쇼진의창 "집중된 의지")는 calculateDamage()
+    // 맨 끝에서 최종 피해에 곱해진다. _itemShieldExpiresAt(월식/멜모셔스의
+    // 아귀의 보호막)은 아이템이 건 shield가 시간이 지나면 자연 소멸하게
+    // 한다(맞아서 깎이는 것과 별개). itemDynamicBonusAD(지배자의 피갑옷
+    // "폭정"/"응징")는 체력 비율에 따라 매 프레임 바뀌는 값이라
+    // recomputeItemStats()가 아니라 itemSystemTick()에서 매 프레임 갱신한다.
+    this.itemSpellDamageAmpPercent = 0;
+    this._itemShieldExpiresAt = 0;
+    this.itemDynamicBonusAD = 0;
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -439,7 +451,7 @@ class CharacterController {
       this.maxHp = base.maxHp + (this.bonusMaxHp || 0) + (this.itemBonusMaxHp || 0);
       this.maxMp = base.maxMp + (this.itemBonusMana || 0);
       this.hpRegen = base.hpRegen; this.mpRegen = base.mpRegen;
-      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0);
+      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0) + (this.itemDynamicBonusAD || 0);
       this.stats.abilityPower = (this.itemBonusAP || 0);
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
       this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0);
@@ -4220,6 +4232,10 @@ class CharacterController {
     let reduction = getDamageReductionPercent(this);
     if (damageType === DAMAGE_TYPE.MAGICAL) reduction = Math.max(reduction, getMagicDamageReductionPercent(this));
     let remaining = Math.max(0, dmg) * (1 - Math.min(1, Math.max(0, reduction))); // 일반 피해감소 + 닐라 W 마법피해감소
+    // 아이템 패시브(멜모셔스의 아귀 - 생명선) - 이 피해로 체력이 30% 밑으로
+    // "떨어질" 보호막을 먼저 걸어서, 바로 아래 shield 흡수 로직이 이번
+    // 피해도 함께 받아낼 수 있게 한다(실제 LoL도 피해가 적용되기 직전에 발동).
+    if (typeof itemOnTakeDamage === 'function') itemOnTakeDamage(this, remaining, damageType);
     // 버그 수정(세트 패시브 문서 4절 "실제로 HP에 적용된 피해를 기준으로
     // 한다"): 예전에는 Shield로 흡수되기 전의 remaining을 그대로 투지
     // 계산에 넘겨서, Shield가 300 있는 상태에서 500 피해를 받아 실제로는
@@ -4520,7 +4536,8 @@ class CharacterController {
       const movingTowardEnemy = this.isChasing && this.currentTarget && this.currentTarget.hp > 0;
       if (!movingTowardEnemy) msBuff = 0;
     }
-    this.stats.percentMoveSpeedBonus = msBuff;
+    this.stats.percentMoveSpeedBonus = msBuff + (this.itemBonusMoveSpeedPercent || 0);
+    this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? getFlatMoveSpeedBuff(this) : 0;
     this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
     this._garenPassiveTick(dt);

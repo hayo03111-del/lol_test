@@ -283,6 +283,200 @@ const ITEM_DATA = {
     // 이 서브 효과는 그 4개 챔피언에서는 작동하지 않는다(README에 명시).
     manaSpentToHealPercent: 0.25, manaSpentHealCapPerSec: 20,
   },
+
+  // [전설급 아이템] 2차분 - 삼위일체~지배자의 피갑옷(사용자가 올려준 원본
+  // 텍스트 625~758줄). 복잡한 적중 시 효과가 많아 하나씩 신중하게 구현한다.
+  // 공용 엔지니어링 메모(item_system.js 상단 참고):
+  // - "스킬로 피해를 입히면" 계열은 전부 기존 여신의 눈물/운명의 재와 동일한
+  //   이유(스킬/평타 구분 플래그가 없음)로 "평타+스킬 피해 전체"에 근사한다.
+  // - 기본 공격 전용 효과(안개의 검/쪼기/충격/선장/라이트쉴드 타격 등)는
+  //   itemOnBasicAttackHit()(광휘의 검/티아맷이 이미 쓰던 공용 훅)에서
+  //   처리한다 - 이 훅은 applyDamage()"안"이 아니라 메인 평타의 applyDamage()가
+  //   이미 끝난 "뒤"에 별도로 불리므로, 안에서 다시 applyDamage()를 불러도
+  //   무한 재귀가 생기지 않는다(기존 광휘의 검/티아맷과 동일한 안전 지점).
+  trinityForce: {
+    id: 'trinityForce', nameKo: '삼위일체', cost: 3333, recipe: ['sheen', 'devourerAxe', 'phageAxe'],
+    stats: { attackDamage: 36, attackSpeedPercent: 0.30, maxHp: 333, abilityHaste: 15 },
+    // 주문 검(기존 광휘의 검과 동일한 메커니즘, 배율만 100%->200%) - 광휘의
+    // 검을 하위템으로 먹었으니 spellbladePassive를 그대로 재사용하되 배율만
+    // 덮어쓴다(item_system.js의 itemOnBasicAttackHit()이 이 필드를 읽는다).
+    spellbladePassive: { procCooldownSec: 1.5, bonusAdPercent: 2.0 },
+    // 가속 - 유닛(챔피언/더미/미니언/구조물 전부, 원문에 제한이 없음) 기본
+    // 공격 시 2초간 이동속도 +20(퍼센트가 아니라 고정 수치 - MS_BUFF_FLAT).
+    onHitMoveSpeedFlatPassive: { amount: 20, durationSec: 2.0 },
+  },
+  // 탐식의 망치/온기가 필요한 자의 도끼 - 삼위일체의 재료지만, 원문에
+  // 자기 자신의 독자적인 가격/스탯/패시브가 전부 있는 "에픽" 등급
+  // 아이템이다(실제 LoL처럼 조합 재료도 그 자체로 구매 가능 - 숨기면
+  // 조합 시스템이 영영 발동하지 못한다). 탐식의 망치 "분노"는 삼위일체의
+  // "가속"과 완전히 동일한 수치라 같은 필드(onHitMoveSpeedFlatPassive)를 재사용한다.
+  devourerAxe: {
+    id: 'devourerAxe', nameKo: '탐식의 망치', cost: 1100, recipe: ['rubyCrystal', 'longSword'],
+    stats: { attackDamage: 15, maxHp: 200 },
+    onHitMoveSpeedFlatPassive: { amount: 20, durationSec: 2.0 },
+  },
+  // 온기가 필요한 자의 도끼 - 원문에 고유 패시브 설명이 없다(스탯 두 줄뿐).
+  phageAxe: { id: 'phageAxe', nameKo: '온기가 필요한 자의 도끼', cost: 1200, recipe: ['longSword', 'dagger', 'longSword'], stats: { attackDamage: 20, attackSpeedPercent: 0.20 } },
+
+  bladeOfTheRuinedKing: {
+    id: 'bladeOfTheRuinedKing', nameKo: '몰락한 왕의 검', cost: 3200, recipe: ['vampiricScepter', 'recurveBow', 'pickaxe'],
+    stats: { attackDamage: 40, attackSpeedPercent: 0.25 },
+    physicalVampPercent: 0.10,
+    // 안개의 검 - 기본 공격 시 "적 현재 체력"의 근접9%|원거리6%를 추가
+    // 물리 피해로. 미니언/정글 몬스터 대상은 최대 100으로 캡(원문).
+    mistsEdgePassive: { meleePercentCurrentHp: 0.09, rangedPercentCurrentHp: 0.06, nonChampionCap: 100 },
+    // 할퀴는 그림자 - 챔피언에게 "3회" 기본 공격을 가하면 1초간 30% 둔화
+    // (재사용대기시간 15초 - 챔피언에게만 적용, 원문이 챔피언으로 한정).
+    scurryingStrikePassive: { hitsNeeded: 3, slowPercent: 0.30, slowDurationSec: 1.0, icdSec: 15 },
+  },
+  // 곡궁("독침": 기본 공격 시 15의 물리 피해 적중 시 효과) - 몰락한 왕의
+  // 검/마법사의 최후 둘 다의 재료이면서 그 자체로도 완결된 에픽 아이템.
+  recurveBow: { id: 'recurveBow', nameKo: '곡궁', cost: 700, recipe: ['dagger'], stats: { attackSpeedPercent: 0.15 }, onHitFlatPhysicalPassive: 15 },
+
+  // 마법사의 최후 - 원문에 공격력/주문력이 전혀 없다(공격속도/마저/강인함 +
+  // 온히트 고정 마법피해 뿐) - 수치를 지어내지 않고 그대로 비워둔다.
+  witsEnd: {
+    id: 'witsEnd', nameKo: '마법사의 최후', cost: 2800, recipe: ['recurveBow', 'negatronCloak', 'recurveBow'],
+    stats: { attackSpeedPercent: 0.50, magicResist: 45 },
+    tenacityPercent: 0.20,
+    onHitFlatMagicDamage: 45,
+  },
+
+  eclipse: {
+    id: 'eclipse', nameKo: '월식', cost: 2900, recipe: ['caulfieldsWarhammer', 'pickaxe', 'longSword'],
+    stats: { attackDamage: 60, abilityHaste: 15 },
+    // 늘 떠오르는 달 - 2초 내 "별개의" 기본 공격 또는 스킬로 같은 챔피언을
+    // 2회 맞히면(icd 6초) 최대 체력 비례 추가 피해 + 2초 보호막(추가 공격력 비례).
+    everRisingMoonPassive: {
+      windowSec: 2.0, icdSec: 6.0,
+      meleeMaxHpPercent: 0.08, rangedMaxHpPercent: 0.05,
+      meleeShieldBase: 150, meleeShieldBonusAdPercent: 0.40,
+      rangedShieldBase: 75, rangedShieldBonusAdPercent: 0.20,
+      shieldDurationSec: 2.0,
+    },
+  },
+  serratedDirk: { id: 'serratedDirk', nameKo: '톱날 단검', cost: 1000, recipe: ['longSword'], stats: { attackDamage: 20 }, armorPenFlat: 10 },
+
+  // 마나무네 - "360의 최대 마나에 도달하면 무라마나로 변합니다"는 아래
+  // muramana 완제품과 거의 동일한 스탯을 갖되 "충격"(온히트/스킬 적중 추가
+  // 물리 피해)이 아직 없는 전 단계다. 조합 시스템(recipe)과는 별개로,
+  // 아이템 하나가 "자기 자신을 다른 완제품으로 바꾸는" 변신 메커니즘은
+  // buildOrBuyItem()의 하위템 소모 방식과 다르므로 item_system.js에
+  // 전용 함수(_itemTickManamuneTransform)로 처리한다.
+  manamune: {
+    id: 'manamune', nameKo: '마나무네', cost: 2900, recipe: ['tearOfGoddess', 'caulfieldsWarhammer', 'longSword'],
+    stats: { attackDamage: 35, mana: 500, abilityHaste: 15 },
+    aweBonusAdPercentOfMana: 0.02,
+    manaCirculationPassive: { maxManaPerHit: 3, maxManaPerChampionHit: 6, maxManaCap: 360, maxCharges: 4, rechargeSec: 8 },
+    transformsInto: 'muramana',
+  },
+  muramana: {
+    id: 'muramana', nameKo: '무라마나', cost: 0, hiddenFromShop: true, // 마나무네가 변신해서만 얻는다(직접 구매 불가)
+    stats: { attackDamage: 35, mana: 1000, abilityHaste: 15 },
+    aweBonusAdPercentOfMana: 0.02,
+    // 충격 - 챔피언 기본 공격 시 마나의 1.2% 추가 물리(적중 시 효과),
+    // 챔피언 대상 스킬 피해 시 근접 마나4%｜원거리 마나3% 추가 물리.
+    shockPassive: { onHitManaPercent: 0.012, onAbilityHitMeleeManaPercent: 0.04, onAbilityHitRangedManaPercent: 0.03 },
+  },
+
+  maw: {
+    id: 'maw', nameKo: '멜모셔스의 아귀', cost: 3100, recipe: ['spellbinder', 'caulfieldsWarhammer'],
+    stats: { attackDamage: 60, magicResist: 40, abilityHaste: 15 },
+    // 생명선 - 마법 피해로 체력이 30% 밑으로 떨어질 때 2.5초간 보호막
+    // (근접200+추가AD150%｜원거리150+추가AD112.5%), 재사용대기시간 90초.
+    // 발동하면 전투가 끝날 때까지(마지막 전투 행동 후 N초 - 이 프로젝트에
+    // "전투 이탈" 판정이 따로 없어 생명선 보호막과 같은 길이로 근사) 모든
+    // 피해 흡혈 10%를 얻는다.
+    lifelinePassive: {
+      hpThresholdPercent: 0.30, icdSec: 90, shieldDurationSec: 2.5,
+      meleeShieldBase: 200, meleeShieldBonusAdPercent: 1.50,
+      rangedShieldBase: 150, rangedShieldBonusAdPercent: 1.125,
+      omnivampPercentAfterTrigger: 0.10, omnivampDurationSec: 2.5,
+    },
+  },
+  // 주문포식자 - 원문에 레벨 비례 보호막(근접110~280｜원거리83~210)을 주는
+  // 자체 "생명선"이 있지만, 멜모셔스의 아귀가 이미 같은 이름의 상위
+  // 효과(추가 공격력 비례)를 갖고 있어 사실상 중복이고, 레벨 보간까지
+  // 구현하면 이번 12종 범위를 벗어난다 - 주문포식자 자체의 생명선은
+  // 생략하고 스탯(공격력/마법저항력)만 정확히 반영한다(명시적 범위 한계).
+  spellbinder: { id: 'spellbinder', nameKo: '주문포식자', cost: 1300, recipe: ['longSword', 'longSword', 'negatronCloak'], stats: { attackDamage: 25, magicResist: 25 } },
+
+  shojinSpear: {
+    id: 'shojinSpear', nameKo: '쇼진의창', cost: 3100, recipe: ['pickaxe', 'tunnelers', 'rubyCrystal'],
+    stats: { attackDamage: 45, maxHp: 450, abilityHaste: 25 }, // "드래곤의 힘"(기본 스킬 가속 +25)은 abilityHaste에 합산
+    // 집중된 의지 - 스킬로 피해를 입힐 때마다 스택(최대 4, 스택당 3%,
+    // 6초 지속·재적중 시 갱신) - 입히는 모든 피해에 곱연산으로 적용된다
+    // (calculateDamage() 참고, ctrl.itemSpellDamageAmpPercent 필드 재사용).
+    focusedWillPassive: { percentPerStack: 0.03, maxStacks: 4, durationSec: 6.0 },
+  },
+  caulfieldsWarhammer: { id: 'caulfieldsWarhammer', nameKo: '콜필드의 전투망치', cost: 1050, recipe: ['longSword', 'glowingMote', 'longSword'], stats: { attackDamage: 20, abilityHaste: 10 } },
+
+  hullbreaker: {
+    id: 'hullbreaker', nameKo: '선체파괴자', cost: 3000, recipe: ['tunnelers', 'ascendedPauldrons', 'pickaxe'],
+    stats: { attackDamage: 40, maxHp: 500, moveSpeedPercent: 0.04 },
+    // 선장 - 챔피언/에픽 몬스터 대상 5번째 기본 공격마다 추가 물리 피해.
+    // 구조물 대상은 배율이 더 커진다. "승선 부대"(주변 공성/슈퍼 미니언
+    // 방어력·마법저항력 버프)는 미니언에 임시 버프를 안전하게 걸었다가
+    // 범위를 벗어나면 정확히 되돌리는 틱 구조가 필요해 이번 범위에서는
+    // 생략한다(핵심 패시브인 "선장"만 구현 - 명시적 한계).
+    captainPassive: {
+      hitsNeeded: 5,
+      meleePercentBaseAd: 1.20, meleePercentMaxHp: 0.05,
+      rangedPercentBaseAd: 0.84, rangedPercentMaxHp: 0.035,
+      meleeStructurePercentBaseAd: 3.00, meleeStructurePercentMaxHp: 0.10,
+      rangedStructurePercentBaseAd: 2.10, rangedStructurePercentMaxHp: 0.07,
+    },
+  },
+  tunnelers: { id: 'tunnelers', nameKo: '땅굴 채굴기', cost: 1150, recipe: ['longSword', 'rubyCrystal'], stats: { attackDamage: 15, maxHp: 250 } },
+  ascendedPauldrons: { id: 'ascendedPauldrons', nameKo: '비상의 월갑', cost: 800, recipe: ['rubyCrystal'], stats: { maxHp: 200, moveSpeedPercent: 0.04 } },
+
+  blackCleaver: {
+    id: 'blackCleaver', nameKo: '칠흑의양날도끼', cost: 3000, recipe: ['devourerAxe', 'kircheisShard', 'pickaxe'],
+    stats: { attackDamage: 45, maxHp: 400, abilityHaste: 20 },
+    // 깎아내기 - 챔피언에게 물리 피해를 입힐 때마다 방어력 감소 스택(최대
+    // 5, 스택당 6%, 6초 지속) - 기존 ARMOR_SHRED 상태이상 타입을 재사용한다
+    // (가렌 E/레넥톤 E가 이미 쓰던 것과 동일한 타입, getArmorShredPercent()가
+    // 자동으로 최신값을 읽는다).
+    carvePassive: { shredPerStack: 0.06, maxStacks: 5, durationSec: 6.0 },
+    // 열정 - 물리 피해를 입히면(대상 불문) 2초간 이동속도 +20(근접)/+10(원거리) -
+    // MS_BUFF_FLAT 재사용.
+    ragePassive: { meleeAmount: 20, rangedAmount: 10, durationSec: 2.0 },
+  },
+  kircheisShard: { id: 'kircheisShard', nameKo: '점화석', cost: 800, recipe: ['rubyCrystal', 'glowingMote'], stats: { maxHp: 200, abilityHaste: 10 } },
+
+  divineSunderer: {
+    id: 'divineSunderer', nameKo: '갈라진하늘', cost: 3100, recipe: ['tunnelers', 'caulfieldsWarhammer'],
+    stats: { attackDamage: 45, maxHp: 450, abilityHaste: 10 },
+    // 라이트쉴드 타격 - 대상(챔피언)별 재사용대기시간 10초. "치명타 적용,
+    // 일반 치명타 피해량의 80%" 부분은 이 프로젝트의 치명타 배율 시스템과
+    // 엮으면 챔피언마다 다른 critMultiplier를 전부 따라가야 해서 범위가
+    // 과도하게 커진다 - 대신 설명된 수치 그대로(근접 기본공격력90%｜원거리
+    // 기본공격력45% + 잃은 체력 4%)의 고정 보너스 물리 피해 + 그만큼 회복으로
+    // 단순화했다(명시적 근사 - "치명타 적용" 연출만 생략, 수치는 원문 그대로).
+    lightshieldStrikePassive: {
+      icdPerTargetSec: 10,
+      meleeBaseAdPercent: 0.90, rangedBaseAdPercent: 0.45,
+      missingHpHealPercent: 0.04,
+    },
+  },
+
+  // 끝없는 갈망 - 원문에 고유 패시브 설명이 전혀 없다(공격력 65 한 줄뿐).
+  // 수치를 지어내지 않는다는 원칙에 따라 패시브를 추가하지 않고 순수
+  // 스탯 아이템 그대로 둔다.
+  eternalThirst: { id: 'eternalThirst', nameKo: '끝없는 갈망', cost: 3100, recipe: ['caulfieldsWarhammer', 'pickaxe', 'longSword'], stats: { attackDamage: 65 } },
+
+  overlordsBloodmail: {
+    id: 'overlordsBloodmail', nameKo: '지배자의 피갑옷', cost: 3300, recipe: ['tunnelers', 'tunnelers'],
+    stats: { attackDamage: 35, maxHp: 550 },
+    // 폭정/응징 - 둘 다 체력에 비례해 매 순간 바뀌는 동적 공격력 보너스라
+    // recomputeItemStats()(구매/판매 시에만 재계산)가 아니라 itemSystemTick()
+    // (매 프레임)에서 ctrl.itemDynamicBonusAD를 다시 계산한다.
+    tyrannyPassive: { bonusHpToAdPercent: 0.025 },
+    // 응징 - 잃은 체력 비율에 선형 비례해 공격력 최대 12%까지 증가, 체력
+    // 30% 지점에서 이미 최대치에 도달(그 아래로는 더 늘지 않음 - 원문
+    // "체력이 30% 아래일 경우 최대 응징 추가 효과가 적용됩니다").
+    vengeancePassive: { maxAdPercent: 0.12, maxAtHpPercent: 0.30 },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -294,6 +488,8 @@ const ITEM_ORDER = [
   'boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes',
   'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed',
   'executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons',
+  'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard',
+  'trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'muramana', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -301,5 +497,10 @@ const ITEM_CATEGORIES = [
   { id: 'consumable', nameKo: '소모품', items: ['healthPotion', 'refillablePotion', 'controlWard', 'elixirOfIron', 'elixirOfSorcery', 'elixirOfWrath'] }, // 투명 와드(트린켓)는 상점에서 사는 게 아니라 기본 장착 - 아래 트린켓 슬롯에 표시
   { id: 'basic', nameKo: '기본 아이템', items: ['pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak', 'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod', 'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword'] },
   { id: 'boots', nameKo: '신발', items: ['boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes', 'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed'] },
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons'] },
+  // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
+  // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
+  // 하나에서 같이 보여준다.
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard'] },
+  // 무라마나는 마나무네가 변신해서만 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail'] },
 ];

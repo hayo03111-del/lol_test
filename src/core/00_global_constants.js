@@ -421,10 +421,14 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     if (bonusArmorIgnorePercent > 0 && target) { const baseArmor = target.baseArmor ?? target.stats?.baseArmor ?? armor; const bonusArmor = Math.max(0, armor - baseArmor); armor = baseArmor + bonusArmor * (1 - Math.min(1, bonusArmorIgnorePercent)); }
     // 기획안 8절 ARMOR_SHRED(예: 가렌 E 6회 피격 시 방어력 25% 감소) 반영.
     if (typeof getArmorShredPercent === 'function') armor *= (1 - getArmorShredPercent(target));
+    // 아이템 패시브(톱날 단검 - 고정 물리 관통력 10) - 마법사의 신발(고정
+    // 마법 관통력)과 동일한 원칙으로 퍼센트 관통보다 먼저 적용한다.
+    const atkP = source || (typeof controller !== 'undefined' ? controller : null);
+    const flatArmorPen = (atkP && atkP.itemBonusArmorPenFlat) || 0;
+    armor = Math.max(0, armor - flatArmorPen);
     armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등
     // 아이템 패시브(최후의 속삭임 - 방어구 관통력 18%) - 마법 관통력(위
     // MAGICAL 분기)과 동일한 이유로 공격자를 source||controller로 찾는다.
-    const atkP = source || (typeof controller !== 'undefined' ? controller : null);
     if (atkP && atkP.itemBonusArmorPenMultiplier < 1) armor *= atkP.itemBonusArmorPenMultiplier;
     dmg *= 100 / (100 + Math.max(0, armor));
   } else if (damageType === DAMAGE_TYPE.MAGICAL) {
@@ -445,7 +449,17 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     dmg *= 1 - getMagicDamageReductionPercent(target);
   }
   // TRUE: 방어 수치를 그대로 무시
-  return Math.max(0, dmg);
+  dmg = Math.max(0, dmg);
+  // 아이템 패시브(쇼진의창 "집중된 의지" - 스택당 피해량 증폭) - 실제
+  // LoL처럼 모든 피해 계산이 끝난 뒤 최종 피해에 곱하는 증폭으로 적용한다.
+  // 원문은 "챔피언 스킬과 기본 지속 효과 피해량"만 증폭한다고 돼 있지만,
+  // 이 프로젝트는 "이번 피해가 스킬인지 평타인지" 구분하는 공용 플래그가
+  // 없다(여신의 눈물/운명의 재/억겁의 카탈리스트 때와 동일한 한계) - 그
+  // 아이템들과 같은 원칙으로 공격자가 입히는 피해 전체(평타+스킬)에
+  // 근사 적용한다(명시적 근사 - README 참고).
+  const ampSource = source || (typeof controller !== 'undefined' ? controller : null);
+  if (ampSource && ampSource.itemSpellDamageAmpPercent > 0) dmg *= (1 + ampSource.itemSpellDamageAmpPercent);
+  return dmg;
 }
 
 // 데미지 적용 공통 진입점: CharacterController(플레이어)든 더미든 동일하게

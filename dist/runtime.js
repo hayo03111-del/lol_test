@@ -428,10 +428,14 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     if (bonusArmorIgnorePercent > 0 && target) { const baseArmor = target.baseArmor ?? target.stats?.baseArmor ?? armor; const bonusArmor = Math.max(0, armor - baseArmor); armor = baseArmor + bonusArmor * (1 - Math.min(1, bonusArmorIgnorePercent)); }
     // 기획안 8절 ARMOR_SHRED(예: 가렌 E 6회 피격 시 방어력 25% 감소) 반영.
     if (typeof getArmorShredPercent === 'function') armor *= (1 - getArmorShredPercent(target));
+    // 아이템 패시브(톱날 단검 - 고정 물리 관통력 10) - 마법사의 신발(고정
+    // 마법 관통력)과 동일한 원칙으로 퍼센트 관통보다 먼저 적용한다.
+    const atkP = source || (typeof controller !== 'undefined' ? controller : null);
+    const flatArmorPen = (atkP && atkP.itemBonusArmorPenFlat) || 0;
+    armor = Math.max(0, armor - flatArmorPen);
     armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등
     // 아이템 패시브(최후의 속삭임 - 방어구 관통력 18%) - 마법 관통력(위
     // MAGICAL 분기)과 동일한 이유로 공격자를 source||controller로 찾는다.
-    const atkP = source || (typeof controller !== 'undefined' ? controller : null);
     if (atkP && atkP.itemBonusArmorPenMultiplier < 1) armor *= atkP.itemBonusArmorPenMultiplier;
     dmg *= 100 / (100 + Math.max(0, armor));
   } else if (damageType === DAMAGE_TYPE.MAGICAL) {
@@ -452,7 +456,17 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     dmg *= 1 - getMagicDamageReductionPercent(target);
   }
   // TRUE: 방어 수치를 그대로 무시
-  return Math.max(0, dmg);
+  dmg = Math.max(0, dmg);
+  // 아이템 패시브(쇼진의창 "집중된 의지" - 스택당 피해량 증폭) - 실제
+  // LoL처럼 모든 피해 계산이 끝난 뒤 최종 피해에 곱하는 증폭으로 적용한다.
+  // 원문은 "챔피언 스킬과 기본 지속 효과 피해량"만 증폭한다고 돼 있지만,
+  // 이 프로젝트는 "이번 피해가 스킬인지 평타인지" 구분하는 공용 플래그가
+  // 없다(여신의 눈물/운명의 재/억겁의 카탈리스트 때와 동일한 한계) - 그
+  // 아이템들과 같은 원칙으로 공격자가 입히는 피해 전체(평타+스킬)에
+  // 근사 적용한다(명시적 근사 - README 참고).
+  const ampSource = source || (typeof controller !== 'undefined' ? controller : null);
+  if (ampSource && ampSource.itemSpellDamageAmpPercent > 0) dmg *= (1 + ampSource.itemSpellDamageAmpPercent);
+  return dmg;
 }
 
 // 데미지 적용 공통 진입점: CharacterController(플레이어)든 더미든 동일하게
@@ -703,6 +717,18 @@ function getMoveSpeedBuffPercent(target) {
     }
     v = Math.max(v, val);
   }
+  return v;
+}
+// 전설급 아이템(삼위일체 "가속"/칠흑의양날도끼 "열정" 등)의 "기본 공격/피해를
+// 입히면 N초 동안 이동 속도 +X(퍼센트가 아니라 LoL 원본 고정 수치)" 효과용.
+// MS_BUFF(퍼센트)와 완전히 별개 타입이다 - stats.flatMoveSpeedBonus는
+// character_controller.js에 이미 선언만 돼 있고 지금까지 아무도 채워 넣지
+// 않던 필드였다(getFinalMoveSpeed()는 처음부터 이 필드를 읽고 있었다).
+function getFlatMoveSpeedBuff(target) {
+  if (!target || !target.statusEffects) return 0;
+  const now = performance.now();
+  let v = 0;
+  for (const e of target.statusEffects) if (e.type === 'MS_BUFF_FLAT' && e.expiresAt > now) v = Math.max(v, e.value);
   return v;
 }
 // 바루스 E(화살비) - "고통스러운 상처"(자가 회복/재생 약화). 범용 상태이상
@@ -2404,6 +2430,200 @@ const ITEM_DATA = {
     // 이 서브 효과는 그 4개 챔피언에서는 작동하지 않는다(README에 명시).
     manaSpentToHealPercent: 0.25, manaSpentHealCapPerSec: 20,
   },
+
+  // [전설급 아이템] 2차분 - 삼위일체~지배자의 피갑옷(사용자가 올려준 원본
+  // 텍스트 625~758줄). 복잡한 적중 시 효과가 많아 하나씩 신중하게 구현한다.
+  // 공용 엔지니어링 메모(item_system.js 상단 참고):
+  // - "스킬로 피해를 입히면" 계열은 전부 기존 여신의 눈물/운명의 재와 동일한
+  //   이유(스킬/평타 구분 플래그가 없음)로 "평타+스킬 피해 전체"에 근사한다.
+  // - 기본 공격 전용 효과(안개의 검/쪼기/충격/선장/라이트쉴드 타격 등)는
+  //   itemOnBasicAttackHit()(광휘의 검/티아맷이 이미 쓰던 공용 훅)에서
+  //   처리한다 - 이 훅은 applyDamage()"안"이 아니라 메인 평타의 applyDamage()가
+  //   이미 끝난 "뒤"에 별도로 불리므로, 안에서 다시 applyDamage()를 불러도
+  //   무한 재귀가 생기지 않는다(기존 광휘의 검/티아맷과 동일한 안전 지점).
+  trinityForce: {
+    id: 'trinityForce', nameKo: '삼위일체', cost: 3333, recipe: ['sheen', 'devourerAxe', 'phageAxe'],
+    stats: { attackDamage: 36, attackSpeedPercent: 0.30, maxHp: 333, abilityHaste: 15 },
+    // 주문 검(기존 광휘의 검과 동일한 메커니즘, 배율만 100%->200%) - 광휘의
+    // 검을 하위템으로 먹었으니 spellbladePassive를 그대로 재사용하되 배율만
+    // 덮어쓴다(item_system.js의 itemOnBasicAttackHit()이 이 필드를 읽는다).
+    spellbladePassive: { procCooldownSec: 1.5, bonusAdPercent: 2.0 },
+    // 가속 - 유닛(챔피언/더미/미니언/구조물 전부, 원문에 제한이 없음) 기본
+    // 공격 시 2초간 이동속도 +20(퍼센트가 아니라 고정 수치 - MS_BUFF_FLAT).
+    onHitMoveSpeedFlatPassive: { amount: 20, durationSec: 2.0 },
+  },
+  // 탐식의 망치/온기가 필요한 자의 도끼 - 삼위일체의 재료지만, 원문에
+  // 자기 자신의 독자적인 가격/스탯/패시브가 전부 있는 "에픽" 등급
+  // 아이템이다(실제 LoL처럼 조합 재료도 그 자체로 구매 가능 - 숨기면
+  // 조합 시스템이 영영 발동하지 못한다). 탐식의 망치 "분노"는 삼위일체의
+  // "가속"과 완전히 동일한 수치라 같은 필드(onHitMoveSpeedFlatPassive)를 재사용한다.
+  devourerAxe: {
+    id: 'devourerAxe', nameKo: '탐식의 망치', cost: 1100, recipe: ['rubyCrystal', 'longSword'],
+    stats: { attackDamage: 15, maxHp: 200 },
+    onHitMoveSpeedFlatPassive: { amount: 20, durationSec: 2.0 },
+  },
+  // 온기가 필요한 자의 도끼 - 원문에 고유 패시브 설명이 없다(스탯 두 줄뿐).
+  phageAxe: { id: 'phageAxe', nameKo: '온기가 필요한 자의 도끼', cost: 1200, recipe: ['longSword', 'dagger', 'longSword'], stats: { attackDamage: 20, attackSpeedPercent: 0.20 } },
+
+  bladeOfTheRuinedKing: {
+    id: 'bladeOfTheRuinedKing', nameKo: '몰락한 왕의 검', cost: 3200, recipe: ['vampiricScepter', 'recurveBow', 'pickaxe'],
+    stats: { attackDamage: 40, attackSpeedPercent: 0.25 },
+    physicalVampPercent: 0.10,
+    // 안개의 검 - 기본 공격 시 "적 현재 체력"의 근접9%|원거리6%를 추가
+    // 물리 피해로. 미니언/정글 몬스터 대상은 최대 100으로 캡(원문).
+    mistsEdgePassive: { meleePercentCurrentHp: 0.09, rangedPercentCurrentHp: 0.06, nonChampionCap: 100 },
+    // 할퀴는 그림자 - 챔피언에게 "3회" 기본 공격을 가하면 1초간 30% 둔화
+    // (재사용대기시간 15초 - 챔피언에게만 적용, 원문이 챔피언으로 한정).
+    scurryingStrikePassive: { hitsNeeded: 3, slowPercent: 0.30, slowDurationSec: 1.0, icdSec: 15 },
+  },
+  // 곡궁("독침": 기본 공격 시 15의 물리 피해 적중 시 효과) - 몰락한 왕의
+  // 검/마법사의 최후 둘 다의 재료이면서 그 자체로도 완결된 에픽 아이템.
+  recurveBow: { id: 'recurveBow', nameKo: '곡궁', cost: 700, recipe: ['dagger'], stats: { attackSpeedPercent: 0.15 }, onHitFlatPhysicalPassive: 15 },
+
+  // 마법사의 최후 - 원문에 공격력/주문력이 전혀 없다(공격속도/마저/강인함 +
+  // 온히트 고정 마법피해 뿐) - 수치를 지어내지 않고 그대로 비워둔다.
+  witsEnd: {
+    id: 'witsEnd', nameKo: '마법사의 최후', cost: 2800, recipe: ['recurveBow', 'negatronCloak', 'recurveBow'],
+    stats: { attackSpeedPercent: 0.50, magicResist: 45 },
+    tenacityPercent: 0.20,
+    onHitFlatMagicDamage: 45,
+  },
+
+  eclipse: {
+    id: 'eclipse', nameKo: '월식', cost: 2900, recipe: ['caulfieldsWarhammer', 'pickaxe', 'longSword'],
+    stats: { attackDamage: 60, abilityHaste: 15 },
+    // 늘 떠오르는 달 - 2초 내 "별개의" 기본 공격 또는 스킬로 같은 챔피언을
+    // 2회 맞히면(icd 6초) 최대 체력 비례 추가 피해 + 2초 보호막(추가 공격력 비례).
+    everRisingMoonPassive: {
+      windowSec: 2.0, icdSec: 6.0,
+      meleeMaxHpPercent: 0.08, rangedMaxHpPercent: 0.05,
+      meleeShieldBase: 150, meleeShieldBonusAdPercent: 0.40,
+      rangedShieldBase: 75, rangedShieldBonusAdPercent: 0.20,
+      shieldDurationSec: 2.0,
+    },
+  },
+  serratedDirk: { id: 'serratedDirk', nameKo: '톱날 단검', cost: 1000, recipe: ['longSword'], stats: { attackDamage: 20 }, armorPenFlat: 10 },
+
+  // 마나무네 - "360의 최대 마나에 도달하면 무라마나로 변합니다"는 아래
+  // muramana 완제품과 거의 동일한 스탯을 갖되 "충격"(온히트/스킬 적중 추가
+  // 물리 피해)이 아직 없는 전 단계다. 조합 시스템(recipe)과는 별개로,
+  // 아이템 하나가 "자기 자신을 다른 완제품으로 바꾸는" 변신 메커니즘은
+  // buildOrBuyItem()의 하위템 소모 방식과 다르므로 item_system.js에
+  // 전용 함수(_itemTickManamuneTransform)로 처리한다.
+  manamune: {
+    id: 'manamune', nameKo: '마나무네', cost: 2900, recipe: ['tearOfGoddess', 'caulfieldsWarhammer', 'longSword'],
+    stats: { attackDamage: 35, mana: 500, abilityHaste: 15 },
+    aweBonusAdPercentOfMana: 0.02,
+    manaCirculationPassive: { maxManaPerHit: 3, maxManaPerChampionHit: 6, maxManaCap: 360, maxCharges: 4, rechargeSec: 8 },
+    transformsInto: 'muramana',
+  },
+  muramana: {
+    id: 'muramana', nameKo: '무라마나', cost: 0, hiddenFromShop: true, // 마나무네가 변신해서만 얻는다(직접 구매 불가)
+    stats: { attackDamage: 35, mana: 1000, abilityHaste: 15 },
+    aweBonusAdPercentOfMana: 0.02,
+    // 충격 - 챔피언 기본 공격 시 마나의 1.2% 추가 물리(적중 시 효과),
+    // 챔피언 대상 스킬 피해 시 근접 마나4%｜원거리 마나3% 추가 물리.
+    shockPassive: { onHitManaPercent: 0.012, onAbilityHitMeleeManaPercent: 0.04, onAbilityHitRangedManaPercent: 0.03 },
+  },
+
+  maw: {
+    id: 'maw', nameKo: '멜모셔스의 아귀', cost: 3100, recipe: ['spellbinder', 'caulfieldsWarhammer'],
+    stats: { attackDamage: 60, magicResist: 40, abilityHaste: 15 },
+    // 생명선 - 마법 피해로 체력이 30% 밑으로 떨어질 때 2.5초간 보호막
+    // (근접200+추가AD150%｜원거리150+추가AD112.5%), 재사용대기시간 90초.
+    // 발동하면 전투가 끝날 때까지(마지막 전투 행동 후 N초 - 이 프로젝트에
+    // "전투 이탈" 판정이 따로 없어 생명선 보호막과 같은 길이로 근사) 모든
+    // 피해 흡혈 10%를 얻는다.
+    lifelinePassive: {
+      hpThresholdPercent: 0.30, icdSec: 90, shieldDurationSec: 2.5,
+      meleeShieldBase: 200, meleeShieldBonusAdPercent: 1.50,
+      rangedShieldBase: 150, rangedShieldBonusAdPercent: 1.125,
+      omnivampPercentAfterTrigger: 0.10, omnivampDurationSec: 2.5,
+    },
+  },
+  // 주문포식자 - 원문에 레벨 비례 보호막(근접110~280｜원거리83~210)을 주는
+  // 자체 "생명선"이 있지만, 멜모셔스의 아귀가 이미 같은 이름의 상위
+  // 효과(추가 공격력 비례)를 갖고 있어 사실상 중복이고, 레벨 보간까지
+  // 구현하면 이번 12종 범위를 벗어난다 - 주문포식자 자체의 생명선은
+  // 생략하고 스탯(공격력/마법저항력)만 정확히 반영한다(명시적 범위 한계).
+  spellbinder: { id: 'spellbinder', nameKo: '주문포식자', cost: 1300, recipe: ['longSword', 'longSword', 'negatronCloak'], stats: { attackDamage: 25, magicResist: 25 } },
+
+  shojinSpear: {
+    id: 'shojinSpear', nameKo: '쇼진의창', cost: 3100, recipe: ['pickaxe', 'tunnelers', 'rubyCrystal'],
+    stats: { attackDamage: 45, maxHp: 450, abilityHaste: 25 }, // "드래곤의 힘"(기본 스킬 가속 +25)은 abilityHaste에 합산
+    // 집중된 의지 - 스킬로 피해를 입힐 때마다 스택(최대 4, 스택당 3%,
+    // 6초 지속·재적중 시 갱신) - 입히는 모든 피해에 곱연산으로 적용된다
+    // (calculateDamage() 참고, ctrl.itemSpellDamageAmpPercent 필드 재사용).
+    focusedWillPassive: { percentPerStack: 0.03, maxStacks: 4, durationSec: 6.0 },
+  },
+  caulfieldsWarhammer: { id: 'caulfieldsWarhammer', nameKo: '콜필드의 전투망치', cost: 1050, recipe: ['longSword', 'glowingMote', 'longSword'], stats: { attackDamage: 20, abilityHaste: 10 } },
+
+  hullbreaker: {
+    id: 'hullbreaker', nameKo: '선체파괴자', cost: 3000, recipe: ['tunnelers', 'ascendedPauldrons', 'pickaxe'],
+    stats: { attackDamage: 40, maxHp: 500, moveSpeedPercent: 0.04 },
+    // 선장 - 챔피언/에픽 몬스터 대상 5번째 기본 공격마다 추가 물리 피해.
+    // 구조물 대상은 배율이 더 커진다. "승선 부대"(주변 공성/슈퍼 미니언
+    // 방어력·마법저항력 버프)는 미니언에 임시 버프를 안전하게 걸었다가
+    // 범위를 벗어나면 정확히 되돌리는 틱 구조가 필요해 이번 범위에서는
+    // 생략한다(핵심 패시브인 "선장"만 구현 - 명시적 한계).
+    captainPassive: {
+      hitsNeeded: 5,
+      meleePercentBaseAd: 1.20, meleePercentMaxHp: 0.05,
+      rangedPercentBaseAd: 0.84, rangedPercentMaxHp: 0.035,
+      meleeStructurePercentBaseAd: 3.00, meleeStructurePercentMaxHp: 0.10,
+      rangedStructurePercentBaseAd: 2.10, rangedStructurePercentMaxHp: 0.07,
+    },
+  },
+  tunnelers: { id: 'tunnelers', nameKo: '땅굴 채굴기', cost: 1150, recipe: ['longSword', 'rubyCrystal'], stats: { attackDamage: 15, maxHp: 250 } },
+  ascendedPauldrons: { id: 'ascendedPauldrons', nameKo: '비상의 월갑', cost: 800, recipe: ['rubyCrystal'], stats: { maxHp: 200, moveSpeedPercent: 0.04 } },
+
+  blackCleaver: {
+    id: 'blackCleaver', nameKo: '칠흑의양날도끼', cost: 3000, recipe: ['devourerAxe', 'kircheisShard', 'pickaxe'],
+    stats: { attackDamage: 45, maxHp: 400, abilityHaste: 20 },
+    // 깎아내기 - 챔피언에게 물리 피해를 입힐 때마다 방어력 감소 스택(최대
+    // 5, 스택당 6%, 6초 지속) - 기존 ARMOR_SHRED 상태이상 타입을 재사용한다
+    // (가렌 E/레넥톤 E가 이미 쓰던 것과 동일한 타입, getArmorShredPercent()가
+    // 자동으로 최신값을 읽는다).
+    carvePassive: { shredPerStack: 0.06, maxStacks: 5, durationSec: 6.0 },
+    // 열정 - 물리 피해를 입히면(대상 불문) 2초간 이동속도 +20(근접)/+10(원거리) -
+    // MS_BUFF_FLAT 재사용.
+    ragePassive: { meleeAmount: 20, rangedAmount: 10, durationSec: 2.0 },
+  },
+  kircheisShard: { id: 'kircheisShard', nameKo: '점화석', cost: 800, recipe: ['rubyCrystal', 'glowingMote'], stats: { maxHp: 200, abilityHaste: 10 } },
+
+  divineSunderer: {
+    id: 'divineSunderer', nameKo: '갈라진하늘', cost: 3100, recipe: ['tunnelers', 'caulfieldsWarhammer'],
+    stats: { attackDamage: 45, maxHp: 450, abilityHaste: 10 },
+    // 라이트쉴드 타격 - 대상(챔피언)별 재사용대기시간 10초. "치명타 적용,
+    // 일반 치명타 피해량의 80%" 부분은 이 프로젝트의 치명타 배율 시스템과
+    // 엮으면 챔피언마다 다른 critMultiplier를 전부 따라가야 해서 범위가
+    // 과도하게 커진다 - 대신 설명된 수치 그대로(근접 기본공격력90%｜원거리
+    // 기본공격력45% + 잃은 체력 4%)의 고정 보너스 물리 피해 + 그만큼 회복으로
+    // 단순화했다(명시적 근사 - "치명타 적용" 연출만 생략, 수치는 원문 그대로).
+    lightshieldStrikePassive: {
+      icdPerTargetSec: 10,
+      meleeBaseAdPercent: 0.90, rangedBaseAdPercent: 0.45,
+      missingHpHealPercent: 0.04,
+    },
+  },
+
+  // 끝없는 갈망 - 원문에 고유 패시브 설명이 전혀 없다(공격력 65 한 줄뿐).
+  // 수치를 지어내지 않는다는 원칙에 따라 패시브를 추가하지 않고 순수
+  // 스탯 아이템 그대로 둔다.
+  eternalThirst: { id: 'eternalThirst', nameKo: '끝없는 갈망', cost: 3100, recipe: ['caulfieldsWarhammer', 'pickaxe', 'longSword'], stats: { attackDamage: 65 } },
+
+  overlordsBloodmail: {
+    id: 'overlordsBloodmail', nameKo: '지배자의 피갑옷', cost: 3300, recipe: ['tunnelers', 'tunnelers'],
+    stats: { attackDamage: 35, maxHp: 550 },
+    // 폭정/응징 - 둘 다 체력에 비례해 매 순간 바뀌는 동적 공격력 보너스라
+    // recomputeItemStats()(구매/판매 시에만 재계산)가 아니라 itemSystemTick()
+    // (매 프레임)에서 ctrl.itemDynamicBonusAD를 다시 계산한다.
+    tyrannyPassive: { bonusHpToAdPercent: 0.025 },
+    // 응징 - 잃은 체력 비율에 선형 비례해 공격력 최대 12%까지 증가, 체력
+    // 30% 지점에서 이미 최대치에 도달(그 아래로는 더 늘지 않음 - 원문
+    // "체력이 30% 아래일 경우 최대 응징 추가 효과가 적용됩니다").
+    vengeancePassive: { maxAdPercent: 0.12, maxAtHpPercent: 0.30 },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -2415,6 +2635,8 @@ const ITEM_ORDER = [
   'boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes',
   'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed',
   'executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons',
+  'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard',
+  'trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'muramana', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -2422,7 +2644,12 @@ const ITEM_CATEGORIES = [
   { id: 'consumable', nameKo: '소모품', items: ['healthPotion', 'refillablePotion', 'controlWard', 'elixirOfIron', 'elixirOfSorcery', 'elixirOfWrath'] }, // 투명 와드(트린켓)는 상점에서 사는 게 아니라 기본 장착 - 아래 트린켓 슬롯에 표시
   { id: 'basic', nameKo: '기본 아이템', items: ['pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak', 'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod', 'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword'] },
   { id: 'boots', nameKo: '신발', items: ['boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes', 'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed'] },
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons'] },
+  // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
+  // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
+  // 하나에서 같이 보여준다.
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard'] },
+  // 무라마나는 마나무네가 변신해서만 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail'] },
 ];
 
 /* ===== src/animation/animation_role_resolver.js ===== */
@@ -7348,6 +7575,7 @@ class CharacterController {
     this.itemBonusCritChance = 0; this.itemBonusAbilityHaste = 0;
     this.itemBonusHpRegenPercent = 0; this.itemBonusMpRegenPercent = 0;
     this.itemBonusMoveSpeedLol = 0; this.itemBonusMagicPenFlat = 0;
+    this.itemBonusMoveSpeedPercent = 0; this.itemBonusArmorPenFlat = 0;
     this.itemSlowResistPercent = 0; this.itemTenacityPercent = 0; this._itemSlaughterStacks = 0;
     // 약간 신비한 신발 "조합해도(신발을 갈아 신어도) 이동속도 상승 유지" -
     // 영구 플래그(한번 세팅되면 챔피언을 바꾸거나 신발을 몇 번을 갈아
@@ -7369,6 +7597,17 @@ class CharacterController {
     this.itemGrievousOnHitPercent = 0; this.itemGrievousOnHitDurationSec = 0;
     this.itemPhysicalVampPercent = 0; this.itemBonusArmorPenMultiplier = 1; this.itemManaOnDamagePercent = 0;
     this._itemSheenArmed = false; this._itemSheenReadyAt = 0; this._itemActiveCooldownUntil = {};
+    this._itemActiveElixir = null; // 영약(강철/마법/분노) 상호 배타적 상태
+    // 전설급 아이템 2차분(삼위일체~지배자의 피갑옷) 전용 상태.
+    // itemSpellDamageAmpPercent(쇼진의창 "집중된 의지")는 calculateDamage()
+    // 맨 끝에서 최종 피해에 곱해진다. _itemShieldExpiresAt(월식/멜모셔스의
+    // 아귀의 보호막)은 아이템이 건 shield가 시간이 지나면 자연 소멸하게
+    // 한다(맞아서 깎이는 것과 별개). itemDynamicBonusAD(지배자의 피갑옷
+    // "폭정"/"응징")는 체력 비율에 따라 매 프레임 바뀌는 값이라
+    // recomputeItemStats()가 아니라 itemSystemTick()에서 매 프레임 갱신한다.
+    this.itemSpellDamageAmpPercent = 0;
+    this._itemShieldExpiresAt = 0;
+    this.itemDynamicBonusAD = 0;
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -7549,7 +7788,7 @@ class CharacterController {
       this.maxHp = base.maxHp + (this.bonusMaxHp || 0) + (this.itemBonusMaxHp || 0);
       this.maxMp = base.maxMp + (this.itemBonusMana || 0);
       this.hpRegen = base.hpRegen; this.mpRegen = base.mpRegen;
-      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0);
+      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0) + (this.itemDynamicBonusAD || 0);
       this.stats.abilityPower = (this.itemBonusAP || 0);
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
       this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0);
@@ -11330,6 +11569,10 @@ class CharacterController {
     let reduction = getDamageReductionPercent(this);
     if (damageType === DAMAGE_TYPE.MAGICAL) reduction = Math.max(reduction, getMagicDamageReductionPercent(this));
     let remaining = Math.max(0, dmg) * (1 - Math.min(1, Math.max(0, reduction))); // 일반 피해감소 + 닐라 W 마법피해감소
+    // 아이템 패시브(멜모셔스의 아귀 - 생명선) - 이 피해로 체력이 30% 밑으로
+    // "떨어질" 보호막을 먼저 걸어서, 바로 아래 shield 흡수 로직이 이번
+    // 피해도 함께 받아낼 수 있게 한다(실제 LoL도 피해가 적용되기 직전에 발동).
+    if (typeof itemOnTakeDamage === 'function') itemOnTakeDamage(this, remaining, damageType);
     // 버그 수정(세트 패시브 문서 4절 "실제로 HP에 적용된 피해를 기준으로
     // 한다"): 예전에는 Shield로 흡수되기 전의 remaining을 그대로 투지
     // 계산에 넘겨서, Shield가 300 있는 상태에서 500 피해를 받아 실제로는
@@ -11630,7 +11873,8 @@ class CharacterController {
       const movingTowardEnemy = this.isChasing && this.currentTarget && this.currentTarget.hp > 0;
       if (!movingTowardEnemy) msBuff = 0;
     }
-    this.stats.percentMoveSpeedBonus = msBuff;
+    this.stats.percentMoveSpeedBonus = msBuff + (this.itemBonusMoveSpeedPercent || 0);
+    this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? getFlatMoveSpeedBuff(this) : 0;
     this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
     this._garenPassiveTick(dt);
@@ -21457,6 +21701,14 @@ function recomputeItemStats(ctrl) {
   // 값이지만, 범용 필드로 둔다(나중에 다른 아이템도 같은 스탯을 가질 수
   // 있으므로 "신발 전용"으로 하드코딩하지 않는다).
   ctrl.itemBonusMoveSpeedLol = 0; ctrl.itemBonusMagicPenFlat = 0;
+  // 전설급 2차분(비상의 월갑/선체파괴자 등)부터 "이동속도 4%"처럼 LoL
+  // 원본 고정 수치가 아니라 퍼센트로 주는 이동속도 스탯이 처음 등장한다 -
+  // itemBonusMoveSpeedLol(고정)과 완전히 별개 필드로 둔다.
+  ctrl.itemBonusMoveSpeedPercent = 0;
+  // 톱날 단검(물리 관통력 10) - 마법사의 신발(고정 마법 관통력)과 동일한
+  // 원칙의 고정 방어구 관통력. 최후의 속삭임(방어구 관통력 %)과는 완전히
+  // 별개 필드다(calculateDamage()에서 고정 관통을 퍼센트 관통보다 먼저 적용).
+  ctrl.itemBonusArmorPenFlat = 0;
   ctrl.itemSlowResistPercent = 0; ctrl.itemTenacityPercent = 0;
   // 서사급 아이템 1차분 - 처형인의 대검(그리버스)/흡혈의 낫(물리 흡혈)/
   // 최후의 속삭임(방어구 관통)/억겁의 카탈리스트(피해 시 마나 회복).
@@ -21481,6 +21733,7 @@ function recomputeItemStats(ctrl) {
     ctrl.itemBonusHpRegenPercent += s.hpRegenPercent || 0;
     ctrl.itemBonusMpRegenPercent += s.mpRegenPercent || 0;
     ctrl.itemBonusMoveSpeedLol += s.moveSpeed || 0;
+    ctrl.itemBonusMoveSpeedPercent += s.moveSpeedPercent || 0;
     ctrl.itemBonusMagicPenFlat += s.magicPenFlat || 0;
     ctrl.itemAllDamageVampPercent += item.allDamageVampPercent || 0;
     ctrl.itemMinionBonusDamage += item.minionBonusDamage || 0;
@@ -21497,6 +21750,7 @@ function recomputeItemStats(ctrl) {
     ctrl.itemPhysicalVampPercent += item.physicalVampPercent || 0;
     ctrl.itemManaOnDamagePercent += item.manaOnDamagePercent || 0;
     if (item.armorPenPercent) ctrl.itemBonusArmorPenMultiplier *= (1 - item.armorPenPercent);
+    ctrl.itemBonusArmorPenFlat += item.armorPenFlat || 0;
     // 암흑의 인장(영광)의 동적 주문력 - 아이템을 들고 있을 때만 적용된다
     // (팔면 중첩 자체는 남아있어도 더 이상 스탯에 반영되지 않는다).
     if (item.gloryPassive) ctrl.itemBonusAP += (ctrl._itemGloryStacks || 0) * item.gloryPassive.apPerStack;
@@ -21521,6 +21775,17 @@ function recomputeItemStats(ctrl) {
     if (eff.abilityPower) ctrl.itemBonusAP += eff.abilityPower;
     if (eff.mpRegenPercent) ctrl.itemBonusMpRegenPercent += eff.mpRegenPercent;
     if (eff.tenacityPercent) ctrl.itemTenacityPercent += eff.tenacityPercent;
+  }
+  // 경탄(마나무네/무라마나) - "마나의 2%만큼 추가 공격력". 최대 마나 자체가
+  // 이 함수가 끝난 뒤 recomputeStats()에서야 계산되므로(순환 의존), 챔피언
+  // 기본 최대 마나(computeChampionStats)를 직접 다시 구해 방금 합산을
+  // 끝낸 itemBonusMana와 더해서 "지금 이 순간의 정확한 총 최대 마나"를
+  // 쓴다(한 프레임 뒤처진 근사가 아니라 항상 정확한 값).
+  const aweSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].aweBonusAdPercentOfMana);
+  if (aweSlot) {
+    const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
+    const totalMaxMp = (baseStats ? baseStats.maxMp : 0) + (ctrl.itemBonusMana || 0);
+    ctrl.itemBonusAD += totalMaxMp * ITEM_DATA[aweSlot.id].aweBonusAdPercentOfMana;
   }
   ctrl.recomputeStats();
 }
@@ -21850,8 +22115,64 @@ function itemSystemTick(ctrl, dt) {
   _itemTickTrinketRecharge(ctrl, dt);
   _itemTickWardExpiry(ctrl, dt);
   if (typeof _itemTickElixirExpiry === 'function') _itemTickElixirExpiry(ctrl);
-  if (!ctrl.items || !ctrl.items.length) return;
   const now = performance.now();
+  // 아이템을 팔아도(인벤토리에서 이미 사라짐) 이미 걸린 보호막/흡혈
+  // 버프는 실제 LoL처럼 원래 지속시간만큼 유지되므로, 인벤토리 유무와
+  // 무관하게 매 프레임 만료만 확인한다(월식/멜모셔스의 아귀가 공용으로 씀).
+  if (ctrl._itemShieldExpiresAt && now >= ctrl._itemShieldExpiresAt) {
+    ctrl.shield = 0;
+    ctrl._itemShieldExpiresAt = 0;
+  }
+  ctrl._itemTempVampPercent = (ctrl._itemMawOmnivampUntil && now < ctrl._itemMawOmnivampUntil)
+    ? ITEM_DATA.maw.lifelinePassive.omnivampPercentAfterTrigger : 0;
+  // 지배자의 피갑옷(폭정/응징) - 체력 비율에 따라 매 순간 바뀌는 동적
+  // 공격력 보너스라 recomputeItemStats()(구매/판매 시에만 재계산)가 아니라
+  // 여기서 매 프레임 다시 계산한다. 소지하지 않으면 0으로 되돌린다.
+  const bloodmailSlot = (ctrl.items || []).find((s) => s.id === 'overlordsBloodmail');
+  if (!bloodmailSlot) {
+    if (ctrl.itemDynamicBonusAD) { ctrl.itemDynamicBonusAD = 0; ctrl.recomputeStats(); }
+  } else {
+    const p1 = ITEM_DATA.overlordsBloodmail.tyrannyPassive;
+    const p2 = ITEM_DATA.overlordsBloodmail.vengeancePassive;
+    const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
+    const tyrannyAD = bonusHp * p1.bonusHpToAdPercent;
+    const maxHp = ctrl.maxHp || 1;
+    const missingPercent = Math.max(0, Math.min(1, 1 - (ctrl.hp || 0) / maxHp));
+    const vengeanceRatio = Math.min(1, missingPercent / (1 - p2.maxAtHpPercent)); // 체력 30%(=missing 70%) 지점에서 1.0 도달
+    const vengeanceAD = (ctrl.stats.attackDamage || 0) * p2.maxAdPercent * vengeanceRatio;
+    const newDynamicAD = tyrannyAD + vengeanceAD;
+    if (Math.abs(newDynamicAD - (ctrl.itemDynamicBonusAD || 0)) > 1e-6) {
+      ctrl.itemDynamicBonusAD = newDynamicAD;
+      ctrl.recomputeStats();
+    }
+  }
+  // 쇼진의창(집중된 의지) - 스택 지속시간이 끝나면 초기화하고, 매 프레임
+  // 현재 스택 수에서 다시 계산한 증폭률을 ctrl.itemSpellDamageAmpPercent에
+  // 써넣는다(calculateDamage()가 이 필드를 읽는다).
+  const shojinSlot = (ctrl.items || []).find((s) => s.id === 'shojinSpear');
+  if (!shojinSlot) {
+    ctrl._itemShojinStacks = 0; ctrl.itemSpellDamageAmpPercent = 0;
+  } else {
+    if (now >= (ctrl._itemShojinExpiresAt || 0)) ctrl._itemShojinStacks = 0;
+    ctrl.itemSpellDamageAmpPercent = (ctrl._itemShojinStacks || 0) * ITEM_DATA.shojinSpear.focusedWillPassive.percentPerStack;
+  }
+  // 마나무네 -> 무라마나 변신("360의 최대 마나에 도달하면") - 조합(recipe)
+  // 소모가 아니라 "자기 자신이 다른 완제품으로 바뀌는" 메커니즘이라
+  // buildOrBuyItem()과 별개로 여기서 직접 처리한다. 골드는 들지 않는다
+  // (완제품 하나가 더 완성된 완제품으로 자연 승급하는 것뿐 - 원문에
+  // 추가 비용 언급이 없음).
+  const manamuneSlot = (ctrl.items || []).find((s) => s.id === 'manamune');
+  if (manamuneSlot) {
+    const p = ITEM_DATA.manamune.manaCirculationPassive;
+    if ((ctrl._itemTearState && ctrl._itemTearState.gained >= p.maxManaCap)) {
+      manamuneSlot.id = 'muramana';
+      ctrl._itemTearState = null; // 무라마나는 더 이상 마나순환 충전이 필요 없는 완제품
+      recomputeItemStats(ctrl);
+      if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+      console.log('[ITEM] 마나무네 -> 무라마나 변신 완료');
+    }
+  }
+  if (!ctrl.items || !ctrl.items.length) return;
   for (const slot of ctrl.items) {
     const item = ITEM_DATA[slot.id];
     if (!item) continue;
@@ -21864,9 +22185,16 @@ function itemSystemTick(ctrl, dt) {
 // 모든 피해 흡혈(도란의 검/활) - applyDamage()/applyDamageToMinion() 양쪽에서
 // 공용으로 호출한다(구조물 피해는 실제 LoL처럼 흡혈이 붙지 않으므로 호출하지 않음).
 function applyItemVamp(source, finalDmg) {
-  if (!source || !(source.itemAllDamageVampPercent > 0) || !(finalDmg > 0)) return;
+  if (!source || !(finalDmg > 0)) return;
+  // 멜모셔스의 아귀(생명선) - 발동 후 일정 시간 모든 피해 흡혈 10% 추가.
+  // 인벤토리 기반 영구 스탯(itemAllDamageVampPercent, recomputeItemStats()가
+  // 채움)과 달리 시간 제한 임시 보너스라 itemSystemTick()이 매 프레임
+  // _itemTempVampPercent에 다시 써넣는다(0 또는 부여량 둘 중 하나로
+  // 덮어쓰기만 하므로 매 프레임 호출해도 누적되지 않는다).
+  const vampPercent = (source.itemAllDamageVampPercent || 0) + (source._itemTempVampPercent || 0);
+  if (!(vampPercent > 0)) return;
   if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
-  source.hp = Math.min(source.maxHp, source.hp + finalDmg * source.itemAllDamageVampPercent);
+  source.hp = Math.min(source.maxHp, source.hp + finalDmg * vampPercent);
 }
 
 // 생명력 흡수(흡혈의 낫) - "모든 피해 흡혈"(위 applyItemVamp)과 달리
@@ -21877,6 +22205,33 @@ function applyItemPhysicalVamp(source, finalDmg, damageType) {
   if (damageType !== DAMAGE_TYPE.PHYSICAL) return;
   if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
   source.hp = Math.min(source.maxHp, source.hp + finalDmg * source.itemPhysicalVampPercent);
+}
+
+// 멜모셔스의 아귀(생명선) - 플레이어 자신이 피해를 "받을" 때 호출되는
+// 훅(character_controller.js의 takeDamage()에서 호출 - 지금까지 아이템
+// 시스템은 전부 "피해를 입힐 때" 훅뿐이었는데, 이건 최초로 "입을 때" 훅이
+// 필요한 아이템이다). 마법 피해로 체력이 30% 밑으로 떨어질 "만큼"의
+// 피해를 받으면(이미 있는 보호막은 먼저 그 피해를 흡수한다고 가정하고
+// 계산) 2.5초간 보호막 + 전투가 끝날 때까지(이 프로젝트엔 "전투 이탈"
+// 판정이 없어 보호막과 같은 길이로 근사) 모든 피해 흡혈 10%.
+function itemOnTakeDamage(ctrl, incomingDamage, damageType) {
+  if (!ctrl || damageType !== DAMAGE_TYPE.MAGICAL) return;
+  const slot = (ctrl.items || []).find((s) => s.id === 'maw');
+  if (!slot) return;
+  const p = ITEM_DATA.maw.lifelinePassive;
+  const now = performance.now();
+  if ((ctrl._itemMawIcdUntil || 0) > now) return;
+  const hpAfter = (ctrl.hp || 0) - Math.max(0, incomingDamage - (ctrl.shield || 0));
+  if (hpAfter >= (ctrl.maxHp || 0) * p.hpThresholdPercent) return; // 30% 밑으로 떨어질 만큼이 아니면 발동 안 함
+  ctrl._itemMawIcdUntil = now + p.icdSec * 1000;
+  const isMelee = _itemIsMelee(ctrl);
+  const shieldBase = isMelee ? p.meleeShieldBase : p.rangedShieldBase;
+  const shieldBonusPercent = isMelee ? p.meleeShieldBonusAdPercent : p.rangedShieldBonusAdPercent;
+  const shieldAmt = shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent;
+  ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
+  ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
+  ctrl._itemMawOmnivampUntil = now + p.omnivampDurationSec * 1000;
+  console.log('[ITEM] 멜모셔스의 아귀 - 생명선 발동');
 }
 
 // 피해 1건을 처리하는 공용 훅 - applyDamage()(챔피언/더미)와
@@ -21906,11 +22261,15 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
     const perSec = target.isMinion ? p.monsterDmgPerSec : p.dmgPerSec;
     applyStatus(target, { id: p.id, type: 'DOT', duration: p.durationSec, totalDamage: perSec * p.durationSec, damageType: DAMAGE_TYPE.MAGICAL, tickInterval: 1.0, source: ctrl });
   }
-  // 여신의 눈물(마나순환) - 챔피언/더미/미니언 대상 피해를 입힐 때마다
-  // 충전 1개를 소모해 최대 마나를 얻는다(챔피언 상대는 2배, 누적 360 한도).
-  const tearSlot = (ctrl.items || []).find((s) => s.id === 'tearOfGoddess');
+  // 마나순환(여신의 눈물/마나무네 공용) - 챔피언/더미/미니언 대상 피해를
+  // 입힐 때마다 충전 1개를 소모해 최대 마나를 얻는다(챔피언 상대는 2배,
+  // 누적 360 한도). 마나무네도 같은 패시브를 가지므로 id를 하드코딩하지
+  // 않고 manaCirculationPassive 필드 보유 여부로 찾는다 - 그래야 여신의
+  // 눈물을 조합해 마나무네가 된 뒤에도(_itemTearState는 ctrl 레벨 상태라
+  // 그대로 이어짐) 충전이 계속 쌓여 360 마나 도달 시 무라마나로 변신할 수 있다.
+  const tearSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].manaCirculationPassive);
   if (tearSlot) {
-    const p = ITEM_DATA.tearOfGoddess.manaCirculationPassive;
+    const p = ITEM_DATA[tearSlot.id].manaCirculationPassive;
     ctrl._itemTearState = ctrl._itemTearState || { charges: p.maxCharges, gained: 0 };
     const st = ctrl._itemTearState;
     if (st.gained < p.maxManaCap && st.charges > 0) {
@@ -21951,6 +22310,46 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
     const eff = ITEM_DATA.elixirOfWrath.elixirEffect;
     if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') {
       ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + finalDmg * eff.championPhysicalVampPercent);
+    }
+  }
+  // 전설급 2차분 - "스킬로 피해를 입히면" 계열(월식/무라마나 충격/쇼진의창)은
+  // 평타 경로에서 이미 호출되는 것과 동일한 공용 함수를 재사용해서 평타+
+  // 스킬 양쪽에서 동작하게 한다(여신의 눈물 때와 동일한 "스킬/평타 구분
+  // 불가" 근사 - item_data.js 주석 참고).
+  _itemEclipseOnHit(ctrl, target);
+  _itemMuramanaShockOnHit(ctrl, target, false);
+  // 쇼진의창(집중된 의지) - 피해를 입힐 때마다 스택(최대 4, 스택당 3%,
+  // 6초 지속·재적중 시 갱신) - 실제 수치 반영은 itemSystemTick()이 매
+  // 프레임 ctrl.itemSpellDamageAmpPercent에 다시 써넣는다(calculateDamage()
+  // 가 매 프레임이 아니라 피해가 발생할 때마다 호출되므로, "스택이 아직
+  // 안 꺼졌는지"는 여기서 매번 갱신해도 안전하다 - 중복 호출 방지 로직
+  // 불필요, 그냥 스택+시간만 갱신).
+  const shojinSlot = (ctrl.items || []).find((s) => s.id === 'shojinSpear');
+  if (shojinSlot) {
+    const p = ITEM_DATA.shojinSpear.focusedWillPassive;
+    const now = performance.now();
+    if (now >= (ctrl._itemShojinExpiresAt || 0)) ctrl._itemShojinStacks = 0;
+    ctrl._itemShojinStacks = Math.min(p.maxStacks, (ctrl._itemShojinStacks || 0) + 1);
+    ctrl._itemShojinExpiresAt = now + p.durationSec * 1000;
+  }
+  // 칠흑의양날도끼 - 깎아내기(챔피언 대상 물리 피해 시 방어력 감소 스택,
+  // 기존 ARMOR_SHRED 상태이상 재사용 - getArmorShredPercent()가 자동으로
+  // 최신값을 읽는다) + 열정(물리 피해를 입히면 대상 불문 자신에게 이동속도
+  // 버프, MS_BUFF_FLAT 재사용).
+  const blackCleaverSlot = (ctrl.items || []).find((s) => s.id === 'blackCleaver');
+  if (blackCleaverSlot && damageType === DAMAGE_TYPE.PHYSICAL) {
+    if (target.isChampion && typeof applyStatus === 'function') {
+      const p = ITEM_DATA.blackCleaver.carvePassive;
+      const now = performance.now();
+      const existing = (target.statusEffects || []).find((e) => e.id === 'itemBlackCleaverShred' && e.expiresAt > now);
+      const prevStacks = existing ? Math.round(existing.value / p.shredPerStack) : 0;
+      const newStacks = Math.min(p.maxStacks, prevStacks + 1);
+      applyStatus(target, { id: 'itemBlackCleaverShred', type: 'ARMOR_SHRED', duration: p.durationSec, value: newStacks * p.shredPerStack, source: ctrl });
+    }
+    if (typeof applyStatus === 'function') {
+      const rp = ITEM_DATA.blackCleaver.ragePassive;
+      const isMelee = _itemIsMelee(ctrl);
+      applyStatus(ctrl, { id: 'itemBlackCleaverRage', type: 'MS_BUFF_FLAT', duration: rp.durationSec, value: isMelee ? rp.meleeAmount : rp.rangedAmount });
     }
   }
 }
@@ -22192,33 +22591,55 @@ function _itemTickElixirExpiry(ctrl) {
    자동으로 동작한다.
    ============================================================ */
 
-// _dispatchCast()에서 호출 - 스킬을 시전하면 광휘의 검(스펠블레이드)을
+// 주문 검(스펠블레이드)을 가진 아이템 - 광휘의 검 또는 삼위일체(삼위일체는
+// 광휘의 검을 하위템으로 먹으므로 실제로는 둘 중 하나만 인벤토리에 있다).
+function _itemSpellbladeSlot(ctrl) {
+  return (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].spellbladePassive);
+}
+// _dispatchCast()에서 호출 - 스킬을 시전하면 주문 검(스펠블레이드)을
 // 무장시킨다(자체 1.5초 쿨다운 - 연속 시전해도 그보다 자주 재무장되지
 // 않는다).
 function itemOnAbilityDispatch(ctrl) {
-  const slot = (ctrl.items || []).find((s) => s.id === 'sheen');
+  const slot = _itemSpellbladeSlot(ctrl);
   if (!slot) return;
-  const p = ITEM_DATA.sheen.spellbladePassive;
+  const p = ITEM_DATA[slot.id].spellbladePassive;
   const now = performance.now();
   if ((ctrl._itemSheenReadyAt || 0) > now) return;
   ctrl._itemSheenReadyAt = now + p.procCooldownSec * 1000;
   ctrl._itemSheenArmed = true;
 }
 
-// _onBasicAttackHit()에서 호출 - 광휘의 검이 무장돼 있으면 소모하며 추가
-// 물리 피해를 입히고, 티아맷을 들고 있으면 매 평타마다 주변 적에게
-// 쪼개기(물리 피해)를 입힌다. 대상 종류를 가리지 않는 applyDamage()를
-// 그대로 써서 미니언/포탑에도 자동으로 맞는 피해로 들어간다.
+// 전설급 아이템들의 "적 챔피언" 식별 키 - Map 기반 중첩/쿨다운 추적에 쓴다
+// (야스오 E의 eTargetCooldowns가 이미 쓰던 것과 동일한 패턴).
+function _itemTargetKey(t) { return (t && (t.id || t.uuid)) || t; }
+// "추가 공격력"(아이템/챔피언 전용 임시 버프로 얻은 AD, 기본 AD 제외) -
+// 이 프로젝트엔 챔피언 기본 AD만 따로 캐시해두는 필드가 없어, 아이템
+// AD(itemBonusAD)와 챔피언 전용 임시 버프(bonusAD) 합으로 근사한다.
+function _itemBonusAD(ctrl) { return (ctrl.itemBonusAD || 0) + (ctrl.bonusAD || 0); }
+function _itemIsMelee(ctrl) { return !!(ctrl.stats && ctrl.stats.attackRange <= 300); }
+function _itemIsStructure(u) { return !!(u && (u.isTurret || u.isInhibitor || u.isNexus)); }
+
+// _onBasicAttackHit()에서 호출 - 광휘의 검/삼위일체가 무장돼 있으면
+// 소모하며 추가 물리 피해를 입히고, 티아맷을 들고 있으면 매 평타마다
+// 주변 적에게 쪼개기(물리 피해)를 입힌다. 대상 종류를 가리지 않는
+// applyDamage()를 그대로 써서 미니언/포탑에도 자동으로 맞는 피해로 들어간다.
+// 전설급 2차분(삼위일체~지배자의 피갑옷) 추가분은 이 함수 끝에 이어붙였다 -
+// 이 훅은 메인 평타의 applyDamage()가 이미 끝난 "뒤"에 불리므로, 안에서
+// 다시 applyDamage()를 호출해도 무한 재귀가 생기지 않는다(기존 광휘의
+// 검/티아맷과 동일한 안전 지점 - item_data.js 상단 주석 참고).
 function itemOnBasicAttackHit(ctrl, target, isCritical) {
   if (ctrl._itemSheenArmed) {
     ctrl._itemSheenArmed = false;
-    const bonus = ITEM_DATA.sheen.spellbladePassive.bonusAdPercent * (ctrl.stats.attackDamage || 0);
-    if (bonus > 0) applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    const spellbladeSlot = _itemSpellbladeSlot(ctrl);
+    if (spellbladeSlot) {
+      const bonus = ITEM_DATA[spellbladeSlot.id].spellbladePassive.bonusAdPercent * (ctrl.stats.attackDamage || 0);
+      if (bonus > 0) applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    }
   }
   const tiamatSlot = (ctrl.items || []).find((s) => s.id === 'tiamat');
-  if (tiamatSlot && !target.isTurret && !target.isInhibitor && !target.isNexus) {
+  if (tiamatSlot && !_itemIsStructure(target)) {
     const p = ITEM_DATA.tiamat.cleavePassive;
-    const isMelee = !!(ctrl.stats && ctrl.stats.attackRange <= 300);
+    const isMelee = _itemIsMelee(ctrl);
     const raw = (isMelee ? p.meleePercent : p.rangedPercent) * (ctrl.stats.attackDamage || 0);
     if (raw > 0 && typeof findEnemiesInRadius === 'function') {
       const hits = findEnemiesInRadius(target.mesh ? target.mesh.position : ctrl.root.position, p.radius);
@@ -22227,6 +22648,159 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
         applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
       }
     }
+  }
+
+  // 가속(삼위일체)/분노(탐식의 망치) - 기본 공격 시 2초간 이동속도
+  // +20(고정 수치) - MS_BUFF_FLAT 재사용. 대상 제한 없음(원문 그대로).
+  const msFlatSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].onHitMoveSpeedFlatPassive);
+  if (msFlatSlot && typeof applyStatus === 'function') {
+    const p = ITEM_DATA[msFlatSlot.id].onHitMoveSpeedFlatPassive;
+    applyStatus(ctrl, { id: 'itemOnHitMsFlat', type: 'MS_BUFF_FLAT', duration: p.durationSec, value: p.amount });
+  }
+  // 곡궁(독침)/마법사의 최후(쪼기) - 기본 공격 시 고정 추가 피해(적중 시 효과).
+  const onHitPhysSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && typeof ITEM_DATA[s.id].onHitFlatPhysicalPassive === 'number');
+  if (onHitPhysSlot && !_itemIsStructure(target)) {
+    applyDamage(target, { rawDamage: ITEM_DATA[onHitPhysSlot.id].onHitFlatPhysicalPassive, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+  }
+  const onHitMagicSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && typeof ITEM_DATA[s.id].onHitFlatMagicDamage === 'number');
+  if (onHitMagicSlot && !_itemIsStructure(target)) {
+    applyDamage(target, { rawDamage: ITEM_DATA[onHitMagicSlot.id].onHitFlatMagicDamage, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+  }
+
+  // 몰락한 왕의 검 - 안개의 검(적 현재 체력 비례 물리 피해, 미니언/정글
+  // 몬스터는 최대 100으로 캡) + 할퀴는 그림자(챔피언 3회 피격 시 둔화,
+  // 효과 자체는 15초 재사용대기시간).
+  const botrkSlot = (ctrl.items || []).find((s) => s.id === 'bladeOfTheRuinedKing');
+  if (botrkSlot && !_itemIsStructure(target)) {
+    const p = ITEM_DATA.bladeOfTheRuinedKing.mistsEdgePassive;
+    const isMelee = _itemIsMelee(ctrl);
+    let raw = (isMelee ? p.meleePercentCurrentHp : p.rangedPercentCurrentHp) * (target.hp || 0);
+    if (!target.isChampion) raw = Math.min(raw, p.nonChampionCap);
+    if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    if (target.isChampion) {
+      const sp = ITEM_DATA.bladeOfTheRuinedKing.scurryingStrikePassive;
+      ctrl._itemBotrkHitCounts = ctrl._itemBotrkHitCounts || new Map();
+      const key = _itemTargetKey(target);
+      const count = (ctrl._itemBotrkHitCounts.get(key) || 0) + 1;
+      if (count >= sp.hitsNeeded) {
+        ctrl._itemBotrkHitCounts.set(key, 0);
+        const now = performance.now();
+        if ((ctrl._itemBotrkSlowIcdUntil || 0) <= now && typeof applyStatus === 'function') {
+          ctrl._itemBotrkSlowIcdUntil = now + sp.icdSec * 1000;
+          applyStatus(target, { id: 'itemBotrkSlow', type: 'SLOW', duration: sp.slowDurationSec, value: sp.slowPercent, source: ctrl });
+        }
+      } else {
+        ctrl._itemBotrkHitCounts.set(key, count);
+      }
+    }
+  }
+
+  // 월식/무라마나 - 기본 공격 경로. 스킬 적중 경로는 itemOnDamageDealt()에서
+  // 같은 공용 함수를 호출한다(아래 _itemEclipseOnHit/_itemMuramanaShockOnHit).
+  _itemEclipseOnHit(ctrl, target);
+  _itemMuramanaShockOnHit(ctrl, target, true);
+
+  // 선체파괴자(선장) - 챔피언/구조물 대상 5번째 기본 공격마다 추가 물리
+  // 피해(구조물 대상은 배율이 더 커진다). 이 프로젝트엔 정글 몬스터가
+  // 없어 "에픽 몬스터" 대상 분기는 실현되지 않는다(명시적 한계).
+  const hullbreakerSlot = (ctrl.items || []).find((s) => s.id === 'hullbreaker');
+  if (hullbreakerSlot) {
+    const p = ITEM_DATA.hullbreaker.captainPassive;
+    ctrl._itemHullbreakerCount = (ctrl._itemHullbreakerCount || 0) + 1;
+    if (ctrl._itemHullbreakerCount >= p.hitsNeeded) {
+      ctrl._itemHullbreakerCount = 0;
+      const isStructure = _itemIsStructure(target);
+      if (target.isChampion || isStructure) {
+        const isMelee = _itemIsMelee(ctrl);
+        const baseAd = ctrl.stats.attackDamage || 0;
+        const maxHp = ctrl.maxHp || 0;
+        const raw = isStructure
+          ? (isMelee ? p.meleeStructurePercentBaseAd * baseAd + p.meleeStructurePercentMaxHp * maxHp : p.rangedStructurePercentBaseAd * baseAd + p.rangedStructurePercentMaxHp * maxHp)
+          : (isMelee ? p.meleePercentBaseAd * baseAd + p.meleePercentMaxHp * maxHp : p.rangedPercentBaseAd * baseAd + p.rangedPercentMaxHp * maxHp);
+        if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      }
+    }
+  }
+
+  // 갈라진하늘(라이트쉴드 타격) - 대상(챔피언)별 10초 재사용대기시간.
+  // "치명타 적용" 연출은 이미 끝난 메인 평타에 되돌려 적용할 수 없어
+  // 생략하고(명시적 근사 - item_data.js 주석 참고), 회복 효과(근접
+  // 기본공격력90%｜원거리45% + 잃은 체력 4%)만 그대로 구현한다.
+  const dsSlot = (ctrl.items || []).find((s) => s.id === 'divineSunderer');
+  if (dsSlot && target.isChampion) {
+    const p = ITEM_DATA.divineSunderer.lightshieldStrikePassive;
+    ctrl._itemDivineSundererIcd = ctrl._itemDivineSundererIcd || new Map();
+    const key = _itemTargetKey(target);
+    const now = performance.now();
+    if ((ctrl._itemDivineSundererIcd.get(key) || 0) <= now) {
+      ctrl._itemDivineSundererIcd.set(key, now + p.icdPerTargetSec * 1000);
+      const isMelee = _itemIsMelee(ctrl);
+      const healPercent = isMelee ? p.meleeBaseAdPercent : p.rangedBaseAdPercent;
+      const missingHp = Math.max(0, (target.maxHp || 0) - (target.hp || 0));
+      const healAmt = healPercent * (ctrl.stats.attackDamage || 0) + missingHp * p.missingHpHealPercent;
+      ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + healAmt);
+    }
+  }
+}
+
+// 월식("늘 떠오르는 달") - 2초 내 "별개의" 기본 공격 또는 스킬로 같은
+// 챔피언을 2회 맞히면(효과 자체 재사용대기시간 6초) 최대 체력 비례
+// 추가 피해 + 추가 공격력 비례 보호막. 기본 공격/스킬 적중 양쪽에서
+// 공용으로 호출되므로(itemOnBasicAttackHit/itemOnDamageDealt), 스킬
+// 경로(itemOnDamageDealt 내부, applyDamage() 재귀 금지 구역)에서도
+// 안전하도록 calculateDamage()로 수치만 뽑아 target.hp를 직접 깎는다.
+function _itemEclipseOnHit(ctrl, target) {
+  if (!target || !target.isChampion) return; // 원문: "한 챔피언에게"
+  const slot = (ctrl.items || []).find((s) => s.id === 'eclipse');
+  if (!slot) return;
+  const p = ITEM_DATA.eclipse.everRisingMoonPassive;
+  const now = performance.now();
+  if ((ctrl._itemEclipseIcdUntil || 0) > now) return;
+  ctrl._itemEclipseHits = ctrl._itemEclipseHits || new Map();
+  const key = _itemTargetKey(target);
+  const rec = ctrl._itemEclipseHits.get(key);
+  if (!rec || now > rec.windowExpiresAt) {
+    ctrl._itemEclipseHits.set(key, { windowExpiresAt: now + p.windowSec * 1000 });
+    return;
+  }
+  ctrl._itemEclipseHits.delete(key);
+  ctrl._itemEclipseIcdUntil = now + p.icdSec * 1000;
+  const isMelee = _itemIsMelee(ctrl);
+  const rawDamage = (isMelee ? p.meleeMaxHpPercent : p.rangedMaxHpPercent) * (target.maxHp || 0);
+  const finalDmg = calculateDamage({ rawDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, target, source: ctrl });
+  const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
+  target.hp = Math.max(minHp, (target.hp || 0) - finalDmg);
+  const shieldBase = isMelee ? p.meleeShieldBase : p.rangedShieldBase;
+  const shieldBonusPercent = isMelee ? p.meleeShieldBonusAdPercent : p.rangedShieldBonusAdPercent;
+  const shieldAmt = shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent;
+  ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
+  ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
+}
+
+// 무라마나("충격") - 기본 공격 시 마나의 1.2% 추가 물리(적중 시 효과),
+// 챔피언 대상 스킬 피해 시 근접 마나4%｜원거리 마나3% 추가 물리.
+// isBasicAttack 플래그로 두 경로를 구분한다(기본 공격 쪽은 대상 제한 없음,
+// 스킬 쪽은 "챔피언에게"로 원문이 한정).
+function _itemMuramanaShockOnHit(ctrl, target, isBasicAttack) {
+  const slot = (ctrl.items || []).find((s) => s.id === 'muramana');
+  if (!slot || !target) return;
+  const p = ITEM_DATA.muramana.shockPassive;
+  if (isBasicAttack) {
+    if (_itemIsStructure(target)) return;
+    const raw = p.onHitManaPercent * (ctrl.maxMp || 0);
+    if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+  } else {
+    if (!target.isChampion) return; // 원문: "챔피언에게"
+    const isMelee = _itemIsMelee(ctrl);
+    const pct = isMelee ? p.onAbilityHitMeleeManaPercent : p.onAbilityHitRangedManaPercent;
+    const rawDamage = pct * (ctrl.maxMp || 0);
+    if (rawDamage <= 0) return;
+    // itemOnDamageDealt() 내부(스킬 피해 경로)에서 호출되므로 applyDamage()를
+    // 다시 부르면 무한 재귀 - calculateDamage()로 수치만 뽑아 직접 차감한다
+    // (마법의 영약 "고정 피해" 훅과 동일한 안전 패턴).
+    const finalDmg = calculateDamage({ rawDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, target, source: ctrl });
+    const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
+    target.hp = Math.max(minHp, (target.hp || 0) - finalDmg);
   }
 }
 
@@ -22273,7 +22847,9 @@ function _itemStatsSummary(item) {
   if (s.hpRegenPercent) parts.push(`기본 체력 재생 +${Math.round(s.hpRegenPercent * 100)}%`);
   if (s.mpRegenPercent) parts.push(`기본 마나 재생 +${Math.round(s.mpRegenPercent * 100)}%`);
   if (s.moveSpeed) parts.push(`이동 속도 +${s.moveSpeed}`);
+  if (s.moveSpeedPercent) parts.push(`이동 속도 +${Math.round(s.moveSpeedPercent * 100)}%`);
   if (s.magicPenFlat) parts.push(`마법 관통력 +${s.magicPenFlat}`);
+  if (item.armorPenFlat) parts.push(`물리 관통력 +${item.armorPenFlat}`);
   if (item.allDamageVampPercent) parts.push(`모든 피해 흡혈 +${(item.allDamageVampPercent * 100).toFixed(1)}%`);
   if (item.minionBonusDamage) parts.push(`도움의 손길(미니언 평타 시 +${item.minionBonusDamage} 피해)`);
   if (item.onHitHeal) parts.push(`적중 시 체력 +${item.onHitHeal} 회복`);
@@ -22318,6 +22894,24 @@ function _itemStatsSummary(item) {
     if (e.onHitFlatDamage) parts.push(`챔피언·포탑에 피해 시 고정 피해 +${e.onHitFlatDamage}(챔피언 대상 재사용대기시간 ${e.onHitChampionIcdSec}초)`);
     if (e.championPhysicalVampPercent) parts.push(`챔피언 대상 물리 피해 흡혈 +${Math.round(e.championPhysicalVampPercent * 100)}%`);
   }
+  // 전설급 2차분(삼위일체~지배자의 피갑옷) 패시브 설명.
+  if (item.onHitMoveSpeedFlatPassive) { const p = item.onHitMoveSpeedFlatPassive; parts.push(`가속(기본 공격 시 ${p.durationSec}초간 이동 속도 +${p.amount})`); }
+  if (item.onHitFlatPhysicalPassive) parts.push(`독침(기본 공격 시 고정 물리 피해 +${item.onHitFlatPhysicalPassive})`);
+  if (item.onHitFlatMagicDamage) parts.push(`쪼기(기본 공격 시 고정 마법 피해 +${item.onHitFlatMagicDamage})`);
+  if (item.mistsEdgePassive) { const p = item.mistsEdgePassive; parts.push(`안개의 검(기본 공격 시 적 현재 체력의 근접${Math.round(p.meleePercentCurrentHp * 100)}%｜원거리${Math.round(p.rangedPercentCurrentHp * 100)}% 추가 물리 피해, 미니언·정글 몬스터는 최대 ${p.nonChampionCap})`); }
+  if (item.scurryingStrikePassive) { const p = item.scurryingStrikePassive; parts.push(`할퀴는 그림자(챔피언 ${p.hitsNeeded}회 기본 공격 시 ${Math.round(p.slowPercent * 100)}% 둔화 ${p.slowDurationSec}초, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.everRisingMoonPassive) { const p = item.everRisingMoonPassive; parts.push(`늘 떠오르는 달(${p.windowSec}초 내 별개의 공격/스킬 2회 시 최대 체력 근접${Math.round(p.meleeMaxHpPercent * 100)}%｜원거리${Math.round(p.rangedMaxHpPercent * 100)}% 피해 + 보호막, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.aweBonusAdPercentOfMana) parts.push(`경탄(최대 마나의 ${Math.round(item.aweBonusAdPercentOfMana * 100)}%만큼 추가 공격력)`);
+  if (item.shockPassive) { const p = item.shockPassive; parts.push(`충격(기본 공격 시 마나 ${Math.round(p.onHitManaPercent * 1000) / 10}% 추가 물리, 챔피언 대상 스킬 피해 시 근접 마나${Math.round(p.onAbilityHitMeleeManaPercent * 100)}%｜원거리${Math.round(p.onAbilityHitRangedManaPercent * 100)}% 추가 물리)`); }
+  if (item.transformsInto) parts.push(`최대 마나에 도달하면 ${(ITEM_DATA[item.transformsInto] && ITEM_DATA[item.transformsInto].nameKo) || item.transformsInto}(으)로 변신`);
+  if (item.lifelinePassive) { const p = item.lifelinePassive; parts.push(`생명선(마법 피해로 체력이 ${Math.round(p.hpThresholdPercent * 100)}% 밑으로 떨어질 만큼이면 ${p.shieldDurationSec}초 보호막, 재사용대기시간 ${p.icdSec}초, 발동 후 ${p.omnivampDurationSec}초간 모든 피해 흡혈 +${Math.round(p.omnivampPercentAfterTrigger * 100)}%)`); }
+  if (item.focusedWillPassive) { const p = item.focusedWillPassive; parts.push(`집중된 의지(피해를 입히면 ${p.durationSec}초간 스택당 피해량 +${Math.round(p.percentPerStack * 100)}%, 최대 ${p.maxStacks}중첩)`); }
+  if (item.captainPassive) { const p = item.captainPassive; parts.push(`선장(챔피언·에픽 몬스터 대상 ${p.hitsNeeded}번째 기본 공격마다 추가 물리 피해, 구조물 대상은 배율 증가)`); }
+  if (item.carvePassive) { const p = item.carvePassive; parts.push(`깎아내기(챔피언 물리 피해 시 ${p.durationSec}초간 방어력 -${Math.round(p.shredPerStack * 100)}%, 최대 ${p.maxStacks}중첩)`); }
+  if (item.ragePassive) { const p = item.ragePassive; parts.push(`열정(물리 피해를 입히면 ${p.durationSec}초간 이동 속도 근접+${p.meleeAmount}｜원거리+${p.rangedAmount})`); }
+  if (item.lightshieldStrikePassive) { const p = item.lightshieldStrikePassive; parts.push(`라이트쉴드 타격(챔피언별 ${p.icdPerTargetSec}초마다 첫 기본 공격 시 근접 기본공격력${Math.round(p.meleeBaseAdPercent * 100)}%｜원거리${Math.round(p.rangedBaseAdPercent * 100)}% + 잃은 체력 ${Math.round(p.missingHpHealPercent * 100)}%만큼 체력 회복)`); }
+  if (item.tyrannyPassive) parts.push(`폭정(추가 체력의 ${(item.tyrannyPassive.bonusHpToAdPercent * 100).toFixed(1)}%만큼 추가 공격력)`);
+  if (item.vengeancePassive) { const p = item.vengeancePassive; parts.push(`응징(잃은 체력에 비례해 공격력 최대 ${Math.round(p.maxAdPercent * 100)}% 증가, 체력 ${Math.round(p.maxAtHpPercent * 100)}%에서 최대치 도달)`); }
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
