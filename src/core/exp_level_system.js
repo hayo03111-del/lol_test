@@ -674,6 +674,13 @@ function killMinion(minion) {
       && minion._lastHitBy === controller && typeof controller._ahriOnMinionKill === 'function') {
     controller._ahriOnMinionKill();
   }
+  // 아이템 패시브 "수확"(수확의 낫) - 플레이어가 마지막으로 때린 미니언이
+  // 죽으면 골드 누적. 챔피언 종류와 무관한 범용 아이템 훅이라 위 아리
+  // 패시브와 별개로 둔다.
+  if (typeof controller !== 'undefined' && controller && minion._lastHitBy === controller
+      && typeof itemOnMinionKillByPlayer === 'function') {
+    itemOnMinionKillByPlayer(controller);
+  }
   minions = minions.filter((m) => m !== minion); // 요청 18-7: 다른 AI가 더 이상 살아있는 유닛으로 인식하지 않게 즉시 목록에서 제거
   if (typeof controller !== 'undefined' && controller && controller.currentTarget === minion) {
     controller.currentTarget = null;

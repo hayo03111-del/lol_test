@@ -25,26 +25,41 @@ document.querySelectorAll('#shopPanel [data-item-id]').forEach((btn) => {
     if (typeof buyItem === 'function' && controller) buyItem(controller, btn.getAttribute('data-item-id'));
   });
 });
-// 인벤토리 슬롯 표시 - buyItem/sellItem이 아이템을 바꿀 때마다 호출하는
-// 이벤트 기반 갱신 함수(updateGoldDisplay()와 동일한 원칙, 매 프레임 아님).
+// 인벤토리 슬롯 표시 - buyItem/sellItem/useItem이 아이템을 바꿀 때마다
+// 호출하는 이벤트 기반 갱신 함수(updateGoldDisplay()와 동일한 원칙, 매
+// 프레임 아님). 소비 아이템(체력/충전형 물약)은 클릭하면 판매 대신
+// 사용되고, 중첩/충전 수를 작은 배지로 함께 표시한다.
 function updateItemUI(ctrl) {
   const row = document.getElementById('inventoryRow');
   if (!row) return;
   row.innerHTML = '';
   const items = (ctrl && ctrl.items) || [];
   for (let i = 0; i < 6; i++) {
-    const slot = document.createElement('div');
-    const itemId = items[i];
-    const data = itemId && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[itemId] : null;
+    const el = document.createElement('div');
+    const slot = items[i];
+    const data = slot && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[slot.id] : null;
     if (data) {
-      slot.className = 'invSlot';
-      slot.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
-      slot.title = data.nameKo + ' (클릭: 판매, 구매가의 70% 환급)';
-      slot.addEventListener('click', () => { if (typeof sellItem === 'function') sellItem(ctrl, i); });
+      const usable = !!data.consumable;
+      el.className = 'invSlot' + (usable ? ' usable' : '');
+      el.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
+      const badgeValue = typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '');
+      if (badgeValue) {
+        const badge = document.createElement('span');
+        badge.className = 'invBadge';
+        badge.textContent = badgeValue;
+        el.appendChild(badge);
+      }
+      el.title = usable
+        ? `${data.nameKo} (${i + 1}번 키 또는 클릭: 사용)`
+        : `${data.nameKo} (클릭: 판매, 구매가의 70% 환급)`;
+      el.addEventListener('click', () => {
+        if (usable) { if (typeof useItem === 'function') useItem(ctrl, i); }
+        else if (typeof sellItem === 'function') sellItem(ctrl, i);
+      });
     } else {
-      slot.className = 'invSlot empty';
+      el.className = 'invSlot empty';
     }
-    row.appendChild(slot);
+    row.appendChild(el);
   }
 }
 var controller = null;
@@ -290,6 +305,15 @@ window.addEventListener('keydown', (e) => {
     case 'KeyR': controller.castAbility('R', mousePoint); break;
     case 'KeyB': controller.startRecall(); break;
     case 'Space': if (dummy && dummy.hp > 0) controller.selectTarget(dummy); break;
+    // 아이템 사용(실제 LoL과 동일한 숫자키 1~6 인벤토리 단축키) - 사용
+    // 불가 아이템(스탯 아이템)이면 useItem() 내부에서 콘솔 경고만 내고
+    // 조용히 무시된다.
+    case 'Digit1': if (typeof useItem === 'function') useItem(controller, 0); break;
+    case 'Digit2': if (typeof useItem === 'function') useItem(controller, 1); break;
+    case 'Digit3': if (typeof useItem === 'function') useItem(controller, 2); break;
+    case 'Digit4': if (typeof useItem === 'function') useItem(controller, 3); break;
+    case 'Digit5': if (typeof useItem === 'function') useItem(controller, 4); break;
+    case 'Digit6': if (typeof useItem === 'function') useItem(controller, 5); break;
   }
 });
 

@@ -188,7 +188,9 @@
     position:fixed; left:14px; bottom:128px; z-index:10; color:#bbb; font-size:11px;
     background:rgba(10,10,15,0.55); padding:6px 12px; border-radius:6px;
     border:1px solid #2a2a35; user-select:none; width:220px;
+    max-height:60vh; display:flex; flex-direction:column;
   }
+  #shopPanel .panelBody { overflow-y:auto; }
   #shopPanel.collapsed .panelBody { display:none; }
   #shopPanel .shopItemRow { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:4px; }
   #shopPanel .shopItemName { flex:1; }
@@ -199,11 +201,16 @@
   #shopPanel .shopItemRow button:hover { background:#3a3a45; }
   #inventoryRow { display:flex; gap:4px; margin-top:8px; padding-top:8px; border-top:1px solid #2a2a35; flex-wrap:wrap; }
   .invSlot {
-    width:28px; height:28px; background:#1b1b22; border:1px solid #3a3a45; border-radius:4px;
+    position:relative; width:28px; height:28px; background:#1b1b22; border:1px solid #3a3a45; border-radius:4px;
     display:flex; align-items:center; justify-content:center; font-size:9px; color:#ccc; cursor:pointer;
   }
   .invSlot:hover { background:#2a2a35; }
   .invSlot.empty { cursor:default; }
+  .invSlot.usable { border-color:#4a7a4a; }
+  .invBadge {
+    position:absolute; right:-2px; bottom:-2px; background:#111; color:#e8c87a; border:1px solid #4a4a58;
+    border-radius:3px; font-size:8px; line-height:1; padding:1px 2px; pointer-events:none;
+  }
 
   /* 요청("상태창들 싹다 접을 수 있게") - helpBox/rangeIndicatorToggle
      공용 접기 헤더. 제목 줄만 항상 보이고, 클릭하면 나머지 내용이
@@ -478,6 +485,7 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
     <div><b>좌클릭 (적 클릭)</b>: 대상 선택 + 공격</div>
     <div><b>Q/W/E/R</b>: 스킬</div>
     <div><b>B</b>: 귀환</div>
+    <div><b>1~6</b>: 인벤토리 아이템 사용(물약)</div>
     <div><b>Space</b>: 대상 강제 공격(테스트)</div>
     <div><b>ESC</b>: 일시정지</div>
     <div><b>F1</b>: 디버그 패널 토글</div>
@@ -525,7 +533,13 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
     <div class="shopItemRow"><span class="shopItemName">도란의 방패 (450)</span><button data-item-id="doransShield">구매</button></div>
     <div class="shopItemRow"><span class="shopItemName">도란의 활 (400)</span><button data-item-id="doransBow">구매</button></div>
     <div class="shopItemRow"><span class="shopItemName">도란의 투구 (450)</span><button data-item-id="doransHelm">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">수확의 낫 (450)</span><button data-item-id="cull">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">암흑의 인장 (350)</span><button data-item-id="darkSeal">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">여신의 눈물 (400)</span><button data-item-id="tearOfGoddess">구매</button></div>
+    <div class="shopItemRow" style="margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;"><span class="shopItemName">체력 물약 (50)</span><button data-item-id="healthPotion">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">충전형 물약 (150)</span><button data-item-id="refillablePotion">구매</button></div>
     <div id="inventoryRow"></div>
+    <div style="font-size:9px;color:#888;margin-top:4px;">숫자키 1~6: 해당 칸 아이템 사용(물약) · 슬롯 클릭: 사용/판매(70%)</div>
   </div>
 </div>
 
@@ -1107,14 +1121,24 @@ function applyDamage(target, result) {
   if (target.isNexus) return applyDamageToNexus(target, result);
   const finalDmg = calculateDamage({ ...result, target });
   target._lastDamageTakenAmount = finalDmg;
-  // 아이템 패시브 공용 훅(item_system.js) - 모든 피해 흡혈(도란의 검/활)과
-  // "챔피언에게 피해를 입힌/입은 시각" 타임스탬프(도란의 반지/방패)는
-  // 구조물이 아닌 챔피언/더미 피해 경로에서만 다룬다(구조물 피해는 실제
-  // LoL처럼 흡혈이 붙지 않음).
-  if (result.source && typeof result.source.championId === 'string') {
-    if (typeof applyItemVamp === 'function') applyItemVamp(result.source, finalDmg);
-    if (target.isChampion) result.source._itemLastDealtChampionDamageAt = performance.now();
+  // 아이템 패시브 공용 훅(item_system.js) - 모든 피해 흡혈(도란의 검/활),
+  // "챔피언에게 피해를 입힌/입은 시각" 타임스탬프(도란의 반지/방패), 마나순환
+  // (여신의 눈물)은 구조물이 아닌 챔피언/더미 피해 경로에서만 다룬다.
+  // 버그 수정: `result.source`는 야스우/바루스/이즈리얼/아리/애쉬/요네 정도만
+  // 채워 넣고(가렌/다리우스/렉사이 등 대부분의 챔피언 스킬 피해 호출은
+  // `source`를 넘기지 않음 - 기본 공격 `attackResult`도 마찬가지) 나머지는
+  // 전부 undefined라서, 그 챔피언들로는 흡혈 아이템이 전혀 발동하지 않는
+  // 상태였다. 이 데모는 애초에 "조작 중인 플레이어 하나만 챔피언/더미에
+  // 피해를 줄 수 있는" 구조(적 AI가 챔피언을 공격하는 기능 자체가 없음)이므로,
+  // `result.source`가 없으면 전역 `controller`(플레이어 자신)로 안전하게
+  // 대체한다(미니언 경로의 `applyDamageToMinion()`이 이미 쓰던 것과 동일한
+  // 원칙 - killMinion()의 전역 controller 참조 참고).
+  const dmgSource = result.source || (typeof controller !== 'undefined' ? controller : null);
+  if (dmgSource && typeof dmgSource.championId === 'string') {
+    if (typeof applyItemVamp === 'function') applyItemVamp(dmgSource, finalDmg);
+    if (target.isChampion) dmgSource._itemLastDealtChampionDamageAt = performance.now();
     if (typeof target._itemLastTookChampionDamageAt !== 'undefined') target._itemLastTookChampionDamageAt = performance.now();
+    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target);
   }
   // 요청(처형 시스템): 이 피해로 대상이 실제로 죽는지를 데미지 적용 "전"에
   // 먼저 판정한다 - 학습용 더미는 damageEnemy()에서 2% 바닥에 멈추도록
@@ -1134,6 +1158,9 @@ function applyDamage(target, result) {
     if (result.source && result.source.championId === 'ahri' && typeof result.source._ahriOnChampionTakedown === 'function') {
       result.source._ahriOnChampionTakedown(target);
     }
+    // 암흑의 인장(영광) - 챔피언 처치 관여 시 중첩 획득. 위 아리 패시브와
+    // 동일한 이유로 이 처형 판정 지점을 "챔피언 처치"로 재사용한다.
+    if (dmgSource && typeof itemOnChampionTakedown === 'function') itemOnChampionTakedown(dmgSource);
   }
   if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL);
   else damageEnemy(target, finalDmg);
@@ -2703,11 +2730,23 @@ function computeChampionStats(championId, level) {
 
 
 /* ===== src/champions/item_data.js ===== */
-// 아이템 시스템 - 1차분(도란 시리즈 5종). 사용자가 보내준 한국어 아이템
-// 텍스트 원문(도란의 검/반지/방패/활/투구)의 수치를 그대로 옮긴다.
-// stats는 recomputeItemStats()(item_system.js)가 그대로 합산해 itemBonus*
-// 필드에 반영하고, 그 외 패시브(흡혈/도움의 손길/재생)는 item_system.js의
+// 아이템 시스템 - 1차분(도란 시리즈 5종) + 2차분(남은 시작 아이템 중 이
+// 프로젝트 구조로 구현 가능한 것들 + 체력/충전형 물약). 사용자가 보내준
+// 한국어 아이템 텍스트 원문의 수치를 그대로 옮긴다. stats는
+// recomputeItemStats()(item_system.js)가 그대로 합산해 itemBonus* 필드에
+// 반영하고, 그 외 패시브(흡혈/도움의 손길/재생 등)는 item_system.js의
 // 전용 틱/훅 함수들이 아이템별 설정 객체를 읽어 처리한다.
+//
+// [시작 아이템] 중 의도적으로 생략한 항목(수치를 지어내지 않는다는 원칙에
+// 따라, 없는 시스템을 새로 발명하지 않고 생략 - Vision System 때와 동일한
+// 원칙):
+// - 새끼 이끼쿵쿵이/화염발톱/바람돌이(정글 동료): 정글 몬스터 캠프와
+//   소환사 주문 "강타" 자체가 이 프로젝트에 없다(허수아비 하나와
+//   미니언/포탑/넥서스만 존재). 이 둘을 전부 새로 만드는 건 아이템
+//   하나의 범위를 벗어난다.
+// - 세계지도집/룬나침반(서포터 아이템): "아군 챔피언", 팀 골드 공유,
+//   포지션(서포터) 배정, 와드 설치 자체가 이 프로젝트에 없다(1인 연습
+//   시뮬레이터라 애초에 아군이라는 개념이 없음).
 const ITEM_DATA = {
   doransBlade: {
     id: 'doransBlade', nameKo: '도란의 검', cost: 450,
@@ -2741,8 +2780,51 @@ const ITEM_DATA = {
     stats: { maxHp: 150, armor: 8, magicResist: 8 },
     minionBonusDamage: 5, // 도움의 손길
   },
+  cull: {
+    id: 'cull', nameKo: '수확의 낫', cost: 450,
+    stats: { attackDamage: 7 },
+    // 수확: 기본 공격 적중 시 체력 3 회복 + 미니언 처치 시 1골드(최대
+    // 100골드 누적) - 한도에 도달하면 350골드를 한 번에 더 받는다(실제
+    // 게임에서는 이 시점에 상위 아이템으로 자동 변하지만, 그 상위 아이템은
+    // 이번 범위에 없어 한도 도달 후에는 추가 골드 지급만 멈춘다).
+    onHitHeal: 3,
+    harvestPassive: { minionGoldPerKill: 1, minionGoldCap: 100, bonusGoldAtCap: 350 },
+  },
+  darkSeal: {
+    id: 'darkSeal', nameKo: '암흑의 인장', cost: 350,
+    stats: { abilityPower: 15 },
+    // 영광: 챔피언 처치 관여 시 중첩(최대 10), 사망 시 5 중첩 소실, 중첩당
+    // 주문력 4. 이 데모는 어시스트 개념(아군 챔피언) 자체가 없어 처치(킬)
+    // 관여만 구현한다 - 처형 판정(markExecute) 지점을 "처치"로 재사용한다.
+    gloryPassive: { apPerStack: 4, maxStacks: 10, takedownStacks: 2, deathLossStacks: 5 },
+  },
+  tearOfGoddess: {
+    id: 'tearOfGoddess', nameKo: '여신의 눈물', cost: 400,
+    stats: { mana: 240 },
+    minionBonusDamage: 5, // 도움의 손길
+    // 마나순환: 챔피언을 상대로는 2배. "스킬 적중 시"가 원문이지만, 이
+    // 프로젝트는 챔피언 스킬 피해 호출 대부분이 기본 공격과 동일한
+    // applyDamage() 공용 진입점을 거치면서도 "스킬이냐 평타냐"를 구분하는
+    // 공용 플래그가 없다(일부 챔피언만 source를 넘김) - 모든 챔피언 파일을
+    // 건드리지 않고는 정확히 구분할 수 없어, 챔피언/더미 대상 피해 전체
+    // (스킬+평타)를 트리거로 근사했다(README에 명시).
+    manaCirculationPassive: { maxManaPerHit: 3, maxManaPerChampionHit: 6, maxManaCap: 360, maxCharges: 4, rechargeSec: 8 },
+  },
+  healthPotion: {
+    id: 'healthPotion', nameKo: '체력 물약', cost: 50,
+    maxStack: 5,
+    consumable: { healAmount: 120, healDurationSec: 15 },
+  },
+  refillablePotion: {
+    id: 'refillablePotion', nameKo: '충전형 물약', cost: 150,
+    maxCharges: 2, refillOnShopUse: true,
+    consumable: { healAmount: 100, healDurationSec: 12 },
+  },
 };
-const ITEM_ORDER = ['doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm'];
+const ITEM_ORDER = [
+  'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
+  'cull', 'darkSeal', 'tearOfGoddess', 'healthPotion', 'refillablePotion',
+];
 
 /* ===== src/animation/animation_role_resolver.js ===== */
 /* ============================================================
@@ -7634,18 +7716,29 @@ class CharacterController {
     // 칼바람 포탑 시스템(destroyTurret 참고) - 팀/골드 시스템이 따로
     // 없어 "아군 전원에게 지급"을 지금은 플레이어 자신의 누적치로 대신한다.
     this.gold = 0;
-    // 아이템 시스템(item_system.js) - 장착한 아이템 id 배열(최대 6칸, 실제
-    // LoL 인벤토리와 동일). itemBonus*는 recomputeItemStats()(items 배열이
-    // 바뀔 때만 호출)가 채우는 합산값이고, recomputeStats()/update()가 그
-    // 값을 읽어 실제 stats에 반영한다. _itemLastDealtChampionDamageAt/
-    // _itemLastTookChampionDamageAt은 도란의 반지(전투 중 마나 회복 증가)/
-    // 도란의 방패(피격 후 회복) 같은 "최근 전투 여부"가 필요한 아이템
-    // 패시브를 위한 범용 타임스탬프 - applyDamage()가 채운다.
+    // 아이템 시스템(item_system.js) - 장착한 아이템 슬롯 배열(최대 6칸, 실제
+    // LoL 인벤토리와 동일). 각 슬롯은 {id, count, charges?} 형태다 - count는
+    // 쌓이는 소비 아이템(체력 물약, 최대 5개까지 한 칸에 중첩)의 개수이고,
+    // charges는 "다시 상점에 들르면 충전되는" 단일 아이템(충전형 물약)의
+    // 남은 사용 횟수다(둘 다 없는 일반 스탯 아이템은 count:1 고정, 슬롯 자체를
+    // 여러 개 차지하는 방식으로 중첩 없이 따로 보관된다). itemBonus*는
+    // recomputeItemStats()(items 배열이 바뀔 때만 호출)가 채우는 합산값이고,
+    // recomputeStats()/update()가 그 값을 읽어 실제 stats에 반영한다.
+    // _itemLastDealtChampionDamageAt/_itemLastTookChampionDamageAt은 도란의
+    // 반지(전투 중 마나 회복 증가)/도란의 방패(피격 후 회복) 같은 "최근 전투
+    // 여부"가 필요한 아이템 패시브를 위한 범용 타임스탬프 - applyDamage()가
+    // 채운다. _itemActiveHeals는 체력/충전형 물약이 사용된 뒤 진행 중인
+    // 지속 회복(HoT) 목록 - 아이템을 팔거나 다 써도 이미 시작된 회복은
+    // 실제 LoL처럼 끝까지 진행된다. _itemGloryStacks(암흑의 인장)/
+    // _itemCullGold(수확의 낫)/_itemTearState(여신의 눈물)는 각 아이템
+    // 전용 누적 상태 - item_system.js의 전용 함수들이 읽고 쓴다.
     this.items = [];
     this.itemBonusAD = 0; this.itemBonusAP = 0; this.itemBonusMaxHp = 0; this.itemBonusMana = 0;
     this.itemBonusArmor = 0; this.itemBonusMr = 0; this.itemBonusAttackSpeedPercent = 0;
-    this.itemAllDamageVampPercent = 0; this.itemMinionBonusDamage = 0;
+    this.itemAllDamageVampPercent = 0; this.itemMinionBonusDamage = 0; this.itemOnHitHeal = 0;
     this._itemLastDealtChampionDamageAt = 0; this._itemLastTookChampionDamageAt = 0;
+    this._itemActiveHeals = []; this._itemGloryStacks = 0; this._itemCullGold = 0; this._itemTearState = null;
+    this._itemTick = {};
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -8942,6 +9035,10 @@ class CharacterController {
     if (target.isMinion && this.itemMinionBonusDamage > 0) {
       applyDamageToMinion(target, { rawDamage: this.itemMinionBonusDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true);
     }
+    // 아이템 패시브 "수확"(수확의 낫) - 기본 공격 적중 시 고정 체력 회복.
+    // 대상 종류(챔피언/더미/미니언/포탑)를 가리지 않는 실제 아이템 설명과
+    // 동일하게 범용으로 적용한다.
+    if (this.itemOnHitHeal > 0) this.hp = Math.min(this.maxHp, this.hp + this.itemOnHitHeal);
     // 애쉬 패시브(서리 화살): 기본 공격마다 대상을 둔화시킨다(치명타면
     // 더 강한 둔화로 대체). Q(궁사의 집중)의 다발 공격(_asheFireFlurry)은
     // 다중 대상이라 이 단일 대상 훅을 거치지 않고 자체적으로 처리한다.
@@ -11605,6 +11702,10 @@ class CharacterController {
     if (this.hp <= 0) this._die();
   }
   _die() {
+    // 암흑의 인장(영광) - 사망 시 중첩 소실. 이 데모는 플레이어를 공격하는
+    // AI가 없어 사실상 트리거될 일이 없지만(도란의 방패 피격 회복과 동일한
+    // 한계), 향후 그런 기능이 추가되면 자동으로 맞물리도록 범용 훅으로 둔다.
+    if (typeof itemOnChampionDeath === 'function') itemOnChampionDeath(this);
     if (this.championId === 'renekton' && this._renekton?.rActive) this._renektonEndR();
     this._clearPending(); this._clearActionTimers();
     this._masteryiCancelAlphaStrike(); // 안전망: Q 도중 사망해도 비대상 플래그/상태가 남지 않게 정리
@@ -21528,6 +21629,13 @@ function killMinion(minion) {
       && minion._lastHitBy === controller && typeof controller._ahriOnMinionKill === 'function') {
     controller._ahriOnMinionKill();
   }
+  // 아이템 패시브 "수확"(수확의 낫) - 플레이어가 마지막으로 때린 미니언이
+  // 죽으면 골드 누적. 챔피언 종류와 무관한 범용 아이템 훅이라 위 아리
+  // 패시브와 별개로 둔다.
+  if (typeof controller !== 'undefined' && controller && minion._lastHitBy === controller
+      && typeof itemOnMinionKillByPlayer === 'function') {
+    itemOnMinionKillByPlayer(controller);
+  }
   minions = minions.filter((m) => m !== minion); // 요청 18-7: 다른 AI가 더 이상 살아있는 유닛으로 인식하지 않게 즉시 목록에서 제거
   if (typeof controller !== 'undefined' && controller && controller.currentTarget === minion) {
     controller.currentTarget = null;
@@ -21642,18 +21750,25 @@ let dummyPlaceMode = false;
 
 
 /* ===== src/core/item_system.js ===== */
-// 아이템 시스템 - 구매/판매/스탯 합산/틱형 패시브(재생·마나회복).
+// 아이템 시스템 - 구매/판매/사용/스탯 합산/틱형 패시브(재생·마나회복·충전).
 // 기존 챔피언 전용 임시 버프 필드(bonusAD 등)와 완전히 분리된 itemBonus*
 // 필드를 recomputeStats()가 읽어가므로, 여기서는 "합산해서 채워 넣기"와
 // "값이 바뀔 때 recomputeStats() 재호출"만 책임진다.
+//
+// 인벤토리 슬롯 형태: ctrl.items = [{ id, count, charges? }, ...]
+// - count: 쌓이는 소비 아이템(체력 물약)의 중첩 개수. 일반 스탯 아이템은
+//   항상 count:1이고, 같은 아이템을 두 번 사면 슬롯을 하나 더 차지한다
+//   (실제 도란 시리즈처럼 "중첩되지 않는" 아이템과 동일).
+// - charges: "상점에 들르면 충전되는" 단일 아이템(충전형 물약)의 남은
+//   사용 횟수. count와 별개 축이다(충전형 물약은 count:1 고정, charges만 줄어든다).
 
 function recomputeItemStats(ctrl) {
   if (!ctrl) return;
   ctrl.itemBonusAD = 0; ctrl.itemBonusAP = 0; ctrl.itemBonusMaxHp = 0; ctrl.itemBonusMana = 0;
   ctrl.itemBonusArmor = 0; ctrl.itemBonusMr = 0; ctrl.itemBonusAttackSpeedPercent = 0;
-  ctrl.itemAllDamageVampPercent = 0; ctrl.itemMinionBonusDamage = 0;
-  for (const itemId of (ctrl.items || [])) {
-    const item = ITEM_DATA[itemId];
+  ctrl.itemAllDamageVampPercent = 0; ctrl.itemMinionBonusDamage = 0; ctrl.itemOnHitHeal = 0;
+  for (const slot of (ctrl.items || [])) {
+    const item = ITEM_DATA[slot.id];
     if (!item) continue;
     const s = item.stats || {};
     ctrl.itemBonusAD += s.attackDamage || 0;
@@ -21665,6 +21780,12 @@ function recomputeItemStats(ctrl) {
     ctrl.itemBonusAttackSpeedPercent += s.attackSpeedPercent || 0;
     ctrl.itemAllDamageVampPercent += item.allDamageVampPercent || 0;
     ctrl.itemMinionBonusDamage += item.minionBonusDamage || 0;
+    ctrl.itemOnHitHeal += item.onHitHeal || 0;
+    // 암흑의 인장(영광)의 동적 주문력 - 아이템을 들고 있을 때만 적용된다
+    // (팔면 중첩 자체는 남아있어도 더 이상 스탯에 반영되지 않는다).
+    if (item.gloryPassive) ctrl.itemBonusAP += (ctrl._itemGloryStacks || 0) * item.gloryPassive.apPerStack;
+    // 여신의 눈물(마나순환)으로 이미 얻은 최대 마나 - 누적값을 그대로 더한다.
+    if (item.manaCirculationPassive && ctrl._itemTearState) ctrl.itemBonusMana += ctrl._itemTearState.gained || 0;
   }
   ctrl.recomputeStats();
 }
@@ -21679,27 +21800,96 @@ function buyItem(ctrl, itemId) {
     console.warn('[ITEM] 기지(상점 구역) 안에서만 구매할 수 있습니다.');
     return false;
   }
-  if ((ctrl.items || []).length >= 6) { console.warn('[ITEM] 인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
   if ((ctrl.gold || 0) < item.cost) { console.warn('[ITEM] 골드가 부족합니다.'); return false; }
+  ctrl.items = ctrl.items || [];
+  if (item.maxStack) {
+    // 쌓이는 소비 아이템 - "최대로 보유할 수 있는 수"는 슬롯 하나의 중첩
+    // 한도가 아니라 전체 보유 개수 한도다(실제 체력 물약처럼 슬롯을
+    // 새로 만들어 우회할 수 없다). 버그 수정: 예전에는 기존 슬롯이 이미
+    // 꽉 찼을 때 그냥 "새 칸을 또 만들어서" 한도를 우회하는 잘못된
+    // 동작이었다 - 전체 보유량을 먼저 확인해 한도 도달 시 구매 자체를 막는다.
+    const totalHeld = ctrl.items.filter((s) => s.id === itemId).reduce((sum, s) => sum + s.count, 0);
+    if (totalHeld >= item.maxStack) {
+      console.warn(`[ITEM] 최대로 보유할 수 있는 수를 초과했습니다(최대 ${item.maxStack}개).`);
+      return false;
+    }
+    const existing = ctrl.items.find((s) => s.id === itemId);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      if (ctrl.items.length >= 6) { console.warn('[ITEM] 인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
+      ctrl.items.push({ id: itemId, count: 1 });
+    }
+  } else {
+    if (ctrl.items.length >= 6) { console.warn('[ITEM] 인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
+    const slot = { id: itemId, count: 1 };
+    if (item.maxCharges) slot.charges = item.maxCharges;
+    ctrl.items.push(slot);
+  }
   ctrl.gold -= item.cost;
-  ctrl.items.push(itemId);
+  // 충전형 물약 "상점을 이용할 때마다 새로 생성됩니다" - 이번 구매를 포함해
+  // 상점을 이용한 것이므로, 이미 보유 중인 충전형 아이템도 전부 재충전한다.
+  for (const slot of ctrl.items) {
+    const d = ITEM_DATA[slot.id];
+    if (d && d.refillOnShopUse && d.maxCharges) slot.charges = d.maxCharges;
+  }
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
   return true;
 }
 
-// 판매가 70%(실제 LoL과 동일한 근사치).
+// 판매가 70%(실제 LoL과 동일한 근사치) - 중첩된 소비 아이템은 칸 전체(개수만큼)를 한 번에 판다.
 function sellItem(ctrl, slotIndex) {
-  const itemId = ctrl.items && ctrl.items[slotIndex];
-  if (!itemId) return false;
-  const item = ITEM_DATA[itemId];
+  const slot = ctrl.items && ctrl.items[slotIndex];
+  if (!slot) return false;
+  const item = ITEM_DATA[slot.id];
+  if (!item) return false;
   ctrl.items.splice(slotIndex, 1);
-  ctrl.gold = (ctrl.gold || 0) + Math.floor((item.cost || 0) * 0.7);
+  ctrl.gold = (ctrl.gold || 0) + Math.floor((item.cost || 0) * (slot.count || 1) * 0.7);
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
   return true;
+}
+
+// 사용 아이템(체력 물약/충전형 물약) - 숫자 키(1~6) 또는 인벤토리 슬롯
+// 클릭으로 호출된다. 중첩/충전 소모 로직만 여기서 처리하고, 실제 회복은
+// 공용 지속 회복(HoT) 목록(_itemActiveHeals)에 등록해 itemSystemTick이
+// 매 프레임 진행한다.
+function useItem(ctrl, slotIndex) {
+  if (!ctrl) return false;
+  const slot = ctrl.items && ctrl.items[slotIndex];
+  if (!slot) return false;
+  const item = ITEM_DATA[slot.id];
+  if (!item || !item.consumable) { console.warn('[ITEM] 사용할 수 없는 아이템입니다.'); return false; }
+  if (item.maxCharges) {
+    if (!(slot.charges > 0)) { console.warn('[ITEM] 충전량이 없습니다.'); return false; }
+    slot.charges -= 1;
+  } else if (item.maxStack) {
+    if (!(slot.count > 0)) return false;
+    slot.count -= 1;
+    if (slot.count <= 0) {
+      const idx = ctrl.items.indexOf(slot);
+      if (idx >= 0) ctrl.items.splice(idx, 1);
+    }
+  }
+  ctrl._itemActiveHeals = ctrl._itemActiveHeals || [];
+  ctrl._itemActiveHeals.push({ perSec: item.consumable.healAmount / item.consumable.healDurationSec, remainingSec: item.consumable.healDurationSec });
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  return true;
+}
+
+function _itemTickActiveHeals(ctrl, dt) {
+  if (!ctrl._itemActiveHeals || !ctrl._itemActiveHeals.length) return;
+  for (const heal of ctrl._itemActiveHeals) {
+    const step = Math.min(dt, heal.remainingSec);
+    ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal.perSec * step);
+    heal.remainingSec -= step;
+  }
+  // 아이템을 팔거나 다 써도(인벤토리에서 이미 제거됨) 이미 시작된 회복은
+  // 실제 LoL처럼 끝까지 진행되므로, 이 목록은 items 배열과 무관하게 돈다.
+  ctrl._itemActiveHeals = ctrl._itemActiveHeals.filter((h) => h.remainingSec > 1e-6);
 }
 
 function _itemTickManaRegen(ctrl, item, dt, now) {
@@ -21744,16 +21934,37 @@ function _itemTickHpRegen(ctrl, item, dt, now) {
   }
 }
 
+// 여신의 눈물(마나순환) 충전 재생 - 8초마다 1충전, 최대 4충전.
+function _itemTickTearRecharge(ctrl, item, dt) {
+  const p = item.manaCirculationPassive;
+  ctrl._itemTearState = ctrl._itemTearState || { charges: p.maxCharges, gained: 0 };
+  const st = ctrl._itemTearState;
+  if (st.charges >= p.maxCharges) return;
+  ctrl._itemTick = ctrl._itemTick || {};
+  const key = 'tearRecharge';
+  ctrl._itemTick[key] = (ctrl._itemTick[key] || 0) + dt;
+  while (ctrl._itemTick[key] >= p.rechargeSec && st.charges < p.maxCharges) {
+    ctrl._itemTick[key] -= p.rechargeSec;
+    st.charges += 1;
+  }
+}
+
 // character_controller.js의 update()가 매 프레임 호출(_asheUpdate(dt) 등과
-// 동일한 패턴). 장착 아이템이 없으면 즉시 return해서 평소엔 비용이 0.
+// 동일한 패턴). 지속 회복(_itemActiveHeals)은 아이템을 하나도 안 갖고
+// 있어도(다 써서 인벤토리에서 빠진 뒤) 계속 진행돼야 하므로 먼저 처리하고,
+// 그 외 장착 아이템 전용 틱은 items가 비어 있으면 즉시 return해서 평소엔
+// 비용이 0이다.
 function itemSystemTick(ctrl, dt) {
-  if (!ctrl || !ctrl.items || !ctrl.items.length) return;
+  if (!ctrl) return;
+  _itemTickActiveHeals(ctrl, dt);
+  if (!ctrl.items || !ctrl.items.length) return;
   const now = performance.now();
-  for (const itemId of ctrl.items) {
-    const item = ITEM_DATA[itemId];
+  for (const slot of ctrl.items) {
+    const item = ITEM_DATA[slot.id];
     if (!item) continue;
     if (item.manaRegenPassive) _itemTickManaRegen(ctrl, item, dt, now);
     if (item.regenPassive || item.champDamageRegen) _itemTickHpRegen(ctrl, item, dt, now);
+    if (item.manaCirculationPassive) _itemTickTearRecharge(ctrl, item, dt);
   }
 }
 
@@ -21763,6 +21974,57 @@ function applyItemVamp(source, finalDmg) {
   if (!source || !(source.itemAllDamageVampPercent > 0) || !(finalDmg > 0)) return;
   if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
   source.hp = Math.min(source.maxHp, source.hp + finalDmg * source.itemAllDamageVampPercent);
+}
+
+// 여신의 눈물(마나순환) - 챔피언/더미 대상 피해를 입힐 때마다 충전 1개를
+// 소모해 최대 마나를 얻는다(챔피언 상대는 2배, 누적 360 한도). applyDamage()
+// 에서 호출한다 - 근사 범위는 item_data.js의 tearOfGoddess 주석 참고.
+function itemOnDamageDealt(ctrl, target) {
+  const slot = (ctrl.items || []).find((s) => s.id === 'tearOfGoddess');
+  if (!slot) return;
+  const p = ITEM_DATA.tearOfGoddess.manaCirculationPassive;
+  ctrl._itemTearState = ctrl._itemTearState || { charges: p.maxCharges, gained: 0 };
+  const st = ctrl._itemTearState;
+  if (st.gained >= p.maxManaCap || st.charges <= 0) return;
+  st.charges -= 1;
+  const gain = Math.min(target.isChampion ? p.maxManaPerChampionHit : p.maxManaPerHit, p.maxManaCap - st.gained);
+  st.gained += gain;
+  recomputeItemStats(ctrl);
+  ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + gain); // 늘어난 최대 마나만큼 현재 마나도 함께 채워준다(실제 여신의 눈물과 동일)
+}
+
+// 수확의 낫 - 플레이어가 마지막으로 때린 미니언이 죽을 때 killMinion()이 호출.
+function itemOnMinionKillByPlayer(ctrl) {
+  const slot = (ctrl.items || []).find((s) => s.id === 'cull');
+  if (!slot) return;
+  const p = ITEM_DATA.cull.harvestPassive;
+  if ((ctrl._itemCullGold || 0) >= p.minionGoldCap) return; // 한도 도달 - 더 이상 추가 골드 없음(상위 아이템 전환 없음)
+  ctrl._itemCullGold = (ctrl._itemCullGold || 0) + p.minionGoldPerKill;
+  ctrl.gold = (ctrl.gold || 0) + p.minionGoldPerKill;
+  if (ctrl._itemCullGold >= p.minionGoldCap) {
+    ctrl.gold += p.bonusGoldAtCap;
+    console.log('[ITEM] 수확의 낫 한도 도달 - 보너스 골드 +' + p.bonusGoldAtCap);
+  }
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+}
+
+// 암흑의 인장(영광) - 챔피언 처치 관여 시 중첩 획득(applyDamage()의 처형
+// 판정 지점에서 호출). 어시스트는 "아군 챔피언" 개념이 없는 이 데모 구조상
+// 구현하지 않는다(item_data.js 주석 참고).
+function itemOnChampionTakedown(ctrl) {
+  const slot = (ctrl.items || []).find((s) => s.id === 'darkSeal');
+  if (!slot) return;
+  const p = ITEM_DATA.darkSeal.gloryPassive;
+  ctrl._itemGloryStacks = Math.min(p.maxStacks, (ctrl._itemGloryStacks || 0) + p.takedownStacks);
+  recomputeItemStats(ctrl);
+}
+
+// 암흑의 인장(영광) - 사망 시 중첩 소실(_die()에서 호출).
+function itemOnChampionDeath(ctrl) {
+  if (!ctrl || !(ctrl._itemGloryStacks > 0)) return;
+  const p = ITEM_DATA.darkSeal.gloryPassive;
+  ctrl._itemGloryStacks = Math.max(0, ctrl._itemGloryStacks - p.deathLossStacks);
+  recomputeItemStats(ctrl);
 }
 
 /* ===== src/core/global_system_instances.js ===== */
@@ -21793,26 +22055,41 @@ document.querySelectorAll('#shopPanel [data-item-id]').forEach((btn) => {
     if (typeof buyItem === 'function' && controller) buyItem(controller, btn.getAttribute('data-item-id'));
   });
 });
-// 인벤토리 슬롯 표시 - buyItem/sellItem이 아이템을 바꿀 때마다 호출하는
-// 이벤트 기반 갱신 함수(updateGoldDisplay()와 동일한 원칙, 매 프레임 아님).
+// 인벤토리 슬롯 표시 - buyItem/sellItem/useItem이 아이템을 바꿀 때마다
+// 호출하는 이벤트 기반 갱신 함수(updateGoldDisplay()와 동일한 원칙, 매
+// 프레임 아님). 소비 아이템(체력/충전형 물약)은 클릭하면 판매 대신
+// 사용되고, 중첩/충전 수를 작은 배지로 함께 표시한다.
 function updateItemUI(ctrl) {
   const row = document.getElementById('inventoryRow');
   if (!row) return;
   row.innerHTML = '';
   const items = (ctrl && ctrl.items) || [];
   for (let i = 0; i < 6; i++) {
-    const slot = document.createElement('div');
-    const itemId = items[i];
-    const data = itemId && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[itemId] : null;
+    const el = document.createElement('div');
+    const slot = items[i];
+    const data = slot && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[slot.id] : null;
     if (data) {
-      slot.className = 'invSlot';
-      slot.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
-      slot.title = data.nameKo + ' (클릭: 판매, 구매가의 70% 환급)';
-      slot.addEventListener('click', () => { if (typeof sellItem === 'function') sellItem(ctrl, i); });
+      const usable = !!data.consumable;
+      el.className = 'invSlot' + (usable ? ' usable' : '');
+      el.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
+      const badgeValue = typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '');
+      if (badgeValue) {
+        const badge = document.createElement('span');
+        badge.className = 'invBadge';
+        badge.textContent = badgeValue;
+        el.appendChild(badge);
+      }
+      el.title = usable
+        ? `${data.nameKo} (${i + 1}번 키 또는 클릭: 사용)`
+        : `${data.nameKo} (클릭: 판매, 구매가의 70% 환급)`;
+      el.addEventListener('click', () => {
+        if (usable) { if (typeof useItem === 'function') useItem(ctrl, i); }
+        else if (typeof sellItem === 'function') sellItem(ctrl, i);
+      });
     } else {
-      slot.className = 'invSlot empty';
+      el.className = 'invSlot empty';
     }
-    row.appendChild(slot);
+    row.appendChild(el);
   }
 }
 var controller = null;
@@ -22058,6 +22335,15 @@ window.addEventListener('keydown', (e) => {
     case 'KeyR': controller.castAbility('R', mousePoint); break;
     case 'KeyB': controller.startRecall(); break;
     case 'Space': if (dummy && dummy.hp > 0) controller.selectTarget(dummy); break;
+    // 아이템 사용(실제 LoL과 동일한 숫자키 1~6 인벤토리 단축키) - 사용
+    // 불가 아이템(스탯 아이템)이면 useItem() 내부에서 콘솔 경고만 내고
+    // 조용히 무시된다.
+    case 'Digit1': if (typeof useItem === 'function') useItem(controller, 0); break;
+    case 'Digit2': if (typeof useItem === 'function') useItem(controller, 1); break;
+    case 'Digit3': if (typeof useItem === 'function') useItem(controller, 2); break;
+    case 'Digit4': if (typeof useItem === 'function') useItem(controller, 3); break;
+    case 'Digit5': if (typeof useItem === 'function') useItem(controller, 4); break;
+    case 'Digit6': if (typeof useItem === 'function') useItem(controller, 5); break;
   }
 });
 

@@ -205,18 +205,29 @@ class CharacterController {
     // 칼바람 포탑 시스템(destroyTurret 참고) - 팀/골드 시스템이 따로
     // 없어 "아군 전원에게 지급"을 지금은 플레이어 자신의 누적치로 대신한다.
     this.gold = 0;
-    // 아이템 시스템(item_system.js) - 장착한 아이템 id 배열(최대 6칸, 실제
-    // LoL 인벤토리와 동일). itemBonus*는 recomputeItemStats()(items 배열이
-    // 바뀔 때만 호출)가 채우는 합산값이고, recomputeStats()/update()가 그
-    // 값을 읽어 실제 stats에 반영한다. _itemLastDealtChampionDamageAt/
-    // _itemLastTookChampionDamageAt은 도란의 반지(전투 중 마나 회복 증가)/
-    // 도란의 방패(피격 후 회복) 같은 "최근 전투 여부"가 필요한 아이템
-    // 패시브를 위한 범용 타임스탬프 - applyDamage()가 채운다.
+    // 아이템 시스템(item_system.js) - 장착한 아이템 슬롯 배열(최대 6칸, 실제
+    // LoL 인벤토리와 동일). 각 슬롯은 {id, count, charges?} 형태다 - count는
+    // 쌓이는 소비 아이템(체력 물약, 최대 5개까지 한 칸에 중첩)의 개수이고,
+    // charges는 "다시 상점에 들르면 충전되는" 단일 아이템(충전형 물약)의
+    // 남은 사용 횟수다(둘 다 없는 일반 스탯 아이템은 count:1 고정, 슬롯 자체를
+    // 여러 개 차지하는 방식으로 중첩 없이 따로 보관된다). itemBonus*는
+    // recomputeItemStats()(items 배열이 바뀔 때만 호출)가 채우는 합산값이고,
+    // recomputeStats()/update()가 그 값을 읽어 실제 stats에 반영한다.
+    // _itemLastDealtChampionDamageAt/_itemLastTookChampionDamageAt은 도란의
+    // 반지(전투 중 마나 회복 증가)/도란의 방패(피격 후 회복) 같은 "최근 전투
+    // 여부"가 필요한 아이템 패시브를 위한 범용 타임스탬프 - applyDamage()가
+    // 채운다. _itemActiveHeals는 체력/충전형 물약이 사용된 뒤 진행 중인
+    // 지속 회복(HoT) 목록 - 아이템을 팔거나 다 써도 이미 시작된 회복은
+    // 실제 LoL처럼 끝까지 진행된다. _itemGloryStacks(암흑의 인장)/
+    // _itemCullGold(수확의 낫)/_itemTearState(여신의 눈물)는 각 아이템
+    // 전용 누적 상태 - item_system.js의 전용 함수들이 읽고 쓴다.
     this.items = [];
     this.itemBonusAD = 0; this.itemBonusAP = 0; this.itemBonusMaxHp = 0; this.itemBonusMana = 0;
     this.itemBonusArmor = 0; this.itemBonusMr = 0; this.itemBonusAttackSpeedPercent = 0;
-    this.itemAllDamageVampPercent = 0; this.itemMinionBonusDamage = 0;
+    this.itemAllDamageVampPercent = 0; this.itemMinionBonusDamage = 0; this.itemOnHitHeal = 0;
     this._itemLastDealtChampionDamageAt = 0; this._itemLastTookChampionDamageAt = 0;
+    this._itemActiveHeals = []; this._itemGloryStacks = 0; this._itemCullGold = 0; this._itemTearState = null;
+    this._itemTick = {};
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -1513,6 +1524,10 @@ class CharacterController {
     if (target.isMinion && this.itemMinionBonusDamage > 0) {
       applyDamageToMinion(target, { rawDamage: this.itemMinionBonusDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true);
     }
+    // 아이템 패시브 "수확"(수확의 낫) - 기본 공격 적중 시 고정 체력 회복.
+    // 대상 종류(챔피언/더미/미니언/포탑)를 가리지 않는 실제 아이템 설명과
+    // 동일하게 범용으로 적용한다.
+    if (this.itemOnHitHeal > 0) this.hp = Math.min(this.maxHp, this.hp + this.itemOnHitHeal);
     // 애쉬 패시브(서리 화살): 기본 공격마다 대상을 둔화시킨다(치명타면
     // 더 강한 둔화로 대체). Q(궁사의 집중)의 다발 공격(_asheFireFlurry)은
     // 다중 대상이라 이 단일 대상 훅을 거치지 않고 자체적으로 처리한다.
@@ -4176,6 +4191,10 @@ class CharacterController {
     if (this.hp <= 0) this._die();
   }
   _die() {
+    // 암흑의 인장(영광) - 사망 시 중첩 소실. 이 데모는 플레이어를 공격하는
+    // AI가 없어 사실상 트리거될 일이 없지만(도란의 방패 피격 회복과 동일한
+    // 한계), 향후 그런 기능이 추가되면 자동으로 맞물리도록 범용 훅으로 둔다.
+    if (typeof itemOnChampionDeath === 'function') itemOnChampionDeath(this);
     if (this.championId === 'renekton' && this._renekton?.rActive) this._renektonEndR();
     this._clearPending(); this._clearActionTimers();
     this._masteryiCancelAlphaStrike(); // 안전망: Q 도중 사망해도 비대상 플래그/상태가 남지 않게 정리
