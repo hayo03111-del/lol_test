@@ -88,8 +88,42 @@ const ITEM_DATA = {
     maxCharges: 2, refillOnShopUse: true,
     consumable: { healAmount: 100, healDurationSec: 12 },
   },
+  // 투명 와드(트린켓) - 실제 LoL처럼 6칸 인벤토리와 완전히 별개인 전용
+  // 슬롯(ctrl.trinket)에 들어간다(돈으로 사지 않고 기본 장착). 재사용
+  // 대기시간(170~90초)과 와드 지속시간(90~120초)은 게임 시간에 따라
+  // 선형으로 보간된다 - 원문에 정확한 보간 구간이 나와있지 않아, 20분
+  // (1200초) 시점에 후반 값에 도달한다고 근사했다(명시적 근사치).
+  stealthWard: {
+    id: 'stealthWard', nameKo: '투명 와드', cost: 0, trinket: true,
+    maxCharges: 2,
+    rechargeSecEarly: 170, rechargeSecLate: 90, scaleFullAtSec: 1200,
+    wardDurationEarlySec: 90, wardDurationLateSec: 120,
+    placeRange: 550, visionRadius: 900, hitsToDestroy: 3,
+  },
+  // [기본 아이템] - 대부분 순수 스탯 아이템. 가격이 원문 텍스트에 없던
+  // 3종(원기 회복의 구슬/천갑옷/B.F. 대검)은 공식적으로 잘 알려진 실제
+  // LoL 가격을 그대로 썼다(명시적으로 표시 - 사용자가 준 텍스트에는
+  // 가격 줄이 누락되어 있었다).
+  pickaxe: { id: 'pickaxe', nameKo: '곡괭이', cost: 875, stats: { attackDamage: 25 } },
+  dagger: { id: 'dagger', nameKo: '단검', cost: 250, stats: { attackSpeedPercent: 0.25 } },
+  longSword: { id: 'longSword', nameKo: '롱소드', cost: 350, stats: { attackDamage: 10 } },
+  rubyCrystal: { id: 'rubyCrystal', nameKo: '루비 수정', cost: 400, stats: { maxHp: 150 } },
+  glowingMote: { id: 'glowingMote', nameKo: '빛나는 티끌', cost: 250, stats: { abilityHaste: 5 } },
+  negatronCloak: { id: 'negatronCloak', nameKo: '마법무효화의 망토', cost: 400, stats: { magicResist: 20 } },
+  cloakOfAgility: { id: 'cloakOfAgility', nameKo: '민첩성의 망토', cost: 600, stats: { critChance: 0.15 } },
+  blastingWand: { id: 'blastingWand', nameKo: '방출의 마법봉', cost: 850, stats: { abilityPower: 45 } },
+  sapphireCrystal: { id: 'sapphireCrystal', nameKo: '사파이어 수정', cost: 300, stats: { mana: 300 } },
+  needlesslyLargeRod: { id: 'needlesslyLargeRod', nameKo: '쓸데없이 큰 지팡이', cost: 1200, stats: { abilityPower: 65 } },
+  faerieCharm: { id: 'faerieCharm', nameKo: '요정의 부적', cost: 200, stats: { mpRegenPercent: 0.5 } },
+  rejuvenationBead: { id: 'rejuvenationBead', nameKo: '원기 회복의 구슬', cost: 150, stats: { hpRegenPercent: 1.0 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  amplifyingTome: { id: 'amplifyingTome', nameKo: '증폭의 고사', cost: 400, stats: { abilityPower: 20 } },
+  chainVest: { id: 'chainVest', nameKo: '천갑옷', cost: 800, stats: { armor: 15 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  bfSword: { id: 'bfSword', nameKo: 'B.F. 대검', cost: 1300, stats: { attackDamage: 40 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
-  'cull', 'darkSeal', 'tearOfGoddess', 'healthPotion', 'refillablePotion',
+  'cull', 'darkSeal', 'tearOfGoddess', 'healthPotion', 'refillablePotion', 'stealthWard',
+  'pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak',
+  'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod',
+  'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword',
 ];

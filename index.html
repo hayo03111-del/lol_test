@@ -486,6 +486,7 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
     <div><b>Q/W/E/R</b>: 스킬</div>
     <div><b>B</b>: 귀환</div>
     <div><b>1~6</b>: 인벤토리 아이템 사용(물약)</div>
+    <div><b>T</b>: 투명 와드 설치</div>
     <div><b>Space</b>: 대상 강제 공격(테스트)</div>
     <div><b>ESC</b>: 일시정지</div>
     <div><b>F1</b>: 디버그 패널 토글</div>
@@ -538,8 +539,28 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
     <div class="shopItemRow"><span class="shopItemName">여신의 눈물 (400)</span><button data-item-id="tearOfGoddess">구매</button></div>
     <div class="shopItemRow" style="margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;"><span class="shopItemName">체력 물약 (50)</span><button data-item-id="healthPotion">구매</button></div>
     <div class="shopItemRow"><span class="shopItemName">충전형 물약 (150)</span><button data-item-id="refillablePotion">구매</button></div>
+    <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">기본 아이템</div>
+    <div class="shopItemRow"><span class="shopItemName">곡괭이 (875)</span><button data-item-id="pickaxe">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">단검 (250)</span><button data-item-id="dagger">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">롱소드 (350)</span><button data-item-id="longSword">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">루비 수정 (400)</span><button data-item-id="rubyCrystal">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">빛나는 티끌 (250)</span><button data-item-id="glowingMote">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">마법무효화의 망토 (400)</span><button data-item-id="negatronCloak">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">민첩성의 망토 (600)</span><button data-item-id="cloakOfAgility">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">방출의 마법봉 (850)</span><button data-item-id="blastingWand">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">사파이어 수정 (300)</span><button data-item-id="sapphireCrystal">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">쓸데없이 큰 지팡이 (1200)</span><button data-item-id="needlesslyLargeRod">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">요정의 부적 (200)</span><button data-item-id="faerieCharm">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">원기 회복의 구슬 (150*)</span><button data-item-id="rejuvenationBead">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">증폭의 고사 (400)</span><button data-item-id="amplifyingTome">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">천갑옷 (800*)</span><button data-item-id="chainVest">구매</button></div>
+    <div class="shopItemRow"><span class="shopItemName">B.F. 대검 (1300*)</span><button data-item-id="bfSword">구매</button></div>
+    <div style="font-size:9px;color:#888;">* 원문에 가격이 없어 실제 LoL 가격을 사용</div>
+    <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">트린켓(기본 장착, 구매 불필요)</div>
+    <div id="trinketSlotRow" style="display:flex;align-items:center;gap:8px;"></div>
+    <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">인벤토리</div>
     <div id="inventoryRow"></div>
-    <div style="font-size:9px;color:#888;margin-top:4px;">숫자키 1~6: 해당 칸 아이템 사용(물약) · 슬롯 클릭: 사용/판매(70%)</div>
+    <div style="font-size:9px;color:#888;margin-top:4px;">숫자키 1~6: 해당 칸 아이템 사용(물약) · 슬롯 클릭: 사용/판매(70%) · T: 투명 와드 설치</div>
   </div>
 </div>
 
@@ -2820,10 +2841,44 @@ const ITEM_DATA = {
     maxCharges: 2, refillOnShopUse: true,
     consumable: { healAmount: 100, healDurationSec: 12 },
   },
+  // 투명 와드(트린켓) - 실제 LoL처럼 6칸 인벤토리와 완전히 별개인 전용
+  // 슬롯(ctrl.trinket)에 들어간다(돈으로 사지 않고 기본 장착). 재사용
+  // 대기시간(170~90초)과 와드 지속시간(90~120초)은 게임 시간에 따라
+  // 선형으로 보간된다 - 원문에 정확한 보간 구간이 나와있지 않아, 20분
+  // (1200초) 시점에 후반 값에 도달한다고 근사했다(명시적 근사치).
+  stealthWard: {
+    id: 'stealthWard', nameKo: '투명 와드', cost: 0, trinket: true,
+    maxCharges: 2,
+    rechargeSecEarly: 170, rechargeSecLate: 90, scaleFullAtSec: 1200,
+    wardDurationEarlySec: 90, wardDurationLateSec: 120,
+    placeRange: 550, visionRadius: 900, hitsToDestroy: 3,
+  },
+  // [기본 아이템] - 대부분 순수 스탯 아이템. 가격이 원문 텍스트에 없던
+  // 3종(원기 회복의 구슬/천갑옷/B.F. 대검)은 공식적으로 잘 알려진 실제
+  // LoL 가격을 그대로 썼다(명시적으로 표시 - 사용자가 준 텍스트에는
+  // 가격 줄이 누락되어 있었다).
+  pickaxe: { id: 'pickaxe', nameKo: '곡괭이', cost: 875, stats: { attackDamage: 25 } },
+  dagger: { id: 'dagger', nameKo: '단검', cost: 250, stats: { attackSpeedPercent: 0.25 } },
+  longSword: { id: 'longSword', nameKo: '롱소드', cost: 350, stats: { attackDamage: 10 } },
+  rubyCrystal: { id: 'rubyCrystal', nameKo: '루비 수정', cost: 400, stats: { maxHp: 150 } },
+  glowingMote: { id: 'glowingMote', nameKo: '빛나는 티끌', cost: 250, stats: { abilityHaste: 5 } },
+  negatronCloak: { id: 'negatronCloak', nameKo: '마법무효화의 망토', cost: 400, stats: { magicResist: 20 } },
+  cloakOfAgility: { id: 'cloakOfAgility', nameKo: '민첩성의 망토', cost: 600, stats: { critChance: 0.15 } },
+  blastingWand: { id: 'blastingWand', nameKo: '방출의 마법봉', cost: 850, stats: { abilityPower: 45 } },
+  sapphireCrystal: { id: 'sapphireCrystal', nameKo: '사파이어 수정', cost: 300, stats: { mana: 300 } },
+  needlesslyLargeRod: { id: 'needlesslyLargeRod', nameKo: '쓸데없이 큰 지팡이', cost: 1200, stats: { abilityPower: 65 } },
+  faerieCharm: { id: 'faerieCharm', nameKo: '요정의 부적', cost: 200, stats: { mpRegenPercent: 0.5 } },
+  rejuvenationBead: { id: 'rejuvenationBead', nameKo: '원기 회복의 구슬', cost: 150, stats: { hpRegenPercent: 1.0 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  amplifyingTome: { id: 'amplifyingTome', nameKo: '증폭의 고사', cost: 400, stats: { abilityPower: 20 } },
+  chainVest: { id: 'chainVest', nameKo: '천갑옷', cost: 800, stats: { armor: 15 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  bfSword: { id: 'bfSword', nameKo: 'B.F. 대검', cost: 1300, stats: { attackDamage: 40 } }, // 가격 원문 누락 - 실제 LoL 가격 사용
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
-  'cull', 'darkSeal', 'tearOfGoddess', 'healthPotion', 'refillablePotion',
+  'cull', 'darkSeal', 'tearOfGoddess', 'healthPotion', 'refillablePotion', 'stealthWard',
+  'pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak',
+  'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod',
+  'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword',
 ];
 
 /* ===== src/animation/animation_role_resolver.js ===== */
@@ -7739,6 +7794,14 @@ class CharacterController {
     this._itemLastDealtChampionDamageAt = 0; this._itemLastTookChampionDamageAt = 0;
     this._itemActiveHeals = []; this._itemGloryStacks = 0; this._itemCullGold = 0; this._itemTearState = null;
     this._itemTick = {};
+    this.itemBonusCritChance = 0; this.itemBonusAbilityHaste = 0;
+    this.itemBonusHpRegenPercent = 0; this.itemBonusMpRegenPercent = 0;
+    // 트린켓(투명 와드) - 6칸 인벤토리와 별개인 전용 슬롯. 실제 LoL처럼
+    // 골드로 사지 않고 기본 장착되어 있다(gold/items와 동일하게 챔피언을
+    // 바꿔도 유지 - applyChampionData()는 건드리지 않는다). _placedWards는
+    // 현재 설치돼 있는 와드 마커(메시+만료 시각) 목록.
+    this.trinket = { id: 'stealthWard', charges: 2 };
+    this._placedWards = [];
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -7925,6 +7988,13 @@ class CharacterController {
       this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0);
       this.stats.baseArmor = base.armor;
       this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0);
+      // 민첩성의 망토(치명타확률 15%) 등 - 이 프로젝트의 기본 챔피언 스탯에는
+      // 애초에 크리티컬 확률이 없고(요네/야스오만 자체 패시브로 매 프레임
+      // stats.critChance를 1로 강제 재설정 - _yoneTick/_yasuoTick 참고),
+      // 아이템 없이는 항상 0%였다. 여기서 매번 덮어써도 요네/야스오는 같은
+      // 프레임 또는 그다음 프레임에 자신의 틱 함수가 다시 1로 되돌리므로
+      // 문제없다(최대 한 프레임짜리 눈에 띄지 않는 과도 상태).
+      this.stats.critChance = (this.itemBonusCritChance || 0);
       this.stats.attackRange = base.attackRange;
       this.stats.baseMoveSpeed = base.baseMoveSpeed;
       this.hp = Math.min(this.hp || this.maxHp * hpPct, this.maxHp);
@@ -9017,7 +9087,7 @@ class CharacterController {
         console.log(`[SKILL BLOCKED] ${msg}`); showSkillToast(msg);
         return false;
       }
-      this.mp -= cost.mana; this.cooldowns[slot] = cost.cd;
+      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd) : cost.cd;
       updateBars(this);
     }
     return true;
@@ -9900,8 +9970,13 @@ class CharacterController {
     // (닐라 실제 bin의 baseStaticHPRegenModifiable=1.2(초당)*5=6.0이 코드의
     // hpRegen:6과 정확히 일치해서 확인됨), 여기서는 그 값을 dt(초)에 그대로
     // 곱해서 실제로는 5배 더 빠르게 재생되고 있었다.
-    this.mp = Math.min(this.maxMp, this.mp + dt * (this.mpRegen != null ? this.mpRegen : 4) / 5);
-    if (this.hp > 0 && this.state !== STATE.DEAD) this.hp = Math.min(this.maxHp, this.hp + dt * (this.hpRegen || 0) / 5);
+    // 아이템 패시브(요정의 부적/원기 회복의 구슬) - 기본 재생량에 곱해지는
+    // 퍼센트 보너스. 기존 hpRegen/mpRegen 자체는 건드리지 않고(레벨업 시
+    // computeChampionStats()가 다시 계산하는 기준값) 여기서만 곱한다.
+    const mpRegenMult = 1 + (this.itemBonusMpRegenPercent || 0);
+    const hpRegenMult = 1 + (this.itemBonusHpRegenPercent || 0);
+    this.mp = Math.min(this.maxMp, this.mp + dt * (this.mpRegen != null ? this.mpRegen : 4) * mpRegenMult / 5);
+    if (this.hp > 0 && this.state !== STATE.DEAD) this.hp = Math.min(this.maxHp, this.hp + dt * (this.hpRegen || 0) * hpRegenMult / 5);
     updateBars(this);
   }
 
@@ -10301,7 +10376,7 @@ class CharacterController {
     const cost = SKILL_COST[slot];
     if (!free) {
       if (this.cooldowns[slot] > 0 || this.mp < cost.mana) return;
-      this.mp -= cost.mana; this.cooldowns[slot] = cost.cd;
+      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd) : cost.cd;
     }
 
     this._clearActionTimers(); // 요청 11: 진행 중이던 다른 시퀀스/액션을 먼저 확실히 취소
@@ -21767,6 +21842,8 @@ function recomputeItemStats(ctrl) {
   ctrl.itemBonusAD = 0; ctrl.itemBonusAP = 0; ctrl.itemBonusMaxHp = 0; ctrl.itemBonusMana = 0;
   ctrl.itemBonusArmor = 0; ctrl.itemBonusMr = 0; ctrl.itemBonusAttackSpeedPercent = 0;
   ctrl.itemAllDamageVampPercent = 0; ctrl.itemMinionBonusDamage = 0; ctrl.itemOnHitHeal = 0;
+  ctrl.itemBonusCritChance = 0; ctrl.itemBonusAbilityHaste = 0;
+  ctrl.itemBonusHpRegenPercent = 0; ctrl.itemBonusMpRegenPercent = 0;
   for (const slot of (ctrl.items || [])) {
     const item = ITEM_DATA[slot.id];
     if (!item) continue;
@@ -21778,6 +21855,10 @@ function recomputeItemStats(ctrl) {
     ctrl.itemBonusArmor += s.armor || 0;
     ctrl.itemBonusMr += s.magicResist || 0;
     ctrl.itemBonusAttackSpeedPercent += s.attackSpeedPercent || 0;
+    ctrl.itemBonusCritChance += s.critChance || 0;
+    ctrl.itemBonusAbilityHaste += s.abilityHaste || 0;
+    ctrl.itemBonusHpRegenPercent += s.hpRegenPercent || 0;
+    ctrl.itemBonusMpRegenPercent += s.mpRegenPercent || 0;
     ctrl.itemAllDamageVampPercent += item.allDamageVampPercent || 0;
     ctrl.itemMinionBonusDamage += item.minionBonusDamage || 0;
     ctrl.itemOnHitHeal += item.onHitHeal || 0;
@@ -21788,6 +21869,22 @@ function recomputeItemStats(ctrl) {
     if (item.manaCirculationPassive && ctrl._itemTearState) ctrl.itemBonusMana += ctrl._itemTearState.gained || 0;
   }
   ctrl.recomputeStats();
+}
+
+// 스킬 가속(빛나는 티끌 등) - 쿨다운을 "설정하는" 순간에 곱한다(공식:
+// 실제 LoL의 재사용 대기시간 공식 cd/(1+AH/100)과 동일).
+// 한계(명시): 이 프로젝트는 가렌/모데카이저/세트/초가스/아리/애쉬/바루스
+// 정도만 character_controller.js의 공용 castAbility()/_castCustomSequence()
+// 경로로 쿨다운을 설정하고, 렉사이/야스오/다리우스/닐라/벡스/이즈리얼/
+// 요네/마스터 이/리 신은 각자 챔피언 파일에서 `this.cooldowns.X = ...`를
+// 직접 설정한다(스킬마다 레벨별 수식이 달라 처음부터 공용 함수를 거치지
+// 않는 구조) - 이 아이템 하나를 위해 9개 챔피언 파일의 수십 군데를 전부
+// 고치는 건 위험도가 너무 커서, 이번 범위에서는 공용 경로만 적용하고
+// 나머지는 README에 한계로 명시한다.
+function abilityHasteCooldown(ctrl, baseCd) {
+  const ah = (ctrl && ctrl.itemBonusAbilityHaste) || 0;
+  if (ah <= 0) return baseCd;
+  return baseCd * (100 / (100 + ah));
 }
 
 // 상점 - 요청대로 "기지 구역(isPositionInBaseZone) 안에서만" 구매 가능.
@@ -21957,6 +22054,8 @@ function _itemTickTearRecharge(ctrl, item, dt) {
 function itemSystemTick(ctrl, dt) {
   if (!ctrl) return;
   _itemTickActiveHeals(ctrl, dt);
+  _itemTickTrinketRecharge(ctrl, dt);
+  _itemTickWardExpiry(ctrl, dt);
   if (!ctrl.items || !ctrl.items.length) return;
   const now = performance.now();
   for (const slot of ctrl.items) {
@@ -22027,6 +22126,98 @@ function itemOnChampionDeath(ctrl) {
   recomputeItemStats(ctrl);
 }
 
+/* ============================================================
+   트린켓(투명 와드) - 6칸 인벤토리와 완전히 별개인 전용 슬롯
+   (ctrl.trinket). 골드로 사지 않고 기본 장착되어 있으며(실제 LoL과
+   동일), 시야는 이미 있는 vision_system.js의 grantVision() 범용
+   진입점을 그대로 재사용한다(vision_system.js 주석이 "나중에 와드
+   개념을 추가하면 이 함수를 재사용하라"고 이미 명시해뒀던 지점).
+   ============================================================ */
+
+// 게임 경과 시간(초)에 따라 a(초반값)->b(후반값)로 선형 보간한다.
+// scaleFullAtSec 시점 이후로는 b에서 고정된다.
+function _itemScaleByGameTime(a, b, scaleFullAtSec) {
+  const gameTimeSec = typeof getTurretGameTimeSec === 'function' ? getTurretGameTimeSec() : scaleFullAtSec;
+  const t = Math.max(0, Math.min(1, gameTimeSec / scaleFullAtSec));
+  return a + (b - a) * t;
+}
+
+// 트린켓 충전 재생 - 게임 시간에 따라 170~90초로 선형 단축된다.
+function _itemTickTrinketRecharge(ctrl, dt) {
+  if (!ctrl || !ctrl.trinket) return;
+  const data = ITEM_DATA[ctrl.trinket.id];
+  if (!data || !data.maxCharges) return;
+  if (ctrl.trinket.charges >= data.maxCharges) return;
+  ctrl._itemTick = ctrl._itemTick || {};
+  const key = 'trinketRecharge';
+  ctrl._itemTick[key] = (ctrl._itemTick[key] || 0) + dt;
+  // 재충전 1회 걸릴 때마다 그 시점 기준으로 다시 계산한다(while 루프 중
+  // 게임 시간이 스케일 구간을 넘나들어도 항상 "현재" 재사용 대기시간을 쓴다).
+  while (ctrl.trinket.charges < data.maxCharges) {
+    const rechargeSec = _itemScaleByGameTime(data.rechargeSecEarly, data.rechargeSecLate, data.scaleFullAtSec);
+    if (ctrl._itemTick[key] < rechargeSec) break;
+    ctrl._itemTick[key] -= rechargeSec;
+    ctrl.trinket.charges += 1;
+    if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  }
+}
+
+// 설치된 와드의 만료(시각 효과 정리) - 실제 시야 만료는 VisionSystem의
+// temporarySources가 자체적으로 처리하므로, 여기서는 지상에 놓인 마커
+// 메시만 같은 시각에 치운다.
+function _itemTickWardExpiry(ctrl, dt) {
+  if (!ctrl || !ctrl._placedWards || !ctrl._placedWards.length) return;
+  const now = performance.now();
+  ctrl._placedWards = ctrl._placedWards.filter((w) => {
+    if (now < w.expiresAt) return true;
+    if (w.mesh && typeof scene !== 'undefined') scene.remove(w.mesh);
+    return false;
+  });
+}
+
+// 투명 와드 설치 - Q/W/E/R과 동일하게 키 입력 시 마우스 월드 좌표를 받아
+// 즉시 시전한다(character_controller.js에서 직접 호출하지 않고 전역
+// 키바인드(global_system_instances.js)에서 바로 호출 - 아이템은 챔피언
+// 고유 스킬이 아니므로 castAbility()를 거치지 않는다).
+function placeWard(ctrl, worldPoint) {
+  if (!ctrl || !ctrl.trinket) { console.warn('[WARD] 장착한 트린켓이 없습니다.'); return false; }
+  const data = ITEM_DATA[ctrl.trinket.id];
+  if (!data) return false;
+  if (!(ctrl.trinket.charges > 0)) { console.warn('[WARD] 충전량이 없습니다.'); return false; }
+  if (!worldPoint) return false;
+
+  // 설치 사정거리(550) 밖을 클릭하면 실제 LoL처럼 그 방향 최대 사거리에 놓인다.
+  const origin = ctrl.root.position;
+  const maxWorldRange = lolRangeToWorld(data.placeRange);
+  const dir = new THREE.Vector3().subVectors(worldPoint, origin);
+  dir.y = 0;
+  const dist = dir.length();
+  const finalPos = dist > maxWorldRange && dist > 0
+    ? origin.clone().add(dir.normalize().multiplyScalar(maxWorldRange))
+    : worldPoint.clone();
+  finalPos.y = 0;
+
+  ctrl.trinket.charges -= 1;
+
+  const durationSec = _itemScaleByGameTime(data.wardDurationEarlySec, data.wardDurationLateSec, data.scaleFullAtSec);
+  if (typeof visionSystem !== 'undefined' && visionSystem) visionSystem.grantVision(finalPos, data.visionRadius, durationSec);
+
+  const ward = { position: finalPos.clone(), hitsRemaining: data.hitsToDestroy, expiresAt: performance.now() + durationSec * 1000, mesh: null };
+  if (typeof scene !== 'undefined' && typeof THREE !== 'undefined') {
+    const geo = new THREE.ConeGeometry(lolRangeToWorld(26), lolRangeToWorld(55), 6);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x3fae6a, transparent: true, opacity: 0.85 });
+    ward.mesh = new THREE.Mesh(geo, mat);
+    ward.mesh.position.copy(finalPos);
+    ward.mesh.position.y = lolRangeToWorld(27);
+    scene.add(ward.mesh);
+  }
+  ctrl._placedWards = ctrl._placedWards || [];
+  ctrl._placedWards.push(ward);
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  console.log(`[WARD] 투명 와드 설치 (지속시간 ${durationSec.toFixed(0)}초, 남은 충전 ${ctrl.trinket.charges}/${data.maxCharges})`);
+  return true;
+}
+
 /* ===== src/core/global_system_instances.js ===== */
 /* ============================================================
    4. GLOBAL SYSTEM INSTANCES
@@ -22060,6 +22251,7 @@ document.querySelectorAll('#shopPanel [data-item-id]').forEach((btn) => {
 // 프레임 아님). 소비 아이템(체력/충전형 물약)은 클릭하면 판매 대신
 // 사용되고, 중첩/충전 수를 작은 배지로 함께 표시한다.
 function updateItemUI(ctrl) {
+  _updateTrinketUI(ctrl);
   const row = document.getElementById('inventoryRow');
   if (!row) return;
   row.innerHTML = '';
@@ -22091,6 +22283,36 @@ function updateItemUI(ctrl) {
     }
     row.appendChild(el);
   }
+}
+// 트린켓(투명 와드) 전용 슬롯 - 6칸 인벤토리와 별개로 표시한다. 클릭으로도
+// 설치할 수 있게 해뒀다(실제로는 T키로 마우스 위치에 바로 꽂는 쪽이
+// 기본 조작법이지만, 클릭 한 번으로도 되게 해 UI만 보고도 쓸 수 있게 함 -
+// 이 경우 현재 조준 중인 지면 좌표가 없으므로 플레이어 바로 앞에 꽂는다).
+function _updateTrinketUI(ctrl) {
+  const row = document.getElementById('trinketSlotRow');
+  if (!row) return;
+  row.innerHTML = '';
+  const trinket = ctrl && ctrl.trinket;
+  const data = trinket && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[trinket.id] : null;
+  if (!data) return;
+  const el = document.createElement('div');
+  el.className = 'invSlot usable';
+  el.textContent = data.nameKo.slice(-2);
+  const badge = document.createElement('span');
+  badge.className = 'invBadge';
+  badge.textContent = `${trinket.charges}/${data.maxCharges}`;
+  el.appendChild(badge);
+  el.title = `${data.nameKo} (T키: 마우스 위치에 설치)`;
+  el.addEventListener('click', () => {
+    if (typeof placeWard !== 'function' || !ctrl) return;
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
+    placeWard(ctrl, ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300))));
+  });
+  row.appendChild(el);
+  const label = document.createElement('span');
+  label.style.fontSize = '10px'; label.style.color = '#999';
+  label.textContent = data.nameKo;
+  row.appendChild(label);
 }
 var controller = null;
 let championRoot = null;
@@ -22344,6 +22566,11 @@ window.addEventListener('keydown', (e) => {
     case 'Digit4': if (typeof useItem === 'function') useItem(controller, 3); break;
     case 'Digit5': if (typeof useItem === 'function') useItem(controller, 4); break;
     case 'Digit6': if (typeof useItem === 'function') useItem(controller, 5); break;
+    // 트린켓(투명 와드) - 실제 LoL의 트린켓 키(기본 Y)와 겹치지 않게
+    // 이 프로젝트에서 안 쓰던 T를 쓴다. Q/W/E/R과 동일하게 현재 마우스
+    // 월드 좌표에 즉시 시전한다(설치 사정거리를 넘으면 placeWard()
+    // 내부에서 그 방향 최대 거리로 clamp).
+    case 'KeyT': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
   }
 });
 

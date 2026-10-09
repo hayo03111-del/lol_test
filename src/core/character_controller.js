@@ -228,6 +228,14 @@ class CharacterController {
     this._itemLastDealtChampionDamageAt = 0; this._itemLastTookChampionDamageAt = 0;
     this._itemActiveHeals = []; this._itemGloryStacks = 0; this._itemCullGold = 0; this._itemTearState = null;
     this._itemTick = {};
+    this.itemBonusCritChance = 0; this.itemBonusAbilityHaste = 0;
+    this.itemBonusHpRegenPercent = 0; this.itemBonusMpRegenPercent = 0;
+    // 트린켓(투명 와드) - 6칸 인벤토리와 별개인 전용 슬롯. 실제 LoL처럼
+    // 골드로 사지 않고 기본 장착되어 있다(gold/items와 동일하게 챔피언을
+    // 바꿔도 유지 - applyChampionData()는 건드리지 않는다). _placedWards는
+    // 현재 설치돼 있는 와드 마커(메시+만료 시각) 목록.
+    this.trinket = { id: 'stealthWard', charges: 2 };
+    this._placedWards = [];
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -414,6 +422,13 @@ class CharacterController {
       this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0);
       this.stats.baseArmor = base.armor;
       this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0);
+      // 민첩성의 망토(치명타확률 15%) 등 - 이 프로젝트의 기본 챔피언 스탯에는
+      // 애초에 크리티컬 확률이 없고(요네/야스오만 자체 패시브로 매 프레임
+      // stats.critChance를 1로 강제 재설정 - _yoneTick/_yasuoTick 참고),
+      // 아이템 없이는 항상 0%였다. 여기서 매번 덮어써도 요네/야스오는 같은
+      // 프레임 또는 그다음 프레임에 자신의 틱 함수가 다시 1로 되돌리므로
+      // 문제없다(최대 한 프레임짜리 눈에 띄지 않는 과도 상태).
+      this.stats.critChance = (this.itemBonusCritChance || 0);
       this.stats.attackRange = base.attackRange;
       this.stats.baseMoveSpeed = base.baseMoveSpeed;
       this.hp = Math.min(this.hp || this.maxHp * hpPct, this.maxHp);
@@ -1506,7 +1521,7 @@ class CharacterController {
         console.log(`[SKILL BLOCKED] ${msg}`); showSkillToast(msg);
         return false;
       }
-      this.mp -= cost.mana; this.cooldowns[slot] = cost.cd;
+      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd) : cost.cd;
       updateBars(this);
     }
     return true;
@@ -2389,8 +2404,13 @@ class CharacterController {
     // (닐라 실제 bin의 baseStaticHPRegenModifiable=1.2(초당)*5=6.0이 코드의
     // hpRegen:6과 정확히 일치해서 확인됨), 여기서는 그 값을 dt(초)에 그대로
     // 곱해서 실제로는 5배 더 빠르게 재생되고 있었다.
-    this.mp = Math.min(this.maxMp, this.mp + dt * (this.mpRegen != null ? this.mpRegen : 4) / 5);
-    if (this.hp > 0 && this.state !== STATE.DEAD) this.hp = Math.min(this.maxHp, this.hp + dt * (this.hpRegen || 0) / 5);
+    // 아이템 패시브(요정의 부적/원기 회복의 구슬) - 기본 재생량에 곱해지는
+    // 퍼센트 보너스. 기존 hpRegen/mpRegen 자체는 건드리지 않고(레벨업 시
+    // computeChampionStats()가 다시 계산하는 기준값) 여기서만 곱한다.
+    const mpRegenMult = 1 + (this.itemBonusMpRegenPercent || 0);
+    const hpRegenMult = 1 + (this.itemBonusHpRegenPercent || 0);
+    this.mp = Math.min(this.maxMp, this.mp + dt * (this.mpRegen != null ? this.mpRegen : 4) * mpRegenMult / 5);
+    if (this.hp > 0 && this.state !== STATE.DEAD) this.hp = Math.min(this.maxHp, this.hp + dt * (this.hpRegen || 0) * hpRegenMult / 5);
     updateBars(this);
   }
 
@@ -2790,7 +2810,7 @@ class CharacterController {
     const cost = SKILL_COST[slot];
     if (!free) {
       if (this.cooldowns[slot] > 0 || this.mp < cost.mana) return;
-      this.mp -= cost.mana; this.cooldowns[slot] = cost.cd;
+      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd) : cost.cd;
     }
 
     this._clearActionTimers(); // 요청 11: 진행 중이던 다른 시퀀스/액션을 먼저 확실히 취소

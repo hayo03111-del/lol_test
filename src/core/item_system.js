@@ -15,6 +15,8 @@ function recomputeItemStats(ctrl) {
   ctrl.itemBonusAD = 0; ctrl.itemBonusAP = 0; ctrl.itemBonusMaxHp = 0; ctrl.itemBonusMana = 0;
   ctrl.itemBonusArmor = 0; ctrl.itemBonusMr = 0; ctrl.itemBonusAttackSpeedPercent = 0;
   ctrl.itemAllDamageVampPercent = 0; ctrl.itemMinionBonusDamage = 0; ctrl.itemOnHitHeal = 0;
+  ctrl.itemBonusCritChance = 0; ctrl.itemBonusAbilityHaste = 0;
+  ctrl.itemBonusHpRegenPercent = 0; ctrl.itemBonusMpRegenPercent = 0;
   for (const slot of (ctrl.items || [])) {
     const item = ITEM_DATA[slot.id];
     if (!item) continue;
@@ -26,6 +28,10 @@ function recomputeItemStats(ctrl) {
     ctrl.itemBonusArmor += s.armor || 0;
     ctrl.itemBonusMr += s.magicResist || 0;
     ctrl.itemBonusAttackSpeedPercent += s.attackSpeedPercent || 0;
+    ctrl.itemBonusCritChance += s.critChance || 0;
+    ctrl.itemBonusAbilityHaste += s.abilityHaste || 0;
+    ctrl.itemBonusHpRegenPercent += s.hpRegenPercent || 0;
+    ctrl.itemBonusMpRegenPercent += s.mpRegenPercent || 0;
     ctrl.itemAllDamageVampPercent += item.allDamageVampPercent || 0;
     ctrl.itemMinionBonusDamage += item.minionBonusDamage || 0;
     ctrl.itemOnHitHeal += item.onHitHeal || 0;
@@ -36,6 +42,22 @@ function recomputeItemStats(ctrl) {
     if (item.manaCirculationPassive && ctrl._itemTearState) ctrl.itemBonusMana += ctrl._itemTearState.gained || 0;
   }
   ctrl.recomputeStats();
+}
+
+// 스킬 가속(빛나는 티끌 등) - 쿨다운을 "설정하는" 순간에 곱한다(공식:
+// 실제 LoL의 재사용 대기시간 공식 cd/(1+AH/100)과 동일).
+// 한계(명시): 이 프로젝트는 가렌/모데카이저/세트/초가스/아리/애쉬/바루스
+// 정도만 character_controller.js의 공용 castAbility()/_castCustomSequence()
+// 경로로 쿨다운을 설정하고, 렉사이/야스오/다리우스/닐라/벡스/이즈리얼/
+// 요네/마스터 이/리 신은 각자 챔피언 파일에서 `this.cooldowns.X = ...`를
+// 직접 설정한다(스킬마다 레벨별 수식이 달라 처음부터 공용 함수를 거치지
+// 않는 구조) - 이 아이템 하나를 위해 9개 챔피언 파일의 수십 군데를 전부
+// 고치는 건 위험도가 너무 커서, 이번 범위에서는 공용 경로만 적용하고
+// 나머지는 README에 한계로 명시한다.
+function abilityHasteCooldown(ctrl, baseCd) {
+  const ah = (ctrl && ctrl.itemBonusAbilityHaste) || 0;
+  if (ah <= 0) return baseCd;
+  return baseCd * (100 / (100 + ah));
 }
 
 // 상점 - 요청대로 "기지 구역(isPositionInBaseZone) 안에서만" 구매 가능.
@@ -205,6 +227,8 @@ function _itemTickTearRecharge(ctrl, item, dt) {
 function itemSystemTick(ctrl, dt) {
   if (!ctrl) return;
   _itemTickActiveHeals(ctrl, dt);
+  _itemTickTrinketRecharge(ctrl, dt);
+  _itemTickWardExpiry(ctrl, dt);
   if (!ctrl.items || !ctrl.items.length) return;
   const now = performance.now();
   for (const slot of ctrl.items) {
@@ -273,4 +297,96 @@ function itemOnChampionDeath(ctrl) {
   const p = ITEM_DATA.darkSeal.gloryPassive;
   ctrl._itemGloryStacks = Math.max(0, ctrl._itemGloryStacks - p.deathLossStacks);
   recomputeItemStats(ctrl);
+}
+
+/* ============================================================
+   트린켓(투명 와드) - 6칸 인벤토리와 완전히 별개인 전용 슬롯
+   (ctrl.trinket). 골드로 사지 않고 기본 장착되어 있으며(실제 LoL과
+   동일), 시야는 이미 있는 vision_system.js의 grantVision() 범용
+   진입점을 그대로 재사용한다(vision_system.js 주석이 "나중에 와드
+   개념을 추가하면 이 함수를 재사용하라"고 이미 명시해뒀던 지점).
+   ============================================================ */
+
+// 게임 경과 시간(초)에 따라 a(초반값)->b(후반값)로 선형 보간한다.
+// scaleFullAtSec 시점 이후로는 b에서 고정된다.
+function _itemScaleByGameTime(a, b, scaleFullAtSec) {
+  const gameTimeSec = typeof getTurretGameTimeSec === 'function' ? getTurretGameTimeSec() : scaleFullAtSec;
+  const t = Math.max(0, Math.min(1, gameTimeSec / scaleFullAtSec));
+  return a + (b - a) * t;
+}
+
+// 트린켓 충전 재생 - 게임 시간에 따라 170~90초로 선형 단축된다.
+function _itemTickTrinketRecharge(ctrl, dt) {
+  if (!ctrl || !ctrl.trinket) return;
+  const data = ITEM_DATA[ctrl.trinket.id];
+  if (!data || !data.maxCharges) return;
+  if (ctrl.trinket.charges >= data.maxCharges) return;
+  ctrl._itemTick = ctrl._itemTick || {};
+  const key = 'trinketRecharge';
+  ctrl._itemTick[key] = (ctrl._itemTick[key] || 0) + dt;
+  // 재충전 1회 걸릴 때마다 그 시점 기준으로 다시 계산한다(while 루프 중
+  // 게임 시간이 스케일 구간을 넘나들어도 항상 "현재" 재사용 대기시간을 쓴다).
+  while (ctrl.trinket.charges < data.maxCharges) {
+    const rechargeSec = _itemScaleByGameTime(data.rechargeSecEarly, data.rechargeSecLate, data.scaleFullAtSec);
+    if (ctrl._itemTick[key] < rechargeSec) break;
+    ctrl._itemTick[key] -= rechargeSec;
+    ctrl.trinket.charges += 1;
+    if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  }
+}
+
+// 설치된 와드의 만료(시각 효과 정리) - 실제 시야 만료는 VisionSystem의
+// temporarySources가 자체적으로 처리하므로, 여기서는 지상에 놓인 마커
+// 메시만 같은 시각에 치운다.
+function _itemTickWardExpiry(ctrl, dt) {
+  if (!ctrl || !ctrl._placedWards || !ctrl._placedWards.length) return;
+  const now = performance.now();
+  ctrl._placedWards = ctrl._placedWards.filter((w) => {
+    if (now < w.expiresAt) return true;
+    if (w.mesh && typeof scene !== 'undefined') scene.remove(w.mesh);
+    return false;
+  });
+}
+
+// 투명 와드 설치 - Q/W/E/R과 동일하게 키 입력 시 마우스 월드 좌표를 받아
+// 즉시 시전한다(character_controller.js에서 직접 호출하지 않고 전역
+// 키바인드(global_system_instances.js)에서 바로 호출 - 아이템은 챔피언
+// 고유 스킬이 아니므로 castAbility()를 거치지 않는다).
+function placeWard(ctrl, worldPoint) {
+  if (!ctrl || !ctrl.trinket) { console.warn('[WARD] 장착한 트린켓이 없습니다.'); return false; }
+  const data = ITEM_DATA[ctrl.trinket.id];
+  if (!data) return false;
+  if (!(ctrl.trinket.charges > 0)) { console.warn('[WARD] 충전량이 없습니다.'); return false; }
+  if (!worldPoint) return false;
+
+  // 설치 사정거리(550) 밖을 클릭하면 실제 LoL처럼 그 방향 최대 사거리에 놓인다.
+  const origin = ctrl.root.position;
+  const maxWorldRange = lolRangeToWorld(data.placeRange);
+  const dir = new THREE.Vector3().subVectors(worldPoint, origin);
+  dir.y = 0;
+  const dist = dir.length();
+  const finalPos = dist > maxWorldRange && dist > 0
+    ? origin.clone().add(dir.normalize().multiplyScalar(maxWorldRange))
+    : worldPoint.clone();
+  finalPos.y = 0;
+
+  ctrl.trinket.charges -= 1;
+
+  const durationSec = _itemScaleByGameTime(data.wardDurationEarlySec, data.wardDurationLateSec, data.scaleFullAtSec);
+  if (typeof visionSystem !== 'undefined' && visionSystem) visionSystem.grantVision(finalPos, data.visionRadius, durationSec);
+
+  const ward = { position: finalPos.clone(), hitsRemaining: data.hitsToDestroy, expiresAt: performance.now() + durationSec * 1000, mesh: null };
+  if (typeof scene !== 'undefined' && typeof THREE !== 'undefined') {
+    const geo = new THREE.ConeGeometry(lolRangeToWorld(26), lolRangeToWorld(55), 6);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x3fae6a, transparent: true, opacity: 0.85 });
+    ward.mesh = new THREE.Mesh(geo, mat);
+    ward.mesh.position.copy(finalPos);
+    ward.mesh.position.y = lolRangeToWorld(27);
+    scene.add(ward.mesh);
+  }
+  ctrl._placedWards = ctrl._placedWards || [];
+  ctrl._placedWards.push(ward);
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  console.log(`[WARD] 투명 와드 설치 (지속시간 ${durationSec.toFixed(0)}초, 남은 충전 ${ctrl.trinket.charges}/${data.maxCharges})`);
+  return true;
 }

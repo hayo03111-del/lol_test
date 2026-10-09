@@ -30,6 +30,7 @@ document.querySelectorAll('#shopPanel [data-item-id]').forEach((btn) => {
 // 프레임 아님). 소비 아이템(체력/충전형 물약)은 클릭하면 판매 대신
 // 사용되고, 중첩/충전 수를 작은 배지로 함께 표시한다.
 function updateItemUI(ctrl) {
+  _updateTrinketUI(ctrl);
   const row = document.getElementById('inventoryRow');
   if (!row) return;
   row.innerHTML = '';
@@ -61,6 +62,36 @@ function updateItemUI(ctrl) {
     }
     row.appendChild(el);
   }
+}
+// 트린켓(투명 와드) 전용 슬롯 - 6칸 인벤토리와 별개로 표시한다. 클릭으로도
+// 설치할 수 있게 해뒀다(실제로는 T키로 마우스 위치에 바로 꽂는 쪽이
+// 기본 조작법이지만, 클릭 한 번으로도 되게 해 UI만 보고도 쓸 수 있게 함 -
+// 이 경우 현재 조준 중인 지면 좌표가 없으므로 플레이어 바로 앞에 꽂는다).
+function _updateTrinketUI(ctrl) {
+  const row = document.getElementById('trinketSlotRow');
+  if (!row) return;
+  row.innerHTML = '';
+  const trinket = ctrl && ctrl.trinket;
+  const data = trinket && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[trinket.id] : null;
+  if (!data) return;
+  const el = document.createElement('div');
+  el.className = 'invSlot usable';
+  el.textContent = data.nameKo.slice(-2);
+  const badge = document.createElement('span');
+  badge.className = 'invBadge';
+  badge.textContent = `${trinket.charges}/${data.maxCharges}`;
+  el.appendChild(badge);
+  el.title = `${data.nameKo} (T키: 마우스 위치에 설치)`;
+  el.addEventListener('click', () => {
+    if (typeof placeWard !== 'function' || !ctrl) return;
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
+    placeWard(ctrl, ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300))));
+  });
+  row.appendChild(el);
+  const label = document.createElement('span');
+  label.style.fontSize = '10px'; label.style.color = '#999';
+  label.textContent = data.nameKo;
+  row.appendChild(label);
 }
 var controller = null;
 let championRoot = null;
@@ -314,6 +345,11 @@ window.addEventListener('keydown', (e) => {
     case 'Digit4': if (typeof useItem === 'function') useItem(controller, 3); break;
     case 'Digit5': if (typeof useItem === 'function') useItem(controller, 4); break;
     case 'Digit6': if (typeof useItem === 'function') useItem(controller, 5); break;
+    // 트린켓(투명 와드) - 실제 LoL의 트린켓 키(기본 Y)와 겹치지 않게
+    // 이 프로젝트에서 안 쓰던 T를 쓴다. Q/W/E/R과 동일하게 현재 마우스
+    // 월드 좌표에 즉시 시전한다(설치 사정거리를 넘으면 placeWard()
+    // 내부에서 그 방향 최대 거리로 clamp).
+    case 'KeyT': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
   }
 });
 
