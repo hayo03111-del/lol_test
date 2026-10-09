@@ -2224,6 +2224,8 @@ const ITEM_DATA = {
     // 건드리지 않고는 정확히 구분할 수 없어, 챔피언/더미 대상 피해 전체
     // (스킬+평타)를 트리거로 근사했다(README에 명시).
     manaCirculationPassive: { maxManaPerHit: 3, maxManaPerChampionHit: 6, maxManaCap: 360, maxCharges: 4, rechargeSec: 8 },
+    // 유일 아이템(마나순환 계열) - manamune/muramana 주석 참고.
+    uniqueGroup: 'manaCirculation',
   },
   healthPotion: {
     id: 'healthPotion', nameKo: '체력 물약', cost: 50,
@@ -2360,10 +2362,19 @@ const ITEM_DATA = {
   // 하위템 가격 합)은 item_system.js의 combineCost()가 자동으로 계산하므로
   // 여기 따로 적지 않는다.
   //
-  // 의도적으로 뺀 항목: "강철인장"(원문 가격 1100원, 하위템 롱소드+천갑옷
-  // 2개 = 350+800+800=1950원로 완제품 가격보다 하위템 가격 합이 더 큰
-  // 모순이 있다 - 숫자를 지어내지 않는다는 원칙에 따라 추측으로 고치지
-  // 않고 이번 배치에서 제외했다. 가격 정보가 더 확인되면 추가할 수 있다).
+  // 강철인장 - QA 재확인 결과 재반영. 원문 가격은 1100원이고 하위템은
+  // 롱소드+천갑옷 2개인데, 천갑옷 가격(800원)이 원문에 없어 실제 LoL
+  // 가격을 썼더니(priceGuessed) 하위템 합(350+800+800=1950원)이 완제품
+  // 가격보다 커지는 모순이 생긴다. 하지만 이 모순은 "천갑옷 쪽의 추측
+  // 가격"에서 비롯된 것이지 강철인장 자신의 가격(1100원은 원문 값 그대로)이
+  // 틀린 게 아니다 - 두 값 중 하나를 지어내 맞추는 대신 그대로 두고,
+  // combineCost()가 이미 0 밑으로 안 내려가게 막아뒀으므로(실제로는 "거의
+  // 공짜로 조합되는" 결과가 된다) 안전하게 반영할 수 있다. 죽음의무도/
+  // 수호천사가 하위템으로 참조하므로 이 아이템 자체도 반드시 있어야 한다.
+  ironSeal: {
+    id: 'ironSeal', nameKo: '강철인장', cost: 1100, recipe: ['longSword', 'chainVest', 'chainVest'],
+    stats: { attackDamage: 15, armor: 30 },
+  },
   executionersCalling: {
     id: 'executionersCalling', nameKo: '처형인의 대검', cost: 800, recipe: ['longSword'],
     stats: { attackDamage: 15 },
@@ -2387,11 +2398,23 @@ const ITEM_DATA = {
   tiamat: {
     id: 'tiamat', nameKo: '티아맷', cost: 1200, recipe: ['longSword', 'longSword'],
     stats: { attackDamage: 25 },
+    // 유일 아이템(hydra 계열) - 원문에 "유일 아이템"이라는 표현은 없지만,
+    // 실제 LoL에서 티아맷/그 상위템(거대한히드라/발걸음분쇄기 등)은 전부
+    // "히드라류" 하나만 보유할 수 있는 유일 아이템이다. buyItem()/
+    // buildOrBuyItem()이 이 uniqueGroup을 공유하는 아이템을 이미 들고
+    // 있으면 구매/조합 자체를 막는다(QA 요청으로 추가 - item_system.js의
+    // uniqueGroup 검사 참고).
+    uniqueGroup: 'hydra',
     // 쪼개기(패시브) - 기본 공격 시 대상 주변 적에게 추가 물리 피해(근거리
     // 40%｜원거리 20%의 공격력). 구조물에는 적용하지 않는다(원문 그대로).
-    cleavePassive: { meleePercent: 0.40, rangedPercent: 0.20, radius: 400 },
+    // radiusGuessed: 원문에 반경 수치가 전혀 없다 - 실제 LoL 티아맷 쪼개기의
+    // 근사 반경(250)을 그대로 썼다(수치를 지어내지 않는다는 원칙에 따라
+    // "출처가 원문이 아님"을 명시적으로 표시 - priceGuessed와 동일한 취지).
+    cleavePassive: { meleePercent: 0.40, rangedPercent: 0.20, radius: 250, radiusGuessed: true },
     // 초승달(사용 시, 10초 쿨다운) - 주변 적에게 공격력 75% 물리 피해.
-    activeAbility: { nameKo: '초승달', cooldownSec: 10, percentAD: 0.75, radius: 400 },
+    // radiusGuessed: 역시 원문에 반경 수치가 없다 - 실제 LoL 초승달 액티브의
+    // 근사 반경(400)을 썼다.
+    activeAbility: { nameKo: '초승달', cooldownSec: 10, percentAD: 0.75, radius: 400, radiusGuessed: true },
   },
   sheen: {
     id: 'sheen', nameKo: '광휘의 검', cost: 900, recipe: ['glowingMote'],
@@ -2516,11 +2539,16 @@ const ITEM_DATA = {
     aweBonusAdPercentOfMana: 0.02,
     manaCirculationPassive: { maxManaPerHit: 3, maxManaPerChampionHit: 6, maxManaCap: 360, maxCharges: 4, rechargeSec: 8 },
     transformsInto: 'muramana',
+    // 유일 아이템(마나순환 계열) - 실제 LoL에서 여신의 눈물/마나무네/
+    // 무라마나는 전부 같은 "마나순환" 유일 아이템 그룹이다(티아맷/히드라와
+    // 동일한 이유로 추가 - QA 요청).
+    uniqueGroup: 'manaCirculation',
   },
   muramana: {
     id: 'muramana', nameKo: '무라마나', cost: 0, hiddenFromShop: true, // 마나무네가 변신해서만 얻는다(직접 구매 불가)
     stats: { attackDamage: 35, mana: 1000, abilityHaste: 15 },
     aweBonusAdPercentOfMana: 0.02,
+    uniqueGroup: 'manaCirculation',
     // 충격 - 챔피언 기본 공격 시 마나의 1.2% 추가 물리(적중 시 효과),
     // 챔피언 대상 스킬 피해 시 근접 마나4%｜원거리 마나3% 추가 물리.
     shockPassive: { onHitManaPercent: 0.012, onAbilityHitMeleeManaPercent: 0.04, onAbilityHitRangedManaPercent: 0.03 },
@@ -2625,11 +2653,7 @@ const ITEM_DATA = {
     vengeancePassive: { maxAdPercent: 0.12, maxAtHpPercent: 0.30 },
   },
 
-  // [전설급 아이템] 3차분 - 거대한히드라~수호천사(원문 760~812줄). "강철인장"
-  // (죽음의무도/수호천사의 하위템 중 하나)은 2차분에서 이미 발견한 가격
-  // 모순(1100원인데 하위템 합이 1950원) 때문에 그때부터 ITEM_DATA에 없는
-  // 상태다 - 그 두 아이템은 recipe 없이(직접 구매만) 반영한다(가짜 숫자를
-  // 채워 넣지 않는다는 원칙 그대로 유지).
+  // [전설급 아이템] 3차분 - 거대한히드라~수호천사(원문 760~812줄).
   giantsBelt: { id: 'giantsBelt', nameKo: '거인의 허리띠', cost: 900, recipe: ['rubyCrystal'], stats: { maxHp: 350 } },
 
   // 거대한히드라/발걸음분쇄기 공용 "쪼개기" - 기본 공격 적중 시 대상 본인에게
@@ -2640,7 +2664,10 @@ const ITEM_DATA = {
   titanicHydra: {
     id: 'titanicHydra', nameKo: '거대한히드라', cost: 3300, recipe: ['tiamat', 'tunnelers', 'giantsBelt'],
     stats: { attackDamage: 40, maxHp: 600 },
-    cleaveMaxHpPassive: { meleeTargetPercent: 0.01, rangedTargetPercent: 0.005, meleeSplashPercent: 0.03, rangedSplashPercent: 0.015, radius: 400 },
+    uniqueGroup: 'hydra', // 티아맷 주석 참고
+    // radiusGuessed: 쪼개기 반경도 원문에 수치가 없다 - 티아맷과 동일한
+    // 근사 반경(250)을 썼다.
+    cleaveMaxHpPassive: { meleeTargetPercent: 0.01, rangedTargetPercent: 0.005, meleeSplashPercent: 0.03, rangedSplashPercent: 0.015, radius: 250, radiusGuessed: true },
     // 거대한 초승달 - 즉시 피해를 주는 게 아니라 "다음 쪼개기"를 강화하는
     // 무장형 액티브(광휘의 검 스펠블레이드와 비슷한 "다음 평타 강화" 구조를
     // 재사용) - 10초 재사용대기시간.
@@ -2651,10 +2678,17 @@ const ITEM_DATA = {
   hydraOfHeroism: {
     id: 'hydraOfHeroism', nameKo: '발걸음분쇄기', cost: 3300, recipe: ['tiamat', 'devourerAxe', 'dagger'],
     stats: { attackDamage: 40, attackSpeedPercent: 0.25, maxHp: 450 },
-    cleaveMaxHpPassive: { meleeTargetPercent: 0.01, rangedTargetPercent: 0.005, meleeSplashPercent: 0.03, rangedSplashPercent: 0.015, radius: 400 },
+    uniqueGroup: 'hydra', // 티아맷 주석 참고
+    cleaveMaxHpPassive: { meleeTargetPercent: 0.01, rangedTargetPercent: 0.005, meleeSplashPercent: 0.03, rangedSplashPercent: 0.015, radius: 250, radiusGuessed: true },
     // 파괴의 충격파 - 즉시 범위 물리 피해 + 35% 둔화 + 맞은 챔피언 하나당
     // 35% 추가 이동속도(3초에 걸쳐 감소) - 재사용대기시간 15초.
-    shockwaveActive: { nameKo: '파괴의 충격파', cooldownSec: 15, meleePercentAD: 0.80, rangedPercentAD: 0.40, radius: 400, slowPercent: 0.35, slowDurationSec: 2.0, msPerChampionHitPercent: 0.35, msDurationSec: 3.0 },
+    // radiusGuessed: 원문에 반경 수치가 없다 - 티아맷 초승달과 동일한
+    // 근사 반경(400, 패시브 쪼개기보다 넓은 "범위형 액티브"이므로 더 크게)을 썼다.
+    // durationGuessed: "35% 둔화시키고"까지만 있고 둔화 지속시간이 원문에
+    // 없다(이동속도 쪽은 "3초에 걸쳐 감소"로 명시돼 있어 msDurationSec은
+    // 원문 값) - 이 문서의 다른 짧은 군중 제어 지속시간과 비슷한 수준인
+    // 2초를 근사치로 썼다.
+    shockwaveActive: { nameKo: '파괴의 충격파', cooldownSec: 15, meleePercentAD: 0.80, rangedPercentAD: 0.40, radius: 400, radiusGuessed: true, slowPercent: 0.35, slowDurationSec: 2.0, durationGuessed: true, msPerChampionHitPercent: 0.35, msDurationSec: 3.0 },
   },
 
   sterakssGage: {
@@ -2669,12 +2703,11 @@ const ITEM_DATA = {
     // "마법 피해로"라는 제한이 없음 - "피해를 입으면"). 보호막은 추가 체력
     // 비례(정액+비례 없이 추가 체력의 60% 그 자체), 4.5초에 걸쳐 점차
     // 감소한다. "8초간 크기 10% 증가"는 순수 시각 효과라 생략한다.
-    lifelinePassive: { hpThresholdPercent: 0.30, icdSec: 90, shieldDurationSec: 3.0, shieldDecaySec: 4.5, bonusHpShieldPercent: 0.60 },
+    lifelinePassive: { hpThresholdPercent: 0.30, icdSec: 90, shieldDecaySec: 4.5, bonusHpShieldPercent: 0.60 },
   },
 
-  // 죽음의무도 - 강철인장이 ITEM_DATA에 없어 recipe 없이(직접 구매만) 반영한다.
   deathsDance: {
-    id: 'deathsDance', nameKo: '죽음의무도', cost: 3300,
+    id: 'deathsDance', nameKo: '죽음의무도', cost: 3300, recipe: ['ironSeal', 'caulfieldsWarhammer'],
     stats: { attackDamage: 60, armor: 50, abilityHaste: 15 },
     // 고통 무시 - 받는 피해의 일부(근접 30%｜원거리 10%)를 즉시 받는 대신
     // 3초에 걸쳐 나눠 받는다. 반항 - 피해를 입힌 챔피언이 3초 안에 죽으면
@@ -2682,9 +2715,8 @@ const ITEM_DATA = {
     ignorePainPassive: { meleeDeferPercent: 0.30, rangedDeferPercent: 0.10, deferDurationSec: 3.0 },
     defiancePassive: { windowSec: 3.0, healBonusAdPercent: 0.75, healDurationSec: 2.0 },
   },
-  // 수호천사 - 역시 강철인장이 ITEM_DATA에 없어 recipe 없이 반영한다.
   guardianAngel: {
-    id: 'guardianAngel', nameKo: '수호천사', cost: 3200,
+    id: 'guardianAngel', nameKo: '수호천사', cost: 3200, recipe: ['ironSeal', 'bfSword'],
     stats: { attackDamage: 55, armor: 45 },
     // 환생 - 치명적인 피해를 받아도 쓰러지지 않고 4초간 경직(무적+대상 지정
     // 불가, 기존 isUntargetable 재사용)된 뒤 체력 50%/마나 100% 회복.
@@ -2702,7 +2734,7 @@ const ITEM_ORDER = [
   'boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes',
   'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed',
   'executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons',
-  'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard',
+  'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'ironSeal',
   'trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'muramana', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail',
   'giantsBelt', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel',
 ];
@@ -2715,7 +2747,7 @@ const ITEM_CATEGORIES = [
   // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
   // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
   // 하나에서 같이 보여준다.
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal'] },
   // 무라마나는 마나무네가 변신해서만 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
   { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel'] },
 ];
@@ -21896,11 +21928,31 @@ function abilityHasteCooldown(ctrl, baseCd) {
 // 전제를 'BLUE' 리터럴로 하드코딩했지만, 이제 ctrl.team(PLAYER_TEAM)을
 // 그대로 읽는다(turret_system.js의 BASE_ZONE_RADIUS 주석이 이미 "나중에
 // 만들 상점도 재사용" 의도를 명시해뒀다).
+// 유일 아이템(uniqueGroup) 검사 - 같은 그룹 태그를 가진 아이템을 이미
+// 들고 있으면 true(충돌). excludeIds에 들어있는 id는 "이번 조합으로
+// 소모될 하위템"이라 충돌 판정에서 제외한다(buildOrBuyItem()이 티아맷을
+// 소모해 거대한히드라가 되는 경우처럼, 상위템으로 자연 승급하는 건 막으면
+// 안 되므로).
+function _itemUniqueGroupConflict(ctrl, item, excludeIds) {
+  if (!item.uniqueGroup) return false;
+  return (ctrl.items || []).some((s) => {
+    if (excludeIds && excludeIds.has(s.id)) return false;
+    const other = ITEM_DATA[s.id];
+    return other && other.uniqueGroup === item.uniqueGroup;
+  });
+}
 function buyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
   if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
     console.warn('[ITEM] 기지(상점 구역) 안에서만 구매할 수 있습니다.');
+    return false;
+  }
+  // 유일 아이템(티아맷/히드라류, 여신의 눈물/마나무네/무라마나 등) - 같은
+  // 계열을 이미 들고 있으면 직접 구매 자체를 막는다(QA 요청 - 원문에
+  // "유일 아이템" 표현은 없지만 실제 LoL 규칙을 그대로 반영).
+  if (_itemUniqueGroupConflict(ctrl, item, null)) {
+    console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
   // 신발은 "하나밖에 사지 못한다"(원문) - 6칸 인벤토리가 아니라 전용
@@ -21966,9 +22018,9 @@ function hasComponents(ctrl, recipe) {
   return true;
 }
 // 조합 비용 = 완제품 가격 - 하위템 가격 합(실제 LoL과 동일한 "차액만
-// 지불" 원칙). 데이터가 잘못돼 하위템 합이 완제품보다 비싸지는 경우에
-// 대비해 0 밑으로는 내려가지 않게 막는다(원래는 이런 아이템을 애초에
-// 데이터에 넣지 않는 게 맞다 - item_data.js의 "강철인장 제외" 주석 참고).
+// 지불" 원칙). 가격 원문 누락으로 추측 가격(priceGuessed)을 쓴 하위템
+// 때문에 합이 완제품보다 비싸지는 경우(예: 강철인장 - item_data.js 주석
+// 참고)에 대비해 0 밑으로는 내려가지 않게 막는다.
 function combineCost(item) {
   const sum = (item.recipe || []).reduce((s, id) => s + ((ITEM_DATA[id] && ITEM_DATA[id].cost) || 0), 0);
   return Math.max(0, item.cost - sum);
@@ -21985,6 +22037,13 @@ function buildOrBuyItem(ctrl, itemId) {
   }
   if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
     console.warn('[ITEM] 기지(상점 구역) 안에서만 조합할 수 있습니다.');
+    return false;
+  }
+  // 유일 아이템 검사 - 이번 조합이 소모할 하위템(item.recipe)은 충돌
+  // 판정에서 제외한다(예: 티아맷을 소모해 거대한히드라가 되는 건 "같은
+  // 계열을 이미 들고 있다"고 막으면 안 된다 - 자연스러운 업그레이드이므로).
+  if (_itemUniqueGroupConflict(ctrl, item, new Set(item.recipe))) {
+    console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
   const cost = combineCost(item);
@@ -23159,6 +23218,9 @@ if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', ()
 // 이 함수를 따로 고칠 필요가 없다.
 function _itemStatsSummary(item) {
   const parts = [];
+  // 유일 아이템(QA 요청) - 티아맷/히드라류, 여신의 눈물/마나무네/무라마나처럼
+  // 같은 계열을 하나만 보유할 수 있는 아이템임을 상점 설명 맨 앞에 표시한다.
+  if (item.uniqueGroup) parts.push('유일 아이템(같은 계열 하나만 보유 가능)');
   const s = item.stats || {};
   if (s.attackDamage) parts.push(`공격력 +${s.attackDamage}`);
   if (s.abilityPower) parts.push(`주문력 +${s.abilityPower}`);

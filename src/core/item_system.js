@@ -140,11 +140,31 @@ function abilityHasteCooldown(ctrl, baseCd) {
 // 전제를 'BLUE' 리터럴로 하드코딩했지만, 이제 ctrl.team(PLAYER_TEAM)을
 // 그대로 읽는다(turret_system.js의 BASE_ZONE_RADIUS 주석이 이미 "나중에
 // 만들 상점도 재사용" 의도를 명시해뒀다).
+// 유일 아이템(uniqueGroup) 검사 - 같은 그룹 태그를 가진 아이템을 이미
+// 들고 있으면 true(충돌). excludeIds에 들어있는 id는 "이번 조합으로
+// 소모될 하위템"이라 충돌 판정에서 제외한다(buildOrBuyItem()이 티아맷을
+// 소모해 거대한히드라가 되는 경우처럼, 상위템으로 자연 승급하는 건 막으면
+// 안 되므로).
+function _itemUniqueGroupConflict(ctrl, item, excludeIds) {
+  if (!item.uniqueGroup) return false;
+  return (ctrl.items || []).some((s) => {
+    if (excludeIds && excludeIds.has(s.id)) return false;
+    const other = ITEM_DATA[s.id];
+    return other && other.uniqueGroup === item.uniqueGroup;
+  });
+}
 function buyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
   if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
     console.warn('[ITEM] 기지(상점 구역) 안에서만 구매할 수 있습니다.');
+    return false;
+  }
+  // 유일 아이템(티아맷/히드라류, 여신의 눈물/마나무네/무라마나 등) - 같은
+  // 계열을 이미 들고 있으면 직접 구매 자체를 막는다(QA 요청 - 원문에
+  // "유일 아이템" 표현은 없지만 실제 LoL 규칙을 그대로 반영).
+  if (_itemUniqueGroupConflict(ctrl, item, null)) {
+    console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
   // 신발은 "하나밖에 사지 못한다"(원문) - 6칸 인벤토리가 아니라 전용
@@ -210,9 +230,9 @@ function hasComponents(ctrl, recipe) {
   return true;
 }
 // 조합 비용 = 완제품 가격 - 하위템 가격 합(실제 LoL과 동일한 "차액만
-// 지불" 원칙). 데이터가 잘못돼 하위템 합이 완제품보다 비싸지는 경우에
-// 대비해 0 밑으로는 내려가지 않게 막는다(원래는 이런 아이템을 애초에
-// 데이터에 넣지 않는 게 맞다 - item_data.js의 "강철인장 제외" 주석 참고).
+// 지불" 원칙). 가격 원문 누락으로 추측 가격(priceGuessed)을 쓴 하위템
+// 때문에 합이 완제품보다 비싸지는 경우(예: 강철인장 - item_data.js 주석
+// 참고)에 대비해 0 밑으로는 내려가지 않게 막는다.
 function combineCost(item) {
   const sum = (item.recipe || []).reduce((s, id) => s + ((ITEM_DATA[id] && ITEM_DATA[id].cost) || 0), 0);
   return Math.max(0, item.cost - sum);
@@ -229,6 +249,13 @@ function buildOrBuyItem(ctrl, itemId) {
   }
   if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
     console.warn('[ITEM] 기지(상점 구역) 안에서만 조합할 수 있습니다.');
+    return false;
+  }
+  // 유일 아이템 검사 - 이번 조합이 소모할 하위템(item.recipe)은 충돌
+  // 판정에서 제외한다(예: 티아맷을 소모해 거대한히드라가 되는 건 "같은
+  // 계열을 이미 들고 있다"고 막으면 안 된다 - 자연스러운 업그레이드이므로).
+  if (_itemUniqueGroupConflict(ctrl, item, new Set(item.recipe))) {
+    console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
   const cost = combineCost(item);

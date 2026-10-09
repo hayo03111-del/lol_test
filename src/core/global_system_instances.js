@@ -27,6 +27,9 @@ if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', ()
 // 이 함수를 따로 고칠 필요가 없다.
 function _itemStatsSummary(item) {
   const parts = [];
+  // 유일 아이템(QA 요청) - 티아맷/히드라류, 여신의 눈물/마나무네/무라마나처럼
+  // 같은 계열을 하나만 보유할 수 있는 아이템임을 상점 설명 맨 앞에 표시한다.
+  if (item.uniqueGroup) parts.push('유일 아이템(같은 계열 하나만 보유 가능)');
   const s = item.stats || {};
   if (s.attackDamage) parts.push(`공격력 +${s.attackDamage}`);
   if (s.abilityPower) parts.push(`주문력 +${s.abilityPower}`);
