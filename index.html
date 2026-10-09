@@ -200,6 +200,27 @@
   }
   #shopPanel .shopItemRow button:hover { background:#3a3a45; }
   #shopPanel .shopItemRow.unaffordable .shopItemName { color:#777; }
+  #shopPanel .shopItemRow.selected { background:rgba(200,170,110,0.14); border-radius:4px; }
+  #shopPanel .shopItemName.clickable { cursor:pointer; }
+  #shopPanel .shopItemName.clickable:hover { color:#c8aa6e; }
+  /* 요청("상점에 아이템 선택하면 오른쪽에 띄워주는 상점 시스템") - 실제 LoL
+     상점처럼 아이템 이름을 클릭하면 상세 정보(전체 효과 설명 + 조합
+     재료/상위 아이템 경로)를 옆 패널에 띄운다. #shopPanel 바로 오른쪽에
+     동일한 스타일로 붙인다 - 아무것도 선택 안 했을 때는 숨겨둔다(.show일 때만 표시). */
+  #shopDetailPanel {
+    position:fixed; left:244px; bottom:128px; z-index:10; color:#bbb; font-size:11px;
+    background:rgba(10,10,15,0.55); padding:8px 12px; border-radius:6px;
+    border:1px solid #2a2a35; user-select:none; width:230px;
+    max-height:60vh; overflow-y:auto; display:none;
+  }
+  #shopDetailPanel.show { display:block; }
+  #shopDetailPanel .detailTitle { color:#c8aa6e; font-weight:bold; font-size:12px; }
+  #shopDetailPanel .detailCost { color:#e8d8b0; margin-top:3px; }
+  #shopDetailPanel .detailDesc { margin-top:6px; line-height:1.5; color:#ccc; }
+  #shopDetailPanel .detailSection { margin-top:8px; padding-top:6px; border-top:1px solid #2a2a35; }
+  #shopDetailPanel .detailSection .label { color:#999; font-size:10px; margin-bottom:3px; }
+  #shopDetailPanel .detailLink { color:#8fc7ff; cursor:pointer; text-decoration:underline; }
+  #shopDetailPanel .detailLink:hover { color:#bcdcff; }
   .shopTabs { display:flex; flex-wrap:wrap; gap:4px; }
   .shopTabs button {
     background:#1b1b22; color:#999; border:1px solid #3a3a45; border-radius:4px;
@@ -548,6 +569,20 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
     <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">인벤토리</div>
     <div id="inventoryRow"></div>
     <div style="font-size:9px;color:#888;margin-top:4px;">숫자키 1~6: 해당 칸 아이템 사용(물약) · 슬롯 클릭: 사용/판매(70%) · T: 투명 와드 설치</div>
+  </div>
+</div>
+
+<div id="shopDetailPanel">
+  <div class="detailTitle" id="shopDetailTitle">아이템을 선택하세요</div>
+  <div class="detailCost" id="shopDetailCost"></div>
+  <div class="detailDesc" id="shopDetailDesc">상점 목록에서 아이템 이름을 클릭하면 여기에 가격/효과/조합 경로가 표시됩니다.</div>
+  <div class="detailSection" id="shopDetailRecipeSection" style="display:none;">
+    <div class="label">하위템(조합 재료)</div>
+    <div id="shopDetailRecipeList"></div>
+  </div>
+  <div class="detailSection" id="shopDetailBuildsIntoSection" style="display:none;">
+    <div class="label">이 아이템으로 조합 가능</div>
+    <div id="shopDetailBuildsIntoList"></div>
   </div>
 </div>
 
@@ -1166,7 +1201,21 @@ function applyDamage(target, result) {
   // 모든 스킬(직선/범위/AOE)에 새 대상 종류가 자동으로 적용된다 - 개별
   // 스킬 코드를 하나도 건드릴 필요가 없다(요청 20-C와 동일한 원칙).
   if (target.isMinion) return applyDamageToMinion(target, result, true); // applyDamage()는 항상 챔피언(플레이어) 스킬/공격 경로에서만 호출됨
-  if (target.isTurret) return applyDamageToTurret(target, result, {});
+  if (target.isTurret) {
+    const turretDmgSource = result.source || (typeof controller !== 'undefined' ? controller : null);
+    const turretFinalDmg = applyDamageToTurret(target, result, { source: turretDmgSource });
+    // 마법의 영약("챔피언이나 포탑에 피해를 입히면 25의 추가 고정 피해") -
+    // 포탑 전용 좁은 훅(itemOnDamageDealtToTurret)만 호출한다. 기존
+    // itemOnDamageDealt()(그리버스/카탈리스트/운명의 재/여신의 눈물)를
+    // 그대로 포탑에도 열면 "포탑 대상"을 전혀 고려하지 않고 만들어진 그
+    // 효과들이 의도치 않게 영향을 받을 위험이 있어(예: target.isMinion이
+    // false인 포탑에 운명의 재 챔피언 등급 발화가 그대로 걸리는 등), 이미
+    // 검증된 기존 훅은 건드리지 않고 이번에 필요한 효과 하나만 분리했다.
+    if (typeof itemOnDamageDealtToTurret === 'function' && turretDmgSource && typeof turretDmgSource.championId === 'string') {
+      itemOnDamageDealtToTurret(turretDmgSource, target, turretFinalDmg);
+    }
+    return turretFinalDmg;
+  }
   if (target.isInhibitor) return applyDamageToInhibitor(target, result);
   if (target.isNexus) return applyDamageToNexus(target, result);
   const finalDmg = calculateDamage({ ...result, target });
@@ -2905,6 +2954,45 @@ const ITEM_DATA = {
     wardDurationEarlySec: 90, wardDurationLateSec: 120,
     placeRange: 550, visionRadius: 900, hitsToDestroy: 3,
   },
+  // 제어 와드 - 트린켓(투명 와드)과 달리 6칸 인벤토리를 차지하는 "구매하는"
+  // 와드다(원문: "최대 2개의 제어 와드를 소지할 수 있습니다" - maxStack:2로
+  // 구현, 체력 물약과 동일한 중첩 방식). 지속시간이 없는(파괴되기 전까지
+  // 영구) 와드라서 아주 긴 값(99999초)으로 사실상 영구에 근사한다.
+  // 설치 사정거리/시야 범위는 원문에 수치가 없어 실제 LoL 값(각각 600/900)을
+  // 사용했다(명시). "노출된 투명 와드 비활성화"/"평타4대로 파괴"/
+  // "최초 발견·제거 골드"는 투명 와드와 동일한 이유(이 1인 연습
+  // 시뮬레이터에는 적이 와드를 공격하거나 와드끼리 상호작용할 적 AI 자체가
+  // 없음)로 생략한다.
+  controlWard: {
+    id: 'controlWard', nameKo: '제어 와드', cost: 75, maxStack: 2,
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 99999, hitsToDestroy: 4 },
+    placeRangeGuessed: true,
+  },
+  // 영약(소모품) 3종 - 전부 "3분 동안 지속, 다른 종류의 영약을 마시면
+  // 기존 효과가 사라진다"(원문)는 상호 배타적 버프라서 ctrl._itemActiveElixir
+  // 하나로 어떤 영약을 마셨는지 관리한다(item_system.js의 _useElixir() 참고).
+  // 강철의 영약 "거대해짐"/"지나간 자리의 아군 이동속도 버프"는 이 1인
+  // 연습 시뮬레이터에 아군 챔피언 개념이 없어 생략(크기 변화는 순수 시각
+  // 효과라 생략해도 수치에는 영향 없음).
+  elixirOfIron: {
+    id: 'elixirOfIron', nameKo: '강철의 영약', cost: 500, consumableType: 'elixir',
+    elixirEffect: { durationSec: 180, maxHp: 300, tenacityPercent: 0.25 },
+  },
+  // 마법의 영약 - "챔피언이나 포탑에 피해를 입히면 25의 추가 고정 피해"는
+  // onHitFlatDamage로, "챔피언이 대상일 경우 재사용대기시간 5초"(포탑은
+  // 원문에 재사용대기시간 언급이 없어 매번 발동)는 onHitChampionIcdSec으로 구현한다.
+  elixirOfSorcery: {
+    id: 'elixirOfSorcery', nameKo: '마법의 영약', cost: 500, consumableType: 'elixir',
+    elixirEffect: { durationSec: 180, abilityPower: 50, mpRegenPercent: 0.15, onHitFlatDamage: 25, onHitChampionIcdSec: 5 },
+  },
+  // 분노의 영약 - "챔피언 대상 물리 피해 흡혈 12% 증가"는 흡혈의 낫의
+  // physicalVampPercent(대상 불문)와 달리 챔피언 대상 전용이라 별도 필드
+  // (championPhysicalVampPercent)로 구분해서 구현한다(item_system.js의
+  // itemOnDamageDealt()가 target.isChampion으로 게이팅).
+  elixirOfWrath: {
+    id: 'elixirOfWrath', nameKo: '분노의 영약', cost: 500, consumableType: 'elixir',
+    elixirEffect: { durationSec: 180, attackDamage: 30, championPhysicalVampPercent: 0.12 },
+  },
   // [기본 아이템] - 대부분 순수 스탯 아이템. 가격이 원문 텍스트에 없던
   // 3종(원기 회복의 구슬/천갑옷/B.F. 대검)은 공식적으로 잘 알려진 실제
   // LoL 가격을 그대로 썼다(명시적으로 표시 - 사용자가 준 텍스트에는
@@ -3053,6 +3141,7 @@ const ITEM_DATA = {
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
   'cull', 'darkSeal', 'tearOfGoddess', 'healthPotion', 'refillablePotion', 'stealthWard',
+  'controlWard', 'elixirOfIron', 'elixirOfSorcery', 'elixirOfWrath',
   'pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak',
   'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod',
   'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword',
@@ -3063,7 +3152,7 @@ const ITEM_ORDER = [
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
   { id: 'starter', nameKo: '시작 아이템', items: ['doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm', 'cull', 'darkSeal', 'tearOfGoddess'] },
-  { id: 'consumable', nameKo: '소모품', items: ['healthPotion', 'refillablePotion'] }, // 투명 와드(트린켓)는 상점에서 사는 게 아니라 기본 장착 - 아래 트린켓 슬롯에 표시
+  { id: 'consumable', nameKo: '소모품', items: ['healthPotion', 'refillablePotion', 'controlWard', 'elixirOfIron', 'elixirOfSorcery', 'elixirOfWrath'] }, // 투명 와드(트린켓)는 상점에서 사는 게 아니라 기본 장착 - 아래 트린켓 슬롯에 표시
   { id: 'basic', nameKo: '기본 아이템', items: ['pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak', 'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod', 'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword'] },
   { id: 'boots', nameKo: '신발', items: ['boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes', 'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed'] },
   { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons'] },
@@ -22155,6 +22244,17 @@ function recomputeItemStats(ctrl) {
   // 신발을 "신고 있을 때만" 적용된다(둘 다 벗으면 당연히 0, _buyBoots()에서
   // 영구 플래그로 못박아뒀으므로 지금 신은 신발 종류와 무관하게 계속 더해진다).
   if (ctrl.boots && ctrl._itemBootsExtraMoveSpeedLol) ctrl.itemBonusMoveSpeedLol += ctrl._itemBootsExtraMoveSpeedLol;
+  // 영약(강철/마법/분노)의 지속시간 중 스탯 - 인벤토리 아이템이 아니라
+  // 별도 상태(ctrl._itemActiveElixir)라 위 applyOne() 루프를 거치지 않으므로
+  // 마지막에 한 번 더 더한다(위 캐리오버 보너스와 동일한 위치/원칙).
+  if (ctrl._itemActiveElixir) {
+    const eff = ITEM_DATA[ctrl._itemActiveElixir.id].elixirEffect;
+    if (eff.maxHp) ctrl.itemBonusMaxHp += eff.maxHp;
+    if (eff.attackDamage) ctrl.itemBonusAD += eff.attackDamage;
+    if (eff.abilityPower) ctrl.itemBonusAP += eff.abilityPower;
+    if (eff.mpRegenPercent) ctrl.itemBonusMpRegenPercent += eff.mpRegenPercent;
+    if (eff.tenacityPercent) ctrl.itemTenacityPercent += eff.tenacityPercent;
+  }
   ctrl.recomputeStats();
 }
 
@@ -22357,6 +22457,13 @@ function useItem(ctrl, slotIndex) {
   // 활성 사용 아이템(티아맷의 "초승달" 등) - 중첩/충전 소모가 없는 대신
   // 아이템 자체 쿨다운이 있다. 소비 아이템과 분기를 분리한다.
   if (item.activeAbility) return _useActiveAbilityItem(ctrl, item);
+  // 제어 와드 - 인벤토리 중첩 소모형이지만 회복이 아니라 와드 설치가
+  // 목적이라 별도 함수로 분리한다(투명 와드의 placeWard()와 유사한 구조,
+  // 다만 트린켓 전용 슬롯이 아니라 6칸 인벤토리를 쓴다).
+  if (item.wardPlacement) return _useControlWard(ctrl, slotIndex, item);
+  // 영약(강철/마법/분노) - 중첩/충전이 아니라 "마시면 바로 소모"되는
+  // 1회성 아이템. 상호 배타적 지속 버프라 별도 상태(_itemActiveElixir)로 관리한다.
+  if (item.elixirEffect) return _useElixir(ctrl, slotIndex, item);
   if (!item.consumable) { console.warn('[ITEM] 사용할 수 없는 아이템입니다.'); return false; }
   if (item.maxCharges) {
     if (!(slot.charges > 0)) { console.warn('[ITEM] 충전량이 없습니다.'); return false; }
@@ -22475,6 +22582,7 @@ function itemSystemTick(ctrl, dt) {
   _itemTickActiveHeals(ctrl, dt);
   _itemTickTrinketRecharge(ctrl, dt);
   _itemTickWardExpiry(ctrl, dt);
+  if (typeof _itemTickElixirExpiry === 'function') _itemTickElixirExpiry(ctrl);
   if (!ctrl.items || !ctrl.items.length) return;
   const now = performance.now();
   for (const slot of ctrl.items) {
@@ -22546,6 +22654,49 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
       ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + gain); // 늘어난 최대 마나만큼 현재 마나도 함께 채워준다(실제 여신의 눈물과 동일)
     }
   }
+  // 마법의 영약(챔피언 대상) - "챔피언이나 포탑에 피해를 입히면 25의
+  // 추가 고정 피해. 챔피언이 대상일 경우 재사용대기시간 5초"(원문). 포탑
+  // 쪽은 이 함수가 아예 호출되지 않는 경로라 별도의 좁은 훅
+  // itemOnDamageDealtToTurret()(00_global_constants.js의 applyDamage()
+  // 포탑 분기에서 직접 호출)이 처리한다. 미니언 대상은 원문에 언급이
+  // 없어 적용하지 않는다(수치를 지어내지 않는다는 원칙).
+  if (ctrl._itemActiveElixir && ctrl._itemActiveElixir.id === 'elixirOfSorcery' && target.isChampion) {
+    const eff = ITEM_DATA.elixirOfSorcery.elixirEffect;
+    const nowMs = performance.now();
+    if ((ctrl._itemActiveElixir.sorceryIcdUntil || 0) <= nowMs) {
+      ctrl._itemActiveElixir.sorceryIcdUntil = nowMs + eff.onHitChampionIcdSec * 1000;
+      // applyDamage()를 다시 부르면 그 함수가 또 itemOnDamageDealt()를
+      // 호출해 무한 재귀로 이어진다(이 함수 자체가 applyDamage()에서
+      // 불리는 중이므로) - 고정 피해라 방어력/마법저항력 계산이 필요
+      // 없으므로, 더미의 학습용 체력 바닥(2%) 보호만 그대로 재현해
+      // target.hp를 직접 깎는다(실드/처형 판정 등은 이 부가 효과의
+      // 성격상 생략 - 메인 스킬 피해가 아니라 작은 보조 효과이므로).
+      const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
+      target.hp = Math.max(minHp, (target.hp || 0) - eff.onHitFlatDamage);
+    }
+  }
+  // 분노의 영약 - "챔피언 대상 물리 피해 흡혈이 12% 증가합니다"(원문).
+  // 흡혈의 낫(physicalVampPercent)과 달리 챔피언 대상 전용이라 별도
+  // 필드로 구분해서 구현했다(일반 흡혈의 낫은 미니언/더미/챔피언 가리지
+  // 않음 - 이 둘을 같은 필드로 합치면 분노의 영약만의 "챔피언 전용"
+  // 제약이 사라진다).
+  if (ctrl._itemActiveElixir && ctrl._itemActiveElixir.id === 'elixirOfWrath' && target.isChampion && damageType === DAMAGE_TYPE.PHYSICAL) {
+    const eff = ITEM_DATA.elixirOfWrath.elixirEffect;
+    if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') {
+      ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + finalDmg * eff.championPhysicalVampPercent);
+    }
+  }
+}
+
+// 마법의 영약의 포탑 전용 분기 - 00_global_constants.js의 applyDamage()가
+// 포탑 대상일 때(itemOnDamageDealt()는 호출되지 않는 완전히 별개 경로)
+// 직접 호출한다. 포탑 쪽은 원문에 재사용대기시간 언급이 없어 매번
+// 발동한다(챔피언 대상만 5초 쿨다운 - 위 itemOnDamageDealt() 참고).
+function itemOnDamageDealtToTurret(ctrl, turret, finalDmg) {
+  if (!ctrl._itemActiveElixir || ctrl._itemActiveElixir.id !== 'elixirOfSorcery') return;
+  if (!turret || turret.destroyed) return;
+  const eff = ITEM_DATA.elixirOfSorcery.elixirEffect;
+  applyDamageToTurret(turret, { rawDamage: eff.onHitFlatDamage, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 }, { source: ctrl });
 }
 
 // 수확의 낫 - 플레이어가 마지막으로 때린 미니언이 죽을 때 killMinion()이 호출.
@@ -22661,6 +22812,38 @@ function _itemTickWardExpiry(ctrl, dt) {
   });
 }
 
+// 사정거리 clamp(목표 지점이 설치 사정거리 밖이면 실제 LoL처럼 그 방향
+// 최대 사거리에 놓는다) - 투명 와드/제어 와드가 공용으로 쓴다.
+function _clampWardTargetPos(ctrl, worldPoint, placeRangeLol) {
+  const origin = ctrl.root.position;
+  const maxWorldRange = lolRangeToWorld(placeRangeLol);
+  const dir = new THREE.Vector3().subVectors(worldPoint, origin);
+  dir.y = 0;
+  const dist = dir.length();
+  const finalPos = dist > maxWorldRange && dist > 0
+    ? origin.clone().add(dir.normalize().multiplyScalar(maxWorldRange))
+    : worldPoint.clone();
+  finalPos.y = 0;
+  return finalPos;
+}
+// 시야 부여 + 지상 마커 메시 생성 + ctrl._placedWards 등록 - 투명 와드/
+// 제어 와드가 공용으로 쓴다(색만 다르게 해서 구분 - 제어 와드는 실제
+// LoL처럼 분홍색 계열).
+function _spawnWardMarker(ctrl, finalPos, durationSec, hitsToDestroy, visionRadius, colorHex) {
+  if (typeof visionSystem !== 'undefined' && visionSystem) visionSystem.grantVision(finalPos, visionRadius, durationSec);
+  const ward = { position: finalPos.clone(), hitsRemaining: hitsToDestroy, expiresAt: performance.now() + durationSec * 1000, mesh: null };
+  if (typeof scene !== 'undefined' && typeof THREE !== 'undefined') {
+    const geo = new THREE.ConeGeometry(lolRangeToWorld(26), lolRangeToWorld(55), 6);
+    const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85 });
+    ward.mesh = new THREE.Mesh(geo, mat);
+    ward.mesh.position.copy(finalPos);
+    ward.mesh.position.y = lolRangeToWorld(27);
+    scene.add(ward.mesh);
+  }
+  ctrl._placedWards = ctrl._placedWards || [];
+  ctrl._placedWards.push(ward);
+}
+
 // 투명 와드 설치 - Q/W/E/R과 동일하게 키 입력 시 마우스 월드 좌표를 받아
 // 즉시 시전한다(character_controller.js에서 직접 호출하지 않고 전역
 // 키바인드(global_system_instances.js)에서 바로 호출 - 아이템은 챔피언
@@ -22672,36 +22855,67 @@ function placeWard(ctrl, worldPoint) {
   if (!(ctrl.trinket.charges > 0)) { console.warn('[WARD] 충전량이 없습니다.'); return false; }
   if (!worldPoint) return false;
 
-  // 설치 사정거리(550) 밖을 클릭하면 실제 LoL처럼 그 방향 최대 사거리에 놓인다.
-  const origin = ctrl.root.position;
-  const maxWorldRange = lolRangeToWorld(data.placeRange);
-  const dir = new THREE.Vector3().subVectors(worldPoint, origin);
-  dir.y = 0;
-  const dist = dir.length();
-  const finalPos = dist > maxWorldRange && dist > 0
-    ? origin.clone().add(dir.normalize().multiplyScalar(maxWorldRange))
-    : worldPoint.clone();
-  finalPos.y = 0;
-
+  const finalPos = _clampWardTargetPos(ctrl, worldPoint, data.placeRange);
   ctrl.trinket.charges -= 1;
-
   const durationSec = _itemScaleByGameTime(data.wardDurationEarlySec, data.wardDurationLateSec, data.scaleFullAtSec);
-  if (typeof visionSystem !== 'undefined' && visionSystem) visionSystem.grantVision(finalPos, data.visionRadius, durationSec);
-
-  const ward = { position: finalPos.clone(), hitsRemaining: data.hitsToDestroy, expiresAt: performance.now() + durationSec * 1000, mesh: null };
-  if (typeof scene !== 'undefined' && typeof THREE !== 'undefined') {
-    const geo = new THREE.ConeGeometry(lolRangeToWorld(26), lolRangeToWorld(55), 6);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x3fae6a, transparent: true, opacity: 0.85 });
-    ward.mesh = new THREE.Mesh(geo, mat);
-    ward.mesh.position.copy(finalPos);
-    ward.mesh.position.y = lolRangeToWorld(27);
-    scene.add(ward.mesh);
-  }
-  ctrl._placedWards = ctrl._placedWards || [];
-  ctrl._placedWards.push(ward);
+  _spawnWardMarker(ctrl, finalPos, durationSec, data.hitsToDestroy, data.visionRadius, 0x3fae6a);
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
   console.log(`[WARD] 투명 와드 설치 (지속시간 ${durationSec.toFixed(0)}초, 남은 충전 ${ctrl.trinket.charges}/${data.maxCharges})`);
   return true;
+}
+
+// 제어 와드 설치 - useItem()에서 호출된다. 숫자키/인벤토리 클릭 둘 다
+// "클릭 시점의 마우스 월드 좌표"를 넘길 방법이 없으므로(useItem(ctrl,
+// slotIndex)는 슬롯 번호만 받는 공용 진입점 - 체력 물약 등 다른 소비
+// 아이템과 동일한 호출 규약을 그대로 따른다), 트린켓의 인벤토리 클릭
+// 폴백과 동일하게 "캐릭터 정면"에 설치한다.
+function _useControlWard(ctrl, slotIndex, item) {
+  const slot = ctrl.items && ctrl.items[slotIndex];
+  if (!slot || slot.id !== item.id) return false;
+  const p = item.wardPlacement;
+  const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
+  const targetPoint = ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)));
+  const finalPos = _clampWardTargetPos(ctrl, targetPoint, p.placeRange);
+  slot.count -= 1;
+  if (slot.count <= 0) {
+    const idx = ctrl.items.indexOf(slot);
+    if (idx >= 0) ctrl.items.splice(idx, 1);
+  }
+  _spawnWardMarker(ctrl, finalPos, p.durationSec, p.hitsToDestroy, p.visionRadius, 0xd23fae);
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  console.log(`[WARD] 제어 와드 설치 (${item.nameKo})`);
+  return true;
+}
+
+/* ============================================================
+   영약(소모품) - 강철/마법/분노 3종. "다른 종류의 영약을 마시면 기존
+   영약의 효과가 사라집니다"(원문) - ctrl._itemActiveElixir 하나로
+   어떤 영약이 켜져 있는지 관리하고, 다른 종류를 마시면 그 자리에서
+   교체한다. 스탯(체력/공격력/주문력/마나 재생/강인함)은
+   recomputeItemStats()가 매번 마지막에 한 번 더해 넣고(아래), 적중 시
+   효과(마법의 영약 고정 피해/분노의 영약 챔피언 전용 흡혈)는
+   itemOnDamageDealt()에 훅을 추가했다.
+   ============================================================ */
+function _useElixir(ctrl, slotIndex, item) {
+  const slot = ctrl.items && ctrl.items[slotIndex];
+  if (!slot || slot.id !== item.id) return false;
+  // 소모 - 중첩/충전 없이 1회 사용으로 인벤토리에서 완전히 사라진다.
+  const idx = ctrl.items.indexOf(slot);
+  if (idx >= 0) ctrl.items.splice(idx, 1);
+  ctrl._itemActiveElixir = { id: item.id, expiresAt: performance.now() + item.elixirEffect.durationSec * 1000, sorceryIcdUntil: 0 };
+  recomputeItemStats(ctrl);
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  console.log(`[ITEM] ${item.nameKo} 사용 (${item.elixirEffect.durationSec}초)`);
+  return true;
+}
+// 지속시간 만료 - itemSystemTick()에서 매 프레임 확인한다(인벤토리
+// 아이템 배열과 무관한 별도 상태라 그 루프 밖에서 따로 처리해야 한다).
+function _itemTickElixirExpiry(ctrl) {
+  if (!ctrl._itemActiveElixir) return;
+  if (performance.now() < ctrl._itemActiveElixir.expiresAt) return;
+  console.log(`[ITEM] ${ITEM_DATA[ctrl._itemActiveElixir.id].nameKo} 효과 종료`);
+  ctrl._itemActiveElixir = null;
+  recomputeItemStats(ctrl);
 }
 
 /* ============================================================
@@ -22824,6 +23038,19 @@ function _itemStatsSummary(item) {
   if (item.slaughterPassive) { const p = item.slaughterPassive; parts.push(`학살(챔피언 처치 관여 시 중첩당 흡혈 +${(p.vampPerStack * 100).toFixed(1)}%, 최대 ${p.maxStacks}중첩)`); }
   if (item.manaSpentToHealPercent) parts.push(`영원(스킬 사용 시 소모 마나의 ${Math.round(item.manaSpentToHealPercent * 100)}%만큼 체력 회복, 초당 최대 ${item.manaSpentHealCapPerSec} HP)`);
   if (item.carryoverMoveSpeedOnUpgrade) parts.push(`다른 신발로 바꿔도 이동 속도 +${item.carryoverMoveSpeedOnUpgrade} 효과 유지`);
+  // 제어 와드 + 영약 3종 - "남은 소모 아이템" 요청으로 추가.
+  if (item.wardPlacement) { const p = item.wardPlacement; parts.push(`사용 시 시야 ${p.visionRadius}의 와드 설치(설치 사정거리 ${p.placeRange}, 최대 ${item.maxStack}개 소지)`); }
+  if (item.elixirEffect) {
+    const e = item.elixirEffect;
+    parts.push(`${e.durationSec}초 지속(다른 영약을 마시면 기존 효과 소멸)`);
+    if (e.maxHp) parts.push(`체력 +${e.maxHp}`);
+    if (e.attackDamage) parts.push(`공격력 +${e.attackDamage}`);
+    if (e.abilityPower) parts.push(`주문력 +${e.abilityPower}`);
+    if (e.mpRegenPercent) parts.push(`기본 마나 재생 +${Math.round(e.mpRegenPercent * 100)}%`);
+    if (e.tenacityPercent) parts.push(`강인함 +${Math.round(e.tenacityPercent * 100)}%`);
+    if (e.onHitFlatDamage) parts.push(`챔피언·포탑에 피해 시 고정 피해 +${e.onHitFlatDamage}(챔피언 대상 재사용대기시간 ${e.onHitChampionIcdSec}초)`);
+    if (e.championPhysicalVampPercent) parts.push(`챔피언 대상 물리 피해 흡혈 +${Math.round(e.championPhysicalVampPercent * 100)}%`);
+  }
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
@@ -22834,6 +23061,75 @@ function _itemStatsSummary(item) {
 }
 
 let _shopActiveCategory = (typeof ITEM_CATEGORIES !== 'undefined' && ITEM_CATEGORIES[0]) ? ITEM_CATEGORIES[0].id : null;
+// 요청("상점에 아이템 선택하면 오른쪽에 띄워주는 상점 시스템") - 실제 LoL
+// 상점처럼 아이템 이름을 클릭하면 #shopDetailPanel(오른쪽 패널)에 전체
+// 효과 설명 + 조합 재료/상위 아이템 경로를 보여준다. 선택 상태는 다른
+// 탭으로 옮겨도 그대로 유지된다(골드가 바뀌어 renderShopPanel()이 다시
+// 그려질 때도 마찬가지) - 하위템/상위템 링크를 눌러 다른 탭의 아이템으로
+// 자연스럽게 넘어갈 수 있어야 하므로, 탭 전환만으로 선택을 지우지 않는다.
+let _shopSelectedItemId = null;
+function _showItemDetail(itemId) {
+  const item = typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[itemId] : null;
+  const panel = document.getElementById('shopDetailPanel');
+  if (!item || !panel) return;
+  _shopSelectedItemId = itemId;
+  if (typeof renderShopPanel === 'function') renderShopPanel(); // 선택한 행에 'selected' 강조 반영
+  panel.classList.add('show');
+  const canBuild = item.recipe && item.recipe.length && controller && typeof hasComponents === 'function' && hasComponents(controller, item.recipe);
+  const payCost = canBuild ? combineCost(item) : item.cost;
+  document.getElementById('shopDetailTitle').textContent = item.nameKo;
+  document.getElementById('shopDetailCost').textContent = item.trinket
+    ? '기본 장착 (구매 불필요)'
+    : `${canBuild ? '조합 ' : ''}${payCost}원${item.priceGuessed ? ' * (가격은 원문 누락으로 실제 LoL 가격 사용)' : ''}`;
+  document.getElementById('shopDetailDesc').textContent = _itemStatsSummary(item) || '(추가 효과 없음)';
+
+  const recipeSection = document.getElementById('shopDetailRecipeSection');
+  const recipeList = document.getElementById('shopDetailRecipeList');
+  recipeList.innerHTML = '';
+  if (item.recipe && item.recipe.length) {
+    recipeSection.style.display = '';
+    const counts = {};
+    for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
+    for (const [id, n] of Object.entries(counts)) {
+      const comp = ITEM_DATA[id];
+      if (!comp) continue;
+      const row = document.createElement('div');
+      const link = document.createElement('span');
+      link.className = 'detailLink';
+      link.textContent = `${comp.nameKo}${n > 1 ? ' x' + n : ''} (${comp.cost}원)`;
+      link.addEventListener('click', () => _showItemDetail(id));
+      row.appendChild(link);
+      recipeList.appendChild(row);
+    }
+  } else {
+    recipeSection.style.display = 'none';
+  }
+
+  // 역방향 조회("이 아이템을 하위템으로 쓰는 상위 아이템") - ITEM_DATA를
+  // 매번 스캔하지만(추가 자료구조 없음) 42종 규모에서는 비용이 무시할
+  // 수준이고, 아이템이 늘어도 자동으로 정확하다(수동 목록을 따로 관리할
+  // 필요가 없다).
+  const buildsSection = document.getElementById('shopDetailBuildsIntoSection');
+  const buildsList = document.getElementById('shopDetailBuildsIntoList');
+  buildsList.innerHTML = '';
+  const buildsInto = (typeof ITEM_ORDER !== 'undefined' ? ITEM_ORDER : Object.keys(ITEM_DATA))
+    .filter((id) => ITEM_DATA[id].recipe && ITEM_DATA[id].recipe.includes(itemId));
+  if (buildsInto.length) {
+    buildsSection.style.display = '';
+    for (const id of buildsInto) {
+      const d = ITEM_DATA[id];
+      const row = document.createElement('div');
+      const link = document.createElement('span');
+      link.className = 'detailLink';
+      link.textContent = `${d.nameKo} (${d.cost}원)`;
+      link.addEventListener('click', () => _showItemDetail(id));
+      row.appendChild(link);
+      buildsList.appendChild(row);
+    }
+  } else {
+    buildsSection.style.display = 'none';
+  }
+}
 function renderShopPanel() {
   const tabsEl = document.getElementById('shopCategoryTabs');
   const listEl = document.getElementById('shopItemList');
@@ -22859,10 +23155,12 @@ function renderShopPanel() {
     const row = document.createElement('div');
     row.className = 'shopItemRow';
     if (controller && (controller.gold || 0) < payCost) row.classList.add('unaffordable');
+    if (itemId === _shopSelectedItemId) row.classList.add('selected');
     const nameEl = document.createElement('span');
-    nameEl.className = 'shopItemName';
+    nameEl.className = 'shopItemName clickable';
     nameEl.textContent = `${item.nameKo} (${canBuild ? '조합 ' : ''}${payCost}${item.priceGuessed ? '*' : ''})`;
     nameEl.title = _itemStatsSummary(item) + (item.priceGuessed ? ' · *가격은 원문 누락으로 실제 LoL 가격 사용' : '');
+    nameEl.addEventListener('click', () => _showItemDetail(itemId));
     const btn = document.createElement('button');
     const alreadyWorn = item.isBoots && controller && controller.boots && controller.boots.id === itemId;
     // 버그 수정(QA 요청): "unaffordable"(이름 회색 처리)만 하고 버튼 자체는
@@ -22898,7 +23196,7 @@ function updateItemUI(ctrl) {
     const slot = items[i];
     const data = slot && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[slot.id] : null;
     if (data) {
-      const usable = !!(data.consumable || data.activeAbility);
+      const usable = !!(data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect);
       el.className = 'invSlot' + (usable ? ' usable' : '');
       el.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
       const badgeValue = typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '');

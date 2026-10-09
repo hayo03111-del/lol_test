@@ -461,7 +461,21 @@ function applyDamage(target, result) {
   // 모든 스킬(직선/범위/AOE)에 새 대상 종류가 자동으로 적용된다 - 개별
   // 스킬 코드를 하나도 건드릴 필요가 없다(요청 20-C와 동일한 원칙).
   if (target.isMinion) return applyDamageToMinion(target, result, true); // applyDamage()는 항상 챔피언(플레이어) 스킬/공격 경로에서만 호출됨
-  if (target.isTurret) return applyDamageToTurret(target, result, {});
+  if (target.isTurret) {
+    const turretDmgSource = result.source || (typeof controller !== 'undefined' ? controller : null);
+    const turretFinalDmg = applyDamageToTurret(target, result, { source: turretDmgSource });
+    // 마법의 영약("챔피언이나 포탑에 피해를 입히면 25의 추가 고정 피해") -
+    // 포탑 전용 좁은 훅(itemOnDamageDealtToTurret)만 호출한다. 기존
+    // itemOnDamageDealt()(그리버스/카탈리스트/운명의 재/여신의 눈물)를
+    // 그대로 포탑에도 열면 "포탑 대상"을 전혀 고려하지 않고 만들어진 그
+    // 효과들이 의도치 않게 영향을 받을 위험이 있어(예: target.isMinion이
+    // false인 포탑에 운명의 재 챔피언 등급 발화가 그대로 걸리는 등), 이미
+    // 검증된 기존 훅은 건드리지 않고 이번에 필요한 효과 하나만 분리했다.
+    if (typeof itemOnDamageDealtToTurret === 'function' && turretDmgSource && typeof turretDmgSource.championId === 'string') {
+      itemOnDamageDealtToTurret(turretDmgSource, target, turretFinalDmg);
+    }
+    return turretFinalDmg;
+  }
   if (target.isInhibitor) return applyDamageToInhibitor(target, result);
   if (target.isNexus) return applyDamageToNexus(target, result);
   const finalDmg = calculateDamage({ ...result, target });

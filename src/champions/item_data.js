@@ -100,6 +100,45 @@ const ITEM_DATA = {
     wardDurationEarlySec: 90, wardDurationLateSec: 120,
     placeRange: 550, visionRadius: 900, hitsToDestroy: 3,
   },
+  // 제어 와드 - 트린켓(투명 와드)과 달리 6칸 인벤토리를 차지하는 "구매하는"
+  // 와드다(원문: "최대 2개의 제어 와드를 소지할 수 있습니다" - maxStack:2로
+  // 구현, 체력 물약과 동일한 중첩 방식). 지속시간이 없는(파괴되기 전까지
+  // 영구) 와드라서 아주 긴 값(99999초)으로 사실상 영구에 근사한다.
+  // 설치 사정거리/시야 범위는 원문에 수치가 없어 실제 LoL 값(각각 600/900)을
+  // 사용했다(명시). "노출된 투명 와드 비활성화"/"평타4대로 파괴"/
+  // "최초 발견·제거 골드"는 투명 와드와 동일한 이유(이 1인 연습
+  // 시뮬레이터에는 적이 와드를 공격하거나 와드끼리 상호작용할 적 AI 자체가
+  // 없음)로 생략한다.
+  controlWard: {
+    id: 'controlWard', nameKo: '제어 와드', cost: 75, maxStack: 2,
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 99999, hitsToDestroy: 4 },
+    placeRangeGuessed: true,
+  },
+  // 영약(소모품) 3종 - 전부 "3분 동안 지속, 다른 종류의 영약을 마시면
+  // 기존 효과가 사라진다"(원문)는 상호 배타적 버프라서 ctrl._itemActiveElixir
+  // 하나로 어떤 영약을 마셨는지 관리한다(item_system.js의 _useElixir() 참고).
+  // 강철의 영약 "거대해짐"/"지나간 자리의 아군 이동속도 버프"는 이 1인
+  // 연습 시뮬레이터에 아군 챔피언 개념이 없어 생략(크기 변화는 순수 시각
+  // 효과라 생략해도 수치에는 영향 없음).
+  elixirOfIron: {
+    id: 'elixirOfIron', nameKo: '강철의 영약', cost: 500, consumableType: 'elixir',
+    elixirEffect: { durationSec: 180, maxHp: 300, tenacityPercent: 0.25 },
+  },
+  // 마법의 영약 - "챔피언이나 포탑에 피해를 입히면 25의 추가 고정 피해"는
+  // onHitFlatDamage로, "챔피언이 대상일 경우 재사용대기시간 5초"(포탑은
+  // 원문에 재사용대기시간 언급이 없어 매번 발동)는 onHitChampionIcdSec으로 구현한다.
+  elixirOfSorcery: {
+    id: 'elixirOfSorcery', nameKo: '마법의 영약', cost: 500, consumableType: 'elixir',
+    elixirEffect: { durationSec: 180, abilityPower: 50, mpRegenPercent: 0.15, onHitFlatDamage: 25, onHitChampionIcdSec: 5 },
+  },
+  // 분노의 영약 - "챔피언 대상 물리 피해 흡혈 12% 증가"는 흡혈의 낫의
+  // physicalVampPercent(대상 불문)와 달리 챔피언 대상 전용이라 별도 필드
+  // (championPhysicalVampPercent)로 구분해서 구현한다(item_system.js의
+  // itemOnDamageDealt()가 target.isChampion으로 게이팅).
+  elixirOfWrath: {
+    id: 'elixirOfWrath', nameKo: '분노의 영약', cost: 500, consumableType: 'elixir',
+    elixirEffect: { durationSec: 180, attackDamage: 30, championPhysicalVampPercent: 0.12 },
+  },
   // [기본 아이템] - 대부분 순수 스탯 아이템. 가격이 원문 텍스트에 없던
   // 3종(원기 회복의 구슬/천갑옷/B.F. 대검)은 공식적으로 잘 알려진 실제
   // LoL 가격을 그대로 썼다(명시적으로 표시 - 사용자가 준 텍스트에는
@@ -248,6 +287,7 @@ const ITEM_DATA = {
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
   'cull', 'darkSeal', 'tearOfGoddess', 'healthPotion', 'refillablePotion', 'stealthWard',
+  'controlWard', 'elixirOfIron', 'elixirOfSorcery', 'elixirOfWrath',
   'pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak',
   'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod',
   'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword',
@@ -258,7 +298,7 @@ const ITEM_ORDER = [
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
   { id: 'starter', nameKo: '시작 아이템', items: ['doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm', 'cull', 'darkSeal', 'tearOfGoddess'] },
-  { id: 'consumable', nameKo: '소모품', items: ['healthPotion', 'refillablePotion'] }, // 투명 와드(트린켓)는 상점에서 사는 게 아니라 기본 장착 - 아래 트린켓 슬롯에 표시
+  { id: 'consumable', nameKo: '소모품', items: ['healthPotion', 'refillablePotion', 'controlWard', 'elixirOfIron', 'elixirOfSorcery', 'elixirOfWrath'] }, // 투명 와드(트린켓)는 상점에서 사는 게 아니라 기본 장착 - 아래 트린켓 슬롯에 표시
   { id: 'basic', nameKo: '기본 아이템', items: ['pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak', 'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod', 'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword'] },
   { id: 'boots', nameKo: '신발', items: ['boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes', 'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed'] },
   { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons'] },

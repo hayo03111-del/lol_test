@@ -72,6 +72,19 @@ function _itemStatsSummary(item) {
   if (item.slaughterPassive) { const p = item.slaughterPassive; parts.push(`학살(챔피언 처치 관여 시 중첩당 흡혈 +${(p.vampPerStack * 100).toFixed(1)}%, 최대 ${p.maxStacks}중첩)`); }
   if (item.manaSpentToHealPercent) parts.push(`영원(스킬 사용 시 소모 마나의 ${Math.round(item.manaSpentToHealPercent * 100)}%만큼 체력 회복, 초당 최대 ${item.manaSpentHealCapPerSec} HP)`);
   if (item.carryoverMoveSpeedOnUpgrade) parts.push(`다른 신발로 바꿔도 이동 속도 +${item.carryoverMoveSpeedOnUpgrade} 효과 유지`);
+  // 제어 와드 + 영약 3종 - "남은 소모 아이템" 요청으로 추가.
+  if (item.wardPlacement) { const p = item.wardPlacement; parts.push(`사용 시 시야 ${p.visionRadius}의 와드 설치(설치 사정거리 ${p.placeRange}, 최대 ${item.maxStack}개 소지)`); }
+  if (item.elixirEffect) {
+    const e = item.elixirEffect;
+    parts.push(`${e.durationSec}초 지속(다른 영약을 마시면 기존 효과 소멸)`);
+    if (e.maxHp) parts.push(`체력 +${e.maxHp}`);
+    if (e.attackDamage) parts.push(`공격력 +${e.attackDamage}`);
+    if (e.abilityPower) parts.push(`주문력 +${e.abilityPower}`);
+    if (e.mpRegenPercent) parts.push(`기본 마나 재생 +${Math.round(e.mpRegenPercent * 100)}%`);
+    if (e.tenacityPercent) parts.push(`강인함 +${Math.round(e.tenacityPercent * 100)}%`);
+    if (e.onHitFlatDamage) parts.push(`챔피언·포탑에 피해 시 고정 피해 +${e.onHitFlatDamage}(챔피언 대상 재사용대기시간 ${e.onHitChampionIcdSec}초)`);
+    if (e.championPhysicalVampPercent) parts.push(`챔피언 대상 물리 피해 흡혈 +${Math.round(e.championPhysicalVampPercent * 100)}%`);
+  }
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
@@ -82,6 +95,75 @@ function _itemStatsSummary(item) {
 }
 
 let _shopActiveCategory = (typeof ITEM_CATEGORIES !== 'undefined' && ITEM_CATEGORIES[0]) ? ITEM_CATEGORIES[0].id : null;
+// 요청("상점에 아이템 선택하면 오른쪽에 띄워주는 상점 시스템") - 실제 LoL
+// 상점처럼 아이템 이름을 클릭하면 #shopDetailPanel(오른쪽 패널)에 전체
+// 효과 설명 + 조합 재료/상위 아이템 경로를 보여준다. 선택 상태는 다른
+// 탭으로 옮겨도 그대로 유지된다(골드가 바뀌어 renderShopPanel()이 다시
+// 그려질 때도 마찬가지) - 하위템/상위템 링크를 눌러 다른 탭의 아이템으로
+// 자연스럽게 넘어갈 수 있어야 하므로, 탭 전환만으로 선택을 지우지 않는다.
+let _shopSelectedItemId = null;
+function _showItemDetail(itemId) {
+  const item = typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[itemId] : null;
+  const panel = document.getElementById('shopDetailPanel');
+  if (!item || !panel) return;
+  _shopSelectedItemId = itemId;
+  if (typeof renderShopPanel === 'function') renderShopPanel(); // 선택한 행에 'selected' 강조 반영
+  panel.classList.add('show');
+  const canBuild = item.recipe && item.recipe.length && controller && typeof hasComponents === 'function' && hasComponents(controller, item.recipe);
+  const payCost = canBuild ? combineCost(item) : item.cost;
+  document.getElementById('shopDetailTitle').textContent = item.nameKo;
+  document.getElementById('shopDetailCost').textContent = item.trinket
+    ? '기본 장착 (구매 불필요)'
+    : `${canBuild ? '조합 ' : ''}${payCost}원${item.priceGuessed ? ' * (가격은 원문 누락으로 실제 LoL 가격 사용)' : ''}`;
+  document.getElementById('shopDetailDesc').textContent = _itemStatsSummary(item) || '(추가 효과 없음)';
+
+  const recipeSection = document.getElementById('shopDetailRecipeSection');
+  const recipeList = document.getElementById('shopDetailRecipeList');
+  recipeList.innerHTML = '';
+  if (item.recipe && item.recipe.length) {
+    recipeSection.style.display = '';
+    const counts = {};
+    for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
+    for (const [id, n] of Object.entries(counts)) {
+      const comp = ITEM_DATA[id];
+      if (!comp) continue;
+      const row = document.createElement('div');
+      const link = document.createElement('span');
+      link.className = 'detailLink';
+      link.textContent = `${comp.nameKo}${n > 1 ? ' x' + n : ''} (${comp.cost}원)`;
+      link.addEventListener('click', () => _showItemDetail(id));
+      row.appendChild(link);
+      recipeList.appendChild(row);
+    }
+  } else {
+    recipeSection.style.display = 'none';
+  }
+
+  // 역방향 조회("이 아이템을 하위템으로 쓰는 상위 아이템") - ITEM_DATA를
+  // 매번 스캔하지만(추가 자료구조 없음) 42종 규모에서는 비용이 무시할
+  // 수준이고, 아이템이 늘어도 자동으로 정확하다(수동 목록을 따로 관리할
+  // 필요가 없다).
+  const buildsSection = document.getElementById('shopDetailBuildsIntoSection');
+  const buildsList = document.getElementById('shopDetailBuildsIntoList');
+  buildsList.innerHTML = '';
+  const buildsInto = (typeof ITEM_ORDER !== 'undefined' ? ITEM_ORDER : Object.keys(ITEM_DATA))
+    .filter((id) => ITEM_DATA[id].recipe && ITEM_DATA[id].recipe.includes(itemId));
+  if (buildsInto.length) {
+    buildsSection.style.display = '';
+    for (const id of buildsInto) {
+      const d = ITEM_DATA[id];
+      const row = document.createElement('div');
+      const link = document.createElement('span');
+      link.className = 'detailLink';
+      link.textContent = `${d.nameKo} (${d.cost}원)`;
+      link.addEventListener('click', () => _showItemDetail(id));
+      row.appendChild(link);
+      buildsList.appendChild(row);
+    }
+  } else {
+    buildsSection.style.display = 'none';
+  }
+}
 function renderShopPanel() {
   const tabsEl = document.getElementById('shopCategoryTabs');
   const listEl = document.getElementById('shopItemList');
@@ -107,10 +189,12 @@ function renderShopPanel() {
     const row = document.createElement('div');
     row.className = 'shopItemRow';
     if (controller && (controller.gold || 0) < payCost) row.classList.add('unaffordable');
+    if (itemId === _shopSelectedItemId) row.classList.add('selected');
     const nameEl = document.createElement('span');
-    nameEl.className = 'shopItemName';
+    nameEl.className = 'shopItemName clickable';
     nameEl.textContent = `${item.nameKo} (${canBuild ? '조합 ' : ''}${payCost}${item.priceGuessed ? '*' : ''})`;
     nameEl.title = _itemStatsSummary(item) + (item.priceGuessed ? ' · *가격은 원문 누락으로 실제 LoL 가격 사용' : '');
+    nameEl.addEventListener('click', () => _showItemDetail(itemId));
     const btn = document.createElement('button');
     const alreadyWorn = item.isBoots && controller && controller.boots && controller.boots.id === itemId;
     // 버그 수정(QA 요청): "unaffordable"(이름 회색 처리)만 하고 버튼 자체는
@@ -146,7 +230,7 @@ function updateItemUI(ctrl) {
     const slot = items[i];
     const data = slot && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[slot.id] : null;
     if (data) {
-      const usable = !!(data.consumable || data.activeAbility);
+      const usable = !!(data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect);
       el.className = 'invSlot' + (usable ? ' usable' : '');
       el.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
       const badgeValue = typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '');
