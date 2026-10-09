@@ -732,9 +732,11 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
     minion.lastAttackedByPlayerAt = performance.now();
     if (typeof controller !== 'undefined' && controller) {
       minion._lastHitBy = controller;
-      // 아이템 패시브 "모든 피해 흡혈"(도란의 검/활) - 미니언 피해도 실제
-      // LoL처럼 흡혈 대상에 포함된다(구조물 피해만 제외).
+      // 아이템 패시브 "모든 피해 흡혈"(도란의 검/활)/"생명력 흡수"(흡혈의
+      // 낫, 물리 피해 전용) - 미니언 피해도 실제 LoL처럼 흡혈 대상에
+      // 포함된다(구조물 피해만 제외).
       if (typeof applyItemVamp === 'function') applyItemVamp(controller, finalDmg);
+      if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(controller, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL);
     }
   }
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }

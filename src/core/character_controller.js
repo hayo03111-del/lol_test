@@ -241,6 +241,13 @@ class CharacterController {
     // 신발 - "하나밖에 사지 못한다"는 원문 그대로 6칸 인벤토리와 별개인
     // 전용 슬롯 하나만 쓴다(트린켓과 동일한 구조). 기본값은 미착용(null).
     this.boots = null;
+    // 서사급 아이템 1차분 전용 상태 - item_system.js의 전용 함수들이
+    // 읽고 쓴다. itemBonusArmorPenMultiplier는 (1-관통%)의 곱으로 저장해서
+    // 나중에 관통력 아이템이 여러 개가 돼도 실제 LoL처럼 곱연산으로
+    // 정확히 누적되게 한다(합연산이 아님).
+    this.itemGrievousOnHitPercent = 0; this.itemGrievousOnHitDurationSec = 0;
+    this.itemPhysicalVampPercent = 0; this.itemBonusArmorPenMultiplier = 1; this.itemManaOnDamagePercent = 0;
+    this._itemSheenArmed = false; this._itemSheenReadyAt = 0; this._itemActiveCooldownUntil = {};
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -1551,6 +1558,10 @@ class CharacterController {
     // 대상 종류(챔피언/더미/미니언/포탑)를 가리지 않는 실제 아이템 설명과
     // 동일하게 범용으로 적용한다.
     if (this.itemOnHitHeal > 0) this.hp = Math.min(this.maxHp, this.hp + this.itemOnHitHeal);
+    // 아이템 패시브(광휘의 검/티아맷) - 평타 적중 공용 훅. 둘 다
+    // item_system.js의 전용 함수가 "보유 여부"부터 직접 확인하므로 여기선
+    // 무조건 호출만 한다(들고 있지 않으면 즉시 return).
+    if (typeof itemOnBasicAttackHit === 'function') itemOnBasicAttackHit(this, target, isCritical);
     // 애쉬 패시브(서리 화살): 기본 공격마다 대상을 둔화시킨다(치명타면
     // 더 강한 둔화로 대체). Q(궁사의 집중)의 다발 공격(_asheFireFlurry)은
     // 다중 대상이라 이 단일 대상 훅을 거치지 않고 자체적으로 처리한다.
@@ -2740,6 +2751,12 @@ class CharacterController {
   // 애니메이션이 아예 없는 순수 버프라(문서 8) 테스트 미리보기에서도 커스텀
   // 시퀀스를 재생할 이유가 없다.
   _dispatchCast(slot, mouseWorldPoint, free) {
+    // 아이템 패시브(광휘의 검 - 주문 검/스펠블레이드) - 모든 챔피언의 모든
+    // 스킬 시전이 결국 이 한 지점을 거치므로, 여기 한 줄만 추가하면 어떤
+    // 챔피언으로 어떤 스킬을 쓰든 자동으로 적용된다(개별 챔피언 파일을
+    // 건드릴 필요 없음 - applyDamage()의 처형 판정과 동일한 원칙). free
+    // (미리보기/프리뷰 캐스트)일 때는 무장시키지 않는다.
+    if (!free && typeof itemOnAbilityDispatch === 'function') itemOnAbilityDispatch(this);
     if (this.championId === 'nilah') {
       if (slot === 'Q') return this._nilahCastQ(mouseWorldPoint, free);
       if (slot === 'W') return this._nilahCastW(mouseWorldPoint, free);

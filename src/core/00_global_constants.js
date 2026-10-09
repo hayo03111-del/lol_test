@@ -391,6 +391,10 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 기획안 8절 ARMOR_SHRED(예: 가렌 E 6회 피격 시 방어력 25% 감소) 반영.
     if (typeof getArmorShredPercent === 'function') armor *= (1 - getArmorShredPercent(target));
     armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등
+    // 아이템 패시브(최후의 속삭임 - 방어구 관통력 18%) - 마법 관통력(위
+    // MAGICAL 분기)과 동일한 이유로 공격자를 source||controller로 찾는다.
+    const atkP = source || (typeof controller !== 'undefined' ? controller : null);
+    if (atkP && atkP.itemBonusArmorPenMultiplier < 1) armor *= atkP.itemBonusArmorPenMultiplier;
     dmg *= 100 / (100 + Math.max(0, armor));
   } else if (damageType === DAMAGE_TYPE.MAGICAL) {
     // 버그 수정: 지금까지 MAGICAL 분기에는 관통력을 반영할 파라미터 자체가
@@ -446,9 +450,11 @@ function applyDamage(target, result) {
   const dmgSource = result.source || (typeof controller !== 'undefined' ? controller : null);
   if (dmgSource && typeof dmgSource.championId === 'string') {
     if (typeof applyItemVamp === 'function') applyItemVamp(dmgSource, finalDmg);
+    const dealtDamageType = result.damageType || DAMAGE_TYPE.PHYSICAL; // calculateDamage()의 기본값과 동일하게 맞춘다
+    if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(dmgSource, finalDmg, dealtDamageType);
     if (target.isChampion) dmgSource._itemLastDealtChampionDamageAt = performance.now();
     if (typeof target._itemLastTookChampionDamageAt !== 'undefined') target._itemLastTookChampionDamageAt = performance.now();
-    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target);
+    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, finalDmg, dealtDamageType);
   }
   // 요청(처형 시스템): 이 피해로 대상이 실제로 죽는지를 데미지 적용 "전"에
   // 먼저 판정한다 - 학습용 더미는 damageEnemy()에서 2% 바닥에 멈추도록

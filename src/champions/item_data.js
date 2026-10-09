@@ -161,6 +161,77 @@ const ITEM_DATA = {
     allDamageVampPercent: 0.04,
     slaughterPassive: { vampPerStack: 0.006, maxStacks: 10 },
   },
+
+  // [서사급 아이템] 1차분 - 전체 목록은 30종이 넘어서, 이번 라운드는 조합
+  // (하위템→완제품) 시스템을 제대로 만드는 데 집중하고 메커니즘이 서로
+  // 겹치지 않는 대표 7종만 먼저 구현했다(나머지는 다음 배치 - README 명시).
+  // `recipe`는 "하위템" 목록(같은 아이템 여러 개면 그만큼 반복) - 전부
+  // 이미 있는 기본 아이템 id를 그대로 가리킨다. 조합 비용(완제품 가격 -
+  // 하위템 가격 합)은 item_system.js의 combineCost()가 자동으로 계산하므로
+  // 여기 따로 적지 않는다.
+  //
+  // 의도적으로 뺀 항목: "강철인장"(원문 가격 1100원, 하위템 롱소드+천갑옷
+  // 2개 = 350+800+800=1950원로 완제품 가격보다 하위템 가격 합이 더 큰
+  // 모순이 있다 - 숫자를 지어내지 않는다는 원칙에 따라 추측으로 고치지
+  // 않고 이번 배치에서 제외했다. 가격 정보가 더 확인되면 추가할 수 있다).
+  executionersCalling: {
+    id: 'executionersCalling', nameKo: '처형인의 대검', cost: 800, recipe: ['longSword'],
+    stats: { attackDamage: 15 },
+    // 고통스러운 상처: 챔피언에게 물리 피해를 입히면 3초간 40% 고통스러운
+    // 상처(그리버스 - 치유/회복 효과 감소. 바루스 E가 이미 쓰던 GRIEVOUS
+    // 상태이상 타입을 그대로 재사용).
+    grievousOnHitPassive: { percent: 0.40, durationSec: 3.0 },
+  },
+  vampiricScepter: {
+    id: 'vampiricScepter', nameKo: '흡혈의 낫', cost: 900, recipe: ['longSword'],
+    stats: { attackDamage: 15 },
+    // 생명력 흡수(물리 피해 전용) - 도란류의 "모든 피해 흡혈"(흡혈)과
+    // 구분되는 별도 수치(물리 피해에만 적용)다.
+    physicalVampPercent: 0.07,
+  },
+  lastWhisper: {
+    id: 'lastWhisper', nameKo: '최후의 속삭임', cost: 1450, recipe: ['longSword', 'longSword'],
+    stats: { attackDamage: 20 },
+    armorPenPercent: 0.18,
+  },
+  tiamat: {
+    id: 'tiamat', nameKo: '티아맷', cost: 1200, recipe: ['longSword', 'longSword'],
+    stats: { attackDamage: 25 },
+    // 쪼개기(패시브) - 기본 공격 시 대상 주변 적에게 추가 물리 피해(근거리
+    // 40%｜원거리 20%의 공격력). 구조물에는 적용하지 않는다(원문 그대로).
+    cleavePassive: { meleePercent: 0.40, rangedPercent: 0.20, radius: 400 },
+    // 초승달(사용 시, 10초 쿨다운) - 주변 적에게 공격력 75% 물리 피해.
+    activeAbility: { nameKo: '초승달', cooldownSec: 10, percentAD: 0.75, radius: 400 },
+  },
+  sheen: {
+    id: 'sheen', nameKo: '광휘의 검', cost: 900, recipe: ['glowingMote'],
+    // 주문 검(스펠블레이드) - 스킬을 사용하면 1.5초 자체 쿨다운으로 무장되고,
+    // 그 상태에서 다음 기본 공격 적중 시 공격력 100%의 추가 물리 피해를
+    // 입힌다. "스킬 사용" 판정은 character_controller.js의 공용 라우팅
+    // 지점(_dispatchCast)에서 잡는다 - 챔피언마다 스킬이 실제로 "성공"
+    // 했는지까지는 구분하지 않고 "시전 시도"를 근사로 쓴다(명시적 근사).
+    spellbladePassive: { procCooldownSec: 1.5, bonusAdPercent: 1.0 },
+  },
+  embersOfFate: {
+    id: 'embersOfFate', nameKo: '운명의 재', cost: 900, recipe: ['amplifyingTome'],
+    stats: { abilityPower: 30 },
+    // 발화 - 챔피언/더미 대상 피해를 입히면(스킬 한정이 원문이지만, 여신의
+    // 눈물과 동일한 이유로 평타+스킬 전체 피해를 트리거로 근사했다) 3초간
+    // 불태워 매초 5의 마법 고정 피해(이미 있는 DOT 상태이상 타입 - 다리우스
+    // 출혈이 쓰던 것과 동일한 범용 틱 시스템을 재사용). 몬스터(미니언)
+    // 대상의 추가 피해(+10/초)는 이번 범위에서는 생략했다(챔피언/더미 전용).
+    burnOnDamagePassive: { id: 'embersOfFateBurn', durationSec: 3.0, dmgPerSec: 5 },
+  },
+  catalystOfAeons: {
+    id: 'catalystOfAeons', nameKo: '억겁의 카탈리스트', cost: 1300, recipe: ['rubyCrystal', 'sapphireCrystal'],
+    stats: { maxHp: 350, mana: 300 },
+    // 영원 - "챔피언에게 피해를 입으면 감소 전 피해량의 7%만큼 마나 회복"만
+    // 구현했다. "스킬 사용 시 소모한 마나의 25%만큼 체력 회복(초당 최대
+    // 20 HoT)" 서브 효과는 "이번 스킬이 정확히 얼마의 마나를 썼는가"를
+    // 챔피언마다 다른 비용 차감 코드를 건드리지 않고는 범용으로 알아낼
+    // 방법이 없어(여신의 눈물 때와 같은 한계) 생략했다 - 명시적 근사.
+    manaOnDamagePercent: 0.07,
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -170,6 +241,7 @@ const ITEM_ORDER = [
   'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword',
   'boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes',
   'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed',
+  'executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -177,4 +249,5 @@ const ITEM_CATEGORIES = [
   { id: 'consumable', nameKo: '소모품', items: ['healthPotion', 'refillablePotion'] }, // 투명 와드(트린켓)는 상점에서 사는 게 아니라 기본 장착 - 아래 트린켓 슬롯에 표시
   { id: 'basic', nameKo: '기본 아이템', items: ['pickaxe', 'dagger', 'longSword', 'rubyCrystal', 'glowingMote', 'negatronCloak', 'cloakOfAgility', 'blastingWand', 'sapphireCrystal', 'needlesslyLargeRod', 'faerieCharm', 'rejuvenationBead', 'amplifyingTome', 'chainVest', 'bfSword'] },
   { id: 'boots', nameKo: '신발', items: ['boots', 'slightlyMagicalBoots', 'berserkersGreaves', 'sorcerersShoes', 'ionianBootsOfLucidity', 'bootsOfSwiftness', 'platedSteelcaps', 'mercurysTreads', 'bootsOfGreed'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons'] },
 ];

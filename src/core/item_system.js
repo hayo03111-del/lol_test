@@ -22,6 +22,14 @@ function recomputeItemStats(ctrl) {
   // 있으므로 "신발 전용"으로 하드코딩하지 않는다).
   ctrl.itemBonusMoveSpeedLol = 0; ctrl.itemBonusMagicPenFlat = 0;
   ctrl.itemSlowResistPercent = 0; ctrl.itemTenacityPercent = 0;
+  // 서사급 아이템 1차분 - 처형인의 대검(그리버스)/흡혈의 낫(물리 흡혈)/
+  // 최후의 속삭임(방어구 관통)/억겁의 카탈리스트(피해 시 마나 회복).
+  ctrl.itemGrievousOnHitPercent = 0; ctrl.itemGrievousOnHitDurationSec = 0;
+  ctrl.itemPhysicalVampPercent = 0; ctrl.itemManaOnDamagePercent = 0;
+  // 방어구 관통은 실제 LoL처럼 곱연산으로 누적한다(아이템이 여러 개여도
+  // 합연산보다 곱연산이 정확하다) - (1-관통%)들의 곱을 저장해뒀다가
+  // calculateDamage()에서 armor에 그대로 곱한다.
+  ctrl.itemBonusArmorPenMultiplier = 1;
   const applyOne = (item) => {
     if (!item) return;
     const s = item.stats || {};
@@ -46,6 +54,13 @@ function recomputeItemStats(ctrl) {
     // 방법이 마땅치 않아 사실상 하나만 적용되지만, 합산해도 안전하다).
     ctrl.itemSlowResistPercent += item.slowResistPercent || 0;
     ctrl.itemTenacityPercent += item.tenacityPercent || 0;
+    if (item.grievousOnHitPassive) {
+      ctrl.itemGrievousOnHitPercent = Math.max(ctrl.itemGrievousOnHitPercent, item.grievousOnHitPassive.percent);
+      ctrl.itemGrievousOnHitDurationSec = Math.max(ctrl.itemGrievousOnHitDurationSec, item.grievousOnHitPassive.durationSec);
+    }
+    ctrl.itemPhysicalVampPercent += item.physicalVampPercent || 0;
+    ctrl.itemManaOnDamagePercent += item.manaOnDamagePercent || 0;
+    if (item.armorPenPercent) ctrl.itemBonusArmorPenMultiplier *= (1 - item.armorPenPercent);
     // 암흑의 인장(영광)의 동적 주문력 - 아이템을 들고 있을 때만 적용된다
     // (팔면 중첩 자체는 남아있어도 더 이상 스탯에 반영되지 않는다).
     if (item.gloryPassive) ctrl.itemBonusAP += (ctrl._itemGloryStacks || 0) * item.gloryPassive.apPerStack;
@@ -131,6 +146,65 @@ function buyItem(ctrl, itemId) {
   return true;
 }
 
+// 조합(하위템 → 완제품) 시스템 - 서사급 아이템부터 실제로 쓰인다.
+// recipe: ['longSword', 'longSword']처럼 같은 id가 여러 번 들어갈 수
+// 있다(티아맷 "롱소드 2개" 등) - 개수를 세어 그만큼 보유 중인지 확인한다.
+function _recipeCounts(recipe) {
+  const counts = {};
+  for (const id of recipe) counts[id] = (counts[id] || 0) + 1;
+  return counts;
+}
+function hasComponents(ctrl, recipe) {
+  const counts = _recipeCounts(recipe);
+  for (const id in counts) {
+    const have = (ctrl.items || []).filter((s) => s.id === id).length;
+    if (have < counts[id]) return false;
+  }
+  return true;
+}
+// 조합 비용 = 완제품 가격 - 하위템 가격 합(실제 LoL과 동일한 "차액만
+// 지불" 원칙). 데이터가 잘못돼 하위템 합이 완제품보다 비싸지는 경우에
+// 대비해 0 밑으로는 내려가지 않게 막는다(원래는 이런 아이템을 애초에
+// 데이터에 넣지 않는 게 맞다 - item_data.js의 "강철인장 제외" 주석 참고).
+function combineCost(item) {
+  const sum = (item.recipe || []).reduce((s, id) => s + ((ITEM_DATA[id] && ITEM_DATA[id].cost) || 0), 0);
+  return Math.max(0, item.cost - sum);
+}
+// 상점 버튼 하나가 "조합"과 "완제품 직접 구매"를 모두 처리한다(실제 LoL
+// 상점과 동일한 UX) - 하위템을 전부 갖고 있으면 그것들을 소모하고 차액만
+// 받고, 아니면 완제품 가격 그대로 받는다(buyItem()으로 위임, 6칸 한도
+// 등 기존 검증을 그대로 재사용).
+function buildOrBuyItem(ctrl, itemId) {
+  const item = ITEM_DATA[itemId];
+  if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
+  if (!item.recipe || !item.recipe.length || !hasComponents(ctrl, item.recipe)) {
+    return buyItem(ctrl, itemId);
+  }
+  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, 'BLUE')) {
+    console.warn('[ITEM] 기지(상점 구역) 안에서만 조합할 수 있습니다.');
+    return false;
+  }
+  const cost = combineCost(item);
+  if ((ctrl.gold || 0) < cost) { console.warn('[ITEM] 골드가 부족합니다(조합 비용).'); return false; }
+  // 하위템 소모 - 개수만큼 각 id의 슬롯을 하나씩 제거한다. 소모(N개) 후
+  // 완제품(1개)을 더하므로 칸 수는 절대 늘지 않는다(N>=1) - 인벤토리
+  // 한도를 별도로 확인할 필요가 없다.
+  const counts = _recipeCounts(item.recipe);
+  for (const id in counts) {
+    for (let i = 0; i < counts[id]; i++) {
+      const idx = ctrl.items.findIndex((s) => s.id === id);
+      if (idx >= 0) ctrl.items.splice(idx, 1);
+    }
+  }
+  ctrl.gold -= cost;
+  ctrl.items.push({ id: itemId, count: 1 });
+  recomputeItemStats(ctrl);
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  console.log(`[ITEM] ${item.nameKo} 조합 완료 (차액 ${cost}원)`);
+  return true;
+}
+
 // 판매가 70%(실제 LoL과 동일한 근사치) - 중첩된 소비 아이템은 칸 전체(개수만큼)를 한 번에 판다.
 function sellItem(ctrl, slotIndex) {
   const slot = ctrl.items && ctrl.items[slotIndex];
@@ -186,7 +260,11 @@ function useItem(ctrl, slotIndex) {
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot) return false;
   const item = ITEM_DATA[slot.id];
-  if (!item || !item.consumable) { console.warn('[ITEM] 사용할 수 없는 아이템입니다.'); return false; }
+  if (!item) return false;
+  // 활성 사용 아이템(티아맷의 "초승달" 등) - 중첩/충전 소모가 없는 대신
+  // 아이템 자체 쿨다운이 있다. 소비 아이템과 분기를 분리한다.
+  if (item.activeAbility) return _useActiveAbilityItem(ctrl, item);
+  if (!item.consumable) { console.warn('[ITEM] 사용할 수 없는 아이템입니다.'); return false; }
   if (item.maxCharges) {
     if (!(slot.charges > 0)) { console.warn('[ITEM] 충전량이 없습니다.'); return false; }
     slot.charges -= 1;
@@ -201,6 +279,27 @@ function useItem(ctrl, slotIndex) {
   ctrl._itemActiveHeals = ctrl._itemActiveHeals || [];
   ctrl._itemActiveHeals.push({ perSec: item.consumable.healAmount / item.consumable.healDurationSec, remainingSec: item.consumable.healDurationSec });
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  return true;
+}
+
+// 티아맷 "초승달" 등 능동 사용 아이템 - 자체 쿨다운만 확인하고(소지 여부는
+// useItem()이 이미 인벤토리 슬롯에서 꺼내 확인했으므로 여기선 다시 보지
+// 않는다), 구조물을 제외한 주변 적에게 물리 피해를 입힌다(원문 그대로).
+function _useActiveAbilityItem(ctrl, item) {
+  const now = performance.now();
+  ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
+  const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
+  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  ctrl._itemActiveCooldownUntil[item.id] = now + item.activeAbility.cooldownSec * 1000;
+  const raw = item.activeAbility.percentAD * (ctrl.stats.attackDamage || 0);
+  if (raw > 0 && typeof findEnemiesInRadius === 'function') {
+    const hits = findEnemiesInRadius(ctrl.root.position, item.activeAbility.radius);
+    for (const { unit } of hits) {
+      if (!unit || unit.hp <= 0 || unit.isTurret || unit.isInhibitor || unit.isNexus) continue; // 구조물 제외(원문 그대로)
+      applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    }
+  }
+  console.log(`[ITEM] ${item.nameKo}(${item.activeAbility.nameKo}) 사용`);
   return true;
 }
 
@@ -302,21 +401,52 @@ function applyItemVamp(source, finalDmg) {
   source.hp = Math.min(source.maxHp, source.hp + finalDmg * source.itemAllDamageVampPercent);
 }
 
-// 여신의 눈물(마나순환) - 챔피언/더미 대상 피해를 입힐 때마다 충전 1개를
-// 소모해 최대 마나를 얻는다(챔피언 상대는 2배, 누적 360 한도). applyDamage()
-// 에서 호출한다 - 근사 범위는 item_data.js의 tearOfGoddess 주석 참고.
-function itemOnDamageDealt(ctrl, target) {
-  const slot = (ctrl.items || []).find((s) => s.id === 'tearOfGoddess');
-  if (!slot) return;
-  const p = ITEM_DATA.tearOfGoddess.manaCirculationPassive;
-  ctrl._itemTearState = ctrl._itemTearState || { charges: p.maxCharges, gained: 0 };
-  const st = ctrl._itemTearState;
-  if (st.gained >= p.maxManaCap || st.charges <= 0) return;
-  st.charges -= 1;
-  const gain = Math.min(target.isChampion ? p.maxManaPerChampionHit : p.maxManaPerHit, p.maxManaCap - st.gained);
-  st.gained += gain;
-  recomputeItemStats(ctrl);
-  ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + gain); // 늘어난 최대 마나만큼 현재 마나도 함께 채워준다(실제 여신의 눈물과 동일)
+// 생명력 흡수(흡혈의 낫) - "모든 피해 흡혈"(위 applyItemVamp)과 달리
+// 물리 피해에만 적용된다. 실제 LoL 생명력 흡수도 기본 공격/물리 스킬
+// 모두에 적용되므로 damageType만으로 판정한다.
+function applyItemPhysicalVamp(source, finalDmg, damageType) {
+  if (!source || !(source.itemPhysicalVampPercent > 0) || !(finalDmg > 0)) return;
+  if (damageType !== DAMAGE_TYPE.PHYSICAL) return;
+  if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
+  source.hp = Math.min(source.maxHp, source.hp + finalDmg * source.itemPhysicalVampPercent);
+}
+
+// 챔피언/더미 대상 피해 1건을 처리하는 공용 훅(applyDamage()에서만 호출 -
+// 미니언/구조물 피해는 애초에 "챔피언에게"라는 조건을 만족하지 못하므로
+// 제외한다). 여신의 눈물(마나순환)/처형인의 대검(그리버스)/억겁의
+// 카탈리스트(피해 시 마나 회복)/운명의 재(발화 DOT)를 전부 여기서 처리한다.
+function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
+  // 처형인의 대검 - 챔피언 대상 물리 피해에 그리버스(고통스러운 상처)를 건다.
+  if (target.isChampion && damageType === DAMAGE_TYPE.PHYSICAL && ctrl.itemGrievousOnHitPercent > 0 && typeof applyStatus === 'function') {
+    applyStatus(target, { id: 'itemGrievousWounds', type: 'GRIEVOUS', duration: ctrl.itemGrievousOnHitDurationSec, value: ctrl.itemGrievousOnHitPercent, source: ctrl });
+  }
+  // 억겁의 카탈리스트 - 챔피언에게 피해를 입히면 그 피해량의 7%만큼 마나 회복.
+  if (target.isChampion && ctrl.itemManaOnDamagePercent > 0 && (ctrl.maxMp || 0) > 0) {
+    ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + finalDmg * ctrl.itemManaOnDamagePercent);
+  }
+  // 운명의 재(발화) - 챔피언/더미 대상 피해 전체를 트리거로 근사(item_data.js
+  // 주석 참고). 같은 id로 다시 걸면 지속시간이 갱신될 뿐 중첩되지 않는다
+  // (01_status_effect_system.js의 upsert 원칙 그대로).
+  const embersSlot = (ctrl.items || []).find((s) => s.id === 'embersOfFate');
+  if (embersSlot && typeof applyStatus === 'function') {
+    const p = ITEM_DATA.embersOfFate.burnOnDamagePassive;
+    applyStatus(target, { id: p.id, type: 'DOT', duration: p.durationSec, totalDamage: p.dmgPerSec * p.durationSec, damageType: DAMAGE_TYPE.MAGICAL, tickInterval: 1.0, source: ctrl });
+  }
+  // 여신의 눈물(마나순환) - 챔피언/더미 대상 피해를 입힐 때마다 충전 1개를
+  // 소모해 최대 마나를 얻는다(챔피언 상대는 2배, 누적 360 한도).
+  const tearSlot = (ctrl.items || []).find((s) => s.id === 'tearOfGoddess');
+  if (tearSlot) {
+    const p = ITEM_DATA.tearOfGoddess.manaCirculationPassive;
+    ctrl._itemTearState = ctrl._itemTearState || { charges: p.maxCharges, gained: 0 };
+    const st = ctrl._itemTearState;
+    if (st.gained < p.maxManaCap && st.charges > 0) {
+      st.charges -= 1;
+      const gain = Math.min(target.isChampion ? p.maxManaPerChampionHit : p.maxManaPerHit, p.maxManaCap - st.gained);
+      st.gained += gain;
+      recomputeItemStats(ctrl);
+      ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + gain); // 늘어난 최대 마나만큼 현재 마나도 함께 채워준다(실제 여신의 눈물과 동일)
+    }
+  }
 }
 
 // 수확의 낫 - 플레이어가 마지막으로 때린 미니언이 죽을 때 killMinion()이 호출.
@@ -452,4 +582,49 @@ function placeWard(ctrl, worldPoint) {
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
   console.log(`[WARD] 투명 와드 설치 (지속시간 ${durationSec.toFixed(0)}초, 남은 충전 ${ctrl.trinket.charges}/${data.maxCharges})`);
   return true;
+}
+
+/* ============================================================
+   서사급 아이템 1차분 전용 공용 훅(광휘의 검/티아맷) - 둘 다
+   character_controller.js의 기존 공용 지점(_onBasicAttackHit/
+   _dispatchCast) 하나에서만 호출되므로, 어떤 챔피언이 들고 있어도
+   자동으로 동작한다.
+   ============================================================ */
+
+// _dispatchCast()에서 호출 - 스킬을 시전하면 광휘의 검(스펠블레이드)을
+// 무장시킨다(자체 1.5초 쿨다운 - 연속 시전해도 그보다 자주 재무장되지
+// 않는다).
+function itemOnAbilityDispatch(ctrl) {
+  const slot = (ctrl.items || []).find((s) => s.id === 'sheen');
+  if (!slot) return;
+  const p = ITEM_DATA.sheen.spellbladePassive;
+  const now = performance.now();
+  if ((ctrl._itemSheenReadyAt || 0) > now) return;
+  ctrl._itemSheenReadyAt = now + p.procCooldownSec * 1000;
+  ctrl._itemSheenArmed = true;
+}
+
+// _onBasicAttackHit()에서 호출 - 광휘의 검이 무장돼 있으면 소모하며 추가
+// 물리 피해를 입히고, 티아맷을 들고 있으면 매 평타마다 주변 적에게
+// 쪼개기(물리 피해)를 입힌다. 대상 종류를 가리지 않는 applyDamage()를
+// 그대로 써서 미니언/포탑에도 자동으로 맞는 피해로 들어간다.
+function itemOnBasicAttackHit(ctrl, target, isCritical) {
+  if (ctrl._itemSheenArmed) {
+    ctrl._itemSheenArmed = false;
+    const bonus = ITEM_DATA.sheen.spellbladePassive.bonusAdPercent * (ctrl.stats.attackDamage || 0);
+    if (bonus > 0) applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+  }
+  const tiamatSlot = (ctrl.items || []).find((s) => s.id === 'tiamat');
+  if (tiamatSlot && !target.isTurret && !target.isInhibitor && !target.isNexus) {
+    const p = ITEM_DATA.tiamat.cleavePassive;
+    const isMelee = !!(ctrl.stats && ctrl.stats.attackRange <= 300);
+    const raw = (isMelee ? p.meleePercent : p.rangedPercent) * (ctrl.stats.attackDamage || 0);
+    if (raw > 0 && typeof findEnemiesInRadius === 'function') {
+      const hits = findEnemiesInRadius(target.mesh ? target.mesh.position : ctrl.root.position, p.radius);
+      for (const { unit } of hits) {
+        if (!unit || unit === target || unit.hp <= 0 || unit.isTurret || unit.isInhibitor || unit.isNexus) continue;
+        applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      }
+    }
+  }
 }

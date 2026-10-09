@@ -49,6 +49,21 @@ function _itemStatsSummary(item) {
   if (item.consumable) parts.push(`사용 시 ${item.consumable.healDurationSec}초에 걸쳐 체력 ${item.consumable.healAmount} 회복`);
   if (item.maxCharges && item.trinket) parts.push(`충전량 ${item.maxCharges}회`);
   if (item.maxStack) parts.push(`최대 ${item.maxStack}개 중첩`);
+  // 서사급 아이템 1차분 패시브 요약.
+  if (item.grievousOnHitPassive) parts.push(`고통스러운 상처(챔피언 물리 피해 시 ${Math.round(item.grievousOnHitPassive.percent * 100)}% 그리버스 ${item.grievousOnHitPassive.durationSec}초)`);
+  if (item.physicalVampPercent) parts.push(`생명력 흡수 +${Math.round(item.physicalVampPercent * 100)}%`);
+  if (item.armorPenPercent) parts.push(`방어구 관통력 +${Math.round(item.armorPenPercent * 100)}%`);
+  if (item.manaOnDamagePercent) parts.push(`챔피언에게 피해를 입히면 피해량의 ${Math.round(item.manaOnDamagePercent * 100)}%만큼 마나 회복`);
+  if (item.cleavePassive) parts.push(`쪼개기(평타 시 주변에 근거리 ${Math.round(item.cleavePassive.meleePercent * 100)}%｜원거리 ${Math.round(item.cleavePassive.rangedPercent * 100)}% 물리 피해)`);
+  if (item.activeAbility) parts.push(`사용 시 "${item.activeAbility.nameKo}": 주변 적에게 공격력 ${Math.round(item.activeAbility.percentAD * 100)}% 물리 피해(재사용 대기시간 ${item.activeAbility.cooldownSec}초)`);
+  if (item.spellbladePassive) parts.push(`주문 검: 스킬 사용 후 다음 평타에 공격력 ${Math.round(item.spellbladePassive.bonusAdPercent * 100)}% 추가 물리 피해(자체 재사용 대기시간 ${item.spellbladePassive.procCooldownSec}초)`);
+  if (item.burnOnDamagePassive) parts.push(`발화(피해 시 ${item.burnOnDamagePassive.durationSec}초간 매초 ${item.burnOnDamagePassive.dmgPerSec} 마법 고정 피해)`);
+  if (item.recipe && item.recipe.length) {
+    const counts = {};
+    for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
+    const compNames = Object.entries(counts).map(([id, n]) => `${(ITEM_DATA[id] && ITEM_DATA[id].nameKo) || id}${n > 1 ? ' x' + n : ''}`);
+    parts.push(`하위템: ${compNames.join(', ')}`);
+  }
   return parts.join(' · ');
 }
 
@@ -71,19 +86,23 @@ function renderShopPanel() {
   for (const itemId of cat.items) {
     const item = ITEM_DATA[itemId];
     if (!item) continue;
+    // 조합(하위템을 전부 갖고 있으면 그 차액만, 아니면 완제품 전체 가격)
+    // - 버튼 라벨/가격 표시를 실제 지불할 금액 기준으로 보여준다.
+    const canBuild = item.recipe && item.recipe.length && controller && typeof hasComponents === 'function' && hasComponents(controller, item.recipe);
+    const payCost = canBuild ? combineCost(item) : item.cost;
     const row = document.createElement('div');
     row.className = 'shopItemRow';
-    if (controller && (controller.gold || 0) < item.cost) row.classList.add('unaffordable');
+    if (controller && (controller.gold || 0) < payCost) row.classList.add('unaffordable');
     const nameEl = document.createElement('span');
     nameEl.className = 'shopItemName';
-    nameEl.textContent = `${item.nameKo} (${item.cost}${item.priceGuessed ? '*' : ''})`;
+    nameEl.textContent = `${item.nameKo} (${canBuild ? '조합 ' : ''}${payCost}${item.priceGuessed ? '*' : ''})`;
     nameEl.title = _itemStatsSummary(item) + (item.priceGuessed ? ' · *가격은 원문 누락으로 실제 LoL 가격 사용' : '');
     const btn = document.createElement('button');
     const alreadyWorn = item.isBoots && controller && controller.boots && controller.boots.id === itemId;
-    btn.textContent = alreadyWorn ? '장착됨' : (item.isBoots ? '착용' : '구매');
+    btn.textContent = alreadyWorn ? '장착됨' : canBuild ? '조합' : (item.isBoots ? '착용' : '구매');
     btn.disabled = !!alreadyWorn;
     btn.title = nameEl.title;
-    btn.addEventListener('click', () => { if (typeof buyItem === 'function' && controller) buyItem(controller, itemId); });
+    btn.addEventListener('click', () => { if (typeof buildOrBuyItem === 'function' && controller) buildOrBuyItem(controller, itemId); });
     row.appendChild(nameEl);
     row.appendChild(btn);
     listEl.appendChild(row);
@@ -107,7 +126,7 @@ function updateItemUI(ctrl) {
     const slot = items[i];
     const data = slot && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[slot.id] : null;
     if (data) {
-      const usable = !!data.consumable;
+      const usable = !!(data.consumable || data.activeAbility);
       el.className = 'invSlot' + (usable ? ' usable' : '');
       el.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
       const badgeValue = typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '');
