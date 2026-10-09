@@ -10,6 +10,37 @@
 const BASE_UNIT = 1.0;
 
 /* ============================================================
+   0-A0-1. TEAM SYSTEM (아군/적군/플레이어)
+   ------------------------------------------------------------
+   요청("아군,적군,플레이어 시스템을 만들어줘") - 지금까지 미니언/포탑/
+   억제기/넥서스는 전부 `.team`('BLUE'/'RED') 필드를 갖고 서로를 generic
+   하게 비교해왔지만(exp_level_system.js의 isValidMinionTarget 등),
+   "플레이어가 어느 팀인가"는 어디에도 데이터로 존재하지 않고 매 파일마다
+   'RED'/'BLUE' 문자열 리터럴을 직접 박아 넣는 방식(예: 01_hit_detection.js
+   의 getAllEnemyUnits()가 `t.team === 'RED'`를 하드코딩, item_system.js의
+   isPositionInBaseZone(..., 'BLUE') 등)으로 흩어져 있었다 - 사실상
+   "시스템"이 아니라 여러 곳에 중복된 가정이었다.
+   이 상수 2개 + 아래 isAllyUnit()/isEnemyUnit() 두 함수로 그 가정을 한
+   곳에 모은다. CharacterController(플레이어)에 처음으로 `.team` 필드가
+   생기고(PLAYER_TEAM), 더미(dummy_enemy.js)에도 `.team`이 생긴다
+   (ENEMY_TEAM) - 기존 동작(플레이어=BLUE, 적=RED)은 전혀 바뀌지 않지만,
+   이제 "이 둘이 같은 편인가"를 `.team` 하나만 보고 generic하게 판정할
+   수 있어, 향후 아군 전용 효과(서포터 아이템/어시스트 등 - README의
+   "아군 챔피언 개념이 없다" 한계)를 만들 때 그 기반으로 재사용할 수 있다.
+   범위(명시): 이번 라운드는 태그/판정 기반만 깐다 - 새로 움직이거나
+   싸우는 아군/적군 유닛을 추가하지 않는다(요청 시 확인된 범위).
+   ============================================================ */
+const PLAYER_TEAM = 'BLUE';
+const ENEMY_TEAM = 'RED';
+// 두 유닛이 같은 팀인지/다른 팀인지 - `.team` 필드가 있는 어떤 유닛
+// 쌍에도 쓸 수 있는 generic 판정(플레이어/더미/미니언/포탑/억제기/넥서스
+// 전부 동일하게 적용 가능). 둘 중 하나라도 team이 없으면(예: 팀 개념이
+// 없는 오브젝트) 안전하게 false를 반환한다 - "모른다"를 "아군이다/적이다"
+// 로 잘못 단정하지 않는다.
+function isAllyUnit(a, b) { return !!(a && b && a.team && b.team && a.team === b.team); }
+function isEnemyUnit(a, b) { return !!(a && b && a.team && b.team && a.team !== b.team); }
+
+/* ============================================================
    0-A00. WORLD DISTANCE SYSTEM (LoL Gameplay Distance ↔ World Distance)
    ------------------------------------------------------------
    버그 수정(치명적): CHAMPION_DATA의 사거리(가렌 평타 175, 마스터 이 Q

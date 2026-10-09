@@ -141,11 +141,13 @@ function findEnemyChampionsNear(turret) {
   // 지금 이 데모에서 "적 챔피언"으로 실존하는 유일한 대상은 플레이어
   // 자신이다(허수아비는 isChampion:true지만 포탑의 실제 교전 대상은
   // 아니다 - 세트 R과 같은 이유로 챔피언 취급될 뿐, 이 포탑 시스템은
-  // 플레이어를 직접 상대하도록 설계). 플레이어는 항상 RED 진영과만
-  // 적대하는 기존 설계를 유지하므로(요청: 기존 챔피언 시스템 최대한
-  // 유지), BLUE 포탑에는 이 우선순위 자체가 적용되지 않는다.
-  if (turret.team !== 'RED') return [];
+  // 플레이어를 직접 상대하도록 설계). 아군/적군/플레이어 시스템 - 예전에는
+  // "플레이어는 항상 RED와만 적대"를 `turret.team !== 'RED'` 리터럴로
+  // 하드코딩했지만, 이제 플레이어 자신의 `.team`(controller.team)과
+  // generic하게 비교한다 - 같은 팀(BLUE) 포탑에는 이 우선순위가 여전히
+  // 적용되지 않는다(동작은 그대로, 가정만 데이터 기반으로 바뀜).
   if (typeof controller === 'undefined' || !controller || controller.hp <= 0) return [];
+  if (!isEnemyUnit(turret, controller)) return [];
   if (controller.state === STATE.DEAD || controller.isUntargetable) return []; // 요청 13 단서: 무적/대상 지정 불가 상태는 별도 처리
   // 버그 수정(모데카이저 R "죽음의 세계" 명세 9절 "메인 월드 포탑은 죽음의
   // 세계 내부의 챔피언을 대상으로 지정할 수 없다"): 포탑은 항상 메인
@@ -330,11 +332,12 @@ function destroyTurret(turret) {
   turret.destroyed = true;
   const data = TURRET_DATA[turret.type];
   const goldAmount = data.destroyGoldOverride != null ? data.destroyGoldOverride : data.goldReward;
-  // 팀 시스템 추가(요청): 플레이어는 항상 RED 진영과 적대 관계라는 기존
-  // 설계를 유지하므로, RED 구조물이 파괴됐을 때만 플레이어에게 골드를
-  // 준다 - 자기 진영(BLUE) 구조물이 미니언 전투로 파괴돼도 골드를 받지
+  // 팀 시스템 추가(요청): 플레이어는 항상 적 진영과 적대 관계라는 기존
+  // 설계를 유지하므로, 적 구조물이 파괴됐을 때만 플레이어에게 골드를
+  // 준다 - 자기 진영 구조물이 미니언 전투로 파괴돼도 골드를 받지
   // 않는다(원래 있던 "아군 전원 = 플레이어 하나" 단순화는 그대로 유지).
-  if (turret.team === 'RED' && typeof controller !== 'undefined' && controller) {
+  // 아군/적군/플레이어 시스템 - 'RED' 리터럴 대신 controller.team과 generic 비교.
+  if (typeof controller !== 'undefined' && controller && isEnemyUnit(turret, controller)) {
     controller.gold = (controller.gold || 0) + goldAmount;
     console.log(`[TURRET] ${data.name} 파괴! +${goldAmount} Gold (누적 ${controller.gold})`);
     updateGoldDisplay();

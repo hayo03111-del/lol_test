@@ -95,12 +95,14 @@ function abilityHasteCooldown(ctrl, baseCd) {
 }
 
 // 상점 - 요청대로 "기지 구역(isPositionInBaseZone) 안에서만" 구매 가능.
-// BLUE가 플레이어 진영이라는 이 데모의 고정 전제를 그대로 따른다(turret_system.js
-// 의 BASE_ZONE_RADIUS 주석이 이미 "나중에 만들 상점도 재사용" 의도를 명시해뒀다).
+// 아군/적군/플레이어 시스템 - 예전에는 "BLUE가 플레이어 진영"이라는 고정
+// 전제를 'BLUE' 리터럴로 하드코딩했지만, 이제 ctrl.team(PLAYER_TEAM)을
+// 그대로 읽는다(turret_system.js의 BASE_ZONE_RADIUS 주석이 이미 "나중에
+// 만들 상점도 재사용" 의도를 명시해뒀다).
 function buyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
-  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, 'BLUE')) {
+  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
     console.warn('[ITEM] 기지(상점 구역) 안에서만 구매할 수 있습니다.');
     return false;
   }
@@ -184,7 +186,7 @@ function buildOrBuyItem(ctrl, itemId) {
   if (!item.recipe || !item.recipe.length || !hasComponents(ctrl, item.recipe)) {
     return buyItem(ctrl, itemId);
   }
-  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, 'BLUE')) {
+  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
     console.warn('[ITEM] 기지(상점 구역) 안에서만 조합할 수 있습니다.');
     return false;
   }

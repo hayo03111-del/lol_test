@@ -17,6 +17,37 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 const BASE_UNIT = 1.0;
 
 /* ============================================================
+   0-A0-1. TEAM SYSTEM (아군/적군/플레이어)
+   ------------------------------------------------------------
+   요청("아군,적군,플레이어 시스템을 만들어줘") - 지금까지 미니언/포탑/
+   억제기/넥서스는 전부 `.team`('BLUE'/'RED') 필드를 갖고 서로를 generic
+   하게 비교해왔지만(exp_level_system.js의 isValidMinionTarget 등),
+   "플레이어가 어느 팀인가"는 어디에도 데이터로 존재하지 않고 매 파일마다
+   'RED'/'BLUE' 문자열 리터럴을 직접 박아 넣는 방식(예: 01_hit_detection.js
+   의 getAllEnemyUnits()가 `t.team === 'RED'`를 하드코딩, item_system.js의
+   isPositionInBaseZone(..., 'BLUE') 등)으로 흩어져 있었다 - 사실상
+   "시스템"이 아니라 여러 곳에 중복된 가정이었다.
+   이 상수 2개 + 아래 isAllyUnit()/isEnemyUnit() 두 함수로 그 가정을 한
+   곳에 모은다. CharacterController(플레이어)에 처음으로 `.team` 필드가
+   생기고(PLAYER_TEAM), 더미(dummy_enemy.js)에도 `.team`이 생긴다
+   (ENEMY_TEAM) - 기존 동작(플레이어=BLUE, 적=RED)은 전혀 바뀌지 않지만,
+   이제 "이 둘이 같은 편인가"를 `.team` 하나만 보고 generic하게 판정할
+   수 있어, 향후 아군 전용 효과(서포터 아이템/어시스트 등 - README의
+   "아군 챔피언 개념이 없다" 한계)를 만들 때 그 기반으로 재사용할 수 있다.
+   범위(명시): 이번 라운드는 태그/판정 기반만 깐다 - 새로 움직이거나
+   싸우는 아군/적군 유닛을 추가하지 않는다(요청 시 확인된 범위).
+   ============================================================ */
+const PLAYER_TEAM = 'BLUE';
+const ENEMY_TEAM = 'RED';
+// 두 유닛이 같은 팀인지/다른 팀인지 - `.team` 필드가 있는 어떤 유닛
+// 쌍에도 쓸 수 있는 generic 판정(플레이어/더미/미니언/포탑/억제기/넥서스
+// 전부 동일하게 적용 가능). 둘 중 하나라도 team이 없으면(예: 팀 개념이
+// 없는 오브젝트) 안전하게 false를 반환한다 - "모른다"를 "아군이다/적이다"
+// 로 잘못 단정하지 않는다.
+function isAllyUnit(a, b) { return !!(a && b && a.team && b.team && a.team === b.team); }
+function isEnemyUnit(a, b) { return !!(a && b && a.team && b.team && a.team !== b.team); }
+
+/* ============================================================
    0-A00. WORLD DISTANCE SYSTEM (LoL Gameplay Distance ↔ World Distance)
    ------------------------------------------------------------
    버그 수정(치명적): CHAMPION_DATA의 사거리(가렌 평타 175, 마스터 이 Q
@@ -722,29 +753,35 @@ function getAllEnemyUnits() {
   // 요청: 사용자가 직접 설치한 허수아비들. 이 배열 하나에만 추가하면
   // findEnemiesInRadius/findFirstInLine/기본 공격 등 이 함수를 쓰는 모든
   // 판정이 자동으로 다중 대상을 인식한다(별도 판정 로직을 새로 만들지 않음).
+  // (더미는 team===ENEMY_TEAM이라 항상 플레이어의 적이지만, 위 두 push는
+  // team이 없던 시절부터의 기존 무조건 포함 로직을 그대로 유지한다 -
+  // 아래 구조물/미니언처럼 team 비교로 걸러도 결과는 똑같다.)
   if (typeof placedDummies !== 'undefined') {
     for (const d of placedDummies) if (d && d.hp > 0) list.push(d);
   }
-  // 요청 문서 20절 - 챔피언(플레이어)의 기본 공격/스킬(범위/직선/AOE 전부
-  // 이 함수 하나를 공용으로 거친다)에 적 진영(RED) 미니언/포탑/억제기/
-  // 넥서스를 포함시킨다. 플레이어는 이 프로젝트 전체에서 항상 RED와만
-  // 적대한다는 기존 설계를 그대로 따르므로(포탑 findEnemyChampionsNear의
-  // team==='RED' 게이트와 동일한 원칙), 여기서도 RED 쪽만 추가한다 -
-  // 아군(BLUE) 미니언/구조물은 애초에 후보에 들어가지 않으므로 "아군은
-  // 공격 불가"(요청 20-B) 요구가 자동으로 만족된다. 새 탐색 시스템을
-  // 만들지 않고 기존 findEnemiesInRadius/findFirstInLine이 전부 이
-  // 함수만 거치는 구조를 그대로 재사용한다(요청 20-C).
+  // 아군/적군/플레이어 시스템 - 챔피언(플레이어)의 기본 공격/스킬(범위/
+  // 직선/AOE 전부 이 함수 하나를 공용으로 거친다)에 적 진영 미니언/포탑/
+  // 억제기/넥서스를 포함시킨다. 예전에는 "항상 RED와만 적대한다"는 가정을
+  // 문자열 리터럴 'RED'로 하드코딩했지만, 이제 플레이어 자신의 `.team`
+  // (PLAYER_TEAM)과 generic하게 비교한다(isEnemyUnit과 동일한 "team이
+  // 다르면 적" 원칙 - 00_global_constants.js) - controller가 아직 없으면
+  // (챔피언 로드 전) PLAYER_TEAM으로 폴백해 기존
+  // 동작을 그대로 유지한다. 아군(같은 팀) 미니언/구조물은 애초에 후보에
+  // 들어가지 않으므로 "아군은 공격 불가"(요청 20-B) 요구가 자동으로
+  // 만족된다. 새 탐색 시스템을 만들지 않고 기존 findEnemiesInRadius/
+  // findFirstInLine이 전부 이 함수만 거치는 구조를 그대로 재사용한다(요청 20-C).
+  const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM;
   if (typeof turrets !== 'undefined') {
-    for (const t of turrets) if (t.team === 'RED' && !t.destroyed && !t.isUntargetable) list.push(t);
+    for (const t of turrets) if (t.team && t.team !== myTeam && !t.destroyed && !t.isUntargetable) list.push(t);
   }
   if (typeof inhibitorBuildings !== 'undefined') {
-    for (const i of inhibitorBuildings) if (i.team === 'RED' && !i.destroyed) list.push(i);
+    for (const i of inhibitorBuildings) if (i.team && i.team !== myTeam && !i.destroyed) list.push(i);
   }
   if (typeof nexusBuildings !== 'undefined') {
-    for (const n of nexusBuildings) if (n.team === 'RED' && !n.destroyed) list.push(n);
+    for (const n of nexusBuildings) if (n.team && n.team !== myTeam && !n.destroyed) list.push(n);
   }
   if (typeof minions !== 'undefined') {
-    for (const m of minions) if (m.team === 'RED' && !m.isDead) list.push(m);
+    for (const m of minions) if (m.team && m.team !== myTeam && !m.isDead) list.push(m);
   }
   return list;
 }
@@ -7026,6 +7063,13 @@ class CharacterController {
   // 서브트리에서 Track 대상을 찾는지 명확하게 분리해 둔다.
   constructor(root, animationRoot, resolver, actionData) {
     this.root = root;
+    // 아군/적군/플레이어 시스템 - 미니언/포탑처럼 이 데모의 유일한 조작
+    // 챔피언도 이제 `.team`을 갖는다(00_global_constants.js 참고). 지금까지
+    // "플레이어는 항상 BLUE"가 여러 파일에 흩어진 문자열 리터럴 가정이었던
+    // 것을 실제 데이터 필드로 통일한다 - 동작은 그대로지만, 앞으로 아군
+    // 전용 효과(서포터 아이템/어시스트 등)를 만들 때 이 필드를 generic하게
+    // 참조할 수 있다.
+    this.team = PLAYER_TEAM;
     this.model = animationRoot; // 실제 GLB Scene/Skeleton/Bone이 들어있는 객체
     this.mixer = new THREE.AnimationMixer(animationRoot);
     this.clips = resolver.clips;
@@ -19129,6 +19173,13 @@ function createDummyEnemy(position) {
     // 일치한다. isMonster는 false(기본값 undefined)로 둬서 초가스 R 등
     // "몬스터 여부"로 분기하는 다른 스킬과도 충돌하지 않는다.
     isChampion: true,
+    // 아군/적군/플레이어 시스템 - 더미는 지금까지 team 필드가 전혀 없어서
+    // getAllEnemyUnits()가 조건 없이 무조건 적으로 집어넣고 있었다(실제로도
+    // 항상 적이니 동작은 똑같다). ENEMY_TEAM을 달아 플레이어(PLAYER_TEAM)와
+    // generic하게(isAllyUnit/isEnemyUnit) 비교할 수 있게 한다 - 더미를
+    // 움직이거나 공격하게 만드는 AI는 이번 범위에 포함하지 않는다(요청 시
+    // 범위를 "태그만"으로 확인함).
+    team: ENEMY_TEAM,
   };
 }
 
@@ -19314,11 +19365,13 @@ function findEnemyChampionsNear(turret) {
   // 지금 이 데모에서 "적 챔피언"으로 실존하는 유일한 대상은 플레이어
   // 자신이다(허수아비는 isChampion:true지만 포탑의 실제 교전 대상은
   // 아니다 - 세트 R과 같은 이유로 챔피언 취급될 뿐, 이 포탑 시스템은
-  // 플레이어를 직접 상대하도록 설계). 플레이어는 항상 RED 진영과만
-  // 적대하는 기존 설계를 유지하므로(요청: 기존 챔피언 시스템 최대한
-  // 유지), BLUE 포탑에는 이 우선순위 자체가 적용되지 않는다.
-  if (turret.team !== 'RED') return [];
+  // 플레이어를 직접 상대하도록 설계). 아군/적군/플레이어 시스템 - 예전에는
+  // "플레이어는 항상 RED와만 적대"를 `turret.team !== 'RED'` 리터럴로
+  // 하드코딩했지만, 이제 플레이어 자신의 `.team`(controller.team)과
+  // generic하게 비교한다 - 같은 팀(BLUE) 포탑에는 이 우선순위가 여전히
+  // 적용되지 않는다(동작은 그대로, 가정만 데이터 기반으로 바뀜).
   if (typeof controller === 'undefined' || !controller || controller.hp <= 0) return [];
+  if (!isEnemyUnit(turret, controller)) return [];
   if (controller.state === STATE.DEAD || controller.isUntargetable) return []; // 요청 13 단서: 무적/대상 지정 불가 상태는 별도 처리
   // 버그 수정(모데카이저 R "죽음의 세계" 명세 9절 "메인 월드 포탑은 죽음의
   // 세계 내부의 챔피언을 대상으로 지정할 수 없다"): 포탑은 항상 메인
@@ -19503,11 +19556,12 @@ function destroyTurret(turret) {
   turret.destroyed = true;
   const data = TURRET_DATA[turret.type];
   const goldAmount = data.destroyGoldOverride != null ? data.destroyGoldOverride : data.goldReward;
-  // 팀 시스템 추가(요청): 플레이어는 항상 RED 진영과 적대 관계라는 기존
-  // 설계를 유지하므로, RED 구조물이 파괴됐을 때만 플레이어에게 골드를
-  // 준다 - 자기 진영(BLUE) 구조물이 미니언 전투로 파괴돼도 골드를 받지
+  // 팀 시스템 추가(요청): 플레이어는 항상 적 진영과 적대 관계라는 기존
+  // 설계를 유지하므로, 적 구조물이 파괴됐을 때만 플레이어에게 골드를
+  // 준다 - 자기 진영 구조물이 미니언 전투로 파괴돼도 골드를 받지
   // 않는다(원래 있던 "아군 전원 = 플레이어 하나" 단순화는 그대로 유지).
-  if (turret.team === 'RED' && typeof controller !== 'undefined' && controller) {
+  // 아군/적군/플레이어 시스템 - 'RED' 리터럴 대신 controller.team과 generic 비교.
+  if (typeof controller !== 'undefined' && controller && isEnemyUnit(turret, controller)) {
     controller.gold = (controller.gold || 0) + goldAmount;
     console.log(`[TURRET] ${data.name} 파괴! +${goldAmount} Gold (누적 ${controller.gold})`);
     updateGoldDisplay();
@@ -20894,10 +20948,11 @@ function findNearestValidNexus(minion) {
 // 미니언만 플레이어를 적 챔피언으로 인식한다. "BLUE MINION ↔ RED
 // CHAMPION" 관계는 이 프로젝트에 조작 가능한 RED 챔피언이 없어(허수아비는
 // 진영이 없는 연습용 표적일 뿐) 실현 대상 자체가 없다.
-const PLAYER_TEAM = 'BLUE';
+// PLAYER_TEAM/ENEMY_TEAM 상수는 00_global_constants.js로 옮겨 공용화했다
+// (아군/적군/플레이어 시스템 - 이제 champion.team과 generic하게 비교한다).
 function isValidChampionTarget(minion, champion) {
   if (typeof champion === 'undefined' || !champion) return false;
-  if (minion.team === PLAYER_TEAM) return false; // 아군 챔피언은 공격 불가(요청 20-B)
+  if (isAllyUnit(minion, champion)) return false; // 아군 챔피언은 공격 불가(요청 20-B) - champion.team(플레이어는 PLAYER_TEAM)과 generic 비교
   if (champion.hp <= 0 || champion.state === STATE.DEAD || champion.isUntargetable) return false;
   if (!canRealmInteract(minion, champion)) return false;
   const range = lolRangeToWorld(minion.attackRange);
@@ -21422,12 +21477,14 @@ function abilityHasteCooldown(ctrl, baseCd) {
 }
 
 // 상점 - 요청대로 "기지 구역(isPositionInBaseZone) 안에서만" 구매 가능.
-// BLUE가 플레이어 진영이라는 이 데모의 고정 전제를 그대로 따른다(turret_system.js
-// 의 BASE_ZONE_RADIUS 주석이 이미 "나중에 만들 상점도 재사용" 의도를 명시해뒀다).
+// 아군/적군/플레이어 시스템 - 예전에는 "BLUE가 플레이어 진영"이라는 고정
+// 전제를 'BLUE' 리터럴로 하드코딩했지만, 이제 ctrl.team(PLAYER_TEAM)을
+// 그대로 읽는다(turret_system.js의 BASE_ZONE_RADIUS 주석이 이미 "나중에
+// 만들 상점도 재사용" 의도를 명시해뒀다).
 function buyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
-  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, 'BLUE')) {
+  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
     console.warn('[ITEM] 기지(상점 구역) 안에서만 구매할 수 있습니다.');
     return false;
   }
@@ -21511,7 +21568,7 @@ function buildOrBuyItem(ctrl, itemId) {
   if (!item.recipe || !item.recipe.length || !hasComponents(ctrl, item.recipe)) {
     return buyItem(ctrl, itemId);
   }
-  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, 'BLUE')) {
+  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
     console.warn('[ITEM] 기지(상점 구역) 안에서만 조합할 수 있습니다.');
     return false;
   }

@@ -274,3 +274,23 @@ E 항목에 데이터 필드(`charmSkillDamageAmpPercent`/`charmSkillDamageAmpDu
 
 새 Node `vm` 단위 테스트 22건(`item_unit_test7.js` - 카탈리스트 마나소모 회복의 속도 상한/총량 보존, 소량/다량 마나소모 양쪽 케이스, 카탈리스트 미보유 시 무효과, 약간 신비한 신발 교체 시 플래그 고정과 여러 번 갈아 신어도 유지, 신발을 완전히 벗으면 미적용, 일반 신발 직접 구매 시 플래그 미설정, 운명의 재 챔피언/미니언 대상 피해량 분기)과, 미니언 DOT 틱 버그 수정을 전담 검증하는 새 테스트 6건(`minion_dot_tick_test.js` - 5틱 전부 정확히 발생·총 피해량 보존, 틱 종료 후 추가 피해 없음, 같은 id 재적용 시 중첩이 아니라 갱신)을 전부 통과시켰다. 기존 5라운드(141건)와 시야 시스템(14건)도 재실행해 회귀가 없음을 확인했다. 전체 번들은 `node --check` 문법 검증과 헤드리스 Chromium 로드 테스트(콘솔 예외 0건)를 통과했다. **참고**: 번들이 `<script type="module">`로 실행되므로 함수들이 모듈 스코프에 갇혀 있어(`controller`만 명시적으로 `window.controller`에 노출됨) 이번 라운드 로직은 브라우저 콘솔에서 직접 호출해 검증하지 못했다 - 대신 실제 소스 파일(`item_system.js`/`01_hit_detection.js`/`01_status_effect_system.js`)을 그대로 읽어 Node `vm`에 로드하는 기존 방식으로 검증했다(이전 라운드들과 동일한 방법론).
 
+## 아군/적군/플레이어 시스템 (팀 태그 기반)
+
+"아군,적군,플레이어 시스템을 만들어줘"를 요청받았다. 먼저 코드베이스를 조사해보니 미니언/포탑/억제기/넥서스는 이미 `.team`('BLUE'/'RED') 필드를 갖고 서로를 generic하게 비교하고 있었지만(`isValidMinionTarget` 등), **정작 플레이어 자신에게는 `.team` 필드가 전혀 없었다** - "플레이어는 항상 BLUE/RED와만 적대한다"는 가정이 `01_hit_detection.js`의 `getAllEnemyUnits()`, `turret_system.js`의 `findEnemyChampionsNear()`/`destroyTurret()`, `item_system.js`의 상점 기지 판정 등 여러 파일에 `'RED'`/`'BLUE'` 문자열 리터럴로 중복 하드코딩돼 있었다(README의 "아군 챔피언 개념이 없다"는 이전 기록과 같은 뿌리의 문제). 이번 요청의 범위를 먼저 확인했는데 - **"팀 태그 기반만 깔지, 실제로 화면에서 움직이고 싸우는 아군 챔피언 봇까지는 만들지 않는다"**, **"적군(더미)도 지금처럼 가만히 있는 허수아비로 유지한다"**로 확정하고 그 범위에서 작업했다.
+
+- **공용 팀 상수/판정 함수 신설**(`00_global_constants.js`, 가장 먼저 로드되는 파일): `PLAYER_TEAM='BLUE'`/`ENEMY_TEAM='RED'` 상수와, `.team` 필드가 있는 어떤 유닛 쌍에도 쓸 수 있는 `isAllyUnit(a,b)`/`isEnemyUnit(a,b)`(둘 다 team이 있고 같으면/다르면 true, 하나라도 team이 없으면 안전하게 false)를 추가했다. 기존에 `exp_level_system.js` 안에 묻혀 있던 `PLAYER_TEAM` 선언은 여기로 옮기고 원래 자리에서 제거했다(중복 선언 금지).
+- **플레이어(CharacterController)에 처음으로 `.team` 필드 추가**: 생성자에서 `this.team = PLAYER_TEAM`으로 설정한다. 이 프로젝트 역사상 처음으로 플레이어 자신이 "내가 어느 팀인가"를 데이터로 갖게 됐다.
+- **더미(허수아비)에도 `.team = ENEMY_TEAM` 추가**: 지금까지 더미는 team 필드가 전혀 없어서 `getAllEnemyUnits()`가 "무조건 적으로 포함"하는 특별 취급을 받고 있었다(실제로도 항상 적이니 결과는 똑같았다). 이제 플레이어와 generic하게(`isEnemyUnit`) 비교할 수 있는 데이터를 갖췄다 - **더미를 움직이거나 반격하게 만드는 AI는 이번 범위에 포함하지 않았다**(요청 시 "지금처럼 더미 유지"로 확정).
+- **하드코딩된 'RED'/'BLUE' 리터럴을 generic 비교로 교체**(동작은 전부 그대로, 가정만 데이터 기반으로 전환):
+  - `getAllEnemyUnits()`(`01_hit_detection.js`) - 포탑/억제기/넥서스/미니언을 `t.team === 'RED'`로 거르던 것을 `t.team !== myTeam`(`myTeam = controller.team || PLAYER_TEAM`)으로 바꿨다.
+  - `findEnemyChampionsNear()`/`destroyTurret()`(`turret_system.js`) - `turret.team !== 'RED'`/`turret.team === 'RED'`를 `isEnemyUnit(turret, controller)`로 바꿨다.
+  - `isValidChampionTarget()`(`exp_level_system.js`) - `minion.team === PLAYER_TEAM`을 `isAllyUnit(minion, champion)`으로 바꿨다(champion은 지금 플레이어뿐이지만, 앞으로 champion 인자에 어떤 team을 가진 유닛이 와도 그대로 맞게 동작한다).
+  - 상점 기지 판정(`item_system.js`의 `buyItem()`/`buildOrBuyItem()`) - `isPositionInBaseZone(ctrl.root.position, 'BLUE')`를 `isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)`으로 바꿨다.
+  - (손대지 않은 것) 미니언↔미니언/포탑↔미니언의 내부 `team === 'RED' ? ... : ...` 분기들(스폰 지점/웨이포인트/모델 색상/회전 등)은 애초에 "플레이어가 어느 팀인가"와 무관하게 이미 team-대-team으로 symmetric하게 동작하고 있어 건드릴 필요가 없었다.
+- **왜 이게 "시스템"인가(단순 리팩터와의 차이)**: 전부 리터럴을 상수로 바꾼 치장이 아니라, 지금까지 "플레이어=항상 BLUE"가 여러 파일에 중복 가정된 탓에 한 곳만 고쳐서는 플레이어의 팀을 바꿀 수 없었던 구조를, 단일 데이터 필드(`controller.team`)와 두 개의 공용 판정 함수로 수렴시켰다. 이제 `controller.team`을 RED로 바꾸는 것만으로 포탑/미니언/상점 기지 판정이 전부 한꺼번에 따라 바뀐다는 것을 테스트로 확인했다(아래 검증 참고) - 데이터 모델이 실제로 generic해졌다는 뜻이다.
+- **의도적으로 범위 밖에 둔 것**(요청 시 확인된 범위): 실제로 이동/공격하는 아군 챔피언 봇, 더미를 적극적으로 반격하게 만드는 AI는 추가하지 않았다. `nilah.js`의 `_nilahAllyCandidates()`(아군 후보를 찾는 코드가 있지만 `globalThis.alliedChampions` 등 한 번도 채워진 적 없는 전역 변수를 참조하는 죽은 코드)는 이번 라운드로 고쳐지지 않는다 - 아군 유닛 자체가 없으니 채울 데이터가 없다. 이번 작업은 "그런 아군 유닛이 나중에 추가되면 바로 꽂을 수 있는 기반"이지, 아군 유닛 자체를 만든 게 아니다.
+
+### 검증
+
+새 Node `vm` 단위 테스트 17건(`team_system_test.js`) - `PLAYER_TEAM`/`ENEMY_TEAM` 상수 값, `isAllyUnit`/`isEnemyUnit`의 동일/다름/null-안전/team-없음 케이스, `getAllEnemyUnits()`가 BLUE 플레이어 기준으로 RED만 적으로 분류, **`controller.team`을 RED로 뒤집었을 때 BLUE 쪽이 적으로 뒤집히는 것까지 확인**(예전 하드코딩이었다면 불가능했을 케이스), controller가 아직 없을 때 `PLAYER_TEAM`으로 안전하게 폴백하는 것까지 전부 통과시켰다. 기존 6라운드(163건)와 시야 시스템(14건)도 재실행해 회귀가 없음을 확인했다(이 과정에서 `item_system.js`의 `buyItem`/`buildOrBuyItem`이 이제 전역 `PLAYER_TEAM`을 참조하게 되면서, 그 상수를 스텁해두지 않았던 기존 테스트 6개가 `ReferenceError`로 깨지는 것을 발견해 각 테스트의 스텁 객체에 `PLAYER_TEAM: 'BLUE'`를 추가해 고쳤다 - 로직 자체의 버그는 아니고 테스트 하네스 보강). 전체 번들은 `node --check` 문법 검증과 헤드리스 Chromium 로드 테스트(콘솔 예외 0건)를 통과했다.
+

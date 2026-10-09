@@ -35,29 +35,35 @@ function getAllEnemyUnits() {
   // 요청: 사용자가 직접 설치한 허수아비들. 이 배열 하나에만 추가하면
   // findEnemiesInRadius/findFirstInLine/기본 공격 등 이 함수를 쓰는 모든
   // 판정이 자동으로 다중 대상을 인식한다(별도 판정 로직을 새로 만들지 않음).
+  // (더미는 team===ENEMY_TEAM이라 항상 플레이어의 적이지만, 위 두 push는
+  // team이 없던 시절부터의 기존 무조건 포함 로직을 그대로 유지한다 -
+  // 아래 구조물/미니언처럼 team 비교로 걸러도 결과는 똑같다.)
   if (typeof placedDummies !== 'undefined') {
     for (const d of placedDummies) if (d && d.hp > 0) list.push(d);
   }
-  // 요청 문서 20절 - 챔피언(플레이어)의 기본 공격/스킬(범위/직선/AOE 전부
-  // 이 함수 하나를 공용으로 거친다)에 적 진영(RED) 미니언/포탑/억제기/
-  // 넥서스를 포함시킨다. 플레이어는 이 프로젝트 전체에서 항상 RED와만
-  // 적대한다는 기존 설계를 그대로 따르므로(포탑 findEnemyChampionsNear의
-  // team==='RED' 게이트와 동일한 원칙), 여기서도 RED 쪽만 추가한다 -
-  // 아군(BLUE) 미니언/구조물은 애초에 후보에 들어가지 않으므로 "아군은
-  // 공격 불가"(요청 20-B) 요구가 자동으로 만족된다. 새 탐색 시스템을
-  // 만들지 않고 기존 findEnemiesInRadius/findFirstInLine이 전부 이
-  // 함수만 거치는 구조를 그대로 재사용한다(요청 20-C).
+  // 아군/적군/플레이어 시스템 - 챔피언(플레이어)의 기본 공격/스킬(범위/
+  // 직선/AOE 전부 이 함수 하나를 공용으로 거친다)에 적 진영 미니언/포탑/
+  // 억제기/넥서스를 포함시킨다. 예전에는 "항상 RED와만 적대한다"는 가정을
+  // 문자열 리터럴 'RED'로 하드코딩했지만, 이제 플레이어 자신의 `.team`
+  // (PLAYER_TEAM)과 generic하게 비교한다(isEnemyUnit과 동일한 "team이
+  // 다르면 적" 원칙 - 00_global_constants.js) - controller가 아직 없으면
+  // (챔피언 로드 전) PLAYER_TEAM으로 폴백해 기존
+  // 동작을 그대로 유지한다. 아군(같은 팀) 미니언/구조물은 애초에 후보에
+  // 들어가지 않으므로 "아군은 공격 불가"(요청 20-B) 요구가 자동으로
+  // 만족된다. 새 탐색 시스템을 만들지 않고 기존 findEnemiesInRadius/
+  // findFirstInLine이 전부 이 함수만 거치는 구조를 그대로 재사용한다(요청 20-C).
+  const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM;
   if (typeof turrets !== 'undefined') {
-    for (const t of turrets) if (t.team === 'RED' && !t.destroyed && !t.isUntargetable) list.push(t);
+    for (const t of turrets) if (t.team && t.team !== myTeam && !t.destroyed && !t.isUntargetable) list.push(t);
   }
   if (typeof inhibitorBuildings !== 'undefined') {
-    for (const i of inhibitorBuildings) if (i.team === 'RED' && !i.destroyed) list.push(i);
+    for (const i of inhibitorBuildings) if (i.team && i.team !== myTeam && !i.destroyed) list.push(i);
   }
   if (typeof nexusBuildings !== 'undefined') {
-    for (const n of nexusBuildings) if (n.team === 'RED' && !n.destroyed) list.push(n);
+    for (const n of nexusBuildings) if (n.team && n.team !== myTeam && !n.destroyed) list.push(n);
   }
   if (typeof minions !== 'undefined') {
-    for (const m of minions) if (m.team === 'RED' && !m.isDead) list.push(m);
+    for (const m of minions) if (m.team && m.team !== myTeam && !m.isDead) list.push(m);
   }
   return list;
 }

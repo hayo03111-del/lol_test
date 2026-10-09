@@ -56,6 +56,13 @@ function createDummyEnemy(position) {
     // 일치한다. isMonster는 false(기본값 undefined)로 둬서 초가스 R 등
     // "몬스터 여부"로 분기하는 다른 스킬과도 충돌하지 않는다.
     isChampion: true,
+    // 아군/적군/플레이어 시스템 - 더미는 지금까지 team 필드가 전혀 없어서
+    // getAllEnemyUnits()가 조건 없이 무조건 적으로 집어넣고 있었다(실제로도
+    // 항상 적이니 동작은 똑같다). ENEMY_TEAM을 달아 플레이어(PLAYER_TEAM)와
+    // generic하게(isAllyUnit/isEnemyUnit) 비교할 수 있게 한다 - 더미를
+    // 움직이거나 공격하게 만드는 AI는 이번 범위에 포함하지 않는다(요청 시
+    // 범위를 "태그만"으로 확인함).
+    team: ENEMY_TEAM,
   };
 }
 

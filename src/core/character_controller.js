@@ -7,6 +7,13 @@ class CharacterController {
   // 서브트리에서 Track 대상을 찾는지 명확하게 분리해 둔다.
   constructor(root, animationRoot, resolver, actionData) {
     this.root = root;
+    // 아군/적군/플레이어 시스템 - 미니언/포탑처럼 이 데모의 유일한 조작
+    // 챔피언도 이제 `.team`을 갖는다(00_global_constants.js 참고). 지금까지
+    // "플레이어는 항상 BLUE"가 여러 파일에 흩어진 문자열 리터럴 가정이었던
+    // 것을 실제 데이터 필드로 통일한다 - 동작은 그대로지만, 앞으로 아군
+    // 전용 효과(서포터 아이템/어시스트 등)를 만들 때 이 필드를 generic하게
+    // 참조할 수 있다.
+    this.team = PLAYER_TEAM;
     this.model = animationRoot; // 실제 GLB Scene/Skeleton/Bone이 들어있는 객체
     this.mixer = new THREE.AnimationMixer(animationRoot);
     this.clips = resolver.clips;

@@ -378,10 +378,11 @@ function findNearestValidNexus(minion) {
 // 미니언만 플레이어를 적 챔피언으로 인식한다. "BLUE MINION ↔ RED
 // CHAMPION" 관계는 이 프로젝트에 조작 가능한 RED 챔피언이 없어(허수아비는
 // 진영이 없는 연습용 표적일 뿐) 실현 대상 자체가 없다.
-const PLAYER_TEAM = 'BLUE';
+// PLAYER_TEAM/ENEMY_TEAM 상수는 00_global_constants.js로 옮겨 공용화했다
+// (아군/적군/플레이어 시스템 - 이제 champion.team과 generic하게 비교한다).
 function isValidChampionTarget(minion, champion) {
   if (typeof champion === 'undefined' || !champion) return false;
-  if (minion.team === PLAYER_TEAM) return false; // 아군 챔피언은 공격 불가(요청 20-B)
+  if (isAllyUnit(minion, champion)) return false; // 아군 챔피언은 공격 불가(요청 20-B) - champion.team(플레이어는 PLAYER_TEAM)과 generic 비교
   if (champion.hp <= 0 || champion.state === STATE.DEAD || champion.isUntargetable) return false;
   if (!canRealmInteract(minion, champion)) return false;
   const range = lolRangeToWorld(minion.attackRange);
