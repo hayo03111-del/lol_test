@@ -91,16 +91,19 @@ function applyStatus(target, effect) {
     // 갱신한다.
     if (target.passiveState) target.passiveState.lastEnemySkillHitAt = now;
   }
-  // 태양의 썰매(썰매 질주) - "적 챔피언을 둔화 또는 이동 불가 상태로
-  // 만들면" 발동하는 공용 훅. 모든 CC 적용이 결국 이 진입점 하나를
-  // 거치므로, 여기 한 줄만 추가하면 어떤 챔피언의 어떤 스킬로 걸든(이
-  // 데모는 사실상 플레이어 하나뿐이지만) 자동으로 맞물린다. SLOW/STUN/
-  // ROOT/KNOCKUP/SUPPRESSION/CHARM만 "둔화 또는 이동 불가"로 친다
-  // (SILENCE/ARMOR_SHRED/MR_SHRED는 이동을 막지 않으므로 제외).
+  // 태양의 썰매(썰매 질주)/밴들파이프(팡파르)/제국의명령(명령) - "적
+  // 챔피언을 둔화 또는 이동 불가 상태로 만들면" 발동하는 공용 훅. 모든
+  // CC 적용이 결국 이 진입점 하나를 거치므로, 여기 한 줄만 추가하면
+  // 어떤 챔피언의 어떤 스킬로 걸든(이 데모는 사실상 플레이어 하나뿐이지만)
+  // 자동으로 맞물린다. SLOW/STUN/ROOT/KNOCKUP/SUPPRESSION/CHARM만 "둔화
+  // 또는 이동 불가"로 친다(SILENCE/ARMOR_SHRED/MR_SHRED는 이동을 막지
+  // 않으므로 제외). target/effect.type을 함께 넘겨서, 제국의명령처럼
+  // "이동 불가"만(둔화 제외) 가려 쓰거나 "걸린 대상"을 표식해야 하는
+  // 패시브도 이 훅 하나로 처리한다.
   if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM'].includes(effect.type)
       && typeof itemOnSlowOrImmobilize === 'function') {
     const attacker = effect.source || (typeof controller !== 'undefined' ? controller : null);
-    if (attacker && attacker !== target) itemOnSlowOrImmobilize(attacker);
+    if (attacker && attacker !== target) itemOnSlowOrImmobilize(attacker, target, effect.type);
   }
   return rec;
 }

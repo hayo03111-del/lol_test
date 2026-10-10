@@ -194,6 +194,7 @@ function _itemStatsSummary(item) {
   if (item.stasisActive) { const p = item.stasisActive; parts.push(`사용 시 "${p.nameKo}": ${p.durationSec}초간 경직(무적+대상 지정 불가, 이동 불가)${p.maxUses ? `, 최대 ${p.maxUses}회만 사용 가능` : `, 재사용 대기시간 ${p.cooldownSec}초`}`); }
   if (item.totalApMultiplierPercent) parts.push(`신비한 작품(총 주문력 +${Math.round(item.totalApMultiplierPercent * 100)}%)`);
   if (item.apSourceWiki) parts.push('(주문력 수치는 원문 누락으로 실제 LoL 수치 사용)');
+  if (item.passiveSourceWiki) parts.push('(고유 패시브는 원문 누락으로 실제 LoL 수치 사용)');
   if (item.giantAbsorbPassive) { const p = item.giantAbsorbPassive; parts.push(`거인의 흡수(${p.rangeLol} 사거리 내 챔피언 상대 ${p.chargeSec}초 충전, 충전된 공격 시 ${p.flatDmg}+체력${Math.round(p.bonusHpPercent * 100)}% 추가 물리 피해 + 그 피해의 ${Math.round(p.maxHpGainPercent * 100)}%만큼 영구 최대 체력 획득, 대상별 재사용대기시간 ${p.icdSec}초)`); }
   if (item.titanicPassive) { const p = item.titanicPassive; parts.push(`거인(최대 체력 ${p.hpPerScaleStep}당 크기 +${Math.round(p.scalePercentPerStep * 100)}%, 최대 +${Math.round(p.maxScalePercent * 100)}%)`); }
   if (item.warmogsHeartPassive) { const p = item.warmogsHeartPassive; parts.push(`워모그의 심장(추가 체력 ${p.bonusHpThreshold} 이상일 때, 챔피언에게 ${p.champOutOfCombatSec}초｜그 외 ${p.nonChampOutOfCombatSec}초 동안 피해를 입지 않으면 초당 ${Math.round(p.percentPerSec * 100)}% 체력 회복)`); }
@@ -207,6 +208,13 @@ function _itemStatsSummary(item) {
   if (item.voidBurstPassive) { const p = item.voidBurstPassive; parts.push(`공허 폭발(챔피언에게 스킬로 피해를 입히면 주변 적에게 ${p.baseDmg}+주문력${Math.round(p.apPercent * 100)}%+최대체력${Math.round(p.maxHpPercent * 100)}% 마법 피해(비챔피언 최대체력 항 ${p.monsterMaxHpBonusCap} 캡), 재사용대기시간 ${p.icdSec}초)`); }
   if (item.ccTriggerPassive) { const p = item.ccTriggerPassive; parts.push(`썰매 질주(적 챔피언에게 둔화·행동 불가 효과를 걸면 체력 ${p.minHeal}~${p.maxHeal}(레벨비례) 회복 + ${p.msDurationSec}초간 이동속도 +${Math.round(p.msPercent * 100)}%, 재사용대기시간 ${p.icdSec}초)`); }
   if (item.mountainsBlessingPassive) { const p = item.mountainsBlessingPassive; parts.push(`산의 축복(챔피언에게 피해를 받으면 ${p.durationSec}초간 받는 피해 근접${Math.round(p.meleePercent * 100)}%｜원거리${Math.round(p.rangedPercent * 100)}% 감소, 보호막이 만료되면 주변에 ${p.slowDurationSec}초간 ${Math.round(p.slowPercent * 100)}% 둔화 충격파)`); }
+  // 전설급 최종분(슈렐리아의군가~제국의명령 - 원문 전체 마지막 배치) 패시브 설명.
+  if (item.faminePassive) { const p = item.faminePassive; parts.push(`기아(추가 공격력 비례 스킬 가속 +${p.flatAbilityHaste}+추가공격력 근접${Math.round(p.meleeBonusAdPercent * 100)}%｜원거리${Math.round(p.rangedBonusAdPercent * 100)}%)`); }
+  if (item.feastPassive) { const p = item.feastPassive; parts.push(`포식(피해를 입힌 챔피언이 ${p.windowSec}초 안에 죽으면 ${p.durationSec}초간 전능 흡혈 +${Math.round(p.omnivampPercent * 100)}%)`); }
+  if (item.teamMoveSpeedActive) { const p = item.teamMoveSpeedActive; parts.push(`사용 시 "${p.nameKo}": ${p.durationSec}초간 이동 속도 +${Math.round(p.msPercent * 100)}%, 재사용 대기시간 ${p.cooldownSec}초`); }
+  if (item.healAndShieldPowerPassive) { const p = item.healAndShieldPowerPassive; parts.push(`별빛 은총(자신에게 돌아오는 회복·보호막 효과 회복+${Math.round(p.healPercent * 100)}%｜보호막+${Math.round(p.shieldPercent * 100)}% 증가 - 아군이 없을 때의 자기 대상 적용으로 근사)`); }
+  if (item.fanfarePassive) { const p = item.fanfarePassive; parts.push(`팡파르(적 챔피언을 둔화·이동 불가 상태로 만들면 근접${p.meleeDurationSec}초｜원거리${p.rangedDurationSec}초간 이동 속도 +${p.msFlat} + 공격 속도 근접+${Math.round(p.meleeAsPercent * 100)}%｜원거리+${Math.round(p.rangedAsPercent * 100)}%)`); }
+  if (item.commandPassive) { const p = item.commandPassive; parts.push(`명령(적 챔피언을 이동 불가 상태로 만들면 ${p.durationSec}초간 취약 표식 - 받는 피해 +${Math.round(p.vulnerablePercent * 100)}%, 중첩 없이 지속시간만 연장)`); }
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
@@ -352,7 +360,20 @@ function updateItemUI(ctrl) {
     const slot = items[i];
     const data = slot && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[slot.id] : null;
     if (data) {
-      const usable = !!(data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect);
+      // 버그 수정(QA - "하위/상위 아이템 시스템 점검" 중 발견): 이 플래그가
+      // true일 때만 클릭이 useItem()으로 가고, false면 대신 sellItem()이
+      // 호출된다(아래 클릭 핸들러 참고) - 그런데 useItem() 자신의 분기
+      // 목록(거대한 초승달/파괴의 충격파/망령의 발걸음/초음속/번개 화살/
+      // 시간 정지 등)에 있는 액티브 아이템 다수가 이 목록에서 빠져 있어서,
+      // 그런 아이템을 인벤토리에서 "클릭"하면 사용이 아니라 판매가 되는
+      // 잠재 버그였다(숫자 단축키로는 정상적으로 useItem()이 호출돼
+      // 지금까지 드러나지 않았다). useItem()이 실제로 분기하는 필드
+      // 전부를 여기서도 동일하게 확인한다.
+      const usable = !!(
+        data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect
+        || data.empoweredCleaveActive || data.shockwaveActive || data.ghostStepActive
+        || data.rocketbeltActive || data.teamMoveSpeedActive || data.noxiousBladeActive || data.stasisActive
+      );
       el.className = 'invSlot' + (usable ? ' usable' : '');
       el.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
       const badgeValue = typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '');

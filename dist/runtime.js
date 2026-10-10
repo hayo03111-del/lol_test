@@ -690,16 +690,19 @@ function applyStatus(target, effect) {
     // 갱신한다.
     if (target.passiveState) target.passiveState.lastEnemySkillHitAt = now;
   }
-  // 태양의 썰매(썰매 질주) - "적 챔피언을 둔화 또는 이동 불가 상태로
-  // 만들면" 발동하는 공용 훅. 모든 CC 적용이 결국 이 진입점 하나를
-  // 거치므로, 여기 한 줄만 추가하면 어떤 챔피언의 어떤 스킬로 걸든(이
-  // 데모는 사실상 플레이어 하나뿐이지만) 자동으로 맞물린다. SLOW/STUN/
-  // ROOT/KNOCKUP/SUPPRESSION/CHARM만 "둔화 또는 이동 불가"로 친다
-  // (SILENCE/ARMOR_SHRED/MR_SHRED는 이동을 막지 않으므로 제외).
+  // 태양의 썰매(썰매 질주)/밴들파이프(팡파르)/제국의명령(명령) - "적
+  // 챔피언을 둔화 또는 이동 불가 상태로 만들면" 발동하는 공용 훅. 모든
+  // CC 적용이 결국 이 진입점 하나를 거치므로, 여기 한 줄만 추가하면
+  // 어떤 챔피언의 어떤 스킬로 걸든(이 데모는 사실상 플레이어 하나뿐이지만)
+  // 자동으로 맞물린다. SLOW/STUN/ROOT/KNOCKUP/SUPPRESSION/CHARM만 "둔화
+  // 또는 이동 불가"로 친다(SILENCE/ARMOR_SHRED/MR_SHRED는 이동을 막지
+  // 않으므로 제외). target/effect.type을 함께 넘겨서, 제국의명령처럼
+  // "이동 불가"만(둔화 제외) 가려 쓰거나 "걸린 대상"을 표식해야 하는
+  // 패시브도 이 훅 하나로 처리한다.
   if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM'].includes(effect.type)
       && typeof itemOnSlowOrImmobilize === 'function') {
     const attacker = effect.source || (typeof controller !== 'undefined' ? controller : null);
-    if (attacker && attacker !== target) itemOnSlowOrImmobilize(attacker);
+    if (attacker && attacker !== target) itemOnSlowOrImmobilize(attacker, target, effect.type);
   }
   return rec;
 }
@@ -2707,10 +2710,30 @@ const ITEM_DATA = {
     },
   },
 
-  // 끝없는 갈망 - 원문에 고유 패시브 설명이 전혀 없다(공격력 65 한 줄뿐).
-  // 수치를 지어내지 않는다는 원칙에 따라 패시브를 추가하지 않고 순수
-  // 스탯 아이템 그대로 둔다.
-  eternalThirst: { id: 'eternalThirst', nameKo: '끝없는 갈망', cost: 3100, recipe: ['caulfieldsWarhammer', 'pickaxe', 'longSword'], stats: { attackDamage: 65 } },
+  // 끝없는 갈망 - 원문에는 "공격력 65" 한 줄뿐, 고유 패시브 설명이 전혀
+  // 없었다(QA 요청 "고유효과가 없다면 찾아서 추가하라"). 이름(영문 "Endless
+  // Hunger")과 하위템(콜필드의 전투망치+곡괭이)으로 실제 LoL 아이템을
+  // 특정해 위키로 교차검증했다 - 기아(Famine, 추가 공격력 비례 스킬
+  // 가속)와 포식(Feast, 처치 관여 시 흡혈full) 두 고유 패시브를 확인해
+  // 추가한다(apSourceWiki와 동일한 성격의 passiveSourceWiki). 원문에 있는
+  // 수치(가격 3100/하위템 3종 - 실제 LoL은 하위템이 2종뿐이라 약간 다름/
+  // 공격력 65)는 "수치를 지어내지 않는다" 원칙에 따라 원문 그대로 둔다.
+  eternalThirst: {
+    id: 'eternalThirst', nameKo: '끝없는 갈망', cost: 3100, recipe: ['caulfieldsWarhammer', 'pickaxe', 'longSword'],
+    stats: { attackDamage: 65 },
+    passiveSourceWiki: true,
+    // 기아 - 추가 공격력에 비례한 스킬 가속(근접이 더 높게 성장 - 위키
+    // 기준 근접 13%/원거리 10%, 기본 +5). 다른 아이템 보너스를 더 살수록
+    // 계속 바뀌는 동적 수치라 지배자의 피갑옷(폭정/응징)과 동일한 패턴
+    // (itemSystemTick에서 매 프레임 재계산)으로 처리한다.
+    faminePassive: { flatAbilityHaste: 5, meleeBonusAdPercent: 0.13, rangedBonusAdPercent: 0.10 },
+    // 포식 - "3초 안에 피해를 입힌 챔피언이 죽으면 8초간 흡혈 15%". 오만
+    // (명성)/죽음의무도(반항)과 완전히 동일한 구조·동일한 한계(이 데모는
+    // 플레이어를 공격하는 적 챔피언 AI가 없어 "적 챔피언이 죽는" 일 자체가
+    // 실전에서는 벌어지지 않는다 - itemOnChampionDeath() 주석 참고)를
+    // 공유하는 범용 훅으로 둔다.
+    feastPassive: { windowSec: 3.0, omnivampPercent: 0.15, durationSec: 8.0 },
+  },
 
   overlordsBloodmail: {
     id: 'overlordsBloodmail', nameKo: '지배자의 피갑옷', cost: 3300, recipe: ['tunnelers', 'tunnelers'],
@@ -3573,6 +3596,77 @@ const ITEM_DATA = {
     // (radiusGuessed). 기존 DAMAGE_REDUCTION 상태이상을 재사용한다.
     mountainsBlessingPassive: { meleePercent: 0.35, rangedPercent: 0.25, durationSec: 2.0, slowPercent: 0.50, slowDurationSec: 1.5, radius: 400, radiusGuessed: true },
   },
+
+  // ==========================================================================
+  // 원문의 마지막 배치(625~1420줄 "[전설급 아이템]" 섹션의 끝) - 전부
+  // "아군"을 대상으로 하는 엔챈트형 아이템들(슈렐리아의군가/월석재생기/
+  // 강철의 솔라리 팬던트/밴들파이프/제국의명령)과 그 공용 하위템(밴들유리
+  // 거울) + 서사급 섹션에서 지금까지 빠져 있던 금지된 우상. 이 배치를
+  // 끝으로 원문(7ad78971-___.txt, 1420줄)의 전체 아이템 목록을 다 반영했다.
+  // ==========================================================================
+  // 밴들유리 거울 - 요정의 부적+증폭의 고서+빛나는 티끌 조합, 아래 5종
+  // 엔챈트 아이템의 공용 하위템(실제 LoL의 Bandleglass Mirror).
+  bandleglassMirror: {
+    id: 'bandleglassMirror', nameKo: '밴들유리 거울', cost: 900, recipe: ['faerieCharm', 'amplifyingTome', 'glowingMote'],
+    stats: { abilityPower: 20, mpRegenPercent: 1.0, abilityHaste: 10 },
+  },
+  // 금지된 우상 - 서사급 섹션(요정의 부적 바로 다음 줄)에 있었지만 지금까지
+  // 구현되지 않았던 아이템(이 문서 전체에서 다른 완제품의 하위템으로도
+  // 쓰이지 않는 독립 아이템). "체력 회복 및 보호막 8%"는 정령의형상(무한한
+  // 활력)과 같은 성격의 효과라 동일한 필드(healingReceivedBonusPercent)를
+  // 재사용한다 - 다만 금지된 우상 자신은 받는 회복/보호막 쪽(itemHealingReceivedBonusPercent/
+  // itemShieldReceivedBonusPercent) 둘 다 똑같이 8%라 숫자가 갈리지 않는다.
+  forbiddenIdol: {
+    id: 'forbiddenIdol', nameKo: '금지된 우상', cost: 600, recipe: ['faerieCharm'],
+    stats: { mpRegenPercent: 0.5 },
+    healingReceivedBonusPercent: 0.08,
+  },
+
+  // 슈렐리아의군가 - "고무적인 연설"(사용 시 이동속도 버프). 원문은 "주변
+  // 아군"에게 적용되지만 1인용 데모라 자신에게만 적용한다(세계지도집
+  // 계열과 동일한 공용 한계).
+  shurelyasBattlesong: {
+    id: 'shurelyasBattlesong', nameKo: '슈렐리아의군가', cost: 2200, recipe: ['aetherialWisp', 'bandleglassMirror'],
+    stats: { abilityPower: 50, abilityHaste: 15, moveSpeedPercent: 0.04, mpRegenPercent: 1.25 },
+    teamMoveSpeedActive: { nameKo: '고무적인 연설', cooldownSec: 75, msPercent: 0.30, durationSec: 4.0 },
+  },
+  // 월석재생기 - "별빛 은총". 원문 자체가 "근처에 아군이 없으면 같은
+  // 대상(=자기 자신)에게 적용"이라는 조항을 명시하고 있고, 이 데모는
+  // 아군이 존재하지 않아 그 조항이 "항상" 성립한다 - 즉 "자신에게 걸리는
+  // 회복/보호막이 30%/35% 증가"로 정확히 근사된다(아군에게 돌아갈 때의
+  // 재분배 동작만 생략 - 받는 사람이 자신뿐이라 관찰 가능한 차이가 없다).
+  moonstoneRenewer: {
+    id: 'moonstoneRenewer', nameKo: '월석재생기', cost: 2200, recipe: ['kircheisShard', 'bandleglassMirror'],
+    stats: { abilityPower: 25, maxHp: 200, abilityHaste: 20, mpRegenPercent: 1.25 },
+    healAndShieldPowerPassive: { healPercent: 0.30, shieldPercent: 0.35 },
+  },
+  // 강철의 솔라리 팬던트 - "헌신"(주변 "아군들"에게 보호막 - 월석재생기와
+  // 달리 "근처에 아군이 없으면 자신에게" 같은 자기 대상 전환 조항이 원문에
+  // 전혀 없다). 이 데모에 아군이 없는 이상 조건을 만족할 대상이 아예
+  // 존재하지 않아 고유 패시브를 구현하지 않는다(명시적 스킵 - 꿈 생성기와
+  // 동일한 성격의 한계, docs/KNOWN_LIMITATIONS.md 참고). 스탯만 제공한다.
+  ironSolariLocket: {
+    id: 'ironSolariLocket', nameKo: '강철의 솔라리 팬던트', cost: 2200, recipe: ['kircheisShard', 'chainVest', 'negatronCloak'],
+    stats: { maxHp: 200, armor: 30, magicResist: 30, abilityHaste: 10 },
+  },
+  // 밴들파이프 - "팡파르"(적을 둔화/이동 불가시키면 이동속도+공격속도).
+  // "자신을 포함한 주변 아군"이라 자신에게는 원문 그대로 적용되고, 다른
+  // 아군에게 나가는 부분만 관찰 불가능한 생략이다(1인용 데모 공용 한계).
+  bandlePipe: {
+    id: 'bandlePipe', nameKo: '밴들파이프', cost: 2300, recipe: ['kircheisShard', 'chainVest', 'negatronCloak'],
+    stats: { maxHp: 200, armor: 20, magicResist: 20, abilityHaste: 15 },
+    fanfarePassive: { meleeDurationSec: 8, rangedDurationSec: 4, msFlat: 20, meleeAsPercent: 0.30, rangedAsPercent: 0.20 },
+  },
+  // 제국의명령 - "통제"(이동 불가 스킬 전용 스킬 가속 +20)는 어떤 스킬이
+  // "이동 불가"를 거는지 챔피언별로 태그하는 시스템이 없어 구현하지 않는다
+  // (docs/KNOWN_LIMITATIONS.md 명시 - 수치를 지어내지 않는다는 원칙과
+  // 동일한 이유로, "항상 켜진 스킬 가속"처럼 부정확하게 근사하지 않고
+  // 아예 생략한다). "명령"(이동 불가 적중 시 취약 표식)만 구현한다.
+  imperialMandate: {
+    id: 'imperialMandate', nameKo: '제국의명령', cost: 2400, recipe: ['amplifyingTome', 'bandleglassMirror', 'amplifyingTome'],
+    stats: { abilityPower: 60, abilityHaste: 15, mpRegenPercent: 1.50 },
+    commandPassive: { vulnerablePercent: 0.07, durationSec: 4.0 },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -3598,6 +3692,7 @@ const ITEM_ORDER = [
   'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard', 'brokenWristGuard',
   'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask',
   'worldAtlas', 'runesteelSpaulders', 'bountyOfWorlds', 'zaZaksRealmspike', 'bloodsong', 'solsticeSleigh', 'dreamMaker', 'celestialOpposition',
+  'bandleglassMirror', 'forbiddenIdol', 'shurelyasBattlesong', 'moonstoneRenewer', 'ironSolariLocket', 'bandlePipe', 'imperialMandate',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -3608,10 +3703,10 @@ const ITEM_CATEGORIES = [
   // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
   // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
   // 하나에서 같이 보여준다.
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise', 'plagueGem', 'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise', 'plagueGem', 'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard', 'bandleglassMirror', 'forbiddenIdol'] },
   // 무라마나/대천사의포옹은 각각 마나무네/대천사의지팡이가 변신해서만
   // 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
-  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade', 'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask'] },
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade', 'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask', 'shurelyasBattlesong', 'moonstoneRenewer', 'ironSolariLocket', 'bandlePipe', 'imperialMandate'] },
   // 서포터 아이템(세계지도집 퀘스트 라인) - 무라마나/대천사의포옹과 동일한
   // 이유로 변신 전용 2종(룬나침반/세계의 결실)은 숨기고, 구매 가능한
   // 시작 아이템(세계지도집)과 그 최종 업그레이드 5종만 노출한다.
@@ -22737,6 +22832,12 @@ function recomputeItemStats(ctrl) {
   // (챔피언 파일마다 따로 구현된 자체 회복 스킬은 한계로 남긴다 - README 명시),
   // 공용 경로(기본 재생/HoT 큐/흡혈/생명선 보호막)에만 적용한다.
   ctrl.itemHealingReceivedBonusPercent = 0;
+  // 월석재생기(별빛 은총) - 회복(30%)과 보호막(35%) 증폭률이 서로 다른
+  // 최초의 아이템이라, 위 itemHealingReceivedBonusPercent(회복 전용)와
+  // 별개로 보호막 전용 필드를 둔다. 정령의형상/금지된 우상처럼 회복·
+  // 보호막 증폭률이 같은 아이템은 item.healingReceivedBonusPercent 하나로
+  // 양쪽 필드에 동일하게 더해진다(아래 집계 루프 참고).
+  ctrl.itemShieldReceivedBonusPercent = 0;
   // 무한의 대검 - 치명타 피해량 +30%(영구 스탯, calculateDamage()가 각
   // 챔피언이 넘기는 critMultiplier에 더해서 읽는다).
   ctrl.itemBonusCritDamagePercent = 0;
@@ -22801,8 +22902,15 @@ function recomputeItemStats(ctrl) {
     if (item.permanentCritPassive) ctrl.itemBonusCritChance += ctrl._itemPermCritBonus || 0;
     // 악의(경멸) - 궁극기 가속.
     ctrl.itemBonusUltimateHaste += item.ultimateHasteFlat || 0;
-    // 정령의형상(무한한 활력).
+    // 정령의형상(무한한 활력)/금지된 우상 - 회복·보호막 증폭률이 같은
+    // 숫자라 양쪽 필드에 동일하게 더한다.
     ctrl.itemHealingReceivedBonusPercent += item.healingReceivedBonusPercent || 0;
+    ctrl.itemShieldReceivedBonusPercent += item.healingReceivedBonusPercent || 0;
+    // 월석재생기(별빛 은총) - 회복/보호막 증폭률이 서로 다른 경우.
+    if (item.healAndShieldPowerPassive) {
+      ctrl.itemHealingReceivedBonusPercent += item.healAndShieldPowerPassive.healPercent || 0;
+      ctrl.itemShieldReceivedBonusPercent += item.healAndShieldPowerPassive.shieldPercent || 0;
+    }
     // 어둠불꽃횃불(어둠불꽃) - 불타는 대상 하나당 총 주문력 4% 증가. 현재
     // 불타고 있는 대상 수(_itemBlackfireBurnTargets)는 itemOnDamageDealt()가
     // DOT를 걸 때 기록하고 itemSystemTick()이 만료분을 정리한다.
@@ -22900,7 +23008,11 @@ function recomputeItemStats(ctrl) {
 // R을 설정하는 호출에서만 itemBonusUltimateHaste를 함께 넣는다(호출하는
 // 쪽이 slot을 안 넘기면 기존처럼 스킬 가속만 적용 - 하위 호환).
 function abilityHasteCooldown(ctrl, baseCd, slot) {
-  let ah = (ctrl && ctrl.itemBonusAbilityHaste) || 0;
+  // itemDynamicAbilityHaste - 끝없는 갈망(기아)처럼 추가 공격력에 비례해
+  // 매 순간 바뀌는 스킬 가속(itemSystemTick에서 매 프레임 재계산 - 지배자의
+  // 피갑옷의 itemDynamicBonusAD와 동일한 패턴). 정적인 itemBonusAbilityHaste
+  // (구매/판매 시에만 재계산)와 별도 필드로 둔다.
+  let ah = (ctrl && ((ctrl.itemBonusAbilityHaste || 0) + (ctrl.itemDynamicAbilityHaste || 0))) || 0;
   if (slot === 'R') ah += (ctrl && ctrl.itemBonusUltimateHaste) || 0;
   if (ah <= 0) return baseCd;
   return baseCd * (100 / (100 + ah));
@@ -23127,6 +23239,9 @@ function useItem(ctrl, slotIndex) {
   // 마법공학 로켓 벨트(초음속) - 즉시 발동형 범위 마법 피해(돌진 이동
   // 자체는 생략 - item_data.js 주석 참고).
   if (item.rocketbeltActive) return _useRocketbeltActive(ctrl, item);
+  // 슈렐리아의군가(고무적인 연설) - 요우무의 유령검(망령의 발걸음)과
+  // 동일한 구조(즉시 발동형 자가 이동속도 버프, 근접/원거리 구분 없음).
+  if (item.teamMoveSpeedActive) return _useTeamMoveSpeedActive(ctrl, item);
   // 마법공학총검(번개 화살) - 자기 주변이 아니라 "현재 선택한 적 챔피언
   // 1명"을 노리는 최초의 아이템 액티브.
   if (item.noxiousBladeActive) return _useNoxiousBladeActive(ctrl, item);
@@ -23236,6 +23351,23 @@ function _useGhostStepActive(ctrl, item) {
   const isMelee = _itemIsMelee(ctrl);
   if (typeof applyStatus === 'function') {
     applyStatus(ctrl, { id: 'itemGhostStepMs', type: 'MS_BUFF', duration: isMelee ? p.meleeDurationSec : p.rangedDurationSec, value: isMelee ? p.meleeMsPercent : p.rangedMsPercent });
+  }
+  console.log(`[ITEM] ${item.nameKo}(${p.nameKo}) 사용`);
+  return true;
+}
+
+// 슈렐리아의군가(고무적인 연설) - "주변 아군의 이동 속도를 4초 동안 30%
+// 상승시킵니다"를 1인용 데모 한계로 자신에게만 적용한다(아군 전체 효과
+// 아이템의 공용 한계 - 세계지도집 계열과 동일한 전례).
+function _useTeamMoveSpeedActive(ctrl, item) {
+  const now = performance.now();
+  ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
+  const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
+  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  const p = item.teamMoveSpeedActive;
+  ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
+  if (typeof applyStatus === 'function') {
+    applyStatus(ctrl, { id: 'itemShurelyasSpeech', type: 'MS_BUFF', duration: p.durationSec, value: p.msPercent });
   }
   console.log(`[ITEM] ${item.nameKo}(${p.nameKo}) 사용`);
   return true;
@@ -23479,8 +23611,14 @@ function itemSystemTick(ctrl, dt) {
       applyStatus(ctrl, { id: 'itemYoumuuOutOfCombatMs', type: 'MS_BUFF_FLAT', duration: 0.5, value: isMelee ? p.meleeAmount : p.rangedAmount });
     }
   }
-  ctrl._itemTempVampPercent = (ctrl._itemMawOmnivampUntil && now < ctrl._itemMawOmnivampUntil)
+  // 버그 방지: 멜모셔스의 아귀(생명선)와 끝없는 갈망(포식) 둘 다 "일정
+  // 시간 동안 전능 흡혈 증가"를 같은 임시 필드에 쓴다 - 한쪽이 다른
+  // 쪽을 덮어쓰지 않도록 둘 중 더 큰 값(겹치면 더 센 효과)을 쓴다.
+  const mawOmnivamp = (ctrl._itemMawOmnivampUntil && now < ctrl._itemMawOmnivampUntil)
     ? ITEM_DATA.maw.lifelinePassive.omnivampPercentAfterTrigger : 0;
+  const feastOmnivamp = (ctrl._itemFeastOmnivampUntil && now < ctrl._itemFeastOmnivampUntil)
+    ? ITEM_DATA.eternalThirst.feastPassive.omnivampPercent : 0;
+  ctrl._itemTempVampPercent = Math.max(mawOmnivamp, feastOmnivamp);
   // 스테락의도전(생명선) - 맞지 않아도 4.5초에 걸쳐 보호막이 녹아내린다.
   // ctrl.shield는 여러 아이템이 공유하는 단일 필드라 "줄어드는 상한선"
   // 역할만 한다 - 실제로 흡수에 쓰여 이미 그보다 작아져 있으면 그대로 둔다
@@ -23528,6 +23666,18 @@ function itemSystemTick(ctrl, dt) {
       ctrl.itemDynamicBonusAD = newDynamicAD;
       ctrl.recomputeStats();
     }
+  }
+  // 끝없는 갈망(기아) - 추가 공격력에 비례해 매 순간 바뀌는 스킬 가속이라
+  // 위 폭정/응징과 동일한 패턴으로 매 프레임 다시 계산한다(ctrl.stats에는
+  // 반영되지 않는 값이라 recomputeStats() 호출은 필요 없다 - abilityHasteCooldown()이
+  // 직접 이 필드를 읽는다).
+  const eternalThirstTickSlot = (ctrl.items || []).find((s) => s.id === 'eternalThirst');
+  if (!eternalThirstTickSlot) {
+    ctrl.itemDynamicAbilityHaste = 0;
+  } else {
+    const p = ITEM_DATA.eternalThirst.faminePassive;
+    const isMelee = _itemIsMelee(ctrl);
+    ctrl.itemDynamicAbilityHaste = p.flatAbilityHaste + _itemBonusAD(ctrl) * (isMelee ? p.meleeBonusAdPercent : p.rangedBonusAdPercent);
   }
   // 쇼진의창(집중된 의지) - 스택 지속시간이 끝나면 초기화하고, 매 프레임
   // 현재 스택 수에서 다시 계산한 증폭률을 ctrl.itemSpellDamageAmpPercent에
@@ -23953,8 +24103,9 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
       const isMelee = _itemIsMelee(ctrl);
       const shieldBase = isMelee ? p.meleeShieldBase : p.rangedShieldBase;
       const shieldBonusPercent = isMelee ? p.meleeShieldBonusAdPercent : p.rangedShieldBonusAdPercent;
-      // 정령의형상(무한한 활력) - 생명선 보호막도 "받는 보호막"에 해당한다.
-      const shieldAmt = (shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent) * (1 + (ctrl.itemHealingReceivedBonusPercent || 0));
+      // 정령의형상(무한한 활력)/월석재생기(별빛 은총) - 생명선 보호막도
+      // "받는 보호막"에 해당한다(보호막 전용 증폭률 사용).
+      const shieldAmt = (shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent) * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
       ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       ctrl._itemMawOmnivampUntil = now + p.omnivampDurationSec * 1000;
@@ -23973,7 +24124,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
     if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
       ctrl._itemSterakIcdUntil = now + p.icdSec * 1000;
       const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
-      const shieldAmt = bonusHp * p.bonusHpShieldPercent * (1 + (ctrl.itemHealingReceivedBonusPercent || 0));
+      const shieldAmt = bonusHp * p.bonusHpShieldPercent * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
       ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
       ctrl._itemSterakShieldState = { maxAmount: shieldAmt, startedAt: now, decaySec: p.shieldDecaySec };
       console.log('[ITEM] 스테락의도전 - 생명선 발동');
@@ -23992,7 +24143,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
       const isMelee = _itemIsMelee(ctrl);
       const shieldAmt = (isMelee
         ? _itemScaleByLevel(ctrl, p.meleeShieldMin, p.meleeShieldMax, p.levelMin, p.levelMax)
-        : _itemScaleByLevel(ctrl, p.rangedShieldMin, p.rangedShieldMax, p.levelMin, p.levelMax)) * (1 + (ctrl.itemHealingReceivedBonusPercent || 0));
+        : _itemScaleByLevel(ctrl, p.rangedShieldMin, p.rangedShieldMax, p.levelMin, p.levelMax)) * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
       ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       console.log('[ITEM] 불멸의 철갑궁 - 생명선 발동');
@@ -24008,7 +24159,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
     const hpAfter = (ctrl.hp || 0) - Math.max(0, remaining - (ctrl.shield || 0));
     if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
       ctrl._itemSeraphIcdUntil = now + p.icdSec * 1000;
-      const shieldAmt = (ctrl.maxMp || 0) * p.shieldManaPercent * (1 + (ctrl.itemHealingReceivedBonusPercent || 0));
+      const shieldAmt = (ctrl.maxMp || 0) * p.shieldManaPercent * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
       ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       console.log('[ITEM] 대천사의포옹 - 생명선 발동');
@@ -24263,6 +24414,14 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
     const p = ITEM_DATA.hubris.renownPassive;
     ctrl._itemHubrisTargets = ctrl._itemHubrisTargets || new Map();
     ctrl._itemHubrisTargets.set(_itemTargetKey(target), performance.now() + p.windowSec * 1000);
+  }
+
+  // 끝없는 갈망(포식) - 위 오만(명성)과 동일한 추적 구조.
+  const eternalThirstSlot = (ctrl.items || []).find((s) => s.id === 'eternalThirst');
+  if (eternalThirstSlot && target.isChampion) {
+    const p = ITEM_DATA.eternalThirst.feastPassive;
+    ctrl._itemEternalThirstTargets = ctrl._itemEternalThirstTargets || new Map();
+    ctrl._itemEternalThirstTargets.set(_itemTargetKey(target), performance.now() + p.windowSec * 1000);
   }
 
   // 요새파괴자(성형작약) - 챔피언에게 스킬로 피해를 입히면(평타+스킬 근사)
@@ -24561,20 +24720,59 @@ function itemOnLevelUp(ctrl) {
 // 이동속도 20% 획득." 01_status_effect_system.js의 applyStatus() 공용
 // 진입점이 호출한다(어떤 챔피언의 어떤 CC 스킬이든 자동으로 맞물림).
 // 아군이 없는 이 데모는 자신에게만 이동속도를 적용한다(명시적 한계).
-function itemOnSlowOrImmobilize(ctrl) {
+// target/effectType(선택) - 밴들파이프(팡파르)는 자신이 건 둔화/이동
+// 불가(태양의 썰매와 동일한 넓은 집합)에 반응하고, 제국의명령(명령)은
+// 그중 "이동 불가"만(둔화 제외) 걸린 "대상"을 표식해야 하므로 추가했다
+// (호출하는 쪽 - 01_status_effect_system.js의 applyStatus() - 이 둘을
+// 안 넘기면 기존처럼 태양의 썰매만 동작 - 하위 호환).
+function itemOnSlowOrImmobilize(ctrl, target, effectType) {
   if (!ctrl) return;
-  const slot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].ccTriggerPassive);
-  if (!slot) return;
-  const p = ITEM_DATA[slot.id].ccTriggerPassive;
-  const now = performance.now();
-  if ((ctrl._itemSleighIcdUntil || 0) > now) return;
-  ctrl._itemSleighIcdUntil = now + p.icdSec * 1000;
-  const heal = _itemScaleByLevel(ctrl, p.minHeal, p.maxHeal, p.levelMin, p.levelMax);
-  if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal);
-  if (typeof applyStatus === 'function') {
-    applyStatus(ctrl, { id: 'itemSolsticeSleighMs', type: 'MS_BUFF', duration: p.msDurationSec, value: p.msPercent });
+  const sleighSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].ccTriggerPassive);
+  if (sleighSlot) {
+    const p = ITEM_DATA[sleighSlot.id].ccTriggerPassive;
+    const now = performance.now();
+    if ((ctrl._itemSleighIcdUntil || 0) <= now) {
+      ctrl._itemSleighIcdUntil = now + p.icdSec * 1000;
+      const heal = _itemScaleByLevel(ctrl, p.minHeal, p.maxHeal, p.levelMin, p.levelMax);
+      if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal);
+      if (typeof applyStatus === 'function') {
+        applyStatus(ctrl, { id: 'itemSolsticeSleighMs', type: 'MS_BUFF', duration: p.msDurationSec, value: p.msPercent });
+      }
+      console.log('[ITEM] 태양의 썰매 - 썰매 질주 발동');
+    }
   }
-  console.log('[ITEM] 태양의 썰매 - 썰매 질주 발동');
+
+  // 밴들파이프(팡파르) - "적 챔피언을 둔화시키거나 이동 불가 상태로
+  // 만들면" 근접8초｜원거리4초간 이동속도 +20(고정) + 자신(및 "주변
+  // 아군" - 1인용 데모라 자신으로 근사)의 공격속도 근접+30%｜원거리+20%.
+  // 재사용대기시간 없이 매번 지속시간을 "갱신"한다(applyStatus가 같은
+  // id를 다시 걸면 자동으로 지속시간을 덮어쓴다 - 원문에 쿨다운 표기가
+  // 없으므로 그대로 따른다).
+  const fanfareSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].fanfarePassive);
+  if (fanfareSlot && typeof applyStatus === 'function') {
+    const p = ITEM_DATA[fanfareSlot.id].fanfarePassive;
+    const isMelee = _itemIsMelee(ctrl);
+    const dur = isMelee ? p.meleeDurationSec : p.rangedDurationSec;
+    applyStatus(ctrl, { id: 'itemFanfareMs', type: 'MS_BUFF_FLAT', duration: dur, value: p.msFlat });
+    applyStatus(ctrl, { id: 'itemFanfareAs', type: 'AS_BUFF', duration: dur, value: isMelee ? p.meleeAsPercent : p.rangedAsPercent });
+    console.log('[ITEM] 밴들파이프 - 팡파르 발동');
+  }
+
+  // 제국의명령(명령) - "통제"(이동 불가 스킬 전용 스킬 가속)는 챔피언별로
+  // 어떤 스킬이 "이동 불가"를 거는지 태그하는 시스템이 없어 구현하지
+  // 않는다(docs/KNOWN_LIMITATIONS.md 명시). "명령"만 구현한다 - 둔화가
+  // 아니라 "이동 불가"(기절/속박/제압/공중에 뜸/매혹)에 걸렸을 때만,
+  // 대상이 챔피언이면 4초간 취약 표식(VULNERABLE 7%)을 남긴다. 같은
+  // 표식을 다시 걸면 "중첩 없이 지속시간만 연장"(원문 그대로) - applyStatus가
+  // 같은 id의 상태이상을 다시 걸면 자동으로 덮어써서 지속시간이 연장되므로
+  // 별도 처리가 필요 없다.
+  const mandateSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].commandPassive);
+  const IMMOBILIZE_TYPES = ['STUN', 'ROOT', 'SUPPRESSION', 'KNOCKUP', 'CHARM']; // 둔화(SLOW) 제외
+  if (mandateSlot && target && target.isChampion && IMMOBILIZE_TYPES.includes(effectType) && typeof applyStatus === 'function') {
+    const p = ITEM_DATA[mandateSlot.id].commandPassive;
+    applyStatus(target, { id: 'itemImperialMandateVulnerable', type: 'VULNERABLE', duration: p.durationSec, value: p.vulnerablePercent, source: ctrl });
+    console.log('[ITEM] 제국의명령 - 명령 발동(취약 표식)');
+  }
 }
 
 // 챔피언 처치 관여 시 중첩을 얻는 아이템들(암흑의 인장의 영광, 탐욕의
@@ -24697,6 +24895,18 @@ function itemOnChampionDeath(ctrl) {
       controller._itemHubrisExpiresAt = performance.now() + p.durationSec * 1000;
       controller.recomputeStats();
       console.log('[ITEM] 오만 - 명성 발동(공격력 증가, 처치 ' + controller._itemHubrisKillCount + '회)');
+    }
+  }
+
+  // 끝없는 갈망(포식) - 위 오만(명성)과 완전히 동일한 구조(피해를 입힌
+  // 챔피언이 3초 안에 죽으면 8초간 전능 흡혈 15%).
+  if (hasAttackerContext && controller._itemEternalThirstTargets) {
+    const expiresAt = controller._itemEternalThirstTargets.get(deadKey);
+    if (typeof expiresAt === 'number' && performance.now() <= expiresAt) {
+      controller._itemEternalThirstTargets.delete(deadKey);
+      const p = ITEM_DATA.eternalThirst.feastPassive;
+      controller._itemFeastOmnivampUntil = performance.now() + p.durationSec * 1000;
+      console.log('[ITEM] 끝없는 갈망 - 포식 발동(전능 흡혈 증가)');
     }
   }
 }
@@ -25713,6 +25923,7 @@ function _itemStatsSummary(item) {
   if (item.stasisActive) { const p = item.stasisActive; parts.push(`사용 시 "${p.nameKo}": ${p.durationSec}초간 경직(무적+대상 지정 불가, 이동 불가)${p.maxUses ? `, 최대 ${p.maxUses}회만 사용 가능` : `, 재사용 대기시간 ${p.cooldownSec}초`}`); }
   if (item.totalApMultiplierPercent) parts.push(`신비한 작품(총 주문력 +${Math.round(item.totalApMultiplierPercent * 100)}%)`);
   if (item.apSourceWiki) parts.push('(주문력 수치는 원문 누락으로 실제 LoL 수치 사용)');
+  if (item.passiveSourceWiki) parts.push('(고유 패시브는 원문 누락으로 실제 LoL 수치 사용)');
   if (item.giantAbsorbPassive) { const p = item.giantAbsorbPassive; parts.push(`거인의 흡수(${p.rangeLol} 사거리 내 챔피언 상대 ${p.chargeSec}초 충전, 충전된 공격 시 ${p.flatDmg}+체력${Math.round(p.bonusHpPercent * 100)}% 추가 물리 피해 + 그 피해의 ${Math.round(p.maxHpGainPercent * 100)}%만큼 영구 최대 체력 획득, 대상별 재사용대기시간 ${p.icdSec}초)`); }
   if (item.titanicPassive) { const p = item.titanicPassive; parts.push(`거인(최대 체력 ${p.hpPerScaleStep}당 크기 +${Math.round(p.scalePercentPerStep * 100)}%, 최대 +${Math.round(p.maxScalePercent * 100)}%)`); }
   if (item.warmogsHeartPassive) { const p = item.warmogsHeartPassive; parts.push(`워모그의 심장(추가 체력 ${p.bonusHpThreshold} 이상일 때, 챔피언에게 ${p.champOutOfCombatSec}초｜그 외 ${p.nonChampOutOfCombatSec}초 동안 피해를 입지 않으면 초당 ${Math.round(p.percentPerSec * 100)}% 체력 회복)`); }
@@ -25726,6 +25937,13 @@ function _itemStatsSummary(item) {
   if (item.voidBurstPassive) { const p = item.voidBurstPassive; parts.push(`공허 폭발(챔피언에게 스킬로 피해를 입히면 주변 적에게 ${p.baseDmg}+주문력${Math.round(p.apPercent * 100)}%+최대체력${Math.round(p.maxHpPercent * 100)}% 마법 피해(비챔피언 최대체력 항 ${p.monsterMaxHpBonusCap} 캡), 재사용대기시간 ${p.icdSec}초)`); }
   if (item.ccTriggerPassive) { const p = item.ccTriggerPassive; parts.push(`썰매 질주(적 챔피언에게 둔화·행동 불가 효과를 걸면 체력 ${p.minHeal}~${p.maxHeal}(레벨비례) 회복 + ${p.msDurationSec}초간 이동속도 +${Math.round(p.msPercent * 100)}%, 재사용대기시간 ${p.icdSec}초)`); }
   if (item.mountainsBlessingPassive) { const p = item.mountainsBlessingPassive; parts.push(`산의 축복(챔피언에게 피해를 받으면 ${p.durationSec}초간 받는 피해 근접${Math.round(p.meleePercent * 100)}%｜원거리${Math.round(p.rangedPercent * 100)}% 감소, 보호막이 만료되면 주변에 ${p.slowDurationSec}초간 ${Math.round(p.slowPercent * 100)}% 둔화 충격파)`); }
+  // 전설급 최종분(슈렐리아의군가~제국의명령 - 원문 전체 마지막 배치) 패시브 설명.
+  if (item.faminePassive) { const p = item.faminePassive; parts.push(`기아(추가 공격력 비례 스킬 가속 +${p.flatAbilityHaste}+추가공격력 근접${Math.round(p.meleeBonusAdPercent * 100)}%｜원거리${Math.round(p.rangedBonusAdPercent * 100)}%)`); }
+  if (item.feastPassive) { const p = item.feastPassive; parts.push(`포식(피해를 입힌 챔피언이 ${p.windowSec}초 안에 죽으면 ${p.durationSec}초간 전능 흡혈 +${Math.round(p.omnivampPercent * 100)}%)`); }
+  if (item.teamMoveSpeedActive) { const p = item.teamMoveSpeedActive; parts.push(`사용 시 "${p.nameKo}": ${p.durationSec}초간 이동 속도 +${Math.round(p.msPercent * 100)}%, 재사용 대기시간 ${p.cooldownSec}초`); }
+  if (item.healAndShieldPowerPassive) { const p = item.healAndShieldPowerPassive; parts.push(`별빛 은총(자신에게 돌아오는 회복·보호막 효과 회복+${Math.round(p.healPercent * 100)}%｜보호막+${Math.round(p.shieldPercent * 100)}% 증가 - 아군이 없을 때의 자기 대상 적용으로 근사)`); }
+  if (item.fanfarePassive) { const p = item.fanfarePassive; parts.push(`팡파르(적 챔피언을 둔화·이동 불가 상태로 만들면 근접${p.meleeDurationSec}초｜원거리${p.rangedDurationSec}초간 이동 속도 +${p.msFlat} + 공격 속도 근접+${Math.round(p.meleeAsPercent * 100)}%｜원거리+${Math.round(p.rangedAsPercent * 100)}%)`); }
+  if (item.commandPassive) { const p = item.commandPassive; parts.push(`명령(적 챔피언을 이동 불가 상태로 만들면 ${p.durationSec}초간 취약 표식 - 받는 피해 +${Math.round(p.vulnerablePercent * 100)}%, 중첩 없이 지속시간만 연장)`); }
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
@@ -25871,7 +26089,20 @@ function updateItemUI(ctrl) {
     const slot = items[i];
     const data = slot && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[slot.id] : null;
     if (data) {
-      const usable = !!(data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect);
+      // 버그 수정(QA - "하위/상위 아이템 시스템 점검" 중 발견): 이 플래그가
+      // true일 때만 클릭이 useItem()으로 가고, false면 대신 sellItem()이
+      // 호출된다(아래 클릭 핸들러 참고) - 그런데 useItem() 자신의 분기
+      // 목록(거대한 초승달/파괴의 충격파/망령의 발걸음/초음속/번개 화살/
+      // 시간 정지 등)에 있는 액티브 아이템 다수가 이 목록에서 빠져 있어서,
+      // 그런 아이템을 인벤토리에서 "클릭"하면 사용이 아니라 판매가 되는
+      // 잠재 버그였다(숫자 단축키로는 정상적으로 useItem()이 호출돼
+      // 지금까지 드러나지 않았다). useItem()이 실제로 분기하는 필드
+      // 전부를 여기서도 동일하게 확인한다.
+      const usable = !!(
+        data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect
+        || data.empoweredCleaveActive || data.shockwaveActive || data.ghostStepActive
+        || data.rocketbeltActive || data.teamMoveSpeedActive || data.noxiousBladeActive || data.stasisActive
+      );
       el.className = 'invSlot' + (usable ? ' usable' : '');
       el.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
       const badgeValue = typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '');

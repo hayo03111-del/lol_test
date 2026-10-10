@@ -42,7 +42,7 @@ node tests/some_test.js
 찍은 뒤 `process.exitCode = 1`만 설정하고 계속 진행한다 - 한 파일 안의
 여러 문제를 한 번에 다 보기 위해서다.
 
-## 테스트 범위(2026-10 기준, 25개 파일 / 약 1,700개 assert)
+## 테스트 범위(2026-10 기준, 26개 파일 / 약 1,850개 assert)
 
 | 파일 | 다루는 영역 |
 |---|---|
@@ -55,6 +55,7 @@ node tests/some_test.js
 | `mejais_test.js` | 메자이의 영혼약탈자 |
 | `support_items_test.js` | 서포터 아이템 라인(세계지도집 ~ 5종 업그레이드) |
 | `spellblade_base_ad_audit_test.js` | 스펠블레이드 "기본 공격력" 버그의 회귀 방지 전용 |
+| `final_legendary_batch_test.js` | 원문 마지막 배치(슈렐리아의군가~제국의명령) + 끝없는 갈망(기아/포식) + 인벤토리 클릭 사용/판매 버그 회귀 방지 |
 | `pen_stacking_test.js` | 방어구·마법 관통력 중첩 계산 |
 | `shop_audit_test.js`, `shop_tooltip_test.js`, `item_qa_audit_test.js` | 상점 데이터 전수 감사(비용/스탯/분류 정합성) |
 | `vision_unit_test.js` | 시야 시스템 |

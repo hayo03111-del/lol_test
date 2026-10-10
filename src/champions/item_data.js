@@ -494,10 +494,30 @@ const ITEM_DATA = {
     },
   },
 
-  // 끝없는 갈망 - 원문에 고유 패시브 설명이 전혀 없다(공격력 65 한 줄뿐).
-  // 수치를 지어내지 않는다는 원칙에 따라 패시브를 추가하지 않고 순수
-  // 스탯 아이템 그대로 둔다.
-  eternalThirst: { id: 'eternalThirst', nameKo: '끝없는 갈망', cost: 3100, recipe: ['caulfieldsWarhammer', 'pickaxe', 'longSword'], stats: { attackDamage: 65 } },
+  // 끝없는 갈망 - 원문에는 "공격력 65" 한 줄뿐, 고유 패시브 설명이 전혀
+  // 없었다(QA 요청 "고유효과가 없다면 찾아서 추가하라"). 이름(영문 "Endless
+  // Hunger")과 하위템(콜필드의 전투망치+곡괭이)으로 실제 LoL 아이템을
+  // 특정해 위키로 교차검증했다 - 기아(Famine, 추가 공격력 비례 스킬
+  // 가속)와 포식(Feast, 처치 관여 시 흡혈full) 두 고유 패시브를 확인해
+  // 추가한다(apSourceWiki와 동일한 성격의 passiveSourceWiki). 원문에 있는
+  // 수치(가격 3100/하위템 3종 - 실제 LoL은 하위템이 2종뿐이라 약간 다름/
+  // 공격력 65)는 "수치를 지어내지 않는다" 원칙에 따라 원문 그대로 둔다.
+  eternalThirst: {
+    id: 'eternalThirst', nameKo: '끝없는 갈망', cost: 3100, recipe: ['caulfieldsWarhammer', 'pickaxe', 'longSword'],
+    stats: { attackDamage: 65 },
+    passiveSourceWiki: true,
+    // 기아 - 추가 공격력에 비례한 스킬 가속(근접이 더 높게 성장 - 위키
+    // 기준 근접 13%/원거리 10%, 기본 +5). 다른 아이템 보너스를 더 살수록
+    // 계속 바뀌는 동적 수치라 지배자의 피갑옷(폭정/응징)과 동일한 패턴
+    // (itemSystemTick에서 매 프레임 재계산)으로 처리한다.
+    faminePassive: { flatAbilityHaste: 5, meleeBonusAdPercent: 0.13, rangedBonusAdPercent: 0.10 },
+    // 포식 - "3초 안에 피해를 입힌 챔피언이 죽으면 8초간 흡혈 15%". 오만
+    // (명성)/죽음의무도(반항)과 완전히 동일한 구조·동일한 한계(이 데모는
+    // 플레이어를 공격하는 적 챔피언 AI가 없어 "적 챔피언이 죽는" 일 자체가
+    // 실전에서는 벌어지지 않는다 - itemOnChampionDeath() 주석 참고)를
+    // 공유하는 범용 훅으로 둔다.
+    feastPassive: { windowSec: 3.0, omnivampPercent: 0.15, durationSec: 8.0 },
+  },
 
   overlordsBloodmail: {
     id: 'overlordsBloodmail', nameKo: '지배자의 피갑옷', cost: 3300, recipe: ['tunnelers', 'tunnelers'],
@@ -1360,6 +1380,77 @@ const ITEM_DATA = {
     // (radiusGuessed). 기존 DAMAGE_REDUCTION 상태이상을 재사용한다.
     mountainsBlessingPassive: { meleePercent: 0.35, rangedPercent: 0.25, durationSec: 2.0, slowPercent: 0.50, slowDurationSec: 1.5, radius: 400, radiusGuessed: true },
   },
+
+  // ==========================================================================
+  // 원문의 마지막 배치(625~1420줄 "[전설급 아이템]" 섹션의 끝) - 전부
+  // "아군"을 대상으로 하는 엔챈트형 아이템들(슈렐리아의군가/월석재생기/
+  // 강철의 솔라리 팬던트/밴들파이프/제국의명령)과 그 공용 하위템(밴들유리
+  // 거울) + 서사급 섹션에서 지금까지 빠져 있던 금지된 우상. 이 배치를
+  // 끝으로 원문(7ad78971-___.txt, 1420줄)의 전체 아이템 목록을 다 반영했다.
+  // ==========================================================================
+  // 밴들유리 거울 - 요정의 부적+증폭의 고서+빛나는 티끌 조합, 아래 5종
+  // 엔챈트 아이템의 공용 하위템(실제 LoL의 Bandleglass Mirror).
+  bandleglassMirror: {
+    id: 'bandleglassMirror', nameKo: '밴들유리 거울', cost: 900, recipe: ['faerieCharm', 'amplifyingTome', 'glowingMote'],
+    stats: { abilityPower: 20, mpRegenPercent: 1.0, abilityHaste: 10 },
+  },
+  // 금지된 우상 - 서사급 섹션(요정의 부적 바로 다음 줄)에 있었지만 지금까지
+  // 구현되지 않았던 아이템(이 문서 전체에서 다른 완제품의 하위템으로도
+  // 쓰이지 않는 독립 아이템). "체력 회복 및 보호막 8%"는 정령의형상(무한한
+  // 활력)과 같은 성격의 효과라 동일한 필드(healingReceivedBonusPercent)를
+  // 재사용한다 - 다만 금지된 우상 자신은 받는 회복/보호막 쪽(itemHealingReceivedBonusPercent/
+  // itemShieldReceivedBonusPercent) 둘 다 똑같이 8%라 숫자가 갈리지 않는다.
+  forbiddenIdol: {
+    id: 'forbiddenIdol', nameKo: '금지된 우상', cost: 600, recipe: ['faerieCharm'],
+    stats: { mpRegenPercent: 0.5 },
+    healingReceivedBonusPercent: 0.08,
+  },
+
+  // 슈렐리아의군가 - "고무적인 연설"(사용 시 이동속도 버프). 원문은 "주변
+  // 아군"에게 적용되지만 1인용 데모라 자신에게만 적용한다(세계지도집
+  // 계열과 동일한 공용 한계).
+  shurelyasBattlesong: {
+    id: 'shurelyasBattlesong', nameKo: '슈렐리아의군가', cost: 2200, recipe: ['aetherialWisp', 'bandleglassMirror'],
+    stats: { abilityPower: 50, abilityHaste: 15, moveSpeedPercent: 0.04, mpRegenPercent: 1.25 },
+    teamMoveSpeedActive: { nameKo: '고무적인 연설', cooldownSec: 75, msPercent: 0.30, durationSec: 4.0 },
+  },
+  // 월석재생기 - "별빛 은총". 원문 자체가 "근처에 아군이 없으면 같은
+  // 대상(=자기 자신)에게 적용"이라는 조항을 명시하고 있고, 이 데모는
+  // 아군이 존재하지 않아 그 조항이 "항상" 성립한다 - 즉 "자신에게 걸리는
+  // 회복/보호막이 30%/35% 증가"로 정확히 근사된다(아군에게 돌아갈 때의
+  // 재분배 동작만 생략 - 받는 사람이 자신뿐이라 관찰 가능한 차이가 없다).
+  moonstoneRenewer: {
+    id: 'moonstoneRenewer', nameKo: '월석재생기', cost: 2200, recipe: ['kircheisShard', 'bandleglassMirror'],
+    stats: { abilityPower: 25, maxHp: 200, abilityHaste: 20, mpRegenPercent: 1.25 },
+    healAndShieldPowerPassive: { healPercent: 0.30, shieldPercent: 0.35 },
+  },
+  // 강철의 솔라리 팬던트 - "헌신"(주변 "아군들"에게 보호막 - 월석재생기와
+  // 달리 "근처에 아군이 없으면 자신에게" 같은 자기 대상 전환 조항이 원문에
+  // 전혀 없다). 이 데모에 아군이 없는 이상 조건을 만족할 대상이 아예
+  // 존재하지 않아 고유 패시브를 구현하지 않는다(명시적 스킵 - 꿈 생성기와
+  // 동일한 성격의 한계, docs/KNOWN_LIMITATIONS.md 참고). 스탯만 제공한다.
+  ironSolariLocket: {
+    id: 'ironSolariLocket', nameKo: '강철의 솔라리 팬던트', cost: 2200, recipe: ['kircheisShard', 'chainVest', 'negatronCloak'],
+    stats: { maxHp: 200, armor: 30, magicResist: 30, abilityHaste: 10 },
+  },
+  // 밴들파이프 - "팡파르"(적을 둔화/이동 불가시키면 이동속도+공격속도).
+  // "자신을 포함한 주변 아군"이라 자신에게는 원문 그대로 적용되고, 다른
+  // 아군에게 나가는 부분만 관찰 불가능한 생략이다(1인용 데모 공용 한계).
+  bandlePipe: {
+    id: 'bandlePipe', nameKo: '밴들파이프', cost: 2300, recipe: ['kircheisShard', 'chainVest', 'negatronCloak'],
+    stats: { maxHp: 200, armor: 20, magicResist: 20, abilityHaste: 15 },
+    fanfarePassive: { meleeDurationSec: 8, rangedDurationSec: 4, msFlat: 20, meleeAsPercent: 0.30, rangedAsPercent: 0.20 },
+  },
+  // 제국의명령 - "통제"(이동 불가 스킬 전용 스킬 가속 +20)는 어떤 스킬이
+  // "이동 불가"를 거는지 챔피언별로 태그하는 시스템이 없어 구현하지 않는다
+  // (docs/KNOWN_LIMITATIONS.md 명시 - 수치를 지어내지 않는다는 원칙과
+  // 동일한 이유로, "항상 켜진 스킬 가속"처럼 부정확하게 근사하지 않고
+  // 아예 생략한다). "명령"(이동 불가 적중 시 취약 표식)만 구현한다.
+  imperialMandate: {
+    id: 'imperialMandate', nameKo: '제국의명령', cost: 2400, recipe: ['amplifyingTome', 'bandleglassMirror', 'amplifyingTome'],
+    stats: { abilityPower: 60, abilityHaste: 15, mpRegenPercent: 1.50 },
+    commandPassive: { vulnerablePercent: 0.07, durationSec: 4.0 },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -1385,6 +1476,7 @@ const ITEM_ORDER = [
   'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard', 'brokenWristGuard',
   'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask',
   'worldAtlas', 'runesteelSpaulders', 'bountyOfWorlds', 'zaZaksRealmspike', 'bloodsong', 'solsticeSleigh', 'dreamMaker', 'celestialOpposition',
+  'bandleglassMirror', 'forbiddenIdol', 'shurelyasBattlesong', 'moonstoneRenewer', 'ironSolariLocket', 'bandlePipe', 'imperialMandate',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -1395,10 +1487,10 @@ const ITEM_CATEGORIES = [
   // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
   // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
   // 하나에서 같이 보여준다.
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise', 'plagueGem', 'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise', 'plagueGem', 'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard', 'bandleglassMirror', 'forbiddenIdol'] },
   // 무라마나/대천사의포옹은 각각 마나무네/대천사의지팡이가 변신해서만
   // 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
-  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade', 'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask'] },
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade', 'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask', 'shurelyasBattlesong', 'moonstoneRenewer', 'ironSolariLocket', 'bandlePipe', 'imperialMandate'] },
   // 서포터 아이템(세계지도집 퀘스트 라인) - 무라마나/대천사의포옹과 동일한
   // 이유로 변신 전용 2종(룬나침반/세계의 결실)은 숨기고, 구매 가능한
   // 시작 아이템(세계지도집)과 그 최종 업그레이드 5종만 노출한다.
