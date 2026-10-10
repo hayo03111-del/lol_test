@@ -942,11 +942,17 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
     // 명시적 근사).
     const effectiveBonusHp = typeof target.bonusHealth === 'number' ? target.bonusHealth : (target.maxHp || 0);
     const ratio = Math.min(1, effectiveBonusHp / p.maxAtBonusHp);
+    // 버그 수정: 거인 학살자는 "피해량의 N%만큼 증폭"이지 새로 추가되는
+    // 별개의 물리 피해가 아니다 - finalDmg는 이미 방어력/마법저항력
+    // 감소가 전부 끝난 "최종" 수치이므로, 그 비율만큼을 그대로 더해야
+    // 한다. calculateDamage()를 다시 거치면 이미 끝난 감소를 한 번 더
+    // 적용하는 이중 감소가 되고, 데미지 타입도 늘 물리로 고정돼 있어서
+    // 원래 피해가 마법 피해였을 경우(예: 주문력도 있는 챔피언의 스킬)
+    // 방어력이 아니라 마법저항력 기준으로 계산돼야 하는데 그러지 못했다.
     const bonusRaw = ratio * p.maxBonusPercent * finalDmg;
     if (bonusRaw > 0) {
-      const extra = calculateDamage({ rawDamage: bonusRaw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, target, source: ctrl });
       const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
-      target.hp = Math.max(minHp, (target.hp || 0) - extra);
+      target.hp = Math.max(minHp, (target.hp || 0) - bonusRaw);
     }
   }
 }
@@ -1504,9 +1510,12 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
   // 마법광학 장치 C44 - 확대(거리 비례 추가 물리 피해, 500거리에서 최대
   // 10%). 이미 끝난 메인 평타 자체를 소급해서 증폭할 방법이 없어(명시적
   // 근사 - 다른 "이미 끝난 평타는 못 고친다" 항목과 동일한 성격), 별도의
-  // 추가 물리 피해 한 번으로 근사한다.
+  // 추가 물리 피해 한 번으로 근사한다. 버그 수정: 원문에 "구조물 제외"
+  // 같은 언급이 전혀 없는데도(티아맷/히드라류 쪼개기와 달리) 다른 온히트
+  // 패시브를 베껴 구조물 제외를 넣었던 실수를 바로잡는다 - 구조물(포탑)
+  // 대상에게도 그대로 적용된다.
   const magnifySlot = (ctrl.items || []).find((s) => s.id === 'magicOpticsC44');
-  if (magnifySlot && !_itemIsStructure(target) && typeof getHorizontalDistance === 'function' && typeof getWorldPosition === 'function') {
+  if (magnifySlot && typeof getHorizontalDistance === 'function' && typeof getWorldPosition === 'function') {
     const p = ITEM_DATA.magicOpticsC44.magnifyPassive;
     const distWorld = getHorizontalDistance(getWorldPosition(ctrl), getWorldPosition(target));
     const distLol = typeof worldDistanceToLol === 'function' ? worldDistanceToLol(distWorld) : distWorld;
@@ -1518,8 +1527,10 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
   // 크라켄 학살자(벼락) - 대상별 3번째 기본 공격마다 잃은 체력 비례 추가
   // 물리 피해(8~18레벨 선형 성장). 몰락한 왕의 검의 "할퀴는 그림자"와
   // 동일한 "대상별 카운터" 패턴(_itemTargetKey Map).
+  // 버그 수정: 원문에 구조물 제외 언급이 없는데도(티아맷/히드라류 쪼개기와
+  // 달리) 구조물을 제외하고 있었다 - 포탑 대상에게도 그대로 적용된다.
   const krakenSlot = (ctrl.items || []).find((s) => s.id === 'krakenSlayer');
-  if (krakenSlot && !_itemIsStructure(target)) {
+  if (krakenSlot) {
     const p = ITEM_DATA.krakenSlayer.boltsPassive;
     ctrl._itemKrakenHitCounts = ctrl._itemKrakenHitCounts || new Map();
     const key = _itemTargetKey(target);
@@ -1545,7 +1556,10 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     ctrl._itemChargeReady = false;
     ctrl._itemChargeProgress = 0;
     const p = ITEM_DATA[chargeSlot.id].chargePassive;
-    if (p.bonusMagicDamage && !_itemIsStructure(target)) {
+    // 버그 수정: 원문에 구조물 제외 언급이 없다 - 포탑을 평타로 밀 때도
+    // 그대로 적용된다(마법 피해로 들어가므로 포탑의 물리 방어력을 무시한다는
+    // 차이만 있을 뿐, 발동 자체를 막을 이유가 없다).
+    if (p.bonusMagicDamage) {
       applyDamage(target, { rawDamage: p.bonusMagicDamage, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
     }
     if (p.msBuffPercent && typeof applyStatus === 'function') {
