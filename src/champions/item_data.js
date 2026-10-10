@@ -1234,6 +1234,132 @@ const ITEM_DATA = {
     // 판정은 다른 아이템들과 동일한 5초 이탈 기준을 그대로 쓴다.
     voidbornResiliencePassive: { combatDurationSec: 5.0, bonusPercent: 0.30, outOfCombatSec: 5.0, durationGuessed: true },
   },
+
+  // [서포터 아이템] 세계지도집 -> 룬 나침반 -> 세계의 결실 -> 5종 업그레이드
+  // (원문 79~112줄 + 1290~1362줄). 이 프로젝트에 "아군 챔피언"/"포지션"
+  // 개념이 없어(어시스트를 구현하지 않은 것과 동일한 이유) 서포터 전용
+  // 제한(배정이 서포터가 아니면 구매 불가)과 "근처 아군"을 요구하는
+  // 조건은 "플레이어 자신"으로 근사한다 - 아래 각 패시브 주석 참고.
+  worldAtlas: {
+    id: 'worldAtlas', nameKo: '세계지도집', cost: 0,
+    stats: { maxHp: 30, hpRegenPercent: 0.25, mpRegenPercent: 0.25 },
+    // 서포터 퀘스트 - "이 아이템으로 400골드를 획득하면 룬 나침반으로
+    // 변합니다." "이 아이템으로"는 재물 공유(spoilsOfWarPassive)로 번
+    // 골드만 센다는 뜻으로 해석했다(일반 골드 전체가 아님) - 아래
+    // _itemGrantSupportGold()가 이 누적을 전담한다.
+    questPassive: { goldThreshold: 400, transformsInto: 'runesteelSpaulders' },
+    // 재물 공유(재사용대기 20초, 최대 충전 3회, 첫 충전은 게임 시작 65초
+    // 후) - "아군 챔피언 근처에서"는 아군이 없는 이 데모에서 플레이어 자신
+    // 기준으로 근사한다(스스로는 항상 "근처"에 있으므로 조건이 trivially
+    // 성립). 미니언 처형 문턱(근접50%｜원거리30%)과 충전 소모는 원문
+    // 93~95줄의 상세 설명을 그대로 반영했다.
+    spoilsOfWarPassive: {
+      maxCharges: 3, rechargeSec: 20, firstChargeDelaySec: 65,
+      meleeDamageGold: 22, rangedDamageGold: 20, minionGold: 15,
+      minionHpThresholdMelee: 0.50, minionHpThresholdRanged: 0.30,
+    },
+  },
+  runesteelSpaulders: {
+    id: 'runesteelSpaulders', nameKo: '룬나침반', cost: 0, hiddenFromShop: true, // 세계지도집의 퀘스트 완료로만 얻는다
+    stats: { maxHp: 100, hpRegenPercent: 0.5, mpRegenPercent: 0.5 },
+    questPassive: { goldThreshold: 800, transformsInto: 'bountyOfWorlds' },
+    spoilsOfWarPassive: {
+      maxCharges: 3, rechargeSec: 20, firstChargeDelaySec: 65,
+      meleeDamageGold: 24, rangedDamageGold: 22, minionGold: 20,
+      minionHpThresholdMelee: 0.50, minionHpThresholdRanged: 0.30,
+    },
+    // 아이템사용(충전량 3회, 상점 이용 시 재충전) - 기존 제어 와드와 같은
+    // 필드(wardPlacement)를 쓰되 maxStack이 아니라 maxCharges로 소모된다
+    // (_useControlWard()를 이번에 범용화했다 - item_system.js 주석 참고).
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 3, refillOnShopUse: true,
+  },
+  bountyOfWorlds: {
+    id: 'bountyOfWorlds', nameKo: '세계의 결실', cost: 0, hiddenFromShop: true, // 룬 나침반의 퀘스트 완료로만 얻는다
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    // 10초당 골드 5 - 여기서부터는 재물 공유 대신 시간당 고정 골드로
+    // 바뀐다(원문에 재물 공유 문구가 다시 나오지 않음).
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // "비용 소모 없이 피의 노래/천상의 이의/꿈 생성기/자자크의 세계가시/
+    // 태양의 썰매로 업그레이드할 수 있습니다" - 아래 5종이 전부
+    // recipe:['bountyOfWorlds']+cost:0이라 기존 buildOrBuyItem()이 이미
+    // "조합 비용 0원"으로 그대로 처리한다(새 메커니즘 불필요).
+  },
+  zaZaksRealmspike: {
+    id: 'zaZaksRealmspike', nameKo: '자자크의 세계가시', cost: 0, recipe: ['bountyOfWorlds'],
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // 공허 폭발(재사용대기 10초) - "챔피언에게 스킬로 피해를 입히면"(평타+
+    // 스킬 전체 근사) 대상 위치에 폭발 - 대상+주변 적에게 10+주문력15%+
+    // 최대체력3% 마법 피해. "몬스터 대상 추가 피해량은 최대 300" - 최대
+    // 체력 비례 항을 몬스터 한정 300으로 캡한다(챔피언은 캡 없음). 반경은
+    // 원문에 없어 추측(radiusGuessed).
+    voidBurstPassive: { icdSec: 10, baseDmg: 10, apPercent: 0.15, maxHpPercent: 0.03, monsterMaxHpBonusCap: 300, radius: 400, radiusGuessed: true },
+  },
+  bloodsong: {
+    id: 'bloodsong', nameKo: '피의 노래', cost: 0, recipe: ['bountyOfWorlds'],
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // 주문 검(1.5초) - "기본공격력 신규 100%"(신규=순수 base AD 100%,
+    // 다른 스펠블레이드 계열과 동일한 "기본공격력" 표현 - QA 재점검으로
+    // 전부 base AD를 쓰도록 고친 공용 로직을 그대로 재사용) + 약점 노출
+    // (대상이 챔피언이면 4초간 받는 피해 근접8%｜원거리5% 증가 - 새
+    // VULNERABLE 상태이상, calculateDamage()가 최종 피해에 곱한다).
+    spellbladePassive: { procCooldownSec: 1.5, bonusAdPercent: 1.0, exposeWeaknessPassive: { durationSec: 4.0, meleePercent: 0.08, rangedPercent: 0.05 } },
+  },
+  solsticeSleigh: {
+    id: 'solsticeSleigh', nameKo: '태양의 썰매', cost: 0, recipe: ['bountyOfWorlds'],
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // 썰매 질주(재사용대기 30초) - "적 챔피언을 둔화 또는 이동 불가 상태로
+    // 만들면 50~230(레벨비례) 체력 회복 + 자신과 주변 체력이 가장 낮은
+    // 아군이 2.5초간 이동속도 20% 획득." 아군이 없는 이 데모는 자신에게만
+    // 이동속도를 적용한다(명시적 한계 - 어시스트 생략과 동일한 이유).
+    ccTriggerPassive: { icdSec: 30, minHeal: 50, maxHeal: 230, levelMin: 1, levelMax: 18, msPercent: 0.20, msDurationSec: 2.5 },
+  },
+  dreamMaker: {
+    id: 'dreamMaker', nameKo: '꿈 생성기', cost: 0, recipe: ['bountyOfWorlds'],
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // 꿈 생성기(8초) - "다른 아군에게 체력을 회복시키거나 보호막을 씌우면"
+    // 발동 조건 자체가 "아군을 회복/보호막시킨다"는, 이 1인 플레이 데모
+    // 구조상 절대 성립할 수 없는 동작이다(플레이어가 자기 자신이 아닌
+    // 다른 플레이어 챔피언을 조종할 방법이 없음) - 어시스트와 동일한
+    // "아군 챔피언 없음" 한계로 고유 패시브는 구현하지 않고 스탯+와드만
+    // 제공한다(명시적 스킵 - README/KNOWN_LIMITATIONS 참고).
+  },
+  celestialOpposition: {
+    id: 'celestialOpposition', nameKo: '천상의 이의', cost: 0, recipe: ['bountyOfWorlds'],
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // 산의 축복 - "챔피언으로부터 받는 피해가 근접35%｜원거리25% 감소,
+    // 챔피언에게 피해를 받은 후 2초간 지속, 보호막이 깨지면(=2초 뒤
+    // 자연 만료) 주변에 충격파(1.5초 50% 둔화). 18초 동안 피해를 받지
+    // 않으면 효과가 초기화됩니다"는 "다시 맞으면 2초가 갱신될 뿐이라 18초
+    // 리셋은 이 단순화에서 관찰 가능한 차이를 만들지 않는다"고 판단해
+    // 별도 구현 없이 생략했다(명시적 근사). 반경은 원문에 없어 추측
+    // (radiusGuessed). 기존 DAMAGE_REDUCTION 상태이상을 재사용한다.
+    mountainsBlessingPassive: { meleePercent: 0.35, rangedPercent: 0.25, durationSec: 2.0, slowPercent: 0.50, slowDurationSec: 1.5, radius: 400, radiusGuessed: true },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -1258,6 +1384,7 @@ const ITEM_ORDER = [
   'plagueGem', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade',
   'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard', 'brokenWristGuard',
   'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask',
+  'worldAtlas', 'runesteelSpaulders', 'bountyOfWorlds', 'zaZaksRealmspike', 'bloodsong', 'solsticeSleigh', 'dreamMaker', 'celestialOpposition',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -1272,4 +1399,8 @@ const ITEM_CATEGORIES = [
   // 무라마나/대천사의포옹은 각각 마나무네/대천사의지팡이가 변신해서만
   // 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
   { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade', 'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask'] },
+  // 서포터 아이템(세계지도집 퀘스트 라인) - 무라마나/대천사의포옹과 동일한
+  // 이유로 변신 전용 2종(룬나침반/세계의 결실)은 숨기고, 구매 가능한
+  // 시작 아이템(세계지도집)과 그 최종 업그레이드 5종만 노출한다.
+  { id: 'support', nameKo: '서포터', items: ['worldAtlas', 'zaZaksRealmspike', 'bloodsong', 'solsticeSleigh', 'dreamMaker', 'celestialOpposition'] },
 ];

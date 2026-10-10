@@ -488,6 +488,10 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   // 근사 적용한다(명시적 근사 - README 참고).
   const ampSource = source || (typeof controller !== 'undefined' ? controller : null);
   if (ampSource && ampSource.itemSpellDamageAmpPercent > 0) dmg *= (1 + ampSource.itemSpellDamageAmpPercent);
+  // 아이템 패시브(피의 노래 "약점 노출" - 대상이 받는 피해량 증가) - 공격자
+  // 기준 증폭(itemSpellDamageAmpPercent, 위)과 반대로 "대상"이 받는 모든
+  // 피해(물리/마법/고정 전부)에 적용되는 VULNERABLE 상태이상이다.
+  if (typeof getVulnerablePercent === 'function') dmg *= (1 + getVulnerablePercent(target));
   return dmg;
 }
 
@@ -628,7 +632,7 @@ function ensureStatusHost(u) {
   return u;
 }
 // effect: { id, type, duration(sec), value, damageType, totalDamage, tickInterval, source }
-// type: SLOW / STUN / SILENCE / ROOT / ARMOR_SHRED / DOT / AD_BUFF / MS_BUFF / DAMAGE_REDUCTION
+// type: SLOW / STUN / SILENCE / ROOT / ARMOR_SHRED / MR_SHRED / DOT / AD_BUFF / MS_BUFF / DAMAGE_REDUCTION / VULNERABLE
 function applyStatus(target, effect) {
   ensureStatusHost(target);
   // 요청 7/8/34: 세트 R 시퀀스 진행 중(캐스트~착지 완료)에는 세트 자신이
@@ -686,6 +690,17 @@ function applyStatus(target, effect) {
     // 갱신한다.
     if (target.passiveState) target.passiveState.lastEnemySkillHitAt = now;
   }
+  // 태양의 썰매(썰매 질주) - "적 챔피언을 둔화 또는 이동 불가 상태로
+  // 만들면" 발동하는 공용 훅. 모든 CC 적용이 결국 이 진입점 하나를
+  // 거치므로, 여기 한 줄만 추가하면 어떤 챔피언의 어떤 스킬로 걸든(이
+  // 데모는 사실상 플레이어 하나뿐이지만) 자동으로 맞물린다. SLOW/STUN/
+  // ROOT/KNOCKUP/SUPPRESSION/CHARM만 "둔화 또는 이동 불가"로 친다
+  // (SILENCE/ARMOR_SHRED/MR_SHRED는 이동을 막지 않으므로 제외).
+  if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM'].includes(effect.type)
+      && typeof itemOnSlowOrImmobilize === 'function') {
+    const attacker = effect.source || (typeof controller !== 'undefined' ? controller : null);
+    if (attacker && attacker !== target) itemOnSlowOrImmobilize(attacker);
+  }
   return rec;
 }
 function clearStatus(target, id) {
@@ -724,6 +739,18 @@ function getMrShredFlat(target) {
   const now = performance.now();
   let v = 0;
   for (const e of target.statusEffects) if (e.type === 'MR_SHRED' && e.expiresAt > now) v = Math.max(v, e.value);
+  return v;
+}
+// 피의 노래(약점 노출) - "받는 피해량 증가"는 기존 DAMAGE_REDUCTION(감소)과
+// 정반대 방향의 효과라 별도 타입으로 둔다. getDamageReductionPercent처럼
+// "가장 센 값 하나만 적용"이 아니라 실제 LoL처럼 여러 출처가 있으면
+// 합연산으로 누적된다(지금은 이 아이템 하나뿐이라 차이는 없지만, 나중에
+// 다른 "취약" 효과가 추가될 가능성을 열어둔다).
+function getVulnerablePercent(target) {
+  if (!target || !target.statusEffects) return 0;
+  const now = performance.now();
+  let v = 0;
+  for (const e of target.statusEffects) if (e.type === 'VULNERABLE' && e.expiresAt > now) v += e.value;
   return v;
 }
 function getDamageReductionPercent(target) {
@@ -3420,6 +3447,132 @@ const ITEM_DATA = {
     // 판정은 다른 아이템들과 동일한 5초 이탈 기준을 그대로 쓴다.
     voidbornResiliencePassive: { combatDurationSec: 5.0, bonusPercent: 0.30, outOfCombatSec: 5.0, durationGuessed: true },
   },
+
+  // [서포터 아이템] 세계지도집 -> 룬 나침반 -> 세계의 결실 -> 5종 업그레이드
+  // (원문 79~112줄 + 1290~1362줄). 이 프로젝트에 "아군 챔피언"/"포지션"
+  // 개념이 없어(어시스트를 구현하지 않은 것과 동일한 이유) 서포터 전용
+  // 제한(배정이 서포터가 아니면 구매 불가)과 "근처 아군"을 요구하는
+  // 조건은 "플레이어 자신"으로 근사한다 - 아래 각 패시브 주석 참고.
+  worldAtlas: {
+    id: 'worldAtlas', nameKo: '세계지도집', cost: 0,
+    stats: { maxHp: 30, hpRegenPercent: 0.25, mpRegenPercent: 0.25 },
+    // 서포터 퀘스트 - "이 아이템으로 400골드를 획득하면 룬 나침반으로
+    // 변합니다." "이 아이템으로"는 재물 공유(spoilsOfWarPassive)로 번
+    // 골드만 센다는 뜻으로 해석했다(일반 골드 전체가 아님) - 아래
+    // _itemGrantSupportGold()가 이 누적을 전담한다.
+    questPassive: { goldThreshold: 400, transformsInto: 'runesteelSpaulders' },
+    // 재물 공유(재사용대기 20초, 최대 충전 3회, 첫 충전은 게임 시작 65초
+    // 후) - "아군 챔피언 근처에서"는 아군이 없는 이 데모에서 플레이어 자신
+    // 기준으로 근사한다(스스로는 항상 "근처"에 있으므로 조건이 trivially
+    // 성립). 미니언 처형 문턱(근접50%｜원거리30%)과 충전 소모는 원문
+    // 93~95줄의 상세 설명을 그대로 반영했다.
+    spoilsOfWarPassive: {
+      maxCharges: 3, rechargeSec: 20, firstChargeDelaySec: 65,
+      meleeDamageGold: 22, rangedDamageGold: 20, minionGold: 15,
+      minionHpThresholdMelee: 0.50, minionHpThresholdRanged: 0.30,
+    },
+  },
+  runesteelSpaulders: {
+    id: 'runesteelSpaulders', nameKo: '룬나침반', cost: 0, hiddenFromShop: true, // 세계지도집의 퀘스트 완료로만 얻는다
+    stats: { maxHp: 100, hpRegenPercent: 0.5, mpRegenPercent: 0.5 },
+    questPassive: { goldThreshold: 800, transformsInto: 'bountyOfWorlds' },
+    spoilsOfWarPassive: {
+      maxCharges: 3, rechargeSec: 20, firstChargeDelaySec: 65,
+      meleeDamageGold: 24, rangedDamageGold: 22, minionGold: 20,
+      minionHpThresholdMelee: 0.50, minionHpThresholdRanged: 0.30,
+    },
+    // 아이템사용(충전량 3회, 상점 이용 시 재충전) - 기존 제어 와드와 같은
+    // 필드(wardPlacement)를 쓰되 maxStack이 아니라 maxCharges로 소모된다
+    // (_useControlWard()를 이번에 범용화했다 - item_system.js 주석 참고).
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 3, refillOnShopUse: true,
+  },
+  bountyOfWorlds: {
+    id: 'bountyOfWorlds', nameKo: '세계의 결실', cost: 0, hiddenFromShop: true, // 룬 나침반의 퀘스트 완료로만 얻는다
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    // 10초당 골드 5 - 여기서부터는 재물 공유 대신 시간당 고정 골드로
+    // 바뀐다(원문에 재물 공유 문구가 다시 나오지 않음).
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // "비용 소모 없이 피의 노래/천상의 이의/꿈 생성기/자자크의 세계가시/
+    // 태양의 썰매로 업그레이드할 수 있습니다" - 아래 5종이 전부
+    // recipe:['bountyOfWorlds']+cost:0이라 기존 buildOrBuyItem()이 이미
+    // "조합 비용 0원"으로 그대로 처리한다(새 메커니즘 불필요).
+  },
+  zaZaksRealmspike: {
+    id: 'zaZaksRealmspike', nameKo: '자자크의 세계가시', cost: 0, recipe: ['bountyOfWorlds'],
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // 공허 폭발(재사용대기 10초) - "챔피언에게 스킬로 피해를 입히면"(평타+
+    // 스킬 전체 근사) 대상 위치에 폭발 - 대상+주변 적에게 10+주문력15%+
+    // 최대체력3% 마법 피해. "몬스터 대상 추가 피해량은 최대 300" - 최대
+    // 체력 비례 항을 몬스터 한정 300으로 캡한다(챔피언은 캡 없음). 반경은
+    // 원문에 없어 추측(radiusGuessed).
+    voidBurstPassive: { icdSec: 10, baseDmg: 10, apPercent: 0.15, maxHpPercent: 0.03, monsterMaxHpBonusCap: 300, radius: 400, radiusGuessed: true },
+  },
+  bloodsong: {
+    id: 'bloodsong', nameKo: '피의 노래', cost: 0, recipe: ['bountyOfWorlds'],
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // 주문 검(1.5초) - "기본공격력 신규 100%"(신규=순수 base AD 100%,
+    // 다른 스펠블레이드 계열과 동일한 "기본공격력" 표현 - QA 재점검으로
+    // 전부 base AD를 쓰도록 고친 공용 로직을 그대로 재사용) + 약점 노출
+    // (대상이 챔피언이면 4초간 받는 피해 근접8%｜원거리5% 증가 - 새
+    // VULNERABLE 상태이상, calculateDamage()가 최종 피해에 곱한다).
+    spellbladePassive: { procCooldownSec: 1.5, bonusAdPercent: 1.0, exposeWeaknessPassive: { durationSec: 4.0, meleePercent: 0.08, rangedPercent: 0.05 } },
+  },
+  solsticeSleigh: {
+    id: 'solsticeSleigh', nameKo: '태양의 썰매', cost: 0, recipe: ['bountyOfWorlds'],
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // 썰매 질주(재사용대기 30초) - "적 챔피언을 둔화 또는 이동 불가 상태로
+    // 만들면 50~230(레벨비례) 체력 회복 + 자신과 주변 체력이 가장 낮은
+    // 아군이 2.5초간 이동속도 20% 획득." 아군이 없는 이 데모는 자신에게만
+    // 이동속도를 적용한다(명시적 한계 - 어시스트 생략과 동일한 이유).
+    ccTriggerPassive: { icdSec: 30, minHeal: 50, maxHeal: 230, levelMin: 1, levelMax: 18, msPercent: 0.20, msDurationSec: 2.5 },
+  },
+  dreamMaker: {
+    id: 'dreamMaker', nameKo: '꿈 생성기', cost: 0, recipe: ['bountyOfWorlds'],
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // 꿈 생성기(8초) - "다른 아군에게 체력을 회복시키거나 보호막을 씌우면"
+    // 발동 조건 자체가 "아군을 회복/보호막시킨다"는, 이 1인 플레이 데모
+    // 구조상 절대 성립할 수 없는 동작이다(플레이어가 자기 자신이 아닌
+    // 다른 플레이어 챔피언을 조종할 방법이 없음) - 어시스트와 동일한
+    // "아군 챔피언 없음" 한계로 고유 패시브는 구현하지 않고 스탯+와드만
+    // 제공한다(명시적 스킵 - README/KNOWN_LIMITATIONS 참고).
+  },
+  celestialOpposition: {
+    id: 'celestialOpposition', nameKo: '천상의 이의', cost: 0, recipe: ['bountyOfWorlds'],
+    stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
+    goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
+    wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
+    durationSecGuessed: true,
+    maxCharges: 4, refillOnShopUse: true,
+    // 산의 축복 - "챔피언으로부터 받는 피해가 근접35%｜원거리25% 감소,
+    // 챔피언에게 피해를 받은 후 2초간 지속, 보호막이 깨지면(=2초 뒤
+    // 자연 만료) 주변에 충격파(1.5초 50% 둔화). 18초 동안 피해를 받지
+    // 않으면 효과가 초기화됩니다"는 "다시 맞으면 2초가 갱신될 뿐이라 18초
+    // 리셋은 이 단순화에서 관찰 가능한 차이를 만들지 않는다"고 판단해
+    // 별도 구현 없이 생략했다(명시적 근사). 반경은 원문에 없어 추측
+    // (radiusGuessed). 기존 DAMAGE_REDUCTION 상태이상을 재사용한다.
+    mountainsBlessingPassive: { meleePercent: 0.35, rangedPercent: 0.25, durationSec: 2.0, slowPercent: 0.50, slowDurationSec: 1.5, radius: 400, radiusGuessed: true },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -3444,6 +3597,7 @@ const ITEM_ORDER = [
   'plagueGem', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade',
   'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard', 'brokenWristGuard',
   'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask',
+  'worldAtlas', 'runesteelSpaulders', 'bountyOfWorlds', 'zaZaksRealmspike', 'bloodsong', 'solsticeSleigh', 'dreamMaker', 'celestialOpposition',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -3458,6 +3612,10 @@ const ITEM_CATEGORIES = [
   // 무라마나/대천사의포옹은 각각 마나무네/대천사의지팡이가 변신해서만
   // 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
   { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade', 'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask'] },
+  // 서포터 아이템(세계지도집 퀘스트 라인) - 무라마나/대천사의포옹과 동일한
+  // 이유로 변신 전용 2종(룬나침반/세계의 결실)은 숨기고, 구매 가능한
+  // 시작 아이템(세계지도집)과 그 최종 업그레이드 5종만 노출한다.
+  { id: 'support', nameKo: '서포터', items: ['worldAtlas', 'zaZaksRealmspike', 'bloodsong', 'solsticeSleigh', 'dreamMaker', 'celestialOpposition'] },
 ];
 
 /* ===== src/animation/animation_role_resolver.js ===== */
@@ -23560,6 +23718,58 @@ function itemSystemTick(ctrl, dt) {
       }
     }
   }
+  // 천상의 이의(산의 축복) - 챔피언에게 받은 피해의 2초 보호막(DAMAGE_REDUCTION
+  // 재사용)이 자연 만료되는 순간을 "보호막이 깨졌다"로 보고 주변에 둔화
+  // 충격파를 방출한다. 유지되는 동안은(재적중으로 계속 갱신) 아무 일도
+  // 일어나지 않는다 - itemOnTakeDamage()가 매 챔피언 피해마다 갱신한다.
+  const celestialSlot = (ctrl.items || []).find((s) => s.id === 'celestialOpposition');
+  if (!celestialSlot) {
+    ctrl._itemCelestialShieldActive = false;
+  } else if (ctrl._itemCelestialShieldActive && now >= (ctrl._itemCelestialShieldExpiresAt || 0)) {
+    ctrl._itemCelestialShieldActive = false;
+    const p = ITEM_DATA.celestialOpposition.mountainsBlessingPassive;
+    if (typeof findEnemiesInRadius === 'function' && typeof applyStatus === 'function') {
+      const hits = findEnemiesInRadius(ctrl.root.position, p.radius);
+      for (const { unit } of hits) {
+        if (!unit || unit.hp <= 0) continue;
+        applyStatus(unit, { id: 'itemCelestialShockwaveSlow', type: 'SLOW', duration: p.slowDurationSec, value: p.slowPercent, source: ctrl });
+      }
+    }
+    console.log('[ITEM] 천상의 이의 - 산의 축복 보호막 소멸(충격파)');
+  }
+  // 세계지도집/룬 나침반(재물 공유) - 충전 재생. "첫 충전은 게임 시작
+  // 65초 후"(firstChargeDelaySec) - 그 전에는 0회, 그 뒤로는 20초마다
+  // 1회씩 최대 3회까지 채워진다(트린켓 재충전과 동일한 구조).
+  const spoilsSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].spoilsOfWarPassive);
+  if (!spoilsSlot) {
+    ctrl._itemSpoilsCharges = 0; ctrl._itemSpoilsFirstChargeGranted = false;
+  } else {
+    const p = ITEM_DATA[spoilsSlot.id].spoilsOfWarPassive;
+    if (!ctrl._itemSpoilsFirstChargeGranted) {
+      const gameTimeSec = typeof getTurretGameTimeSec === 'function' ? getTurretGameTimeSec() : p.firstChargeDelaySec;
+      if (gameTimeSec >= p.firstChargeDelaySec) { ctrl._itemSpoilsFirstChargeGranted = true; ctrl._itemSpoilsCharges = 1; }
+    } else if ((ctrl._itemSpoilsCharges || 0) < p.maxCharges) {
+      ctrl._itemTick = ctrl._itemTick || {};
+      ctrl._itemTick.spoilsRecharge = (ctrl._itemTick.spoilsRecharge || 0) + dt;
+      while (ctrl._itemTick.spoilsRecharge >= p.rechargeSec && (ctrl._itemSpoilsCharges || 0) < p.maxCharges) {
+        ctrl._itemTick.spoilsRecharge -= p.rechargeSec;
+        ctrl._itemSpoilsCharges = (ctrl._itemSpoilsCharges || 0) + 1;
+      }
+    }
+  }
+  // 세계의 결실 + 5종 업그레이드(10초당 골드5) - 재물 공유와 달리 조건
+  // 없이 시간이 지나면 그냥 지급된다.
+  const giptSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].goldPerIntervalPassive);
+  if (giptSlot) {
+    const p = ITEM_DATA[giptSlot.id].goldPerIntervalPassive;
+    ctrl._itemTick = ctrl._itemTick || {};
+    ctrl._itemTick.goldInterval = (ctrl._itemTick.goldInterval || 0) + dt;
+    while (ctrl._itemTick.goldInterval >= p.intervalSec) {
+      ctrl._itemTick.goldInterval -= p.intervalSec;
+      ctrl.gold = (ctrl.gold || 0) + p.gold;
+      if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+    }
+  }
   // 영겁의지팡이(불멸의 시간) - 60초마다 체력/마나/주문력 중첩 획득, 최대
   // 중첩 도달 시 1회 레벨업. 아이템을 팔면(인벤토리에서 사라지면) 더 이상
   // 진행되지 않지만, 이미 쌓인 중첩(_itemTimelessStacks)은 암흑의 인장
@@ -23713,6 +23923,24 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
       console.log(`[ITEM] ${ITEM_DATA[nullifySlot.id].nameKo} - 무효화 발동(피해 완전 차단)`);
       return 0;
     }
+  }
+
+  // 천상의 이의(산의 축복) - "챔피언으로부터 받는 피해가 근접35%｜원거리
+  // 25% 감소. 챔피언에게 피해를 받은 후 2초 동안 지속됩니다." 기존
+  // DAMAGE_REDUCTION 상태이상(character_controller.js의 takeDamage()가
+  // 이미 getDamageReductionPercent()로 읽어 적용함)을 재사용해서 새 피해
+  // 감소 경로를 만들지 않는다 - 재적중 시 2초가 그대로 갱신되고, 자연
+  // 만료되는 순간을 itemSystemTick()이 "보호막이 깨짐"으로 보고 충격파를
+  // 낸다. 이 효과 자체가 "받는 피해를 줄이는" 것이라 이번 피해(remaining)
+  // 에는 적용하지 않는다(다음 피해부터 적용 - 원문이 "받은 후"라고
+  // 명시해 이미 걸려있던 상태에서만 줄어드는 것으로 해석했다).
+  const celestialSlot = (ctrl.items || []).find((s) => s.id === 'celestialOpposition');
+  if (celestialSlot && source && source.isChampion && typeof applyStatus === 'function') {
+    const p = ITEM_DATA.celestialOpposition.mountainsBlessingPassive;
+    const isMelee = _itemIsMelee(ctrl);
+    applyStatus(ctrl, { id: 'itemCelestialBlessing', type: 'DAMAGE_REDUCTION', duration: p.durationSec, value: isMelee ? p.meleePercent : p.rangedPercent });
+    ctrl._itemCelestialShieldActive = true;
+    ctrl._itemCelestialShieldExpiresAt = now + p.durationSec * 1000;
   }
 
   // 멜모셔스의 아귀 - 생명선(마법 피해 전용, 원문 그대로).
@@ -24219,6 +24447,45 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
   if (banshSlot && target.isChampion && !ctrl._itemNullifyShieldUp) {
     ctrl._itemNullifyReadyAt = performance.now() + ITEM_DATA[banshSlot.id].nullifyPassive.icdSec * 1000;
   }
+
+  // 세계지도집/룬 나침반(재물 공유 - 챔피언/구조물 피해) - "스킬 및 기본
+  // 공격으로 챔피언 및 구조물에 피해를 입히면 (근거리22｜원거리20)골드를
+  // 획득합니다." 충전을 소모한다(미니언 처형과 충전을 공유 - 아래
+  // itemOnBasicAttackHit() 참고).
+  const spoilsSlotD = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].spoilsOfWarPassive);
+  if (spoilsSlotD && (target.isChampion || _itemIsStructure(target)) && (ctrl._itemSpoilsCharges || 0) > 0) {
+    const item = ITEM_DATA[spoilsSlotD.id];
+    const p = item.spoilsOfWarPassive;
+    ctrl._itemSpoilsCharges -= 1;
+    const gold = _itemIsMelee(ctrl) ? p.meleeDamageGold : p.rangedDamageGold;
+    _itemGrantSupportGold(ctrl, spoilsSlotD, item, gold);
+    console.log(`[ITEM] ${item.nameKo} - 재물 공유 발동(피해, +${gold}골드)`);
+  }
+
+  // 자자크의 세계가시(공허 폭발, 재사용대기 10초) - "챔피언에게 스킬로
+  // 피해를 입히면"(평타+스킬 전체 근사) 대상 위치에서 폭발 - 대상+주변
+  // 적에게 10+주문력15%+최대체력3% 마법 피해(몬스터는 최대체력 항을
+  // 300으로 캡).
+  const zazakSlot = (ctrl.items || []).find((s) => s.id === 'zaZaksRealmspike');
+  if (zazakSlot && target.isChampion) {
+    const p = ITEM_DATA.zaZaksRealmspike.voidBurstPassive;
+    const nowZ = performance.now();
+    if ((ctrl._itemZazakReadyAt || 0) <= nowZ) {
+      ctrl._itemZazakReadyAt = nowZ + p.icdSec * 1000;
+      const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
+      const doBurst = (unit) => {
+        if (!unit || unit.hp <= 0) return;
+        const hpBonus = unit.isMinion ? Math.min(p.monsterMaxHpBonusCap, (unit.maxHp || 0) * p.maxHpPercent) : (unit.maxHp || 0) * p.maxHpPercent;
+        applyDamage(unit, { rawDamage: p.baseDmg + ap * p.apPercent + hpBonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      };
+      doBurst(target);
+      if (typeof findEnemiesInRadius === 'function') {
+        const hits = findEnemiesInRadius(target.mesh ? target.mesh.position : ctrl.root.position, p.radius);
+        for (const { unit } of hits) { if (unit && unit !== target) doBurst(unit); }
+      }
+      console.log('[ITEM] 자자크의 세계가시 - 공허 폭발 발동');
+    }
+  }
 }
 
 // 마법의 영약의 포탑 전용 분기 - 00_global_constants.js의 applyDamage()가
@@ -24287,6 +24554,27 @@ function itemOnLevelUp(ctrl) {
   ctrl._itemActiveManaRestores = ctrl._itemActiveManaRestores || [];
   ctrl._itemActiveManaRestores.push({ perSec: totalRestore / p.durationSec, remainingSec: p.durationSec });
   console.log('[ITEM] 사라진 양피지 - 깨우치기 발동(마나 회복)');
+}
+
+// 태양의 썰매(썰매 질주) - "적 챔피언을 둔화 또는 이동 불가 상태로 만들면
+// 50~230(레벨비례) 체력 회복 + 자신과 주변 체력이 가장 낮은 아군이 2.5초간
+// 이동속도 20% 획득." 01_status_effect_system.js의 applyStatus() 공용
+// 진입점이 호출한다(어떤 챔피언의 어떤 CC 스킬이든 자동으로 맞물림).
+// 아군이 없는 이 데모는 자신에게만 이동속도를 적용한다(명시적 한계).
+function itemOnSlowOrImmobilize(ctrl) {
+  if (!ctrl) return;
+  const slot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].ccTriggerPassive);
+  if (!slot) return;
+  const p = ITEM_DATA[slot.id].ccTriggerPassive;
+  const now = performance.now();
+  if ((ctrl._itemSleighIcdUntil || 0) > now) return;
+  ctrl._itemSleighIcdUntil = now + p.icdSec * 1000;
+  const heal = _itemScaleByLevel(ctrl, p.minHeal, p.maxHeal, p.levelMin, p.levelMax);
+  if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal);
+  if (typeof applyStatus === 'function') {
+    applyStatus(ctrl, { id: 'itemSolsticeSleighMs', type: 'MS_BUFF', duration: p.msDurationSec, value: p.msPercent });
+  }
+  console.log('[ITEM] 태양의 썰매 - 썰매 질주 발동');
 }
 
 // 챔피언 처치 관여 시 중첩을 얻는 아이템들(암흑의 인장의 영광, 탐욕의
@@ -24552,17 +24840,30 @@ function placeWard(ctrl, worldPoint) {
 // slotIndex)는 슬롯 번호만 받는 공용 진입점 - 체력 물약 등 다른 소비
 // 아이템과 동일한 호출 규약을 그대로 따른다), 트린켓의 인벤토리 클릭
 // 폴백과 동일하게 "캐릭터 정면"에 설치한다.
+// 버그 수정 전까지는 wardPlacement를 가진 아이템이 전부 제어 와드처럼
+// "소모되면 인벤토리 칸에서 완전히 사라지는" slot.count(maxStack) 방식
+// 하나만 지원했다. 서포터 아이템 계열(세계지도집/룬 나침반/세계의 결실 +
+// 5종 업그레이드)의 와드는 "충전량 N회, 상점 이용 시 재충전"(체력 물약과
+// 동일한 maxCharges+refillOnShopUse 패턴)이라 그대로 재사용하면 slot.count가
+// undefined라서 와드가 무한정 나가는 잠재 버그가 될 뻔했다 - item.maxCharges
+// 보유 여부로 두 소모 방식을 분기한다(제어 와드 등 기존 maxStack 아이템은
+// 동작이 전혀 바뀌지 않는다 - 회귀 없음).
 function _useControlWard(ctrl, slotIndex, item) {
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot || slot.id !== item.id) return false;
+  if (item.maxCharges && !(slot.charges > 0)) { console.warn('[ITEM] 충전량이 없습니다.'); return false; }
   const p = item.wardPlacement;
   const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
   const targetPoint = ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)));
   const finalPos = _clampWardTargetPos(ctrl, targetPoint, p.placeRange);
-  slot.count -= 1;
-  if (slot.count <= 0) {
-    const idx = ctrl.items.indexOf(slot);
-    if (idx >= 0) ctrl.items.splice(idx, 1);
+  if (item.maxCharges) {
+    slot.charges -= 1;
+  } else {
+    slot.count -= 1;
+    if (slot.count <= 0) {
+      const idx = ctrl.items.indexOf(slot);
+      if (idx >= 0) ctrl.items.splice(idx, 1);
+    }
   }
   _spawnWardMarker(ctrl, finalPos, p.durationSec, p.hitsToDestroy, p.visionRadius, 0xd23fae);
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
@@ -24647,6 +24948,32 @@ function _itemBonusAD(ctrl) { return (ctrl.itemBonusAD || 0) + (ctrl.bonusAD || 
 function _itemIsMelee(ctrl) { return !!(ctrl.stats && ctrl.stats.attackRange <= 300); }
 function _itemIsStructure(u) { return !!(u && (u.isTurret || u.isInhibitor || u.isNexus)); }
 
+// 서포터 아이템(세계지도집 퀘스트 라인) 공용 골드 지급 - 재물 공유(피해/
+// 미니언 처형)와 10초당 골드(goldPerIntervalPassive)가 전부 이 함수 하나를
+// 거친다. item.questPassive가 있으면(세계지도집/룬 나침반) 이 아이템
+// "자신"으로 번 골드만 누적해서(일반 골드 전체가 아님 - 원문 "이 아이템으로
+// 400골드를 획득하면") 문턱에 도달하는 순간 다음 단계로 변신시킨다.
+function _itemGrantSupportGold(ctrl, slot, item, amount) {
+  if (!(amount > 0)) return;
+  ctrl.gold = (ctrl.gold || 0) + amount;
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (!item.questPassive) return;
+  ctrl._itemQuestGoldEarned = (ctrl._itemQuestGoldEarned || 0) + amount;
+  if (ctrl._itemQuestGoldEarned < item.questPassive.goldThreshold) return;
+  const toId = item.questPassive.transformsInto;
+  const toItem = ITEM_DATA[toId];
+  if (!toItem) return;
+  slot.id = toId;
+  ctrl._itemQuestGoldEarned = 0;
+  // 다음 단계가 충전형 와드를 가진 아이템이면(룬나침반/세계의 결실) 변신
+  // 즉시 충전을 가득 채운다 - 실제 LoL도 퀘스트 완료로 받은 새 아이템은
+  // 바로 쓸 수 있는 상태로 지급된다(상점 재방문을 기다릴 필요 없음).
+  if (toItem.maxCharges) slot.charges = toItem.maxCharges;
+  recomputeItemStats(ctrl);
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  console.log(`[ITEM] ${item.nameKo} -> ${toItem.nameKo} 퀘스트 완료(변신)`);
+}
+
 // 거대한히드라/발걸음분쇄기 공용 "쪼개기" - 대상에게 자신의 최대 체력
 // 비례 추가 물리 피해 + "대상 뒤의 적들"에게 더 센 최대 체력 비례 물리
 // 피해(실제 LoL 거대한히드라도 대상이 아니라 "자신의" 최대 체력이 기준).
@@ -24692,6 +25019,21 @@ function _itemCleaveOnHit(ctrl, target) {
 // 다시 applyDamage()를 호출해도 무한 재귀가 생기지 않는다(기존 광휘의
 // 검/티아맷과 동일한 안전 지점 - item_data.js 상단 주석 참고).
 function itemOnBasicAttackHit(ctrl, target, isCritical) {
+  // 세계지도집/룬 나침반(재물 공유 - 미니언 처형) - "일정 체력(근거리
+  // 챔피언은 50%, 원거리 챔피언은 30%) 이하인 미니언을 평타로 치면 스택을
+  // 하나 소모하여 골드를 같이 받는다"(원문 93~95줄). 위 itemOnDamageDealt()의
+  // 챔피언/구조물 피해 지급과 같은 충전 풀을 공유한다.
+  const spoilsSlotA = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].spoilsOfWarPassive);
+  if (spoilsSlotA && target.isMinion && (ctrl._itemSpoilsCharges || 0) > 0) {
+    const item = ITEM_DATA[spoilsSlotA.id];
+    const p = item.spoilsOfWarPassive;
+    const threshold = _itemIsMelee(ctrl) ? p.minionHpThresholdMelee : p.minionHpThresholdRanged;
+    if ((target.hp / (target.maxHp || 1)) <= threshold) {
+      ctrl._itemSpoilsCharges -= 1;
+      _itemGrantSupportGold(ctrl, spoilsSlotA, item, p.minionGold);
+      console.log(`[ITEM] ${item.nameKo} - 재물 공유 발동(미니언 처형, +${p.minionGold}골드)`);
+    }
+  }
   // 강철심장(거인의 흡수) - 충전이 끝난 상태에서, 충전을 시작했던 바로 그
   // 대상을 기본 공격으로 맞히면 70+체력6% 추가 물리 피해 + 그 피해의 10%만큼
   // 영구 최대 체력 획득(대상별 재사용대기시간 30초).
@@ -24716,6 +25058,18 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     const spellbladeSlot = _itemSpellbladeSlot(ctrl);
     if (spellbladeSlot) {
       const p = ITEM_DATA[spellbladeSlot.id].spellbladePassive;
+      // 버그 수정(QA - "주문 검과 주문검 상위템 시리즈" 재점검): 원문을 다시
+      // 확인해보니 삼위일체("기본 공격력 200%")/정수약탈자("기본공격력 125%
+      // + 기본공격력 63%")/황혼과새벽("기본공격력 75%")/리치베인("기본공격력
+      // 75%")/피의 노래("기본공격력 100%") 전부 예외 없이 "기본공격력"(base
+      // AD, 아이템으로 늘어난 보너스 공격력 제외)을 쓰는데, 지금까지는
+      // ctrl.stats.attackDamage(현재 "총" 공격력)를 그대로 곱하고 있었다 -
+      // 즉 삼위일체/정수약탈자/황혼과새벽/리치베인 4종 전부 공격력 아이템을
+      // 더 살수록 스펠블레이드 피해까지 같이 부풀려지는 잘못된 동작이었다.
+      // 스테락의도전 "잡아채는 발톱"/경탄(마나무네)과 동일한 이유로
+      // computeChampionStats()에서 레벨별 기본 공격력을 다시 구해 쓴다.
+      const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
+      const baseAd = (baseStats && typeof baseStats.attackDamage === 'number') ? baseStats.attackDamage : (ctrl.stats.attackDamage || 0);
       // 정수약탈자 - 삼위일체(순수 AD%)와 달리 치명타 확률에도 비례하는
       // 추가 항(bonusPerCritChance/manaPerCritChance)이 있다. 기존
       // 아이템들은 이 필드가 없어(undefined -> 0) 그대로 동작한다.
@@ -24724,7 +25078,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
       // 스펠블레이드 아이템들은 이 필드들이 없어(undefined -> 0/기본값)
       // 그대로 동작한다(회귀 없음).
       const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
-      const bonus = p.bonusAdPercent * (ctrl.stats.attackDamage || 0) + (p.bonusApPercent || 0) * ap + (p.bonusPerCritChance || 0) * (ctrl.stats.critChance || 0);
+      const bonus = p.bonusAdPercent * baseAd + (p.bonusApPercent || 0) * ap + (p.bonusPerCritChance || 0) * (ctrl.stats.critChance || 0);
       const dmgType = p.damageType === 'MAGICAL' ? DAMAGE_TYPE.MAGICAL : DAMAGE_TYPE.PHYSICAL;
       if (bonus > 0) {
         // 황혼과새벽(주문 검) - "적중 시 효과를 추가로 1회 적용합니다"를
@@ -24734,8 +25088,17 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
         for (let i = 0; i < procs; i++) applyDamage(target, { rawDamage: bonus, damageType: dmgType, isCritical: false, critMultiplier: 1, source: ctrl });
       }
       if ((p.manaAdPercent || p.manaPerCritChance) && (ctrl.maxMp || 0) > 0) {
-        const manaGain = (p.manaAdPercent || 0) * (ctrl.stats.attackDamage || 0) + (p.manaPerCritChance || 0) * (ctrl.stats.critChance || 0);
+        const manaGain = (p.manaAdPercent || 0) * baseAd + (p.manaPerCritChance || 0) * (ctrl.stats.critChance || 0);
         if (manaGain > 0) ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + manaGain);
+      }
+      // 피의 노래(약점 노출) - 대상이 챔피언일 경우 4초간 받는 피해량 증가
+      // (근접 8%｜원거리 5%). 기존 피해량 증폭 상태이상(쇼진의창의
+      // itemSpellDamageAmpPercent는 "자신이 주는" 피해 증폭이라 달라서,
+      // "대상이 받는" 피해 증폭은 새 상태이상 타입(VULNERABLE)을 쓴다.
+      if (p.exposeWeaknessPassive && target.isChampion && typeof applyStatus === 'function') {
+        const ew = p.exposeWeaknessPassive;
+        const isMelee = _itemIsMelee(ctrl);
+        applyStatus(target, { id: 'itemBloodsongExposeWeakness', type: 'VULNERABLE', duration: ew.durationSec, value: isMelee ? ew.meleePercent : ew.rangedPercent, source: ctrl });
       }
       // 황혼과새벽 - "사용자의 체력을 (주문력10%+추가체력3%)만큼 회복".
       if (p.healApPercent || p.healBonusHpPercent) {
@@ -24902,7 +25265,12 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
       const isStructure = _itemIsStructure(target);
       if (target.isChampion || isStructure) {
         const isMelee = _itemIsMelee(ctrl);
-        const baseAd = ctrl.stats.attackDamage || 0;
+        // 버그 수정(QA - "기본공격력" 재점검): 필드 이름(PercentBaseAd)은
+        // 이미 기본 공격력을 의도했지만, 실제로는 ctrl.stats.attackDamage
+        // (아이템까지 전부 합친 "총" 공격력)를 읽고 있었다 - 원문("근거리
+        // 기본공격력 120%" 등)대로 진짜 기본 공격력만 쓰도록 고친다.
+        const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
+        const baseAd = (baseStats && typeof baseStats.attackDamage === 'number') ? baseStats.attackDamage : (ctrl.stats.attackDamage || 0);
         const maxHp = ctrl.maxHp || 0;
         const raw = isStructure
           ? (isMelee ? p.meleeStructurePercentBaseAd * baseAd + p.meleeStructurePercentMaxHp * maxHp : p.rangedStructurePercentBaseAd * baseAd + p.rangedStructurePercentMaxHp * maxHp)
@@ -24927,7 +25295,11 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
       const isMelee = _itemIsMelee(ctrl);
       const healPercent = isMelee ? p.meleeBaseAdPercent : p.rangedBaseAdPercent;
       const missingHp = Math.max(0, (target.maxHp || 0) - (target.hp || 0));
-      const healAmt = healPercent * (ctrl.stats.attackDamage || 0) + missingHp * p.missingHpHealPercent;
+      // 버그 수정(QA - "기본공격력" 재점검): 위 선체파괴자와 동일한 문제 -
+      // 필드 이름은 BaseAdPercent인데 실제로는 총 공격력을 읽고 있었다.
+      const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
+      const baseAd = (baseStats && typeof baseStats.attackDamage === 'number') ? baseStats.attackDamage : (ctrl.stats.attackDamage || 0);
+      const healAmt = healPercent * baseAd + missingHp * p.missingHpHealPercent;
       ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + healAmt);
     }
   }
@@ -25218,7 +25590,8 @@ function _itemStatsSummary(item) {
     const extraPart = sp.extraProc ? ' + 적중 시 효과 1회 추가 적용' : '';
     const healPart = (sp.healApPercent || sp.healBonusHpPercent) ? `, 체력 (주문력${Math.round((sp.healApPercent || 0) * 100)}%+추가체력${Math.round((sp.healBonusHpPercent || 0) * 100)}%) 회복` : '';
     const asPart = sp.attackSpeedWhileReadyPercent ? `, 주문 검 사용 가능 시 공격속도 +${Math.round(sp.attackSpeedWhileReadyPercent * 100)}%` : '';
-    parts.push(`주문 검: 스킬 사용 후 다음 평타에 (공격력${Math.round(sp.bonusAdPercent * 100)}%${apPart}${critPart}) 추가 ${dmgLabel} 피해${extraPart}${manaPart}${healPart}${asPart}(자체 재사용 대기시간 ${sp.procCooldownSec}초)`);
+    const ewPart = sp.exposeWeaknessPassive ? `, 챔피언 적중 시 ${sp.exposeWeaknessPassive.durationSec}초간 받는 피해 근접${Math.round(sp.exposeWeaknessPassive.meleePercent * 100)}%｜원거리${Math.round(sp.exposeWeaknessPassive.rangedPercent * 100)}% 증가(약점 노출)` : '';
+    parts.push(`주문 검: 스킬 사용 후 다음 평타에 ("기본" 공격력${Math.round(sp.bonusAdPercent * 100)}%${apPart}${critPart}) 추가 ${dmgLabel} 피해${extraPart}${manaPart}${healPart}${asPart}${ewPart}(자체 재사용 대기시간 ${sp.procCooldownSec}초)`);
   }
   if (item.onHitMagicDamagePassive) { const p = item.onHitMagicDamagePassive; parts.push(`이케시아의 이빨(기본 공격 시 온히트 마법 피해 +${p.flat}+주문력${Math.round(p.apPercent * 100)}%)`); }
   if (item.squallPassive) { const p = item.squallPassive; parts.push(`폭풍 약탈자(${p.windowSec}초 내 챔피언 최대 체력의 ${Math.round(p.hpThresholdPercent * 100)}%에 해당하는 피해를 입히면 질풍 적용, 대상별 재사용대기시간 ${p.icdSec}초)`); }
@@ -25270,7 +25643,11 @@ function _itemStatsSummary(item) {
   if (item.manaSpentToHealPercent) parts.push(`영원(스킬 사용 시 소모 마나의 ${Math.round(item.manaSpentToHealPercent * 100)}%만큼 체력 회복, 초당 최대 ${item.manaSpentHealCapPerSec} HP)`);
   if (item.carryoverMoveSpeedOnUpgrade) parts.push(`다른 신발로 바꿔도 이동 속도 +${item.carryoverMoveSpeedOnUpgrade} 효과 유지`);
   // 제어 와드 + 영약 3종 - "남은 소모 아이템" 요청으로 추가.
-  if (item.wardPlacement) { const p = item.wardPlacement; parts.push(`사용 시 시야 ${p.visionRadius}의 와드 설치(설치 사정거리 ${p.placeRange}, 최대 ${item.maxStack}개 소지)`); }
+  // 버그 수정(QA - "서포터 아이템" 점검): 기존에는 maxStack 기반 제어
+  // 와드(제어 와드 아이템 자체)만 염두에 두고 item.maxStack을 그대로
+  // 박아 넣었는데, 세계의 결실 계열(충전 기반 - maxCharges)은 maxStack이
+  // 없어 상점 설명에 "최대 undefined개 소지"로 표시되고 있었다.
+  if (item.wardPlacement) { const p = item.wardPlacement; const qty = item.maxStack || item.maxCharges; parts.push(`사용 시 시야 ${p.visionRadius}의 와드 설치(설치 사정거리 ${p.placeRange}${qty ? `, 최대 ${qty}개 소지` : ''})`); }
   if (item.elixirEffect) {
     const e = item.elixirEffect;
     parts.push(`${e.durationSec}초 지속(다른 영약을 마시면 기존 효과 소멸)`);
@@ -25342,6 +25719,13 @@ function _itemStatsSummary(item) {
   if (item.agonyPassive) { const p = item.agonyPassive; parts.push(`고뇌(챔피언과 전투 중일 때 ${p.intervalSec}초마다 주변 적 챔피언에게 추가 체력 ${Math.round(p.bonusHpPercent * 100)}% 마법 피해 + 입힌 피해의 ${Math.round(p.healPercentOfDamage * 100)}%만큼 체력 회복)`); }
   if (item.healingReceivedBonusPercent) parts.push(`무한한 활력(자신이 받는 체력 회복·보호막 효과 +${Math.round(item.healingReceivedBonusPercent * 100)}%)`);
   if (item.voidbornResiliencePassive) { const p = item.voidbornResiliencePassive; parts.push(`공허 태생의 저항력(챔피언과 ${p.combatDurationSec}초 이상 전투 시 전투가 끝날 때까지 추가 방어력·마법저항력 +${Math.round(p.bonusPercent * 100)}%)`); }
+  // 서포터 아이템(세계지도집 퀘스트 라인) 패시브 설명.
+  if (item.questPassive) { const p = item.questPassive; parts.push(`퀘스트: 이 아이템으로 골드 ${p.goldThreshold}를 모으면 ${(ITEM_DATA[p.transformsInto] && ITEM_DATA[p.transformsInto].nameKo) || p.transformsInto}(으)로 변신`); }
+  if (item.spoilsOfWarPassive) { const p = item.spoilsOfWarPassive; parts.push(`재물 공유(챔피언·구조물에 피해를 입히면 근접+${p.meleeDamageGold}｜원거리+${p.rangedDamageGold}골드, 체력 ${Math.round(p.minionHpThresholdMelee * 100)}%(근접)｜${Math.round(p.minionHpThresholdRanged * 100)}%(원거리) 이하 미니언 처형 시 +${p.minionGold}골드 - 최대 ${p.maxCharges}회 충전/${p.rechargeSec}초, 게임 시작 ${p.firstChargeDelaySec}초 후 첫 충전)`); }
+  if (item.goldPerIntervalPassive) { const p = item.goldPerIntervalPassive; parts.push(`${p.intervalSec}초마다 골드 +${p.gold}`); }
+  if (item.voidBurstPassive) { const p = item.voidBurstPassive; parts.push(`공허 폭발(챔피언에게 스킬로 피해를 입히면 주변 적에게 ${p.baseDmg}+주문력${Math.round(p.apPercent * 100)}%+최대체력${Math.round(p.maxHpPercent * 100)}% 마법 피해(비챔피언 최대체력 항 ${p.monsterMaxHpBonusCap} 캡), 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.ccTriggerPassive) { const p = item.ccTriggerPassive; parts.push(`썰매 질주(적 챔피언에게 둔화·행동 불가 효과를 걸면 체력 ${p.minHeal}~${p.maxHeal}(레벨비례) 회복 + ${p.msDurationSec}초간 이동속도 +${Math.round(p.msPercent * 100)}%, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.mountainsBlessingPassive) { const p = item.mountainsBlessingPassive; parts.push(`산의 축복(챔피언에게 피해를 받으면 ${p.durationSec}초간 받는 피해 근접${Math.round(p.meleePercent * 100)}%｜원거리${Math.round(p.rangedPercent * 100)}% 감소, 보호막이 만료되면 주변에 ${p.slowDurationSec}초간 ${Math.round(p.slowPercent * 100)}% 둔화 충격파)`); }
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;

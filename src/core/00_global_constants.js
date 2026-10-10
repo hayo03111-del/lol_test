@@ -481,6 +481,10 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   // 근사 적용한다(명시적 근사 - README 참고).
   const ampSource = source || (typeof controller !== 'undefined' ? controller : null);
   if (ampSource && ampSource.itemSpellDamageAmpPercent > 0) dmg *= (1 + ampSource.itemSpellDamageAmpPercent);
+  // 아이템 패시브(피의 노래 "약점 노출" - 대상이 받는 피해량 증가) - 공격자
+  // 기준 증폭(itemSpellDamageAmpPercent, 위)과 반대로 "대상"이 받는 모든
+  // 피해(물리/마법/고정 전부)에 적용되는 VULNERABLE 상태이상이다.
+  if (typeof getVulnerablePercent === 'function') dmg *= (1 + getVulnerablePercent(target));
   return dmg;
 }
 

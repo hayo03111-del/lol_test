@@ -33,7 +33,7 @@ function ensureStatusHost(u) {
   return u;
 }
 // effect: { id, type, duration(sec), value, damageType, totalDamage, tickInterval, source }
-// type: SLOW / STUN / SILENCE / ROOT / ARMOR_SHRED / DOT / AD_BUFF / MS_BUFF / DAMAGE_REDUCTION
+// type: SLOW / STUN / SILENCE / ROOT / ARMOR_SHRED / MR_SHRED / DOT / AD_BUFF / MS_BUFF / DAMAGE_REDUCTION / VULNERABLE
 function applyStatus(target, effect) {
   ensureStatusHost(target);
   // 요청 7/8/34: 세트 R 시퀀스 진행 중(캐스트~착지 완료)에는 세트 자신이
@@ -91,6 +91,17 @@ function applyStatus(target, effect) {
     // 갱신한다.
     if (target.passiveState) target.passiveState.lastEnemySkillHitAt = now;
   }
+  // 태양의 썰매(썰매 질주) - "적 챔피언을 둔화 또는 이동 불가 상태로
+  // 만들면" 발동하는 공용 훅. 모든 CC 적용이 결국 이 진입점 하나를
+  // 거치므로, 여기 한 줄만 추가하면 어떤 챔피언의 어떤 스킬로 걸든(이
+  // 데모는 사실상 플레이어 하나뿐이지만) 자동으로 맞물린다. SLOW/STUN/
+  // ROOT/KNOCKUP/SUPPRESSION/CHARM만 "둔화 또는 이동 불가"로 친다
+  // (SILENCE/ARMOR_SHRED/MR_SHRED는 이동을 막지 않으므로 제외).
+  if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM'].includes(effect.type)
+      && typeof itemOnSlowOrImmobilize === 'function') {
+    const attacker = effect.source || (typeof controller !== 'undefined' ? controller : null);
+    if (attacker && attacker !== target) itemOnSlowOrImmobilize(attacker);
+  }
   return rec;
 }
 function clearStatus(target, id) {
@@ -129,6 +140,18 @@ function getMrShredFlat(target) {
   const now = performance.now();
   let v = 0;
   for (const e of target.statusEffects) if (e.type === 'MR_SHRED' && e.expiresAt > now) v = Math.max(v, e.value);
+  return v;
+}
+// 피의 노래(약점 노출) - "받는 피해량 증가"는 기존 DAMAGE_REDUCTION(감소)과
+// 정반대 방향의 효과라 별도 타입으로 둔다. getDamageReductionPercent처럼
+// "가장 센 값 하나만 적용"이 아니라 실제 LoL처럼 여러 출처가 있으면
+// 합연산으로 누적된다(지금은 이 아이템 하나뿐이라 차이는 없지만, 나중에
+// 다른 "취약" 효과가 추가될 가능성을 열어둔다).
+function getVulnerablePercent(target) {
+  if (!target || !target.statusEffects) return 0;
+  const now = performance.now();
+  let v = 0;
+  for (const e of target.statusEffects) if (e.type === 'VULNERABLE' && e.expiresAt > now) v += e.value;
   return v;
 }
 function getDamageReductionPercent(target) {

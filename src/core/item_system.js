@@ -1028,6 +1028,58 @@ function itemSystemTick(ctrl, dt) {
       }
     }
   }
+  // 천상의 이의(산의 축복) - 챔피언에게 받은 피해의 2초 보호막(DAMAGE_REDUCTION
+  // 재사용)이 자연 만료되는 순간을 "보호막이 깨졌다"로 보고 주변에 둔화
+  // 충격파를 방출한다. 유지되는 동안은(재적중으로 계속 갱신) 아무 일도
+  // 일어나지 않는다 - itemOnTakeDamage()가 매 챔피언 피해마다 갱신한다.
+  const celestialSlot = (ctrl.items || []).find((s) => s.id === 'celestialOpposition');
+  if (!celestialSlot) {
+    ctrl._itemCelestialShieldActive = false;
+  } else if (ctrl._itemCelestialShieldActive && now >= (ctrl._itemCelestialShieldExpiresAt || 0)) {
+    ctrl._itemCelestialShieldActive = false;
+    const p = ITEM_DATA.celestialOpposition.mountainsBlessingPassive;
+    if (typeof findEnemiesInRadius === 'function' && typeof applyStatus === 'function') {
+      const hits = findEnemiesInRadius(ctrl.root.position, p.radius);
+      for (const { unit } of hits) {
+        if (!unit || unit.hp <= 0) continue;
+        applyStatus(unit, { id: 'itemCelestialShockwaveSlow', type: 'SLOW', duration: p.slowDurationSec, value: p.slowPercent, source: ctrl });
+      }
+    }
+    console.log('[ITEM] 천상의 이의 - 산의 축복 보호막 소멸(충격파)');
+  }
+  // 세계지도집/룬 나침반(재물 공유) - 충전 재생. "첫 충전은 게임 시작
+  // 65초 후"(firstChargeDelaySec) - 그 전에는 0회, 그 뒤로는 20초마다
+  // 1회씩 최대 3회까지 채워진다(트린켓 재충전과 동일한 구조).
+  const spoilsSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].spoilsOfWarPassive);
+  if (!spoilsSlot) {
+    ctrl._itemSpoilsCharges = 0; ctrl._itemSpoilsFirstChargeGranted = false;
+  } else {
+    const p = ITEM_DATA[spoilsSlot.id].spoilsOfWarPassive;
+    if (!ctrl._itemSpoilsFirstChargeGranted) {
+      const gameTimeSec = typeof getTurretGameTimeSec === 'function' ? getTurretGameTimeSec() : p.firstChargeDelaySec;
+      if (gameTimeSec >= p.firstChargeDelaySec) { ctrl._itemSpoilsFirstChargeGranted = true; ctrl._itemSpoilsCharges = 1; }
+    } else if ((ctrl._itemSpoilsCharges || 0) < p.maxCharges) {
+      ctrl._itemTick = ctrl._itemTick || {};
+      ctrl._itemTick.spoilsRecharge = (ctrl._itemTick.spoilsRecharge || 0) + dt;
+      while (ctrl._itemTick.spoilsRecharge >= p.rechargeSec && (ctrl._itemSpoilsCharges || 0) < p.maxCharges) {
+        ctrl._itemTick.spoilsRecharge -= p.rechargeSec;
+        ctrl._itemSpoilsCharges = (ctrl._itemSpoilsCharges || 0) + 1;
+      }
+    }
+  }
+  // 세계의 결실 + 5종 업그레이드(10초당 골드5) - 재물 공유와 달리 조건
+  // 없이 시간이 지나면 그냥 지급된다.
+  const giptSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].goldPerIntervalPassive);
+  if (giptSlot) {
+    const p = ITEM_DATA[giptSlot.id].goldPerIntervalPassive;
+    ctrl._itemTick = ctrl._itemTick || {};
+    ctrl._itemTick.goldInterval = (ctrl._itemTick.goldInterval || 0) + dt;
+    while (ctrl._itemTick.goldInterval >= p.intervalSec) {
+      ctrl._itemTick.goldInterval -= p.intervalSec;
+      ctrl.gold = (ctrl.gold || 0) + p.gold;
+      if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+    }
+  }
   // 영겁의지팡이(불멸의 시간) - 60초마다 체력/마나/주문력 중첩 획득, 최대
   // 중첩 도달 시 1회 레벨업. 아이템을 팔면(인벤토리에서 사라지면) 더 이상
   // 진행되지 않지만, 이미 쌓인 중첩(_itemTimelessStacks)은 암흑의 인장
@@ -1181,6 +1233,24 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
       console.log(`[ITEM] ${ITEM_DATA[nullifySlot.id].nameKo} - 무효화 발동(피해 완전 차단)`);
       return 0;
     }
+  }
+
+  // 천상의 이의(산의 축복) - "챔피언으로부터 받는 피해가 근접35%｜원거리
+  // 25% 감소. 챔피언에게 피해를 받은 후 2초 동안 지속됩니다." 기존
+  // DAMAGE_REDUCTION 상태이상(character_controller.js의 takeDamage()가
+  // 이미 getDamageReductionPercent()로 읽어 적용함)을 재사용해서 새 피해
+  // 감소 경로를 만들지 않는다 - 재적중 시 2초가 그대로 갱신되고, 자연
+  // 만료되는 순간을 itemSystemTick()이 "보호막이 깨짐"으로 보고 충격파를
+  // 낸다. 이 효과 자체가 "받는 피해를 줄이는" 것이라 이번 피해(remaining)
+  // 에는 적용하지 않는다(다음 피해부터 적용 - 원문이 "받은 후"라고
+  // 명시해 이미 걸려있던 상태에서만 줄어드는 것으로 해석했다).
+  const celestialSlot = (ctrl.items || []).find((s) => s.id === 'celestialOpposition');
+  if (celestialSlot && source && source.isChampion && typeof applyStatus === 'function') {
+    const p = ITEM_DATA.celestialOpposition.mountainsBlessingPassive;
+    const isMelee = _itemIsMelee(ctrl);
+    applyStatus(ctrl, { id: 'itemCelestialBlessing', type: 'DAMAGE_REDUCTION', duration: p.durationSec, value: isMelee ? p.meleePercent : p.rangedPercent });
+    ctrl._itemCelestialShieldActive = true;
+    ctrl._itemCelestialShieldExpiresAt = now + p.durationSec * 1000;
   }
 
   // 멜모셔스의 아귀 - 생명선(마법 피해 전용, 원문 그대로).
@@ -1687,6 +1757,45 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
   if (banshSlot && target.isChampion && !ctrl._itemNullifyShieldUp) {
     ctrl._itemNullifyReadyAt = performance.now() + ITEM_DATA[banshSlot.id].nullifyPassive.icdSec * 1000;
   }
+
+  // 세계지도집/룬 나침반(재물 공유 - 챔피언/구조물 피해) - "스킬 및 기본
+  // 공격으로 챔피언 및 구조물에 피해를 입히면 (근거리22｜원거리20)골드를
+  // 획득합니다." 충전을 소모한다(미니언 처형과 충전을 공유 - 아래
+  // itemOnBasicAttackHit() 참고).
+  const spoilsSlotD = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].spoilsOfWarPassive);
+  if (spoilsSlotD && (target.isChampion || _itemIsStructure(target)) && (ctrl._itemSpoilsCharges || 0) > 0) {
+    const item = ITEM_DATA[spoilsSlotD.id];
+    const p = item.spoilsOfWarPassive;
+    ctrl._itemSpoilsCharges -= 1;
+    const gold = _itemIsMelee(ctrl) ? p.meleeDamageGold : p.rangedDamageGold;
+    _itemGrantSupportGold(ctrl, spoilsSlotD, item, gold);
+    console.log(`[ITEM] ${item.nameKo} - 재물 공유 발동(피해, +${gold}골드)`);
+  }
+
+  // 자자크의 세계가시(공허 폭발, 재사용대기 10초) - "챔피언에게 스킬로
+  // 피해를 입히면"(평타+스킬 전체 근사) 대상 위치에서 폭발 - 대상+주변
+  // 적에게 10+주문력15%+최대체력3% 마법 피해(몬스터는 최대체력 항을
+  // 300으로 캡).
+  const zazakSlot = (ctrl.items || []).find((s) => s.id === 'zaZaksRealmspike');
+  if (zazakSlot && target.isChampion) {
+    const p = ITEM_DATA.zaZaksRealmspike.voidBurstPassive;
+    const nowZ = performance.now();
+    if ((ctrl._itemZazakReadyAt || 0) <= nowZ) {
+      ctrl._itemZazakReadyAt = nowZ + p.icdSec * 1000;
+      const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
+      const doBurst = (unit) => {
+        if (!unit || unit.hp <= 0) return;
+        const hpBonus = unit.isMinion ? Math.min(p.monsterMaxHpBonusCap, (unit.maxHp || 0) * p.maxHpPercent) : (unit.maxHp || 0) * p.maxHpPercent;
+        applyDamage(unit, { rawDamage: p.baseDmg + ap * p.apPercent + hpBonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      };
+      doBurst(target);
+      if (typeof findEnemiesInRadius === 'function') {
+        const hits = findEnemiesInRadius(target.mesh ? target.mesh.position : ctrl.root.position, p.radius);
+        for (const { unit } of hits) { if (unit && unit !== target) doBurst(unit); }
+      }
+      console.log('[ITEM] 자자크의 세계가시 - 공허 폭발 발동');
+    }
+  }
 }
 
 // 마법의 영약의 포탑 전용 분기 - 00_global_constants.js의 applyDamage()가
@@ -1755,6 +1864,27 @@ function itemOnLevelUp(ctrl) {
   ctrl._itemActiveManaRestores = ctrl._itemActiveManaRestores || [];
   ctrl._itemActiveManaRestores.push({ perSec: totalRestore / p.durationSec, remainingSec: p.durationSec });
   console.log('[ITEM] 사라진 양피지 - 깨우치기 발동(마나 회복)');
+}
+
+// 태양의 썰매(썰매 질주) - "적 챔피언을 둔화 또는 이동 불가 상태로 만들면
+// 50~230(레벨비례) 체력 회복 + 자신과 주변 체력이 가장 낮은 아군이 2.5초간
+// 이동속도 20% 획득." 01_status_effect_system.js의 applyStatus() 공용
+// 진입점이 호출한다(어떤 챔피언의 어떤 CC 스킬이든 자동으로 맞물림).
+// 아군이 없는 이 데모는 자신에게만 이동속도를 적용한다(명시적 한계).
+function itemOnSlowOrImmobilize(ctrl) {
+  if (!ctrl) return;
+  const slot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].ccTriggerPassive);
+  if (!slot) return;
+  const p = ITEM_DATA[slot.id].ccTriggerPassive;
+  const now = performance.now();
+  if ((ctrl._itemSleighIcdUntil || 0) > now) return;
+  ctrl._itemSleighIcdUntil = now + p.icdSec * 1000;
+  const heal = _itemScaleByLevel(ctrl, p.minHeal, p.maxHeal, p.levelMin, p.levelMax);
+  if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal);
+  if (typeof applyStatus === 'function') {
+    applyStatus(ctrl, { id: 'itemSolsticeSleighMs', type: 'MS_BUFF', duration: p.msDurationSec, value: p.msPercent });
+  }
+  console.log('[ITEM] 태양의 썰매 - 썰매 질주 발동');
 }
 
 // 챔피언 처치 관여 시 중첩을 얻는 아이템들(암흑의 인장의 영광, 탐욕의
@@ -2020,17 +2150,30 @@ function placeWard(ctrl, worldPoint) {
 // slotIndex)는 슬롯 번호만 받는 공용 진입점 - 체력 물약 등 다른 소비
 // 아이템과 동일한 호출 규약을 그대로 따른다), 트린켓의 인벤토리 클릭
 // 폴백과 동일하게 "캐릭터 정면"에 설치한다.
+// 버그 수정 전까지는 wardPlacement를 가진 아이템이 전부 제어 와드처럼
+// "소모되면 인벤토리 칸에서 완전히 사라지는" slot.count(maxStack) 방식
+// 하나만 지원했다. 서포터 아이템 계열(세계지도집/룬 나침반/세계의 결실 +
+// 5종 업그레이드)의 와드는 "충전량 N회, 상점 이용 시 재충전"(체력 물약과
+// 동일한 maxCharges+refillOnShopUse 패턴)이라 그대로 재사용하면 slot.count가
+// undefined라서 와드가 무한정 나가는 잠재 버그가 될 뻔했다 - item.maxCharges
+// 보유 여부로 두 소모 방식을 분기한다(제어 와드 등 기존 maxStack 아이템은
+// 동작이 전혀 바뀌지 않는다 - 회귀 없음).
 function _useControlWard(ctrl, slotIndex, item) {
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot || slot.id !== item.id) return false;
+  if (item.maxCharges && !(slot.charges > 0)) { console.warn('[ITEM] 충전량이 없습니다.'); return false; }
   const p = item.wardPlacement;
   const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
   const targetPoint = ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)));
   const finalPos = _clampWardTargetPos(ctrl, targetPoint, p.placeRange);
-  slot.count -= 1;
-  if (slot.count <= 0) {
-    const idx = ctrl.items.indexOf(slot);
-    if (idx >= 0) ctrl.items.splice(idx, 1);
+  if (item.maxCharges) {
+    slot.charges -= 1;
+  } else {
+    slot.count -= 1;
+    if (slot.count <= 0) {
+      const idx = ctrl.items.indexOf(slot);
+      if (idx >= 0) ctrl.items.splice(idx, 1);
+    }
   }
   _spawnWardMarker(ctrl, finalPos, p.durationSec, p.hitsToDestroy, p.visionRadius, 0xd23fae);
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
@@ -2115,6 +2258,32 @@ function _itemBonusAD(ctrl) { return (ctrl.itemBonusAD || 0) + (ctrl.bonusAD || 
 function _itemIsMelee(ctrl) { return !!(ctrl.stats && ctrl.stats.attackRange <= 300); }
 function _itemIsStructure(u) { return !!(u && (u.isTurret || u.isInhibitor || u.isNexus)); }
 
+// 서포터 아이템(세계지도집 퀘스트 라인) 공용 골드 지급 - 재물 공유(피해/
+// 미니언 처형)와 10초당 골드(goldPerIntervalPassive)가 전부 이 함수 하나를
+// 거친다. item.questPassive가 있으면(세계지도집/룬 나침반) 이 아이템
+// "자신"으로 번 골드만 누적해서(일반 골드 전체가 아님 - 원문 "이 아이템으로
+// 400골드를 획득하면") 문턱에 도달하는 순간 다음 단계로 변신시킨다.
+function _itemGrantSupportGold(ctrl, slot, item, amount) {
+  if (!(amount > 0)) return;
+  ctrl.gold = (ctrl.gold || 0) + amount;
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (!item.questPassive) return;
+  ctrl._itemQuestGoldEarned = (ctrl._itemQuestGoldEarned || 0) + amount;
+  if (ctrl._itemQuestGoldEarned < item.questPassive.goldThreshold) return;
+  const toId = item.questPassive.transformsInto;
+  const toItem = ITEM_DATA[toId];
+  if (!toItem) return;
+  slot.id = toId;
+  ctrl._itemQuestGoldEarned = 0;
+  // 다음 단계가 충전형 와드를 가진 아이템이면(룬나침반/세계의 결실) 변신
+  // 즉시 충전을 가득 채운다 - 실제 LoL도 퀘스트 완료로 받은 새 아이템은
+  // 바로 쓸 수 있는 상태로 지급된다(상점 재방문을 기다릴 필요 없음).
+  if (toItem.maxCharges) slot.charges = toItem.maxCharges;
+  recomputeItemStats(ctrl);
+  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  console.log(`[ITEM] ${item.nameKo} -> ${toItem.nameKo} 퀘스트 완료(변신)`);
+}
+
 // 거대한히드라/발걸음분쇄기 공용 "쪼개기" - 대상에게 자신의 최대 체력
 // 비례 추가 물리 피해 + "대상 뒤의 적들"에게 더 센 최대 체력 비례 물리
 // 피해(실제 LoL 거대한히드라도 대상이 아니라 "자신의" 최대 체력이 기준).
@@ -2160,6 +2329,21 @@ function _itemCleaveOnHit(ctrl, target) {
 // 다시 applyDamage()를 호출해도 무한 재귀가 생기지 않는다(기존 광휘의
 // 검/티아맷과 동일한 안전 지점 - item_data.js 상단 주석 참고).
 function itemOnBasicAttackHit(ctrl, target, isCritical) {
+  // 세계지도집/룬 나침반(재물 공유 - 미니언 처형) - "일정 체력(근거리
+  // 챔피언은 50%, 원거리 챔피언은 30%) 이하인 미니언을 평타로 치면 스택을
+  // 하나 소모하여 골드를 같이 받는다"(원문 93~95줄). 위 itemOnDamageDealt()의
+  // 챔피언/구조물 피해 지급과 같은 충전 풀을 공유한다.
+  const spoilsSlotA = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].spoilsOfWarPassive);
+  if (spoilsSlotA && target.isMinion && (ctrl._itemSpoilsCharges || 0) > 0) {
+    const item = ITEM_DATA[spoilsSlotA.id];
+    const p = item.spoilsOfWarPassive;
+    const threshold = _itemIsMelee(ctrl) ? p.minionHpThresholdMelee : p.minionHpThresholdRanged;
+    if ((target.hp / (target.maxHp || 1)) <= threshold) {
+      ctrl._itemSpoilsCharges -= 1;
+      _itemGrantSupportGold(ctrl, spoilsSlotA, item, p.minionGold);
+      console.log(`[ITEM] ${item.nameKo} - 재물 공유 발동(미니언 처형, +${p.minionGold}골드)`);
+    }
+  }
   // 강철심장(거인의 흡수) - 충전이 끝난 상태에서, 충전을 시작했던 바로 그
   // 대상을 기본 공격으로 맞히면 70+체력6% 추가 물리 피해 + 그 피해의 10%만큼
   // 영구 최대 체력 획득(대상별 재사용대기시간 30초).
@@ -2184,6 +2368,18 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     const spellbladeSlot = _itemSpellbladeSlot(ctrl);
     if (spellbladeSlot) {
       const p = ITEM_DATA[spellbladeSlot.id].spellbladePassive;
+      // 버그 수정(QA - "주문 검과 주문검 상위템 시리즈" 재점검): 원문을 다시
+      // 확인해보니 삼위일체("기본 공격력 200%")/정수약탈자("기본공격력 125%
+      // + 기본공격력 63%")/황혼과새벽("기본공격력 75%")/리치베인("기본공격력
+      // 75%")/피의 노래("기본공격력 100%") 전부 예외 없이 "기본공격력"(base
+      // AD, 아이템으로 늘어난 보너스 공격력 제외)을 쓰는데, 지금까지는
+      // ctrl.stats.attackDamage(현재 "총" 공격력)를 그대로 곱하고 있었다 -
+      // 즉 삼위일체/정수약탈자/황혼과새벽/리치베인 4종 전부 공격력 아이템을
+      // 더 살수록 스펠블레이드 피해까지 같이 부풀려지는 잘못된 동작이었다.
+      // 스테락의도전 "잡아채는 발톱"/경탄(마나무네)과 동일한 이유로
+      // computeChampionStats()에서 레벨별 기본 공격력을 다시 구해 쓴다.
+      const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
+      const baseAd = (baseStats && typeof baseStats.attackDamage === 'number') ? baseStats.attackDamage : (ctrl.stats.attackDamage || 0);
       // 정수약탈자 - 삼위일체(순수 AD%)와 달리 치명타 확률에도 비례하는
       // 추가 항(bonusPerCritChance/manaPerCritChance)이 있다. 기존
       // 아이템들은 이 필드가 없어(undefined -> 0) 그대로 동작한다.
@@ -2192,7 +2388,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
       // 스펠블레이드 아이템들은 이 필드들이 없어(undefined -> 0/기본값)
       // 그대로 동작한다(회귀 없음).
       const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
-      const bonus = p.bonusAdPercent * (ctrl.stats.attackDamage || 0) + (p.bonusApPercent || 0) * ap + (p.bonusPerCritChance || 0) * (ctrl.stats.critChance || 0);
+      const bonus = p.bonusAdPercent * baseAd + (p.bonusApPercent || 0) * ap + (p.bonusPerCritChance || 0) * (ctrl.stats.critChance || 0);
       const dmgType = p.damageType === 'MAGICAL' ? DAMAGE_TYPE.MAGICAL : DAMAGE_TYPE.PHYSICAL;
       if (bonus > 0) {
         // 황혼과새벽(주문 검) - "적중 시 효과를 추가로 1회 적용합니다"를
@@ -2202,8 +2398,17 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
         for (let i = 0; i < procs; i++) applyDamage(target, { rawDamage: bonus, damageType: dmgType, isCritical: false, critMultiplier: 1, source: ctrl });
       }
       if ((p.manaAdPercent || p.manaPerCritChance) && (ctrl.maxMp || 0) > 0) {
-        const manaGain = (p.manaAdPercent || 0) * (ctrl.stats.attackDamage || 0) + (p.manaPerCritChance || 0) * (ctrl.stats.critChance || 0);
+        const manaGain = (p.manaAdPercent || 0) * baseAd + (p.manaPerCritChance || 0) * (ctrl.stats.critChance || 0);
         if (manaGain > 0) ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + manaGain);
+      }
+      // 피의 노래(약점 노출) - 대상이 챔피언일 경우 4초간 받는 피해량 증가
+      // (근접 8%｜원거리 5%). 기존 피해량 증폭 상태이상(쇼진의창의
+      // itemSpellDamageAmpPercent는 "자신이 주는" 피해 증폭이라 달라서,
+      // "대상이 받는" 피해 증폭은 새 상태이상 타입(VULNERABLE)을 쓴다.
+      if (p.exposeWeaknessPassive && target.isChampion && typeof applyStatus === 'function') {
+        const ew = p.exposeWeaknessPassive;
+        const isMelee = _itemIsMelee(ctrl);
+        applyStatus(target, { id: 'itemBloodsongExposeWeakness', type: 'VULNERABLE', duration: ew.durationSec, value: isMelee ? ew.meleePercent : ew.rangedPercent, source: ctrl });
       }
       // 황혼과새벽 - "사용자의 체력을 (주문력10%+추가체력3%)만큼 회복".
       if (p.healApPercent || p.healBonusHpPercent) {
@@ -2370,7 +2575,12 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
       const isStructure = _itemIsStructure(target);
       if (target.isChampion || isStructure) {
         const isMelee = _itemIsMelee(ctrl);
-        const baseAd = ctrl.stats.attackDamage || 0;
+        // 버그 수정(QA - "기본공격력" 재점검): 필드 이름(PercentBaseAd)은
+        // 이미 기본 공격력을 의도했지만, 실제로는 ctrl.stats.attackDamage
+        // (아이템까지 전부 합친 "총" 공격력)를 읽고 있었다 - 원문("근거리
+        // 기본공격력 120%" 등)대로 진짜 기본 공격력만 쓰도록 고친다.
+        const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
+        const baseAd = (baseStats && typeof baseStats.attackDamage === 'number') ? baseStats.attackDamage : (ctrl.stats.attackDamage || 0);
         const maxHp = ctrl.maxHp || 0;
         const raw = isStructure
           ? (isMelee ? p.meleeStructurePercentBaseAd * baseAd + p.meleeStructurePercentMaxHp * maxHp : p.rangedStructurePercentBaseAd * baseAd + p.rangedStructurePercentMaxHp * maxHp)
@@ -2395,7 +2605,11 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
       const isMelee = _itemIsMelee(ctrl);
       const healPercent = isMelee ? p.meleeBaseAdPercent : p.rangedBaseAdPercent;
       const missingHp = Math.max(0, (target.maxHp || 0) - (target.hp || 0));
-      const healAmt = healPercent * (ctrl.stats.attackDamage || 0) + missingHp * p.missingHpHealPercent;
+      // 버그 수정(QA - "기본공격력" 재점검): 위 선체파괴자와 동일한 문제 -
+      // 필드 이름은 BaseAdPercent인데 실제로는 총 공격력을 읽고 있었다.
+      const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
+      const baseAd = (baseStats && typeof baseStats.attackDamage === 'number') ? baseStats.attackDamage : (ctrl.stats.attackDamage || 0);
+      const healAmt = healPercent * baseAd + missingHp * p.missingHpHealPercent;
       ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + healAmt);
     }
   }

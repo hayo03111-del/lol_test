@@ -71,7 +71,8 @@ function _itemStatsSummary(item) {
     const extraPart = sp.extraProc ? ' + 적중 시 효과 1회 추가 적용' : '';
     const healPart = (sp.healApPercent || sp.healBonusHpPercent) ? `, 체력 (주문력${Math.round((sp.healApPercent || 0) * 100)}%+추가체력${Math.round((sp.healBonusHpPercent || 0) * 100)}%) 회복` : '';
     const asPart = sp.attackSpeedWhileReadyPercent ? `, 주문 검 사용 가능 시 공격속도 +${Math.round(sp.attackSpeedWhileReadyPercent * 100)}%` : '';
-    parts.push(`주문 검: 스킬 사용 후 다음 평타에 (공격력${Math.round(sp.bonusAdPercent * 100)}%${apPart}${critPart}) 추가 ${dmgLabel} 피해${extraPart}${manaPart}${healPart}${asPart}(자체 재사용 대기시간 ${sp.procCooldownSec}초)`);
+    const ewPart = sp.exposeWeaknessPassive ? `, 챔피언 적중 시 ${sp.exposeWeaknessPassive.durationSec}초간 받는 피해 근접${Math.round(sp.exposeWeaknessPassive.meleePercent * 100)}%｜원거리${Math.round(sp.exposeWeaknessPassive.rangedPercent * 100)}% 증가(약점 노출)` : '';
+    parts.push(`주문 검: 스킬 사용 후 다음 평타에 ("기본" 공격력${Math.round(sp.bonusAdPercent * 100)}%${apPart}${critPart}) 추가 ${dmgLabel} 피해${extraPart}${manaPart}${healPart}${asPart}${ewPart}(자체 재사용 대기시간 ${sp.procCooldownSec}초)`);
   }
   if (item.onHitMagicDamagePassive) { const p = item.onHitMagicDamagePassive; parts.push(`이케시아의 이빨(기본 공격 시 온히트 마법 피해 +${p.flat}+주문력${Math.round(p.apPercent * 100)}%)`); }
   if (item.squallPassive) { const p = item.squallPassive; parts.push(`폭풍 약탈자(${p.windowSec}초 내 챔피언 최대 체력의 ${Math.round(p.hpThresholdPercent * 100)}%에 해당하는 피해를 입히면 질풍 적용, 대상별 재사용대기시간 ${p.icdSec}초)`); }
@@ -123,7 +124,11 @@ function _itemStatsSummary(item) {
   if (item.manaSpentToHealPercent) parts.push(`영원(스킬 사용 시 소모 마나의 ${Math.round(item.manaSpentToHealPercent * 100)}%만큼 체력 회복, 초당 최대 ${item.manaSpentHealCapPerSec} HP)`);
   if (item.carryoverMoveSpeedOnUpgrade) parts.push(`다른 신발로 바꿔도 이동 속도 +${item.carryoverMoveSpeedOnUpgrade} 효과 유지`);
   // 제어 와드 + 영약 3종 - "남은 소모 아이템" 요청으로 추가.
-  if (item.wardPlacement) { const p = item.wardPlacement; parts.push(`사용 시 시야 ${p.visionRadius}의 와드 설치(설치 사정거리 ${p.placeRange}, 최대 ${item.maxStack}개 소지)`); }
+  // 버그 수정(QA - "서포터 아이템" 점검): 기존에는 maxStack 기반 제어
+  // 와드(제어 와드 아이템 자체)만 염두에 두고 item.maxStack을 그대로
+  // 박아 넣었는데, 세계의 결실 계열(충전 기반 - maxCharges)은 maxStack이
+  // 없어 상점 설명에 "최대 undefined개 소지"로 표시되고 있었다.
+  if (item.wardPlacement) { const p = item.wardPlacement; const qty = item.maxStack || item.maxCharges; parts.push(`사용 시 시야 ${p.visionRadius}의 와드 설치(설치 사정거리 ${p.placeRange}${qty ? `, 최대 ${qty}개 소지` : ''})`); }
   if (item.elixirEffect) {
     const e = item.elixirEffect;
     parts.push(`${e.durationSec}초 지속(다른 영약을 마시면 기존 효과 소멸)`);
@@ -195,6 +200,13 @@ function _itemStatsSummary(item) {
   if (item.agonyPassive) { const p = item.agonyPassive; parts.push(`고뇌(챔피언과 전투 중일 때 ${p.intervalSec}초마다 주변 적 챔피언에게 추가 체력 ${Math.round(p.bonusHpPercent * 100)}% 마법 피해 + 입힌 피해의 ${Math.round(p.healPercentOfDamage * 100)}%만큼 체력 회복)`); }
   if (item.healingReceivedBonusPercent) parts.push(`무한한 활력(자신이 받는 체력 회복·보호막 효과 +${Math.round(item.healingReceivedBonusPercent * 100)}%)`);
   if (item.voidbornResiliencePassive) { const p = item.voidbornResiliencePassive; parts.push(`공허 태생의 저항력(챔피언과 ${p.combatDurationSec}초 이상 전투 시 전투가 끝날 때까지 추가 방어력·마법저항력 +${Math.round(p.bonusPercent * 100)}%)`); }
+  // 서포터 아이템(세계지도집 퀘스트 라인) 패시브 설명.
+  if (item.questPassive) { const p = item.questPassive; parts.push(`퀘스트: 이 아이템으로 골드 ${p.goldThreshold}를 모으면 ${(ITEM_DATA[p.transformsInto] && ITEM_DATA[p.transformsInto].nameKo) || p.transformsInto}(으)로 변신`); }
+  if (item.spoilsOfWarPassive) { const p = item.spoilsOfWarPassive; parts.push(`재물 공유(챔피언·구조물에 피해를 입히면 근접+${p.meleeDamageGold}｜원거리+${p.rangedDamageGold}골드, 체력 ${Math.round(p.minionHpThresholdMelee * 100)}%(근접)｜${Math.round(p.minionHpThresholdRanged * 100)}%(원거리) 이하 미니언 처형 시 +${p.minionGold}골드 - 최대 ${p.maxCharges}회 충전/${p.rechargeSec}초, 게임 시작 ${p.firstChargeDelaySec}초 후 첫 충전)`); }
+  if (item.goldPerIntervalPassive) { const p = item.goldPerIntervalPassive; parts.push(`${p.intervalSec}초마다 골드 +${p.gold}`); }
+  if (item.voidBurstPassive) { const p = item.voidBurstPassive; parts.push(`공허 폭발(챔피언에게 스킬로 피해를 입히면 주변 적에게 ${p.baseDmg}+주문력${Math.round(p.apPercent * 100)}%+최대체력${Math.round(p.maxHpPercent * 100)}% 마법 피해(비챔피언 최대체력 항 ${p.monsterMaxHpBonusCap} 캡), 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.ccTriggerPassive) { const p = item.ccTriggerPassive; parts.push(`썰매 질주(적 챔피언에게 둔화·행동 불가 효과를 걸면 체력 ${p.minHeal}~${p.maxHeal}(레벨비례) 회복 + ${p.msDurationSec}초간 이동속도 +${Math.round(p.msPercent * 100)}%, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.mountainsBlessingPassive) { const p = item.mountainsBlessingPassive; parts.push(`산의 축복(챔피언에게 피해를 받으면 ${p.durationSec}초간 받는 피해 근접${Math.round(p.meleePercent * 100)}%｜원거리${Math.round(p.rangedPercent * 100)}% 감소, 보호막이 만료되면 주변에 ${p.slowDurationSec}초간 ${Math.round(p.slowPercent * 100)}% 둔화 충격파)`); }
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
