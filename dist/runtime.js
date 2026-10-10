@@ -457,6 +457,9 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 세팅만 하고 실제로 아무 데도 쓰이지 않아 완전히 무효과였다. PHYSICAL의
     // armorPenPercent와 동일한 방식으로 마법저항력에 반영한다.
     let mr = (target && (target.magicResist ?? target.stats?.magicResist)) || 0;
+    // 아이템 패시브(악의 "증오안개" - 마법 저항력 10 감소, MR_SHRED 상태이상) -
+    // ARMOR_SHRED(칠흑의양날도끼)와 동일한 자리(관통 적용 전)에서 먼저 깎는다.
+    if (typeof getMrShredFlat === 'function') mr = Math.max(0, mr - getMrShredFlat(target));
     // 아이템 패시브(마법사의 신발 - 고정 마법 관통력) - 고정 관통은 항상
     // 퍼센트 관통보다 먼저 적용한다(실제 LoL 공식과 동일 순서). `source`가
     // 없는 호출(대부분의 스킬 피해 호출)은 흡혈/영광 처치 훅과 동일한
@@ -602,7 +605,9 @@ const EXECUTE_ZONE_PERCENT = 25;
 // "대상이 시전자 쪽으로 걸어간다"는 강제 이동까지 더해진 CC다(아래
 // isStunned/tickStatusEffects 참고 - KNOCKUP의 강제 Y좌표 이동과 동일한
 // 방식으로 강제 XZ좌표 이동을 처리한다).
-const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM']);
+// MR_SHRED(악의 "증오안개" - 마법 저항력 감소) - ARMOR_SHRED와 완전히
+// 동일한 성격(강인함 지속시간 감소 대상에는 포함 안 됨)의 마법저항력 버전.
+const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM']);
 function unitLabel(u) {
   if (typeof dummy !== 'undefined' && u === dummy) return '더미 타겟';
   if (typeof controller !== 'undefined' && u === controller) return controller.championId || '플레이어';
@@ -701,6 +706,16 @@ function getArmorShredPercent(target) {
   const now = performance.now();
   let v = 0;
   for (const e of target.statusEffects) if (e.type === 'ARMOR_SHRED' && e.expiresAt > now) v = Math.max(v, e.value);
+  return v;
+}
+// ARMOR_SHRED(getArmorShredPercent)와 달리 이건 퍼센트가 아니라 고정
+// 마법저항력 감소량이다(악의 "증오안개" - 마법 저항력 10 감소, 퍼센트
+// 아님) - 이름에 Percent를 쓰지 않아 호출부에서 헷갈리지 않게 한다.
+function getMrShredFlat(target) {
+  if (!target || !target.statusEffects) return 0;
+  const now = performance.now();
+  let v = 0;
+  for (const e of target.statusEffects) if (e.type === 'MR_SHRED' && e.expiresAt > now) v = Math.max(v, e.value);
   return v;
 }
 function getDamageReductionPercent(target) {
@@ -3002,6 +3017,192 @@ const ITEM_DATA = {
     // 영혼약탈자만의 추가 효과라 별도 필드로 둔다.
     soulboundMsPassive: { stackThreshold: 10, moveSpeedPercent: 0.10 },
   },
+
+  // [전설급 아이템] 7차분 - 주문력 계열 본격 시작(영겁의지팡이~균열생성기).
+  // 원문(1034~1150줄)의 하위템 중 5종(사라진 양피지/악마의 마법서/마법공학
+  // 교류 발전기/에테르 환영/기괴한 가면)은 지금까지 읽지 않았던 원문
+  // 앞부분(460~579줄 - 에픽 아이템 모음)에 전부 완전한 스탯으로 정의돼
+  // 있었다 - 위키를 참고할 필요 없이 원문만으로 전부 채웠다. 위키는
+  // "영겁의지팡이"의 "최대 중첩에 도달하면 레벨이 오릅니다"라는 원문 문장이
+  // 오역/수사적 표현이 아니라 실제 LoL 아이템(Rod of Ages)의 진짜 메커니즘
+  // (스택 10개를 채우면 챔피언 레벨이 1 오름)이라는 것만 교차검증했다.
+  lostChapter: {
+    id: 'lostChapter', nameKo: '사라진 양피지', cost: 1200, recipe: ['amplifyingTome', 'sapphireCrystal', 'glowingMote'],
+    stats: { abilityPower: 40, mana: 300, abilityHaste: 10 },
+    // 깨우치기 - "레벨 업하면 3초 동안 최대 마나의 20%를 회복합니다."
+    // 레벨업 훅(itemOnLevelUp)이 character_controller.js의 levelUp()에서
+    // 새로 호출된다(아래 rodOfAges의 "불멸의 시간"으로 인한 레벨업도
+    // 동일한 levelUp()을 거치므로 자동으로 함께 발동한다).
+    enlightenPassive: { manaPercentOverTime: 0.20, durationSec: 3.0 },
+  },
+  fiendishCodex: {
+    id: 'fiendishCodex', nameKo: '악마의 마법서', cost: 850, recipe: ['amplifyingTome', 'glowingMote'],
+    stats: { abilityPower: 25, abilityHaste: 10 },
+  },
+  hextechAlternator: {
+    id: 'hextechAlternator', nameKo: '마법공학 교류 발전기', cost: 1100, recipe: ['amplifyingTome'],
+    stats: { abilityPower: 45 },
+    // 자극 - "챔피언에게 피해를 입히면 65의 마법 피해를 추가로 입힙니다"
+    // (재사용대기시간 40초). 루덴의메아리/로켓벨트/폭풍쇄도/그림자불꽃/
+    // 마법공학총검 등 이 아이템을 하위템으로 쓰는 완제품들은 전부 자기
+    // 고유의 이름 붙은 패시브를 따로 갖고 있어(원문에 "자극"을 다시 언급한
+    // 곳이 없음), 이 패시브는 교류 발전기를 완제품으로 바꾸지 않고 그
+    // 자체로 들고 있을 때만 적용된다(다른 하위템들과 동일한 원칙 - 완제품은
+    // 자기 스탯/패시브를 전부 새로 명시한다).
+    procOnChampionDamagePassive: { icdSec: 40, flatMagicDamage: 65 },
+  },
+  aetherialWisp: {
+    id: 'aetherialWisp', nameKo: '에테르 환영', cost: 900, recipe: ['amplifyingTome'],
+    stats: { abilityPower: 30, moveSpeedPercent: 0.04 },
+  },
+  hauntingGuise: {
+    id: 'hauntingGuise', nameKo: '기괴한 가면', cost: 1300, recipe: ['amplifyingTome', 'rubyCrystal'],
+    stats: { abilityPower: 30, maxHp: 200 },
+    // 광기 - "적 챔피언과 전투 중 매초 2%의 추가 피해(최대 6%)". "전투 중"의
+    // 정확한 판정 기준(몇 초간 피해를 안 주고받아야 이탈로 보는지)이 원문에
+    // 없어, 이미 있는 요우무의 유령검 "출몰"의 5초 기준을 그대로 재사용했다
+    // (durationGuessed - item_data.js 공용 관례).
+    combatRampPassive: { percentPerSec: 0.02, maxPercent: 0.06, outOfCombatSec: 5.0, durationGuessed: true },
+  },
+
+  rodOfAges: {
+    id: 'rodOfAges', nameKo: '영겁의지팡이', cost: 2600, recipe: ['blastingWand', 'catalystOfAeons'],
+    stats: { abilityPower: 45, maxHp: 350, mana: 400 },
+    // 영원 - 억겁의 카탈리스트와 완전히 동일한 문구/수치(원문 1042~1043줄이
+    // 511줄과 토씨 하나 안 틀리고 같다). itemOnManaSpent()가 'catalystOfAeons'
+    // id로 하드코딩돼 있던 걸 manaSpentToHealPercent 필드 보유 여부로 범용화
+    // 했다(암흑의 인장 영광 하드코딩 버그와 동일한 패턴 - QA 재점검).
+    manaOnDamagePercent: 0.07, manaSpentToHealPercent: 0.25, manaSpentHealCapPerSec: 20,
+    // 불멸의 시간 - 60초마다 체력10/마나20/주문력3씩 최대 10중첩(체력100/
+    // 마나200/주문력30)까지 쌓이고, 10중첩에 도달하는 "그 순간" 챔피언
+    // 레벨이 1 오른다(위키로 교차검증한 실제 메커니즘 - 아래 주석 참고).
+    timelessPassive: { intervalSec: 60, hpPerStack: 10, manaPerStack: 20, apPerStack: 3, maxStacks: 10, levelUpOnMax: true },
+  },
+  archangelsStaff: {
+    id: 'archangelsStaff', nameKo: '대천사의지팡이', cost: 2900, recipe: ['tearOfGoddess', 'lostChapter', 'fiendishCodex'],
+    stats: { abilityPower: 70, mana: 600, abilityHaste: 25 },
+    // 경탄(마나1%)의 주문력) - 마나무네/무라마나의 aweBonusAdPercentOfMana와
+    // 동일한 구조지만 공격력이 아니라 주문력을 주므로 별도 필드로 둔다.
+    aweBonusApPercentOfMana: 0.01,
+    // 마나순환 - 여신의 눈물/마나무네와 수치가 다르다(원문을 다시 확인한
+    // 결과 충전 5회·적중당 5마나로 챔피언 배수 언급이 없음 - 추측이 아니라
+    // 원문 1053~1054줄을 그대로 옮긴 값).
+    manaCirculationPassive: { maxManaPerHit: 5, maxManaPerChampionHit: 5, maxManaCap: 360, maxCharges: 5, rechargeSec: 8 },
+    transformsInto: 'seraphsEmbrace',
+    // 유일 아이템(마나순환 계열) - 마나무네/무라마나와 같은 그룹에 둬서
+    // 대천사의지팡이 계열과 동시에 들 수 없게 한다(실제 LoL과 동일).
+    uniqueGroup: 'manaCirculation',
+  },
+  seraphsEmbrace: {
+    id: 'seraphsEmbrace', nameKo: '대천사의포옹', cost: 0, hiddenFromShop: true, // 대천사의지팡이가 변신해서만 얻는다
+    stats: { abilityPower: 70, mana: 1000, abilityHaste: 25 },
+    aweBonusApPercentOfMana: 0.02,
+    uniqueGroup: 'manaCirculation',
+    // 생명선 - "체력이 30% 밑으로 떨어질 만큼 피해를 입으면 3초 동안
+    // (마나18%)의 피해를 흡수하는 보호막"(재사용대기 90초). 멜모셔스의
+    // 아귀(AD 비례)/스테락의도전(추가체력 비례)/불멸의 철갑궁(레벨 비례)에
+    // 이은 네 번째 생명선 형태 - 마나 비례라 manaPercentShield로 구분한다.
+    lifelinePassive: { manaPercentShield: true, hpThresholdPercent: 0.30, shieldManaPercent: 0.18, shieldDurationSec: 3.0, icdSec: 90 },
+  },
+  malignance: {
+    id: 'malignance', nameKo: '악의', cost: 2700, recipe: ['lostChapter', 'blastingWand'],
+    stats: { abilityPower: 90, mana: 600, abilityHaste: 15 },
+    // 경멸 - "궁극기 가속이 20 증가합니다." 스킬 가속(abilityBonusHaste)과
+    // 별개로 R 쿨다운에만 적용되는 전용 필드. character_controller.js의
+    // _dispatchCast()가 공용 지점이므로 거기서 마지막으로 시전한 슬롯(R
+    // 여부)만 기록해두면(ctrl._itemLastCastSlot) 챔피언 파일을 건드리지
+    // 않고도 R 전용 가속을 구현할 수 있다.
+    ultimateHasteFlat: 20,
+    // 증오안개 - "궁극기로 적 챔피언에게 피해를 입힐 때마다 3초 동안 대상
+    // 발밑의 지면을 불태워 매초 60+주문력5%의 마법 피해를 입히고 마법
+    // 저항력을 10 감소시킵니다. 입힌 피해량에 따라 반경이 늘어납니다(최대
+    // 반경 550)." 반경이 피해량에 따라 늘어나는 정확한 비례식은 원문에
+    // 없어(최대값 550 자체는 원문 수치 그대로 - 추측 아님), 매 발동마다
+    // 원문이 준 최대 반경을 그대로 쓰는 것으로 단순화했다(비례식만 생략 -
+    // radiusGuessed는 "반경 수치 자체"가 추측일 때 쓰는 플래그라 여기선
+    // 쓰지 않는다). "궁극기로"는 ctrl._itemLastCastSlot==='R'이고 그
+    // 캐스트로부터 짧은 시간(rDamageWindowMs) 안에 이 피해가 발생했는지로
+    // 판정한다(원문에 정확한 판정 창이 없어 durationGuessed류로 플래그).
+    hatefogPassive: { dmgPerSec: 60, apPercentPerSec: 0.05, mrShred: 10, durationSec: 3.0, maxRadius: 550, rDamageWindowMs: 500, rDamageWindowGuessed: true },
+  },
+  blackfireTorch: {
+    id: 'blackfireTorch', nameKo: '어둠불꽃횃불', cost: 2800, recipe: ['lostChapter', 'embersOfFate'],
+    stats: { abilityPower: 80, mana: 600, abilityHaste: 20 },
+    // 악의의 불길 - 운명의 재(embersOfFate)의 발화와 동일한 트리거 근사
+    // (스킬+평타 전체)로, 주문력 비례가 추가된 버전. 몬스터는 매초 20의
+    // "추가" 피해(원문 그대로 - 기본 20+AP2%에 20을 더함).
+    burnOnDamagePassive: { id: 'blackfireTorchBurn', durationSec: 3.0, baseDmgPerSec: 20, apPercentPerSec: 0.02, monsterBonusPerSec: 20 },
+    // 어둠불꽃 - "악의의 불길에 영향을 받는 적 챔피언/에픽 몬스터/대형
+    // 몬스터 하나당 주문력 4% 증가." 이 엔진엔 에픽/대형 몬스터 구분이 없어
+    // (훈련용 더미를 포함한) 챔피언 단위로만 센다 - item_system.js의
+    // _itemBlackfireBurnTargets가 현재 불타고 있는 대상 수를 추적한다.
+    // "주문력 N% 증가"는 합연산이 아니라 라바돈의 죽음모자와 같은 총
+    // 주문력 곱연산(itemTotalApMultiplierBonus, 이번에 새로 만든 공용 필드)이다.
+    blackfirePassive: { apPercentPerStack: 0.04 },
+  },
+  ludensEcho: {
+    id: 'ludensEcho', nameKo: '루덴의메아리', cost: 2750, recipe: ['lostChapter', 'hextechAlternator'],
+    stats: { abilityPower: 100, mana: 600, abilityHaste: 10 },
+    // 메아리(재사용대기 12초) - "메아리 6개 발사, 주 대상+주변 적에게
+    // (75+주문력5%) 추가 마법 피해. 남은 메아리는 주 대상에게 20%씩 발사."
+    // 이 엔진엔 "주변 적 여러 명"을 동시에 쫓아다니는 광역 투사체 시스템이
+    // 없어, 주변에 다른 적이 전혀 없을 때의 실제 LoL 수치(모든 메아리가
+    // 주 대상에게 집중 - 기본 100% + 나머지 5발×20% = 총 200%)로 단순화했다.
+    ludensEchoPassive: { icdSec: 12, baseDmg: 75, apPercent: 0.05, totalEchoes: 6, redirectPercent: 0.20 },
+  },
+  hextechRocketbelt: {
+    id: 'hextechRocketbelt', nameKo: '마법공학 로켓 벨트', cost: 2650, recipe: ['hextechAlternator', 'kircheisShard', 'rubyCrystal'],
+    stats: { abilityPower: 60, maxHp: 350, abilityHaste: 20 },
+    // 초음속(재사용대기 50초) - "지정 방향으로 돌진하며 부채꼴로 100+
+    // 주문력10% 마법 피해, 지형은 통과 불가." 이 프로젝트의 돌진(점멸형
+    // 이동)은 챔피언마다 제각각 구현돼 있고 아이템 공용 경로에서 캐릭터를
+    // 실제로 옮기는 범용 함수가 없어(명시적 한계 - 챔피언 파일을 전부
+    // 건드리는 위험을 피함), 돌진으로 인한 이동 자체는 생략하고 자신 주변
+    // 범위(findEnemiesInRadius - 다른 액티브 아이템들과 동일한 패턴) 마법
+    // 피해만 재현했다. 반경은 원문에 없어 추측(radiusGuessed).
+    rocketbeltActive: { nameKo: '초음속', cooldownSec: 50, baseDmg: 100, apPercent: 0.10, radius: 400, radiusGuessed: true },
+  },
+  rylaisCrystalScepter: {
+    id: 'rylaisCrystalScepter', nameKo: '라일라이의수정홀', cost: 2600, recipe: ['blastingWand', 'giantsBelt', 'amplifyingTome'],
+    stats: { abilityPower: 65, maxHp: 400 },
+    // 서리 - "스킬로 적에게 피해를 입히면 1초 동안 30% 둔화" (다른
+    // 아이템들과 동일한 스킬+평타 근사, 챔피언/미니언 구분 없이 원문 그대로 적용).
+    frostOnDamagePassive: { slowPercent: 0.30, slowDurationSec: 1.0 },
+  },
+  liandrysTorment: {
+    id: 'liandrysTorment', nameKo: '리안드리의 고통', cost: 3000, recipe: ['hauntingGuise', 'embersOfFate'],
+    stats: { abilityPower: 60, maxHp: 300 },
+    // 고통 - "스킬로 피해를 입히면 3초 동안 적을 불태워 매초 최대 체력의
+    // 2%에 해당하는 마법 피해." 적용 시점의 최대 체력을 스냅샷해서 3초간
+    // 균등하게 나눠 입힌다(운명의 재 등 기존 DOT들과 동일한 totalDamage/
+    // duration 모델 - 매 틱 다시 계산하지 않음, 명시적 단순화).
+    burnPercentMaxHpPassive: { id: 'liandrysBurn', durationSec: 3.0, percentOfMaxHpPerSec: 0.02 },
+    // 고난 - 기괴한 가면의 "광기"와 완전히 동일한 문구/수치(원문 1127~1128줄).
+    combatRampPassive: { percentPerSec: 0.02, maxPercent: 0.06, outOfCombatSec: 5.0, durationGuessed: true },
+  },
+  cosmicDrive: {
+    id: 'cosmicDrive', nameKo: '우주의추진력', cost: 3000, recipe: ['kircheisShard', 'aetherialWisp', 'fiendishCodex'],
+    stats: { abilityPower: 70, maxHp: 350, abilityHaste: 25, moveSpeedPercent: 0.04 },
+    // 마법의 춤 - "적 챔피언에게 마법 또는 고정 피해를 입히면 4초 동안
+    // 이동 속도가 20 증가합니다." 기존 MS_BUFF_FLAT(칠흑의양날도끼 "열정" 등)을
+    // 재사용 - 재적중 시 지속시간만 갱신되고 중첩되지 않는다.
+    dancePassive: { msFlat: 20, durationSec: 4.0 },
+  },
+  riftmaker: {
+    id: 'riftmaker', nameKo: '균열생성기', cost: 3100, recipe: ['hauntingGuise', 'fiendishCodex'],
+    stats: { abilityPower: 70, maxHp: 350, abilityHaste: 15 },
+    // 공허의 부패 - 기괴한 가면/리안드리의 고통과 같은 구조의 전투 중
+    // 누적 추가 피해지만 최대치가 8%로 더 높고, 최대치에 도달하면 모든
+    // 피해 흡혈(근접10%｜원거리6%)을 추가로 얻는다(onMaxVamp).
+    combatRampPassive: {
+      percentPerSec: 0.02, maxPercent: 0.08, outOfCombatSec: 5.0, durationGuessed: true,
+      onMaxVamp: { meleePercent: 0.10, rangedPercent: 0.06 },
+    },
+    // 공허의 마력 - "추가 체력의 2%만큼 주문력을 얻습니다." 스테락의도전의
+    // bonusAdPercentOfBaseAd(기본 공격력 비례)와 유사한 구조지만 이쪽은
+    // "추가 체력"(itemBonusMaxHp 등 합산된 보너스 최대 체력) 비례다.
+    apPercentOfBonusHp: 0.02,
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -3021,6 +3222,8 @@ const ITEM_ORDER = [
   'feralization',
   'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge',
   'mejaisSoulstealer',
+  'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise',
+  'rodOfAges', 'archangelsStaff', 'seraphsEmbrace', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -3031,9 +3234,10 @@ const ITEM_CATEGORIES = [
   // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
   // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
   // 하나에서 같이 보여준다.
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization'] },
-  // 무라마나는 마나무네가 변신해서만 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
-  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise'] },
+  // 무라마나/대천사의포옹은 각각 마나무네/대천사의지팡이가 변신해서만
+  // 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker'] },
 ];
 
 /* ===== src/animation/animation_role_resolver.js ===== */
@@ -8191,7 +8395,9 @@ class CharacterController {
       this.maxMp = base.maxMp + (this.itemBonusMana || 0);
       this.hpRegen = base.hpRegen; this.mpRegen = base.mpRegen;
       this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0) + (this.itemDynamicBonusAD || 0) + (this.itemTempADBonus || 0);
-      this.stats.abilityPower = (this.itemBonusAP || 0);
+      // 어둠불꽃횃불(어둠불꽃)/(향후) 라바돈의 죽음모자 - "총 주문력 N%
+      // 증가" 계열은 itemBonusAP 합연산 전부가 끝난 뒤 곱하는 배율이다.
+      this.stats.abilityPower = (this.itemBonusAP || 0) * (1 + (this.itemTotalApMultiplierBonus || 0));
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
       this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0);
       this.stats.baseArmor = base.armor;
@@ -8233,6 +8439,9 @@ class CharacterController {
     updateBars(this);
     if (typeof showLevelUpEffect === 'function') showLevelUpEffect(this); // 요청 8: 레벨업 시각 효과
     if (typeof updateExpUI === 'function') updateExpUI(this);
+    // 사라진 양피지(깨우치기)/영겁의지팡이(불멸의 시간으로 인한 레벨업도
+    // 동일한 경로) - "레벨 업하면" 트리거를 이 한 지점에서 공용으로 처리한다.
+    if (typeof itemOnLevelUp === 'function') itemOnLevelUp(this);
   }
   levelUpSkill(slot) {
     const cap = slot === 'R' ? 3 : 5;
@@ -9303,7 +9512,7 @@ class CharacterController {
         console.log(`[SKILL BLOCKED] ${msg}`); showSkillToast(msg);
         return false;
       }
-      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd) : cost.cd;
+      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd, slot) : cost.cd;
       if (cost.mana > 0 && typeof itemOnManaSpent === 'function') itemOnManaSpent(this, cost.mana);
       updateBars(this);
     }
@@ -10525,6 +10734,11 @@ class CharacterController {
     // 건드릴 필요 없음 - applyDamage()의 처형 판정과 동일한 원칙). free
     // (미리보기/프리뷰 캐스트)일 때는 무장시키지 않는다.
     if (!free && typeof itemOnAbilityDispatch === 'function') itemOnAbilityDispatch(this);
+    // 악의(경멸의 "궁극기 가속"/증오안개의 "궁극기로 피해를 입힐 때") -
+    // 모든 챔피언의 모든 스킬 시전이 이 한 지점을 거치므로, 여기서 마지막
+    // 시전 슬롯과 시각만 기록해두면 챔피언 파일을 건드리지 않고도 "방금
+    // 궁극기(R)를 썼는지"를 item_system.js에서 판정할 수 있다.
+    if (!free) { this._itemLastCastSlot = slot; this._itemLastCastSlotAt = performance.now(); }
     if (this.championId === 'nilah') {
       if (slot === 'Q') return this._nilahCastQ(mouseWorldPoint, free);
       if (slot === 'W') return this._nilahCastW(mouseWorldPoint, free);
@@ -10603,7 +10817,7 @@ class CharacterController {
     const cost = SKILL_COST[slot];
     if (!free) {
       if (this.cooldowns[slot] > 0 || this.mp < cost.mana) return;
-      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd) : cost.cd;
+      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd, slot) : cost.cd;
     }
 
     this._clearActionTimers(); // 요청 11: 진행 중이던 다른 시퀀스/액션을 먼저 확실히 취소
@@ -22137,6 +22351,13 @@ function recomputeItemStats(ctrl) {
   // 무한의 대검 - 치명타 피해량 +30%(영구 스탯, calculateDamage()가 각
   // 챔피언이 넘기는 critMultiplier에 더해서 읽는다).
   ctrl.itemBonusCritDamagePercent = 0;
+  // 악의(경멸) - "궁극기 가속" - 스킬 가속(itemBonusAbilityHaste)과 별개로
+  // R 쿨다운에만 더해진다(abilityHasteCooldown()의 slot==='R' 분기 참고).
+  ctrl.itemBonusUltimateHaste = 0;
+  // 라바돈의 죽음모자(미구현)/어둠불꽃횃불(어둠불꽃) - "총 주문력 N% 증가"
+  // 계열은 합연산이 아니라 최종 주문력에 곱하는 배율이다 - character_controller.js의
+  // recomputeStats()가 itemBonusAP에 (1+이 값)을 곱한다.
+  ctrl.itemTotalApMultiplierBonus = 0;
   const applyOne = (item) => {
     if (!item) return;
     const s = item.stats || {};
@@ -22188,6 +22409,27 @@ function recomputeItemStats(ctrl) {
     // 암흑의 인장(영광)/탐욕의 군화(학살)와 동일한 패턴(아이템을 들고
     // 있을 때만 적용, 중첩 자체는 팔아도 남아있음).
     if (item.permanentCritPassive) ctrl.itemBonusCritChance += ctrl._itemPermCritBonus || 0;
+    // 악의(경멸) - 궁극기 가속.
+    ctrl.itemBonusUltimateHaste += item.ultimateHasteFlat || 0;
+    // 어둠불꽃횃불(어둠불꽃) - 불타는 대상 하나당 총 주문력 4% 증가. 현재
+    // 불타고 있는 대상 수(_itemBlackfireBurnTargets)는 itemOnDamageDealt()가
+    // DOT를 걸 때 기록하고 itemSystemTick()이 만료분을 정리한다.
+    if (item.blackfirePassive) ctrl.itemTotalApMultiplierBonus += (ctrl._itemBlackfireStacks || 0) * item.blackfirePassive.apPercentPerStack;
+    // 영겁의지팡이(불멸의 시간) - 60초마다 쌓이는 체력/마나/주문력 중첩.
+    // 중첩 자체(ctrl._itemTimelessStacks)는 암흑의 인장 영광과 동일하게
+    // 팔아도 남지만, 스탯 반영은 아이템을 들고 있을 때만 적용된다.
+    if (item.timelessPassive) {
+      const st = ctrl._itemTimelessStacks || 0;
+      ctrl.itemBonusAP += st * item.timelessPassive.apPerStack;
+      ctrl.itemBonusMaxHp += st * item.timelessPassive.hpPerStack;
+      ctrl.itemBonusMana += st * item.timelessPassive.manaPerStack;
+    }
+    // 균열생성기(공허의 부패) - 전투 중 누적 추가 피해가 최대치에 도달하면
+    // 모든 피해 흡혈(근접/원거리)을 추가로 얻는다.
+    if (item.combatRampPassive && item.combatRampPassive.onMaxVamp && ctrl._itemCombatRampVampApplied) {
+      const vp = item.combatRampPassive.onMaxVamp;
+      ctrl.itemAllDamageVampPercent += _itemIsMelee(ctrl) ? vp.meleePercent : vp.rangedPercent;
+    }
   };
   for (const slot of (ctrl.items || [])) applyOne(ITEM_DATA[slot.id]);
   if (ctrl.boots) applyOne(ITEM_DATA[ctrl.boots.id]);
@@ -22226,6 +22468,22 @@ function recomputeItemStats(ctrl) {
     const baseAd = baseStats ? baseStats.attackDamage : 0;
     ctrl.itemBonusAD += baseAd * ITEM_DATA[sterakSlot.id].bonusAdPercentOfBaseAd;
   }
+  // 경탄(대천사의지팡이/대천사의포옹) - 마나무네/무라마나의 경탄과 동일한
+  // 구조지만 공격력이 아니라 주문력을 준다.
+  const apAweSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].aweBonusApPercentOfMana);
+  if (apAweSlot) {
+    const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
+    const totalMaxMp = (baseStats ? baseStats.maxMp : 0) + (ctrl.itemBonusMana || 0);
+    ctrl.itemBonusAP += totalMaxMp * ITEM_DATA[apAweSlot.id].aweBonusApPercentOfMana;
+  }
+  // 균열생성기(공허의 마력) - "추가 체력의 2%만큼 주문력". 스테락의도전과
+  // 동일한 이유로 recomputeStats() 이전인 지금 "추가 체력"을 직접 합산해 쓴다
+  // (itemBonusMaxHp는 위 applyOne() 루프에서 이미 다 더해진 상태).
+  const riftmakerSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].apPercentOfBonusHp);
+  if (riftmakerSlot) {
+    const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
+    ctrl.itemBonusAP += bonusHp * ITEM_DATA[riftmakerSlot.id].apPercentOfBonusHp;
+  }
   ctrl.recomputeStats();
 }
 
@@ -22239,8 +22497,12 @@ function recomputeItemStats(ctrl) {
 // 않는 구조) - 이 아이템 하나를 위해 9개 챔피언 파일의 수십 군데를 전부
 // 고치는 건 위험도가 너무 커서, 이번 범위에서는 공용 경로만 적용하고
 // 나머지는 README에 한계로 명시한다.
-function abilityHasteCooldown(ctrl, baseCd) {
-  const ah = (ctrl && ctrl.itemBonusAbilityHaste) || 0;
+// slot(선택) - 악의(경멸)의 "궁극기 가속"은 R 쿨다운에만 더해지므로,
+// R을 설정하는 호출에서만 itemBonusUltimateHaste를 함께 넣는다(호출하는
+// 쪽이 slot을 안 넘기면 기존처럼 스킬 가속만 적용 - 하위 호환).
+function abilityHasteCooldown(ctrl, baseCd, slot) {
+  let ah = (ctrl && ctrl.itemBonusAbilityHaste) || 0;
+  if (slot === 'R') ah += (ctrl && ctrl.itemBonusUltimateHaste) || 0;
   if (ah <= 0) return baseCd;
   return baseCd * (100 / (100 + ah));
 }
@@ -22463,6 +22725,9 @@ function useItem(ctrl, slotIndex) {
   // 요우무의 유령검(망령의 발걸음) - 이동속도 버프(즉시 발동형이지만
   // 피해가 없다는 점이 위 두 액티브와 다르다).
   if (item.ghostStepActive) return _useGhostStepActive(ctrl, item);
+  // 마법공학 로켓 벨트(초음속) - 즉시 발동형 범위 마법 피해(돌진 이동
+  // 자체는 생략 - item_data.js 주석 참고).
+  if (item.rocketbeltActive) return _useRocketbeltActive(ctrl, item);
   // 제어 와드 - 인벤토리 중첩 소모형이지만 회복이 아니라 와드 설치가
   // 목적이라 별도 함수로 분리한다(투명 와드의 placeWard()와 유사한 구조,
   // 다만 트린켓 전용 슬롯이 아니라 6칸 인벤토리를 쓴다).
@@ -22571,6 +22836,34 @@ function _useGhostStepActive(ctrl, item) {
   return true;
 }
 
+// 마법공학 로켓 벨트(초음속) - "지정 방향으로 돌진하며 부채꼴 모양으로
+// 100+주문력10% 마법 피해를 입히는 마법 탄환을 발사합니다." 돌진으로
+// 인한 실제 이동은 생략하고(item_data.js 주석 참고), 자기 주변 범위
+// (findEnemiesInRadius - 티아맷/발걸음분쇄기와 동일한 패턴) 마법 피해만
+// 재현한다.
+function _useRocketbeltActive(ctrl, item) {
+  const now = performance.now();
+  ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
+  const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
+  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  const p = item.rocketbeltActive;
+  ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
+  const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
+  const raw = p.baseDmg + ap * p.apPercent;
+  if (typeof findEnemiesInRadius === 'function') {
+    const hits = findEnemiesInRadius(ctrl.root.position, p.radius);
+    for (const { unit } of hits) {
+      // 구조물을 제외하지 않는다 - 티아맷/발걸음분쇄기와 달리 원문에
+      // "구조물 제외" 문구가 없다(이 프로젝트의 확립된 원칙 - QA 재점검에서
+      // 근거 없는 구조물 제외를 여러 번 버그로 찾아 고친 적이 있다).
+      if (!unit || unit.hp <= 0) continue;
+      applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    }
+  }
+  console.log(`[ITEM] ${item.nameKo}(${p.nameKo}) 사용`);
+  return true;
+}
+
 function _itemTickActiveHeals(ctrl, dt) {
   if (!ctrl._itemActiveHeals || !ctrl._itemActiveHeals.length) return;
   for (const heal of ctrl._itemActiveHeals) {
@@ -22581,6 +22874,18 @@ function _itemTickActiveHeals(ctrl, dt) {
   // 아이템을 팔거나 다 써도(인벤토리에서 이미 제거됨) 이미 시작된 회복은
   // 실제 LoL처럼 끝까지 진행되므로, 이 목록은 items 배열과 무관하게 돈다.
   ctrl._itemActiveHeals = ctrl._itemActiveHeals.filter((h) => h.remainingSec > 1e-6);
+}
+
+// 사라진 양피지(깨우치기)의 마나 HoT - _itemTickActiveHeals와 완전히
+// 동일한 구조(마나 상한 클램프만 다름).
+function _itemTickActiveManaRestores(ctrl, dt) {
+  if (!ctrl._itemActiveManaRestores || !ctrl._itemActiveManaRestores.length) return;
+  for (const restore of ctrl._itemActiveManaRestores) {
+    const step = Math.min(dt, restore.remainingSec);
+    if ((ctrl.maxMp || 0) > 0) ctrl.mp = Math.min(ctrl.maxMp, (ctrl.mp || 0) + restore.perSec * step);
+    restore.remainingSec -= step;
+  }
+  ctrl._itemActiveManaRestores = ctrl._itemActiveManaRestores.filter((r) => r.remainingSec > 1e-6);
 }
 
 function _itemTickManaRegen(ctrl, item, dt, now) {
@@ -22648,6 +22953,7 @@ function _itemTickTearRecharge(ctrl, item, dt) {
 function itemSystemTick(ctrl, dt) {
   if (!ctrl) return;
   _itemTickActiveHeals(ctrl, dt);
+  _itemTickActiveManaRestores(ctrl, dt);
   _itemTickTrinketRecharge(ctrl, dt);
   _itemTickWardExpiry(ctrl, dt);
   if (typeof _itemTickElixirExpiry === 'function') _itemTickElixirExpiry(ctrl);
@@ -22762,20 +23068,24 @@ function itemSystemTick(ctrl, dt) {
     if (now >= (ctrl._itemShojinExpiresAt || 0)) ctrl._itemShojinStacks = 0;
     ctrl.itemSpellDamageAmpPercent = (ctrl._itemShojinStacks || 0) * ITEM_DATA.shojinSpear.focusedWillPassive.percentPerStack;
   }
-  // 마나무네 -> 무라마나 변신("360의 최대 마나에 도달하면") - 조합(recipe)
-  // 소모가 아니라 "자기 자신이 다른 완제품으로 바뀌는" 메커니즘이라
-  // buildOrBuyItem()과 별개로 여기서 직접 처리한다. 골드는 들지 않는다
-  // (완제품 하나가 더 완성된 완제품으로 자연 승급하는 것뿐 - 원문에
-  // 추가 비용 언급이 없음).
-  const manamuneSlot = (ctrl.items || []).find((s) => s.id === 'manamune');
-  if (manamuneSlot) {
-    const p = ITEM_DATA.manamune.manaCirculationPassive;
+  // 마나순환 변신("360의 최대 마나에 도달하면") - 조합(recipe) 소모가
+  // 아니라 "자기 자신이 다른 완제품으로 바뀌는" 메커니즘이라 buildOrBuyItem()과
+  // 별개로 여기서 직접 처리한다. 골드는 들지 않는다(원문에 추가 비용 언급
+  // 없음). 버그 수정(QA) - 예전에는 s.id === 'manamune'로 하드코딩돼 있어서,
+  // 대천사의지팡이(마나무네와 동일한 transformsInto+manaCirculationPassive
+  // 조합)가 추가되면 대천사의 포옹으로 전혀 변신하지 못하는 잠재 버그였다 -
+  // 암흑의 인장 영광과 동일한 이유로 필드 보유 여부 기반 범용 탐색으로 고쳤다.
+  const transformSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].transformsInto && ITEM_DATA[s.id].manaCirculationPassive);
+  if (transformSlot) {
+    const fromItem = ITEM_DATA[transformSlot.id];
+    const p = fromItem.manaCirculationPassive;
     if ((ctrl._itemTearState && ctrl._itemTearState.gained >= p.maxManaCap)) {
-      manamuneSlot.id = 'muramana';
-      ctrl._itemTearState = null; // 무라마나는 더 이상 마나순환 충전이 필요 없는 완제품
+      const toId = fromItem.transformsInto;
+      transformSlot.id = toId;
+      ctrl._itemTearState = null; // 변신 완제품은 더 이상 마나순환 충전이 필요 없다
       recomputeItemStats(ctrl);
       if (typeof updateItemUI === 'function') updateItemUI(ctrl);
-      console.log('[ITEM] 마나무네 -> 무라마나 변신 완료');
+      console.log(`[ITEM] ${fromItem.nameKo} -> ${ITEM_DATA[toId].nameKo} 변신 완료`);
     }
   }
   // 폭풍갈퀴/고속연사포 공용 "충전 상태" - 이동하거나 공격하면 충전되고
@@ -22793,6 +23103,61 @@ function itemSystemTick(ctrl, dt) {
     if (ctrl.state === STATE.MOVE || ctrl.state === STATE.ATTACK) {
       ctrl._itemChargeProgress = (ctrl._itemChargeProgress || 0) + dt;
       if (ctrl._itemChargeProgress >= p.chargeTimeSec) ctrl._itemChargeReady = true;
+    }
+  }
+  // 기괴한 가면(광기)/리안드리의 고통(고난)/균열생성기(공허의 부패) 공용
+  // "전투 중 누적 추가 피해" - 아이템을 들고 있지 않으면 0으로 되돌리고,
+  // 들고 있으면 최근 챔피언 피해를 주거나받은 적 없는 시간(outOfCombatSec)을
+  // 기준으로 전투 이탈 즉시 0으로 리셋한다(요우무의 유령검 "출몰"과 동일한
+  // 전투 판정 근사). 최대치 도달 여부(onMaxVamp용)는 바뀔 때만 재계산한다.
+  const rampSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].combatRampPassive);
+  if (!rampSlot) {
+    if (ctrl._itemCombatRampPercent || ctrl._itemCombatRampVampApplied) {
+      ctrl._itemCombatRampPercent = 0; ctrl._itemCombatRampVampApplied = false;
+    }
+  } else {
+    const p = ITEM_DATA[rampSlot.id].combatRampPassive;
+    const inCombat = (now - (ctrl._itemLastDealtChampionDamageAt || 0)) <= p.outOfCombatSec * 1000
+      || (now - (ctrl._itemLastTookChampionDamageAt || 0)) <= p.outOfCombatSec * 1000;
+    ctrl._itemCombatRampPercent = inCombat ? Math.min(p.maxPercent, (ctrl._itemCombatRampPercent || 0) + p.percentPerSec * dt) : 0;
+    const atMax = p.onMaxVamp && ctrl._itemCombatRampPercent >= p.maxPercent - 1e-6;
+    if (!!atMax !== !!ctrl._itemCombatRampVampApplied) {
+      ctrl._itemCombatRampVampApplied = !!atMax;
+      recomputeItemStats(ctrl);
+    }
+  }
+  // 영겁의지팡이(불멸의 시간) - 60초마다 체력/마나/주문력 중첩 획득, 최대
+  // 중첩 도달 시 1회 레벨업. 아이템을 팔면(인벤토리에서 사라지면) 더 이상
+  // 진행되지 않지만, 이미 쌓인 중첩(_itemTimelessStacks)은 암흑의 인장
+  // 영광과 동일하게 그대로 남는다(다만 스탯 반영은 들고 있을 때만).
+  const timelessSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].timelessPassive);
+  if (timelessSlot) {
+    const p = ITEM_DATA[timelessSlot.id].timelessPassive;
+    ctrl._itemTick = ctrl._itemTick || {};
+    const key = 'timeless';
+    ctrl._itemTick[key] = (ctrl._itemTick[key] || 0) + dt;
+    while (ctrl._itemTick[key] >= p.intervalSec && (ctrl._itemTimelessStacks || 0) < p.maxStacks) {
+      ctrl._itemTick[key] -= p.intervalSec;
+      ctrl._itemTimelessStacks = (ctrl._itemTimelessStacks || 0) + 1;
+      recomputeItemStats(ctrl);
+      if (ctrl._itemTimelessStacks >= p.maxStacks && p.levelUpOnMax && !ctrl._itemTimelessLeveledUp) {
+        ctrl._itemTimelessLeveledUp = true;
+        if (typeof ctrl.levelUp === 'function') ctrl.levelUp();
+        console.log('[ITEM] 영겁의지팡이 - 불멸의 시간 최대 중첩 도달(레벨 1 상승)');
+      }
+    }
+  }
+  // 어둠불꽃횃불(어둠불꽃) - 현재 불타고 있는 대상 수(_itemBlackfireBurnTargets,
+  // itemOnDamageDealt()가 기록)를 매 프레임 정리해서 만료된 대상을 뺀다.
+  if (ctrl._itemBlackfireBurnTargets && ctrl._itemBlackfireBurnTargets.size) {
+    let changed = false;
+    for (const [key, expiresAt] of ctrl._itemBlackfireBurnTargets) {
+      if (now >= expiresAt) { ctrl._itemBlackfireBurnTargets.delete(key); changed = true; }
+    }
+    const newCount = ctrl._itemBlackfireBurnTargets.size;
+    if (changed || newCount !== (ctrl._itemBlackfireStacks || 0)) {
+      ctrl._itemBlackfireStacks = newCount;
+      recomputeItemStats(ctrl);
     }
   }
   if (!ctrl.items || !ctrl.items.length) return;
@@ -22922,6 +23287,22 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
       ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       console.log('[ITEM] 불멸의 철갑궁 - 생명선 발동');
+    }
+  }
+
+  // 대천사의포옹 - 생명선. 위 세 형태와 또 다른 네 번째 형태(최대 마나
+  // 비례 보호막, 감쇠 없이 3초 그대로 유지) - 피해 종류는 가리지 않는다
+  // (원문에 제한 없음).
+  const seraphSlot = (ctrl.items || []).find((s) => s.id === 'seraphsEmbrace');
+  if (seraphSlot && (ctrl._itemSeraphIcdUntil || 0) <= now) {
+    const p = ITEM_DATA.seraphsEmbrace.lifelinePassive;
+    const hpAfter = (ctrl.hp || 0) - Math.max(0, remaining - (ctrl.shield || 0));
+    if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
+      ctrl._itemSeraphIcdUntil = now + p.icdSec * 1000;
+      const shieldAmt = (ctrl.maxMp || 0) * p.shieldManaPercent;
+      ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
+      ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
+      console.log('[ITEM] 대천사의포옹 - 생명선 발동');
     }
   }
 
@@ -23201,6 +23582,111 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
     const p = ITEM_DATA.serylasGrudge.frostPassive;
     applyStatus(target, { id: 'itemSeryldaSlow', type: 'SLOW', duration: p.slowDurationSec, value: p.slowPercent, source: ctrl });
   }
+
+  // [전설급 7차분 - 주문력]
+  // 기괴한 가면(광기)/리안드리의 고통(고난)/균열생성기(공허의 부패) 공용
+  // "전투 중 누적 추가 피해" - 이미 끝난 최종 피해(finalDmg)에 비율만
+  // 더한다(도미닉 경의 인사 거인 학살자와 동일한 이중 감소 방지 패턴).
+  if (target.isChampion && (ctrl._itemCombatRampPercent || 0) > 0) {
+    const bonus = finalDmg * ctrl._itemCombatRampPercent;
+    const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
+    target.hp = Math.max(minHp, (target.hp || 0) - bonus);
+  }
+
+  // 마법공학 교류 발전기(자극) - 챔피언에게 피해를 입히면 65의 추가 마법
+  // 피해(재사용대기 40초). 정찰병의 새총 "명중"과 동일한 패턴(calculateDamage()로
+  // 수치만 뽑아 직접 차감 - 재귀 안전).
+  const procSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].procOnChampionDamagePassive);
+  if (procSlot && target.isChampion) {
+    const p = ITEM_DATA[procSlot.id].procOnChampionDamagePassive;
+    const now = performance.now();
+    ctrl._itemProcReadyAt = ctrl._itemProcReadyAt || {};
+    if ((ctrl._itemProcReadyAt[procSlot.id] || 0) <= now) {
+      ctrl._itemProcReadyAt[procSlot.id] = now + p.icdSec * 1000;
+      const bonusDmg = calculateDamage({ rawDamage: p.flatMagicDamage, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, target, source: ctrl });
+      const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
+      target.hp = Math.max(minHp, (target.hp || 0) - bonusDmg);
+    }
+  }
+
+  // 어둠불꽃횃불(악의의 불길) - 운명의 재와 동일한 트리거 근사(스킬+평타
+  // 전체)로 3초간 불태우며, 주문력 비례가 추가된다. 몬스터는 매초 20의
+  // 추가 피해(원문 "추가" 그대로 - 기본값에 더해서 입힘). 동시에 현재
+  // 불타는 대상 Map(_itemBlackfireBurnTargets)에 기록해서 "어둠불꽃"(총
+  // 주문력 증가) 스택 수의 근거로 쓴다.
+  const blackfireSlot = (ctrl.items || []).find((s) => s.id === 'blackfireTorch');
+  if (blackfireSlot && typeof applyStatus === 'function') {
+    const p = ITEM_DATA.blackfireTorch.burnOnDamagePassive;
+    const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
+    const perSec = (p.baseDmgPerSec + ap * p.apPercentPerSec) + (target.isMinion ? p.monsterBonusPerSec : 0);
+    applyStatus(target, { id: p.id, type: 'DOT', duration: p.durationSec, totalDamage: perSec * p.durationSec, damageType: DAMAGE_TYPE.MAGICAL, tickInterval: 1.0, source: ctrl });
+    if (target.isChampion || target.isTrainingDummy) {
+      ctrl._itemBlackfireBurnTargets = ctrl._itemBlackfireBurnTargets || new Map();
+      ctrl._itemBlackfireBurnTargets.set(_itemTargetKey(target), performance.now() + p.durationSec * 1000);
+    }
+  }
+
+  // 루덴의메아리(메아리, 재사용대기 12초) - "메아리 6개, 주 대상+주변
+  // 적에게 (75+주문력5%), 남은 메아리는 주 대상에게 20%씩" - 이 엔진은
+  // 근처 여러 적을 동시에 추적하는 광역 시스템이 없어, 주변에 다른 적이
+  // 없을 때의 실제 수치(= 기본 100% + 나머지 5발×20% = 총 200%)로
+  // 단순화해 전부 주 대상에게 집중시켰다(item_data.js 주석 참고).
+  const ludensSlot = (ctrl.items || []).find((s) => s.id === 'ludensEcho');
+  if (ludensSlot && target.isChampion) {
+    const p = ITEM_DATA.ludensEcho.ludensEchoPassive;
+    const now = performance.now();
+    if ((ctrl._itemLudensReadyAt || 0) <= now) {
+      ctrl._itemLudensReadyAt = now + p.icdSec * 1000;
+      const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
+      const full = p.baseDmg + ap * p.apPercent;
+      const total = full * (1 + (p.totalEchoes - 1) * p.redirectPercent);
+      const bonusDmg = calculateDamage({ rawDamage: total, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, target, source: ctrl });
+      const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
+      target.hp = Math.max(minHp, (target.hp || 0) - bonusDmg);
+    }
+  }
+
+  // 라일라이의수정홀(서리) - 적에게 피해를 입히면 1초간 30% 둔화(원문에
+  // 챔피언 전용 언급이 없어 미니언/챔피언 모두 적용).
+  const rylaiSlot = (ctrl.items || []).find((s) => s.id === 'rylaisCrystalScepter');
+  if (rylaiSlot && typeof applyStatus === 'function') {
+    const p = ITEM_DATA.rylaisCrystalScepter.frostOnDamagePassive;
+    applyStatus(target, { id: 'itemRylaiSlow', type: 'SLOW', duration: p.slowDurationSec, value: p.slowPercent, source: ctrl });
+  }
+
+  // 리안드리의 고통(고통) - 3초간 적을 불태워 매초 최대 체력 2%의 마법
+  // 피해(적용 시점 최대 체력을 스냅샷 - item_data.js 주석 참고).
+  const liandrySlot = (ctrl.items || []).find((s) => s.id === 'liandrysTorment');
+  if (liandrySlot && typeof applyStatus === 'function') {
+    const p = ITEM_DATA.liandrysTorment.burnPercentMaxHpPassive;
+    const totalDamage = (target.maxHp || 0) * p.percentOfMaxHpPerSec * p.durationSec;
+    applyStatus(target, { id: p.id, type: 'DOT', duration: p.durationSec, totalDamage, damageType: DAMAGE_TYPE.MAGICAL, tickInterval: 1.0, source: ctrl });
+  }
+
+  // 우주의추진력(마법의 춤) - 적 챔피언에게 마법 또는 고정 피해를 입히면
+  // 4초간 이동 속도 +20(칠흑의양날도끼 "열정"과 동일한 MS_BUFF_FLAT 재사용 -
+  // 재적중 시 지속시간만 갱신, 중첩 없음).
+  const cosmicSlot = (ctrl.items || []).find((s) => s.id === 'cosmicDrive');
+  if (cosmicSlot && target.isChampion && (damageType === DAMAGE_TYPE.MAGICAL || damageType === DAMAGE_TYPE.TRUE) && typeof applyStatus === 'function') {
+    const p = ITEM_DATA.cosmicDrive.dancePassive;
+    applyStatus(ctrl, { id: 'itemCosmicDriveMs', type: 'MS_BUFF_FLAT', duration: p.durationSec, value: p.msFlat });
+  }
+
+  // 악의(증오안개) - "궁극기로 적 챔피언에게 피해를 입힐 때마다" - R
+  // 시전 직후 짧은 시간(rDamageWindowMs) 안에 발생한 피해만 "궁극기로
+  // 입힌 피해"로 근사한다(_dispatchCast()가 기록하는 ctrl._itemLastCastSlot -
+  // 챔피언 파일을 건드리지 않고 R 여부를 구분하는 유일한 지점).
+  const malignanceSlot = (ctrl.items || []).find((s) => s.id === 'malignance');
+  if (malignanceSlot && target.isChampion && typeof applyStatus === 'function') {
+    const p = ITEM_DATA.malignance.hatefogPassive;
+    const now = performance.now();
+    if (ctrl._itemLastCastSlot === 'R' && (now - (ctrl._itemLastCastSlotAt || 0)) <= p.rDamageWindowMs) {
+      const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
+      const perSec = p.dmgPerSec + ap * p.apPercentPerSec;
+      applyStatus(target, { id: 'itemMalignanceHatefogBurn', type: 'DOT', duration: p.durationSec, totalDamage: perSec * p.durationSec, damageType: DAMAGE_TYPE.MAGICAL, tickInterval: 1.0, source: ctrl });
+      applyStatus(target, { id: 'itemMalignanceHatefogMrShred', type: 'MR_SHRED', duration: p.durationSec, value: p.mrShred, source: ctrl });
+    }
+  }
 }
 
 // 마법의 영약의 포탑 전용 분기 - 00_global_constants.js의 applyDamage()가
@@ -23239,15 +23725,36 @@ function itemOnMinionKillByPlayer(ctrl) {
 // 이 훅을 타지 않는다 - 스킬 가속(abilityHasteCooldown)과 동일한 한계.
 function itemOnManaSpent(ctrl, manaSpent) {
   if (!ctrl || !manaSpent || manaSpent <= 0) return;
-  const slot = (ctrl.items || []).find((s) => s.id === 'catalystOfAeons');
+  // 버그 수정(QA) - 'catalystOfAeons' id로 하드코딩돼 있었다. 영겁의지팡이가
+  // 억겁의 카탈리스트와 완전히 동일한 "영원" 패시브(manaSpentToHealPercent)를
+  // 갖게 되면서, 암흑의 인장(영광)/마나무네(마나순환) 때와 동일한 하드코딩
+  // 버그가 될 뻔했다 - 필드 보유 여부로 범용 탐색하도록 미리 고쳤다.
+  const slot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].manaSpentToHealPercent);
   if (!slot) return;
-  const p = ITEM_DATA.catalystOfAeons;
+  const p = ITEM_DATA[slot.id];
   const totalHeal = manaSpent * p.manaSpentToHealPercent;
   if (totalHeal <= 0) return;
   const perSec = Math.min(p.manaSpentHealCapPerSec, totalHeal);
   const remainingSec = totalHeal / perSec;
   ctrl._itemActiveHeals = ctrl._itemActiveHeals || [];
   ctrl._itemActiveHeals.push({ perSec, remainingSec });
+}
+
+// 사라진 양피지(깨우치기) - "레벨 업하면 3초 동안 최대 마나의 20%를
+// 회복합니다." character_controller.js의 levelUp()(수동 레벨업 버튼/EXP
+// 자동 레벨업/영겁의지팡이 "불멸의 시간" 모두 동일한 이 메서드 하나를
+// 거친다)이 호출하는 공용 훅. _itemActiveHeals(HoT)와 동일한 구조의
+// 전용 큐(_itemActiveManaRestores)로 진행한다(체력이 아니라 마나라 따로 둠).
+function itemOnLevelUp(ctrl) {
+  if (!ctrl) return;
+  const slot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].enlightenPassive);
+  if (!slot || !((ctrl.maxMp || 0) > 0)) return;
+  const p = ITEM_DATA[slot.id].enlightenPassive;
+  const totalRestore = (ctrl.maxMp || 0) * p.manaPercentOverTime;
+  if (totalRestore <= 0) return;
+  ctrl._itemActiveManaRestores = ctrl._itemActiveManaRestores || [];
+  ctrl._itemActiveManaRestores.push({ perSec: totalRestore / p.durationSec, remainingSec: p.durationSec });
+  console.log('[ITEM] 사라진 양피지 - 깨우치기 발동(마나 회복)');
 }
 
 // 챔피언 처치 관여 시 중첩을 얻는 아이템들(암흑의 인장의 영광, 탐욕의
@@ -24144,7 +24651,8 @@ function _itemStatsSummary(item) {
   if (item.shapedChargePassive) { const p = item.shapedChargePassive; parts.push(`성형작약(챔피언에게 스킬로 피해 시 추가로 ${p.meleeFlat}(+물리 관통력×${Math.round(p.meleeArmorPenPercentOfStat * 100)}%)｜원거리 ${p.rangedFlat}(+물리 관통력×${Math.round(p.rangedArmorPenPercentOfStat * 100)}%)의 고정 피해, 재사용대기시간 ${p.icdSec}초)`); }
   if (item.sabotagePassive) { const p = item.sabotagePassive; parts.push(`파괴 공작(처치 관여 시 ${p.durationSec}초간 보유 - 포탑 대상 다음 기본 공격 시 ${p.dotDurationSec}초에 걸쳐 근접${p.meleeFlat}(+물리 관통력×${Math.round(p.meleeArmorPenPercentOfStat * 100)}%)｜원거리${p.rangedFlat}(+물리 관통력×${Math.round(p.rangedArmorPenPercentOfStat * 100)}%)의 고정 피해)`); }
   if (item.frostPassive) { const p = item.frostPassive; parts.push(`매서운 추위(스킬로 체력 ${Math.round(p.hpThresholdPercent * 100)}% 이하인 적에게 피해 시 ${p.slowDurationSec}초간 ${Math.round(p.slowPercent * 100)}% 둔화)`); }
-  if (item.burnOnDamagePassive) parts.push(`발화(피해 시 ${item.burnOnDamagePassive.durationSec}초간 매초 ${item.burnOnDamagePassive.dmgPerSec}(몬스터 ${item.burnOnDamagePassive.monsterDmgPerSec}) 마법 고정 피해)`);
+  if (item.burnOnDamagePassive && item.burnOnDamagePassive.dmgPerSec != null) parts.push(`발화(피해 시 ${item.burnOnDamagePassive.durationSec}초간 매초 ${item.burnOnDamagePassive.dmgPerSec}(몬스터 ${item.burnOnDamagePassive.monsterDmgPerSec}) 마법 고정 피해)`);
+  if (item.burnOnDamagePassive && item.burnOnDamagePassive.baseDmgPerSec != null) { const p = item.burnOnDamagePassive; parts.push(`악의의 불길(피해 시 ${p.durationSec}초간 매초 ${p.baseDmgPerSec}+주문력${Math.round(p.apPercentPerSec * 100)}% 마법 피해, 몬스터 매초 +${p.monsterBonusPerSec} 추가)`); }
   // 버그 수정(QA 요청 "효과가 제대로 적용되게 해줘"): 아래 패시브들은
   // item_system.js에 실제로 구현/테스트까지 돼 있었지만, 이 함수가 각
   // 라운드마다 새로 추가된 설명을 전부 따라가지 못해 상점 툴팁에 전혀
@@ -24200,6 +24708,28 @@ function _itemStatsSummary(item) {
   if (item.lightshieldStrikePassive) { const p = item.lightshieldStrikePassive; parts.push(`라이트쉴드 타격(챔피언별 ${p.icdPerTargetSec}초마다 첫 기본 공격 시 근접 기본공격력${Math.round(p.meleeBaseAdPercent * 100)}%｜원거리${Math.round(p.rangedBaseAdPercent * 100)}% + 잃은 체력 ${Math.round(p.missingHpHealPercent * 100)}%만큼 체력 회복)`); }
   if (item.tyrannyPassive) parts.push(`폭정(추가 체력의 ${(item.tyrannyPassive.bonusHpToAdPercent * 100).toFixed(1)}%만큼 추가 공격력)`);
   if (item.vengeancePassive) { const p = item.vengeancePassive; parts.push(`응징(잃은 체력에 비례해 공격력 최대 ${Math.round(p.maxAdPercent * 100)}% 증가, 체력 ${Math.round(p.maxAtHpPercent * 100)}%에서 최대치 도달)`); }
+  // 전설급 7차분(영겁의지팡이~균열생성기) 패시브 설명.
+  if (item.enlightenPassive) { const p = item.enlightenPassive; parts.push(`깨우치기(레벨 업 시 ${p.durationSec}초에 걸쳐 최대 마나의 ${Math.round(p.manaPercentOverTime * 100)}% 회복)`); }
+  if (item.procOnChampionDamagePassive) { const p = item.procOnChampionDamagePassive; parts.push(`자극(챔피언에게 피해를 입히면 고정 마법 피해 +${p.flatMagicDamage}, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.timelessPassive) { const p = item.timelessPassive; parts.push(`불멸의 시간(${p.intervalSec}초마다 체력+${p.hpPerStack}/마나+${p.manaPerStack}/주문력+${p.apPerStack}, 최대 ${p.maxStacks}중첩, 최대 중첩 도달 시 레벨 +1)`); }
+  if (item.aweBonusApPercentOfMana) parts.push(`경탄(최대 마나의 ${Math.round(item.aweBonusApPercentOfMana * 100)}%만큼 추가 주문력)`);
+  if (item.lifelinePassive && item.lifelinePassive.manaPercentShield) { const p = item.lifelinePassive; parts.push(`생명선(피해 종류 무관 - 체력이 ${Math.round(p.hpThresholdPercent * 100)}% 밑으로 떨어질 만큼이면 ${p.shieldDurationSec}초간 최대 마나의 ${Math.round(p.shieldManaPercent * 100)}% 보호막, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.ultimateHasteFlat) parts.push(`궁극기 가속 +${item.ultimateHasteFlat}`);
+  if (item.hatefogPassive) { const p = item.hatefogPassive; parts.push(`증오안개(궁극기로 챔피언에게 피해 시 ${p.durationSec}초간 지면을 불태워 매초 ${p.dmgPerSec}+주문력${Math.round(p.apPercentPerSec * 100)}% 마법 피해 + 마법저항력 -${p.mrShred}, 최대 반경 ${p.maxRadius})`); }
+  if (item.blackfirePassive) parts.push(`어둠불꽃(불타는 적 하나당 총 주문력 +${Math.round(item.blackfirePassive.apPercentPerStack * 100)}%)`);
+  if (item.ludensEchoPassive) { const p = item.ludensEchoPassive; parts.push(`메아리(스킬로 피해 시 대상에게 ${p.baseDmg}+주문력${Math.round(p.apPercent * 100)}% 기준 추가 마법 피해, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.rocketbeltActive) { const p = item.rocketbeltActive; parts.push(`사용 시 "${p.nameKo}": 주변 적에게 ${p.baseDmg}+주문력${Math.round(p.apPercent * 100)}% 마법 피해, 재사용 대기시간 ${p.cooldownSec}초`); }
+  if (item.frostOnDamagePassive) { const p = item.frostOnDamagePassive; parts.push(`서리(피해 시 ${p.slowDurationSec}초간 ${Math.round(p.slowPercent * 100)}% 둔화)`); }
+  if (item.burnPercentMaxHpPassive) { const p = item.burnPercentMaxHpPassive; parts.push(`고통(피해 시 ${p.durationSec}초간 매초 최대 체력의 ${Math.round(p.percentOfMaxHpPerSec * 100)}% 마법 피해)`); }
+  if (item.combatRampPassive) {
+    const p = item.combatRampPassive;
+    let s = `전투 중 누적 추가 피해(챔피언 상대 매초 +${Math.round(p.percentPerSec * 100)}%, 최대 ${Math.round(p.maxPercent * 100)}%`;
+    if (p.onMaxVamp) s += `, 최대치 도달 시 모든 피해 흡혈 근접+${Math.round(p.onMaxVamp.meleePercent * 100)}%｜원거리+${Math.round(p.onMaxVamp.rangedPercent * 100)}%`;
+    s += ')';
+    parts.push(s);
+  }
+  if (item.dancePassive) { const p = item.dancePassive; parts.push(`마법의 춤(적 챔피언에게 마법·고정 피해 시 ${p.durationSec}초간 이동 속도 +${p.msFlat})`); }
+  if (item.apPercentOfBonusHp) parts.push(`공허의 마력(추가 체력의 ${Math.round(item.apPercentOfBonusHp * 100)}%만큼 추가 주문력)`);
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;

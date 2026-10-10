@@ -18,7 +18,9 @@
 // "대상이 시전자 쪽으로 걸어간다"는 강제 이동까지 더해진 CC다(아래
 // isStunned/tickStatusEffects 참고 - KNOCKUP의 강제 Y좌표 이동과 동일한
 // 방식으로 강제 XZ좌표 이동을 처리한다).
-const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM']);
+// MR_SHRED(악의 "증오안개" - 마법 저항력 감소) - ARMOR_SHRED와 완전히
+// 동일한 성격(강인함 지속시간 감소 대상에는 포함 안 됨)의 마법저항력 버전.
+const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM']);
 function unitLabel(u) {
   if (typeof dummy !== 'undefined' && u === dummy) return '더미 타겟';
   if (typeof controller !== 'undefined' && u === controller) return controller.championId || '플레이어';
@@ -117,6 +119,16 @@ function getArmorShredPercent(target) {
   const now = performance.now();
   let v = 0;
   for (const e of target.statusEffects) if (e.type === 'ARMOR_SHRED' && e.expiresAt > now) v = Math.max(v, e.value);
+  return v;
+}
+// ARMOR_SHRED(getArmorShredPercent)와 달리 이건 퍼센트가 아니라 고정
+// 마법저항력 감소량이다(악의 "증오안개" - 마법 저항력 10 감소, 퍼센트
+// 아님) - 이름에 Percent를 쓰지 않아 호출부에서 헷갈리지 않게 한다.
+function getMrShredFlat(target) {
+  if (!target || !target.statusEffects) return 0;
+  const now = performance.now();
+  let v = 0;
+  for (const e of target.statusEffects) if (e.type === 'MR_SHRED' && e.expiresAt > now) v = Math.max(v, e.value);
   return v;
 }
 function getDamageReductionPercent(target) {

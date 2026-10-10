@@ -94,7 +94,8 @@ function _itemStatsSummary(item) {
   if (item.shapedChargePassive) { const p = item.shapedChargePassive; parts.push(`성형작약(챔피언에게 스킬로 피해 시 추가로 ${p.meleeFlat}(+물리 관통력×${Math.round(p.meleeArmorPenPercentOfStat * 100)}%)｜원거리 ${p.rangedFlat}(+물리 관통력×${Math.round(p.rangedArmorPenPercentOfStat * 100)}%)의 고정 피해, 재사용대기시간 ${p.icdSec}초)`); }
   if (item.sabotagePassive) { const p = item.sabotagePassive; parts.push(`파괴 공작(처치 관여 시 ${p.durationSec}초간 보유 - 포탑 대상 다음 기본 공격 시 ${p.dotDurationSec}초에 걸쳐 근접${p.meleeFlat}(+물리 관통력×${Math.round(p.meleeArmorPenPercentOfStat * 100)}%)｜원거리${p.rangedFlat}(+물리 관통력×${Math.round(p.rangedArmorPenPercentOfStat * 100)}%)의 고정 피해)`); }
   if (item.frostPassive) { const p = item.frostPassive; parts.push(`매서운 추위(스킬로 체력 ${Math.round(p.hpThresholdPercent * 100)}% 이하인 적에게 피해 시 ${p.slowDurationSec}초간 ${Math.round(p.slowPercent * 100)}% 둔화)`); }
-  if (item.burnOnDamagePassive) parts.push(`발화(피해 시 ${item.burnOnDamagePassive.durationSec}초간 매초 ${item.burnOnDamagePassive.dmgPerSec}(몬스터 ${item.burnOnDamagePassive.monsterDmgPerSec}) 마법 고정 피해)`);
+  if (item.burnOnDamagePassive && item.burnOnDamagePassive.dmgPerSec != null) parts.push(`발화(피해 시 ${item.burnOnDamagePassive.durationSec}초간 매초 ${item.burnOnDamagePassive.dmgPerSec}(몬스터 ${item.burnOnDamagePassive.monsterDmgPerSec}) 마법 고정 피해)`);
+  if (item.burnOnDamagePassive && item.burnOnDamagePassive.baseDmgPerSec != null) { const p = item.burnOnDamagePassive; parts.push(`악의의 불길(피해 시 ${p.durationSec}초간 매초 ${p.baseDmgPerSec}+주문력${Math.round(p.apPercentPerSec * 100)}% 마법 피해, 몬스터 매초 +${p.monsterBonusPerSec} 추가)`); }
   // 버그 수정(QA 요청 "효과가 제대로 적용되게 해줘"): 아래 패시브들은
   // item_system.js에 실제로 구현/테스트까지 돼 있었지만, 이 함수가 각
   // 라운드마다 새로 추가된 설명을 전부 따라가지 못해 상점 툴팁에 전혀
@@ -150,6 +151,28 @@ function _itemStatsSummary(item) {
   if (item.lightshieldStrikePassive) { const p = item.lightshieldStrikePassive; parts.push(`라이트쉴드 타격(챔피언별 ${p.icdPerTargetSec}초마다 첫 기본 공격 시 근접 기본공격력${Math.round(p.meleeBaseAdPercent * 100)}%｜원거리${Math.round(p.rangedBaseAdPercent * 100)}% + 잃은 체력 ${Math.round(p.missingHpHealPercent * 100)}%만큼 체력 회복)`); }
   if (item.tyrannyPassive) parts.push(`폭정(추가 체력의 ${(item.tyrannyPassive.bonusHpToAdPercent * 100).toFixed(1)}%만큼 추가 공격력)`);
   if (item.vengeancePassive) { const p = item.vengeancePassive; parts.push(`응징(잃은 체력에 비례해 공격력 최대 ${Math.round(p.maxAdPercent * 100)}% 증가, 체력 ${Math.round(p.maxAtHpPercent * 100)}%에서 최대치 도달)`); }
+  // 전설급 7차분(영겁의지팡이~균열생성기) 패시브 설명.
+  if (item.enlightenPassive) { const p = item.enlightenPassive; parts.push(`깨우치기(레벨 업 시 ${p.durationSec}초에 걸쳐 최대 마나의 ${Math.round(p.manaPercentOverTime * 100)}% 회복)`); }
+  if (item.procOnChampionDamagePassive) { const p = item.procOnChampionDamagePassive; parts.push(`자극(챔피언에게 피해를 입히면 고정 마법 피해 +${p.flatMagicDamage}, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.timelessPassive) { const p = item.timelessPassive; parts.push(`불멸의 시간(${p.intervalSec}초마다 체력+${p.hpPerStack}/마나+${p.manaPerStack}/주문력+${p.apPerStack}, 최대 ${p.maxStacks}중첩, 최대 중첩 도달 시 레벨 +1)`); }
+  if (item.aweBonusApPercentOfMana) parts.push(`경탄(최대 마나의 ${Math.round(item.aweBonusApPercentOfMana * 100)}%만큼 추가 주문력)`);
+  if (item.lifelinePassive && item.lifelinePassive.manaPercentShield) { const p = item.lifelinePassive; parts.push(`생명선(피해 종류 무관 - 체력이 ${Math.round(p.hpThresholdPercent * 100)}% 밑으로 떨어질 만큼이면 ${p.shieldDurationSec}초간 최대 마나의 ${Math.round(p.shieldManaPercent * 100)}% 보호막, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.ultimateHasteFlat) parts.push(`궁극기 가속 +${item.ultimateHasteFlat}`);
+  if (item.hatefogPassive) { const p = item.hatefogPassive; parts.push(`증오안개(궁극기로 챔피언에게 피해 시 ${p.durationSec}초간 지면을 불태워 매초 ${p.dmgPerSec}+주문력${Math.round(p.apPercentPerSec * 100)}% 마법 피해 + 마법저항력 -${p.mrShred}, 최대 반경 ${p.maxRadius})`); }
+  if (item.blackfirePassive) parts.push(`어둠불꽃(불타는 적 하나당 총 주문력 +${Math.round(item.blackfirePassive.apPercentPerStack * 100)}%)`);
+  if (item.ludensEchoPassive) { const p = item.ludensEchoPassive; parts.push(`메아리(스킬로 피해 시 대상에게 ${p.baseDmg}+주문력${Math.round(p.apPercent * 100)}% 기준 추가 마법 피해, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.rocketbeltActive) { const p = item.rocketbeltActive; parts.push(`사용 시 "${p.nameKo}": 주변 적에게 ${p.baseDmg}+주문력${Math.round(p.apPercent * 100)}% 마법 피해, 재사용 대기시간 ${p.cooldownSec}초`); }
+  if (item.frostOnDamagePassive) { const p = item.frostOnDamagePassive; parts.push(`서리(피해 시 ${p.slowDurationSec}초간 ${Math.round(p.slowPercent * 100)}% 둔화)`); }
+  if (item.burnPercentMaxHpPassive) { const p = item.burnPercentMaxHpPassive; parts.push(`고통(피해 시 ${p.durationSec}초간 매초 최대 체력의 ${Math.round(p.percentOfMaxHpPerSec * 100)}% 마법 피해)`); }
+  if (item.combatRampPassive) {
+    const p = item.combatRampPassive;
+    let s = `전투 중 누적 추가 피해(챔피언 상대 매초 +${Math.round(p.percentPerSec * 100)}%, 최대 ${Math.round(p.maxPercent * 100)}%`;
+    if (p.onMaxVamp) s += `, 최대치 도달 시 모든 피해 흡혈 근접+${Math.round(p.onMaxVamp.meleePercent * 100)}%｜원거리+${Math.round(p.onMaxVamp.rangedPercent * 100)}%`;
+    s += ')';
+    parts.push(s);
+  }
+  if (item.dancePassive) { const p = item.dancePassive; parts.push(`마법의 춤(적 챔피언에게 마법·고정 피해 시 ${p.durationSec}초간 이동 속도 +${p.msFlat})`); }
+  if (item.apPercentOfBonusHp) parts.push(`공허의 마력(추가 체력의 ${Math.round(item.apPercentOfBonusHp * 100)}%만큼 추가 주문력)`);
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;

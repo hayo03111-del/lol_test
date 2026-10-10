@@ -470,7 +470,9 @@ class CharacterController {
       this.maxMp = base.maxMp + (this.itemBonusMana || 0);
       this.hpRegen = base.hpRegen; this.mpRegen = base.mpRegen;
       this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0) + (this.itemDynamicBonusAD || 0) + (this.itemTempADBonus || 0);
-      this.stats.abilityPower = (this.itemBonusAP || 0);
+      // 어둠불꽃횃불(어둠불꽃)/(향후) 라바돈의 죽음모자 - "총 주문력 N%
+      // 증가" 계열은 itemBonusAP 합연산 전부가 끝난 뒤 곱하는 배율이다.
+      this.stats.abilityPower = (this.itemBonusAP || 0) * (1 + (this.itemTotalApMultiplierBonus || 0));
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
       this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0);
       this.stats.baseArmor = base.armor;
@@ -512,6 +514,9 @@ class CharacterController {
     updateBars(this);
     if (typeof showLevelUpEffect === 'function') showLevelUpEffect(this); // 요청 8: 레벨업 시각 효과
     if (typeof updateExpUI === 'function') updateExpUI(this);
+    // 사라진 양피지(깨우치기)/영겁의지팡이(불멸의 시간으로 인한 레벨업도
+    // 동일한 경로) - "레벨 업하면" 트리거를 이 한 지점에서 공용으로 처리한다.
+    if (typeof itemOnLevelUp === 'function') itemOnLevelUp(this);
   }
   levelUpSkill(slot) {
     const cap = slot === 'R' ? 3 : 5;
@@ -1582,7 +1587,7 @@ class CharacterController {
         console.log(`[SKILL BLOCKED] ${msg}`); showSkillToast(msg);
         return false;
       }
-      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd) : cost.cd;
+      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd, slot) : cost.cd;
       if (cost.mana > 0 && typeof itemOnManaSpent === 'function') itemOnManaSpent(this, cost.mana);
       updateBars(this);
     }
@@ -2804,6 +2809,11 @@ class CharacterController {
     // 건드릴 필요 없음 - applyDamage()의 처형 판정과 동일한 원칙). free
     // (미리보기/프리뷰 캐스트)일 때는 무장시키지 않는다.
     if (!free && typeof itemOnAbilityDispatch === 'function') itemOnAbilityDispatch(this);
+    // 악의(경멸의 "궁극기 가속"/증오안개의 "궁극기로 피해를 입힐 때") -
+    // 모든 챔피언의 모든 스킬 시전이 이 한 지점을 거치므로, 여기서 마지막
+    // 시전 슬롯과 시각만 기록해두면 챔피언 파일을 건드리지 않고도 "방금
+    // 궁극기(R)를 썼는지"를 item_system.js에서 판정할 수 있다.
+    if (!free) { this._itemLastCastSlot = slot; this._itemLastCastSlotAt = performance.now(); }
     if (this.championId === 'nilah') {
       if (slot === 'Q') return this._nilahCastQ(mouseWorldPoint, free);
       if (slot === 'W') return this._nilahCastW(mouseWorldPoint, free);
@@ -2882,7 +2892,7 @@ class CharacterController {
     const cost = SKILL_COST[slot];
     if (!free) {
       if (this.cooldowns[slot] > 0 || this.mp < cost.mana) return;
-      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd) : cost.cd;
+      this.mp -= cost.mana; this.cooldowns[slot] = typeof abilityHasteCooldown === 'function' ? abilityHasteCooldown(this, cost.cd, slot) : cost.cd;
     }
 
     this._clearActionTimers(); // 요청 11: 진행 중이던 다른 시퀀스/액션을 먼저 확실히 취소

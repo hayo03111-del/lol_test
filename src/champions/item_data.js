@@ -839,6 +839,192 @@ const ITEM_DATA = {
     // 영혼약탈자만의 추가 효과라 별도 필드로 둔다.
     soulboundMsPassive: { stackThreshold: 10, moveSpeedPercent: 0.10 },
   },
+
+  // [전설급 아이템] 7차분 - 주문력 계열 본격 시작(영겁의지팡이~균열생성기).
+  // 원문(1034~1150줄)의 하위템 중 5종(사라진 양피지/악마의 마법서/마법공학
+  // 교류 발전기/에테르 환영/기괴한 가면)은 지금까지 읽지 않았던 원문
+  // 앞부분(460~579줄 - 에픽 아이템 모음)에 전부 완전한 스탯으로 정의돼
+  // 있었다 - 위키를 참고할 필요 없이 원문만으로 전부 채웠다. 위키는
+  // "영겁의지팡이"의 "최대 중첩에 도달하면 레벨이 오릅니다"라는 원문 문장이
+  // 오역/수사적 표현이 아니라 실제 LoL 아이템(Rod of Ages)의 진짜 메커니즘
+  // (스택 10개를 채우면 챔피언 레벨이 1 오름)이라는 것만 교차검증했다.
+  lostChapter: {
+    id: 'lostChapter', nameKo: '사라진 양피지', cost: 1200, recipe: ['amplifyingTome', 'sapphireCrystal', 'glowingMote'],
+    stats: { abilityPower: 40, mana: 300, abilityHaste: 10 },
+    // 깨우치기 - "레벨 업하면 3초 동안 최대 마나의 20%를 회복합니다."
+    // 레벨업 훅(itemOnLevelUp)이 character_controller.js의 levelUp()에서
+    // 새로 호출된다(아래 rodOfAges의 "불멸의 시간"으로 인한 레벨업도
+    // 동일한 levelUp()을 거치므로 자동으로 함께 발동한다).
+    enlightenPassive: { manaPercentOverTime: 0.20, durationSec: 3.0 },
+  },
+  fiendishCodex: {
+    id: 'fiendishCodex', nameKo: '악마의 마법서', cost: 850, recipe: ['amplifyingTome', 'glowingMote'],
+    stats: { abilityPower: 25, abilityHaste: 10 },
+  },
+  hextechAlternator: {
+    id: 'hextechAlternator', nameKo: '마법공학 교류 발전기', cost: 1100, recipe: ['amplifyingTome'],
+    stats: { abilityPower: 45 },
+    // 자극 - "챔피언에게 피해를 입히면 65의 마법 피해를 추가로 입힙니다"
+    // (재사용대기시간 40초). 루덴의메아리/로켓벨트/폭풍쇄도/그림자불꽃/
+    // 마법공학총검 등 이 아이템을 하위템으로 쓰는 완제품들은 전부 자기
+    // 고유의 이름 붙은 패시브를 따로 갖고 있어(원문에 "자극"을 다시 언급한
+    // 곳이 없음), 이 패시브는 교류 발전기를 완제품으로 바꾸지 않고 그
+    // 자체로 들고 있을 때만 적용된다(다른 하위템들과 동일한 원칙 - 완제품은
+    // 자기 스탯/패시브를 전부 새로 명시한다).
+    procOnChampionDamagePassive: { icdSec: 40, flatMagicDamage: 65 },
+  },
+  aetherialWisp: {
+    id: 'aetherialWisp', nameKo: '에테르 환영', cost: 900, recipe: ['amplifyingTome'],
+    stats: { abilityPower: 30, moveSpeedPercent: 0.04 },
+  },
+  hauntingGuise: {
+    id: 'hauntingGuise', nameKo: '기괴한 가면', cost: 1300, recipe: ['amplifyingTome', 'rubyCrystal'],
+    stats: { abilityPower: 30, maxHp: 200 },
+    // 광기 - "적 챔피언과 전투 중 매초 2%의 추가 피해(최대 6%)". "전투 중"의
+    // 정확한 판정 기준(몇 초간 피해를 안 주고받아야 이탈로 보는지)이 원문에
+    // 없어, 이미 있는 요우무의 유령검 "출몰"의 5초 기준을 그대로 재사용했다
+    // (durationGuessed - item_data.js 공용 관례).
+    combatRampPassive: { percentPerSec: 0.02, maxPercent: 0.06, outOfCombatSec: 5.0, durationGuessed: true },
+  },
+
+  rodOfAges: {
+    id: 'rodOfAges', nameKo: '영겁의지팡이', cost: 2600, recipe: ['blastingWand', 'catalystOfAeons'],
+    stats: { abilityPower: 45, maxHp: 350, mana: 400 },
+    // 영원 - 억겁의 카탈리스트와 완전히 동일한 문구/수치(원문 1042~1043줄이
+    // 511줄과 토씨 하나 안 틀리고 같다). itemOnManaSpent()가 'catalystOfAeons'
+    // id로 하드코딩돼 있던 걸 manaSpentToHealPercent 필드 보유 여부로 범용화
+    // 했다(암흑의 인장 영광 하드코딩 버그와 동일한 패턴 - QA 재점검).
+    manaOnDamagePercent: 0.07, manaSpentToHealPercent: 0.25, manaSpentHealCapPerSec: 20,
+    // 불멸의 시간 - 60초마다 체력10/마나20/주문력3씩 최대 10중첩(체력100/
+    // 마나200/주문력30)까지 쌓이고, 10중첩에 도달하는 "그 순간" 챔피언
+    // 레벨이 1 오른다(위키로 교차검증한 실제 메커니즘 - 아래 주석 참고).
+    timelessPassive: { intervalSec: 60, hpPerStack: 10, manaPerStack: 20, apPerStack: 3, maxStacks: 10, levelUpOnMax: true },
+  },
+  archangelsStaff: {
+    id: 'archangelsStaff', nameKo: '대천사의지팡이', cost: 2900, recipe: ['tearOfGoddess', 'lostChapter', 'fiendishCodex'],
+    stats: { abilityPower: 70, mana: 600, abilityHaste: 25 },
+    // 경탄(마나1%)의 주문력) - 마나무네/무라마나의 aweBonusAdPercentOfMana와
+    // 동일한 구조지만 공격력이 아니라 주문력을 주므로 별도 필드로 둔다.
+    aweBonusApPercentOfMana: 0.01,
+    // 마나순환 - 여신의 눈물/마나무네와 수치가 다르다(원문을 다시 확인한
+    // 결과 충전 5회·적중당 5마나로 챔피언 배수 언급이 없음 - 추측이 아니라
+    // 원문 1053~1054줄을 그대로 옮긴 값).
+    manaCirculationPassive: { maxManaPerHit: 5, maxManaPerChampionHit: 5, maxManaCap: 360, maxCharges: 5, rechargeSec: 8 },
+    transformsInto: 'seraphsEmbrace',
+    // 유일 아이템(마나순환 계열) - 마나무네/무라마나와 같은 그룹에 둬서
+    // 대천사의지팡이 계열과 동시에 들 수 없게 한다(실제 LoL과 동일).
+    uniqueGroup: 'manaCirculation',
+  },
+  seraphsEmbrace: {
+    id: 'seraphsEmbrace', nameKo: '대천사의포옹', cost: 0, hiddenFromShop: true, // 대천사의지팡이가 변신해서만 얻는다
+    stats: { abilityPower: 70, mana: 1000, abilityHaste: 25 },
+    aweBonusApPercentOfMana: 0.02,
+    uniqueGroup: 'manaCirculation',
+    // 생명선 - "체력이 30% 밑으로 떨어질 만큼 피해를 입으면 3초 동안
+    // (마나18%)의 피해를 흡수하는 보호막"(재사용대기 90초). 멜모셔스의
+    // 아귀(AD 비례)/스테락의도전(추가체력 비례)/불멸의 철갑궁(레벨 비례)에
+    // 이은 네 번째 생명선 형태 - 마나 비례라 manaPercentShield로 구분한다.
+    lifelinePassive: { manaPercentShield: true, hpThresholdPercent: 0.30, shieldManaPercent: 0.18, shieldDurationSec: 3.0, icdSec: 90 },
+  },
+  malignance: {
+    id: 'malignance', nameKo: '악의', cost: 2700, recipe: ['lostChapter', 'blastingWand'],
+    stats: { abilityPower: 90, mana: 600, abilityHaste: 15 },
+    // 경멸 - "궁극기 가속이 20 증가합니다." 스킬 가속(abilityBonusHaste)과
+    // 별개로 R 쿨다운에만 적용되는 전용 필드. character_controller.js의
+    // _dispatchCast()가 공용 지점이므로 거기서 마지막으로 시전한 슬롯(R
+    // 여부)만 기록해두면(ctrl._itemLastCastSlot) 챔피언 파일을 건드리지
+    // 않고도 R 전용 가속을 구현할 수 있다.
+    ultimateHasteFlat: 20,
+    // 증오안개 - "궁극기로 적 챔피언에게 피해를 입힐 때마다 3초 동안 대상
+    // 발밑의 지면을 불태워 매초 60+주문력5%의 마법 피해를 입히고 마법
+    // 저항력을 10 감소시킵니다. 입힌 피해량에 따라 반경이 늘어납니다(최대
+    // 반경 550)." 반경이 피해량에 따라 늘어나는 정확한 비례식은 원문에
+    // 없어(최대값 550 자체는 원문 수치 그대로 - 추측 아님), 매 발동마다
+    // 원문이 준 최대 반경을 그대로 쓰는 것으로 단순화했다(비례식만 생략 -
+    // radiusGuessed는 "반경 수치 자체"가 추측일 때 쓰는 플래그라 여기선
+    // 쓰지 않는다). "궁극기로"는 ctrl._itemLastCastSlot==='R'이고 그
+    // 캐스트로부터 짧은 시간(rDamageWindowMs) 안에 이 피해가 발생했는지로
+    // 판정한다(원문에 정확한 판정 창이 없어 durationGuessed류로 플래그).
+    hatefogPassive: { dmgPerSec: 60, apPercentPerSec: 0.05, mrShred: 10, durationSec: 3.0, maxRadius: 550, rDamageWindowMs: 500, rDamageWindowGuessed: true },
+  },
+  blackfireTorch: {
+    id: 'blackfireTorch', nameKo: '어둠불꽃횃불', cost: 2800, recipe: ['lostChapter', 'embersOfFate'],
+    stats: { abilityPower: 80, mana: 600, abilityHaste: 20 },
+    // 악의의 불길 - 운명의 재(embersOfFate)의 발화와 동일한 트리거 근사
+    // (스킬+평타 전체)로, 주문력 비례가 추가된 버전. 몬스터는 매초 20의
+    // "추가" 피해(원문 그대로 - 기본 20+AP2%에 20을 더함).
+    burnOnDamagePassive: { id: 'blackfireTorchBurn', durationSec: 3.0, baseDmgPerSec: 20, apPercentPerSec: 0.02, monsterBonusPerSec: 20 },
+    // 어둠불꽃 - "악의의 불길에 영향을 받는 적 챔피언/에픽 몬스터/대형
+    // 몬스터 하나당 주문력 4% 증가." 이 엔진엔 에픽/대형 몬스터 구분이 없어
+    // (훈련용 더미를 포함한) 챔피언 단위로만 센다 - item_system.js의
+    // _itemBlackfireBurnTargets가 현재 불타고 있는 대상 수를 추적한다.
+    // "주문력 N% 증가"는 합연산이 아니라 라바돈의 죽음모자와 같은 총
+    // 주문력 곱연산(itemTotalApMultiplierBonus, 이번에 새로 만든 공용 필드)이다.
+    blackfirePassive: { apPercentPerStack: 0.04 },
+  },
+  ludensEcho: {
+    id: 'ludensEcho', nameKo: '루덴의메아리', cost: 2750, recipe: ['lostChapter', 'hextechAlternator'],
+    stats: { abilityPower: 100, mana: 600, abilityHaste: 10 },
+    // 메아리(재사용대기 12초) - "메아리 6개 발사, 주 대상+주변 적에게
+    // (75+주문력5%) 추가 마법 피해. 남은 메아리는 주 대상에게 20%씩 발사."
+    // 이 엔진엔 "주변 적 여러 명"을 동시에 쫓아다니는 광역 투사체 시스템이
+    // 없어, 주변에 다른 적이 전혀 없을 때의 실제 LoL 수치(모든 메아리가
+    // 주 대상에게 집중 - 기본 100% + 나머지 5발×20% = 총 200%)로 단순화했다.
+    ludensEchoPassive: { icdSec: 12, baseDmg: 75, apPercent: 0.05, totalEchoes: 6, redirectPercent: 0.20 },
+  },
+  hextechRocketbelt: {
+    id: 'hextechRocketbelt', nameKo: '마법공학 로켓 벨트', cost: 2650, recipe: ['hextechAlternator', 'kircheisShard', 'rubyCrystal'],
+    stats: { abilityPower: 60, maxHp: 350, abilityHaste: 20 },
+    // 초음속(재사용대기 50초) - "지정 방향으로 돌진하며 부채꼴로 100+
+    // 주문력10% 마법 피해, 지형은 통과 불가." 이 프로젝트의 돌진(점멸형
+    // 이동)은 챔피언마다 제각각 구현돼 있고 아이템 공용 경로에서 캐릭터를
+    // 실제로 옮기는 범용 함수가 없어(명시적 한계 - 챔피언 파일을 전부
+    // 건드리는 위험을 피함), 돌진으로 인한 이동 자체는 생략하고 자신 주변
+    // 범위(findEnemiesInRadius - 다른 액티브 아이템들과 동일한 패턴) 마법
+    // 피해만 재현했다. 반경은 원문에 없어 추측(radiusGuessed).
+    rocketbeltActive: { nameKo: '초음속', cooldownSec: 50, baseDmg: 100, apPercent: 0.10, radius: 400, radiusGuessed: true },
+  },
+  rylaisCrystalScepter: {
+    id: 'rylaisCrystalScepter', nameKo: '라일라이의수정홀', cost: 2600, recipe: ['blastingWand', 'giantsBelt', 'amplifyingTome'],
+    stats: { abilityPower: 65, maxHp: 400 },
+    // 서리 - "스킬로 적에게 피해를 입히면 1초 동안 30% 둔화" (다른
+    // 아이템들과 동일한 스킬+평타 근사, 챔피언/미니언 구분 없이 원문 그대로 적용).
+    frostOnDamagePassive: { slowPercent: 0.30, slowDurationSec: 1.0 },
+  },
+  liandrysTorment: {
+    id: 'liandrysTorment', nameKo: '리안드리의 고통', cost: 3000, recipe: ['hauntingGuise', 'embersOfFate'],
+    stats: { abilityPower: 60, maxHp: 300 },
+    // 고통 - "스킬로 피해를 입히면 3초 동안 적을 불태워 매초 최대 체력의
+    // 2%에 해당하는 마법 피해." 적용 시점의 최대 체력을 스냅샷해서 3초간
+    // 균등하게 나눠 입힌다(운명의 재 등 기존 DOT들과 동일한 totalDamage/
+    // duration 모델 - 매 틱 다시 계산하지 않음, 명시적 단순화).
+    burnPercentMaxHpPassive: { id: 'liandrysBurn', durationSec: 3.0, percentOfMaxHpPerSec: 0.02 },
+    // 고난 - 기괴한 가면의 "광기"와 완전히 동일한 문구/수치(원문 1127~1128줄).
+    combatRampPassive: { percentPerSec: 0.02, maxPercent: 0.06, outOfCombatSec: 5.0, durationGuessed: true },
+  },
+  cosmicDrive: {
+    id: 'cosmicDrive', nameKo: '우주의추진력', cost: 3000, recipe: ['kircheisShard', 'aetherialWisp', 'fiendishCodex'],
+    stats: { abilityPower: 70, maxHp: 350, abilityHaste: 25, moveSpeedPercent: 0.04 },
+    // 마법의 춤 - "적 챔피언에게 마법 또는 고정 피해를 입히면 4초 동안
+    // 이동 속도가 20 증가합니다." 기존 MS_BUFF_FLAT(칠흑의양날도끼 "열정" 등)을
+    // 재사용 - 재적중 시 지속시간만 갱신되고 중첩되지 않는다.
+    dancePassive: { msFlat: 20, durationSec: 4.0 },
+  },
+  riftmaker: {
+    id: 'riftmaker', nameKo: '균열생성기', cost: 3100, recipe: ['hauntingGuise', 'fiendishCodex'],
+    stats: { abilityPower: 70, maxHp: 350, abilityHaste: 15 },
+    // 공허의 부패 - 기괴한 가면/리안드리의 고통과 같은 구조의 전투 중
+    // 누적 추가 피해지만 최대치가 8%로 더 높고, 최대치에 도달하면 모든
+    // 피해 흡혈(근접10%｜원거리6%)을 추가로 얻는다(onMaxVamp).
+    combatRampPassive: {
+      percentPerSec: 0.02, maxPercent: 0.08, outOfCombatSec: 5.0, durationGuessed: true,
+      onMaxVamp: { meleePercent: 0.10, rangedPercent: 0.06 },
+    },
+    // 공허의 마력 - "추가 체력의 2%만큼 주문력을 얻습니다." 스테락의도전의
+    // bonusAdPercentOfBaseAd(기본 공격력 비례)와 유사한 구조지만 이쪽은
+    // "추가 체력"(itemBonusMaxHp 등 합산된 보너스 최대 체력) 비례다.
+    apPercentOfBonusHp: 0.02,
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -858,6 +1044,8 @@ const ITEM_ORDER = [
   'feralization',
   'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge',
   'mejaisSoulstealer',
+  'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise',
+  'rodOfAges', 'archangelsStaff', 'seraphsEmbrace', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -868,7 +1056,8 @@ const ITEM_CATEGORIES = [
   // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
   // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
   // 하나에서 같이 보여준다.
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization'] },
-  // 무라마나는 마나무네가 변신해서만 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
-  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise'] },
+  // 무라마나/대천사의포옹은 각각 마나무네/대천사의지팡이가 변신해서만
+  // 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker'] },
 ];

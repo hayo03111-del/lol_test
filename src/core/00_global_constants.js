@@ -450,6 +450,9 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 세팅만 하고 실제로 아무 데도 쓰이지 않아 완전히 무효과였다. PHYSICAL의
     // armorPenPercent와 동일한 방식으로 마법저항력에 반영한다.
     let mr = (target && (target.magicResist ?? target.stats?.magicResist)) || 0;
+    // 아이템 패시브(악의 "증오안개" - 마법 저항력 10 감소, MR_SHRED 상태이상) -
+    // ARMOR_SHRED(칠흑의양날도끼)와 동일한 자리(관통 적용 전)에서 먼저 깎는다.
+    if (typeof getMrShredFlat === 'function') mr = Math.max(0, mr - getMrShredFlat(target));
     // 아이템 패시브(마법사의 신발 - 고정 마법 관통력) - 고정 관통은 항상
     // 퍼센트 관통보다 먼저 적용한다(실제 LoL 공식과 동일 순서). `source`가
     // 없는 호출(대부분의 스킬 피해 호출)은 흡혈/영광 처치 훅과 동일한
