@@ -78,6 +78,12 @@ function recomputeItemStats(ctrl) {
     // 암흑의 인장(영광)의 동적 주문력 - 아이템을 들고 있을 때만 적용된다
     // (팔면 중첩 자체는 남아있어도 더 이상 스탯에 반영되지 않는다).
     if (item.gloryPassive) ctrl.itemBonusAP += (ctrl._itemGloryStacks || 0) * item.gloryPassive.apPerStack;
+    // 메자이의 영혼약탈자 - 10중첩 이상일 때 이동속도 10% 상승(암흑의
+    // 인장에는 없는 전용 추가 효과). gloryPassive와 동일하게 "들고 있을
+    // 때만" 적용되고 중첩 자체는 ctrl 레벨 상태라 팔아도 남는다.
+    if (item.soulboundMsPassive && (ctrl._itemGloryStacks || 0) >= item.soulboundMsPassive.stackThreshold) {
+      ctrl.itemBonusMoveSpeedPercent += item.soulboundMsPassive.moveSpeedPercent;
+    }
     // 탐욕의 군화(학살)의 동적 흡혈 - 중첩당 0.6%씩 추가.
     if (item.slaughterPassive) ctrl.itemAllDamageVampPercent += (ctrl._itemSlaughterStacks || 0) * item.slaughterPassive.vampPerStack;
     // 여신의 눈물(마나순환)으로 이미 얻은 최대 마나 - 누적값을 그대로 더한다.
@@ -1154,9 +1160,19 @@ function itemOnManaSpent(ctrl, manaSpent) {
 function itemOnChampionTakedown(ctrl) {
   if (!ctrl) return;
   let changed = false;
-  const darkSealSlot = (ctrl.items || []).find((s) => s.id === 'darkSeal');
-  if (darkSealSlot) {
-    const p = ITEM_DATA.darkSeal.gloryPassive;
+  // 버그 수정(메자이의 영혼약탈자 추가 전 QA): 이 블록이 'darkSeal' id로
+  // 하드코딩돼 있었다 - 암흑의 인장을 메자이의 영혼약탈자로 조합(업그레이드)한
+  // 뒤에는 인벤토리에 더 이상 'darkSeal'이 없으므로 이 조건이 항상
+  // 거짓이 되어 처치해도 중첩이 전혀 쌓이지 않는 잠재 버그였다(지금까지는
+  // gloryPassive를 가진 아이템이 암흑의 인장 하나뿐이라 드러나지 않았을
+  // 뿐). gloryPassive 필드 보유 여부로 범용 탐색하고, 그 아이템 자신의
+  // takedownStacks/maxStacks를 쓴다 - 메자이의 영혼약탈자(중첩당 5주문력,
+  // 최대 25, 처치당 4)로 업그레이드해도 암흑의 인장 때 쌓인 중첩
+  // (_itemGloryStacks, ctrl 레벨 상태라 조합해도 그대로 이어짐)이 자연스럽게
+  // 이어지고, 더 커진 상한(25)까지 계속 쌓인다.
+  const gloryItemSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].gloryPassive);
+  if (gloryItemSlot) {
+    const p = ITEM_DATA[gloryItemSlot.id].gloryPassive;
     ctrl._itemGloryStacks = Math.min(p.maxStacks, (ctrl._itemGloryStacks || 0) + p.takedownStacks);
     changed = true;
   }
@@ -1186,8 +1202,16 @@ function itemOnChampionTakedown(ctrl) {
 // 암흑의 인장(영광) - 사망 시 중첩 소실(_die()에서 호출). 죽음의무도
 // (반항)의 "상대가 죽으면" 판정도 같은 진입점에서 함께 처리한다.
 function itemOnChampionDeath(ctrl) {
-  if (ctrl && ctrl._itemGloryStacks > 0) {
-    const p = ITEM_DATA.darkSeal.gloryPassive;
+  // 버그 수정: 위 itemOnChampionTakedown()과 동일한 이유로 'darkSeal'
+  // 하드코딩을 없애고, 현재 들고 있는 gloryPassive 아이템(암흑의 인장
+  // 또는 메자이의 영혼약탈자) 자신의 deathLossStacks를 쓴다. 이미 팔아서
+  // 둘 다 없으면(중첩은 ctrl에 남아있어도) 사망 손실 자체를 적용하지
+  // 않는다 - "어떤 아이템 기준으로 깎을지" 알 수 없는 상태이므로, 기존
+  // "아이템을 팔아도 중첩은 남지만 스탯엔 더 이상 반영 안 됨" 원칙과
+  // 동일하게 가장 보수적으로(그대로 둠) 처리한다.
+  const gloryItemSlot = (ctrl && ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].gloryPassive);
+  if (ctrl && ctrl._itemGloryStacks > 0 && gloryItemSlot) {
+    const p = ITEM_DATA[gloryItemSlot.id].gloryPassive;
     ctrl._itemGloryStacks = Math.max(0, ctrl._itemGloryStacks - p.deathLossStacks);
     recomputeItemStats(ctrl);
   }
@@ -1565,12 +1589,18 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     applyStatus(ctrl, { id: 'itemOnHitMsFlat', type: 'MS_BUFF_FLAT', duration: p.durationSec, value: p.amount });
   }
   // 곡궁(독침)/마법사의 최후(쪼기) - 기본 공격 시 고정 추가 피해(적중 시 효과).
+  // 버그 수정(QA 재점검 - 4차분에서 찾은 것과 동일한 종류): 원문("기본
+  // 공격 시 15의 물리 피해") 어디에도 "구조물 제외" 언급이 없는데 구조물
+  // 제외 가드가 들어가 있었다 - 포탑 대상에도 그대로 적용되게 고친다.
   const onHitPhysSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && typeof ITEM_DATA[s.id].onHitFlatPhysicalPassive === 'number');
-  if (onHitPhysSlot && !_itemIsStructure(target)) {
+  if (onHitPhysSlot) {
     applyDamage(target, { rawDamage: ITEM_DATA[onHitPhysSlot.id].onHitFlatPhysicalPassive, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
   }
+  // 버그 수정: 마법사의 최후(쪼기)도 원문에 구조물 제외 언급이 없다 -
+  // 동일하게 제거한다(구인수의 격노검 "분노"도 같은 필드를 공유하므로
+  // 같이 적용된다 - 원문에도 역시 구조물 제외가 없음).
   const onHitMagicSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && typeof ITEM_DATA[s.id].onHitFlatMagicDamage === 'number');
-  if (onHitMagicSlot && !_itemIsStructure(target)) {
+  if (onHitMagicSlot) {
     const flatMagic = ITEM_DATA[onHitMagicSlot.id].onHitFlatMagicDamage;
     applyDamage(target, { rawDamage: flatMagic, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
     // 구인수의 격노검(들끓는 일격) - 최대 중첩(4, 공격속도 32%) 도달 시
@@ -1601,8 +1631,10 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     }
   }
   // 경계(그림자) - 기본 공격 시 고정+추가공격력%+주문력% 온히트 마법 피해.
+  // 버그 수정(QA 재점검): 원문에 구조물 제외 언급이 없는데 다른 코드를
+  // 베끼면서 구조물 제외 가드가 들어가 있었다 - 제거한다.
   const hybridSlot = (ctrl.items || []).find((s) => s.id === 'vigilance');
-  if (hybridSlot && !_itemIsStructure(target)) {
+  if (hybridSlot) {
     const p = ITEM_DATA.vigilance.onHitHybridPassive;
     const raw = p.flat + _itemBonusAD(ctrl) * p.bonusAdPercent + (ctrl.stats.abilityPower || 0) * p.apPercent;
     if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
@@ -1891,16 +1923,17 @@ function _itemEclipseOnHit(ctrl, target) {
   ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
 }
 
-// 무라마나("충격") - 기본 공격 시 마나의 1.2% 추가 물리(적중 시 효과),
-// 챔피언 대상 스킬 피해 시 근접 마나4%｜원거리 마나3% 추가 물리.
-// isBasicAttack 플래그로 두 경로를 구분한다(기본 공격 쪽은 대상 제한 없음,
-// 스킬 쪽은 "챔피언에게"로 원문이 한정).
+// 무라마나("충격") - 챔피언 대상 기본 공격 시 마나의 1.2% 추가 물리
+// (적중 시 효과), 챔피언 대상 스킬 피해 시 근접 마나4%｜원거리 마나3%
+// 추가 물리. isBasicAttack 플래그로 두 경로를 구분하지만 원문을 다시
+// 읽어보니 둘 다 "챔피언에게"로 한정돼 있다 - 버그 수정: 기본 공격
+// 쪽을 "구조물만 제외"로 잘못 구현해뒀었다(미니언에게도 발동하던 상태).
 function _itemMuramanaShockOnHit(ctrl, target, isBasicAttack) {
   const slot = (ctrl.items || []).find((s) => s.id === 'muramana');
   if (!slot || !target) return;
   const p = ITEM_DATA.muramana.shockPassive;
   if (isBasicAttack) {
-    if (_itemIsStructure(target)) return;
+    if (!target.isChampion) return; // 원문: "챔피언에게 기본 공격 시"
     const raw = p.onHitManaPercent * (ctrl.maxMp || 0);
     if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
   } else {

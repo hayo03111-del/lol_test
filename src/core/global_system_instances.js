@@ -105,6 +105,7 @@ function _itemStatsSummary(item) {
   if (item.champDamageRegen) { const p = item.champDamageRegen; parts.push(`인내의 집중력(전투 중 피격 후 ${p.durationSec}초 동안 최대 근접 ${p.meleeMaxHp}｜원거리 ${p.rangedMaxHp} 체력 회복)`); }
   if (item.harvestPassive) { const p = item.harvestPassive; parts.push(`수확(미니언 처치 시 골드 ${p.minionGoldPerKill}, 최대 ${p.minionGoldCap}까지 누적 시 ${p.bonusGoldAtCap} 추가 지급)`); }
   if (item.gloryPassive) { const p = item.gloryPassive; parts.push(`영광(챔피언 처치 관여 시 중첩당 주문력 +${p.apPerStack}, 최대 ${p.maxStacks}중첩, 사망 시 ${p.deathLossStacks}중첩 소실)`); }
+  if (item.soulboundMsPassive) { const p = item.soulboundMsPassive; parts.push(`${p.stackThreshold}중첩 이상일 때 이동 속도 +${Math.round(p.moveSpeedPercent * 100)}%`); }
   if (item.manaCirculationPassive) { const p = item.manaCirculationPassive; parts.push(`마나순환(적중 시 최대 마나 +${p.maxManaPerHit}｜챔피언 +${p.maxManaPerChampionHit}, 누적 최대 ${p.maxManaCap}, 충전 ${p.maxCharges}회/${p.rechargeSec}초)`); }
   if (item.slaughterPassive) { const p = item.slaughterPassive; parts.push(`학살(챔피언 처치 관여 시 중첩당 흡혈 +${(p.vampPerStack * 100).toFixed(1)}%, 최대 ${p.maxStacks}중첩)`); }
   if (item.manaSpentToHealPercent) parts.push(`영원(스킬 사용 시 소모 마나의 ${Math.round(item.manaSpentToHealPercent * 100)}%만큼 체력 회복, 초당 최대 ${item.manaSpentHealCapPerSec} HP)`);

@@ -824,6 +824,21 @@ const ITEM_DATA = {
     stats: { attackDamage: 45, abilityHaste: 15 }, armorPenPercent: 0.35,
     frostPassive: { hpThresholdPercent: 0.50, slowPercent: 0.30, slowDurationSec: 1.0 },
   },
+
+  // [전설급 아이템] 6차분 - 주문력 계열 시작. 메자이의 영혼약탈자(원문
+  // 1025~1032줄)는 암흑의 인장의 직접 업그레이드다 - gloryPassive 필드를
+  // 공유하는 두 번째 아이템이라, 이번에 item_system.js의 itemOnChampionTakedown()/
+  // itemOnChampionDeath()에 있던 "darkSeal로 하드코딩된" 숨은 버그를 먼저
+  // 고쳤다(QA 재점검 - README 참고). 어시스트(중첩 2회)는 이 데모에
+  // "아군 챔피언" 개념이 없어 암흑의 인장 때와 동일하게 구현하지 않는다.
+  mejaisSoulstealer: {
+    id: 'mejaisSoulstealer', nameKo: '메자이의 영혼약탈자', cost: 1500, recipe: ['darkSeal'],
+    stats: { abilityPower: 20, maxHp: 100 },
+    gloryPassive: { apPerStack: 5, maxStacks: 25, takedownStacks: 4, deathLossStacks: 10 },
+    // 10중첩 이상일 때 이동 속도 10% 상승 - 암흑의 인장에는 없는 메자이의
+    // 영혼약탈자만의 추가 효과라 별도 필드로 둔다.
+    soulboundMsPassive: { stackThreshold: 10, moveSpeedPercent: 0.10 },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -842,6 +857,7 @@ const ITEM_ORDER = [
   'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards',
   'feralization',
   'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge',
+  'mejaisSoulstealer',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -854,5 +870,5 @@ const ITEM_CATEGORIES = [
   // 하나에서 같이 보여준다.
   { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization'] },
   // 무라마나는 마나무네가 변신해서만 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
-  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge'] },
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer'] },
 ];
