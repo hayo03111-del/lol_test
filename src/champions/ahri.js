@@ -32,7 +32,9 @@ CharacterController.prototype._ahriOnMinionKill = function() {
   if (this._ahri.passiveStacks < (p.maxStacks || 9)) return;
   this._ahri.passiveStacks = 0;
   const heal = growLinear(p.minionHealBase, p.minionHealGrowth, this.champLevel || 1) + p.minionHealApRatio * (this.stats.abilityPower || 0);
-  this.hp = Math.min(this.maxHp, this.hp + heal);
+  // 그리버스 치유 감소(QA 버그 수정) - getGrievousPercent()가 실제 회복
+  // 계산 어디에도 연결돼 있지 않던 문제를 챔피언 전용 회복 경로에도 적용.
+  this.hp = Math.min(this.maxHp, this.hp + heal * (1 - getGrievousPercent(this)));
   updateBars(this);
   // 버그 수정(레퍼런스 영상 ability_0103_P1.webm 픽셀 대조): 기존 색상
   // (0x8fffb0, 녹색 계열)은 실제 정기 흡수 VFX와 다르다 - 실측 결과 밝은
@@ -44,7 +46,8 @@ CharacterController.prototype._ahriOnChampionTakedown = function(target) {
   const p = this._champData() && this._champData().passive;
   if (p) {
     const heal = growLinear(p.championHealBase, p.championHealGrowth, this.champLevel || 1) + p.championHealApRatio * (this.stats.abilityPower || 0);
-    this.hp = Math.min(this.maxHp, this.hp + heal);
+    // 그리버스 치유 감소(QA 버그 수정).
+    this.hp = Math.min(this.maxHp, this.hp + heal * (1 - getGrievousPercent(this)));
     updateBars(this);
     // 버그 수정(레퍼런스 영상 대조): 실제 영상은 챔피언 처치 관여 시 정기를
     // "빨아들이는" 이펙트가 대상 위치에도 나타난다(아리 쪽 이펙트 하나만

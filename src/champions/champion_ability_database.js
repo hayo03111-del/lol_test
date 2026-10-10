@@ -94,10 +94,14 @@ const championAbilityDatabase = {
     // 평타 대기) 상태에서 이동하면 일반 Run_Base가 아니라 전용 이동 클립
     // Run_Spell1을 써야 한다. idleClips는 일부러 비워둔다(문서: "Q 입력 후
     // 가만히 있으면 Idle_Base 그대로, Spell1을 억지로 끼워넣지 않는다").
-    // 이 서브 상태('Q')는 _castQ()에서 애니메이션 전용으로 setSubState되고,
-    // 실제 강화 평타가 발동되는 순간(_beginAttackSwing) clearSubState되어
-    // 문서 12/13절의 "Q 소모는 HIT 성공 시점" 원칙과 애니메이션이 어긋나지
-    // 않게 맞춘다.
+    // 이 서브 상태('Q')는 _castQ()에서 애니메이션 전용으로 setSubState된다.
+    // 버그 수정(QA - "가렌 Q 강화 기본 공격 소비 시점"): 예전엔 clearSubState가
+    // 스윙이 "시작"되는 _beginAttackSwing 시점에 일어나서, 문서 12/13절의
+    // "Q 소모는 HIT 성공 시점" 원칙과 실제로는 어긋나 있었다(사거리 이탈/
+    // 대상 소멸로 스윙이 끝내 맞지 않아도 Q가 사라졌다). 이제
+    // character_controller.js의 _consumeGarenQOnConfirmedHit()이 HIT가
+    // 실제로 확정되는 _onBasicAttackHit() 시점에만 clearSubState하므로,
+    // Q_ARMED(Run_Spell1) 애니메이션도 실제 소모 시점까지 정확히 유지된다.
     Q: {
       animationNames: ['Spell1'], animationPatterns: [/spell1/i, /decisive[_ ]?strike/i],
       attackOverrideAnimationNames: ['Spell1'], attackOverrideMode: 'oneShot', attackOverrideUses: 1,

@@ -45,7 +45,8 @@ CharacterController.prototype._settPassiveTick = function(dt) {
     const perTick = valueByBreakpoints(cd.passive.regenByLevelBreakpoints, this.champLevel);
     const missingPercent = ((this.maxHp - this.hp) / this.maxHp) * 100;
     const extraRegen = perTick * (missingPercent / 5);
-    this.hp = Math.min(this.maxHp, this.hp + extraRegen * dt);
+    // 그리버스 치유 감소(QA 버그 수정).
+    this.hp = Math.min(this.maxHp, this.hp + extraRegen * dt * (1 - getGrievousPercent(this)));
   
 };
 
@@ -128,11 +129,24 @@ CharacterController.prototype._settShieldDecayTick = function(dt) {
   
 };
 
-// Extracted from CharacterController: _settWOnCast
-CharacterController.prototype._settWOnCast = function(origin, forward) { 
+// 버그 수정(QA - "세트 W 보호막 적용 타이밍"): 예전엔 투지 소모+보호막
+// 적용+피해 판정이 전부 _settWOnCast() 하나에 묶여 있었고, 그 함수
+// 전체가 character_controller.js의 지연된 onFire 콜백(SKILL_TIMING_DATABASE.sett.W
+// = 0.75초) 안에서만 호출됐다 - 즉 "보호막은 0.000초 즉시, 피해는 0.750초"
+// 라는 문서/주석의 의도와 달리 보호막까지 0.75초 늦게 뜨는 버그였다.
+// 이제 두 단계로 분리한다:
+//   1) _settWApplyShield() - 시전 "즉시"(가렌 W/마스터 이의 W와 동일하게
+//      runAction() 호출 전에) 불린다 - 투지를 스냅샷하고 그 자리에서
+//      비운 뒤, 그 스냅샷 값으로 보호막을 건다. 0.75초 뒤 피해 판정이
+//      쓸 수 있도록 스냅샷 값을 this._sett.wPendingSpent에 보존해둔다
+//      (그 사이 전투로 투지가 다시 쌓이거나 보호막이 깎여도 피해량
+//      계산에는 영향이 없다 - 저장된 값은 고정).
+//   2) _settWOnCast(origin, forward) - 기존처럼 onFire에서 0.75초 뒤
+//      호출되지만, 이제 투지를 다시 소모하지 않고 1)이 저장해 둔
+//      wPendingSpent만 읽어서 피해만 계산한다.
+CharacterController.prototype._settWApplyShield = function() {
     const cd = this._champData(); if (!cd) return;
     const w = cd.W;
-    const lvl = Math.max(1, this.skillLevels.W || 1);
     // 문서 8절: "저장된 투지를 먼저 확보 -> 소모 -> 그 값으로 피해 계산"
     // 순서를 그대로 지킨다(0으로 만든 뒤 그 0으로 피해를 계산하는 버그 방지).
     const spent = this._settGritSum();
@@ -140,6 +154,10 @@ CharacterController.prototype._settWOnCast = function(origin, forward) {
     // 합계 숫자만 0으로 만들지 않고 항목 배열 자체를 비운다.
     this._sett.gritEntries = [];
     this._sett.grit = 0;
+    // 0.75초 뒤 피해 판정(_settWOnCast)이 정확히 "이번 시전이 소모한 양"을
+    // 쓸 수 있도록 고정 보존한다 - 그 사이 다시 피격해 투지가 쌓여도
+    // 이번 W의 피해량에는 영향이 없다.
+    this._sett.wPendingSpent = spent;
     // 버그 수정(요청 14): 예전엔 setTimeout 하나로 "3초 동안 보호막 유지 후
     // 즉시 0"이었다 - 3초 내내 전체 값을 유지하다가 순간적으로 사라지는
     // 것은 "3초에 걸쳐 감소"가 아니다. 이제 초당 감소율(rate)만 정해두고
@@ -149,6 +167,19 @@ CharacterController.prototype._settWOnCast = function(origin, forward) {
     // 큰 값을 덮어씌우지 않는다.
     this.shield = Math.max(this.shield, spent); // 소모한 투지의 100% = 보호막
     this._sett.wShieldDecayPerSec = w.shieldDuration > 0 ? spent / w.shieldDuration : 0;
+    updateBars(this);
+
+};
+
+// Extracted from CharacterController: _settWOnCast
+CharacterController.prototype._settWOnCast = function(origin, forward) {
+    const cd = this._champData(); if (!cd) return;
+    const w = cd.W;
+    const lvl = Math.max(1, this.skillLevels.W || 1);
+    // 보호막 적용 시점(_settWApplyShield, 시전 즉시)에 이미 확보해 둔 값을
+    // 그대로 쓴다 - 여기서 다시 _settGritSum()을 부르면 이미 0으로 비워진
+    // 뒤라 피해가 전부 0이 되는 버그가 난다.
+    const spent = this._sett.wPendingSpent || 0;
 
     const bonusAd = this._getBonusAD();
     let centerHit = 0, sideHits = 0;

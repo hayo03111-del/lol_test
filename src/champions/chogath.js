@@ -4,7 +4,8 @@ CharacterController.prototype._chogathOnKill = function(target) {
     const p = cd.passive;
     const heal = p.healBase + p.healPerLevel * this.champLevel;
     const mana = p.manaBase + p.manaPerLevel * this.champLevel;
-    this.hp = Math.min(this.maxHp, this.hp + heal);
+    // 그리버스 치유 감소(QA 버그 수정) - 마나는 영향받지 않는다(실제 LoL과 동일).
+    this.hp = Math.min(this.maxHp, this.hp + heal * (1 - getGrievousPercent(this)));
     this.mp = Math.min(this.maxMp, this.mp + mana);
     updateBars(this);
     debugSkillHit("Cho'Gath passive (육식)", target, { heal: Math.round(heal), mana: Math.round(mana) });

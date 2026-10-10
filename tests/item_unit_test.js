@@ -16,6 +16,7 @@ const stubs = {
   updateGoldDisplay: () => {},
   DAMAGE_TYPE: { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' },
   applyStatus: () => {},
+  getGrievousPercent: () => 0,
 };
 
 const context = vm.createContext(stubs);

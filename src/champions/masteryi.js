@@ -692,7 +692,9 @@ CharacterController.prototype._masteryiWOnCast = function() {
     clearTimeout(this._masteryiWHealTimer);
     this._masteryiWHealTimer = setTimeout(() => {
       if (this.currentActionKey !== 'masteryiW') return;
-      this.hp = Math.min(this.maxHp, this.hp + totalHeal);
+      // 그리버스 치유 감소(QA 버그 수정) - 실제 적용 시점(지연된 콜백 내부)의
+      // 그리버스 상태를 반영한다(계산 시점이 아니라 적용 시점 기준).
+      this.hp = Math.min(this.maxHp, this.hp + totalHeal * (1 - getGrievousPercent(this)));
       updateBars(this);
       debugSkillHit('Master Yi W (heal applied)', this, { heal: Math.round(totalHeal) });
       this._masteryiWHealTimer = null;

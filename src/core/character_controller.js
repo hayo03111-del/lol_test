@@ -189,7 +189,7 @@ class CharacterController {
     this._darius = { stacksOnTarget: new Map() }; // target -> {stacks, empoweredUntil}
     this._rRecastReadyUntil = 0; // 다리우스 R 처치 후 무료 재시전 창
     this._eHitCountThisCast = 0; // 가렌 E 회전 중 누적 타격 수
-    this._sett = { punchSide: 'left', lastPunchAt: 0, qUsesRemaining: 0, grit: 0, gritEntries: [], rSeq: null, wShieldDecayPerSec: 0 };
+    this._sett = { punchSide: 'left', lastPunchAt: 0, qUsesRemaining: 0, grit: 0, gritEntries: [], rSeq: null, wShieldDecayPerSec: 0, wPendingSpent: 0 };
     this._morde = { hitStacks: 0, auraExpiresAt: 0, dealtBank: 0, wShieldActiveUntil: 0,
       // R(죽음의 세계) 전용 상태 - 명세 28절 "R 종료 시 반드시 초기화해야 할
       // 상태 목록"에 대응. isInDeathRealm이 이 전투가 "R 내부"인지 아닌지를
@@ -369,7 +369,7 @@ class CharacterController {
     this._dariusWArmed = false;
     this._leesin = { qMarkTarget: null, qMarkExpiresAt: 0, wMarkReadyUntil: 0, eMarkHits: [], eMarkExpiresAt: 0, passiveHitsLeft: 0 };
     if (this._leesinAnimTimer) { clearTimeout(this._leesinAnimTimer); this._leesinAnimTimer = null; }
-    this._sett = { punchSide: 'left', lastPunchAt: 0, qUsesRemaining: 0, grit: 0, gritEntries: [], rSeq: null, wShieldDecayPerSec: 0 };
+    this._sett = { punchSide: 'left', lastPunchAt: 0, qUsesRemaining: 0, grit: 0, gritEntries: [], rSeq: null, wShieldDecayPerSec: 0, wPendingSpent: 0 };
     this._nilah = { qEmpoweredUntil: 0, qWaveLockUntil: 0, qArmorPen: 0, qLifeSteal: 0, eCharges: 2, eRechargeAt: [], eDash: null, rSeq: null, qDuringEDashFired: false, pendingEWave: null, shieldUntil: 0, shieldKind: null, wCastAt: 0, attackVariantIndex: { attack1: 0, attack2: 0 }, qVariantIndex: 0, allyStates: new Map() };
     this._renekton = { rage: 0, lastCombatAt: performance.now(), nextRageDecayAt: 0, wArmed: false, wEmpowered: false, wTarget: null, wSeq: null, eSecondReadyUntil: 0, eFirstHit: false, rActiveUntil: 0, rAuraAccum: 0, rRageAccum: 0, rBonusMaxHp: 0, rActive: false, rCastStartedAt: 0, rAuraVfx: null, qRageGenerated: 0 };
     this._masteryi = { attackCount: 0, rActiveUntil: 0, alpha: null, wPause: null, pendingWAfterHit: false, wStartedAt: 0 };
@@ -1630,7 +1630,7 @@ class CharacterController {
     // 화살통) 추가 마법 피해/오한 적용.
     if (this.championId === 'varus') this._varusOnBasicAttackHit(target);
 
-    if (this.championId === 'garen' && overrideId === 'Q') this._garenQOnHit(target);
+    if (this.championId === 'garen' && overrideId === 'Q') { this._garenQOnHit(target); this._consumeGarenQOnConfirmedHit(); }
     if (this.championId === 'darius') {
       this._dariusApplyBleed(target);
       if (overrideId === 'W') this._dariusWOnHit(target);
@@ -2131,25 +2131,41 @@ class CharacterController {
       override.useIndex++;
     }
     const attackData = { clips: overrideClips, cancelable: true };
-    if (override.oneShot) {
+    // 버그 수정(QA - "가렌 Q 강화 기본 공격 소비 시점"): 문서는 "Q 소모 =
+    // 실제 HIT 성공 시점"이라고 명시하는데, 이 지점(_beginAttackSwing이
+    // 스윙을 "시작"하는 순간)은 아직 HIT 판정 이전(Windup)이다 - 여기서
+    // 바로 소모하면 사거리 이탈/대상 소멸로 실제로는 맞지 않은 스윙에도
+    // 효과가 사라지는 버그가 된다. 세트 Q처럼 "스윙을 시작한 것 자체가
+    // 소비 조건"인 다른 오버라이드는 기존과 동일하게 여기서 즉시 소모하고,
+    // 가렌 Q만 예외로 두어 실제 소모를 _onBasicAttackHit()의 HIT 확정
+    // 시점(_consumeGarenQOnConfirmedHit, 아래)으로 미룬다 - 스윙이 끝내
+    // HIT에 도달하지 못하면(_onBasicAttackHit 자체가 호출되지 않음) 애초에
+    // 깎지 않았으므로 되돌릴 필요 없이 자연히 다음 스윙에 다시 쓸 수 있다.
+    const deferToConfirmedHit = this.championId === 'garen' && overrideId === 'Q';
+    if (override.oneShot && !deferToConfirmedHit) {
       override.usesRemaining -= 1;
       if (override.usesRemaining <= 0) {
         this.clearAttackOverride(override.id);
-        // 업데이트(가렌 Q 문서 12/13절 애니메이션 레이어 대응): 오버라이드가
-        // 실제로 소진되는 이 시점에 애니메이션 전용 서브 상태도 함께 꺼서
-        // Run_Spell1이 실제 강화 평타 소모 시점과 맞물려 사라지게 한다.
-        // 게임로직 TODO: 문서는 "Q 소모 = 실제 HIT 성공 시점"이라고 명시한다
-        // (Windup 중 대상이 사라지면 소모하면 안 됨). 하지만 이 지점은 스윙
-        // 시작(Windup 진입) 시점이라 HIT 판정 이전이다 - 기존 평타 시스템의
-        // 소모 타이밍 자체를 바꾸는 것은 게임 로직 변경이라 이번 범위에서는
-        // 건드리지 않았고, 애니메이션(서브 상태)만 그 기존 타이밍을 그대로
-        // 따라가게 맞췄다. 실제로 "HIT 성공 시에만 소모"를 구현하려면 이
-        // 블록을 onFire(HIT 이벤트) 콜백 쪽으로 옮기고, 빗나감/대상 소실
-        // 시에는 override.usesRemaining을 되돌리는 로직이 필요하다.
+        // 오버라이드가 실제로 소진되는 이 시점에 애니메이션 전용 서브
+        // 상태도 함께 꺼서 Run_Spell1이 소모 시점과 맞물려 사라지게 한다.
         this.clearSubState(override.id);
       }
     }
     return { overrideId, key, attackData };
+  }
+
+  // 가렌 Q 전용 - 위 _consumeAttackOverride가 미뤄둔 소모를 _onBasicAttackHit()이
+  // 실제 적중을 확정한 시점에 수행한다. 이 함수가 호출된다는 것 자체가
+  // 이번 스윙이 명중했다는 뜻이므로(미스/대상 소실 시에는 _onBasicAttackHit
+  // 자체가 호출되지 않는다), 한 번의 명중 이벤트당 정확히 한 번만 소모된다.
+  _consumeGarenQOnConfirmedHit() {
+    const override = this.attackOverrides.find((o) => o.id === 'Q');
+    if (!override) return; // 이미 소모돼 등록 해제됐거나(이론상 도달 불가) 애초에 없음
+    override.usesRemaining -= 1;
+    if (override.usesRemaining <= 0) {
+      this.clearAttackOverride('Q');
+      this.clearSubState('Q');
+    }
   }
 
   _beginAttackSwing() {
@@ -2480,7 +2496,11 @@ class CharacterController {
     // computeChampionStats()가 다시 계산하는 기준값) 여기서만 곱한다.
     const mpRegenMult = 1 + (this.itemBonusMpRegenPercent || 0);
     // 정령의형상(무한한 활력) - 기본 체력 재생도 "받는 체력 회복"에 포함된다.
-    const hpRegenMult = (1 + (this.itemBonusHpRegenPercent || 0)) * (1 + (this.itemHealingReceivedBonusPercent || 0));
+    // 버그 수정(QA - "그리버스 치유 감소"): getGrievousPercent()가 정의만
+    // 되고 실제 회복 계산 어디에도 연결돼 있지 않았다 - 전 챔피언 공통
+    // 기본 체력 재생이 가장 핵심적인 회복 경로이므로 여기서 감소율을 곱한다
+    // (item_system.js의 다른 공용 회복 경로들에도 동일하게 연결했다).
+    const hpRegenMult = (1 + (this.itemBonusHpRegenPercent || 0)) * (1 + (this.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(this));
     this.mp = Math.min(this.maxMp, this.mp + dt * (this.mpRegen != null ? this.mpRegen : 4) * mpRegenMult / 5);
     if (this.hp > 0 && this.state !== STATE.DEAD) this.hp = Math.min(this.maxHp, this.hp + dt * (this.hpRegen || 0) * hpRegenMult / 5);
     updateBars(this);
@@ -3646,15 +3666,18 @@ class CharacterController {
     // Time도 사실상 0)은 두 이벤트를 분리할 실익이 없어 생략한다(기존과
     // 동일하게 onFire 하나로 처리).
     if (db && db.W && db.W.animationNames && db.W.animationNames.length) {
-      // 게임로직 TODO(세트 W 문서 4/5절): 여기서 실제 보호막 수치 계산/적용
-      // (Grit 게이지 기반)이 들어가야 한다. 이 데모는 애니메이션 레이어만
-      // 다루므로 VFX만 즉시 스폰한다.
       vfx.spawn('w', this.root.position.clone());
     }
     // 기획안 반영(가렌 W "용기"): Cast Time 0초 스킬이므로 보호막/피해감소는
     // runAction() 애니메이션 타이밍과 무관하게 여기서 즉시 적용한다.
     if (this.championId === 'garen') this._garenWOnCast();
     if (this.championId === 'masteryi') this._masteryiWOnCast();
+    // 버그 수정(QA - "세트 W 보호막 적용 타이밍"): 위 문서 4/5/8절 주석이
+    // 요구하던 "Shield는 0.000초 즉시" 부분이 실제로는 구현되지 않고 VFX만
+    // 즉시 스폰되고 있었다(투지 소모+보호막 적용이 전부 아래 onFire의
+    // _settWOnCast() 안에 있어 0.75초 늦게 떴다) - 보호막은 여기서 즉시
+    // 걸고, 공격 판정(_settWOnCast)은 그대로 onFire(0.75초)에서 처리한다.
+    if (this.championId === 'sett') this._settWApplyShield();
     // 세트 W(강펀치) 문서 10/16절: "방향 고정" - 캐스트 시작 시점의 방향을
     // 스냅샷해서, 0.75초 뒤 실제 판정 시점에도 그 시점 방향을 그대로 쓴다
     // (그 사이 캐릭터가 다른 쪽을 보게 되어도 사다리꼴은 안 돈다).
@@ -3681,7 +3704,10 @@ class CharacterController {
         // 양옆(Physical Damage) 판정 - _settWOnCast가 getAllEnemyUnits() 전체를
         // 대상으로 판정한다(더 이상 currentTarget 단일 대상에 의존하지 않음).
         vfx.spawn('w', this.root.position.clone());
-        if (this.championId === 'sett') this._settWOnCast(settWOrigin, settWForward); // 보호막+타격을 SKILL_TIMING_DATABASE.sett.W(0.75초) 시점에 함께 처리
+        // 보호막은 위(runAction 호출 전) _settWApplyShield()가 이미 즉시
+        // 처리했다 - 여기서는 그 함수가 저장해 둔 wPendingSpent로 타격만
+        // SKILL_TIMING_DATABASE.sett.W(0.75초) 시점에 처리한다.
+        if (this.championId === 'sett') this._settWOnCast(settWOrigin, settWForward);
         this._activateWSubState(data.buffDuration);
       },
     });

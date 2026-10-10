@@ -26,6 +26,7 @@ const stubs = {
   isPositionInBaseZone: () => true,
   updateGoldDisplay: () => {}, updateItemUI: () => {}, updateBars: () => {},
   getTurretGameTimeSec: () => gameTimeSec,
+  getGrievousPercent: () => 0,
   PLAYER_TEAM: 'BLUE',
   DAMAGE_TYPE: { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' },
   STATE: { DEAD: 'DEAD', IDLE: 'IDLE', MOVE: 'MOVE', ATTACK: 'ATTACK' },

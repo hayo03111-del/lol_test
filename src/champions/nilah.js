@@ -106,18 +106,23 @@ CharacterController.prototype._nilahApplyShield = function(amount, duration, kin
 };
 
 // Extracted from CharacterController: _nilahReceiveHeal
-CharacterController.prototype._nilahReceiveHeal = function(amount, source=null) { 
+CharacterController.prototype._nilahReceiveHeal = function(amount, source=null) {
     if (!(amount > 0)) return 0;
     const boosted = source && source !== this && (source.isChampion || source.type === 'champion' || source.championId)
       ? amount * (1 + this._nilahData().passive.allyHealBonusPercent / 100)
       : amount;
+    // 그리버스 치유 감소(QA 버그 수정) - 넘친 회복을 보호막으로 바꾸는
+    // overheal 계산도 "실제로 줄어든 회복량" 기준으로 일관되게 계산해야
+    // 하므로, hp에 더하기 전에 미리 곱해 둔다(그래야 overheal도 자동으로
+    // 같이 줄어든다).
+    const effective = boosted * (1 - getGrievousPercent(this));
     const before = this.hp;
-    this.hp = Math.min(this.maxHp, this.hp + boosted);
-    const overheal = Math.max(0, before + boosted - this.maxHp);
+    this.hp = Math.min(this.maxHp, this.hp + effective);
+    const overheal = Math.max(0, before + effective - this.maxHp);
     if (overheal > 0) this._nilahApplyShield(overheal, this._nilahData().passive.sharedShieldMaxDuration, 'nilahP');
     updateBars(this);
-    return boosted;
-  
+    return effective;
+
 };
 
 // Extracted from CharacterController: _nilahReceiveShield
@@ -133,17 +138,20 @@ CharacterController.prototype._nilahReceiveShield = function(amount, source=null
 };
 
 // Extracted from CharacterController: _nilahHealSelf
-CharacterController.prototype._nilahHealSelf = function(amount, shieldDuration, kind='nilahP') { 
+CharacterController.prototype._nilahHealSelf = function(amount, shieldDuration, kind='nilahP') {
     if (!(amount > 0)) return 0;
+    // 그리버스 치유 감소(QA 버그 수정) - 위 _nilahReceiveHeal과 동일한 이유로
+    // overheal 계산 전에 미리 곱한다.
+    const effective = amount * (1 - getGrievousPercent(this));
     const before = this.hp;
-    this.hp = Math.min(this.maxHp, this.hp + amount);
-    const overheal = Math.max(0, before + amount - this.maxHp);
+    this.hp = Math.min(this.maxHp, this.hp + effective);
+    const overheal = Math.max(0, before + effective - this.maxHp);
     if (overheal > 0) this._nilahApplyShield(overheal, shieldDuration, kind);
     // 요청("강화 평타 쓸 때 발밑에 반짝이 제거"): 회복량 자체(위 hp 계산)는
     // 그대로 두고, 발밑에 나타나던 시각 효과만 제거했다.
     updateBars(this);
     return overheal;
-  
+
 };
 
 // Extracted from CharacterController: _nilahAllyCandidates

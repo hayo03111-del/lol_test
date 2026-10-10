@@ -22,6 +22,7 @@ const stubs = {
   updateGoldDisplay: () => {},
   updateItemUI: () => {},
   getTurretGameTimeSec: () => 0,
+  getGrievousPercent: () => 0,
   PLAYER_TEAM: 'BLUE',
   DAMAGE_TYPE: { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' },
   applyStatus: (target, effect) => {

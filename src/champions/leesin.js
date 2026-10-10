@@ -84,7 +84,8 @@ CharacterController.prototype._leesinOnBasicAttackHit = function() {
     // 강철의 의지(W 재시전) 활성 중이면 평타로 입힌 피해의 일부만큼 흡혈.
     if (hasStatus(this, 'LEESIN_W_VAMP')) {
       const st = getStatus(this, 'leesinW_vamp');
-      if (st) { this.hp = Math.min(this.maxHp, this.hp + this.stats.attackDamage * st.value); updateBars(this); }
+      // 그리버스 치유 감소(QA 버그 수정) - 흡혈 계열 효과도 적용 대상.
+      if (st) { this.hp = Math.min(this.maxHp, this.hp + this.stats.attackDamage * st.value * (1 - getGrievousPercent(this))); updateBars(this); }
     }
   
 };

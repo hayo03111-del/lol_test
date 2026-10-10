@@ -24,6 +24,18 @@ const { itemOnBasicAttackHit } = context;
 // ... itemOnBasicAttackHit(ctrl, target, false) 호출 후 assert
 ```
 
+### 챔피언 전투 로직(`character_controller.js`) 테스트 - 생성자를 부르지 않는다
+
+`character_controller.js`의 `class CharacterController`는 생성자가 GLB
+모델/AnimationMixer/VFX를 실제로 만든다 - `new CharacterController(...)`를
+그대로 호출하면 렌더링 전체를 스텁해야 해서 비현실적이다. 대신
+`Object.create(CharacterController.prototype)`로 생성자를 거치지 않고
+빈 인스턴스를 만든 뒤, 테스트가 필요한 필드만 직접 채워 넣는다 - 이렇게
+해도 `_settWOnCast`/`_garenQOnHit`/`regen()` 같은 실제 prototype
+메서드(순수 게임 로직)는 똑같이 동작한다(`tests/combat_core_bugfix_test.js`
+참고). 이 방식은 렌더링/애니메이션 의존성을 피하면서도 실제 전투 수식을
+그대로 검증한다 - 로직을 재구현하는 게 아니라는 원칙은 동일하게 지킨다.
+
 ## 실행 방법
 
 ```bash
@@ -42,7 +54,7 @@ node tests/some_test.js
 찍은 뒤 `process.exitCode = 1`만 설정하고 계속 진행한다 - 한 파일 안의
 여러 문제를 한 번에 다 보기 위해서다.
 
-## 테스트 범위(2026-10 기준, 27개 파일 / 약 1,850개 assert)
+## 테스트 범위(2026-10 기준, 28개 파일 / 약 1,875개 assert)
 
 | 파일 | 다루는 영역 |
 |---|---|
@@ -57,6 +69,7 @@ node tests/some_test.js
 | `spellblade_base_ad_audit_test.js` | 스펠블레이드 "기본 공격력" 버그의 회귀 방지 전용 |
 | `final_legendary_batch_test.js` | 원문 마지막 배치(슈렐리아의군가~제국의명령) + 끝없는 갈망(기아/포식) + 인벤토리 클릭 사용/판매 버그 회귀 방지 |
 | `item_fuzz_sweep_test.js` | 156개 아이템 전부를 모든 공용 훅에 일괄 실행해 예외/NaN 오염을 감시하는 전수 스윕 |
+| `combat_core_bugfix_test.js` | **전투 로직 전용**(아이템이 아님) - 세트 W 보호막 즉시 적용/피해 지연 판정/투지 보존, 그리버스가 공용 회복 경로와 챔피언 전용 회복(세트 패시브)·기본 재생 양쪽에 실제로 곱해지는지, 가렌 Q가 명중 전엔 안 깎이고 명중 시에만 소모되는지(세트 Q는 기존처럼 즉시 소모 유지) |
 | `pen_stacking_test.js` | 방어구·마법 관통력 중첩 계산 |
 | `shop_audit_test.js`, `shop_tooltip_test.js`, `item_qa_audit_test.js` | 상점 데이터 전수 감사(비용/스탯/분류 정합성) |
 | `vision_unit_test.js` | 시야 시스템 |

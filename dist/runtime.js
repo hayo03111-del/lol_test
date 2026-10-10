@@ -3965,10 +3965,14 @@ const championAbilityDatabase = {
     // 평타 대기) 상태에서 이동하면 일반 Run_Base가 아니라 전용 이동 클립
     // Run_Spell1을 써야 한다. idleClips는 일부러 비워둔다(문서: "Q 입력 후
     // 가만히 있으면 Idle_Base 그대로, Spell1을 억지로 끼워넣지 않는다").
-    // 이 서브 상태('Q')는 _castQ()에서 애니메이션 전용으로 setSubState되고,
-    // 실제 강화 평타가 발동되는 순간(_beginAttackSwing) clearSubState되어
-    // 문서 12/13절의 "Q 소모는 HIT 성공 시점" 원칙과 애니메이션이 어긋나지
-    // 않게 맞춘다.
+    // 이 서브 상태('Q')는 _castQ()에서 애니메이션 전용으로 setSubState된다.
+    // 버그 수정(QA - "가렌 Q 강화 기본 공격 소비 시점"): 예전엔 clearSubState가
+    // 스윙이 "시작"되는 _beginAttackSwing 시점에 일어나서, 문서 12/13절의
+    // "Q 소모는 HIT 성공 시점" 원칙과 실제로는 어긋나 있었다(사거리 이탈/
+    // 대상 소멸로 스윙이 끝내 맞지 않아도 Q가 사라졌다). 이제
+    // character_controller.js의 _consumeGarenQOnConfirmedHit()이 HIT가
+    // 실제로 확정되는 _onBasicAttackHit() 시점에만 clearSubState하므로,
+    // Q_ARMED(Run_Spell1) 애니메이션도 실제 소모 시점까지 정확히 유지된다.
     Q: {
       animationNames: ['Spell1'], animationPatterns: [/spell1/i, /decisive[_ ]?strike/i],
       attackOverrideAnimationNames: ['Spell1'], attackOverrideMode: 'oneShot', attackOverrideUses: 1,
@@ -8587,7 +8591,7 @@ class CharacterController {
     this._darius = { stacksOnTarget: new Map() }; // target -> {stacks, empoweredUntil}
     this._rRecastReadyUntil = 0; // 다리우스 R 처치 후 무료 재시전 창
     this._eHitCountThisCast = 0; // 가렌 E 회전 중 누적 타격 수
-    this._sett = { punchSide: 'left', lastPunchAt: 0, qUsesRemaining: 0, grit: 0, gritEntries: [], rSeq: null, wShieldDecayPerSec: 0 };
+    this._sett = { punchSide: 'left', lastPunchAt: 0, qUsesRemaining: 0, grit: 0, gritEntries: [], rSeq: null, wShieldDecayPerSec: 0, wPendingSpent: 0 };
     this._morde = { hitStacks: 0, auraExpiresAt: 0, dealtBank: 0, wShieldActiveUntil: 0,
       // R(죽음의 세계) 전용 상태 - 명세 28절 "R 종료 시 반드시 초기화해야 할
       // 상태 목록"에 대응. isInDeathRealm이 이 전투가 "R 내부"인지 아닌지를
@@ -8767,7 +8771,7 @@ class CharacterController {
     this._dariusWArmed = false;
     this._leesin = { qMarkTarget: null, qMarkExpiresAt: 0, wMarkReadyUntil: 0, eMarkHits: [], eMarkExpiresAt: 0, passiveHitsLeft: 0 };
     if (this._leesinAnimTimer) { clearTimeout(this._leesinAnimTimer); this._leesinAnimTimer = null; }
-    this._sett = { punchSide: 'left', lastPunchAt: 0, qUsesRemaining: 0, grit: 0, gritEntries: [], rSeq: null, wShieldDecayPerSec: 0 };
+    this._sett = { punchSide: 'left', lastPunchAt: 0, qUsesRemaining: 0, grit: 0, gritEntries: [], rSeq: null, wShieldDecayPerSec: 0, wPendingSpent: 0 };
     this._nilah = { qEmpoweredUntil: 0, qWaveLockUntil: 0, qArmorPen: 0, qLifeSteal: 0, eCharges: 2, eRechargeAt: [], eDash: null, rSeq: null, qDuringEDashFired: false, pendingEWave: null, shieldUntil: 0, shieldKind: null, wCastAt: 0, attackVariantIndex: { attack1: 0, attack2: 0 }, qVariantIndex: 0, allyStates: new Map() };
     this._renekton = { rage: 0, lastCombatAt: performance.now(), nextRageDecayAt: 0, wArmed: false, wEmpowered: false, wTarget: null, wSeq: null, eSecondReadyUntil: 0, eFirstHit: false, rActiveUntil: 0, rAuraAccum: 0, rRageAccum: 0, rBonusMaxHp: 0, rActive: false, rCastStartedAt: 0, rAuraVfx: null, qRageGenerated: 0 };
     this._masteryi = { attackCount: 0, rActiveUntil: 0, alpha: null, wPause: null, pendingWAfterHit: false, wStartedAt: 0 };
@@ -10028,7 +10032,7 @@ class CharacterController {
     // 화살통) 추가 마법 피해/오한 적용.
     if (this.championId === 'varus') this._varusOnBasicAttackHit(target);
 
-    if (this.championId === 'garen' && overrideId === 'Q') this._garenQOnHit(target);
+    if (this.championId === 'garen' && overrideId === 'Q') { this._garenQOnHit(target); this._consumeGarenQOnConfirmedHit(); }
     if (this.championId === 'darius') {
       this._dariusApplyBleed(target);
       if (overrideId === 'W') this._dariusWOnHit(target);
@@ -10529,25 +10533,41 @@ class CharacterController {
       override.useIndex++;
     }
     const attackData = { clips: overrideClips, cancelable: true };
-    if (override.oneShot) {
+    // 버그 수정(QA - "가렌 Q 강화 기본 공격 소비 시점"): 문서는 "Q 소모 =
+    // 실제 HIT 성공 시점"이라고 명시하는데, 이 지점(_beginAttackSwing이
+    // 스윙을 "시작"하는 순간)은 아직 HIT 판정 이전(Windup)이다 - 여기서
+    // 바로 소모하면 사거리 이탈/대상 소멸로 실제로는 맞지 않은 스윙에도
+    // 효과가 사라지는 버그가 된다. 세트 Q처럼 "스윙을 시작한 것 자체가
+    // 소비 조건"인 다른 오버라이드는 기존과 동일하게 여기서 즉시 소모하고,
+    // 가렌 Q만 예외로 두어 실제 소모를 _onBasicAttackHit()의 HIT 확정
+    // 시점(_consumeGarenQOnConfirmedHit, 아래)으로 미룬다 - 스윙이 끝내
+    // HIT에 도달하지 못하면(_onBasicAttackHit 자체가 호출되지 않음) 애초에
+    // 깎지 않았으므로 되돌릴 필요 없이 자연히 다음 스윙에 다시 쓸 수 있다.
+    const deferToConfirmedHit = this.championId === 'garen' && overrideId === 'Q';
+    if (override.oneShot && !deferToConfirmedHit) {
       override.usesRemaining -= 1;
       if (override.usesRemaining <= 0) {
         this.clearAttackOverride(override.id);
-        // 업데이트(가렌 Q 문서 12/13절 애니메이션 레이어 대응): 오버라이드가
-        // 실제로 소진되는 이 시점에 애니메이션 전용 서브 상태도 함께 꺼서
-        // Run_Spell1이 실제 강화 평타 소모 시점과 맞물려 사라지게 한다.
-        // 게임로직 TODO: 문서는 "Q 소모 = 실제 HIT 성공 시점"이라고 명시한다
-        // (Windup 중 대상이 사라지면 소모하면 안 됨). 하지만 이 지점은 스윙
-        // 시작(Windup 진입) 시점이라 HIT 판정 이전이다 - 기존 평타 시스템의
-        // 소모 타이밍 자체를 바꾸는 것은 게임 로직 변경이라 이번 범위에서는
-        // 건드리지 않았고, 애니메이션(서브 상태)만 그 기존 타이밍을 그대로
-        // 따라가게 맞췄다. 실제로 "HIT 성공 시에만 소모"를 구현하려면 이
-        // 블록을 onFire(HIT 이벤트) 콜백 쪽으로 옮기고, 빗나감/대상 소실
-        // 시에는 override.usesRemaining을 되돌리는 로직이 필요하다.
+        // 오버라이드가 실제로 소진되는 이 시점에 애니메이션 전용 서브
+        // 상태도 함께 꺼서 Run_Spell1이 소모 시점과 맞물려 사라지게 한다.
         this.clearSubState(override.id);
       }
     }
     return { overrideId, key, attackData };
+  }
+
+  // 가렌 Q 전용 - 위 _consumeAttackOverride가 미뤄둔 소모를 _onBasicAttackHit()이
+  // 실제 적중을 확정한 시점에 수행한다. 이 함수가 호출된다는 것 자체가
+  // 이번 스윙이 명중했다는 뜻이므로(미스/대상 소실 시에는 _onBasicAttackHit
+  // 자체가 호출되지 않는다), 한 번의 명중 이벤트당 정확히 한 번만 소모된다.
+  _consumeGarenQOnConfirmedHit() {
+    const override = this.attackOverrides.find((o) => o.id === 'Q');
+    if (!override) return; // 이미 소모돼 등록 해제됐거나(이론상 도달 불가) 애초에 없음
+    override.usesRemaining -= 1;
+    if (override.usesRemaining <= 0) {
+      this.clearAttackOverride('Q');
+      this.clearSubState('Q');
+    }
   }
 
   _beginAttackSwing() {
@@ -10878,7 +10898,11 @@ class CharacterController {
     // computeChampionStats()가 다시 계산하는 기준값) 여기서만 곱한다.
     const mpRegenMult = 1 + (this.itemBonusMpRegenPercent || 0);
     // 정령의형상(무한한 활력) - 기본 체력 재생도 "받는 체력 회복"에 포함된다.
-    const hpRegenMult = (1 + (this.itemBonusHpRegenPercent || 0)) * (1 + (this.itemHealingReceivedBonusPercent || 0));
+    // 버그 수정(QA - "그리버스 치유 감소"): getGrievousPercent()가 정의만
+    // 되고 실제 회복 계산 어디에도 연결돼 있지 않았다 - 전 챔피언 공통
+    // 기본 체력 재생이 가장 핵심적인 회복 경로이므로 여기서 감소율을 곱한다
+    // (item_system.js의 다른 공용 회복 경로들에도 동일하게 연결했다).
+    const hpRegenMult = (1 + (this.itemBonusHpRegenPercent || 0)) * (1 + (this.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(this));
     this.mp = Math.min(this.maxMp, this.mp + dt * (this.mpRegen != null ? this.mpRegen : 4) * mpRegenMult / 5);
     if (this.hp > 0 && this.state !== STATE.DEAD) this.hp = Math.min(this.maxHp, this.hp + dt * (this.hpRegen || 0) * hpRegenMult / 5);
     updateBars(this);
@@ -12044,15 +12068,18 @@ class CharacterController {
     // Time도 사실상 0)은 두 이벤트를 분리할 실익이 없어 생략한다(기존과
     // 동일하게 onFire 하나로 처리).
     if (db && db.W && db.W.animationNames && db.W.animationNames.length) {
-      // 게임로직 TODO(세트 W 문서 4/5절): 여기서 실제 보호막 수치 계산/적용
-      // (Grit 게이지 기반)이 들어가야 한다. 이 데모는 애니메이션 레이어만
-      // 다루므로 VFX만 즉시 스폰한다.
       vfx.spawn('w', this.root.position.clone());
     }
     // 기획안 반영(가렌 W "용기"): Cast Time 0초 스킬이므로 보호막/피해감소는
     // runAction() 애니메이션 타이밍과 무관하게 여기서 즉시 적용한다.
     if (this.championId === 'garen') this._garenWOnCast();
     if (this.championId === 'masteryi') this._masteryiWOnCast();
+    // 버그 수정(QA - "세트 W 보호막 적용 타이밍"): 위 문서 4/5/8절 주석이
+    // 요구하던 "Shield는 0.000초 즉시" 부분이 실제로는 구현되지 않고 VFX만
+    // 즉시 스폰되고 있었다(투지 소모+보호막 적용이 전부 아래 onFire의
+    // _settWOnCast() 안에 있어 0.75초 늦게 떴다) - 보호막은 여기서 즉시
+    // 걸고, 공격 판정(_settWOnCast)은 그대로 onFire(0.75초)에서 처리한다.
+    if (this.championId === 'sett') this._settWApplyShield();
     // 세트 W(강펀치) 문서 10/16절: "방향 고정" - 캐스트 시작 시점의 방향을
     // 스냅샷해서, 0.75초 뒤 실제 판정 시점에도 그 시점 방향을 그대로 쓴다
     // (그 사이 캐릭터가 다른 쪽을 보게 되어도 사다리꼴은 안 돈다).
@@ -12079,7 +12106,10 @@ class CharacterController {
         // 양옆(Physical Damage) 판정 - _settWOnCast가 getAllEnemyUnits() 전체를
         // 대상으로 판정한다(더 이상 currentTarget 단일 대상에 의존하지 않음).
         vfx.spawn('w', this.root.position.clone());
-        if (this.championId === 'sett') this._settWOnCast(settWOrigin, settWForward); // 보호막+타격을 SKILL_TIMING_DATABASE.sett.W(0.75초) 시점에 함께 처리
+        // 보호막은 위(runAction 호출 전) _settWApplyShield()가 이미 즉시
+        // 처리했다 - 여기서는 그 함수가 저장해 둔 wPendingSpent로 타격만
+        // SKILL_TIMING_DATABASE.sett.W(0.75초) 시점에 처리한다.
+        if (this.championId === 'sett') this._settWOnCast(settWOrigin, settWForward);
         this._activateWSubState(data.buffDuration);
       },
     });
@@ -13077,7 +13107,8 @@ CharacterController.prototype._dariusQOnHit = function(target, distanceWorld = n
     if (isBlade) {
       const missingHp = Math.max(0, this.maxHp - this.hp);
       const heal = Math.min(this.maxHp * (q.healCapPercent / 100), missingHp * (q.healPercentOfLostHp / 100));
-      this.hp = Math.min(this.maxHp, this.hp + heal);
+      // 그리버스 치유 감소(QA 버그 수정).
+      this.hp = Math.min(this.maxHp, this.hp + heal * (1 - getGrievousPercent(this)));
       updateBars(this);
     }
 };
@@ -13176,7 +13207,8 @@ CharacterController.prototype._garenPassiveTick = function(dt) {
     if (!this.passiveState._nextHealAt) this.passiveState._nextHealAt = now + p.tickInterval * 1000;
     if (now >= this.passiveState._nextHealAt) {
       const pct = skillVal(p.healPercentByLevel, this.champLevel) / 100;
-      this.hp = Math.min(this.maxHp, this.hp + this.maxHp * pct);
+      // 그리버스 치유 감소(QA 버그 수정).
+      this.hp = Math.min(this.maxHp, this.hp + this.maxHp * pct * (1 - getGrievousPercent(this)));
       updateBars(this);
       this.passiveState._nextHealAt = now + p.tickInterval * 1000;
     }
@@ -13312,7 +13344,8 @@ CharacterController.prototype._settPassiveTick = function(dt) {
     const perTick = valueByBreakpoints(cd.passive.regenByLevelBreakpoints, this.champLevel);
     const missingPercent = ((this.maxHp - this.hp) / this.maxHp) * 100;
     const extraRegen = perTick * (missingPercent / 5);
-    this.hp = Math.min(this.maxHp, this.hp + extraRegen * dt);
+    // 그리버스 치유 감소(QA 버그 수정).
+    this.hp = Math.min(this.maxHp, this.hp + extraRegen * dt * (1 - getGrievousPercent(this)));
   
 };
 
@@ -13395,11 +13428,24 @@ CharacterController.prototype._settShieldDecayTick = function(dt) {
   
 };
 
-// Extracted from CharacterController: _settWOnCast
-CharacterController.prototype._settWOnCast = function(origin, forward) { 
+// 버그 수정(QA - "세트 W 보호막 적용 타이밍"): 예전엔 투지 소모+보호막
+// 적용+피해 판정이 전부 _settWOnCast() 하나에 묶여 있었고, 그 함수
+// 전체가 character_controller.js의 지연된 onFire 콜백(SKILL_TIMING_DATABASE.sett.W
+// = 0.75초) 안에서만 호출됐다 - 즉 "보호막은 0.000초 즉시, 피해는 0.750초"
+// 라는 문서/주석의 의도와 달리 보호막까지 0.75초 늦게 뜨는 버그였다.
+// 이제 두 단계로 분리한다:
+//   1) _settWApplyShield() - 시전 "즉시"(가렌 W/마스터 이의 W와 동일하게
+//      runAction() 호출 전에) 불린다 - 투지를 스냅샷하고 그 자리에서
+//      비운 뒤, 그 스냅샷 값으로 보호막을 건다. 0.75초 뒤 피해 판정이
+//      쓸 수 있도록 스냅샷 값을 this._sett.wPendingSpent에 보존해둔다
+//      (그 사이 전투로 투지가 다시 쌓이거나 보호막이 깎여도 피해량
+//      계산에는 영향이 없다 - 저장된 값은 고정).
+//   2) _settWOnCast(origin, forward) - 기존처럼 onFire에서 0.75초 뒤
+//      호출되지만, 이제 투지를 다시 소모하지 않고 1)이 저장해 둔
+//      wPendingSpent만 읽어서 피해만 계산한다.
+CharacterController.prototype._settWApplyShield = function() {
     const cd = this._champData(); if (!cd) return;
     const w = cd.W;
-    const lvl = Math.max(1, this.skillLevels.W || 1);
     // 문서 8절: "저장된 투지를 먼저 확보 -> 소모 -> 그 값으로 피해 계산"
     // 순서를 그대로 지킨다(0으로 만든 뒤 그 0으로 피해를 계산하는 버그 방지).
     const spent = this._settGritSum();
@@ -13407,6 +13453,10 @@ CharacterController.prototype._settWOnCast = function(origin, forward) {
     // 합계 숫자만 0으로 만들지 않고 항목 배열 자체를 비운다.
     this._sett.gritEntries = [];
     this._sett.grit = 0;
+    // 0.75초 뒤 피해 판정(_settWOnCast)이 정확히 "이번 시전이 소모한 양"을
+    // 쓸 수 있도록 고정 보존한다 - 그 사이 다시 피격해 투지가 쌓여도
+    // 이번 W의 피해량에는 영향이 없다.
+    this._sett.wPendingSpent = spent;
     // 버그 수정(요청 14): 예전엔 setTimeout 하나로 "3초 동안 보호막 유지 후
     // 즉시 0"이었다 - 3초 내내 전체 값을 유지하다가 순간적으로 사라지는
     // 것은 "3초에 걸쳐 감소"가 아니다. 이제 초당 감소율(rate)만 정해두고
@@ -13416,6 +13466,19 @@ CharacterController.prototype._settWOnCast = function(origin, forward) {
     // 큰 값을 덮어씌우지 않는다.
     this.shield = Math.max(this.shield, spent); // 소모한 투지의 100% = 보호막
     this._sett.wShieldDecayPerSec = w.shieldDuration > 0 ? spent / w.shieldDuration : 0;
+    updateBars(this);
+
+};
+
+// Extracted from CharacterController: _settWOnCast
+CharacterController.prototype._settWOnCast = function(origin, forward) {
+    const cd = this._champData(); if (!cd) return;
+    const w = cd.W;
+    const lvl = Math.max(1, this.skillLevels.W || 1);
+    // 보호막 적용 시점(_settWApplyShield, 시전 즉시)에 이미 확보해 둔 값을
+    // 그대로 쓴다 - 여기서 다시 _settGritSum()을 부르면 이미 0으로 비워진
+    // 뒤라 피해가 전부 0이 되는 버그가 난다.
+    const spent = this._sett.wPendingSpent || 0;
 
     const bonusAd = this._getBonusAD();
     let centerHit = 0, sideHits = 0;
@@ -14031,7 +14094,10 @@ CharacterController.prototype._renektonApplyQHit = function(target, empowered, r
         rageTracker.champHeal = (rageTracker.champHeal || 0) + heal;
       }
     }
-    this.hp = Math.min(this.maxHp, this.hp + Math.max(0,heal));
+    // 그리버스 치유 감소(QA 버그 수정) - 처치 누적 상한(rageTracker.champHeal)은
+    // 그리버스와 무관하게 "의도된" 회복량 기준으로 그대로 추적하고(위),
+    // 실제로 체력에 더해지는 마지막 적용 단계에서만 감소율을 곱한다.
+    this.hp = Math.min(this.maxHp, this.hp + Math.max(0,heal) * (1 - getGrievousPercent(this)));
   
 };
 
@@ -15879,18 +15945,23 @@ CharacterController.prototype._nilahApplyShield = function(amount, duration, kin
 };
 
 // Extracted from CharacterController: _nilahReceiveHeal
-CharacterController.prototype._nilahReceiveHeal = function(amount, source=null) { 
+CharacterController.prototype._nilahReceiveHeal = function(amount, source=null) {
     if (!(amount > 0)) return 0;
     const boosted = source && source !== this && (source.isChampion || source.type === 'champion' || source.championId)
       ? amount * (1 + this._nilahData().passive.allyHealBonusPercent / 100)
       : amount;
+    // 그리버스 치유 감소(QA 버그 수정) - 넘친 회복을 보호막으로 바꾸는
+    // overheal 계산도 "실제로 줄어든 회복량" 기준으로 일관되게 계산해야
+    // 하므로, hp에 더하기 전에 미리 곱해 둔다(그래야 overheal도 자동으로
+    // 같이 줄어든다).
+    const effective = boosted * (1 - getGrievousPercent(this));
     const before = this.hp;
-    this.hp = Math.min(this.maxHp, this.hp + boosted);
-    const overheal = Math.max(0, before + boosted - this.maxHp);
+    this.hp = Math.min(this.maxHp, this.hp + effective);
+    const overheal = Math.max(0, before + effective - this.maxHp);
     if (overheal > 0) this._nilahApplyShield(overheal, this._nilahData().passive.sharedShieldMaxDuration, 'nilahP');
     updateBars(this);
-    return boosted;
-  
+    return effective;
+
 };
 
 // Extracted from CharacterController: _nilahReceiveShield
@@ -15906,17 +15977,20 @@ CharacterController.prototype._nilahReceiveShield = function(amount, source=null
 };
 
 // Extracted from CharacterController: _nilahHealSelf
-CharacterController.prototype._nilahHealSelf = function(amount, shieldDuration, kind='nilahP') { 
+CharacterController.prototype._nilahHealSelf = function(amount, shieldDuration, kind='nilahP') {
     if (!(amount > 0)) return 0;
+    // 그리버스 치유 감소(QA 버그 수정) - 위 _nilahReceiveHeal과 동일한 이유로
+    // overheal 계산 전에 미리 곱한다.
+    const effective = amount * (1 - getGrievousPercent(this));
     const before = this.hp;
-    this.hp = Math.min(this.maxHp, this.hp + amount);
-    const overheal = Math.max(0, before + amount - this.maxHp);
+    this.hp = Math.min(this.maxHp, this.hp + effective);
+    const overheal = Math.max(0, before + effective - this.maxHp);
     if (overheal > 0) this._nilahApplyShield(overheal, shieldDuration, kind);
     // 요청("강화 평타 쓸 때 발밑에 반짝이 제거"): 회복량 자체(위 hp 계산)는
     // 그대로 두고, 발밑에 나타나던 시각 효과만 제거했다.
     updateBars(this);
     return overheal;
-  
+
 };
 
 // Extracted from CharacterController: _nilahAllyCandidates
@@ -17298,7 +17372,9 @@ CharacterController.prototype._masteryiWOnCast = function() {
     clearTimeout(this._masteryiWHealTimer);
     this._masteryiWHealTimer = setTimeout(() => {
       if (this.currentActionKey !== 'masteryiW') return;
-      this.hp = Math.min(this.maxHp, this.hp + totalHeal);
+      // 그리버스 치유 감소(QA 버그 수정) - 실제 적용 시점(지연된 콜백 내부)의
+      // 그리버스 상태를 반영한다(계산 시점이 아니라 적용 시점 기준).
+      this.hp = Math.min(this.maxHp, this.hp + totalHeal * (1 - getGrievousPercent(this)));
       updateBars(this);
       debugSkillHit('Master Yi W (heal applied)', this, { heal: Math.round(totalHeal) });
       this._masteryiWHealTimer = null;
@@ -17375,7 +17451,8 @@ CharacterController.prototype._chogathOnKill = function(target) {
     const p = cd.passive;
     const heal = p.healBase + p.healPerLevel * this.champLevel;
     const mana = p.manaBase + p.manaPerLevel * this.champLevel;
-    this.hp = Math.min(this.maxHp, this.hp + heal);
+    // 그리버스 치유 감소(QA 버그 수정) - 마나는 영향받지 않는다(실제 LoL과 동일).
+    this.hp = Math.min(this.maxHp, this.hp + heal * (1 - getGrievousPercent(this)));
     this.mp = Math.min(this.maxMp, this.mp + mana);
     updateBars(this);
     debugSkillHit("Cho'Gath passive (육식)", target, { heal: Math.round(heal), mana: Math.round(mana) });
@@ -17621,7 +17698,8 @@ CharacterController.prototype._leesinOnBasicAttackHit = function() {
     // 강철의 의지(W 재시전) 활성 중이면 평타로 입힌 피해의 일부만큼 흡혈.
     if (hasStatus(this, 'LEESIN_W_VAMP')) {
       const st = getStatus(this, 'leesinW_vamp');
-      if (st) { this.hp = Math.min(this.maxHp, this.hp + this.stats.attackDamage * st.value); updateBars(this); }
+      // 그리버스 치유 감소(QA 버그 수정) - 흡혈 계열 효과도 적용 대상.
+      if (st) { this.hp = Math.min(this.maxHp, this.hp + this.stats.attackDamage * st.value * (1 - getGrievousPercent(this))); updateBars(this); }
     }
   
 };
@@ -17951,7 +18029,10 @@ CharacterController.prototype._mordeWOnRecast = function() {
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
     const heal = this.shield * (skillVal(w.recastHealPercentByLevel, lvl) / 100);
-    this.hp = Math.min(this.maxHp, this.hp + heal);
+    // 그리버스 치유 감소(QA 버그 수정) - 보호막을 체력으로 "전환"하는 것도
+    // 결과적으로는 체력 회복이라 적용 대상이다(보호막 자체의 생성/소멸은
+    // 영향받지 않는다 - 전환된 "이후"의 체력 회복량만 줄어든다).
+    this.hp = Math.min(this.maxHp, this.hp + heal * (1 - getGrievousPercent(this)));
     this.shield = 0;
     clearTimeout(this._morde.shieldDecayTimer);
     updateBars(this);
@@ -18671,7 +18752,9 @@ CharacterController.prototype._ahriOnMinionKill = function() {
   if (this._ahri.passiveStacks < (p.maxStacks || 9)) return;
   this._ahri.passiveStacks = 0;
   const heal = growLinear(p.minionHealBase, p.minionHealGrowth, this.champLevel || 1) + p.minionHealApRatio * (this.stats.abilityPower || 0);
-  this.hp = Math.min(this.maxHp, this.hp + heal);
+  // 그리버스 치유 감소(QA 버그 수정) - getGrievousPercent()가 실제 회복
+  // 계산 어디에도 연결돼 있지 않던 문제를 챔피언 전용 회복 경로에도 적용.
+  this.hp = Math.min(this.maxHp, this.hp + heal * (1 - getGrievousPercent(this)));
   updateBars(this);
   // 버그 수정(레퍼런스 영상 ability_0103_P1.webm 픽셀 대조): 기존 색상
   // (0x8fffb0, 녹색 계열)은 실제 정기 흡수 VFX와 다르다 - 실측 결과 밝은
@@ -18683,7 +18766,8 @@ CharacterController.prototype._ahriOnChampionTakedown = function(target) {
   const p = this._champData() && this._champData().passive;
   if (p) {
     const heal = growLinear(p.championHealBase, p.championHealGrowth, this.champLevel || 1) + p.championHealApRatio * (this.stats.abilityPower || 0);
-    this.hp = Math.min(this.maxHp, this.hp + heal);
+    // 그리버스 치유 감소(QA 버그 수정).
+    this.hp = Math.min(this.maxHp, this.hp + heal * (1 - getGrievousPercent(this)));
     updateBars(this);
     // 버그 수정(레퍼런스 영상 대조): 실제 영상은 챔피언 처치 관여 시 정기를
     // "빨아들이는" 이펙트가 대상 위치에도 나타난다(아리 쪽 이펙트 하나만
@@ -23466,7 +23550,15 @@ function _itemTickActiveHeals(ctrl, dt) {
   if (!ctrl._itemActiveHeals || !ctrl._itemActiveHeals.length) return;
   // 정령의형상(무한한 활력) - 체력 물약/억겁의 카탈리스트·영겁의지팡이
   // "영원" 등 이 큐를 쓰는 모든 HoT에 공통 적용된다.
-  const healMult = 1 + (ctrl.itemHealingReceivedBonusPercent || 0);
+  // 버그 수정(QA - "그리버스 치유 감소"): getGrievousPercent()가 정의만
+  // 되고 실제 회복 계산 어디에서도 곱해지지 않고 있었다(01_status_effect_system.js
+  // 주석에 "이 헬퍼를 실제로 소비하는 곳은 아직 없다"고 명시돼 있었음).
+  // 이 함수를 포함해 아래의 공용 회복 경로(기본 재생/온힛/흡혈/고정 회복
+  // 등 - item_system.js가 itemHealingReceivedBonusPercent로 이미 증폭하던
+  // 바로 그 지점들)에 감소율을 곱한다 - 증폭(healMult)과 감소(grievousMult)는
+  // 서로 다른 승수라 순서 상관없이 곱만 하면 된다(보호막은 이 함수가
+  // 건드리지 않는 별개 시스템이라 영향받지 않는다).
+  const healMult = (1 + (ctrl.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(ctrl));
   for (const heal of ctrl._itemActiveHeals) {
     const step = Math.min(dt, heal.remainingSec);
     ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal.perSec * healMult * step);
@@ -23514,7 +23606,8 @@ function _itemTickHpRegen(ctrl, item, dt, now) {
   // 재현하는 경우 등) false로 취급돼 강화 회복이 누락된다 - 항상 숫자인지만
   // 확인하고 시간 차 계산으로 판정한다.
   // 정령의형상(무한한 활력) - 인내의 집중력(평시/전투 강화) 둘 다에 적용.
-  const healMult = 1 + (ctrl.itemHealingReceivedBonusPercent || 0);
+  // 그리버스 치유 감소도 같은 지점에 곱한다(위 _itemTickActiveHeals 주석 참고).
+  const healMult = (1 + (ctrl.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(ctrl));
   if (item.champDamageRegen && typeof ctrl._itemLastTookChampionDamageAt === 'number'
       && (now - ctrl._itemLastTookChampionDamageAt) <= item.champDamageRegen.durationSec * 1000) {
     const isMelee = !!(ctrl.stats && ctrl.stats.attackRange <= 300);
@@ -23806,7 +23899,8 @@ function itemSystemTick(ctrl, dt) {
     const safeFromChamp = (now - (ctrl._itemLastTookChampionDamageAt || 0)) > p.champOutOfCombatSec * 1000;
     const safeFromAny = (now - (ctrl._itemLastTookAnyDamageAt || 0)) > p.nonChampOutOfCombatSec * 1000;
     if (bonusHp >= p.bonusHpThreshold && safeFromChamp && safeFromAny) {
-      const healMult = 1 + (ctrl.itemHealingReceivedBonusPercent || 0);
+      // 그리버스 치유 감소도 같은 지점에 곱한다(위 _itemTickActiveHeals 주석 참고).
+      const healMult = (1 + (ctrl.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(ctrl));
       ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + (ctrl.maxHp || 0) * p.percentPerSec * healMult * dt);
     }
   }
@@ -23835,7 +23929,8 @@ function itemSystemTick(ctrl, dt) {
           }
         }
         if (totalDealt > 0) {
-          const healMult = 1 + (ctrl.itemHealingReceivedBonusPercent || 0);
+          // 그리버스 치유 감소도 같은 지점에 곱한다(위 _itemTickActiveHeals 주석 참고).
+          const healMult = (1 + (ctrl.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(ctrl));
           ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + totalDealt * p.healPercentOfDamage * healMult);
         }
       }
@@ -24005,7 +24100,9 @@ function applyItemVamp(source, finalDmg) {
   if (!(vampPercent > 0)) return;
   if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
   // 정령의형상(무한한 활력) - 흡혈도 "자신이 받는 체력 회복"에 해당한다.
-  const healMult = 1 + (source.itemHealingReceivedBonusPercent || 0);
+  // 그리버스 치유 감소 - 실제 LoL에서도 흡혈/스펠뱀프는 그리버스의 직접
+  // 적용 대상이다(위 _itemTickActiveHeals 주석 참고).
+  const healMult = (1 + (source.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(source));
   source.hp = Math.min(source.maxHp, source.hp + finalDmg * vampPercent * healMult);
 }
 
@@ -24016,8 +24113,9 @@ function applyItemPhysicalVamp(source, finalDmg, damageType) {
   if (!source || !(source.itemPhysicalVampPercent > 0) || !(finalDmg > 0)) return;
   if (damageType !== DAMAGE_TYPE.PHYSICAL) return;
   if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
-  // 정령의형상(무한한 활력).
-  const healAmt = finalDmg * source.itemPhysicalVampPercent * (1 + (source.itemHealingReceivedBonusPercent || 0));
+  // 정령의형상(무한한 활력). 그리버스 치유 감소도 같은 지점에 곱한다
+  // (applyItemVamp와 동일한 이유 - 생명력 흡수도 그리버스의 직접 적용 대상).
+  const healAmt = finalDmg * source.itemPhysicalVampPercent * (1 + (source.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(source));
   // 피바라기(영액의 보호막) - 생명력 흡수 전용 아이템이라 생명력 회복
   // (physicalVampPercent)은 흡혈의 낫 등과 공용 필드를 그대로 쓰지만,
   // "최대 체력을 초과하는 회복분을 보호막으로 전환"하는 건 피바라기만의
