@@ -61,7 +61,25 @@ function _itemStatsSummary(item) {
   if (item.manaOnDamagePercent) parts.push(`챔피언에게 피해를 입히면 피해량의 ${Math.round(item.manaOnDamagePercent * 100)}%만큼 마나 회복`);
   if (item.cleavePassive) parts.push(`쪼개기(평타 시 주변에 근거리 ${Math.round(item.cleavePassive.meleePercent * 100)}%｜원거리 ${Math.round(item.cleavePassive.rangedPercent * 100)}% 물리 피해)`);
   if (item.activeAbility) parts.push(`사용 시 "${item.activeAbility.nameKo}": 주변 적에게 공격력 ${Math.round(item.activeAbility.percentAD * 100)}% 물리 피해(재사용 대기시간 ${item.activeAbility.cooldownSec}초)`);
-  if (item.spellbladePassive) parts.push(`주문 검: 스킬 사용 후 다음 평타에 공격력 ${Math.round(item.spellbladePassive.bonusAdPercent * 100)}% 추가 물리 피해(자체 재사용 대기시간 ${item.spellbladePassive.procCooldownSec}초)`);
+  if (item.spellbladePassive) {
+    const sp = item.spellbladePassive;
+    const critPart = sp.bonusPerCritChance ? ` + 치명타확률 ${sp.bonusPerCritChance}` : '';
+    const manaPart = (sp.manaAdPercent || sp.manaPerCritChance) ? `, 마나 (공격력${Math.round((sp.manaAdPercent || 0) * 100)}%${sp.manaPerCritChance ? ' + 치명타확률 ' + sp.manaPerCritChance : ''}) 획득` : '';
+    parts.push(`주문 검: 스킬 사용 후 다음 평타에 (공격력${Math.round(sp.bonusAdPercent * 100)}%${critPart}) 추가 물리 피해${manaPart}(자체 재사용 대기시간 ${sp.procCooldownSec}초)`);
+  }
+  // 전설급 4차분(정수약탈자~도미닉 경의 인사) 패시브 설명.
+  if (item.executePassive) parts.push(`죽음(체력이 ${Math.round(item.executePassive.hpThresholdPercent * 100)}% 밑으로 떨어질 만큼의 피해를 입히면 처형)`);
+  if (item.taxPassive) parts.push(`세금(챔피언 처치 시 추가로 ${item.taxPassive.goldOnTakedown}골드)`);
+  if (item.magnifyPassive) parts.push(`확대(기본 공격 시 거리 비례 최대 ${Math.round(item.magnifyPassive.maxBonusPercent * 100)}% 추가 물리 피해, ${item.magnifyPassive.maxDistanceLol} 거리에서 최대)`);
+  if (item.arcaneFocusPassive) { const p = item.arcaneFocusPassive; parts.push(`비전 조준(피해를 입힌 챔피언이 ${p.windowSec}초 안에 사망하면 ${p.bonusDurationSec}초 동안 사거리+${p.bonusRangeLol})`); }
+  if (item.permanentCritPassive) { const p = item.permanentCritPassive; parts.push(`연습이 치명타를 낳는다(공격 시 치명타확률 영구 근접+${(p.meleeCritPerHit * 100).toFixed(1)}%｜원거리+${(p.rangedCritPerHit * 100).toFixed(1)}%, 최대 ${Math.round(p.maxCritChance * 100)}%)`); }
+  if (item.marksmanshipActivePassive) { const p = item.marksmanshipActivePassive; parts.push(`명중(적 챔피언 공격 시 ${p.buffDurationSec}초간 공격속도+${Math.round(p.attackSpeedBonusPercent * 100)}%, 재사용대기시간 ${p.icdSec}초, 기본 공격 시 ${p.cdrPerAttackSec}초｜치명타 적중 시 추가 ${p.cdrPerCritSec}초 감소)`); }
+  if (item.markmanshipPassive) { const p = item.markmanshipPassive; parts.push(`명중(챔피언에게 피해를 입히면 고정 마법 피해+${p.bonusMagicDamage}, 재사용대기시간 ${p.icdSec}초, 기본 공격 시 ${p.cdrPerAttackSec}초 감소)`); }
+  if (item.boltsPassive) { const p = item.boltsPassive; parts.push(`벼락(${p.hitsNeeded}번째 기본 공격마다 대상이 잃은 체력 비례 추가 물리 피해, 근접${p.meleeMin}~${p.meleeMax}｜원거리${p.rangedMin}~${p.rangedMax}, ${p.levelMin}~${p.levelMax}레벨 구간 성장)`); }
+  if (item.chargePassive) { const p = item.chargePassive; parts.push(`충전 상태(이동하거나 공격하면 충전, 충전 상태로 공격 시${p.bonusMagicDamage ? ' 마법 피해+' + p.bonusMagicDamage : ''}${p.msBuffPercent ? ', 이동속도+' + Math.round(p.msBuffPercent * 100) + '%(' + p.msBuffDurationSec + '초)' : ''}${p.bonusRangePercent ? ', 사거리+' + Math.round(p.bonusRangePercent * 100) + '%(최대 ' + p.bonusRangeCapLol + '유닛)' : ''})`); }
+  if (item.ghostingPassive) parts.push('유체화(이동 시 미니언·챔피언과 충돌하지 않음 - 이 데모는 유닛 충돌 자체가 없어 실질적인 차이는 없음)');
+  if (item.enlightenmentPassive) parts.push(`깨달음(기본 공격 시 기본 스킬의 남은 재사용 대기시간 ${Math.round(item.enlightenmentPassive.cdrPercentOfRemaining * 100)}% 감소)`);
+  if (item.giantSlayerPassive) { const p = item.giantSlayerPassive; parts.push(`거인 학살자(대상의 추가 체력에 비례해 챔피언 대상 최대 ${Math.round(p.maxBonusPercent * 100)}% 추가 피해, 추가 체력 ${p.maxAtBonusHp}에서 최대)`); }
   if (item.burnOnDamagePassive) parts.push(`발화(피해 시 ${item.burnOnDamagePassive.durationSec}초간 매초 ${item.burnOnDamagePassive.dmgPerSec}(몬스터 ${item.burnOnDamagePassive.monsterDmgPerSec}) 마법 고정 피해)`);
   // 버그 수정(QA 요청 "효과가 제대로 적용되게 해줘"): 아래 패시브들은
   // item_system.js에 실제로 구현/테스트까지 돼 있었지만, 이 함수가 각

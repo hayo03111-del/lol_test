@@ -576,6 +576,123 @@ const ITEM_DATA = {
     // 재사용대기시간 300초.
     revivePassive: { stasisDurationSec: 4.0, icdSec: 300, healHpPercent: 0.50, healMpPercent: 1.0 },
   },
+
+  // [전설급 아이템] 4차분 - 정수약탈자~도미닉 경의 인사(치명타 계열 10종,
+  // 원문 814~913줄). 이번 배치에 새로 필요한 중간 조립 아이템 4종(열정의
+  // 검/정찰병의 새총/절정의 화살/꽁지깃)도 함께 반영한다 - 2차분 때와 같은
+  // 이유로(하위템을 숨기면 조합 자체가 성립하지 않음) 전부 독립적으로
+  // 구매 가능한 서사급 탭 아이템으로 넣는다.
+  zealSword: { id: 'zealSword', nameKo: '열정의 검', cost: 1200, recipe: ['cloakOfAgility', 'dagger'], stats: { attackSpeedPercent: 0.15, critChance: 0.15, moveSpeedPercent: 0.04 } },
+  // 정찰병의 새총 "명중" - 챔피언에게 피해를 입히면(적중 시 효과) 40
+  // 고정 마법 피해(재사용대기 40초) + 기본 공격 시(대상 불문) 이 쿨다운이
+  // 1초 추가로 감소한다(공격하면서 싸우면 사실상 훨씬 자주 발동).
+  scoutsSlingshot: {
+    id: 'scoutsSlingshot', nameKo: '정찰병의 새총', cost: 600, recipe: ['dagger', 'dagger'],
+    stats: { attackSpeedPercent: 0.20 },
+    markmanshipPassive: { icdSec: 40, bonusMagicDamage: 40, cdrPerAttackSec: 1 },
+  },
+  peakArrow: { id: 'peakArrow', nameKo: '절정의 화살', cost: 1300, recipe: ['longSword', 'cloakOfAgility'], stats: { attackDamage: 15, critChance: 0.20 } },
+  tailFeather: { id: 'tailFeather', nameKo: '꽁지깃', cost: 775, recipe: ['longSword'], stats: { attackDamage: 15, moveSpeedPercent: 0.04 } },
+
+  // 정수약탈자 - 주문 검(스펠블레이드) 계열이지만 기존 삼위일체(순수 AD%)와
+  // 달리 치명타 확률에도 비례하는 새 변형이다. sheen/trinityForce와 동일한
+  // spellbladePassive 필드를 그대로 쓰되, 치명타 확률 비례 추가 항
+  // (bonusPerCritChance/manaPerCritChance)을 선택적으로 더 두고 기존
+  // 아이템들은 안 써서(undefined->0) 전혀 영향받지 않게 한다.
+  essenceReaver: {
+    id: 'essenceReaver', nameKo: '정수약탈자', cost: 3050, recipe: ['sheen', 'caulfieldsWarhammer', 'cloakOfAgility'],
+    stats: { attackDamage: 50, abilityHaste: 20, critChance: 0.25 },
+    spellbladePassive: { bonusAdPercent: 1.25, bonusPerCritChance: 50, manaAdPercent: 0.63, manaPerCritChance: 25, procCooldownSec: 1.5 },
+  },
+  // 징수의 총 - 죽음(처형)은 "이 피해로 체력이 5% 밑으로 떨어질 '만큼'
+  // 이면" 완전히 처형한다는 뜻으로 해석했다(실제 LoL 수확자와 동일한
+  // 취지 - 정확히 0 이하가 아니라 5% 문턱 전부를 처형 범위로 본다).
+  // 세금(처치 시 +25골드)은 기존 "챔피언 처치 관여" 공용 훅
+  // (itemOnChampionTakedown - 암흑의 인장/탐욕의 군화가 이미 쓰던 지점)을
+  // 그대로 재사용한다.
+  collector: {
+    id: 'collector', nameKo: '징수의 총', cost: 3000, recipe: ['pickaxe', 'serratedDirk', 'cloakOfAgility'],
+    stats: { attackDamage: 50, critChance: 0.25 }, armorPenFlat: 10,
+    executePassive: { hpThresholdPercent: 0.05 },
+    taxPassive: { goldOnTakedown: 25 },
+  },
+  // 마법광학 장치 C44 - 확대(거리 비례 추가 피해, 500거리에서 최대 10%) +
+  // 비전 조준(피해 입힌 챔피언이 3초 내 사망 시 8초간 사거리+100). 후자는
+  // 죽음의무도 "반항"과 동일한 이유(이 데모엔 플레이어를 공격하는 적 AI가
+  // 없어 실제로 발동할 조건이 생기지 않음)로 범용 훅만 정확히 만들어두고
+  // README에 한계를 명시한다.
+  magicOpticsC44: {
+    id: 'magicOpticsC44', nameKo: '마법광학 장치 C44', cost: 2800, recipe: ['pickaxe', 'peakArrow', 'longSword'],
+    stats: { attackDamage: 55, critChance: 0.25 },
+    magnifyPassive: { maxBonusPercent: 0.10, maxDistanceLol: 500 },
+    arcaneFocusPassive: { windowSec: 3.0, bonusRangeLol: 100, bonusDurationSec: 8.0 },
+  },
+  // 윤 탈 야생화살 - "연습이 치명타를 낳는다"(영구 치명타 누적, 최대 25%) +
+  // "명중"(적 챔피언 공격 시 6초간 공격속도+30%, 재사용대기 30초, 기본
+  // 공격 시 1초/치명타 적중 시 추가 2초 감소).
+  rageblade: {
+    id: 'rageblade', nameKo: '윤 탈 야생화살', cost: 3000, recipe: ['bfSword', 'scoutsSlingshot', 'longSword'],
+    stats: { attackDamage: 50, attackSpeedPercent: 0.45 },
+    permanentCritPassive: { meleeCritPerHit: 0.004, rangedCritPerHit: 0.002, maxCritChance: 0.25 },
+    marksmanshipActivePassive: { icdSec: 30, attackSpeedBonusPercent: 0.30, buffDurationSec: 6.0, cdrPerAttackSec: 1, cdrPerCritSec: 2 },
+  },
+  // 크라켄 학살자 - 벼락(3번째 평타마다 잃은 체력 비례 추가 물리 피해,
+  // 8~18레벨 구간에서 선형 성장). 원문에 레벨 구간 밖(1~7, 19+)의 수치가
+  // 없어 7레벨 이하는 8레벨 값, 19레벨 이상은 18레벨 값으로 고정한다(흔한
+  // "구간 성장" 해석). 괄호 안의 1.75배 값(262.5~350/210~280)은 모든
+  // 다른 수치와 정확히 1.75배 관계라 "비챔피언(몬스터) 대상" 값으로 읽었다 -
+  // 이 프로젝트엔 정글 몬스터가 없어 사실상 쓰이지 않는다(명시적 한계,
+  // 선체파괴자의 에픽 몬스터 분기와 동일한 성격).
+  krakenSlayer: {
+    id: 'krakenSlayer', nameKo: '크라켄 학살자', cost: 3000, recipe: ['tailFeather', 'phageAxe', 'recurveBow'],
+    stats: { attackDamage: 45, attackSpeedPercent: 0.40, moveSpeedPercent: 0.04 },
+    boltsPassive: { hitsNeeded: 3, meleeMin: 150, meleeMax: 200, rangedMin: 120, rangedMax: 160, levelMin: 8, levelMax: 18 },
+  },
+  // 폭풍갈퀴 - 충전 상태(이동하거나 공격하면 충전되고, 충전 상태에서
+  // 공격하면 소모) + 번개(충전 소모 시 100 추가 마법 피해 + 1.5초간
+  // 이동속도 45%). "충전까지 걸리는 시간"이 원문에 없어(durationGuessed)
+  // 실제 LoL 폭풍갈퀴류 아이템의 근사치(2초)를 썼다.
+  stormrazor: {
+    id: 'stormrazor', nameKo: '폭풍갈퀴', cost: 3200, recipe: ['bfSword', 'cloakOfAgility', 'scoutsSlingshot'],
+    stats: { attackDamage: 50, attackSpeedPercent: 0.20, critChance: 0.25 },
+    chargePassive: { chargeTimeSec: 2.0, durationGuessed: true, bonusMagicDamage: 100, msBuffPercent: 0.45, msBuffDurationSec: 1.5 },
+  },
+  // 유령무희 - 망령의 왈츠(상시 유체화 - 이동 시 미니언/챔피언과 충돌하지
+  // 않음). 지속시간/트리거 조건이 원문에 없고 "유체화 상태가 됩니다"만
+  // 적혀 있어 상시 지속 패시브로 해석했다. 한계(명시): 이 프로젝트는
+  // 미니언/챔피언과의 물리적 충돌(이동 차단) 자체를 구현하지 않은 완전한
+  // 자유 이동 모델이라, "유체화"가 막아줄 충돌이 애초에 존재하지 않는다 -
+  // 즉 이 패시브는 사실상 평소와 차이가 없는 무해한 플래그로만 반영한다.
+  phantomDancer: {
+    id: 'phantomDancer', nameKo: '유령무희', cost: 2650, recipe: ['dagger', 'zealSword', 'dagger'],
+    stats: { attackSpeedPercent: 0.65, critChance: 0.25, moveSpeedPercent: 0.10 },
+    ghostingPassive: true,
+  },
+  // 고속연사포 - 저격수(충전 상태로 공격 시 40 추가 마법 피해 + 사거리
+  // 35% 증가, 최대 150유닛까지만). 폭풍갈퀴와 같은 충전 상태 메커니즘을
+  // 공유한다(chargePassive).
+  rapidFireCannon: {
+    id: 'rapidFireCannon', nameKo: '고속연사포', cost: 2650, recipe: ['zealSword', 'scoutsSlingshot'],
+    stats: { attackSpeedPercent: 0.35, critChance: 0.25, moveSpeedPercent: 0.04 },
+    chargePassive: { chargeTimeSec: 2.0, durationGuessed: true, bonusMagicDamage: 40, bonusRangePercent: 0.35, bonusRangeCapLol: 150 },
+  },
+  // 나보리 명멸검 - 깨달음(기본 공격 시 기본 스킬 남은 쿨다운 15% 감소).
+  // "남은" 쿨다운이라 즉시 쓸 재사용대기시간이 없으면(쿨다운 중이 아니면)
+  // 효과가 없다 - 기존 챔피언 쿨다운 필드(cooldowns.Q/W/E/R)를 직접
+  // 비율로 줄인다.
+  naboriFlickerblade: {
+    id: 'naboriFlickerblade', nameKo: '나보리 명멸검', cost: 2650, recipe: ['dagger', 'zealSword', 'dagger'],
+    stats: { attackSpeedPercent: 0.40, critChance: 0.25, moveSpeedPercent: 0.04 },
+    enlightenmentPassive: { cdrPercentOfRemaining: 0.15 },
+  },
+  // 도미닉 경의 인사 - 거인 학살자(대상 추가 체력 비례 챔피언 대상 추가
+  // 피해, 최대 15%, 추가 체력 1500에서 최대 도달 - 지배자의 피갑옷
+  // "응징"과 동일한 선형 보간 패턴을 재사용한다).
+  lordDominiksRegards: {
+    id: 'lordDominiksRegards', nameKo: '도미닉 경의 인사', cost: 3300, recipe: ['lastWhisper', 'peakArrow'],
+    stats: { attackDamage: 35, critChance: 0.25 }, armorPenPercent: 0.35,
+    giantSlayerPassive: { maxBonusPercent: 0.15, maxAtBonusHp: 1500 },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -590,6 +707,8 @@ const ITEM_ORDER = [
   'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'ironSeal',
   'trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'muramana', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail',
   'giantsBelt', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel',
+  'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather',
+  'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -600,7 +719,7 @@ const ITEM_CATEGORIES = [
   // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
   // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
   // 하나에서 같이 보여준다.
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather'] },
   // 무라마나는 마나무네가 변신해서만 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
-  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel'] },
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards'] },
 ];

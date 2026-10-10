@@ -78,6 +78,10 @@ function recomputeItemStats(ctrl) {
     if (item.slaughterPassive) ctrl.itemAllDamageVampPercent += (ctrl._itemSlaughterStacks || 0) * item.slaughterPassive.vampPerStack;
     // 여신의 눈물(마나순환)으로 이미 얻은 최대 마나 - 누적값을 그대로 더한다.
     if (item.manaCirculationPassive && ctrl._itemTearState) ctrl.itemBonusMana += ctrl._itemTearState.gained || 0;
+    // 윤 탈 야생화살(연습이 치명타를 낳는다)의 영구 누적 치명타 확률 -
+    // 암흑의 인장(영광)/탐욕의 군화(학살)와 동일한 패턴(아이템을 들고
+    // 있을 때만 적용, 중첩 자체는 팔아도 남아있음).
+    if (item.permanentCritPassive) ctrl.itemBonusCritChance += ctrl._itemPermCritBonus || 0;
   };
   for (const slot of (ctrl.items || [])) applyOne(ITEM_DATA[slot.id]);
   if (ctrl.boots) applyOne(ITEM_DATA[ctrl.boots.id]);
@@ -529,6 +533,13 @@ function itemSystemTick(ctrl, dt) {
     ctrl.shield = 0;
     ctrl._itemShieldExpiresAt = 0;
   }
+  // 마법광학 장치 C44(비전 조준)/고속연사포(저격수)가 공용으로 쓰는 임시
+  // 사거리 보너스 - 보호막 만료와 동일한 패턴(아이템을 팔아도 이미 걸린
+  // 버프는 원래 지속시간만큼 유지).
+  if (ctrl._itemTempAttackRangeExpiresAt && now >= ctrl._itemTempAttackRangeExpiresAt) {
+    ctrl._itemTempAttackRangeBonusLol = 0;
+    ctrl._itemTempAttackRangeExpiresAt = 0;
+  }
   ctrl._itemTempVampPercent = (ctrl._itemMawOmnivampUntil && now < ctrl._itemMawOmnivampUntil)
     ? ITEM_DATA.maw.lifelinePassive.omnivampPercentAfterTrigger : 0;
   // 스테락의도전(생명선) - 맞지 않아도 4.5초에 걸쳐 보호막이 녹아내린다.
@@ -603,6 +614,23 @@ function itemSystemTick(ctrl, dt) {
       recomputeItemStats(ctrl);
       if (typeof updateItemUI === 'function') updateItemUI(ctrl);
       console.log('[ITEM] 마나무네 -> 무라마나 변신 완료');
+    }
+  }
+  // 폭풍갈퀴/고속연사포 공용 "충전 상태" - 이동하거나 공격하면 충전되고
+  // (원문: "이동하거나 공격하면 충전 상태로 공격할 수 있습니다"), 충전이
+  // 꽉 차면 다음 기본 공격에서 소모된다(소모 자체는 itemOnBasicAttackHit()).
+  // "충전까지 걸리는 시간"이 원문에 없어(item_data.js의 durationGuessed
+  // 참고) 가만히 있으면(IDLE) 진행도가 그대로 멈추는 것으로 해석했다
+  // (0으로 리셋하지 않음 - "이동하거나 공격하면"이 "계속 움직여야만
+  // 쌓인다"는 뜻이지 "멈추면 초기화된다"는 뜻은 아니므로).
+  const chargeSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].chargePassive);
+  if (!chargeSlot) {
+    ctrl._itemChargeProgress = 0; ctrl._itemChargeReady = false;
+  } else if (!ctrl._itemChargeReady) {
+    const p = ITEM_DATA[chargeSlot.id].chargePassive;
+    if (ctrl.state === STATE.MOVE || ctrl.state === STATE.ATTACK) {
+      ctrl._itemChargeProgress = (ctrl._itemChargeProgress || 0) + dt;
+      if (ctrl._itemChargeProgress >= p.chargeTimeSec) ctrl._itemChargeReady = true;
     }
   }
   if (!ctrl.items || !ctrl.items.length) return;
@@ -857,6 +885,70 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
       applyStatus(ctrl, { id: 'itemBlackCleaverRage', type: 'MS_BUFF_FLAT', duration: rp.durationSec, value: isMelee ? rp.meleeAmount : rp.rangedAmount });
     }
   }
+
+  // [전설급 4차분]
+  // 징수의 총(죽음) - 이 피해로 체력이 5% 밑으로 "떨어질 만큼"이면
+  // 완전히 처형한다. itemOnDamageDealt()는 target.takeDamage()/
+  // damageEnemy()가 finalDmg를 적용하기 "전"에 불리므로, target.hp를
+  // finalDmg와 정확히 같은 값으로 미리 맞춰두면 뒤이은 정상 차감이
+  // 0까지 정확히 깎아준다(처형 판정/학습용 더미의 2% 바닥도 기존 로직이
+  // 그대로 처리 - 더미는 damageEnemy()가 늘 그렇듯 2%에서 멈춘다).
+  const collectorSlot = (ctrl.items || []).find((s) => s.id === 'collector');
+  if (collectorSlot && target.isChampion && target.hp > 0) {
+    const p = ITEM_DATA.collector.executePassive;
+    const hpAfterPercent = (target.hp - finalDmg) / (target.maxHp || 1);
+    if (hpAfterPercent > 0 && hpAfterPercent < p.hpThresholdPercent) {
+      target.hp = finalDmg;
+    }
+  }
+  // 정찰병의 새총(명중) - 챔피언에게 피해를 입히면 40 고정 마법 피해
+  // 추가(재사용대기 40초, 기본 공격 시 1초씩 추가 감소 - 위
+  // itemOnBasicAttackHit()의 _itemScoutsReadyAt 감소 참고). calculateDamage()로
+  // 수치만 뽑아 직접 차감하는 재귀 안전 패턴(마법의 영약과 동일).
+  const scoutsOnHitSlot = (ctrl.items || []).find((s) => s.id === 'scoutsSlingshot');
+  if (scoutsOnHitSlot && target.isChampion) {
+    const p = ITEM_DATA.scoutsSlingshot.markmanshipPassive;
+    const now = performance.now();
+    if ((ctrl._itemScoutsReadyAt || 0) <= now) {
+      ctrl._itemScoutsReadyAt = now + p.icdSec * 1000;
+      const bonusDmg = calculateDamage({ rawDamage: p.bonusMagicDamage, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, target, source: ctrl });
+      const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
+      target.hp = Math.max(minHp, (target.hp || 0) - bonusDmg);
+    }
+  }
+  // 마법광학 장치 C44(비전 조준) - "피해를 입힌 챔피언이 3초 안에 사망하면"
+  // 판정을 위해, 방금 피해를 입힌 대상과 시각을 기록해둔다. 실제 발동(사거리
+  // +100, 8초)은 itemOnChampionDeath()에서 처리한다(죽음의무도 "반항"과
+  // 동일한 구조 - 이 데모는 적 AI가 없어 실제 발동 조건이 생기지 않지만
+  // 정확하게 구현해둔다 - item_data.js 주석 참고).
+  const magicOpticsSlot = (ctrl.items || []).find((s) => s.id === 'magicOpticsC44');
+  if (magicOpticsSlot && target.isChampion) {
+    const p = ITEM_DATA.magicOpticsC44.arcaneFocusPassive;
+    ctrl._itemArcaneFocusTargets = ctrl._itemArcaneFocusTargets || new Map();
+    ctrl._itemArcaneFocusTargets.set(_itemTargetKey(target), performance.now() + p.windowSec * 1000);
+  }
+  // 도미닉 경의 인사(거인 학살자) - 챔피언 대상 추가 체력 비례 추가 피해,
+  // 최대 15%(추가 체력 1500에서 최대 도달) - 지배자의 피갑옷 "응징"과
+  // 동일한 선형 보간. 추가 물리 피해를 한 번 더 입히는 방식으로 근사한다
+  // (이미 끝난 메인 평타/스킬 자체를 소급 증폭할 수 없는 건 다른 "거리
+  // 비례 피해"류와 동일한 한계).
+  const giantSlayerSlot = (ctrl.items || []).find((s) => s.id === 'lordDominiksRegards');
+  if (giantSlayerSlot && target.isChampion) {
+    const p = ITEM_DATA.lordDominiksRegards.giantSlayerPassive;
+    // bonusHp 근사: 이 프로젝트의 더미/가상 대상엔 "챔피언 기본 체력"을
+    // 따로 구할 길이 없는 경우가 있어, target.bonusHealth가 있으면 그걸
+    // 우선 쓰고 없으면 maxHp 전체를 "추가 체력"으로 간주한다(더미 기본
+    // 체력 300은 임의의 연습용 수치라 기준 삼기 애매하므로 이렇게 둔다 -
+    // 명시적 근사).
+    const effectiveBonusHp = typeof target.bonusHealth === 'number' ? target.bonusHealth : (target.maxHp || 0);
+    const ratio = Math.min(1, effectiveBonusHp / p.maxAtBonusHp);
+    const bonusRaw = ratio * p.maxBonusPercent * finalDmg;
+    if (bonusRaw > 0) {
+      const extra = calculateDamage({ rawDamage: bonusRaw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, target, source: ctrl });
+      const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
+      target.hp = Math.max(minHp, (target.hp || 0) - extra);
+    }
+  }
 }
 
 // 마법의 영약의 포탑 전용 분기 - 00_global_constants.js의 applyDamage()가
@@ -923,6 +1015,15 @@ function itemOnChampionTakedown(ctrl) {
     ctrl._itemSlaughterStacks = Math.min(p.maxStacks, (ctrl._itemSlaughterStacks || 0) + 1);
     changed = true;
   }
+  // 징수의 총(세금) - 챔피언 처치 시 추가 골드. 이 처형 판정 지점은
+  // 학습용 더미의 "죽었어야 할 타격"도 똑같이 처치로 취급하므로(암흑의
+  // 인장 영광과 동일한 기존 원칙), 더미를 상대로도 테스트/실제 플레이
+  // 양쪽에서 똑같이 골드가 들어온다.
+  const collectorSlot = (ctrl.items || []).find((s) => s.id === 'collector');
+  if (collectorSlot) {
+    ctrl.gold = (ctrl.gold || 0) + ITEM_DATA.collector.taxPassive.goldOnTakedown;
+    if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  }
   if (changed) recomputeItemStats(ctrl);
 }
 
@@ -934,30 +1035,51 @@ function itemOnChampionDeath(ctrl) {
     ctrl._itemGloryStacks = Math.max(0, ctrl._itemGloryStacks - p.deathLossStacks);
     recomputeItemStats(ctrl);
   }
+  // 아래 두 블록(반항/비전 조준)은 둘 다 "이 ctrl이 방금 죽었는데, 그
+  // 전에 이 ctrl을 공격한 전역 controller가 있다면 반응한다"는 동일한
+  // 구조라 공용으로 한 번만 가드를 계산해서 공유한다 - 버그 수정(이전
+  // 버전): 반항 쪽에서 쓰던 `return`들이 함수 전체를 끝내버려서, 나중에
+  // 추가한 비전 조준 로직이 전혀 실행되지 않는 문제가 있었다. 이제는
+  // 가드를 통과하면 두 블록 모두 독립적으로(return 없이) 이어서 확인한다.
+  const deadKey = ctrl ? _itemTargetKey(ctrl) : null;
+  const hasAttackerContext = deadKey != null && typeof controller !== 'undefined' && controller && controller !== ctrl;
+
   // 죽음의무도(반항) - "피해를 입힌 챔피언이 3초 안에 죽으면" 그 지연
   // 피해가 사라지고 대신 추가 공격력 75%만큼 2초에 걸쳐 회복한다. 이
   // 프로젝트는 플레이어를 공격하는 적 AI가 없는 구조라(itemOnChampionTakedown
   // 위 주석 참고 - 어시스트와 동일한 성격의 한계) 실제 플레이로는 이
   // 조건이 발생하지 않지만, 향후 적 AI가 추가되면 자동으로 맞물리도록
-  // 범용 훅으로 둔다. 전역 controller(이 데모에서 아이템을 실제로 장착할
-  // 수 있는 유일한 캐릭터)를 대상으로, 방금 죽은 이 ctrl이 남긴 지연
-  // 피해 묶음이 있는지 확인한다 - 지연 피해 자체가 정확히 3초(원문의
-  // 반항 판정 시간과 동일)만 유지되므로, "아직 배열에 남아있다"는 것
-  // 자체가 곧 "3초 이내"라는 뜻이라 별도 타임스탬프 비교가 필요 없다.
-  const deadKey = ctrl ? _itemTargetKey(ctrl) : null;
-  if (deadKey == null) return;
-  if (typeof controller === 'undefined' || !controller || controller === ctrl) return;
-  if (!controller._itemDeathsDanceDot || !controller._itemDeathsDanceDot.length) return;
-  const before = controller._itemDeathsDanceDot.length;
-  controller._itemDeathsDanceDot = controller._itemDeathsDanceDot.filter((d) => d.sourceKey !== deadKey);
-  if (controller._itemDeathsDanceDot.length === before) return; // 이 ctrl에게서 받은 지연 피해가 없었음
-  const p = ITEM_DATA.deathsDance.defiancePassive;
-  const healTotal = _itemBonusAD(controller) * p.healBonusAdPercent;
-  if (healTotal > 0) {
-    controller._itemActiveHeals = controller._itemActiveHeals || [];
-    controller._itemActiveHeals.push({ perSec: healTotal / p.healDurationSec, remainingSec: p.healDurationSec });
+  // 범용 훅으로 둔다. 지연 피해 자체가 정확히 3초(원문의 반항 판정
+  // 시간과 동일)만 유지되므로, "아직 배열에 남아있다"는 것 자체가 곧
+  // "3초 이내"라는 뜻이라 별도 타임스탬프 비교가 필요 없다.
+  if (hasAttackerContext && controller._itemDeathsDanceDot && controller._itemDeathsDanceDot.length) {
+    const before = controller._itemDeathsDanceDot.length;
+    controller._itemDeathsDanceDot = controller._itemDeathsDanceDot.filter((d) => d.sourceKey !== deadKey);
+    if (controller._itemDeathsDanceDot.length !== before) {
+      const p = ITEM_DATA.deathsDance.defiancePassive;
+      const healTotal = _itemBonusAD(controller) * p.healBonusAdPercent;
+      if (healTotal > 0) {
+        controller._itemActiveHeals = controller._itemActiveHeals || [];
+        controller._itemActiveHeals.push({ perSec: healTotal / p.healDurationSec, remainingSec: p.healDurationSec });
+      }
+      console.log('[ITEM] 죽음의무도 - 반항 발동(지연 피해 제거 + 회복)');
+    }
   }
-  console.log('[ITEM] 죽음의무도 - 반항 발동(지연 피해 제거 + 회복)');
+
+  // 마법광학 장치 C44(비전 조준) - "피해를 입힌 챔피언이 3초 안에
+  // 사망하면 8초 동안 사거리 +100". 위와 동일한 한계(적 AI 없음)를
+  // 공유한다 - itemOnDamageDealt()가 기록해둔 _itemArcaneFocusTargets
+  // 맵에서 이 ctrl(방금 죽은 대상)에 대한 기록이 아직 유효한지 확인한다.
+  if (hasAttackerContext && controller._itemArcaneFocusTargets) {
+    const expiresAt = controller._itemArcaneFocusTargets.get(deadKey);
+    if (typeof expiresAt === 'number' && performance.now() <= expiresAt) {
+      controller._itemArcaneFocusTargets.delete(deadKey);
+      const p = ITEM_DATA.magicOpticsC44.arcaneFocusPassive;
+      controller._itemTempAttackRangeBonusLol = Math.max(controller._itemTempAttackRangeBonusLol || 0, p.bonusRangeLol);
+      controller._itemTempAttackRangeExpiresAt = Math.max(controller._itemTempAttackRangeExpiresAt || 0, performance.now() + p.bonusDurationSec * 1000);
+      console.log('[ITEM] 마법광학 장치 C44 - 비전 조준 발동(사거리 증가)');
+    }
+  }
 }
 
 // 수호천사 - 환생. takeDamage()에서 "이번 피해로 hp가 0 이하가 됐다"고
@@ -1223,8 +1345,16 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     ctrl._itemSheenArmed = false;
     const spellbladeSlot = _itemSpellbladeSlot(ctrl);
     if (spellbladeSlot) {
-      const bonus = ITEM_DATA[spellbladeSlot.id].spellbladePassive.bonusAdPercent * (ctrl.stats.attackDamage || 0);
+      const p = ITEM_DATA[spellbladeSlot.id].spellbladePassive;
+      // 정수약탈자 - 삼위일체(순수 AD%)와 달리 치명타 확률에도 비례하는
+      // 추가 항(bonusPerCritChance/manaPerCritChance)이 있다. 기존
+      // 아이템들은 이 필드가 없어(undefined -> 0) 그대로 동작한다.
+      const bonus = p.bonusAdPercent * (ctrl.stats.attackDamage || 0) + (p.bonusPerCritChance || 0) * (ctrl.stats.critChance || 0);
       if (bonus > 0) applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      if ((p.manaAdPercent || p.manaPerCritChance) && (ctrl.maxMp || 0) > 0) {
+        const manaGain = (p.manaAdPercent || 0) * (ctrl.stats.attackDamage || 0) + (p.manaPerCritChance || 0) * (ctrl.stats.critChance || 0);
+        if (manaGain > 0) ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + manaGain);
+      }
     }
   }
   const tiamatSlot = (ctrl.items || []).find((s) => s.id === 'tiamat');
@@ -1335,6 +1465,114 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
       const missingHp = Math.max(0, (target.maxHp || 0) - (target.hp || 0));
       const healAmt = healPercent * (ctrl.stats.attackDamage || 0) + missingHp * p.missingHpHealPercent;
       ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + healAmt);
+    }
+  }
+
+  // [전설급 4차분] 정찰병의 새총/윤 탈 야생화살의 "명중" 계열 - 기본 공격
+  // 시(대상 불문) 재사용대기시간을 추가로 깎는다(치명타 적중 시 윤 탈
+  // 야생화살은 더 깎인다). 발동(마법 피해/공격속도 버프) 자체는 각각
+  // itemOnDamageDealt()/아래 블록에서 처리하고, 여기서는 "공격했다"는
+  // 신호로 쿨다운만 줄인다 - readyAt(절대 시각)을 그만큼 앞당기는 방식.
+  const scoutsSlot = (ctrl.items || []).find((s) => s.id === 'scoutsSlingshot');
+  if (scoutsSlot) {
+    ctrl._itemScoutsReadyAt = (ctrl._itemScoutsReadyAt || 0) - ITEM_DATA.scoutsSlingshot.markmanshipPassive.cdrPerAttackSec * 1000;
+  }
+  const ragebladeSlot = (ctrl.items || []).find((s) => s.id === 'rageblade');
+  if (ragebladeSlot) {
+    const rp = ITEM_DATA.rageblade;
+    const now = performance.now();
+    // 연습이 치명타를 낳는다 - 영구 누적(최대 25%). 암흑의 인장(영광)과
+    // 동일한 패턴으로, recomputeItemStats()가 매번 0으로 초기화하는
+    // itemBonusCritChance가 아니라 별도 영구 필드(_itemPermCritBonus)에
+    // 쌓아두고 recomputeItemStats()에서 다시 더한다(구매/판매해도 유지).
+    const isMelee = _itemIsMelee(ctrl);
+    const perHit = isMelee ? rp.permanentCritPassive.meleeCritPerHit : rp.permanentCritPassive.rangedCritPerHit;
+    const before = ctrl._itemPermCritBonus || 0;
+    ctrl._itemPermCritBonus = Math.min(rp.permanentCritPassive.maxCritChance, before + perHit);
+    if (ctrl._itemPermCritBonus !== before) recomputeItemStats(ctrl);
+    // 명중 - 적 챔피언 공격 시(기본 공격) 6초간 공격속도+30%, 재사용대기
+    // 30초. 기본 공격 시(대상 불문) 1초, 치명타 적중 시 추가 2초 감소.
+    ctrl._itemRagebladeReadyAt = ctrl._itemRagebladeReadyAt || now;
+    if (target.isChampion && now >= ctrl._itemRagebladeReadyAt && typeof applyStatus === 'function') {
+      ctrl._itemRagebladeReadyAt = now + rp.marksmanshipActivePassive.icdSec * 1000;
+      applyStatus(ctrl, { id: 'itemRagebladeMarksmanship', type: 'AS_BUFF', duration: rp.marksmanshipActivePassive.buffDurationSec, value: rp.marksmanshipActivePassive.attackSpeedBonusPercent });
+    }
+    const cdr = rp.marksmanshipActivePassive.cdrPerAttackSec + (isCritical ? rp.marksmanshipActivePassive.cdrPerCritSec : 0);
+    ctrl._itemRagebladeReadyAt -= cdr * 1000;
+  }
+
+  // 마법광학 장치 C44 - 확대(거리 비례 추가 물리 피해, 500거리에서 최대
+  // 10%). 이미 끝난 메인 평타 자체를 소급해서 증폭할 방법이 없어(명시적
+  // 근사 - 다른 "이미 끝난 평타는 못 고친다" 항목과 동일한 성격), 별도의
+  // 추가 물리 피해 한 번으로 근사한다.
+  const magnifySlot = (ctrl.items || []).find((s) => s.id === 'magicOpticsC44');
+  if (magnifySlot && !_itemIsStructure(target) && typeof getHorizontalDistance === 'function' && typeof getWorldPosition === 'function') {
+    const p = ITEM_DATA.magicOpticsC44.magnifyPassive;
+    const distWorld = getHorizontalDistance(getWorldPosition(ctrl), getWorldPosition(target));
+    const distLol = typeof worldDistanceToLol === 'function' ? worldDistanceToLol(distWorld) : distWorld;
+    const ratio = Math.max(0, Math.min(1, distLol / p.maxDistanceLol));
+    const bonusRaw = ratio * p.maxBonusPercent * (ctrl.stats.attackDamage || 0);
+    if (bonusRaw > 0) applyDamage(target, { rawDamage: bonusRaw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+  }
+
+  // 크라켄 학살자(벼락) - 대상별 3번째 기본 공격마다 잃은 체력 비례 추가
+  // 물리 피해(8~18레벨 선형 성장). 몰락한 왕의 검의 "할퀴는 그림자"와
+  // 동일한 "대상별 카운터" 패턴(_itemTargetKey Map).
+  const krakenSlot = (ctrl.items || []).find((s) => s.id === 'krakenSlayer');
+  if (krakenSlot && !_itemIsStructure(target)) {
+    const p = ITEM_DATA.krakenSlayer.boltsPassive;
+    ctrl._itemKrakenHitCounts = ctrl._itemKrakenHitCounts || new Map();
+    const key = _itemTargetKey(target);
+    const count = (ctrl._itemKrakenHitCounts.get(key) || 0) + 1;
+    if (count >= p.hitsNeeded) {
+      ctrl._itemKrakenHitCounts.set(key, 0);
+      const isMelee = _itemIsMelee(ctrl);
+      const min = isMelee ? p.meleeMin : p.rangedMin;
+      const max = isMelee ? p.meleeMax : p.rangedMax;
+      const level = Math.max(p.levelMin, Math.min(p.levelMax, ctrl.champLevel || p.levelMin));
+      const levelRatio = (level - p.levelMin) / (p.levelMax - p.levelMin);
+      const raw = min + (max - min) * levelRatio;
+      if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    } else {
+      ctrl._itemKrakenHitCounts.set(key, count);
+    }
+  }
+
+  // 폭풍갈퀴/고속연사포 공용 "충전 상태" 소모 - 기본 공격 시 충전돼 있으면
+  // 소모하며 각자의 효과를 낸다(충전 축적은 itemSystemTick()이 담당).
+  const chargeSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].chargePassive);
+  if (chargeSlot && ctrl._itemChargeReady) {
+    ctrl._itemChargeReady = false;
+    ctrl._itemChargeProgress = 0;
+    const p = ITEM_DATA[chargeSlot.id].chargePassive;
+    if (p.bonusMagicDamage && !_itemIsStructure(target)) {
+      applyDamage(target, { rawDamage: p.bonusMagicDamage, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    }
+    if (p.msBuffPercent && typeof applyStatus === 'function') {
+      applyStatus(ctrl, { id: 'itemChargeMsBuff', type: 'MS_BUFF', duration: p.msBuffDurationSec, value: p.msBuffPercent });
+    }
+    if (p.bonusRangePercent) {
+      // 고속연사포(저격수) - "사거리 35% 증가(최대 150유닛)"에 지속시간이
+      // 원문에 없다(durationGuessed) - 충전 소모형 버프답게 짧게 유지되는
+      // 것으로 보고 다른 충전형 효과(폭풍갈퀴 "번개"의 1.5초)와 동일한
+      // 값을 근사치로 썼다. _itemTempAttackRangeBonusLol/만료는
+      // 마법광학 장치 C44 "비전 조준"과 공용 필드를 쓴다(character_controller.js의
+      // update()가 매 프레임 적용).
+      const baseRangeLol = typeof worldDistanceToLol === 'function' ? worldDistanceToLol(ctrl._attackRangeBaseWorld || ctrl.stats.attackRange || 0) : 0;
+      const bonusLol = Math.min(p.bonusRangeCapLol, baseRangeLol * p.bonusRangePercent);
+      ctrl._itemTempAttackRangeBonusLol = Math.max(ctrl._itemTempAttackRangeBonusLol || 0, bonusLol);
+      ctrl._itemTempAttackRangeExpiresAt = Math.max(ctrl._itemTempAttackRangeExpiresAt || 0, performance.now() + 1.5 * 1000);
+    }
+  }
+
+  // 나보리 명멸검(깨달음) - 기본 공격 시 기본 스킬(Q/W/E/R)의 "남은"
+  // 재사용대기시간을 15% 줄인다. 쿨다운 중이 아니면(cooldowns.X가 0 또는
+  // 음수) 당연히 효과가 없다.
+  const naboriSlot = (ctrl.items || []).find((s) => s.id === 'naboriFlickerblade');
+  if (naboriSlot && ctrl.cooldowns) {
+    const pct = ITEM_DATA.naboriFlickerblade.enlightenmentPassive.cdrPercentOfRemaining;
+    for (const key of ['Q', 'W', 'E', 'R']) {
+      if (ctrl.cooldowns[key] > 0) ctrl.cooldowns[key] *= (1 - pct);
     }
   }
 }

@@ -271,6 +271,13 @@ class CharacterController {
     this.itemSpellDamageAmpPercent = 0;
     this._itemShieldExpiresAt = 0;
     this.itemDynamicBonusAD = 0;
+    // 전설급 아이템 4차분(정수약탈자~도미닉 경의 인사) 전용 상태.
+    // _itemTempAttackRangeBonusLol/ExpiresAt(마법광학 장치 C44 "비전
+    // 조준"/고속연사포 "저격수")은 character_controller.js의 update()가
+    // 매 프레임 stats.attackRange에 더해 반영한다.
+    this._itemTempAttackRangeBonusLol = 0;
+    this._itemTempAttackRangeExpiresAt = 0;
+    this._attackRangeBaseWorld = 0;
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -465,6 +472,11 @@ class CharacterController {
       // 문제없다(최대 한 프레임짜리 눈에 띄지 않는 과도 상태).
       this.stats.critChance = (this.itemBonusCritChance || 0);
       this.stats.attackRange = base.attackRange;
+      // 마법광학 장치 C44(비전 조준)/고속연사포(저격수)의 임시 사거리
+      // 보너스가 매 프레임(update()) 덧씌우는 "기준값"을 여기 따로
+      // 저장해둔다 - update()가 매번 base.attackRange를 다시 구할 수
+      // 없으므로(recomputeStats()는 구매/판매 등 이벤트성으로만 호출됨).
+      this._attackRangeBaseWorld = base.attackRange;
       // 신발(이동속도) - item_data.js에 LoL 원본 단위로 저장해뒀으므로
       // base.baseMoveSpeed와 동일하게 여기서 한 번만 lolRangeToWorld()로
       // 변환한다(기본 이동속도 자체가 이미 그 변환을 거친 값이라 단위를 맞춤).
@@ -4546,6 +4558,7 @@ class CharacterController {
     }
     this.stats.percentMoveSpeedBonus = msBuff + (this.itemBonusMoveSpeedPercent || 0);
     this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? getFlatMoveSpeedBuff(this) : 0;
+    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld(this._itemTempAttackRangeBonusLol || 0);
     this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
     this._garenPassiveTick(dt);
