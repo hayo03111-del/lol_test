@@ -80,6 +80,20 @@ function _itemStatsSummary(item) {
   if (item.ghostingPassive) parts.push('유체화(이동 시 미니언·챔피언과 충돌하지 않음 - 이 데모는 유닛 충돌 자체가 없어 실질적인 차이는 없음)');
   if (item.enlightenmentPassive) parts.push(`깨달음(기본 공격 시 기본 스킬의 남은 재사용 대기시간 ${Math.round(item.enlightenmentPassive.cdrPercentOfRemaining * 100)}% 감소)`);
   if (item.giantSlayerPassive) { const p = item.giantSlayerPassive; parts.push(`거인 학살자(대상의 추가 체력에 비례해 챔피언 대상 최대 ${Math.round(p.maxBonusPercent * 100)}% 추가 피해, 추가 체력 ${p.maxAtBonusHp}에서 최대)`); }
+  // 전설급 5차분(필멸자의 운명~세릴다의 원한) 패시브 설명.
+  if (item.lifelinePassive && item.lifelinePassive.levelScaledShield) { const p = item.lifelinePassive; parts.push(`생명선(피해 종류 무관 - 체력이 ${Math.round(p.hpThresholdPercent * 100)}% 밑으로 떨어질 만큼이면 ${p.shieldDurationSec}초간 근접${p.meleeShieldMin}~${p.meleeShieldMax}｜원거리${p.rangedShieldMin}~${p.rangedShieldMax}(레벨비례) 보호막, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.critDamagePercent) parts.push(`치명타 피해량 +${Math.round(item.critDamagePercent * 100)}%`);
+  if (item.onHitHybridPassive) { const p = item.onHitHybridPassive; parts.push(`그림자(기본 공격 시 ${p.flat}(+추가공격력${Math.round(p.bonusAdPercent * 100)}%+주문력${Math.round(p.apPercent * 100)}%) 온히트 마법 피해)`); }
+  if (item.lightDarkPassive) { const p = item.lightDarkPassive; parts.push(`빛과 어둠(챔피언 상대 기본 공격마다 번갈아 - 빛: 방어력·마법저항력 ${p.lightArmorMrMin}~${p.lightArmorMrMax}(레벨비례)×최대 ${p.maxStacks}중첩, 어둠: 방어구·마법 관통력 ${Math.round(p.darkPenPercentPerStack * 100)}%×최대 ${p.maxStacks}중첩, ${p.durationSec}초 지속)`); }
+  if (item.ragingBlowsPassive) { const p = item.ragingBlowsPassive; parts.push(`들끓는 일격(기본 공격 시 공격속도 +${Math.round(p.asPerStack * 100)}%, 최대 ${p.maxStacks}중첩, 최대 중첩 시 ${p.doubleProcHitsNeeded}번째 기본 공격마다 적중 시 효과 2회)`); }
+  if (item.overhealShieldPassive) { const p = item.overhealShieldPassive; parts.push(`영액의 보호막(생명력 회복으로 최대 체력을 초과하는 회복분을 보호막으로 전환, 최대 ${p.minShield}~${p.maxShield}(${p.levelMin}~${p.levelMax}레벨))`); }
+  if (item.outOfCombatMsPassive) { const p = item.outOfCombatMsPassive; parts.push(`출몰(전투 이탈 시 이동속도 근접+${p.meleeAmount}｜원거리+${p.rangedAmount})`); }
+  if (item.ghostStepActive) { const p = item.ghostStepActive; parts.push(`사용 시 "${p.nameKo}": 근접${p.meleeDurationSec}초｜원거리${p.rangedDurationSec}초간 이동속도 근접+${Math.round(p.meleeMsPercent * 100)}%｜원거리+${Math.round(p.rangedMsPercent * 100)}% + 유체화, 재사용 대기시간 ${p.cooldownSec}초`); }
+  if (item.skywardPassive) { const p = item.skywardPassive; parts.push(`창공(충전 상태로 공격 시 ${p.durationSec}초간 물리 관통력 근접+${p.meleeArmorPenFlat}｜원거리+${p.rangedArmorPenFlat} + 대상 현재 체력 근접${Math.round(p.meleeCurrentHpPercent * 100)}%｜원거리${Math.round(p.rangedCurrentHpPercent * 100)}% 추가 물리 피해, 비챔피언 최대 ${p.nonChampionCap})`); }
+  if (item.renownPassive) { const p = item.renownPassive; parts.push(`명성(피해를 입힌 챔피언이 ${p.windowSec}초 안에 죽으면 ${p.durationSec}초간 공격력 +${p.baseAD}, 처치마다 +${p.adPerKill} 추가)`); }
+  if (item.shapedChargePassive) { const p = item.shapedChargePassive; parts.push(`성형작약(챔피언에게 스킬로 피해 시 추가로 ${p.meleeFlat}(+물리 관통력×${Math.round(p.meleeArmorPenPercentOfStat * 100)}%)｜원거리 ${p.rangedFlat}(+물리 관통력×${Math.round(p.rangedArmorPenPercentOfStat * 100)}%)의 고정 피해, 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.sabotagePassive) { const p = item.sabotagePassive; parts.push(`파괴 공작(처치 관여 시 ${p.durationSec}초간 보유 - 포탑 대상 다음 기본 공격 시 ${p.dotDurationSec}초에 걸쳐 근접${p.meleeFlat}(+물리 관통력×${Math.round(p.meleeArmorPenPercentOfStat * 100)}%)｜원거리${p.rangedFlat}(+물리 관통력×${Math.round(p.rangedArmorPenPercentOfStat * 100)}%)의 고정 피해)`); }
+  if (item.frostPassive) { const p = item.frostPassive; parts.push(`매서운 추위(스킬로 체력 ${Math.round(p.hpThresholdPercent * 100)}% 이하인 적에게 피해 시 ${p.slowDurationSec}초간 ${Math.round(p.slowPercent * 100)}% 둔화)`); }
   if (item.burnOnDamagePassive) parts.push(`발화(피해 시 ${item.burnOnDamagePassive.durationSec}초간 매초 ${item.burnOnDamagePassive.dmgPerSec}(몬스터 ${item.burnOnDamagePassive.monsterDmgPerSec}) 마법 고정 피해)`);
   // 버그 수정(QA 요청 "효과가 제대로 적용되게 해줘"): 아래 패시브들은
   // item_system.js에 실제로 구현/테스트까지 돼 있었지만, 이 함수가 각

@@ -278,6 +278,17 @@ class CharacterController {
     this._itemTempAttackRangeBonusLol = 0;
     this._itemTempAttackRangeExpiresAt = 0;
     this._attackRangeBaseWorld = 0;
+    // 전설급 아이템 5차분(필멸자의 운명~세릴다의 원한) 전용 상태. 전부
+    // "지속시간이 있는 임시 버프"라 영구 스탯(itemBonus*)과 분리된 별도
+    // 필드로 둔다(recomputeStats()가 매번 다시 더함, itemSystemTick()이
+    // 만료되면 0으로 되돌리고 recomputeStats()를 다시 호출).
+    this.itemTempADBonus = 0;
+    this.itemTempArmorBonus = 0;
+    this.itemTempMrBonus = 0;
+    this.itemTempArmorPenFlat = 0;
+    this.itemTempArmorPenPercent = 0;
+    this.itemTempMagicPenPercent = 0;
+    this.itemBonusCritDamagePercent = 0;
     // 모데카이저 R "죽음의 세계" - 모든 유닛(더미/포탑/우물 포함)의
     // 기본값은 'main'(메인 월드)이다. canRealmInteract()가 이 필드가
     // 아예 없는 기존 유닛도 'main'으로 취급하므로 필수는 아니지만,
@@ -458,12 +469,12 @@ class CharacterController {
       this.maxHp = base.maxHp + (this.bonusMaxHp || 0) + (this.itemBonusMaxHp || 0);
       this.maxMp = base.maxMp + (this.itemBonusMana || 0);
       this.hpRegen = base.hpRegen; this.mpRegen = base.mpRegen;
-      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0) + (this.itemDynamicBonusAD || 0);
+      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0) + (this.itemDynamicBonusAD || 0) + (this.itemTempADBonus || 0);
       this.stats.abilityPower = (this.itemBonusAP || 0);
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
-      this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0);
+      this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0);
       this.stats.baseArmor = base.armor;
-      this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0);
+      this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0) + (this.itemTempMrBonus || 0);
       // 민첩성의 망토(치명타확률 15%) 등 - 이 프로젝트의 기본 챔피언 스탯에는
       // 애초에 크리티컬 확률이 없고(요네/야스오만 자체 패시브로 매 프레임
       // stats.critChance를 1로 강제 재설정 - _yoneTick/_yasuoTick 참고),

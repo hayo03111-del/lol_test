@@ -693,6 +693,137 @@ const ITEM_DATA = {
     stats: { attackDamage: 35, critChance: 0.25 }, armorPenPercent: 0.35,
     giantSlayerPassive: { maxBonusPercent: 0.15, maxAtBonusHp: 1500 },
   },
+
+  // [전설급 아이템] 5차분 - 필멸자의 운명~세릴다의 원한(치명타 계열 나머지
+  // 11종, 원문 915~1023줄). 이번에 새로 필요해진 하위템 "야수화"도 함께
+  // 반영한다. "최후의 대검"(필멸자의 운명의 하위템)은 원문 전체에서 이
+  // 한 곳에만 등장하고 별도 정의가 없다 - 다른 9개 아이템이 전부
+  // "최후의 속삭임"이라고 정확히 적는 것과 비교하면 오탈자일 가능성이
+  // 매우 높아, lastWhisper로 해석했다(명시적 해석 - 존재하지 않는 id를
+  // 만들거나 가격을 지어내지 않는다는 원칙과 동일한 선상에서, 유일하게
+  // 합리적인 기존 아이템에 매칭했다).
+  feralization: { id: 'feralization', nameKo: '야수화', cost: 1337, recipe: ['glowingMote', 'pickaxe'], stats: { attackDamage: 25, abilityHaste: 10 }, armorPenFlat: 5 },
+
+  // 필멸자의 운명 - 고통스러운 상처는 처형인의 대검과 완전히 동일한
+  // grievousOnHitPassive 필드를 재사용한다(이미 챔피언 대상 물리 피해
+  // 시 그리버스를 거는 공용 로직이 있음 - 새 코드 불필요).
+  mortalReminder: {
+    id: 'mortalReminder', nameKo: '필멸자의 운명', cost: 3000, recipe: ['executionersCalling', 'lastWhisper', 'cloakOfAgility'],
+    stats: { attackDamage: 35, critChance: 0.25 }, armorPenPercent: 0.30,
+    grievousOnHitPassive: { percent: 0.40, durationSec: 3.0 },
+  },
+
+  // 경계 - 그림자(기본 공격 시 고정+추가공격력%+주문력% 온히트 마법 피해) +
+  // 빛과 어둠(챔피언 상대 기본 공격마다 번갈아 빛/어둠을 적용 - 빛은
+  // 방어력+마법저항력, 어둠은 방어구 관통력+마법 관통력을 얻고 각각 최대
+  // 3중첩까지 쌓인다. 1중첩 수치(6~8, 레벨비례)의 정확히 3배가 "최대"로
+  // 명시돼 있어 중첩 해석이 원문과 정확히 일치한다).
+  vigilance: {
+    id: 'vigilance', nameKo: '경계', cost: 3000, recipe: ['phageAxe', 'recurveBow'],
+    stats: { attackDamage: 30, attackSpeedPercent: 0.35 },
+    onHitHybridPassive: { flat: 30, bonusAdPercent: 0.10, apPercent: 0.10 },
+    lightDarkPassive: { lightArmorMrMin: 6, lightArmorMrMax: 8, levelMin: 1, levelMax: 18, darkPenPercentPerStack: 0.10, maxStacks: 3, durationSec: 5.0 },
+  },
+
+  // 구인수의 격노검 - 분노(기본 공격 시 고정 마법 피해, 기존
+  // onHitFlatMagicDamage 재사용) + 들끓는 일격(공격속도 스택 최대 4,
+  // 32%, 최대 중첩 도달 시 3번째 평타마다 적중 시 효과 2회 적용 - "분노"의
+  // 고정 마법 피해가 두 번 들어간다).
+  wrathblade: {
+    id: 'wrathblade', nameKo: '구인수의 격노검', cost: 3000, recipe: ['amplifyingTome', 'recurveBow', 'pickaxe'],
+    stats: { attackDamage: 30, abilityPower: 30, attackSpeedPercent: 0.25 },
+    onHitFlatMagicDamage: 30,
+    ragingBlowsPassive: { asPerStack: 0.08, maxStacks: 4, doubleProcHitsNeeded: 3 },
+  },
+
+  // 무한의 대검 - 치명타 피해량(critDamagePercent)은 이번에 새로 만든
+  // 전역 필드로, calculateDamage()가 각 챔피언이 넘기는 critMultiplier에
+  // 더해서 반영한다(공용 필드가 아니라 호출부마다 다른 값을 넘기는 구조라
+  // 이렇게 할 수밖에 없다 - 00_global_constants.js 주석 참고).
+  infinityEdge: {
+    id: 'infinityEdge', nameKo: '무한의 대검', cost: 3500, recipe: ['bfSword', 'pickaxe', 'cloakOfAgility'],
+    stats: { attackDamage: 75, critChance: 0.25 },
+    critDamagePercent: 0.30,
+  },
+
+  // 불멸의 철갑궁 - 생명선. 멜모셔스의 아귀(공격력 비례)/스테락의도전
+  // (추가 체력 비례)과 또 다른 세 번째 형태 - 레벨에 선형 비례하는
+  // "고정" 보호막(levelScaledShield 플래그로 구분)이고, 스테락의도전과
+  // 달리 감쇠 없이 3초간 그대로 유지된다(원문에 "점차 감소" 언급 없음).
+  immortalShieldbow: {
+    id: 'immortalShieldbow', nameKo: '불멸의 철갑궁', cost: 3000, recipe: ['pickaxe', 'peakArrow'],
+    stats: { attackDamage: 55, critChance: 0.25 },
+    lifelinePassive: { hpThresholdPercent: 0.30, icdSec: 90, shieldDurationSec: 3.0, levelScaledShield: true, meleeShieldMin: 400, meleeShieldMax: 700, rangedShieldMin: 320, rangedShieldMax: 560, levelMin: 1, levelMax: 18 },
+  },
+
+  // 피바라기 - 생명력 회복(physicalVampPercent, 기존 필드 재사용) +
+  // 영액의 보호막(흡혈로 최대 체력을 초과해 회복하려는 양을 보호막으로
+  // 전환, 레벨 8~18 구간 선형 성장 - "8레벨부터 증가한다"를 다른
+  // 아이템들과 동일한 8~18 레벨 구간 관례로 해석했다. 8레벨 미만은
+  // 8레벨 값(165)으로 고정).
+  bloodthirster: {
+    id: 'bloodthirster', nameKo: '피바라기', cost: 3400, recipe: ['bfSword', 'pickaxe', 'vampiricScepter'],
+    stats: { attackDamage: 80 }, physicalVampPercent: 0.15,
+    overhealShieldPassive: { minShield: 165, maxShield: 315, levelMin: 8, levelMax: 18 },
+  },
+
+  // 요우무의 유령검 - 출몰(전투 이탈 시 이동속도 증가 - 이 프로젝트엔
+  // "전투 이탈" 판정이 없어 기존 마나 재생 패시브가 쓰던 "최근 챔피언
+  // 피해를 주거나/받은 적 없음" 타임스탬프를 그대로 재사용한다. "얼마나
+  // 지나야 전투 이탈로 보는지"가 원문에 없어 다른 전투 판정 윈도우와
+  // 비슷한 5초로 근사했다 - durationGuessed) + 망령의 발걸음(사용형
+  // 액티브, 45초 쿨다운 - 이동속도 증가 + 유체화(유령무희와 동일한 이유로
+  // 실질적 효과는 없음 - 명시적 한계)).
+  youmuusGhostblade: {
+    id: 'youmuusGhostblade', nameKo: '요우무의 유령검', cost: 2800, recipe: ['serratedDirk', 'tailFeather', 'longSword'],
+    stats: { attackDamage: 55, moveSpeedPercent: 0.04 }, armorPenFlat: 18,
+    outOfCombatMsPassive: { meleeAmount: 20, rangedAmount: 10, outOfCombatSec: 5.0, durationGuessed: true },
+    ghostStepActive: { nameKo: '망령의 발걸음', cooldownSec: 45, meleeDurationSec: 6.0, rangedDurationSec: 4.0, meleeMsPercent: 0.20, rangedMsPercent: 0.15 },
+  },
+
+  // 벼락폭풍검 - 전류 자극(적 챔피언에게 스킬로 피해를 입히면 충전 상태
+  // 준비 - 폭풍갈퀴/고속연사포의 "이동/공격으로 충전"과는 트리거 자체가
+  // 달라 별도 필드(skillChargePassive)로 둔다) + 창공(충전 소모 시
+  // 4초간 물리 관통력 획득 + 대상 현재 체력 비례 추가 물리 피해, 비챔피언
+  // 대상 최대 200).
+  stormsurge: {
+    id: 'stormsurge', nameKo: '벼락폭풍검', cost: 3000, recipe: ['feralization', 'longSword', 'longSword'],
+    stats: { attackDamage: 55, abilityHaste: 10 }, armorPenFlat: 10,
+    skillChargePassive: {},
+    skywardPassive: { durationSec: 4.0, meleeArmorPenFlat: 15, rangedArmorPenFlat: 12, meleeCurrentHpPercent: 0.09, rangedCurrentHpPercent: 0.07, nonChampionCap: 200 },
+  },
+
+  // 오만 - 명성(피해를 입힌 챔피언이 3초 안에 죽으면 90초간 공격력 증가,
+  // 처치할 때마다 추가로 쌓인다 - 지배자의 피갑옷/도미닉 경의 인사 등과
+  // 동일한 "적 AI 없음" 한계를 그대로 안고 있지만, 정확하게 구현해둔다).
+  hubris: {
+    id: 'hubris', nameKo: '오만', cost: 2800, recipe: ['serratedDirk', 'caulfieldsWarhammer'],
+    stats: { attackDamage: 55, abilityHaste: 10 }, armorPenFlat: 18,
+    renownPassive: { windowSec: 3.0, baseAD: 12, adPerKill: 3, durationSec: 90 },
+  },
+
+  // 요새파괴자 - 성형작약(스킬로 챔피언에게 피해 시 추가 고정 피해, 자신의
+  // 물리 방어구 관통력 비례, 재사용대기 20초) + 파괴 공작(처치 관여 시
+  // 90초간 "파괴 공작" 보유 - 그 상태로 에픽 몬스터/포탑 공격 시 3초에
+  // 걸친 거대한 고정 피해. 이 프로젝트엔 정글 몬스터가 없어 포탑 분기만
+  // 구현한다(명시적 한계 - 선체파괴자 등과 동일한 성격). "스킬로" 피해를
+  // 입히는 트리거는 이 프로젝트의 공용 한계(스킬/평타 구분 불가)로 평타+
+  // 스킬 전체에 근사한다(여신의 눈물 등과 동일 - README 참고).
+  fortressBreaker: {
+    id: 'fortressBreaker', nameKo: '요새파괴자', cost: 3000, recipe: ['feralization', 'serratedDirk'],
+    stats: { attackDamage: 55, abilityHaste: 15 }, armorPenFlat: 22,
+    shapedChargePassive: { icdSec: 20, meleeFlat: 50, meleeArmorPenPercentOfStat: 1.50, rangedFlat: 15, rangedArmorPenPercentOfStat: 0.75 },
+    sabotagePassive: { windowSec: 3.0, durationSec: 90, dotDurationSec: 3.0, meleeFlat: 300, meleeArmorPenPercentOfStat: 25.0, rangedFlat: 240, rangedArmorPenPercentOfStat: 20.0 },
+  },
+
+  // 세릴다의 원한 - 매서운 추위(스킬로 체력 50% 이하인 적에게 피해를
+  // 입히면 1초간 30% 둔화 - "스킬로"는 다른 아이템과 동일한 한계로 평타+
+  // 스킬 전체에 근사한다).
+  serylasGrudge: {
+    id: 'serylasGrudge', nameKo: '세릴다의 원한', cost: 3000, recipe: ['caulfieldsWarhammer', 'lastWhisper'],
+    stats: { attackDamage: 45, abilityHaste: 15 }, armorPenPercent: 0.35,
+    frostPassive: { hpThresholdPercent: 0.50, slowPercent: 0.30, slowDurationSec: 1.0 },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -709,6 +840,8 @@ const ITEM_ORDER = [
   'giantsBelt', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel',
   'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather',
   'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards',
+  'feralization',
+  'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -719,7 +852,7 @@ const ITEM_CATEGORIES = [
   // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
   // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
   // 하나에서 같이 보여준다.
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization'] },
   // 무라마나는 마나무네가 변신해서만 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
-  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards'] },
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge'] },
 ];

@@ -415,7 +415,13 @@ const DAMAGE_TYPE = { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' };
 // 넘어온다 - 여기서 다시 굴리지 않는다(같은 공격 인스턴스의 결과가 명중
 // 시점에 바뀌면 안 되므로).
 function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0 }) {
-  let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critMultiplier) : 1);
+  // 무한의 대검(치명타 피해량 +30%) - 각 챔피언 스킬이 저마다 다른
+  // critMultiplier를 넘기므로(공용 필드가 아님), 공격자의 아이템 보너스를
+  // 여기서 한 곳에서 더해 넣는다 - 치명타가 아니면 critMultiplier 자체가
+  // 안 쓰이므로 영향이 없다.
+  const critAtk = source || (typeof controller !== 'undefined' ? controller : null);
+  const critBonus = (critAtk && critAtk.itemBonusCritDamagePercent) || 0;
+  let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critMultiplier + critBonus) : 1);
   if (damageType === DAMAGE_TYPE.PHYSICAL) {
     let armor = (target && (target.armor ?? target.stats?.armor)) || 0;
     if (bonusArmorIgnorePercent > 0 && target) { const baseArmor = target.baseArmor ?? target.stats?.baseArmor ?? armor; const bonusArmor = Math.max(0, armor - baseArmor); armor = baseArmor + bonusArmor * (1 - Math.min(1, bonusArmorIgnorePercent)); }
@@ -424,9 +430,16 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 아이템 패시브(톱날 단검 - 고정 물리 관통력 10) - 마법사의 신발(고정
     // 마법 관통력)과 동일한 원칙으로 퍼센트 관통보다 먼저 적용한다.
     const atkP = source || (typeof controller !== 'undefined' ? controller : null);
-    const flatArmorPen = (atkP && atkP.itemBonusArmorPenFlat) || 0;
+    // 벼락폭풍검(창공)의 "4초간 물리 관통력 획득"은 영구 스탯(itemBonusArmorPenFlat,
+    // 구매/판매 시에만 재계산)과 별개로 지속시간이 있는 임시 버프라 자체
+    // 필드(itemTempArmorPenFlat)에 더해서 같은 자리에서 합산한다.
+    const flatArmorPen = ((atkP && atkP.itemBonusArmorPenFlat) || 0) + ((atkP && atkP.itemTempArmorPenFlat) || 0);
     armor = Math.max(0, armor - flatArmorPen);
     armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등
+    // 경계(빛과 어둠 - 어둠)의 "10%(최대 30%) 방어구 관통력"도 영구
+    // 곱연산 필드(itemBonusArmorPenMultiplier)와 별개인 임시 버프라
+    // 똑같이 곱으로 추가 적용한다.
+    if (atkP && atkP.itemTempArmorPenPercent > 0) armor *= (1 - Math.max(0, Math.min(1, atkP.itemTempArmorPenPercent)));
     // 아이템 패시브(최후의 속삭임 - 방어구 관통력 18%) - 마법 관통력(위
     // MAGICAL 분기)과 동일한 이유로 공격자를 source||controller로 찾는다.
     if (atkP && atkP.itemBonusArmorPenMultiplier < 1) armor *= atkP.itemBonusArmorPenMultiplier;
@@ -444,7 +457,10 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     const atk = source || (typeof controller !== 'undefined' ? controller : null);
     const flatMagicPen = (atk && atk.itemBonusMagicPenFlat) || 0;
     mr = Math.max(0, mr - flatMagicPen);
-    const effectiveMr = mr * (1 - Math.max(0, Math.min(1, magicPenPercent)));
+    // 경계(빛과 어둠 - 어둠)의 임시 마법 관통력(최대 30%) - PHYSICAL 분기의
+    // itemTempArmorPenPercent와 동일한 자리.
+    const tempMagicPenPercent = (atk && atk.itemTempMagicPenPercent) || 0;
+    const effectiveMr = mr * (1 - Math.max(0, Math.min(1, magicPenPercent))) * (1 - Math.max(0, Math.min(1, tempMagicPenPercent)));
     dmg *= 100 / (100 + Math.max(0, effectiveMr));
     dmg *= 1 - getMagicDamageReductionPercent(target);
   }
