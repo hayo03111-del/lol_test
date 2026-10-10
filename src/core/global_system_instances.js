@@ -184,6 +184,17 @@ function _itemStatsSummary(item) {
   }
   if (item.dancePassive) { const p = item.dancePassive; parts.push(`마법의 춤(적 챔피언에게 마법·고정 피해 시 ${p.durationSec}초간 이동 속도 +${p.msFlat})`); }
   if (item.apPercentOfBonusHp) parts.push(`공허의 마력(추가 체력의 ${Math.round(item.apPercentOfBonusHp * 100)}%만큼 추가 주문력)`);
+  // 전설급 9차분(벤시의장막~해신작쇼) 패시브 설명.
+  if (item.nullifyPassive) { const p = item.nullifyPassive; parts.push(`무효화(적의 다음 피해 1회를 완전히 차단하는 방어막, 재사용대기시간 ${p.icdSec}초${p.resetOnChampionDamage ? ' - 챔피언에게 피해를 입히면 재사용대기시간 초기화' : ''})`); }
+  if (item.stasisActive) { const p = item.stasisActive; parts.push(`사용 시 "${p.nameKo}": ${p.durationSec}초간 경직(무적+대상 지정 불가, 이동 불가)${p.maxUses ? `, 최대 ${p.maxUses}회만 사용 가능` : `, 재사용 대기시간 ${p.cooldownSec}초`}`); }
+  if (item.totalApMultiplierPercent) parts.push(`신비한 작품(총 주문력 +${Math.round(item.totalApMultiplierPercent * 100)}%)`);
+  if (item.apSourceWiki) parts.push('(주문력 수치는 원문 누락으로 실제 LoL 수치 사용)');
+  if (item.giantAbsorbPassive) { const p = item.giantAbsorbPassive; parts.push(`거인의 흡수(${p.rangeLol} 사거리 내 챔피언 상대 ${p.chargeSec}초 충전, 충전된 공격 시 ${p.flatDmg}+체력${Math.round(p.bonusHpPercent * 100)}% 추가 물리 피해 + 그 피해의 ${Math.round(p.maxHpGainPercent * 100)}%만큼 영구 최대 체력 획득, 대상별 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.titanicPassive) { const p = item.titanicPassive; parts.push(`거인(최대 체력 ${p.hpPerScaleStep}당 크기 +${Math.round(p.scalePercentPerStep * 100)}%, 최대 +${Math.round(p.maxScalePercent * 100)}%)`); }
+  if (item.warmogsHeartPassive) { const p = item.warmogsHeartPassive; parts.push(`워모그의 심장(추가 체력 ${p.bonusHpThreshold} 이상일 때, 챔피언에게 ${p.champOutOfCombatSec}초｜그 외 ${p.nonChampOutOfCombatSec}초 동안 피해를 입지 않으면 초당 ${Math.round(p.percentPerSec * 100)}% 체력 회복)`); }
+  if (item.agonyPassive) { const p = item.agonyPassive; parts.push(`고뇌(챔피언과 전투 중일 때 ${p.intervalSec}초마다 주변 적 챔피언에게 추가 체력 ${Math.round(p.bonusHpPercent * 100)}% 마법 피해 + 입힌 피해의 ${Math.round(p.healPercentOfDamage * 100)}%만큼 체력 회복)`); }
+  if (item.healingReceivedBonusPercent) parts.push(`무한한 활력(자신이 받는 체력 회복·보호막 효과 +${Math.round(item.healingReceivedBonusPercent * 100)}%)`);
+  if (item.voidbornResiliencePassive) { const p = item.voidbornResiliencePassive; parts.push(`공허 태생의 저항력(챔피언과 ${p.combatDurationSec}초 이상 전투 시 전투가 끝날 때까지 추가 방어력·마법저항력 +${Math.round(p.bonusPercent * 100)}%)`); }
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;

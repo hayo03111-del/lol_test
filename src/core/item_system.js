@@ -42,6 +42,11 @@ function recomputeItemStats(ctrl) {
   // 원칙(곱연산)의 마법저항력 버전. 지금까지는 마법 관통력이 전부 고정
   // 수치(마법사의 신발)뿐이라 이 필드가 필요 없었다.
   ctrl.itemBonusMagicPenMultiplier = 1;
+  // 정령의형상(무한한 활력) - "자신이 받는 모든 체력 회복 및 보호막 효과가
+  // 25% 증가". 이 엔진의 모든 회복/보호막 경로를 전부 건드릴 수는 없어
+  // (챔피언 파일마다 따로 구현된 자체 회복 스킬은 한계로 남긴다 - README 명시),
+  // 공용 경로(기본 재생/HoT 큐/흡혈/생명선 보호막)에만 적용한다.
+  ctrl.itemHealingReceivedBonusPercent = 0;
   // 무한의 대검 - 치명타 피해량 +30%(영구 스탯, calculateDamage()가 각
   // 챔피언이 넘기는 critMultiplier에 더해서 읽는다).
   ctrl.itemBonusCritDamagePercent = 0;
@@ -106,10 +111,15 @@ function recomputeItemStats(ctrl) {
     if (item.permanentCritPassive) ctrl.itemBonusCritChance += ctrl._itemPermCritBonus || 0;
     // 악의(경멸) - 궁극기 가속.
     ctrl.itemBonusUltimateHaste += item.ultimateHasteFlat || 0;
+    // 정령의형상(무한한 활력).
+    ctrl.itemHealingReceivedBonusPercent += item.healingReceivedBonusPercent || 0;
     // 어둠불꽃횃불(어둠불꽃) - 불타는 대상 하나당 총 주문력 4% 증가. 현재
     // 불타고 있는 대상 수(_itemBlackfireBurnTargets)는 itemOnDamageDealt()가
     // DOT를 걸 때 기록하고 itemSystemTick()이 만료분을 정리한다.
     if (item.blackfirePassive) ctrl.itemTotalApMultiplierBonus += (ctrl._itemBlackfireStacks || 0) * item.blackfirePassive.apPercentPerStack;
+    // 라바돈의 죽음모자(신비한 작품) - "총 주문력 30% 증가"는 고정 배율이라
+    // 단순 합연산(위 블록처럼 동적 계산이 필요 없음).
+    ctrl.itemTotalApMultiplierBonus += item.totalApMultiplierPercent || 0;
     // 영겁의지팡이(불멸의 시간) - 60초마다 쌓이는 체력/마나/주문력 중첩.
     // 중첩 자체(ctrl._itemTimelessStacks)는 암흑의 인장 영광과 동일하게
     // 팔아도 남지만, 스탯 반영은 아이템을 들고 있을 때만 적용된다.
@@ -119,6 +129,10 @@ function recomputeItemStats(ctrl) {
       ctrl.itemBonusMaxHp += st * item.timelessPassive.hpPerStack;
       ctrl.itemBonusMana += st * item.timelessPassive.manaPerStack;
     }
+    // 강철심장(거인의 흡수) - "그 피해의 10%만큼 최대 체력을 부여" - 매번
+    // 발동할 때마다 영구적으로 쌓이는 추가 최대 체력(암흑의 인장 영광과
+    // 동일한 "중첩 상태는 ctrl에, 적용은 들고 있을 때만" 패턴).
+    if (item.giantAbsorbPassive) ctrl.itemBonusMaxHp += ctrl._itemHeartsteelPermanentHpGain || 0;
     // 균열생성기(공허의 부패) - 전투 중 누적 추가 피해가 최대치에 도달하면
     // 모든 피해 흡혈(근접/원거리)을 추가로 얻는다.
     if (item.combatRampPassive && item.combatRampPassive.onMaxVamp && ctrl._itemCombatRampVampApplied) {
@@ -426,6 +440,9 @@ function useItem(ctrl, slotIndex) {
   // 마법공학총검(번개 화살) - 자기 주변이 아니라 "현재 선택한 적 챔피언
   // 1명"을 노리는 최초의 아이템 액티브.
   if (item.noxiousBladeActive) return _useNoxiousBladeActive(ctrl, item);
+  // 존야의모래시계(시간 정지)/추적자의 팔목 보호대(시간 정지, 1회 한정) -
+  // 둘 다 동일한 경직 효과를 공유한다.
+  if (item.stasisActive) return _useStasisActive(ctrl, item);
   // 제어 와드 - 인벤토리 중첩 소모형이지만 회복이 아니라 와드 설치가
   // 목적이라 별도 함수로 분리한다(투명 와드의 placeWard()와 유사한 구조,
   // 다만 트린켓 전용 슬롯이 아니라 6칸 인벤토리를 쓴다).
@@ -588,11 +605,49 @@ function _useNoxiousBladeActive(ctrl, item) {
   return true;
 }
 
+// 존야의모래시계(시간 정지)/추적자의 팔목 보호대(시간 정지, 1회 한정) -
+// "경직: 무적 및 대상으로 지정할 수 없는 상태가 되지만, 그동안 움직일 수
+// 없습니다." 기존 isUntargetable(수호천사 환생이 쓰는 것과 동일한 필드 -
+// 무적+대상 지정 불가)에 더해 STUN 상태이상(이동/스킬 시전을 막는 기존
+// 공용 isStunned() 판정)을 함께 걸어 "움직일 수 없음"까지 재현한다.
+// maxUses가 있으면(추적자의 팔목 보호대) 쿨다운이 아니라 횟수로 제한하고,
+// 사용 후 transformsAfterUse로 자기 자신을 변신시킨다.
+function _useStasisActive(ctrl, item) {
+  const now = performance.now();
+  const p = item.stasisActive;
+  if (p.maxUses) {
+    ctrl._itemStasisUsesLeft = ctrl._itemStasisUsesLeft || {};
+    const used = ctrl._itemStasisUsesLeft[item.id] || 0;
+    if (used >= p.maxUses) { console.warn(`[ITEM] ${item.nameKo}: 더 이상 사용할 수 없습니다(1회 한정).`); return false; }
+    ctrl._itemStasisUsesLeft[item.id] = used + 1;
+  } else {
+    ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
+    const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
+    if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+    ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
+  }
+  ctrl.isUntargetable = true;
+  ctrl._itemStasisUntil = Math.max(ctrl._itemStasisUntil || 0, now + p.durationSec * 1000);
+  if (typeof applyStatus === 'function') {
+    applyStatus(ctrl, { id: 'itemStasisStun', type: 'STUN', duration: p.durationSec });
+  }
+  if (p.transformsAfterUse) {
+    const slot = (ctrl.items || []).find((s) => s.id === item.id);
+    if (slot) slot.id = p.transformsAfterUse;
+    if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  }
+  console.log(`[ITEM] ${item.nameKo}(${p.nameKo}) 사용`);
+  return true;
+}
+
 function _itemTickActiveHeals(ctrl, dt) {
   if (!ctrl._itemActiveHeals || !ctrl._itemActiveHeals.length) return;
+  // 정령의형상(무한한 활력) - 체력 물약/억겁의 카탈리스트·영겁의지팡이
+  // "영원" 등 이 큐를 쓰는 모든 HoT에 공통 적용된다.
+  const healMult = 1 + (ctrl.itemHealingReceivedBonusPercent || 0);
   for (const heal of ctrl._itemActiveHeals) {
     const step = Math.min(dt, heal.remainingSec);
-    ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal.perSec * step);
+    ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal.perSec * healMult * step);
     heal.remainingSec -= step;
   }
   // 아이템을 팔거나 다 써도(인벤토리에서 이미 제거됨) 이미 시작된 회복은
@@ -636,12 +691,14 @@ function _itemTickHpRegen(ctrl, item, dt, now) {
   // 그 값이 정확히 0일 때(틱 함수 자체 테스트처럼 now=0에서 "방금 맞음"을
   // 재현하는 경우 등) false로 취급돼 강화 회복이 누락된다 - 항상 숫자인지만
   // 확인하고 시간 차 계산으로 판정한다.
+  // 정령의형상(무한한 활력) - 인내의 집중력(평시/전투 강화) 둘 다에 적용.
+  const healMult = 1 + (ctrl.itemHealingReceivedBonusPercent || 0);
   if (item.champDamageRegen && typeof ctrl._itemLastTookChampionDamageAt === 'number'
       && (now - ctrl._itemLastTookChampionDamageAt) <= item.champDamageRegen.durationSec * 1000) {
     const isMelee = !!(ctrl.stats && ctrl.stats.attackRange <= 300);
     const total = isMelee ? item.champDamageRegen.meleeMaxHp : item.champDamageRegen.rangedMaxHp;
     const perSec = total / item.champDamageRegen.durationSec;
-    ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + perSec * dt);
+    ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + perSec * healMult * dt);
     return;
   }
   if (!item.regenPassive) return;
@@ -650,7 +707,7 @@ function _itemTickHpRegen(ctrl, item, dt, now) {
   ctrl._itemTick[key] = (ctrl._itemTick[key] || 0) + dt;
   while (ctrl._itemTick[key] >= item.regenPassive.tickSec) {
     ctrl._itemTick[key] -= item.regenPassive.tickSec;
-    ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + item.regenPassive.hpPerTick);
+    ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + item.regenPassive.hpPerTick * healMult);
   }
 }
 
@@ -850,6 +907,127 @@ function itemSystemTick(ctrl, dt) {
       recomputeItemStats(ctrl);
     }
   }
+  // 신록의 장벽/벤시의장막(무효화) - 재사용대기시간이 끝나면 방어막이
+  // "생성"된다(실제로 막는 건 itemOnTakeDamage()). 벤시의장막은 챔피언에게
+  // 피해를 입히면 재사용대기시간이 초기화되는 조항이 추가로 있다
+  // (itemOnDamageDealt() 참고) - 아이템을 안 들고 있으면 상태를 전부 지운다.
+  const nullifySlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].nullifyPassive);
+  if (!nullifySlot) {
+    ctrl._itemNullifyReadyAt = 0; ctrl._itemNullifyShieldUp = false;
+  } else if (!ctrl._itemNullifyShieldUp && now >= (ctrl._itemNullifyReadyAt || 0)) {
+    ctrl._itemNullifyShieldUp = true;
+    console.log(`[ITEM] ${ITEM_DATA[nullifySlot.id].nameKo} - 무효화 방어막 생성`);
+  }
+  // 존야의모래시계(시간 정지)/추적자의 팔목 보호대 - 경직(무적+대상 지정
+  // 불가) 시간이 끝나면 대상 지정 불가를 풀어준다(수호천사 환생과 동일한
+  // 패턴이지만, 죽었다가 부활하는 게 아니므로 체력/마나 회복은 없다).
+  if (ctrl._itemStasisUntil && now >= ctrl._itemStasisUntil) {
+    ctrl._itemStasisUntil = 0;
+    ctrl.isUntargetable = false;
+    console.log('[ITEM] 시간 정지 종료');
+  }
+  // 강철심장(거인의 흡수) - "700 사거리 내 챔피언을 상대로 3초간 충전."
+  // 현재 선택한 대상(ctrl.currentTarget)이 사거리 내 챔피언인 동안에만
+  // 진행되고, 벗어나거나 다른 대상으로 바뀌면 처음부터 다시 쌓인다.
+  const heartsteelSlot = (ctrl.items || []).find((s) => s.id === 'heartsteel');
+  if (!heartsteelSlot) {
+    ctrl._itemHeartsteelProgress = 0; ctrl._itemHeartsteelChargeTarget = null;
+  } else if (!ctrl._itemHeartsteelReady) {
+    const p = ITEM_DATA.heartsteel.giantAbsorbPassive;
+    const target = ctrl.currentTarget;
+    const inRange = target && target.hp > 0 && target.isChampion && typeof getHorizontalDistance === 'function' && typeof worldDistanceToLol === 'function'
+      && worldDistanceToLol(getHorizontalDistance(ctrl.root.position, target.mesh ? target.mesh.position : target.root.position)) <= p.rangeLol;
+    const targetKey = inRange ? _itemTargetKey(target) : null;
+    const icdOk = !targetKey || (now >= ((ctrl._itemHeartsteelIcdUntil || {})[targetKey] || 0));
+    if (inRange && icdOk) {
+      if (ctrl._itemHeartsteelChargeTarget !== targetKey) { ctrl._itemHeartsteelChargeTarget = targetKey; ctrl._itemHeartsteelProgress = 0; }
+      ctrl._itemHeartsteelProgress = (ctrl._itemHeartsteelProgress || 0) + dt;
+      if (ctrl._itemHeartsteelProgress >= p.chargeSec) { ctrl._itemHeartsteelReady = true; ctrl._itemHeartsteelReadyTargetKey = targetKey; }
+    } else {
+      ctrl._itemHeartsteelProgress = 0; ctrl._itemHeartsteelChargeTarget = null;
+    }
+  }
+  // 강철심장(거인) - 최대 체력 1000당 모델 크기 3% 증가(최대 30%, 시각
+  // 효과 - 전투 수치에는 영향 없음).
+  if (heartsteelSlot && ctrl.root && ctrl.root.scale) {
+    const p = ITEM_DATA.heartsteel.titanicPassive;
+    const scaleBonus = Math.min(p.maxScalePercent, ((ctrl.maxHp || 0) / p.hpPerScaleStep) * p.scalePercentPerStep);
+    const s = 1 + scaleBonus;
+    if (Math.abs((ctrl._itemHeartsteelScale || 1) - s) > 1e-4) { ctrl._itemHeartsteelScale = s; ctrl.root.scale.setScalar(s); }
+  } else if (!heartsteelSlot && ctrl._itemHeartsteelScale && ctrl._itemHeartsteelScale !== 1 && ctrl.root && ctrl.root.scale) {
+    ctrl._itemHeartsteelScale = 1; ctrl.root.scale.setScalar(1);
+  }
+  // 워모그의 갑옷(워모그의 심장) - 추가 체력 2000 이상일 때, 챔피언에게
+  // 8초(비챔피언에게는 3초) 동안 피해를 입지 않으면 초당 3% 체력 회복.
+  const warmogsSlot = (ctrl.items || []).find((s) => s.id === 'warmogsArmor');
+  if (warmogsSlot) {
+    const p = ITEM_DATA.warmogsArmor.warmogsHeartPassive;
+    const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
+    const safeFromChamp = (now - (ctrl._itemLastTookChampionDamageAt || 0)) > p.champOutOfCombatSec * 1000;
+    const safeFromAny = (now - (ctrl._itemLastTookAnyDamageAt || 0)) > p.nonChampOutOfCombatSec * 1000;
+    if (bonusHp >= p.bonusHpThreshold && safeFromChamp && safeFromAny) {
+      const healMult = 1 + (ctrl.itemHealingReceivedBonusPercent || 0);
+      ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + (ctrl.maxHp || 0) * p.percentPerSec * healMult * dt);
+    }
+  }
+  // 끝없는 절망(고뇌) - 챔피언과 전투 중일 때 4초마다 주변 적 챔피언에게
+  // 추가체력3% 마법 피해 + 입힌 피해 합의 250%만큼 체력 회복.
+  const despairSlot = (ctrl.items || []).find((s) => s.id === 'endlessDespair');
+  if (!despairSlot) {
+    ctrl._itemAgonyTick = 0;
+  } else {
+    const p = ITEM_DATA.endlessDespair.agonyPassive;
+    const inCombat = (now - (ctrl._itemLastDealtChampionDamageAt || 0)) <= p.outOfCombatSec * 1000
+      || (now - (ctrl._itemLastTookChampionDamageAt || 0)) <= p.outOfCombatSec * 1000;
+    if (!inCombat) { ctrl._itemAgonyTick = 0; }
+    else {
+      ctrl._itemAgonyTick = (ctrl._itemAgonyTick || 0) + dt;
+      if (ctrl._itemAgonyTick >= p.intervalSec) {
+        ctrl._itemAgonyTick -= p.intervalSec;
+        const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
+        const raw = bonusHp * p.bonusHpPercent;
+        let totalDealt = 0;
+        if (raw > 0 && typeof findEnemiesInRadius === 'function') {
+          const hits = findEnemiesInRadius(ctrl.root.position, p.radius);
+          for (const { unit } of hits) {
+            if (!unit || unit.hp <= 0 || !unit.isChampion) continue;
+            totalDealt += applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+          }
+        }
+        if (totalDealt > 0) {
+          const healMult = 1 + (ctrl.itemHealingReceivedBonusPercent || 0);
+          ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + totalDealt * p.healPercentOfDamage * healMult);
+        }
+      }
+    }
+  }
+  // 해신작쇼(공허 태생의 저항력) - 챔피언과 5초 이상 "끊기지 않고" 전투를
+  // 벌이면 전투가 끝날 때까지 추가 방어력/마법저항력 30% 증가(기존 임시
+  // 스탯 필드 재사용). 전투 시작 시각(_itemAbyssalCombatStartAt)은 전투가
+  // 끊기는 즉시(요우무의 유령검과 동일한 5초 기준) 초기화된다.
+  const abyssalSlot = (ctrl.items || []).find((s) => s.id === 'abyssalMask');
+  if (!abyssalSlot) {
+    if (ctrl._itemAbyssalBuffActive) { ctrl._itemAbyssalBuffActive = false; ctrl.itemTempArmorBonus = 0; ctrl.itemTempMrBonus = 0; ctrl.recomputeStats(); }
+    ctrl._itemAbyssalCombatStartAt = 0;
+  } else {
+    const p = ITEM_DATA.abyssalMask.voidbornResiliencePassive;
+    const inCombat = (now - (ctrl._itemLastDealtChampionDamageAt || 0)) <= p.outOfCombatSec * 1000
+      || (now - (ctrl._itemLastTookChampionDamageAt || 0)) <= p.outOfCombatSec * 1000;
+    if (!inCombat) {
+      ctrl._itemAbyssalCombatStartAt = 0;
+      if (ctrl._itemAbyssalBuffActive) { ctrl._itemAbyssalBuffActive = false; ctrl.itemTempArmorBonus = 0; ctrl.itemTempMrBonus = 0; ctrl.recomputeStats(); }
+    } else {
+      if (!ctrl._itemAbyssalCombatStartAt) ctrl._itemAbyssalCombatStartAt = now;
+      const qualifies = (now - ctrl._itemAbyssalCombatStartAt) >= p.combatDurationSec * 1000;
+      if (qualifies && !ctrl._itemAbyssalBuffActive) {
+        ctrl._itemAbyssalBuffActive = true;
+        ctrl.itemTempArmorBonus = (ctrl.itemBonusArmor || 0) * p.bonusPercent;
+        ctrl.itemTempMrBonus = (ctrl.itemBonusMr || 0) * p.bonusPercent;
+        ctrl.recomputeStats();
+        console.log('[ITEM] 해신작쇼 - 공허 태생의 저항력 발동');
+      }
+    }
+  }
   // 영겁의지팡이(불멸의 시간) - 60초마다 체력/마나/주문력 중첩 획득, 최대
   // 중첩 도달 시 1회 레벨업. 아이템을 팔면(인벤토리에서 사라지면) 더 이상
   // 진행되지 않지만, 이미 쌓인 중첩(_itemTimelessStacks)은 암흑의 인장
@@ -934,7 +1112,9 @@ function applyItemVamp(source, finalDmg) {
   const vampPercent = (source.itemAllDamageVampPercent || 0) + (source._itemTempVampPercent || 0);
   if (!(vampPercent > 0)) return;
   if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
-  source.hp = Math.min(source.maxHp, source.hp + finalDmg * vampPercent);
+  // 정령의형상(무한한 활력) - 흡혈도 "자신이 받는 체력 회복"에 해당한다.
+  const healMult = 1 + (source.itemHealingReceivedBonusPercent || 0);
+  source.hp = Math.min(source.maxHp, source.hp + finalDmg * vampPercent * healMult);
 }
 
 // 생명력 흡수(흡혈의 낫) - "모든 피해 흡혈"(위 applyItemVamp)과 달리
@@ -944,7 +1124,8 @@ function applyItemPhysicalVamp(source, finalDmg, damageType) {
   if (!source || !(source.itemPhysicalVampPercent > 0) || !(finalDmg > 0)) return;
   if (damageType !== DAMAGE_TYPE.PHYSICAL) return;
   if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
-  const healAmt = finalDmg * source.itemPhysicalVampPercent;
+  // 정령의형상(무한한 활력).
+  const healAmt = finalDmg * source.itemPhysicalVampPercent * (1 + (source.itemHealingReceivedBonusPercent || 0));
   // 피바라기(영액의 보호막) - 생명력 흡수 전용 아이템이라 생명력 회복
   // (physicalVampPercent)은 흡혈의 낫 등과 공용 필드를 그대로 쓰지만,
   // "최대 체력을 초과하는 회복분을 보호막으로 전환"하는 건 피바라기만의
@@ -987,6 +1168,21 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
   let remaining = incomingDamage;
   const now = performance.now();
 
+  // 신록의 장벽/벤시의장막(무효화) - "적의 다음 스킬을 막아 주는 주문
+  // 방어막"을 이 엔진의 공용 한계(스킬/평타 구분 불가)에 따라 "다음 피해
+  // 1회 전체 무효화"로 근사한다. 방어막이 떠 있으면 이번 피해를 통째로
+  // 막고 소모한다 - itemSystemTick()이 재사용대기시간 뒤에 다시 생성한다.
+  if (ctrl._itemNullifyShieldUp) {
+    const nullifySlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].nullifyPassive);
+    if (nullifySlot) {
+      const p = ITEM_DATA[nullifySlot.id].nullifyPassive;
+      ctrl._itemNullifyShieldUp = false;
+      ctrl._itemNullifyReadyAt = now + p.icdSec * 1000;
+      console.log(`[ITEM] ${ITEM_DATA[nullifySlot.id].nameKo} - 무효화 발동(피해 완전 차단)`);
+      return 0;
+    }
+  }
+
   // 멜모셔스의 아귀 - 생명선(마법 피해 전용, 원문 그대로).
   const mawSlot = (ctrl.items || []).find((s) => s.id === 'maw');
   if (mawSlot && damageType === DAMAGE_TYPE.MAGICAL && (ctrl._itemMawIcdUntil || 0) <= now) {
@@ -997,7 +1193,8 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
       const isMelee = _itemIsMelee(ctrl);
       const shieldBase = isMelee ? p.meleeShieldBase : p.rangedShieldBase;
       const shieldBonusPercent = isMelee ? p.meleeShieldBonusAdPercent : p.rangedShieldBonusAdPercent;
-      const shieldAmt = shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent;
+      // 정령의형상(무한한 활력) - 생명선 보호막도 "받는 보호막"에 해당한다.
+      const shieldAmt = (shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent) * (1 + (ctrl.itemHealingReceivedBonusPercent || 0));
       ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       ctrl._itemMawOmnivampUntil = now + p.omnivampDurationSec * 1000;
@@ -1016,7 +1213,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
     if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
       ctrl._itemSterakIcdUntil = now + p.icdSec * 1000;
       const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
-      const shieldAmt = bonusHp * p.bonusHpShieldPercent;
+      const shieldAmt = bonusHp * p.bonusHpShieldPercent * (1 + (ctrl.itemHealingReceivedBonusPercent || 0));
       ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
       ctrl._itemSterakShieldState = { maxAmount: shieldAmt, startedAt: now, decaySec: p.shieldDecaySec };
       console.log('[ITEM] 스테락의도전 - 생명선 발동');
@@ -1033,9 +1230,9 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
     if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
       ctrl._itemShieldbowIcdUntil = now + p.icdSec * 1000;
       const isMelee = _itemIsMelee(ctrl);
-      const shieldAmt = isMelee
+      const shieldAmt = (isMelee
         ? _itemScaleByLevel(ctrl, p.meleeShieldMin, p.meleeShieldMax, p.levelMin, p.levelMax)
-        : _itemScaleByLevel(ctrl, p.rangedShieldMin, p.rangedShieldMax, p.levelMin, p.levelMax);
+        : _itemScaleByLevel(ctrl, p.rangedShieldMin, p.rangedShieldMax, p.levelMin, p.levelMax)) * (1 + (ctrl.itemHealingReceivedBonusPercent || 0));
       ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       console.log('[ITEM] 불멸의 철갑궁 - 생명선 발동');
@@ -1051,7 +1248,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
     const hpAfter = (ctrl.hp || 0) - Math.max(0, remaining - (ctrl.shield || 0));
     if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
       ctrl._itemSeraphIcdUntil = now + p.icdSec * 1000;
-      const shieldAmt = (ctrl.maxMp || 0) * p.shieldManaPercent;
+      const shieldAmt = (ctrl.maxMp || 0) * p.shieldManaPercent * (1 + (ctrl.itemHealingReceivedBonusPercent || 0));
       ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       console.log('[ITEM] 대천사의포옹 - 생명선 발동');
@@ -1480,6 +1677,15 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
       const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
       target.hp = Math.max(minHp, (target.hp || 0) - bonus);
     }
+  }
+
+  // 벤시의장막(무효화) - "챔피언에게 피해를 입으면 재사용 대기시간이
+  // 초기화됩니다." 이미 방어막이 떠 있는 상태는 건드리지 않고(보수적
+  // 해석 - item_data.js 주석 참고), 아직 충전 중일 때만 타이머를 다시
+  // 지금부터 전체 재사용대기시간만큼 센다.
+  const banshSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].nullifyPassive && ITEM_DATA[s.id].nullifyPassive.resetOnChampionDamage);
+  if (banshSlot && target.isChampion && !ctrl._itemNullifyShieldUp) {
+    ctrl._itemNullifyReadyAt = performance.now() + ITEM_DATA[banshSlot.id].nullifyPassive.icdSec * 1000;
   }
 }
 
@@ -1954,6 +2160,25 @@ function _itemCleaveOnHit(ctrl, target) {
 // 다시 applyDamage()를 호출해도 무한 재귀가 생기지 않는다(기존 광휘의
 // 검/티아맷과 동일한 안전 지점 - item_data.js 상단 주석 참고).
 function itemOnBasicAttackHit(ctrl, target, isCritical) {
+  // 강철심장(거인의 흡수) - 충전이 끝난 상태에서, 충전을 시작했던 바로 그
+  // 대상을 기본 공격으로 맞히면 70+체력6% 추가 물리 피해 + 그 피해의 10%만큼
+  // 영구 최대 체력 획득(대상별 재사용대기시간 30초).
+  if (ctrl._itemHeartsteelReady && _itemTargetKey(target) === ctrl._itemHeartsteelReadyTargetKey) {
+    ctrl._itemHeartsteelReady = false; ctrl._itemHeartsteelProgress = 0; ctrl._itemHeartsteelChargeTarget = null;
+    const p = ITEM_DATA.heartsteel.giantAbsorbPassive;
+    const bonusDmg = p.flatDmg + (ctrl.maxHp || 0) * p.bonusHpPercent;
+    applyDamage(target, { rawDamage: bonusDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    // 영구 최대 체력 획득분은 암흑의 인장 영광/영겁의지팡이 불멸의 시간과
+    // 동일한 패턴 - 중첩 상태(_itemHeartsteelPermanentHpGain)를 따로 저장해두고
+    // recomputeItemStats()의 applyOne()이 매번 다시 더해 넣는다(여기서
+    // itemBonusMaxHp를 직접 건드리면 다음 recomputeItemStats() 호출 때
+    // 통째로 리셋되어 사라진다).
+    ctrl._itemHeartsteelPermanentHpGain = (ctrl._itemHeartsteelPermanentHpGain || 0) + bonusDmg * p.maxHpGainPercent;
+    recomputeItemStats(ctrl);
+    ctrl._itemHeartsteelIcdUntil = ctrl._itemHeartsteelIcdUntil || {};
+    ctrl._itemHeartsteelIcdUntil[ctrl._itemHeartsteelReadyTargetKey] = performance.now() + p.icdSec * 1000;
+    console.log('[ITEM] 강철심장 - 거인의 흡수 발동');
+  }
   if (ctrl._itemSheenArmed) {
     ctrl._itemSheenArmed = false;
     const spellbladeSlot = _itemSpellbladeSlot(ctrl);

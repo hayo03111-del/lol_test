@@ -232,7 +232,7 @@ class CharacterController {
     this.itemBonusAD = 0; this.itemBonusAP = 0; this.itemBonusMaxHp = 0; this.itemBonusMana = 0;
     this.itemBonusArmor = 0; this.itemBonusMr = 0; this.itemBonusAttackSpeedPercent = 0;
     this.itemAllDamageVampPercent = 0; this.itemMinionBonusDamage = 0; this.itemOnHitHeal = 0;
-    this._itemLastDealtChampionDamageAt = 0; this._itemLastTookChampionDamageAt = 0;
+    this._itemLastDealtChampionDamageAt = 0; this._itemLastTookChampionDamageAt = 0; this._itemLastTookAnyDamageAt = 0;
     this._itemActiveHeals = []; this._itemGloryStacks = 0; this._itemCullGold = 0; this._itemTearState = null;
     this._itemTick = {};
     this.itemBonusCritChance = 0; this.itemBonusAbilityHaste = 0;
@@ -2479,7 +2479,8 @@ class CharacterController {
     // 퍼센트 보너스. 기존 hpRegen/mpRegen 자체는 건드리지 않고(레벨업 시
     // computeChampionStats()가 다시 계산하는 기준값) 여기서만 곱한다.
     const mpRegenMult = 1 + (this.itemBonusMpRegenPercent || 0);
-    const hpRegenMult = 1 + (this.itemBonusHpRegenPercent || 0);
+    // 정령의형상(무한한 활력) - 기본 체력 재생도 "받는 체력 회복"에 포함된다.
+    const hpRegenMult = (1 + (this.itemBonusHpRegenPercent || 0)) * (1 + (this.itemHealingReceivedBonusPercent || 0));
     this.mp = Math.min(this.maxMp, this.mp + dt * (this.mpRegen != null ? this.mpRegen : 4) * mpRegenMult / 5);
     if (this.hp > 0 && this.state !== STATE.DEAD) this.hp = Math.min(this.maxHp, this.hp + dt * (this.hpRegen || 0) * hpRegenMult / 5);
     updateBars(this);

@@ -359,7 +359,13 @@ const ITEM_DATA = {
   // 마법사의 최후 - 원문에 공격력/주문력이 전혀 없다(공격속도/마저/강인함 +
   // 온히트 고정 마법피해 뿐) - 수치를 지어내지 않고 그대로 비워둔다.
   witsEnd: {
-    id: 'witsEnd', nameKo: '마법사의 최후', cost: 2800, recipe: ['recurveBow', 'negatronCloak', 'recurveBow'],
+    // 버그 수정(9차분 작업 중 발견): 원문(651~653줄)은 하위템으로 "곡궁,
+    // 음전자 망토,곡궁"을 명시하는데, 지금까지는 음전자 망토(negatronMantle,
+    // 이번에 처음 추가)가 없어 그 자리에 마법무효화의 망토(negatronCloak)를
+    // 직접 썼다 - 완제품 자체 스탯(마법저항력 45)은 음전자 망토 쪽 수치와
+    // 이미 일치해 전투 밸런스엔 영향이 없었지만, 조합 비용/상점의 "하위템"
+    // 표시가 원문과 달랐다. 이번에 하위템이 생겨 정확한 재료로 바로잡는다.
+    id: 'witsEnd', nameKo: '마법사의 최후', cost: 2800, recipe: ['recurveBow', 'negatronMantle', 'recurveBow'],
     stats: { attackSpeedPercent: 0.50, magicResist: 45 },
     tenacityPercent: 0.20,
     onHitFlatMagicDamage: 45,
@@ -1105,6 +1111,129 @@ const ITEM_DATA = {
     // 범위인 1~18로 해석 - 두 끝값(175/253) 자체는 원문 수치 그대로).
     noxiousBladeActive: { nameKo: '번개 화살', cooldownSec: 60, minDmg: 175, maxDmg: 253, levelMin: 1, levelMax: 18, apPercent: 0.30, slowPercent: 0.25, slowDurationSec: 1.5 },
   },
+
+  // [전설급 아이템] 9차분 - 방어형/유틸 아이템(벤시의장막~해신작쇼, 8종 +
+  // 하위템 6종). 원문(1216~1288줄 + 521~610줄의 하위템). 라바돈의
+  // 죽음모자만 원문에 자체 주문력 수치가 빠져 있어(조합 비용/패시브는
+  // 있는데 "주문력 N" 줄만 누락 - 명백한 전사 누락) 위키로 교차검증해서
+  // 130(실제 LoL과 조합 비용 3500원까지 정확히 일치)을 채웠다.
+  negatronMantle: {
+    id: 'negatronMantle', nameKo: '음전자 망토', cost: 850, recipe: ['negatronCloak'],
+    stats: { magicResist: 45 },
+  },
+  chainmailVest: {
+    id: 'chainmailVest', nameKo: '쇠사슬조끼', cost: 800, recipe: ['chainVest'],
+    stats: { armor: 40 },
+  },
+  crystallineBracer: {
+    id: 'crystallineBracer', nameKo: '수정 팔 보호구', cost: 800, recipe: ['rubyCrystal', 'rejuvenationBead'],
+    stats: { maxHp: 200, hpRegenPercent: 1.0 },
+  },
+  ghostlyHood: {
+    id: 'ghostlyHood', nameKo: '망령의 두건', cost: 1250, recipe: ['rubyCrystal', 'negatronCloak', 'rejuvenationBead'],
+    stats: { maxHp: 200, magicResist: 35, hpRegenPercent: 1.0 },
+  },
+  verdantBarrier: {
+    id: 'verdantBarrier', nameKo: '신록의 장벽', cost: 1600, recipe: ['negatronCloak', 'amplifyingTome', 'amplifyingTome'],
+    stats: { abilityPower: 40, magicResist: 25 },
+    // 무효화(60초) - 벤시의장막과 달리 "챔피언에게 피해를 입으면 재사용
+    // 대기시간이 초기화됩니다" 조항이 원문에 없다(그 조항은 벤시의장막
+    // 전용 - 1223줄에만 있고 이 하위템 자체 설명(541~547줄)엔 없음).
+    nullifyPassive: { icdSec: 60 },
+  },
+  // 추적자의 팔목 보호대 - "시간 정지"를 한 번만 쓸 수 있는 소모성 액티브
+  // (존야의모래시계와 완전히 동일한 경직 효과를 공유 - stasisActive 재사용,
+  // maxUses:1로만 구분). 한 번 쓰면 부러진 팔목 보호대로 자동 변신하지만
+  // (조각난 시간 - "상점에서 부서진 팔목 보호대만 살 수 있다"), 스탯은
+  // 동일하고 존야의모래시계로 조합하는 데도 아무 지장이 없다(원문 그대로).
+  pursuerWristGuard: {
+    id: 'pursuerWristGuard', nameKo: '추적자의 팔목 보호대', cost: 1600, recipe: ['amplifyingTome', 'chainVest', 'amplifyingTome'],
+    stats: { abilityPower: 40, armor: 25 },
+    stasisActive: { nameKo: '시간 정지', durationSec: 2.50, maxUses: 1, transformsAfterUse: 'brokenWristGuard' },
+  },
+  brokenWristGuard: {
+    id: 'brokenWristGuard', nameKo: '부러진 팔목 보호대', cost: 0, hiddenFromShop: true, // 추적자의 팔목 보호대가 액티브를 쓰면 변신(직접 구매 불가)
+    stats: { abilityPower: 40, armor: 25 },
+    // 조각난 시간 - "팔목 보호대는 망가졌지만 업그레이드는 가능합니다."
+    // 액티브(시간 정지)는 이미 소모돼 더 이상 없고, 상위 조합(존야의모래시계)
+    // 재료 자격만 그대로 유지한다(stasisActive 필드 자체가 없음).
+  },
+
+  banshees: {
+    id: 'banshees', nameKo: '벤시의장막', cost: 3000, recipe: ['needlesslyLargeRod', 'verdantBarrier'],
+    stats: { abilityPower: 105, magicResist: 40 },
+    // 무효화(40초) + "챔피언에게 피해를 입으면 아이템 재사용 대기시간이
+    // 초기화됩니다"(resetOnChampionDamage) - 신록의 장벽에는 없는 벤시의장막
+    // 전용 추가 조항. 원문 그대로("초기화") 보수적으로 해석해, 이미 방어막이
+    // 떠 있는 상태에서는 건드리지 않고 "아직 충전 중일 때"만 타이머를 다시
+    // 0부터 센다(이미 생긴 방어막을 도로 없애지 않는 쪽이 안전한 해석).
+    nullifyPassive: { icdSec: 40, resetOnChampionDamage: true },
+  },
+  zhonyasHourglass: {
+    id: 'zhonyasHourglass', nameKo: '존야의모래시계', cost: 3250, recipe: ['needlesslyLargeRod', 'pursuerWristGuard'],
+    stats: { abilityPower: 105, armor: 50 },
+    stasisActive: { nameKo: '시간 정지', cooldownSec: 120, durationSec: 2.50 },
+  },
+  rabadonsDeathcap: {
+    id: 'rabadonsDeathcap', nameKo: '라바돈의 죽음모자', cost: 3500, recipe: ['needlesslyLargeRod', 'needlesslyLargeRod'],
+    // 주문력 130 - 원문에 수치가 누락돼 위키로 교차검증(위 배치 주석 참고).
+    stats: { abilityPower: 130 }, apSourceWiki: true,
+    // 신비한 작품 - "총 주문력이 30% 증가합니다"(itemTotalApMultiplierBonus 재사용).
+    totalApMultiplierPercent: 0.30,
+  },
+  heartsteel: {
+    id: 'heartsteel', nameKo: '강철심장', cost: 3000, recipe: ['giantsBelt', 'crystallineBracer', 'giantsBelt'],
+    stats: { maxHp: 900, hpRegenPercent: 1.0 },
+    // 거인의 흡수(대상별 재사용대기 30초) - "700 사거리 내 챔피언을 상대로
+    // 3초간 충전, 충전된 공격은 70+체력6% 추가 물리 피해 + 그 피해의 10%만큼
+    // 영구 최대 체력 획득." 이 엔진엔 "주변 적 전체"를 매 프레임 추적하는
+    // 범용 근접 감지가 없어, 다른 아이템들과 동일하게 ctrl.currentTarget
+    // 기준으로 근사한다(현재 선택한 대상이 700 사거리 내 챔피언일 때만 충전).
+    giantAbsorbPassive: { rangeLol: 700, chargeSec: 3.0, icdSec: 30, flatDmg: 70, bonusHpPercent: 0.06, maxHpGainPercent: 0.10 },
+    // 거인 - "최대 체력 1000당 크기가 3% 증가(최대 30%)". 전투에 영향을 주는
+    // 수치가 아니라 모델 크기(시각 효과)라 ctrl.root.scale에 직접 반영한다.
+    titanicPassive: { hpPerScaleStep: 1000, scalePercentPerStep: 0.03, maxScalePercent: 0.30 },
+  },
+  warmogsArmor: {
+    id: 'warmogsArmor', nameKo: '워모그의 갑옷', cost: 3100, recipe: ['giantsBelt', 'giantsBelt', 'crystallineBracer'],
+    // 워모그의 활력 - "아이템 체력의 12%에 해당하는 추가 체력". 1000(이
+    // 아이템 자신이 주는 체력)의 12%=120을 더해 1120을 그대로 최종 스탯으로
+    // 박아뒀다(자기 자신을 참조하는 1회성 파생값이라 별도 공용 필드를 만들
+    // 필요가 없었다).
+    stats: { maxHp: 1120, hpRegenPercent: 1.0 },
+    // 워모그의 심장 - "추가 체력이 2000 이상일 때, 8초 동안 피해를 입지
+    // 않으면 초당 3% 체력 회복(챔피언이 아닌 대상에게는 3초)". 챔피언
+    // 전용/비챔피언 전용 두 타임스탬프(_itemLastTookChampionDamageAt,
+    // 이번에 새로 만든 _itemLastTookAnyDamageAt)를 따로 확인한다.
+    warmogsHeartPassive: { bonusHpThreshold: 2000, champOutOfCombatSec: 8.0, nonChampOutOfCombatSec: 3.0, percentPerSec: 0.03 },
+  },
+  endlessDespair: {
+    id: 'endlessDespair', nameKo: '끝없는 절망', cost: 2800, recipe: ['chainmailVest', 'kircheisShard', 'rubyCrystal'],
+    stats: { maxHp: 400, armor: 50, abilityHaste: 15 },
+    // 고뇌 - "챔피언과 전투 중일 때 4초마다 주변 적 챔피언에게 추가체력3%
+    // 마법 피해 + 피해량의 250%만큼 체력 회복." "전투 중" 판정은 요우무의
+    // 유령검 "출몰"과 동일한 5초 기준(durationGuessed)을 재사용한다. 반경은
+    // 원문에 없어 추측(radiusGuessed).
+    agonyPassive: { intervalSec: 4.0, bonusHpPercent: 0.03, healPercentOfDamage: 2.50, radius: 400, radiusGuessed: true, outOfCombatSec: 5.0, durationGuessed: true },
+  },
+  spiritVisage: {
+    id: 'spiritVisage', nameKo: '정령의형상', cost: 2700, recipe: ['ghostlyHood', 'kircheisShard'],
+    stats: { maxHp: 400, magicResist: 50, abilityHaste: 10, hpRegenPercent: 1.0 },
+    // 무한한 활력 - "자신이 받는 모든 체력 회복 및 보호막 효과가 25% 증가."
+    // 이 엔진의 공용 회복/보호막 경로(기본 재생/HoT 큐/흡혈/생명선)에만
+    // 적용된다 - 챔피언마다 따로 구현된 자체 회복 스킬은 한계로 남긴다
+    // (스킬 가속과 동일한 "9개 챔피언 한정" 성격의 한계 - README 명시).
+    healingReceivedBonusPercent: 0.25,
+  },
+  abyssalMask: {
+    id: 'abyssalMask', nameKo: '해신작쇼', cost: 3200, recipe: ['chainmailVest', 'negatronMantle', 'giantsBelt'],
+    stats: { maxHp: 350, armor: 45, magicResist: 45 },
+    // 공허 태생의 저항력 - "챔피언과 5초 이상 전투를 벌이면 강화되어 전투가
+    // 끝날 때까지 추가 방어력 및 마법 저항력이 30% 증가." 기존 임시 스탯
+    // 인프라(itemTempArmorBonus/itemTempMrBonus)를 재사용 - "전투 종료"
+    // 판정은 다른 아이템들과 동일한 5초 이탈 기준을 그대로 쓴다.
+    voidbornResiliencePassive: { combatDurationSec: 5.0, bonusPercent: 0.30, outOfCombatSec: 5.0, durationGuessed: true },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -1127,6 +1256,8 @@ const ITEM_ORDER = [
   'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise',
   'rodOfAges', 'archangelsStaff', 'seraphsEmbrace', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker',
   'plagueGem', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade',
+  'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard', 'brokenWristGuard',
+  'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -1137,8 +1268,8 @@ const ITEM_CATEGORIES = [
   // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
   // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
   // 하나에서 같이 보여준다.
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise', 'plagueGem'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise', 'plagueGem', 'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard'] },
   // 무라마나/대천사의포옹은 각각 마나무네/대천사의지팡이가 변신해서만
   // 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
-  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade'] },
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade', 'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask'] },
 ];

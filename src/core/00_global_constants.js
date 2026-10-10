@@ -516,6 +516,11 @@ function applyDamage(target, result) {
   if (target.isNexus) return applyDamageToNexus(target, result);
   const finalDmg = calculateDamage({ ...result, target });
   target._lastDamageTakenAmount = finalDmg;
+  // 워모그의 갑옷(워모그의 심장) - "챔피언이 아닌 대상에게는 3초"처럼
+  // 공격자 종류와 무관하게 "피해를 받은 적 없는 시간"이 필요한 효과를
+  // 위한 범용 타임스탬프(챔피언 전용인 _itemLastTookChampionDamageAt과
+  // 별개 - 미니언/몬스터 등 비챔피언 공격자에게 맞았을 때도 갱신된다).
+  if (typeof target._itemLastTookAnyDamageAt !== 'undefined') target._itemLastTookAnyDamageAt = performance.now();
   // 아이템 패시브 공용 훅(item_system.js) - 모든 피해 흡혈(도란의 검/활),
   // "챔피언에게 피해를 입힌/입은 시각" 타임스탬프(도란의 반지/방패), 마나순환
   // (여신의 눈물)은 구조물이 아닌 챔피언/더미 피해 경로에서만 다룬다.
