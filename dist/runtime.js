@@ -25818,6 +25818,13 @@ function _itemStatsSummary(item) {
   if (item.markmanshipPassive) { const p = item.markmanshipPassive; parts.push(`명중(챔피언에게 피해를 입히면 고정 마법 피해+${p.bonusMagicDamage}, 재사용대기시간 ${p.icdSec}초, 기본 공격 시 ${p.cdrPerAttackSec}초 감소)`); }
   if (item.boltsPassive) { const p = item.boltsPassive; parts.push(`벼락(${p.hitsNeeded}번째 기본 공격마다 대상이 잃은 체력 비례 추가 물리 피해, 근접${p.meleeMin}~${p.meleeMax}｜원거리${p.rangedMin}~${p.rangedMax}, ${p.levelMin}~${p.levelMax}레벨 구간 성장)`); }
   if (item.chargePassive) { const p = item.chargePassive; parts.push(`충전 상태(이동하거나 공격하면 충전, 충전 상태로 공격 시${p.bonusMagicDamage ? ' 마법 피해+' + p.bonusMagicDamage : ''}${p.msBuffPercent ? ', 이동속도+' + Math.round(p.msBuffPercent * 100) + '%(' + p.msBuffDurationSec + '초)' : ''}${p.bonusRangePercent ? ', 사거리+' + Math.round(p.bonusRangePercent * 100) + '%(최대 ' + p.bonusRangeCapLol + '유닛)' : ''})`); }
+  // 버그 수정(QA - "버그/미구현 확인"): skillChargePassive는 지금까지
+  // item_data.js에 빈 객체({})로만 있고 로직(item_system.js가 's.id ===
+  // "stormsurge"'로 직접 확인)과 설명(이 함수) 둘 다 이 필드를 전혀
+  // 읽지 않았다 - 아래 창공(skywardPassive) 설명만 보면 "충전 상태"가
+  // 어떻게 생기는지 전혀 알 수 없었다(트리거 조건 자체가 설명에서
+  // 통째로 빠져 있었음).
+  if (item.skillChargePassive) parts.push('전류 자극(챔피언에게 스킬로 피해를 입히면 충전 상태 준비)');
   if (item.ghostingPassive) parts.push('유체화(이동 시 미니언·챔피언과 충돌하지 않음 - 이 데모는 유닛 충돌 자체가 없어 실질적인 차이는 없음)');
   if (item.enlightenmentPassive) parts.push(`깨달음(기본 공격 시 기본 스킬의 남은 재사용 대기시간 ${Math.round(item.enlightenmentPassive.cdrPercentOfRemaining * 100)}% 감소)`);
   if (item.giantSlayerPassive) { const p = item.giantSlayerPassive; parts.push(`거인 학살자(대상의 추가 체력에 비례해 챔피언 대상 최대 ${Math.round(p.maxBonusPercent * 100)}% 추가 피해, 추가 체력 ${p.maxAtBonusHp}에서 최대)`); }

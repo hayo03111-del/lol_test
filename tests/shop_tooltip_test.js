@@ -15,9 +15,35 @@ function assert(cond, msg) {
   else console.log('ok:', msg);
 }
 
+// 버그 수정(QA - "버그/미구현 확인"): 이 테스트는 원래 _itemStatsSummary()를
+// global_system_instances.js에서 손으로 복사해 둔 스냅샷 파일(세션
+// 스크래치패드의 절대 경로, /tmp/claude-0/.../_itemStatsSummary_extracted.js)을
+// 읽고 있었다 - 두 가지 문제가 있었다: (1) 그 경로는 이 세션의 임시
+// 디렉터리라 다른 체크아웃/세션에서는 파일 자체가 없어 테스트가 ENOENT로
+// 깨졌고, (2) 설사 파일이 있어도 그 스냅샷은 parts.push() 67줄짜리 아주
+// 오래된 버전(현재 실제 함수는 148줄)이라 최근 라운드에서 추가된 거의
+// 모든 아이템 설명을 전혀 검증하지 못하는 죽은 테스트였다. 이제 실제
+// 소스(global_system_instances.js)에서 함수 본문을 직접 중괄호 매칭으로
+// 잘라내 쓴다 - 이 파일 전체를 그냥 실행하지 않는 이유는 최상위에
+// `new VFXSystem(scene)` 같은 부수효과 코드가 있어 DOM/THREE 전체를
+// 스텁해야 하기 때문이다(_itemStatsSummary 자신은 ITEM_DATA만 참조하는
+// 순수 함수라 이렇게 분리해도 동작이 완전히 동일하다).
+function extractFunctionSource(fileSrc, signature) {
+  const start = fileSrc.indexOf(signature);
+  if (start === -1) throw new Error(`함수 시그니처를 찾지 못했습니다: ${signature}`);
+  let depth = 0, end = -1;
+  for (let i = start; i < fileSrc.length; i++) {
+    if (fileSrc[i] === '{') depth++;
+    else if (fileSrc[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+  }
+  if (end === -1) throw new Error(`함수의 닫는 중괄호를 찾지 못했습니다: ${signature}`);
+  return fileSrc.slice(start, end);
+}
+
 const context = vm.createContext({ console });
 const itemDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/item_data.js'), 'utf8');
-const fnSrc = fs.readFileSync('/tmp/claude-0/-home-user-league-of-legend/af6c8ae1-1b36-5685-9781-aa103d4d0aa5/scratchpad/_itemStatsSummary_extracted.js', 'utf8');
+const giSrc = fs.readFileSync(path.join(ROOT, 'src/core/global_system_instances.js'), 'utf8');
+const fnSrc = extractFunctionSource(giSrc, 'function _itemStatsSummary(item) {');
 vm.runInContext(itemDataSrc + '\n' + fnSrc + `
 this.ITEM_DATA = ITEM_DATA;
 this._itemStatsSummary = _itemStatsSummary;
