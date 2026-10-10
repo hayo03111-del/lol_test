@@ -17,6 +17,7 @@ const stubs = {
   DAMAGE_TYPE: { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' },
   applyStatus: () => {},
   getGrievousPercent: () => 0,
+  getHealReceivedMultiplier: (t) => 1 + ((t && t.itemHealingReceivedBonusPercent) || 0),
 };
 
 const context = vm.createContext(stubs);

@@ -24,6 +24,7 @@ const stubs = {
   updateItemUI: () => {},
   getTurretGameTimeSec: () => 0,
   getGrievousPercent: () => 0,
+  getHealReceivedMultiplier: (t) => 1 + ((t && t.itemHealingReceivedBonusPercent) || 0),
   DAMAGE_TYPE: { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' },
   applyStatus: (target, effect) => { appliedStatuses.push({ target, effect }); return effect; },
   findEnemiesInRadius: () => [],

@@ -104,10 +104,10 @@ CharacterController.prototype._renektonApplyQHit = function(target, empowered, r
         rageTracker.champHeal = (rageTracker.champHeal || 0) + heal;
       }
     }
-    // 그리버스 치유 감소(QA 버그 수정) - 처치 누적 상한(rageTracker.champHeal)은
-    // 그리버스와 무관하게 "의도된" 회복량 기준으로 그대로 추적하고(위),
-    // 실제로 체력에 더해지는 마지막 적용 단계에서만 감소율을 곱한다.
-    this.hp = Math.min(this.maxHp, this.hp + Math.max(0,heal) * (1 - getGrievousPercent(this)));
+    // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소) - 처치 누적 상한
+    // (rageTracker.champHeal)은 이 배율과 무관하게 "의도된" 회복량 기준으로
+    // 그대로 추적하고(위), 실제로 체력에 더해지는 마지막 적용 단계에서만 곱한다.
+    this.hp = Math.min(this.maxHp, this.hp + Math.max(0,heal) * getHealReceivedMultiplier(this));
   
 };
 

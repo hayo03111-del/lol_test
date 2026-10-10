@@ -122,10 +122,10 @@ CharacterController.prototype._mordeWOnRecast = function() {
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
     const heal = this.shield * (skillVal(w.recastHealPercentByLevel, lvl) / 100);
-    // 그리버스 치유 감소(QA 버그 수정) - 보호막을 체력으로 "전환"하는 것도
-    // 결과적으로는 체력 회복이라 적용 대상이다(보호막 자체의 생성/소멸은
-    // 영향받지 않는다 - 전환된 "이후"의 체력 회복량만 줄어든다).
-    this.hp = Math.min(this.maxHp, this.hp + heal * (1 - getGrievousPercent(this)));
+    // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소) - 보호막을 체력으로
+    // "전환"하는 것도 결과적으로는 체력 회복이라 적용 대상이다(보호막
+    // 자체의 생성/소멸은 영향받지 않는다 - 전환된 "이후"의 체력 회복량만 달라진다).
+    this.hp = Math.min(this.maxHp, this.hp + heal * getHealReceivedMultiplier(this));
     this.shield = 0;
     clearTimeout(this._morde.shieldDecayTimer);
     updateBars(this);

@@ -111,11 +111,11 @@ CharacterController.prototype._nilahReceiveHeal = function(amount, source=null) 
     const boosted = source && source !== this && (source.isChampion || source.type === 'champion' || source.championId)
       ? amount * (1 + this._nilahData().passive.allyHealBonusPercent / 100)
       : amount;
-    // 그리버스 치유 감소(QA 버그 수정) - 넘친 회복을 보호막으로 바꾸는
-    // overheal 계산도 "실제로 줄어든 회복량" 기준으로 일관되게 계산해야
-    // 하므로, hp에 더하기 전에 미리 곱해 둔다(그래야 overheal도 자동으로
-    // 같이 줄어든다).
-    const effective = boosted * (1 - getGrievousPercent(this));
+    // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소) - 넘친 회복을
+    // 보호막으로 바꾸는 overheal 계산도 "실제로 적용된 회복량" 기준으로
+    // 일관되게 계산해야 하므로, hp에 더하기 전에 미리 곱해 둔다(그래야
+    // overheal도 자동으로 같이 반영된다).
+    const effective = boosted * getHealReceivedMultiplier(this);
     const before = this.hp;
     this.hp = Math.min(this.maxHp, this.hp + effective);
     const overheal = Math.max(0, before + effective - this.maxHp);
@@ -140,9 +140,9 @@ CharacterController.prototype._nilahReceiveShield = function(amount, source=null
 // Extracted from CharacterController: _nilahHealSelf
 CharacterController.prototype._nilahHealSelf = function(amount, shieldDuration, kind='nilahP') {
     if (!(amount > 0)) return 0;
-    // 그리버스 치유 감소(QA 버그 수정) - 위 _nilahReceiveHeal과 동일한 이유로
-    // overheal 계산 전에 미리 곱한다.
-    const effective = amount * (1 - getGrievousPercent(this));
+    // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소) - 위 _nilahReceiveHeal과
+    // 동일한 이유로 overheal 계산 전에 미리 곱한다.
+    const effective = amount * getHealReceivedMultiplier(this);
     const before = this.hp;
     this.hp = Math.min(this.maxHp, this.hp + effective);
     const overheal = Math.max(0, before + effective - this.maxHp);

@@ -877,3 +877,95 @@ GLB를 불러오기 전까지 `null`임을 직접 확인했다. 따라서 헤드
 CDN에서 받아옴, GLB 파일은 사용자가 직접 업로드해야 함, Windows 전용
 실행 파일 없음).
 
+## 전투 시스템 보완 점검(기존 전투 로직 리팩터링·버그 추가 발견)
+
+위 QA 라운드 이후 "기존 전투 시스템을 보완/리팩터링해달라"는 후속 요청에
+따라, 새 기능을 추가하는 대신 기존 전투 로직을 다시 감사해 버그를 더
+찾고, 문서와 실제 구현이 어긋난 지점을 정리했다.
+
+### 회복 배율 비대칭 해결 - `getHealReceivedMultiplier()`
+
+이전 라운드에서 그리버스(치유 감소)는 공용 회복 경로 + 챔피언별 자체
+회복 스킬까지 전부 연결했지만, 정령의형상(치유 증폭)은 공용 회복 경로
+에만 연결돼 있고 챔피언별 자체 회복 스킬에는 적용되지 않는 비대칭이
+남아 있었다(`docs/KNOWN_LIMITATIONS.md`에 한계로 명시돼 있던 항목).
+`01_status_effect_system.js`에 두 효과를 하나로 묶는 공용 헬퍼
+`getHealReceivedMultiplier(target)`(정령의형상 증폭 × 그리버스 감소)를
+추가하고, `item_system.js`의 공용 회복 경로 6곳과 챔피언별 자체 회복
+스킬 12곳(아리/초가스/다리우스/가렌/리 신/마스터 이/모데카이저/닐라
+2곳/레넥톤/세트) 전부를 이 헬퍼로 통일했다 - 두 효과가 항상 함께,
+정확히 곱해진다(`tests/combat_core_bugfix_test.js`에 "정령의형상
+증폭(+25%)과 그리버스(-50%)가 세트 패시브 회복에도 동시에 정확히
+곱해지는지" 회귀 테스트 추가).
+
+### 다리우스 W(마비의 일격) - 가렌 Q와 동일한 "명중 전 소모" 버그 추가 발견
+
+가렌 Q 수정과 같은 패턴의 공격 오버라이드 소비 로직(`_consumeAttackOverride`)
+을 다시 점검하던 중, 다리우스 W도 `champion_ability_database.js`에
+`attackOverrideMode:'oneShot', attackOverrideUses:1`로 등록되는 "다음
+평타 1회 강화"라서 가렌 Q와 완전히 같은 구조인데, 가렌 Q만 예외
+처리(HIT 확정 시점으로 소모 연기)돼 있고 다리우스 W는 빠져 있는 것을
+발견했다. 스킬이 평타를 끊는 우선순위 규칙으로 스윙이 캔슬되거나
+대상이 사거리를 벗어나면, 실제 HIT(`_dariusWOnHit` - 추가 피해/슬로우/
+처치 시 쿨다운·마나 환급)가 한 번도 발동되지 못한 채 W가 허비될 수
+있었다. `_consumeAttackOverride()`의 `deferToConfirmedHit` 조건에
+다리우스 W를 추가하고, 가렌 Q와 대칭되는 `_consumeDariusWOnConfirmedHit()`
+을 새로 만들어 `_onBasicAttackHit()`에서 `_dariusWOnHit()` 직후
+호출하도록 수정했다(`tests/combat_core_bugfix_test.js`에 가렌 Q 테스트와
+동일한 구조로 회귀 테스트 6개 추가 - 소비 타이밍 4개 + 실제 피해/슬로우
+효과 2개).
+
+### 세트 R(강펀치) Suppress - 점검 후 "이미 정확히 구현돼 있음"으로 결론
+
+`character_controller.js`의 TODO 주석들을 다시 훑다가, 공용 `_castR()`
+안의 `multiPhaseClips` 분기(윈드업→채널→캐스트형 궁극기를 위한 범용
+다단계 애니메이션 폴백 경로)만 보고 "세트 R이 대상을 Suppress 상태로
+만들지 않는다"고 처음에 오판해 그 분기에 Suppress 적용 코드를 추가했다.
+이후 재검토 과정에서, `_castR()` 맨 앞에 `if (this.championId === 'sett')
+{ this._settCastR(free); return; }`로 즉시 위임되어 그 공용 분기 자체에
+도달하지 않는다는 것(현재 `multiPhaseClips`를 쓰는 챔피언이 세트뿐이라
+사실상 죽은 코드)을 확인했다. 진짜 세트 R 로직(`sett.js`의 `_settCastR`/
+`_settUpdateR`/`_settEndR`/`_settRImpact`)을 다시 읽어보니, Suppress는
+캐스트 즉시 임시값으로 걸렸다가 실제 애니메이션 클립 길이 합산 후
+정확한 지속시간으로 재설정되고, 정상 종료/중단(`aborted`) 양쪽 경로
+모두에서 `_settEndR()`이 `clearStatus`로 확실히 해제하고 있어 **이미
+완전하고 정확하게 구현돼 있었다**. 공용 분기에 잘못 추가했던 코드는
+되돌리고, 혼동의 원인이 된 stale 주석들을 정리했다(동작 변경 없음 -
+`docs/KNOWN_LIMITATIONS.md`에 과정을 정직하게 기록했다).
+
+### Stale 문서 정리(실제로는 이미 고쳐졌지만 TODO 주석만 남아있던 것들)
+
+`character_controller.js`를 TODO 주석 기준으로 전수 점검하면서, 실제
+코드는 이미 올바르게 동작하는데 과거 TODO 문서화만 갱신되지 않고 남아
+있던 지점을 추가로 찾아 정리했다(기능 변경 없음, 주석만 정확하게 수정):
+- 가렌 E(decimate의 광역 재검색)는 이미 매 틱 `findEnemiesInRadius()`를
+  다시 호출하도록 구현돼 있었다.
+- 모데카이저 W 재시전 시의 보호막→회복 변환은 이미 `_mordeWOnRecast()`가
+  전부 구현하고 있었다.
+- `_castW()` 공용 분기의 "사망/CC 상태에서는 애니메이션도 재생하지
+  않아야 한다" TODO는 실제로는 이미 상위 경로(`castAbility()`의
+  `isCrowdControlled()` 체크, `getActionAuthority()`의 DEAD/RESPAWN
+  가드)에서 처리되고 있어 별도 처리가 필요 없었다.
+- `_castW()` 공용 분기의 "보호 효과/VFX가 즉시(0.000초) 적용돼야 한다"
+  TODO 중 보호 효과(가렌/마스터 이/세트)와 VFX 부분은 이미 바로 아래
+  코드에서 즉시 처리되고 있었다(이전 라운드의 세트 W 수정이 바로 이
+  부분이다) - 서브 상태/지속시간 타이머 시작 부분만 여전히 onFire
+  시점에 걸리지만, 현재 구현된 챔피언 범위에서는 실질적 영향이 없다.
+
+진짜로 아직 해결되지 않은 TODO(예: 다리우스 Q/W 캔슬 프레임, 가렌/다리우스
+R의 "사거리 이탈 시 피해 취소 여부" 등)는 전부 "자료만으로 확정할 수
+없다"고 원문서에 명시된 항목들이라 숫자를 임의로 지어내지 않고 그대로
+남겨뒀다.
+
+### 검증
+
+전체 회귀 테스트 28개 파일, 1,882개 assert 전부 통과(이번 라운드에서
+추가된 assert는 6개 - 다리우스 W 소비 타이밍/효과 검증).
+`node --check src/core/character_controller.js`로 문법 검증도 통과했다.
+`index.html`/`dist/runtime.js`는 `src/*.js` 원본을 그대로 참조하는 게
+아니라 `tools/build.py`/`tools/embed_runtime.py`가 통째로 복사해 넣는
+번들이므로, 이번에 수정한 `src/core/character_controller.js`/
+`src/core/01_status_effect_system.js`/`src/core/item_system.js`/
+`src/champions/*.js`의 변경이 실제 게임에 반영되도록 빌드를 다시
+돌리고 `tools/check_build.py`로 동기화를 재검증했다.
+

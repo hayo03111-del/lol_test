@@ -216,6 +216,18 @@ function getGrievousPercent(target) {
   for (const e of target.statusEffects) if (e.type === 'GRIEVOUS' && e.expiresAt > now) v = Math.max(v, e.value);
   return v;
 }
+// 공용 "받는 체력 회복" 배율 - 정령의형상(무한한 활력, itemHealingReceivedBonusPercent)
+// 같은 증폭과 그리버스(getGrievousPercent) 같은 감소를 한 곳에서 묶어서
+// 반환한다. 두 효과는 서로 독립된 곱셈 인자라 순서는 상관없다(이미
+// item_system.js/character_controller.js의 공용 재생 경로가 똑같은 두
+// 값을 따로 곱하고 있었는데, 챔피언별 자체 회복 스킬(아리/세트 등)에는
+// 그리버스만 연결하고 itemHealingReceivedBonusPercent는 빠뜨리기 쉬운
+// 구조라 - 새 회복 지점을 추가할 때 이 함수 하나만 곱하면 둘 다 자동으로
+// 챙기게 한다).
+function getHealReceivedMultiplier(target) {
+  if (!target) return 1;
+  return (1 + (target.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(target));
+}
 function getAttackSpeedBuffPercent(target) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();

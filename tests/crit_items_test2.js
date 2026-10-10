@@ -63,6 +63,7 @@ const stubs2 = {
   updateBars: () => {},
   getTurretGameTimeSec: () => 0,
   getGrievousPercent: () => 0,
+  getHealReceivedMultiplier: (t) => 1 + ((t && t.itemHealingReceivedBonusPercent) || 0),
   PLAYER_TEAM: 'BLUE',
   DAMAGE_TYPE: { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' },
   STATE: { DEAD: 'DEAD', IDLE: 'IDLE', MOVE: 'MOVE', ATTACK: 'ATTACK' },

@@ -45,8 +45,8 @@ CharacterController.prototype._settPassiveTick = function(dt) {
     const perTick = valueByBreakpoints(cd.passive.regenByLevelBreakpoints, this.champLevel);
     const missingPercent = ((this.maxHp - this.hp) / this.maxHp) * 100;
     const extraRegen = perTick * (missingPercent / 5);
-    // 그리버스 치유 감소(QA 버그 수정).
-    this.hp = Math.min(this.maxHp, this.hp + extraRegen * dt * (1 - getGrievousPercent(this)));
+    // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소).
+    this.hp = Math.min(this.maxHp, this.hp + extraRegen * dt * getHealReceivedMultiplier(this));
   
 };
 

@@ -57,8 +57,8 @@ CharacterController.prototype._dariusQOnHit = function(target, distanceWorld = n
     if (isBlade) {
       const missingHp = Math.max(0, this.maxHp - this.hp);
       const heal = Math.min(this.maxHp * (q.healCapPercent / 100), missingHp * (q.healPercentOfLostHp / 100));
-      // 그리버스 치유 감소(QA 버그 수정).
-      this.hp = Math.min(this.maxHp, this.hp + heal * (1 - getGrievousPercent(this)));
+      // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소).
+      this.hp = Math.min(this.maxHp, this.hp + heal * getHealReceivedMultiplier(this));
       updateBars(this);
     }
 };

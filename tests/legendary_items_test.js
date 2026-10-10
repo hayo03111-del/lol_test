@@ -23,6 +23,7 @@ const stubs = {
   updateItemUI: () => {},
   getTurretGameTimeSec: () => 0,
   getGrievousPercent: () => 0,
+  getHealReceivedMultiplier: (t) => 1 + ((t && t.itemHealingReceivedBonusPercent) || 0),
   PLAYER_TEAM: 'BLUE',
   DAMAGE_TYPE: { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' },
   applyStatus: (target, effect) => {

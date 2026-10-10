@@ -64,8 +64,9 @@ const champDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/champion_dat
 const ccSrc = fs.readFileSync(path.join(ROOT, 'src/core/character_controller.js'), 'utf8');
 const settSrc = fs.readFileSync(path.join(ROOT, 'src/champions/sett.js'), 'utf8');
 const garenSrc = fs.readFileSync(path.join(ROOT, 'src/champions/garen.js'), 'utf8');
+const dariusSrc = fs.readFileSync(path.join(ROOT, 'src/champions/darius.js'), 'utf8');
 
-vm.runInContext(constSrc + '\n' + statusSrc + '\n' + hitSrc + '\n' + champDataSrc + '\n' + ccSrc + '\n' + settSrc + '\n' + garenSrc + `
+vm.runInContext(constSrc + '\n' + statusSrc + '\n' + hitSrc + '\n' + champDataSrc + '\n' + ccSrc + '\n' + settSrc + '\n' + garenSrc + '\n' + dariusSrc + `
 this.CharacterController = CharacterController;
 this.CHAMPION_DATA = CHAMPION_DATA;
 this.applyStatus = applyStatus;
@@ -230,6 +231,20 @@ function skillValLocal(byLevel, lvl) {
   const healAfterExpiry = ctrl2.hp - before3;
   assert(Math.abs(healAfterExpiry - healNoGrievous) < 1e-6, `그리버스 만료 후: 회복량이 정상치로 복구된다(got ${healAfterExpiry.toFixed(3)}, 기대 ${healNoGrievous.toFixed(3)})`);
   now -= 10100;
+
+  // getHealReceivedMultiplier() 공용 헬퍼 도입 전에는 챔피언 전용 회복
+  // 스킬(세트 패시브 등)에 정령의형상류 "받는 회복 증폭"
+  // (itemHealingReceivedBonusPercent)이 전혀 연결돼 있지 않았다(그리버스
+  // 감소만 연결돼 있어 증폭/감소가 비대칭이었다) - 이제 같은 헬퍼 하나로
+  // 둘 다 자동으로 챙겨지는지, 그리고 두 효과가 동시에 걸려도 올바르게
+  // 곱셈으로 합쳐지는지 확인한다.
+  const ctrl3 = makeMinimalChamp('sett', { hp: 1000, maxHp: 2000, itemHealingReceivedBonusPercent: 0.25 });
+  applyStatus(ctrl3, { id: 'testGrievousAndAmp', type: 'GRIEVOUS', duration: 10, value: 0.5 });
+  const before4 = ctrl3.hp;
+  ctrl3._settPassiveTick(1.0);
+  const healWithBoth = ctrl3.hp - before4;
+  // 증폭(+25%)과 감소(-50%)가 동시에 걸리면 125% * 50% = 62.5%가 적용된다.
+  assert(Math.abs(healWithBoth - healNoGrievous * 1.25 * 0.5) < 1e-6, `정령의형상 증폭(+25%)과 그리버스(-50%)가 챔피언 전용 회복(세트 패시브)에도 동시에 정확히 곱해진다(got ${healWithBoth.toFixed(3)}, 기대 ${(healNoGrievous*1.25*0.5).toFixed(3)})`);
 }
 
 // 전 챔피언 공통 기본 체력 재생(character_controller.js의 regen())에도
@@ -317,6 +332,51 @@ function skillValLocal(byLevel, lvl) {
   ctrl._consumeAttackOverride(override, null);
   override = ctrl.attackOverrides.find((o) => o.id === 'Q');
   assert(!override, '세트 Q: 두 번째 소모로 완전히 해제된다');
+}
+
+// ========================================================================
+// 1-4. 다리우스 W(마비의 일격) 강화 기본 공격 소비 시점 - 가렌 Q와 완전히
+// 동일한 패턴의 버그(전투 시스템 보완 점검 중 발견): champion_ability_database.js
+// 에 attackOverrideMode:'oneShot'/uses:1로 등록되는 "다음 평타 1회 강화"라서,
+// 스킬이 평타를 끊는 우선순위 규칙으로 스윙이 캔슬되거나 대상이 사거리를
+// 벗어나 실제 HIT에 도달하지 못하면 가렌 Q와 동일하게 허비될 수 있었다.
+// ========================================================================
+{
+  const ctrl = makeMinimalChamp('darius');
+  ctrl.registerAttackOverride({ id: 'W', clips: ['Spell2'], priority: 10, oneShot: true, uses: 1 });
+  let override = ctrl.attackOverrides.find((o) => o.id === 'W');
+  assert(!!override && override.usesRemaining === 1, '다리우스 W: 시전 직후 오버라이드가 1회분으로 등록된다(사전 조건)');
+
+  // 스윙 "시작" 시점(_beginAttackSwing이 _consumeAttackOverride를 부르는
+  // 지점과 동일) - 아직 명중 여부를 모르므로 소모되면 안 된다.
+  ctrl._consumeAttackOverride(override, null);
+  override = ctrl.attackOverrides.find((o) => o.id === 'W');
+  assert(!!override && override.usesRemaining === 1, '다리우스 W: 스윙을 "시작"한 것만으로는 소모되지 않는다(명중 전)');
+
+  // 스윙이 캔슬되거나 빗나가 _onBasicAttackHit() 자체가 호출되지 않는
+  // 경우 - 오버라이드가 그대로 남아 다음 평타에 다시 쓸 수 있어야 한다.
+  override = ctrl.attackOverrides.find((o) => o.id === 'W');
+  assert(!!override && override.usesRemaining === 1, '다리우스 W: 스윙이 캔슬/빗나가면(HIT 콜백 자체가 안 불림) 효과가 그대로 유지된다');
+
+  // 실제 명중이 확정된 시점(_onBasicAttackHit()이 _dariusWOnHit() 직후
+  // 호출하는 지점과 동일).
+  ctrl._consumeDariusWOnConfirmedHit();
+  override = ctrl.attackOverrides.find((o) => o.id === 'W');
+  assert(!override, '다리우스 W: 실제 적중이 확정되면 그 시점에 1회분이 소모되어(uses=1) 오버라이드가 해제된다');
+}
+
+// 다리우스 W의 실제 효과(추가 피해+슬로우)가 적중 시 정확히 걸리는지.
+{
+  const ctrl = makeMinimalChamp('darius');
+  const target = makeTarget();
+  const before = target.hp;
+  ctrl._dariusWOnHit(target);
+  const w = CHAMPION_DATA.darius.W;
+  const lvl = ctrl.skillLevels.W;
+  const expectedDmg = ctrl.stats.attackDamage * skillValLocal(w.bonusAdRatioByLevel, lvl);
+  assert(Math.abs((before - target.hp) - expectedDmg) < 1e-6, `다리우스 W: 적중 시 추가 피해량이 정확하다(got ${(before-target.hp).toFixed(1)}, 기대 ${expectedDmg.toFixed(1)})`);
+  const slow = target.statusEffects.find((e) => e.id === 'dariusW_slow');
+  assert(!!slow && slow.type === 'SLOW' && Math.abs(slow.value - w.slowPercent / 100) < 1e-9, '다리우스 W: 적중 시 슬로우가 정확한 수치로 걸린다');
 }
 
 console.log(process.exitCode ? '\nSOME CHECKS FAILED' : '\nALL CHECKS PASSED');

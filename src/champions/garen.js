@@ -17,8 +17,8 @@ CharacterController.prototype._garenPassiveTick = function(dt) {
     if (!this.passiveState._nextHealAt) this.passiveState._nextHealAt = now + p.tickInterval * 1000;
     if (now >= this.passiveState._nextHealAt) {
       const pct = skillVal(p.healPercentByLevel, this.champLevel) / 100;
-      // 그리버스 치유 감소(QA 버그 수정).
-      this.hp = Math.min(this.maxHp, this.hp + this.maxHp * pct * (1 - getGrievousPercent(this)));
+      // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소).
+      this.hp = Math.min(this.maxHp, this.hp + this.maxHp * pct * getHealReceivedMultiplier(this));
       updateBars(this);
       this.passiveState._nextHealAt = now + p.tickInterval * 1000;
     }

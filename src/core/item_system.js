@@ -679,17 +679,11 @@ function _useStasisActive(ctrl, item) {
 
 function _itemTickActiveHeals(ctrl, dt) {
   if (!ctrl._itemActiveHeals || !ctrl._itemActiveHeals.length) return;
-  // 정령의형상(무한한 활력) - 체력 물약/억겁의 카탈리스트·영겁의지팡이
-  // "영원" 등 이 큐를 쓰는 모든 HoT에 공통 적용된다.
-  // 버그 수정(QA - "그리버스 치유 감소"): getGrievousPercent()가 정의만
-  // 되고 실제 회복 계산 어디에서도 곱해지지 않고 있었다(01_status_effect_system.js
-  // 주석에 "이 헬퍼를 실제로 소비하는 곳은 아직 없다"고 명시돼 있었음).
-  // 이 함수를 포함해 아래의 공용 회복 경로(기본 재생/온힛/흡혈/고정 회복
-  // 등 - item_system.js가 itemHealingReceivedBonusPercent로 이미 증폭하던
-  // 바로 그 지점들)에 감소율을 곱한다 - 증폭(healMult)과 감소(grievousMult)는
-  // 서로 다른 승수라 순서 상관없이 곱만 하면 된다(보호막은 이 함수가
-  // 건드리지 않는 별개 시스템이라 영향받지 않는다).
-  const healMult = (1 + (ctrl.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(ctrl));
+  // 정령의형상(무한한 활력) 증폭 + 그리버스 감소 - 체력 물약/억겁의
+  // 카탈리스트·영겁의지팡이 "영원" 등 이 큐를 쓰는 모든 HoT에 공통
+  // 적용된다(01_status_effect_system.js의 getHealReceivedMultiplier 참고 -
+  // 보호막은 이 함수가 건드리지 않는 별개 시스템이라 영향받지 않는다).
+  const healMult = getHealReceivedMultiplier(ctrl);
   for (const heal of ctrl._itemActiveHeals) {
     const step = Math.min(dt, heal.remainingSec);
     ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal.perSec * healMult * step);
@@ -738,7 +732,7 @@ function _itemTickHpRegen(ctrl, item, dt, now) {
   // 확인하고 시간 차 계산으로 판정한다.
   // 정령의형상(무한한 활력) - 인내의 집중력(평시/전투 강화) 둘 다에 적용.
   // 그리버스 치유 감소도 같은 지점에 곱한다(위 _itemTickActiveHeals 주석 참고).
-  const healMult = (1 + (ctrl.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(ctrl));
+  const healMult = getHealReceivedMultiplier(ctrl);
   if (item.champDamageRegen && typeof ctrl._itemLastTookChampionDamageAt === 'number'
       && (now - ctrl._itemLastTookChampionDamageAt) <= item.champDamageRegen.durationSec * 1000) {
     const isMelee = !!(ctrl.stats && ctrl.stats.attackRange <= 300);
@@ -1031,7 +1025,7 @@ function itemSystemTick(ctrl, dt) {
     const safeFromAny = (now - (ctrl._itemLastTookAnyDamageAt || 0)) > p.nonChampOutOfCombatSec * 1000;
     if (bonusHp >= p.bonusHpThreshold && safeFromChamp && safeFromAny) {
       // 그리버스 치유 감소도 같은 지점에 곱한다(위 _itemTickActiveHeals 주석 참고).
-      const healMult = (1 + (ctrl.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(ctrl));
+      const healMult = getHealReceivedMultiplier(ctrl);
       ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + (ctrl.maxHp || 0) * p.percentPerSec * healMult * dt);
     }
   }
@@ -1061,7 +1055,7 @@ function itemSystemTick(ctrl, dt) {
         }
         if (totalDealt > 0) {
           // 그리버스 치유 감소도 같은 지점에 곱한다(위 _itemTickActiveHeals 주석 참고).
-          const healMult = (1 + (ctrl.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(ctrl));
+          const healMult = getHealReceivedMultiplier(ctrl);
           ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + totalDealt * p.healPercentOfDamage * healMult);
         }
       }
@@ -1233,7 +1227,7 @@ function applyItemVamp(source, finalDmg) {
   // 정령의형상(무한한 활력) - 흡혈도 "자신이 받는 체력 회복"에 해당한다.
   // 그리버스 치유 감소 - 실제 LoL에서도 흡혈/스펠뱀프는 그리버스의 직접
   // 적용 대상이다(위 _itemTickActiveHeals 주석 참고).
-  const healMult = (1 + (source.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(source));
+  const healMult = getHealReceivedMultiplier(source);
   source.hp = Math.min(source.maxHp, source.hp + finalDmg * vampPercent * healMult);
 }
 
@@ -1246,7 +1240,7 @@ function applyItemPhysicalVamp(source, finalDmg, damageType) {
   if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
   // 정령의형상(무한한 활력). 그리버스 치유 감소도 같은 지점에 곱한다
   // (applyItemVamp와 동일한 이유 - 생명력 흡수도 그리버스의 직접 적용 대상).
-  const healAmt = finalDmg * source.itemPhysicalVampPercent * (1 + (source.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(source));
+  const healAmt = finalDmg * source.itemPhysicalVampPercent * getHealReceivedMultiplier(source);
   // 피바라기(영액의 보호막) - 생명력 흡수 전용 아이템이라 생명력 회복
   // (physicalVampPercent)은 흡혈의 낫 등과 공용 필드를 그대로 쓰지만,
   // "최대 체력을 초과하는 회복분을 보호막으로 전환"하는 건 피바라기만의
