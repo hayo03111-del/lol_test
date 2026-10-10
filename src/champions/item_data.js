@@ -1025,6 +1025,86 @@ const ITEM_DATA = {
     // "추가 체력"(itemBonusMaxHp 등 합산된 보너스 최대 체력) 비례다.
     apPercentOfBonusHp: 0.02,
   },
+
+  // [전설급 아이템] 8차분 - 주문력 계열 2차(황혼과새벽~마법공학총검, 7종 +
+  // 하위템 1종). 원문(1151~1214줄). 신규 하위템은 "역병의 보석" 하나뿐이고
+  // (490~494줄에 이미 완전한 스탯으로 있었다), 나머지 하위템은 전부 기존
+  // 아이템 재사용이다. "에테르 환영"이 리치베인 쪽 원문(1172줄)에서는
+  // "애테르 환영"으로 오타가 나 있지만, 스탯이 동일한 같은 아이템을
+  // 가리키는 게 명백해 같은 id(aetherialWisp)로 매핑했다.
+  plagueGem: {
+    id: 'plagueGem', nameKo: '역병의 보석', cost: 1100, recipe: ['amplifyingTome'],
+    stats: { abilityPower: 25 },
+    // 마법 관통력 13%(퍼센트) - 공허의지팡이(40%)와 공용 필드
+    // (magicPenPercent, 이번에 새로 추가한 곱연산 관통력)를 쓴다.
+    magicPenPercent: 0.13,
+  },
+  duskAndDawn: {
+    id: 'duskAndDawn', nameKo: '황혼과새벽', cost: 3100, recipe: ['sheen', 'blastingWand', 'kircheisShard', 'dagger'],
+    stats: { abilityPower: 60, maxHp: 300, attackSpeedPercent: 0.20, abilityHaste: 20 },
+    // 주문 검 - 기존 spellbladePassive를 확장했다(damageType: 마법 피해로
+    // 전환, bonusApPercent 신규 추가, extraProc: "적중 시 효과를 추가로
+    // 1회 적용"을 스펠블레이드 자체 피해가 2번 들어가는 것으로 단순화 -
+    // 이 엔진엔 "다른 온히트 효과들을 전부 다시 트리거"하는 범용 재생
+    // 시스템이 없어, 가장 직접적인 해석인 "이 피해 자체가 한 번 더"로
+    // 근사했다) + 체력 회복(주문력10%+추가체력3%).
+    spellbladePassive: {
+      procCooldownSec: 1.5, bonusAdPercent: 0.75, bonusApPercent: 0.10, damageType: 'MAGICAL', extraProc: true,
+      healApPercent: 0.10, healBonusHpPercent: 0.03,
+    },
+  },
+  nashorsTooth: {
+    id: 'nashorsTooth', nameKo: '내셔의이빨', cost: 2900, recipe: ['recurveBow', 'blastingWand', 'fiendishCodex'],
+    stats: { abilityPower: 80, attackSpeedPercent: 0.50, abilityHaste: 15 },
+    // 이케시아의 이빨 - "기본 공격 시 15+주문력15%의 마법 피해(적중 시
+    // 효과)". 기존 onHitFlatMagicDamage(순수 숫자)와 달리 주문력 비례가
+    // 있어 별도 객체 필드로 둔다.
+    onHitMagicDamagePassive: { flat: 15, apPercent: 0.15 },
+  },
+  lichBane: {
+    id: 'lichBane', nameKo: '리치베인', cost: 2900, recipe: ['sheen', 'aetherialWisp', 'blastingWand'],
+    stats: { abilityPower: 100, moveSpeedPercent: 0.06, abilityHaste: 10 },
+    // 주문 검(마법 피해, 공격력75%+주문력45%) + "주문 검을 사용 가능할 때
+    // 50%의 공격속도를 얻습니다" - attackSpeedWhileReadyPercent는
+    // character_controller.js가 매 프레임 itemSpellbladeReadyAttackSpeedPercent()로
+    // 읽어 "무장 중인 동안만" 적용한다(영구 스탯이 아님).
+    spellbladePassive: { procCooldownSec: 1.5, bonusAdPercent: 0.75, bonusApPercent: 0.45, damageType: 'MAGICAL', attackSpeedWhileReadyPercent: 0.50 },
+  },
+  voidStaff: {
+    id: 'voidStaff', nameKo: '공허의지팡이', cost: 3000, recipe: ['plagueGem', 'blastingWand'],
+    stats: { abilityPower: 95 },
+    magicPenPercent: 0.40,
+  },
+  tempestStaff: {
+    id: 'tempestStaff', nameKo: '폭풍쇄도', cost: 2800, recipe: ['hextechAlternator', 'aetherialWisp'],
+    stats: { abilityPower: 90, magicPenFlat: 15, moveSpeedPercent: 0.06 },
+    // 폭풍 약탈자 - "2.5초 내로 챔피언 최대 체력의 25%에 해당하는 피해를
+    // 입히면 질풍을 적용"(대상별 재사용대기시간 30초로 해석 - "폭풍
+    // 약탈자(30초)"가 쿨다운 표기와 같은 자리에 있다). 질풍 - 2초 후 단일
+    // 대상 125+주문력10% 마법 피해, 가격 전에 대상이 죽으면 즉시 넓은
+    // 범위에 폭발(반경은 원문에 없어 추측 - radiusGuessed).
+    squallPassive: { windowSec: 2.5, hpThresholdPercent: 0.25, icdSec: 30 },
+    galePassive: { delaySec: 2.0, baseDmg: 125, apPercent: 0.10, explosionRadius: 400, radiusGuessed: true },
+  },
+  shadowflame: {
+    id: 'shadowflame', nameKo: '그림자불꽃', cost: 3200, recipe: ['hextechAlternator', 'needlesslyLargeRod'],
+    stats: { abilityPower: 110, magicPenFlat: 15 },
+    // 잿덩이꽃 - 체력 40% 이하인 적에게 마법/고정 피해 시 20% 추가 피해.
+    // "치명타 피해량 관련 능력치는 잿덩이꽃의 추가 피해량에만 영향을
+    // 줍니다" - 무한의 대검 등 itemBonusCritDamagePercent가 이 20%
+    // 자체에만 곱해진다(전체 피해가 아니라).
+    cinderbloomPassive: { hpThresholdPercent: 0.40, bonusPercent: 0.20 },
+  },
+  hextechGunblade: {
+    id: 'hextechGunblade', nameKo: '마법공학총검', cost: 3000, recipe: ['vampiricScepter', 'hextechAlternator', 'amplifyingTome'],
+    stats: { attackDamage: 40, abilityPower: 80 }, allDamageVampPercent: 0.10,
+    // 번개 화살(재사용대기 60초) - 적 챔피언 전용 단일 대상 액티브(이
+    // 엔진에서 "자기 주변 범위"가 아니라 "현재 선택한 적 챔피언 1명"을
+    // 노리는 최초의 아이템 액티브 - ctrl.currentTarget을 그대로 쓴다).
+    // 175~253은 레벨 비례(원문에 정확한 구간이 없어 챔피언 전체 레벨
+    // 범위인 1~18로 해석 - 두 끝값(175/253) 자체는 원문 수치 그대로).
+    noxiousBladeActive: { nameKo: '번개 화살', cooldownSec: 60, minDmg: 175, maxDmg: 253, levelMin: 1, levelMax: 18, apPercent: 0.30, slowPercent: 0.25, slowDurationSec: 1.5 },
+  },
 };
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
@@ -1046,6 +1126,7 @@ const ITEM_ORDER = [
   'mejaisSoulstealer',
   'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise',
   'rodOfAges', 'archangelsStaff', 'seraphsEmbrace', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker',
+  'plagueGem', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade',
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -1056,8 +1137,8 @@ const ITEM_CATEGORIES = [
   // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
   // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
   // 하나에서 같이 보여준다.
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise', 'plagueGem'] },
   // 무라마나/대천사의포옹은 각각 마나무네/대천사의지팡이가 변신해서만
   // 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
-  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker'] },
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade'] },
 ];

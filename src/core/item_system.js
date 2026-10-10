@@ -38,6 +38,10 @@ function recomputeItemStats(ctrl) {
   // 합연산보다 곱연산이 정확하다) - (1-관통%)들의 곱을 저장해뒀다가
   // calculateDamage()에서 armor에 그대로 곱한다.
   ctrl.itemBonusArmorPenMultiplier = 1;
+  // 역병의 보석/공허의지팡이(마법 관통력 13%/40%) - 방어구 관통력과 동일한
+  // 원칙(곱연산)의 마법저항력 버전. 지금까지는 마법 관통력이 전부 고정
+  // 수치(마법사의 신발)뿐이라 이 필드가 필요 없었다.
+  ctrl.itemBonusMagicPenMultiplier = 1;
   // 무한의 대검 - 치명타 피해량 +30%(영구 스탯, calculateDamage()가 각
   // 챔피언이 넘기는 critMultiplier에 더해서 읽는다).
   ctrl.itemBonusCritDamagePercent = 0;
@@ -81,6 +85,7 @@ function recomputeItemStats(ctrl) {
     ctrl.itemPhysicalVampPercent += item.physicalVampPercent || 0;
     ctrl.itemManaOnDamagePercent += item.manaOnDamagePercent || 0;
     if (item.armorPenPercent) ctrl.itemBonusArmorPenMultiplier *= (1 - item.armorPenPercent);
+    if (item.magicPenPercent) ctrl.itemBonusMagicPenMultiplier *= (1 - item.magicPenPercent);
     ctrl.itemBonusArmorPenFlat += item.armorPenFlat || 0;
     // 암흑의 인장(영광)의 동적 주문력 - 아이템을 들고 있을 때만 적용된다
     // (팔면 중첩 자체는 남아있어도 더 이상 스탯에 반영되지 않는다).
@@ -418,6 +423,9 @@ function useItem(ctrl, slotIndex) {
   // 마법공학 로켓 벨트(초음속) - 즉시 발동형 범위 마법 피해(돌진 이동
   // 자체는 생략 - item_data.js 주석 참고).
   if (item.rocketbeltActive) return _useRocketbeltActive(ctrl, item);
+  // 마법공학총검(번개 화살) - 자기 주변이 아니라 "현재 선택한 적 챔피언
+  // 1명"을 노리는 최초의 아이템 액티브.
+  if (item.noxiousBladeActive) return _useNoxiousBladeActive(ctrl, item);
   // 제어 와드 - 인벤토리 중첩 소모형이지만 회복이 아니라 와드 설치가
   // 목적이라 별도 함수로 분리한다(투명 와드의 placeWard()와 유사한 구조,
   // 다만 트린켓 전용 슬롯이 아니라 6칸 인벤토리를 쓴다).
@@ -549,6 +557,32 @@ function _useRocketbeltActive(ctrl, item) {
       if (!unit || unit.hp <= 0) continue;
       applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
     }
+  }
+  console.log(`[ITEM] ${item.nameKo}(${p.nameKo}) 사용`);
+  return true;
+}
+
+// 마법공학총검(번개 화살) - "적 챔피언에게 충격을 줘 (175~253(레벨비례)+
+// 주문력30%)의 마법 피해를 입히고 1.5초 동안 25% 둔화시킵니다." 지금까지
+// 모든 아이템 액티브는 "자기 주변 범위"(findEnemiesInRadius)였지만, 이
+// 아이템은 원문상 명백히 단일 대상 지정 스킬이다 - 이 엔진에서 "현재
+// 선택한 대상"을 가리키는 기존 필드(ctrl.currentTarget, 다른 챔피언들의
+// 단일 대상 스킬이 이미 쓰는 것과 동일)를 그대로 재사용한다. 사거리는
+// 원문에 없어 검사하지 않는다(명시적 단순화).
+function _useNoxiousBladeActive(ctrl, item) {
+  const now = performance.now();
+  ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
+  const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
+  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  const target = ctrl.currentTarget;
+  if (!target || target.hp <= 0 || !target.isChampion) { console.warn(`[ITEM] ${item.nameKo}: 적 챔피언을 먼저 선택해야 합니다.`); return false; }
+  const p = item.noxiousBladeActive;
+  ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
+  const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
+  const base = _itemScaleByLevel(ctrl, p.minDmg, p.maxDmg, p.levelMin, p.levelMax);
+  applyDamage(target, { rawDamage: base + ap * p.apPercent, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+  if (typeof applyStatus === 'function') {
+    applyStatus(target, { id: 'itemNoxiousBladeSlow', type: 'SLOW', duration: p.slowDurationSec, value: p.slowPercent, source: ctrl });
   }
   console.log(`[ITEM] ${item.nameKo}(${p.nameKo}) 사용`);
   return true;
@@ -849,6 +883,34 @@ function itemSystemTick(ctrl, dt) {
       ctrl._itemBlackfireStacks = newCount;
       recomputeItemStats(ctrl);
     }
+  }
+  // 폭풍쇄도(질풍) - 2초 뒤 예약된 단일 대상 타격을 진행한다. "가격 전에
+  // 대상이 사망할 경우 즉시 폭발해 넓은 범위에 피해를 입힙니다" - 아직
+  // 타격 시각이 안 됐어도 대상이 이미 죽어 있으면 그 자리에서 즉시
+  // 폭발시킨다(원문 그대로, 타이머를 기다리지 않음).
+  if (ctrl._itemGaleQueue && ctrl._itemGaleQueue.length) {
+    const gp = ITEM_DATA.tempestStaff.galePassive;
+    const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
+    const raw = gp.baseDmg + ap * gp.apPercent;
+    const remaining = [];
+    for (const g of ctrl._itemGaleQueue) {
+      if (g.target.hp <= 0) {
+        if (typeof findEnemiesInRadius === 'function') {
+          const hits = findEnemiesInRadius(g.target.mesh ? g.target.mesh.position : ctrl.root.position, gp.explosionRadius);
+          for (const { unit } of hits) {
+            if (!unit || unit.hp <= 0) continue;
+            applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+          }
+        }
+        console.log('[ITEM] 폭풍쇄도 - 질풍(대상 사망, 즉시 폭발)');
+      } else if (now >= g.triggerAt) {
+        applyDamage(g.target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+        console.log('[ITEM] 폭풍쇄도 - 질풍 타격');
+      } else {
+        remaining.push(g);
+      }
+    }
+    ctrl._itemGaleQueue = remaining;
   }
   if (!ctrl.items || !ctrl.items.length) return;
   for (const slot of ctrl.items) {
@@ -1377,6 +1439,48 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
       applyStatus(target, { id: 'itemMalignanceHatefogMrShred', type: 'MR_SHRED', duration: p.durationSec, value: p.mrShred, source: ctrl });
     }
   }
+
+  // 폭풍쇄도(폭풍 약탈자) - "2.5초 내로 챔피언 최대 체력의 25%에 해당하는
+  // 피해를 입히면 질풍을 적용"(대상별 재사용대기시간 30초). 누적 피해를
+  // 롤링 윈도우(2.5초)로 추적하다가 문턱을 넘으면 질풍을 큐에 등록하고
+  // (실제 타격은 itemSystemTick()이 2초 뒤에 처리), 즉시 누적을 초기화한다.
+  const tempestSlot = (ctrl.items || []).find((s) => s.id === 'tempestStaff');
+  if (tempestSlot && target.isChampion) {
+    const sp = ITEM_DATA.tempestStaff.squallPassive;
+    const now = performance.now();
+    ctrl._itemSquallState = ctrl._itemSquallState || new Map();
+    const key = _itemTargetKey(target);
+    let st = ctrl._itemSquallState.get(key);
+    if (!st || now - st.windowStart > sp.windowSec * 1000) st = { sum: 0, windowStart: now };
+    st.sum += finalDmg;
+    ctrl._itemSquallState.set(key, st);
+    ctrl._itemGaleIcdUntil = ctrl._itemGaleIcdUntil || new Map();
+    const icdUntil = ctrl._itemGaleIcdUntil.get(key) || 0;
+    if (st.sum >= (target.maxHp || 0) * sp.hpThresholdPercent && now >= icdUntil) {
+      ctrl._itemGaleIcdUntil.set(key, now + sp.icdSec * 1000);
+      ctrl._itemSquallState.delete(key);
+      const gp = ITEM_DATA.tempestStaff.galePassive;
+      ctrl._itemGaleQueue = ctrl._itemGaleQueue || [];
+      ctrl._itemGaleQueue.push({ target, triggerAt: now + gp.delaySec * 1000 });
+      console.log('[ITEM] 폭풍쇄도 - 질풍 적용');
+    }
+  }
+
+  // 그림자불꽃(잿덩이꽃) - 체력 40% 이하인 적에게 마법/고정 피해 시 20%
+  // 추가 피해. "치명타 피해량 관련 능력치는 잿덩이꽃의 추가 피해량에만
+  // 영향을 줍니다" - 무한의 대검 등 itemBonusCritDamagePercent가 이
+  // 20%(bonusPercent) 자체에만 곱해진다(전체 피해가 아니라 이 보너스에만).
+  const shadowflameSlot = (ctrl.items || []).find((s) => s.id === 'shadowflame');
+  if (shadowflameSlot && (damageType === DAMAGE_TYPE.MAGICAL || damageType === DAMAGE_TYPE.TRUE)
+      && (target.hp / (target.maxHp || 1)) <= ITEM_DATA.shadowflame.cinderbloomPassive.hpThresholdPercent) {
+    const p = ITEM_DATA.shadowflame.cinderbloomPassive;
+    const critDmgBonus = (ctrl.itemBonusCritDamagePercent || 0);
+    const bonus = finalDmg * p.bonusPercent * (1 + critDmgBonus);
+    if (bonus > 0) {
+      const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
+      target.hp = Math.max(minHp, (target.hp || 0) - bonus);
+    }
+  }
 }
 
 // 마법의 영약의 포탑 전용 분기 - 00_global_constants.js의 applyDamage()가
@@ -1771,6 +1875,17 @@ function _itemTickElixirExpiry(ctrl) {
 function _itemSpellbladeSlot(ctrl) {
   return (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].spellbladePassive);
 }
+// 리치베인 - "주문 검을 사용 가능할 때 50%의 공격 속도를 얻습니다."
+// 스펠블레이드가 "무장된(armed) 동안만" 켜지는 임시 버프라 영구 스탯
+// (itemBonusAttackSpeedPercent)과 분리해, character_controller.js의
+// update()가 매 프레임 호출해 공격속도에 직접 더한다(가속/감속 상태처럼
+// 지속시간을 따로 관리할 필요 없이, 무장이 풀리는 순간 자동으로 0이 된다).
+function itemSpellbladeReadyAttackSpeedPercent(ctrl) {
+  if (!ctrl || !ctrl._itemSheenArmed) return 0;
+  const slot = _itemSpellbladeSlot(ctrl);
+  if (!slot) return 0;
+  return ITEM_DATA[slot.id].spellbladePassive.attackSpeedWhileReadyPercent || 0;
+}
 // _dispatchCast()에서 호출 - 스킬을 시전하면 주문 검(스펠블레이드)을
 // 무장시킨다(자체 1.5초 쿨다운 - 연속 시전해도 그보다 자주 재무장되지
 // 않는다).
@@ -1847,11 +1962,29 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
       // 정수약탈자 - 삼위일체(순수 AD%)와 달리 치명타 확률에도 비례하는
       // 추가 항(bonusPerCritChance/manaPerCritChance)이 있다. 기존
       // 아이템들은 이 필드가 없어(undefined -> 0) 그대로 동작한다.
-      const bonus = p.bonusAdPercent * (ctrl.stats.attackDamage || 0) + (p.bonusPerCritChance || 0) * (ctrl.stats.critChance || 0);
-      if (bonus > 0) applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      // 황혼과새벽/리치베인(주문력 계열 스펠블레이드) - bonusApPercent와
+      // damageType(기본 PHYSICAL, 둘 다 'MAGICAL')을 추가했다. 기존 AD
+      // 스펠블레이드 아이템들은 이 필드들이 없어(undefined -> 0/기본값)
+      // 그대로 동작한다(회귀 없음).
+      const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
+      const bonus = p.bonusAdPercent * (ctrl.stats.attackDamage || 0) + (p.bonusApPercent || 0) * ap + (p.bonusPerCritChance || 0) * (ctrl.stats.critChance || 0);
+      const dmgType = p.damageType === 'MAGICAL' ? DAMAGE_TYPE.MAGICAL : DAMAGE_TYPE.PHYSICAL;
+      if (bonus > 0) {
+        // 황혼과새벽(주문 검) - "적중 시 효과를 추가로 1회 적용합니다"를
+        // 이 피해 자체가 한 번 더 들어가는 것으로 단순화했다(item_data.js
+        // 주석 참고) - extraProc이 없는 기존 아이템은 1회만 적용된다.
+        const procs = p.extraProc ? 2 : 1;
+        for (let i = 0; i < procs; i++) applyDamage(target, { rawDamage: bonus, damageType: dmgType, isCritical: false, critMultiplier: 1, source: ctrl });
+      }
       if ((p.manaAdPercent || p.manaPerCritChance) && (ctrl.maxMp || 0) > 0) {
         const manaGain = (p.manaAdPercent || 0) * (ctrl.stats.attackDamage || 0) + (p.manaPerCritChance || 0) * (ctrl.stats.critChance || 0);
         if (manaGain > 0) ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + manaGain);
+      }
+      // 황혼과새벽 - "사용자의 체력을 (주문력10%+추가체력3%)만큼 회복".
+      if (p.healApPercent || p.healBonusHpPercent) {
+        const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
+        const heal = (p.healApPercent || 0) * ap + (p.healBonusHpPercent || 0) * bonusHp;
+        if (heal > 0 && typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal);
       }
     }
   }
@@ -1922,6 +2055,16 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
         ctrl._itemWrathbladeMaxStackHits = 0; // 최대 중첩이 풀리면(공격 공백) 카운트도 초기화
       }
     }
+  }
+  // 내셔의이빨(이케시아의 이빨) - 기본 공격 시 15+주문력15% 온히트 마법
+  // 피해. 기존 onHitFlatMagicDamage(순수 숫자)와 달리 주문력 비례가 있어
+  // 별도 객체 필드(onHitMagicDamagePassive)로 둔다 - 원문에 구조물 제외
+  // 언급이 없어 제외하지 않는다.
+  const onHitMagicApSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].onHitMagicDamagePassive);
+  if (onHitMagicApSlot) {
+    const p = ITEM_DATA[onHitMagicApSlot.id].onHitMagicDamagePassive;
+    const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
+    applyDamage(target, { rawDamage: p.flat + ap * p.apPercent, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
   }
   // 경계(그림자) - 기본 공격 시 고정+추가공격력%+주문력% 온히트 마법 피해.
   // 버그 수정(QA 재점검): 원문에 구조물 제외 언급이 없는데 다른 코드를

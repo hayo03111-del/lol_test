@@ -463,7 +463,10 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 경계(빛과 어둠 - 어둠)의 임시 마법 관통력(최대 30%) - PHYSICAL 분기의
     // itemTempArmorPenPercent와 동일한 자리.
     const tempMagicPenPercent = (atk && atk.itemTempMagicPenPercent) || 0;
-    const effectiveMr = mr * (1 - Math.max(0, Math.min(1, magicPenPercent))) * (1 - Math.max(0, Math.min(1, tempMagicPenPercent)));
+    // 아이템 패시브(역병의 보석/공허의지팡이 - 퍼센트 마법 관통력) - 최후의
+    // 속삭임(itemBonusArmorPenMultiplier)과 동일한 자리/원칙의 영구 곱연산 관통력.
+    const itemMagicPenMultiplier = (atk && atk.itemBonusMagicPenMultiplier < 1) ? atk.itemBonusMagicPenMultiplier : 1;
+    const effectiveMr = mr * (1 - Math.max(0, Math.min(1, magicPenPercent))) * (1 - Math.max(0, Math.min(1, tempMagicPenPercent))) * itemMagicPenMultiplier;
     dmg *= 100 / (100 + Math.max(0, effectiveMr));
     dmg *= 1 - getMagicDamageReductionPercent(target);
   }

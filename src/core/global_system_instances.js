@@ -58,15 +58,26 @@ function _itemStatsSummary(item) {
   if (item.grievousOnHitPassive) parts.push(`고통스러운 상처(챔피언 물리 피해 시 ${Math.round(item.grievousOnHitPassive.percent * 100)}% 그리버스 ${item.grievousOnHitPassive.durationSec}초)`);
   if (item.physicalVampPercent) parts.push(`생명력 흡수 +${Math.round(item.physicalVampPercent * 100)}%`);
   if (item.armorPenPercent) parts.push(`방어구 관통력 +${Math.round(item.armorPenPercent * 100)}%`);
+  if (item.magicPenPercent) parts.push(`마법 관통력 +${Math.round(item.magicPenPercent * 100)}%`);
   if (item.manaOnDamagePercent) parts.push(`챔피언에게 피해를 입히면 피해량의 ${Math.round(item.manaOnDamagePercent * 100)}%만큼 마나 회복`);
   if (item.cleavePassive) parts.push(`쪼개기(평타 시 주변에 근거리 ${Math.round(item.cleavePassive.meleePercent * 100)}%｜원거리 ${Math.round(item.cleavePassive.rangedPercent * 100)}% 물리 피해)`);
   if (item.activeAbility) parts.push(`사용 시 "${item.activeAbility.nameKo}": 주변 적에게 공격력 ${Math.round(item.activeAbility.percentAD * 100)}% 물리 피해(재사용 대기시간 ${item.activeAbility.cooldownSec}초)`);
   if (item.spellbladePassive) {
     const sp = item.spellbladePassive;
     const critPart = sp.bonusPerCritChance ? ` + 치명타확률 ${sp.bonusPerCritChance}` : '';
+    const apPart = sp.bonusApPercent ? ` + 주문력${Math.round(sp.bonusApPercent * 100)}%` : '';
     const manaPart = (sp.manaAdPercent || sp.manaPerCritChance) ? `, 마나 (공격력${Math.round((sp.manaAdPercent || 0) * 100)}%${sp.manaPerCritChance ? ' + 치명타확률 ' + sp.manaPerCritChance : ''}) 획득` : '';
-    parts.push(`주문 검: 스킬 사용 후 다음 평타에 (공격력${Math.round(sp.bonusAdPercent * 100)}%${critPart}) 추가 물리 피해${manaPart}(자체 재사용 대기시간 ${sp.procCooldownSec}초)`);
+    const dmgLabel = sp.damageType === 'MAGICAL' ? '마법' : '물리';
+    const extraPart = sp.extraProc ? ' + 적중 시 효과 1회 추가 적용' : '';
+    const healPart = (sp.healApPercent || sp.healBonusHpPercent) ? `, 체력 (주문력${Math.round((sp.healApPercent || 0) * 100)}%+추가체력${Math.round((sp.healBonusHpPercent || 0) * 100)}%) 회복` : '';
+    const asPart = sp.attackSpeedWhileReadyPercent ? `, 주문 검 사용 가능 시 공격속도 +${Math.round(sp.attackSpeedWhileReadyPercent * 100)}%` : '';
+    parts.push(`주문 검: 스킬 사용 후 다음 평타에 (공격력${Math.round(sp.bonusAdPercent * 100)}%${apPart}${critPart}) 추가 ${dmgLabel} 피해${extraPart}${manaPart}${healPart}${asPart}(자체 재사용 대기시간 ${sp.procCooldownSec}초)`);
   }
+  if (item.onHitMagicDamagePassive) { const p = item.onHitMagicDamagePassive; parts.push(`이케시아의 이빨(기본 공격 시 온히트 마법 피해 +${p.flat}+주문력${Math.round(p.apPercent * 100)}%)`); }
+  if (item.squallPassive) { const p = item.squallPassive; parts.push(`폭풍 약탈자(${p.windowSec}초 내 챔피언 최대 체력의 ${Math.round(p.hpThresholdPercent * 100)}%에 해당하는 피해를 입히면 질풍 적용, 대상별 재사용대기시간 ${p.icdSec}초)`); }
+  if (item.galePassive) { const p = item.galePassive; parts.push(`질풍(${p.delaySec}초 후 ${p.baseDmg}+주문력${Math.round(p.apPercent * 100)}% 마법 피해, 가격 전 대상 사망 시 즉시 범위 폭발)`); }
+  if (item.cinderbloomPassive) { const p = item.cinderbloomPassive; parts.push(`잿덩이꽃(체력 ${Math.round(p.hpThresholdPercent * 100)}% 이하인 적에게 마법·고정 피해 시 +${Math.round(p.bonusPercent * 100)}% 추가 피해, 치명타 피해량 효과 적용)`); }
+  if (item.noxiousBladeActive) { const p = item.noxiousBladeActive; parts.push(`사용 시 "${p.nameKo}": 선택한 적 챔피언에게 ${p.minDmg}~${p.maxDmg}(레벨비례)+주문력${Math.round(p.apPercent * 100)}% 마법 피해 + ${p.slowDurationSec}초간 ${Math.round(p.slowPercent * 100)}% 둔화, 재사용 대기시간 ${p.cooldownSec}초`); }
   // 전설급 4차분(정수약탈자~도미닉 경의 인사) 패시브 설명.
   if (item.executePassive) parts.push(`죽음(체력이 ${Math.round(item.executePassive.hpThresholdPercent * 100)}% 밑으로 떨어질 만큼의 피해를 입히면 처형)`);
   if (item.taxPassive) parts.push(`세금(챔피언 처치 시 추가로 ${item.taxPassive.goldOnTakedown}골드)`);
