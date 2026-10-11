@@ -60,6 +60,10 @@ vm.runInContext([
   read('src/champions/champion_data.js'),
   read('src/champions/champion_ability_database.js'),
   read('src/core/character_controller.js'),
+  read('src/core/controller_movement.js'),
+  read('src/core/controller_combat.js'),
+  read('src/core/controller_casting.js'),
+  read('src/core/controller_lifecycle.js'),
   read('src/champions/nautilus.js'),
 ].join('\n') + `
 this.CharacterController = CharacterController;

@@ -56,6 +56,10 @@ vm.runInContext([
   read('src/core/item_system.js'),
   read('src/world/dummy_enemy.js').replace(/^function createDummyEnemy[\s\S]*?\n}\n/m, ''),
   read('src/core/character_controller.js'),
+  read('src/core/controller_movement.js'),
+  read('src/core/controller_combat.js'),
+  read('src/core/controller_casting.js'),
+  read('src/core/controller_lifecycle.js'),
   read('src/champions/leesin.js'),
   read('src/champions/nilah.js'),
 ].join('\n') + `

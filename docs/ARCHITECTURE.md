@@ -55,7 +55,9 @@ assets/        - 모델/텍스처 등 정적 리소스
 - **수치**는 `champion_data.js`(`CHAMPION_DATA.<id>`)와 `item_data.js`
   (`ITEM_DATA.<id>`)에만 있다. 쿨다운/피해량/사거리 등을 튜닝하려면 이
   두 파일만 고치면 된다.
-- **로직**은 `character_controller.js`의 공용 메서드 + 챔피언별 파일
+- **로직**은 CharacterController 공용 메서드(`character_controller.js` 클래스 본체 +
+  `controller_movement.js`/`controller_combat.js`/`controller_casting.js`/
+  `controller_lifecycle.js`로 분리된 메서드) + 챔피언별 파일
   (`src/champions/<id>.js`)의 `CharacterController.prototype` 확장,
   아이템은 `item_system.js`의 `itemOn*()` 훅 함수들에 있다.
 - 공용 Controller 코드는 항상 `if (this.championId === '<id>')` 같은

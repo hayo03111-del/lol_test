@@ -64,7 +64,8 @@ const constSrc = fs.readFileSync(path.join(ROOT, 'src/core/00_global_constants.j
 const statusSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8');
 const hitSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_hit_detection.js'), 'utf8');
 const champDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/champion_data.js'), 'utf8');
-const ccSrc = fs.readFileSync(path.join(ROOT, 'src/core/character_controller.js'), 'utf8');
+// character_controller.js + 분리된 메서드 파일들(controller_*.js)을 함께 로드한다.
+const ccSrc = ['character_controller.js', 'controller_movement.js', 'controller_combat.js', 'controller_casting.js', 'controller_lifecycle.js'].map((f) => fs.readFileSync(path.join(ROOT, 'src/core', f), 'utf8')).join('\n');
 const settSrc = fs.readFileSync(path.join(ROOT, 'src/champions/sett.js'), 'utf8');
 const garenSrc = fs.readFileSync(path.join(ROOT, 'src/champions/garen.js'), 'utf8');
 const dariusSrc = fs.readFileSync(path.join(ROOT, 'src/champions/darius.js'), 'utf8');

@@ -97,7 +97,17 @@ myChamp: {
 자세한 내부 패턴(상태이상/투사체/히트 디텍션/시야/전 맵 사거리
 궁극기)은 아래 "10. 공용 유틸리티 레퍼런스"를 참고.
 
-## 4. (필수) `src/core/character_controller.js` - 6곳 연결(+선택 1곳)
+## 4. (필수) CharacterController 연결 - 6곳(+선택 1곳)
+
+CharacterController는 여러 파일로 나뉘어 있다(전부 같은 클래스의 메서드):
+
+| 파일 | 내용 |
+|---|---|
+| `src/core/character_controller.js` | 클래스 본체 - 생성자, `_freshChampionStates()`, `applyChampionData()`, 스탯/레벨, 애니메이션 헬퍼, 행동 권한, `update(dt)` |
+| `src/core/controller_movement.js` | 이동/대상 선택/추적 |
+| `src/core/controller_combat.js` | `_onBasicAttackHit()`, 공격 오버라이드, 평타 스윙, 스킬 비용, 재생 |
+| `src/core/controller_casting.js` | `castAbility()`, 시전 라우팅 표(`CHAMPION_DIRECT_CASTS`/`CHAMPION_SLOT_CASTS`), 공용 `_castQ/W/E/R` |
+| `src/core/controller_lifecycle.js` | 귀환, `takeDamage()`, `_die()`, 부활 |
 
 전부 "기존 챔피언 분기 바로 옆에 한 줄/한 블록 추가"다. 자리를 찾을 때는
 가장 최근에 추가된 챔피언(현재는 `ashe`)의 분기를 `grep -n "championId === 'ashe'"`로
@@ -123,7 +133,7 @@ this._myChamp = {
 (아리 여우불/모데카이저 인터벌 정리 옆)에 추가한다. 단순 데이터만 들고 있으면
 이 단계는 필요 없다.
 
-### 4-3. `_onBasicAttackHit(target, overrideId, wouldKill, attackHand, isCritical)` 맨 앞
+### 4-3. `_onBasicAttackHit(target, overrideId, wouldKill, attackHand, isCritical)` 맨 앞 (controller_combat.js)
 
 패시브가 평타에 묻어나는 챔피언이면:
 
@@ -131,7 +141,7 @@ this._myChamp = {
 if (this.championId === 'myChamp') this._myChampOnBasicAttackHit(target, isCritical);
 ```
 
-### 4-4. `castAbility(slot, ...)` - 비애니메이션 유틸 스킬이면(선택)
+### 4-4. `castAbility(slot, ...)` - 비애니메이션 유틸 스킬이면(선택, controller_casting.js)
 
 스킬에 별도 시전 모션이 없고(가렌/다리우스/모데카이저 W, 애쉬 Q 같은
 "즉시 상태 전환"형) 평타/다른 행동 중에도 즉시 쓸 수 있어야 하면,
@@ -147,22 +157,26 @@ if (this.championId === 'myChamp' && slot === 'Q') {
 시전 모션이 있는 평범한 스킬이면 이 단계는 건너뛴다(공용 게이트 로직을
 그대로 탄다).
 
-### 4-5. `_dispatchCast(slot, mouseWorldPoint, free)` - 실제 라우팅
+### 4-5. 시전 라우팅 표에 등록 (controller_casting.js)
+
+챔피언 전용 시전 함수로 4슬롯을 전부 처리하면 `CHAMPION_DIRECT_CASTS`에
+한 줄 추가한다(각 함수는 `(컨트롤러, 마우스 지점, free)`를 받는다):
 
 ```js
-if (this.championId === 'myChamp') {
-  if (slot === 'Q') return this._myChampCastQ(free);
-  if (slot === 'W') return this._myChampCastW(mouseWorldPoint, free);
-  if (slot === 'E') return this._myChampCastE(mouseWorldPoint, free);
-  if (slot === 'R') return this._myChampCastR(mouseWorldPoint, free);
-}
+myChamp: {
+  Q: (c, m, f) => c._myChampCastQ(f),
+  W: (c, m, f) => c._myChampCastW(m, f),
+  E: (c, m, f) => c._myChampCastE(m, f),
+  R: (c, m, f) => c._myChampCastR(m, f),
+},
 ```
 
-방향이 필요 없는 스킬(자기 자신 대상)은 `mouseWorldPoint`를 받는
-매개변수 자체를 생략해도 된다(요네/이즈리얼/아리/바루스/애쉬의 기존
-분기들이 좋은 예시).
+`CHAMPION_DIRECT_CASTS`는 "▶ 모션 테스트"의 커스텀 애니메이션 시퀀스보다
+먼저 실행된다. 커스텀 시퀀스 미리보기를 거친 뒤 일부 슬롯만 가로채고 나머지는
+공용 로직(가렌/다리우스형)에 맡기려면 대신 `CHAMPION_SLOT_CASTS.Q/W/E/R`에
+등록한다. 방향이 필요 없는 스킬은 `m`을 그냥 무시하면 된다.
 
-### 4-6. `_die()` - 사망 시 정리
+### 4-6. `_die()` - 사망 시 정리 (controller_lifecycle.js)
 
 진행 중이던 지연 판정/버프/상태이상을 전부 끈다:
 
@@ -172,7 +186,7 @@ if (this.championId === 'myChamp' && this._myChamp) {
 }
 ```
 
-### 4-7. `update(dt)` - 매 프레임 틱 호출
+### 4-7. `update(dt)` - 매 프레임 틱 호출 (character_controller.js)
 
 다른 챔피언들의 `this._xUpdate(dt);` 호출 옆에 한 줄 추가:
 
@@ -298,9 +312,9 @@ this._myChampUpdate(dt);
 - [ ] `champion_data.js`에 `CHAMPION_DATA.<id>` 추가
 - [ ] `champion_ability_database.js`에 `championAbilityDatabase.<id>` 추가
 - [ ] `src/champions/<id>.js` 작성(`_TEMPLATE.js` 복사)
-- [ ] `character_controller.js` 6~7곳: `_freshChampionStates()` / (필요 시) `applyChampionData()` 정리 /
-      `_onBasicAttackHit()` / (선택) `castAbility()` 우회 / `_dispatchCast()` /
-      `_die()` / `update()`
+- [ ] CharacterController 6~7곳: `_freshChampionStates()` / (필요 시) `applyChampionData()` 정리 /
+      `_onBasicAttackHit()`(combat) / (선택) `castAbility()` 우회(casting) / 시전 라우팅 표(casting) /
+      `_die()`(lifecycle) / `update()`
 - [ ] `build_manifest.json`에 파일 추가
 - [ ] (선택) `skill_timing_database.js`(캐스트 타임/모델 배율/별칭)
 - [ ] (선택) `action_timing.js`(평타/정지/이동 클립 강제)
