@@ -360,9 +360,9 @@ CharacterController.prototype._ezrealTickRTravel = function(dt) {
     if (!u || u.hp <= 0 || travel.hitSet.has(u)) continue;
     if (isInCircle(u, travel.pos, travel.halfWidth)) {
       travel.hitSet.add(u);
-      const falloff = Math.max((r.minDamagePercent || 10) / 100, 1 - ((r.falloffPerUnitPercent || 0) / 100) * travel.hitCount);
+      // PC 판 정조준 일격은 맞힌 수에 따른 감소가 없다(미니언/일반 몬스터만 50%) - 예전 "대상마다 10% 감소"는 제거.
       travel.hitCount++;
-      let dmg = baseDmg * falloff;
+      let dmg = baseDmg;
       // 버그 수정: u.isMonster는 이 뷰어에서 포탑/억제기/넥서스에도 true로
       // 설정돼 있어(구조물 자체를 표시하는 용도로 겹쳐 쓰임 - turret_system.js
       // 참고), 그대로 쓰면 정조준 일격이 구조물에도 미니언 감소 배율을
@@ -373,7 +373,7 @@ CharacterController.prototype._ezrealTickRTravel = function(dt) {
       if (u.isMinion) dmg *= (r.minionDamageMultiplier != null ? r.minionDamageMultiplier : 1);
       applyDamage(u, { rawDamage: dmg, damageType: r.damageType === 'MAGICAL' ? DAMAGE_TYPE.MAGICAL : DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
       vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone());
-      debugSkillHit('Ezreal R', u, { falloff: falloff.toFixed(2) });
+      debugSkillHit('Ezreal R', u, { dmg: dmg.toFixed(1) });
       this._ezrealGainPassiveStack();
       // R이 W 표식 대상을 맞히면 표식도 함께 터진다(이 R의 마나 소모량 + 60 환불).
       this._ezrealDetonateMark(u, 'ability', r.mana);

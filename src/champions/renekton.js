@@ -15,7 +15,7 @@ CharacterController.prototype._renektonMarkCombat = function() {
     if (this.championId !== 'renekton') return;
     const now = performance.now();
     this._renekton.lastCombatAt = now;
-    this._renekton.nextRageDecayAt = now + 12000 + 5000;
+    this._renekton.nextRageDecayAt = 0; // 비전투 12초가 지나면 그때부터 0.25초마다 1씩 감소(PC 위키)
   
 };
 
@@ -149,7 +149,12 @@ CharacterController.prototype._renektonCastW = function(mouseWorldPoint, free=fa
     const empowered = !free && this._renekton.rage>=50;
     if (empowered) this._renekton.rage-=50;
     this._renekton.wArmed=true; this._renekton.wEmpowered=empowered;
+    // PC 위키: 7초 안의 다음 평타만 강화(예전엔 시간 제한이 없었다).
+    this._renekton.wArmedUntil = performance.now() + (w.empowerWindowSec || 7) * 1000;
     updateBars(this);
+    // 버그 수정: 평타 도중 W를 쓰면 공용 시전 경로가 평타를 취소하는데, W는 강화만 걸고 공격을
+    // 재개하지 않아 레넥톤이 그 자리에 멈춰 있었다. 원작 W는 평타 타이머를 초기화하므로 바로 공격을 이어간다.
+    if (!this.currentActionKey) this._resumeAfterAction();
   
 };
 
@@ -213,8 +218,9 @@ CharacterController.prototype._renektonResolveWHit = function(seq) {
       applyDamage(target,{rawDamage:raw/seq.hits,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1});
     } else {
       applyDamage(target,{rawDamage:raw/seq.hits,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1});
-      this._renektonGainRage(5);
-      if (target.isChampion || (!target.isMinion&&!target.isTurret&&!target.isNexus&&!target.isInhibitor)) this._renektonGainRage(10);
+      this._renektonGainRage(5); // 타격마다 평타 분노
+      // 챔피언 적중 추가 분노 10은 스킬 한 번에 1회(예전엔 타격마다 들어가 2회 = 20이었다).
+      if (seq.hitIndex===0 && (target.isChampion || (!target.isMinion&&!target.isTurret&&!target.isNexus&&!target.isInhibitor))) this._renektonGainRage(10);
     }
     this._renektonMarkCombat();
     if (seq.hitIndex===seq.hits-1 && !seq.empowered) applyStatus(target,{id:'renektonWstun',type:'STUN',duration:seq.stun,value:1});
@@ -315,21 +321,27 @@ CharacterController.prototype._renektonTick = function(dt) {
       r.rRageAccum+=dt;
       while(r.rRageAccum>=1){r.rRageAccum-=1;this._renektonGainRage(5);}
       r.rAuraAccum+=dt;
-      while(r.rAuraAccum>=1){
-        r.rAuraAccum-=1;
-        const rd=this._renektonData().R,lvl=this.skillLevels.R||1;
-        const raw=skillVal(rd.damagePerSecond,lvl)+rd.bonusAdRatio*this._renektonExtraAD()+rd.apRatio*(this.stats.abilityPower||0);
+      const rdTick=this._renektonData().R; const tickSec=rdTick.tickSec||1;
+      while(r.rAuraAccum>=tickSec){
+        r.rAuraAccum-=tickSec;
+        const rd=rdTick,lvl=this.skillLevels.R||1;
+        // 0.5초마다 초당 피해의 절반(PC 위키: 30/75/120 + 추가 AD 5% + AP 5%).
+        const raw=(skillVal(rd.damagePerSecond,lvl)+rd.bonusAdRatio*this._renektonExtraAD()+rd.apRatio*(this.stats.abilityPower||0))*tickSec;
         const radius=rd.range;
         for(const h of findEnemiesInRadius(this.root.position,radius))applyDamage(h.unit,{rawDamage:raw,damageType:DAMAGE_TYPE.MAGICAL,isCritical:false,critMultiplier:1});
       }
       if(now>=r.rActiveUntil)this._renektonEndR();
     } else {
+      // 버그 수정: 예전엔 비전투 17초 뒤부터 5초마다 20씩 깎였다. PC 위키: 12초 뒤부터 0.25초마다 1(초당 4).
+      const pd=this._renektonData().passive;
       const since=(now-r.lastCombatAt)/1000;
-      if(r.rage>0 && since>=12){
-        if(!r.nextRageDecayAt)r.nextRageDecayAt=r.lastCombatAt+17000;
-        while(now>=r.nextRageDecayAt && r.rage>0){r.rage=Math.max(0,r.rage-20);r.nextRageDecayAt+=5000;}
-      } else if(since<12) r.nextRageDecayAt=0;
+      const exitSec=pd.combatExitSec||12, stepMs=(pd.rageDecayInterval||0.25)*1000, stepAmt=pd.rageDecayAmount||1;
+      if(r.rage>0 && since>=exitSec){
+        if(!r.nextRageDecayAt)r.nextRageDecayAt=r.lastCombatAt+exitSec*1000+stepMs;
+        while(now>=r.nextRageDecayAt && r.rage>0){r.rage=Math.max(0,r.rage-stepAmt);r.nextRageDecayAt+=stepMs;}
+      } else if(since<exitSec) r.nextRageDecayAt=0;
     }
+    if(r.wArmed && r.wArmedUntil && now>=r.wArmedUntil && !r.wSeq){r.wArmed=false;r.wEmpowered=false;r.wArmedUntil=0;}
     // E 2단 재사용 창 만료
     if(r.eSecondReadyUntil && now>=r.eSecondReadyUntil){r.eSecondReadyUntil=0;r.eFirstHit=false;}
     updateBars(this);

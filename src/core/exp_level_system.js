@@ -682,6 +682,11 @@ function killMinion(minion) {
       && typeof itemOnMinionKillByPlayer === 'function') {
     itemOnMinionKillByPlayer(controller);
   }
+  // 바루스 패시브(살아있는 복수) - 유닛 처치 시 공격 속도.
+  if (typeof controller !== 'undefined' && controller && controller.championId === 'varus'
+      && minion._lastHitBy === controller && typeof controller._varusOnKill === 'function') {
+    controller._varusOnKill(minion, false);
+  }
   // 가렌 W(용기) 패시브 - 가렌이 마지막으로 때린 미니언이 죽으면 처치 스택.
   if (typeof controller !== 'undefined' && controller && controller.championId === 'garen'
       && minion._lastHitBy === controller && typeof controller._garenOnTakedown === 'function') {

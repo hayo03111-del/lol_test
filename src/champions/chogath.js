@@ -43,13 +43,14 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
       // 정확한 파열 폭발 반경이 기획안에 없어(사거리 950은 "시전 가능
       // 거리") 근접 판정 반경(200)으로 근사한다 - 섹션 18 원칙에 따라
       // 새 피해 수치를 만들지는 않았고, 오직 판정 반경만 근사치다.
-      const hits = findEnemiesInRadius(impactPoint, 200);
+      const hits = findEnemiesInRadius(impactPoint, q.radius || 250); // PC 위키: 반경 250(예전 200)
       if (hits.length) {
         for (const h of hits) {
           const dmg = skillVal(q.damageByLevel, lvl) + q.apRatio * this.stats.abilityPower;
-          const wouldKill = h.unit.hp > 0 && h.unit.hp <= dmg;
-          applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
-          applyStatus(h.unit, { id: 'chogathQ_knockup', type: 'STUN', duration: q.knockupDuration, value: 1 });
+          const hpB = h.unit.hp, flB = isFlooredTrainingDummy(h.unit);
+          const dealt = applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
+          const wouldKill = !flB && hpB > 0 && hpB <= dealt; // 실제 입힌 피해(마법 저항 적용 후) 기준
+          applyStatus(h.unit, { id: 'chogathQ_knockup', type: 'KNOCKUP', duration: q.knockupDuration, value: 1 }); // 공중에 뜸(예전엔 기절로 처리)
           const unit = h.unit;
           setTimeout(() => { if (unit.hp > 0) applyStatus(unit, { id: 'chogathQ_slow', type: 'SLOW', duration: q.slowDuration, value: q.slowPercent / 100 }); }, q.knockupDuration * 1000);
           if (wouldKill) this._chogathOnKill(h.unit);
@@ -84,8 +85,9 @@ CharacterController.prototype._chogathCastW = function(free) {
       if (hits.length) {
         for (const h of hits) {
           const dmg = skillVal(w.damageByLevel, lvl) + w.apRatio * this.stats.abilityPower;
-          const wouldKill = h.unit.hp > 0 && h.unit.hp <= dmg;
-          applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
+          const hpB = h.unit.hp, flB = isFlooredTrainingDummy(h.unit);
+          const dealt = applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
+          const wouldKill = !flB && hpB > 0 && hpB <= dealt;
           applyStatus(h.unit, { id: 'chogathW_silence', type: 'SILENCE', duration: skillVal(w.silenceDurationByLevel, lvl), value: 1 });
           if (wouldKill) this._chogathOnKill(h.unit);
         }
@@ -117,8 +119,9 @@ CharacterController.prototype._chogathEOnHit = function(target) {
     const stacks = this._chogath.predationStacks || 0;
     const dmg = skillVal(e.perHitDamageByLevel, lvl) + e.apRatio * this.stats.abilityPower
       + (target.maxHp || 0) * ((skillVal(e.perHitMaxHpPercentByLevel, lvl) + e.perStackMaxHpPercent * stacks) / 100);
-    const wouldKill = target.hp > 0 && target.hp <= dmg;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
+    const hpB = target.hp, flB = isFlooredTrainingDummy(target);
+    const dealt = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
+    const wouldKill = !flB && hpB > 0 && hpB <= dealt;
     applyStatus(target, { id: 'chogathE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100 });
     if (wouldKill) this._chogathOnKill(target);
     this._chogath.eChargesRemaining -= 1;
@@ -131,17 +134,26 @@ CharacterController.prototype._chogathROnHit = function(target) {
     const cd = this._champData(); if (!cd) return;
     const r = cd.R;
     const lvl = Math.max(1, this.skillLevels.R || 1);
-    const isChampionTarget = !target.isMonster;
-    const bonusHp = Math.max(0, (this.maxHp || 0) - CHAMPION_DATA.chogath.stats.hp);
+    // 버그 수정: 예전엔 "몬스터가 아니면 챔피언"으로 판정해 미니언에게도 챔피언 피해(300~650)가 들어갔고,
+    // 추가 체력도 1레벨 기본 체력 기준이라 레벨업 체력이 전부 추가 체력으로 계산됐다.
+    const isChampionTarget = !!target.isChampion;
+    const bonusHp = Math.max(0, (this.maxHp || 0) - (computeChampionStats('chogath', this.champLevel)?.maxHp || CHAMPION_DATA.chogath.stats.hp));
     const dmg = isChampionTarget
       ? skillVal(r.championDamageByLevel, lvl) + r.championApRatio * this.stats.abilityPower + r.championBonusHpRatio * bonusHp
       : r.nonChampionDamage + r.nonChampionApRatio * this.stats.abilityPower + r.nonChampionBonusHpRatio * bonusHp;
-    const wouldKill = target.hp > 0 && target.hp <= dmg;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+    const hpB = target.hp, flB = isFlooredTrainingDummy(target);
+    const dealt = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: this }) || 0;
+    const wouldKill = !flB && hpB > 0 && hpB <= dealt;
     if (wouldKill) {
-      this._chogath.predationStacks = (this._chogath.predationStacks || 0) + 1;
-      this.bonusMaxHp = (this.bonusMaxHp || 0) + skillVal(r.hpGrowthByLevel, lvl);
-      this.recomputeStats();
+      // 중첩: 챔피언/에픽 몬스터는 제한 없음, 미니언/일반 몬스터로 얻는 중첩은 최대 6(PC 위키).
+      const fromNonEpic = !target.isChampion && !target.isEpicMonster;
+      const nonEpicStacks = this._chogath.nonEpicStacks || 0;
+      if (!fromNonEpic || nonEpicStacks < (r.nonEpicStackCap || 6)) {
+        if (fromNonEpic) this._chogath.nonEpicStacks = nonEpicStacks + 1;
+        this._chogath.predationStacks = (this._chogath.predationStacks || 0) + 1;
+        this.bonusMaxHp = (this.bonusMaxHp || 0) + skillVal(r.hpGrowthByLevel, lvl);
+        this.recomputeStats();
+      }
       this._chogathOnKill(target);
       debugSkillHit("Cho'Gath R (처치)", target, { stacks: this._chogath.predationStacks });
     }

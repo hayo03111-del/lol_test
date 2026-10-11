@@ -16,7 +16,8 @@ CharacterController.prototype._settOnBasicAttackHit = function(target, attackHan
     this._sett.lastPunchAt = performance.now();
     this._sett.punchSide = attackHand ? attackHand.toLowerCase() : this._sett.punchSide; // 디버그 표시(예: [SETT Q] Next Attack)용 미러링일 뿐, 판정에는 쓰지 않음
     if (attackHand === 'RIGHT') {
-      const dmg = p.rightPunchDamageBase + p.rightPunchDamageGrowth * (this.champLevel - 1) + p.rightPunchBonusAdRatio * this._getBonusAD();
+      const t = Math.min(1, Math.max(0, (this.champLevel - 1) / 17));
+      const dmg = p.rightPunchDamageAtLevel1 + (p.rightPunchDamageAtLevel18 - p.rightPunchDamageAtLevel1) * t + p.rightPunchBonusAdRatio * this._getBonusAD();
       applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
     }
     if (this._settQOnHit) this._settQOnHit(target); // Q 활성 중이면 추가 타격 처리(아래)
@@ -65,7 +66,9 @@ CharacterController.prototype._settQOnHit = function(target) {
     const cd = this._champData(); if (!cd) return;
     const q = cd.Q;
     const lvl = Math.max(1, this.skillLevels.Q || 1);
-    const dmg = skillVal(q.perHitFlatByLevel, lvl) + (target.maxHp || 0) * (skillVal(q.perHitMaxHpPercentByLevel, lvl) / 100) + skillVal(q.perHitAdRatioByLevel, lvl) * this.stats.attackDamage;
+    // 대상 최대 체력의 (1% + 공격력 100당 1~3%) - 공격력은 총 공격력 기준(PC 위키 "per 100 AD").
+    const hpPercent = q.perHitMaxHpPercent + (this.stats.attackDamage / 100) * skillVal(q.perHitMaxHpPercentPer100AdByLevel, lvl);
+    const dmg = skillVal(q.perHitFlatByLevel, lvl) + (target.maxHp || 0) * (hpPercent / 100);
     applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
     this._sett.qUsesRemaining -= 1;
     console.log(`[SETT Q] Q EMPOWERED HIT (uses left: ${this._sett.qUsesRemaining})`);
@@ -123,6 +126,7 @@ CharacterController.prototype._settGritTick = function(dt) {
 // Extracted from CharacterController: _settShieldDecayTick
 CharacterController.prototype._settShieldDecayTick = function(dt) { 
     if (this.championId !== 'sett' || !this._sett.wShieldDecayPerSec || this.shield <= 0) return;
+    if (this._sett.wShieldDecayStartAt && performance.now() < this._sett.wShieldDecayStartAt) return;
     this.shield = Math.max(0, this.shield - this._sett.wShieldDecayPerSec * dt);
     if (this.shield <= 0) this._sett.wShieldDecayPerSec = 0;
     updateBars(this);
@@ -167,7 +171,10 @@ CharacterController.prototype._settWApplyShield = function() {
     // 큰 값을 덮어씌우지 않는다.
     const shieldAmt = spent * getShieldReceivedMultiplier(this); // 소모한 투지의 100% = 보호막(보호막 효과 증가 적용)
     this.shield = Math.max(this.shield, shieldAmt);
-    this._sett.wShieldDecayPerSec = w.shieldDuration > 0 ? shieldAmt / w.shieldDuration : 0;
+    // PC 위키: 보호막은 3초 지속, 0.75초 뒤부터 남은 2.25초에 걸쳐 0까지 감소한다.
+    const decayDelay = w.shieldDecayDelaySec || 0;
+    this._sett.wShieldDecayStartAt = performance.now() + decayDelay * 1000;
+    this._sett.wShieldDecayPerSec = w.shieldDuration > decayDelay ? shieldAmt / (w.shieldDuration - decayDelay) : 0;
     updateBars(this);
 
 };
@@ -183,20 +190,22 @@ CharacterController.prototype._settWOnCast = function(origin, forward) {
     const spent = this._sett.wPendingSpent || 0;
 
     const bonusAd = this._getBonusAD();
+    // 소모한 투지의 25% + 추가 공격력 100당 25%(PC 위키).
+    const gritRatio = w.gritSpendPercent + (bonusAd / 100) * (w.gritSpendPercentPer100BonusAd || 0);
     let centerHit = 0, sideHits = 0;
     for (const unit of getAllEnemyUnits()) {
       const zone = isPointInsideSettWTrapezoid(unit, origin, forward, w.range, w.centerHalfWidth, w.endHalfWidth);
       if (!zone) continue;
       if (zone === 'CENTER') {
         // 중앙 적중: 투지 비례 고정 피해(True Damage) - Armor/MR 무시.
-        const dmg = skillVal(w.damageBaseByLevel, lvl) + spent * (w.gritSpendPercent / 100) + w.bonusAdRatio * bonusAd;
+        const dmg = skillVal(w.damageBaseByLevel, lvl) + spent * (gritRatio / 100);
         applyDamage(unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
         console.log(`[SETT W] CENTER HIT -> TRUE DAMAGE ${dmg.toFixed(1)} (flow ${spent.toFixed(0)})`);
         centerHit++;
       } else {
         // 양옆 적중: 같은 공식이지만 물리 피해(방어력 적용) - 중앙과 절대
         // 같은 대상에게 동시에 들어가지 않는다(둘 중 하나만, 요청 15).
-        const dmg = skillVal(w.damageBaseByLevel, lvl) + spent * (w.gritSpendPercent / 100) + w.bonusAdRatio * bonusAd;
+        const dmg = skillVal(w.damageBaseByLevel, lvl) + spent * (gritRatio / 100);
         applyDamage(unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
         console.log(`[SETT W] SIDE HIT -> PHYSICAL DAMAGE ${dmg.toFixed(1)} (flow ${spent.toFixed(0)})`);
         sideHits++;

@@ -57,12 +57,11 @@ CharacterController.prototype._varusDetonateBlight = function(target, { viaQ = f
   const w = this._champData().W;
   const wLvl = Math.max(1, this.skillLevels.W || 1);
   const targetMaxHp = (target.maxHp != null ? target.maxHp : (target.stats && target.stats.maxHp)) || 0;
-  let raw = (skillVal(w.detonatePercentMaxHpByLevel, wLvl) / 100) * stacks * targetMaxHp;
-  if (viaQ) {
-    const missingHp = Math.max(0, targetMaxHp - Math.max(0, target.hp));
-    const chargeMult = 1 + ((w.qConsumeMaxChargeMultiplier || 1.5) - 1) * chargeFraction;
-    raw += (skillVal(w.qConsumeMissingHpPercentByLevel, wLvl) / 100) * chargeMult * missingHp;
-  }
+  // 중첩당 대상 최대 체력 3~5%(+주문력 100당 1.3%). Q로 터뜨리면 충전량에 따라 최대 50% 증가(PC 위키).
+  // 버그 수정: 예전엔 Q로 터뜨릴 때마다 잃은 체력 비례 피해를 더했다 - 그건 W를 "사용"한 뒤의 다음 Q 효과다.
+  const perStackPercent = skillVal(w.detonatePercentMaxHpByLevel, wLvl) + 1.3 * ((this.stats.abilityPower || 0) / 100);
+  let raw = (perStackPercent / 100) * stacks * targetMaxHp;
+  if (viaQ) raw *= 1 + ((w.qConsumeMaxChargeMultiplier || 1.5) - 1) * chargeFraction;
   applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
   vfx.spawn('hit', getWorldPosition(target)?.clone() || target.mesh.position.clone(), undefined, { color: 0x8fd6ff });
   debugSkillHit('Varus W (오한 소모)', target, { stacks, viaQ });
@@ -89,44 +88,44 @@ CharacterController.prototype._varusDetonateBlight = function(target, { viaQ = f
 // 투자해야만(bin VarusWOnHitDamage의 랭크0 sentinel=-1) 발동한다.
 CharacterController.prototype._varusOnBasicAttackHit = function(target) {
   if (!target) return;
-  const now = performance.now();
-  const lv = this._varus.lv;
-  if (lv.target !== target) { lv.target = target; lv.rampStartAt = now; }
-  lv.lastHitAt = now;
-
   if ((this.skillLevels.W || 0) >= 1) {
     const w = this._champData().W;
     const wLvl = Math.max(1, this.skillLevels.W);
-    const raw = skillVal(w.onHitDamageByLevel, wLvl) + (w.onHitBonusAdRatio || 0) * this._getBonusAD();
+    // 적중 시 추가 마법 피해: 4~40 + 주문력 25%(PC 위키 V26.12/V26.03).
+    const raw = skillVal(w.onHitDamageByLevel, wLvl) + (w.onHitApRatio || 0) * (this.stats.abilityPower || 0);
     applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     vfx.spawn('hit', getWorldPosition(target)?.clone() || target.mesh.position.clone(), undefined, { color: 0x8fd6ff });
     this._varusApplyBlight(target);
   }
 };
 
-// 패시브(살아있는 복수) 매 프레임 램프 - 마지막 공격 대상 기준으로 공격
-// 속도가 점점 오르다가(챔피언 레벨에 따라 5~15초에 걸쳐 최대치), 일정
-// 시간(2초) 이상 그 대상을 다시 때리지 못하면 램프가 초기화된다. 얻은
-// 보너스 공격 속도의 일부는 공격력(bonusAD)으로도 전환된다(AP 전환분은
-// 파일 상단 주석 참고 - 이 데모에서는 실제 기여가 없어 생략).
+// 패시브(살아있는 복수): 유닛 처치 → 공속 10/15/20%, 챔피언 처치 관여 → 30%(지속 5/7/9/11초).
+// 챔피언 관여로 얻은 강화 상태는 챔피언 관여로만 갱신된다(유닛 처치가 덮어쓰지 않음).
+CharacterController.prototype._varusOnKill = function(target, isChampionTakedown) {
+  if (this.championId !== 'varus') return;
+  const p = this._champData().passive;
+  const lv = this._varus.lv;
+  const now = performance.now();
+  const durMs = valueByBreakpoints(p.durationByLevel, this.champLevel) * 1000;
+  if (isChampionTakedown) {
+    lv.takedown = true; lv.asPercent = p.takedownAsPercent; lv.adRatio = p.takedownAdPerBonusAsPercent; lv.until = now + durMs;
+  } else if (!(lv.takedown && now < lv.until)) {
+    lv.takedown = false; lv.asPercent = valueByBreakpoints(p.killAsByLevel, this.champLevel); lv.adRatio = p.killAdPerBonusAsPercent; lv.until = now + durMs;
+  }
+  applyStatus(this, { id: 'varusLivingVengeance', type: 'AS_BUFF', duration: (lv.until - now) / 1000, value: lv.asPercent / 100 });
+};
+
+// 매 프레임: 강화 중이면 "추가 공격 속도(%)의 11%/33%"만큼 공격력(bonusAD).
 CharacterController.prototype._varusLvTick = function(dt) {
   const lv = this._varus.lv;
   const now = performance.now();
-  if (lv.target && (lv.target.hp <= 0 || now - lv.lastHitAt > 2000)) lv.target = null;
-  if (!lv.target) {
+  if (!lv.until || now >= lv.until) {
+    if (lv.until) { lv.until = 0; lv.takedown = false; lv.asPercent = 0; lv.adRatio = 0; }
     if (this.bonusAD) this.bonusAD = 0;
     return;
   }
-  const p = this._champData().passive;
-  const isChampionLike = !(lv.target.isMinion || lv.target.isTurret || lv.target.isInhibitor || lv.target.isNexus);
-  const rampDurationSec = valueByBreakpoints(p.rampDurationBreakpoints, this.champLevel);
-  const elapsedSec = (now - lv.rampStartAt) / 1000;
-  const frac = Math.max(0, Math.min(1, rampDurationSec > 0 ? elapsedSec / rampDurationSec : 1));
-  const cap = isChampionLike ? p.championAsCap : p.nonChampionAsCap;
-  const asPercent = cap * frac;
-  applyStatus(this, { id: 'varusLivingVengeance', type: 'AS_BUFF', duration: 0.35, value: asPercent });
-  const divisor = isChampionLike ? p.adPerASPointChampion : p.adPerASPointNonChampion;
-  this.bonusAD = divisor > 0 ? (asPercent * 100) / divisor : 0;
+  const bonusAsPercent = ((this.stats.levelBonusAttackSpeed || 0) + (this.stats.bonusAttackSpeedPercent || 0)) * 100;
+  this.bonusAD = Math.max(0, bonusAsPercent) * (lv.adRatio || 0);
 };
 
 // Q(꿰뚫는 화살): 홀드-충전 스킬샷. 이미 충전 중일 때 다시 호출되면(재입력
@@ -177,7 +176,11 @@ CharacterController.prototype._varusReleaseQ = function() {
   const chargeDamageMult = (q.minChargeDamageRatio || 0.667) + (1 - (q.minChargeDamageRatio || 0.667)) * chargeFraction;
   const halfWidth = lolRangeToWorld(q.width || 75) * 0.5;
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
-  const hitUnit = findFirstInLine(this.root.position, dir, lolRange, halfWidth);
+  // 관통: 경로의 모든 적에게 피해, 맞힌 적마다 15%씩 감소(최소 33% - PC 위키 "적 수에 따라 0~67% 감소").
+  const lineHits = findEnemiesInLine(this.root.position, dir, lolRange, q.width || 75)
+    .map((u) => ({ u, d: getHorizontalDistance(getWorldPosition(u), this.root.position) }))
+    .sort((a, b) => a.d - b.d);
+  const hitUnit = lineHits.length ? lineHits[0].u : null;
   const worldRange = lolRangeToWorld(lolRange);
   let impactDistance = worldRange;
   if (hitUnit) {
@@ -187,17 +190,38 @@ CharacterController.prototype._varusReleaseQ = function() {
   const targetPoint = origin.clone().addScaledVector(dir, worldRange);
 
   const lvl = Math.max(1, this.skillLevels.Q || 1);
-  const dmgMax = skillVal(q.damageMaxByLevel, lvl) + skillVal(q.totalAdRatioMax, lvl) * this.stats.attackDamage;
+  // 최대 피해 80~360 + 추가 AD 120%(PC 위키), 충전 0%면 2/3.
+  const dmgMax = skillVal(q.damageMaxByLevel, lvl) + (q.bonusAdRatioMax || 0) * this._getBonusAD();
   const raw = dmgMax * chargeDamageMult;
+  const empowered = !!this._varus.wEmpowerQ;
+  this._varus.wEmpowerQ = false;
+  const w = this._champData().W;
+  const wLvl = Math.max(1, this.skillLevels.W || 1);
+  const resolveHit = (t, index) => {
+    if (!t || t.hp <= 0) return;
+    const mult = Math.max(0.33, 1 - 0.15 * index);
+    applyDamage(t, { rawDamage: raw * mult, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
+    if (empowered && t.hp > 0) {
+      const tMax = (t.maxHp != null ? t.maxHp : (t.stats && t.stats.maxHp)) || 0;
+      const missing = Math.max(0, tMax - t.hp);
+      const pct = skillVal(w.qConsumeMissingHpPercentByLevel, wLvl) * (1 + ((w.qConsumeMaxChargeMultiplier || 1.5) - 1) * chargeFraction);
+      applyDamage(t, { rawDamage: missing * pct / 100, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    }
+    vfx.spawn('hit', getWorldPosition(t)?.clone() || t.mesh.position.clone(), undefined, { color: 0x8fd6ff });
+    debugSkillHit('Varus Q', t, { chargeFraction: chargeFraction.toFixed(2), index, mult });
+    this._varusDetonateBlight(t, { viaQ: true, chargeFraction });
+  };
+  const speedWorld = lolRangeToWorld(q.missileSpeed || 1500);
+  lineHits.slice(1).forEach((h, k) => {
+    const t = setTimeout(() => resolveHit(h.u, k + 1), (h.d / Math.max(1e-6, speedWorld)) * 1000);
+    void t; // 발사된 화살은 바루스가 다른 행동을 해도 계속 날아가므로 _actionTimers에 넣지 않는다
+  });
 
   projectiles.spawn({
     from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(q.missileSpeed || 1500), damage: 0,
     color: 0x8fd6ff, realmId: this.realmId,
     onHit: (t) => {
-      applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
-      vfx.spawn('hit', getWorldPosition(t)?.clone() || t.mesh.position.clone(), undefined, { color: 0x8fd6ff });
-      debugSkillHit('Varus Q', t, { chargeFraction: chargeFraction.toFixed(2) });
-      this._varusDetonateBlight(t, { viaQ: true, chargeFraction });
+      resolveHit(t, 0);
     },
   });
   if (!hitUnit) debugSkillMiss('Varus Q', `no target in line (충전 ${(chargeFraction * 100).toFixed(0)}%, 사거리 ${impactDistance.toFixed(1)})`);
@@ -218,25 +242,12 @@ CharacterController.prototype._varusReleaseQ = function() {
 // 그대로 실패한다(빈 사용으로 40초 재사용 대기시간을 낭비하지 않음).
 CharacterController.prototype._varusCastW = function(mouseWorldPoint, free = false) {
   if (isSilenced(this)) return;
-  // 실제 대상 탐색을 비용 지불보다 먼저 한다 - 사거리 내 오한이 남은
-  // 대상이 없으면 비용/쿨다운을 전혀 소모하지 않고 그대로 실패한다(빈
-  // 사용으로 40초 재사용 대기시간을 낭비하지 않음). free(모션 테스트)일
-  // 때도 학습 여부(_payCost 내부 게이트)는 다른 챔피언들과 동일하게
-  // free===true면 우회된다.
-  const w = this._champData().W;
-  const worldRange = lolRangeToWorld(w.range || 750);
-  let target = (this.currentTarget && getStatus(this.currentTarget, 'varusBlight')) ? this.currentTarget : null;
-  if (!target) {
-    let bestDist = Infinity;
-    for (const u of getAllEnemyUnits()) {
-      if (!getStatus(u, 'varusBlight')) continue;
-      const d = getHorizontalDistance(getWorldPosition(u), this.root.position);
-      if (d <= worldRange && d < bestDist) { bestDist = d; target = u; }
-    }
-  }
-  if (!target) { debugSkillMiss('Varus W', '사거리 내 오한이 남은 대상이 없음'); return; }
+  // 사용 효과(PC 위키): 다음 꿰뚫는 화살이 대상 잃은 체력의 6~14%(충전 시 최대 9~21%) 추가 마법 피해.
+  // 버그 수정: 예전엔 W 사용이 "가까운 대상의 오한을 즉시 터뜨리기"로 구현돼 있었다(원작에 없는 효과).
   if (!this._payCost('W', free)) return;
-  this._varusDetonateBlight(target, { viaQ: false, chargeFraction: 0 });
+  this._varus.wEmpowerQ = true;
+  vfx.spawn('hit', this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 1.2, 0)), undefined, { color: 0x8fd6ff });
+  debugSkillHit('Varus W (다음 Q 강화)', this);
 };
 
 // E(화살비): 지정 지점 범위 공격. 착탄 시점에 범위 안의 적 전체에게 물리

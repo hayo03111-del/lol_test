@@ -3,7 +3,9 @@ CharacterController.prototype._nilahData = function() {  return CHAMPION_DATA.ni
 };
 
 // Extracted from CharacterController: _nilahQCritMultiplier
-CharacterController.prototype._nilahQCritMultiplier = function() {  return (this.ieEquipped === true) ? this._nilahData().Q.critMultiplierIE : this._nilahData().Q.critMultiplier; 
+// 버그 수정: 예전엔 this.ieEquipped를 봤는데 이 값은 어디서도 설정되지 않아 무한의 대검 보너스가
+// 한 번도 적용되지 않았다. 아이템 시스템이 실제로 채우는 치명타 피해 보너스(무한의 대검 30%)로 판정한다.
+CharacterController.prototype._nilahQCritMultiplier = function() {  return ((this.itemBonusCritDamagePercent || 0) > 0) ? this._nilahData().Q.critMultiplierIE : this._nilahData().Q.critMultiplier; 
 };
 
 // Extracted from CharacterController: _nilahCurrentQASPercent
@@ -621,9 +623,7 @@ CharacterController.prototype._nilahCastR = function(free=false) {
     // 데이터 추가(실제 bin 확인 - ShieldCalc): R 시전 시 확정 보호막을
     // 즉시 부여한다. 지금까지 있던 "초과 회복량 → 보호막 전환"과는 완전히
     // 별개의, 실제 스펠 데이터에 있는 고정 보호막 공식이다.
-    const bonusAd = Math.max(0, this.stats.attackDamage - (computeChampionStats('nilah', this.champLevel)?.attackDamage || 0));
-    const shieldAmount = skillVal(r.shieldBaseByLevel, lvl) + r.shieldBonusAdRatio * bonusAd;
-    this._nilahApplyShield(shieldAmount, r.shieldDuration, 'nilahR');
+    // (예전 시전 즉시 고정 보호막은 PC 판에 없는 효과라 제거 - 보호막은 R 회복의 초과분 전환만.)
     // 사용자가 제공한 VFX v2 - 실제 R 반경(damageRadius)과 전체 지속시간
     // (선딜 + 채널링)에 맞춰 한 번만 재생한다(틱마다 반복 재생하지 않음).
     nilahVfx2.playRLoL({

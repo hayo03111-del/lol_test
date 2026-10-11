@@ -48,18 +48,17 @@ CharacterController.prototype._asheIsAlive = function() {
 CharacterController.prototype._asheApplyFrostShot = function(target, isCritical) {
   if (!target || target.hp <= 0) return;
   const p = this._champData().passive;
-  const lvl = this.champLevel || 1;
-  let slowPercent;
+  const slowPercent = this._asheFrostSlowPercent();
+  const duration = p.slowDurationSec || 2.0;
+  applyStatus(target, { id: 'asheFrostShot', type: 'SLOW', duration, value: slowPercent / 100, source: this });
+  // 치명타: 둔화 2배로 시작해 첫 1초에 걸쳐 원래 세기로 감소(PC 위키). 둔화는 가장 강한 것 하나만 적용되므로
+  // "2배 세기에서 2초에 걸쳐 0으로 선형 감소"하는 상태를 함께 걸면 처음 1초는 2배→1배로 내려오고
+  // 그 뒤엔 기본 둔화가 남는다 - 원작 곡선과 정확히 같다.
   if (isCritical) {
-    slowPercent = valueByBreakpoints(p.critSlowByLevel, lvl);
-  } else {
-    slowPercent = valueByBreakpoints(p.slowByLevel, lvl);
-    if (this._ashe && performance.now() < (this._ashe.qActiveUntil || 0)) {
-      slowPercent += p.qActiveBonusSlowPercent || 0;
-    }
+    const mult = p.critSlowMultiplier || 2;
+    const decaySec = p.critDecaySec || 1.0;
+    applyStatus(target, { id: 'asheFrostShotCrit', type: 'SLOW', duration: decaySec * mult / (mult - 1), value: Math.min(0.99, slowPercent * mult / 100), decayLinear: true, source: this });
   }
-  slowPercent = Math.max(0, Math.min(90, slowPercent)); // 안전 상한 - 공식 상한 수치가 아니라 다른 챔피언 슬로우들과 동일한 엔진 관례
-  applyStatus(target, { id: 'asheFrostShot', type: 'SLOW', duration: p.slowDurationSec || 1.0, value: slowPercent / 100, source: this });
   vfx.spawn('hit', getWorldPosition(target)?.clone() || target.mesh.position.clone(), undefined, { color: 0xbfe8ff });
 };
 
@@ -67,6 +66,21 @@ CharacterController.prototype._asheApplyFrostShot = function(target, isCritical)
 // 궁사의 집중(Q) 스택 획득. Q의 다발 공격(_asheFireFlurry)은 다중 대상이라
 // 이 단일 대상 훅을 거치지 않고 완전히 분리 처리하므로, 여기서는 항상
 // "일반 평타"만 다룬다 - 다발 공격 때문에 스택이 이중으로 쌓일 걱정이 없다.
+// 서리 화살 둔화 세기(%): 1레벨 20% → 18레벨 30%(레벨 사이는 선형 보간 - 곡선 미공개).
+CharacterController.prototype._asheFrostSlowPercent = function() {
+  const p = this._champData().passive;
+  const t = Math.min(1, Math.max(0, ((this.champLevel || 1) - 1) / 17));
+  return p.slowPercentAtLevel1 + (p.slowPercentAtLevel18 - p.slowPercentAtLevel1) * t;
+};
+
+// 서리 화살 추가 피해 배율: 평타가 치명타 확률 × (100% + 무한의 대검 30%)만큼 추가 피해, 치명타 자체는 추가 피해 없음.
+CharacterController.prototype._asheBasicAttackDamageMultiplier = function() {
+  const p = this._champData().passive;
+  const crit = Math.max(0, Math.min(1, this.stats.critChance || 0));
+  const ratio = (p.critChanceBonusDamageRatio || 1) + (((this.itemBonusCritDamagePercent || 0) > 0) ? (p.critChanceBonusDamageRatioIE || 0) : 0);
+  return 1 + crit * ratio;
+};
+
 CharacterController.prototype._asheOnBasicAttackHit = function(target, isCritical) {
   if (!target) return;
   this._asheApplyFrostShot(target, isCritical);
@@ -99,47 +113,41 @@ CharacterController.prototype._asheCastQ = function(free = false) {
   const durationSec = q.buffDurationSec || 6.0;
   applyStatus(this, { id: 'asheRangersFocus', type: 'AS_BUFF', duration: durationSec, value: asPercent / 100 });
   this._ashe.qActiveUntil = performance.now() + durationSec * 1000;
-  this._ashe.flurryPending = true; // 다음 기본 공격 한 번이 다발 공격(화살 6발)으로 바뀐다
+  this._ashe.flurryPending = true; // 시전 후 첫 다발은 화살 1발 추가(6발). 이후 지속시간 동안의 평타는 5발 다발.
   vfx.spawn('hit', this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 1.2, 0)), undefined, { color: 0xbfe8ff });
   debugSkillHit('Ashe Q (궁사의 집중 발동)', this, { attackSpeedPercent: asPercent, durationSec });
 };
 
 // Q로 강화된 첫 기본 공격 - character_controller.js의 _beginAttackSwing()이
 // flurryPending을 확인해 일반 단일 대상 공격 대신 이 함수를 호출한다.
-CharacterController.prototype._asheFireFlurry = function(originalTarget, originPos, dirToTarget, willCrit) {
+// 궁사의 집중 다발 공격: 평타 대상 하나에게 화살 5발(첫 다발 6발). 화살마다 피해·서리 화살,
+// 적중 시 효과(아이템 등)는 다발당 1회. 평타처럼 서리 화살 추가 피해 배율이 적용된다.
+CharacterController.prototype._asheFireFlurry = function(originalTarget, originPos, dirToTarget, willCrit, isFirst) {
   const q = this._champData().Q;
   const lvl = Math.max(1, this.skillLevels.Q || 1);
-  const totalDamage = (skillVal(q.flurryTotalAdPercentByLevel, lvl) / 100) * this.stats.attackDamage;
-  const arrowCount = q.flurryArrowCount || 6;
-  const center = (originalTarget && originalTarget.hp > 0) ? (getWorldPosition(originalTarget) || originPos) : originPos;
-  let targets = findEnemiesInRadius(center, q.flurrySpreadRange || 400).map((h) => h.unit);
-  if (!targets.length && originalTarget && originalTarget.hp > 0) targets = [originalTarget];
-  targets = targets.slice(0, arrowCount);
-  if (!targets.length) {
-    debugSkillMiss('Ashe Q (다발 공격)', '사거리 내 대상 없음');
-    return;
-  }
-  const perArrow = totalDamage / arrowCount;
-  const baseArrows = Math.floor(arrowCount / targets.length);
-  const extra = arrowCount % targets.length;
-  targets.forEach((t, i) => {
-    const arrows = baseArrows + (i < extra ? 1 : 0);
-    if (arrows <= 0) return;
-    const dmg = perArrow * arrows;
+  const arrows = (q.flurryArrowCount || 5) + (isFirst ? (q.firstFlurryBonusArrows || 0) : 0);
+  const perArrow = (skillVal(q.flurryArrowAdPercentByLevel, lvl) / 100) * this.stats.attackDamage * this._asheBasicAttackDamageMultiplier();
+  if (!originalTarget || originalTarget.hp <= 0) { debugSkillMiss('Ashe Q (다발 공격)', '대상 없음'); return; }
+  const t = originalTarget;
+  for (let i = 0; i < arrows; i++) {
+    const dmg = perArrow;
+    const firstArrow = i === 0;
     projectiles.spawn({
       from: originPos, target: t, speed: q.flurryMissileSpeed ? lolRangeToWorld(q.flurryMissileSpeed) : this.stats.projectileSpeed * 2,
       color: 0xbfe8ff, realmId: this.realmId,
       onHit: (u) => {
         if (u.isTurret) { applyDamageToTurret(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, { isRanged: true, source: this }); return; }
-        if (u.isMinion) { applyDamageToMinion(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true }, true); this._asheApplyFrostShot(u, willCrit); return; }
+        if (u.isMinion) { applyDamageToMinion(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: firstArrow }, true); this._asheApplyFrostShot(u, willCrit); return; }
         if (u.isInhibitor) { applyDamageToInhibitor(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
         if (u.isNexus) { applyDamageToNexus(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
         applyDamage(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true });
         this._asheApplyFrostShot(u, willCrit);
-        debugSkillHit('Ashe Q (다발 공격)', u, { arrows, dmg: dmg.toFixed(1) });
+        // 적중 시 효과(아이템·집중 중첩 등)는 다발당 한 번 - 첫 화살에서만.
+        if (firstArrow && typeof itemOnBasicAttackHit === 'function') itemOnBasicAttackHit(this, u, willCrit);
+        debugSkillHit('Ashe Q (다발 공격)', u, { arrow: i + 1, of: arrows, dmg: dmg.toFixed(1) });
       },
     });
-  });
+  }
 };
 
 /* ---------------------------------------------------------------
@@ -172,7 +180,27 @@ CharacterController.prototype._asheCastW = function(mouseWorldPoint, free = fals
 CharacterController.prototype._asheResolveWImpact = function(p) {
   const w = this._champData().W;
   const origin = this.root.position.clone();
-  const hits = findEnemiesInRadius(origin, w.range || 1200, { forward: p.dir, maxAngleDeg: (w.coneAngleDeg || 46) / 2 });
+  // 화살 N발(7~11)이 부채꼴(27.75~46.25°)로 퍼진다. 화살마다 처음 맞은 적 하나에만 피해(한 대상은 한 번만).
+  const coneDeg = skillVal(w.coneAngleDegByLevel, p.lvl) || 46;
+  const arrows = skillVal(w.arrowsByLevel, p.lvl) || 9;
+  const candidates = findEnemiesInRadius(origin, w.range || 1200, { forward: p.dir, maxAngleDeg: coneDeg / 2 });
+  const hits = [];
+  const taken = new Set();
+  for (let i = 0; i < arrows; i++) {
+    const ang = THREE.MathUtils.degToRad(-coneDeg / 2 + (arrows > 1 ? (coneDeg * i) / (arrows - 1) : coneDeg / 2));
+    const adir = p.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), ang);
+    let best = null;
+    for (const h of candidates) {
+      if (taken.has(h.unit)) continue;
+      const up = getWorldPosition(h.unit); if (!up) continue;
+      const v = new THREE.Vector3(up.x - origin.x, 0, up.z - origin.z);
+      const along = v.dot(adir); if (along < 0) continue;
+      const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
+      if (lateral > lolRangeToWorld(20) + getCollisionRadius(h.unit)) continue; // 화살 폭(미공개 - 20 근사)
+      if (!best || along < best.along) best = { unit: h.unit, along };
+    }
+    if (best) { taken.add(best.unit); hits.push(best); }
+  }
   if (!hits.length) { debugSkillMiss('Ashe W (일제 사격)', '부채꼴 범위 내 대상 없음'); return; }
   const raw = skillVal(w.damageByLevel, p.lvl) + (w.bonusAdRatio || 0) * this._getBonusAD();
   for (const { unit } of hits) {
@@ -202,7 +230,13 @@ CharacterController.prototype._asheCastE = function(mouseWorldPoint, free = fals
   const rawDist = dir.length();
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
+  // 충전 2회(재충전 90~50초, 하나씩) + 사용 간격 5초(PC 위키).
+  if (!free && (this._ashe.eCharges || 0) <= 0) { showSkillToast('E - 충전 없음'); return; }
   if (!this._payCost('E', free)) return;
+  if (!free) {
+    this._ashe.eCharges -= 1;
+    if (!this._ashe.eRechargeEndAt) this._ashe.eRechargeEndAt = performance.now() + abilityHasteCooldown(this, skillVal(e.rechargeTime, Math.max(1, this.skillLevels.E || 1))) * 1000;
+  }
   this.faceDirectionInstant(dir);
   this._clearActionTimers();
   this.currentActionKey = 'asheE'; this.currentPhase = 'STARTUP'; this.phaseCancelable = true;
@@ -277,7 +311,9 @@ CharacterController.prototype._asheResolveRFire = function(p) {
     dir: p.dir.clone(), pos: origin.clone(),
     maxDist: lolRangeToWorld(r.range || 20000),
     halfWidth: lolRangeToWorld(r.width || 130) * 0.5,
-    speed: lolRangeToWorld(r.missileSpeed || 1650),
+    speed: lolRangeToWorld(r.missileSpeed || 1500),
+    maxSpeed: lolRangeToWorld(r.missileMaxSpeed || r.missileSpeed || 1500),
+    accel: lolRangeToWorld(r.missileAccelPerSec || 0),
     traveled: 0, vfxAccum: 0,
   };
   vfx.spawn('hit', origin.clone(), undefined, { color: 0x9fd7ff });
@@ -288,6 +324,7 @@ CharacterController.prototype._asheResolveRFire = function(p) {
 CharacterController.prototype._asheTickRTravel = function(dt) {
   const travel = this._ashe && this._ashe.rTravel;
   if (!travel) return;
+  if (travel.accel > 0) travel.speed = Math.min(travel.maxSpeed, travel.speed + travel.accel * dt); // 1500→2100 가속
   const remaining = Math.max(0, travel.maxDist - travel.traveled);
   const step = Math.min(remaining, Math.max(0, travel.speed * dt));
   travel.pos.addScaledVector(travel.dir, step);
@@ -337,6 +374,7 @@ CharacterController.prototype._asheResolveRHit = function(primary, travel) {
     if (!u || u === primary || u.hp <= 0) continue;
     if (!isInCircle(u, travel.pos, splashRadius)) continue;
     applyDamage(u, { rawDamage: raw * splashMult, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    this._asheApplyFrostShot(u, false); // PC 위키: 주변 적에게도 서리 화살
     vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0x9fd7ff });
     debugSkillHit('Ashe R (마법의 수정화살 - 주변 피해)', u);
   }
@@ -352,6 +390,13 @@ CharacterController.prototype._asheUpdate = function(dt) {
 
   if (this._ashe.focusStacks > 0 && now >= this._ashe.focusExpiresAt) {
     this._ashe.focusStacks = 0;
+  }
+  // E 충전: 하나씩 재충전, 최대 2회.
+  if (this._ashe.eRechargeEndAt && now >= this._ashe.eRechargeEndAt) {
+    const e = this._champData().E;
+    this._ashe.eCharges = Math.min(e.maxCharges || 2, (this._ashe.eCharges || 0) + 1);
+    this._ashe.eRechargeEndAt = this._ashe.eCharges < (e.maxCharges || 2)
+      ? now + abilityHasteCooldown(this, skillVal(e.rechargeTime, Math.max(1, this.skillLevels.E || 1))) * 1000 : 0;
   }
   if (this._ashe.qActiveUntil && now >= this._ashe.qActiveUntil) {
     this._ashe.qActiveUntil = 0;

@@ -167,8 +167,10 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
       const cd = this._champData();
       // 패시브: 기본 공격에 주문력 40% 추가 마법 피해(이 데모는 AP 아이템이 없어 0으로 기여).
       const bonus = cd.passive.apRatio * this.stats.abilityPower;
-      if (bonus > 0) applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent });
-      this._mordeOnDealtHit(target, this.stats.attackDamage + bonus);
+      const aaDealt = target._lastDamageTakenAmount != null ? target._lastDamageTakenAmount : this.stats.attackDamage;
+      let bonusDealt = 0;
+      if (bonus > 0 && !target.isTurret) bonusDealt = applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, source: this }) || 0;
+      this._mordeOnDealtHit(target, aaDealt + bonusDealt); // 실제 입힌 피해 기준
     }
     if (this.championId === 'chogath') {
       this._chogathEOnHit(target); // E 활성화 중이면 이 평타에 가시 피해 추가
@@ -890,17 +892,21 @@ CharacterController.prototype._beginAttackSwing = function() {
         // _onBasicAttackHit()을 전혀 거치지 않고 완전히 분리된 전용 함수
         // (_asheFireFlurry)로 처리한다(요네 아자카나 분기와 동일한 위치의
         // "이번 스윙이 특수한가" 확인).
-        if (this.championId === 'ashe' && this._ashe && this._ashe.flurryPending) {
+        // 버그 수정: 예전엔 Q 후 "첫 평타 1번"만 다발 공격이었다 - 원작은 Q 지속시간(6초) 동안의 모든
+        // 평타가 다발 공격(첫 다발만 화살 1발 추가).
+        if (this.championId === 'ashe' && this._ashe && performance.now() < (this._ashe.qActiveUntil || 0)) {
+          const isFirst = !!this._ashe.flurryPending;
           this._ashe.flurryPending = false;
           vfx.spawn('basicAttack', originPos, dirToTarget);
-          this._asheFireFlurry(target, originPos, dirToTarget, willCrit);
+          this._asheFireFlurry(target, originPos, dirToTarget, willCrit, isFirst);
           return;
         }
         const attackResult = {
-          rawDamage: this.stats.attackDamage,
+          // 애쉬 서리 화살: 치명타는 추가 피해 없음(둔화만 강화), 대신 모든 평타가 치명타 확률 비례 추가 피해.
+          rawDamage: this.championId === 'ashe' ? this.stats.attackDamage * this._asheBasicAttackDamageMultiplier() : this.stats.attackDamage,
           damageType: DAMAGE_TYPE.PHYSICAL,
-          isCritical: willCrit,
-          critMultiplier: this.stats.critMultiplier,
+          isCritical: this.championId === 'ashe' ? false : willCrit,
+          critMultiplier: this.championId === 'ashe' ? 1 : this.stats.critMultiplier,
           armorPenPercent: this.armorPenPercent || 0,
           // 야스오 R 이후 15초: "치명타" 공격만 추가 방어력 일부 무시(예전엔 치명타가 아니어도 적용).
           bonusArmorIgnorePercent: (this.championId === 'yasuo' && willCrit && this._yasuo.rArmorBuffUntil > performance.now()) ? this._champData().R.armorIgnoreBonusPercent : 0,

@@ -154,7 +154,8 @@ function makeTarget(overrides = {}) {
   ctrl._settWOnCast(origin, forward);
   const w = CHAMPION_DATA.sett.W;
   const lvl = ctrl.skillLevels.W;
-  const expectedDmg = skillValLocal(w.damageBaseByLevel, lvl) + 300 * (w.gritSpendPercent / 100) + w.bonusAdRatio * ctrl._getBonusAD();
+  // PC 위키: 소모 투지의 (25% + 추가 공격력 100당 25%) - 추가 공격력은 투지 비율에 붙는 계수다.
+  const expectedDmg = skillValLocal(w.damageBaseByLevel, lvl) + 300 * ((w.gritSpendPercent + (ctrl._getBonusAD() / 100) * w.gritSpendPercentPer100BonusAd) / 100);
   assert(Math.abs((before - target.hp) - expectedDmg) < 1e-6, `세트 W: 0.75초 뒤 피해 판정이 "시전 시점에 저장된" 투지(300)만 쓴다(총 공격력에 영향 없음) - got ${(before - target.hp).toFixed(1)}, 기대 ${expectedDmg.toFixed(1)}`);
 }
 

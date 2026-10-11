@@ -650,6 +650,8 @@ function applyDamage(target, result) {
     // 학습용 허수아비는 죽지 않고 2% 바닥에 멈추므로, 이미 바닥에 있는 허수아비를
     // 계속 때리는 것은 새 처치로 치지 않는다(같은 허수아비로 무한 적립 방지).
     if (!isFlooredTrainingDummy(target) && dmgSource && dmgSource.championId === 'garen' && typeof dmgSource._garenOnTakedown === 'function') dmgSource._garenOnTakedown();
+    // 바루스 패시브(살아있는 복수) - 챔피언 처치 관여(미니언 처치는 killMinion에서).
+    if (!isFlooredTrainingDummy(target) && target.isChampion && dmgSource && dmgSource.championId === 'varus' && typeof dmgSource._varusOnKill === 'function') dmgSource._varusOnKill(target, true);
   }
   // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만"
   // 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 그대로 넘긴다.

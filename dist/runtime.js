@@ -657,6 +657,8 @@ function applyDamage(target, result) {
     // 학습용 허수아비는 죽지 않고 2% 바닥에 멈추므로, 이미 바닥에 있는 허수아비를
     // 계속 때리는 것은 새 처치로 치지 않는다(같은 허수아비로 무한 적립 방지).
     if (!isFlooredTrainingDummy(target) && dmgSource && dmgSource.championId === 'garen' && typeof dmgSource._garenOnTakedown === 'function') dmgSource._garenOnTakedown();
+    // 바루스 패시브(살아있는 복수) - 챔피언 처치 관여(미니언 처치는 killMinion에서).
+    if (!isFlooredTrainingDummy(target) && target.isChampion && dmgSource && dmgSource.championId === 'varus' && typeof dmgSource._varusOnKill === 'function') dmgSource._varusOnKill(target, true);
   }
   // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만"
   // 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 그대로 넘긴다.
@@ -1537,12 +1539,13 @@ const CHAMPION_DATA = {
       // PC 위키 기본 스탯: 평타 선딜 17.73%
       windupPercent: 0.1773,
     },
-    passive: { name: '분노의 지배', rageMax: 100, empoweredThreshold: 50, lowHpThreshold: 0.5, lowHpMultiplier: 1.5, combatExitSec: 12, rageDecayInterval: 5, rageDecayAmount: 20 },
+    // PC 위키: 평타당 분노 5, 체력 50% 미만이면 분노 획득 50% 증가, 12초 비전투 후 0.25초마다 1씩(초당 4) 감소.
+    passive: { name: '분노의 지배', rageMax: 100, empoweredThreshold: 50, lowHpThreshold: 0.5, lowHpMultiplier: 1.5, combatExitSec: 12, rageDecayInterval: 0.25, rageDecayAmount: 1 },
     Q: {
       name: '양떼 도륙', cooldown: 7, mana: 0, range: 325, damageByLevel: [60,90,120,150,180], bonusAdRatio: 1.0,
       healNonChampion: [2,3,4,5,6], healNonChampionAdRatio: 0.02,
       healChampion: [12,20,28,36,44], healChampionAdRatio: 0.17, healChampionCap: [50,75,100,125,150],
-      empoweredDamageByLevel: [90,135,180,225,275], empoweredBonusAdRatio: 1.4,
+      empoweredDamageByLevel: [90,135,180,225,270], empoweredBonusAdRatio: 1.4, // PC 위키: 5레벨 270(예전 275)
       empoweredHealNonChampion: [6,9,12,15,18], empoweredHealNonChampionAdRatio: 0.06,
       empoweredHealChampion: [36,60,84,108,132], empoweredHealChampionAdRatio: 0.51,
       empoweredHealChampionCap: [200,300,400,500,600], nonChampionRage: 2.5, championRage: 10, maxRageGenerated: 30,
@@ -1552,10 +1555,10 @@ const CHAMPION_DATA = {
       name: '무자비한 포식자', cooldown: [16,14,12,10,8], mana: 0, range: 175,
       damageByLevel: [10,40,70,100,130], totalAdRatio: 1.5, hits: 2, stunDuration: 0.75,
       empoweredDamageByLevel: [15,60,105,150,195], empoweredTotalAdRatio: 2.25, empoweredHits: 3, empoweredStunDuration: 1.5,
-      bonusChampionRage: 10, damageType: 'PHYSICAL'
+      bonusChampionRage: 10, empowerWindowSec: 7, damageType: 'PHYSICAL' // PC 위키: 7초 안의 다음 평타 강화
     },
     E: {
-      name: '자르고 토막내기', cooldown: [16,14.5,13,11.5,10], mana: 0, range: 550,
+      name: '자르고 토막내기', cooldown: [16,14.5,13,11.5,10], mana: 0, range: 450, // Data Dragon: 돌진 450(예전 550)
       damageByLevel: [40,70,100,130,160], bonusAdRatio: 0.9,
       empoweredDamageByLevel: [70,115,160,205,250], empoweredBonusAdRatio: 1.35,
       armorShredByLevel: [25,27.5,30,32.5,35], armorShredDuration: 4,
@@ -1564,7 +1567,7 @@ const CHAMPION_DATA = {
     R: {
       name: '강신', cooldown: [120,100,80], mana: 0, range: 350, castTime: 0.125, duration: 15,
       bonusMaxHp: [300,500,700], immediateRage: 20, ragePerSecond: 5,
-      damagePerSecond: [60,150,240], bonusAdRatio: 0.1, apRatio: 0.1, damageType: 'MAGICAL'
+      damagePerSecond: [60,150,240], bonusAdRatio: 0.1, apRatio: 0.1, tickSec: 0.5, bonusAttackRange: 25, damageType: 'MAGICAL' // PC 위키: 0.5초마다 30/75/120(+추가 AD 5%+AP 5%), 사거리 +25
     },
   },
   garen: {
@@ -1688,21 +1691,31 @@ const CHAMPION_DATA = {
     passive: {
       name: '투기장의 투지',
       desc: '왼손-오른손 번갈아 기본 공격(오른손이 추가 물리피해 + 8배 공격속도로 즉시 이어짐). 왼손 이후 2초 안에 오른손이 안 나가면 다시 왼손부터.',
-      rightPunchDamageBase: 5, rightPunchDamageGrowth: 5, rightPunchBonusAdRatio: 0.55,
+      // PC 위키 Template:Data Sett/Pit Grit(V25.17): 오른손 추가 피해 5~100(레벨 비례) + 추가 AD 55%.
+      // 레벨 사이 곡선은 공개돼 있지 않아 1→18 선형 보간(rightPunchCurveGuessed). 예전 5+5×(레벨-1)=5~90은 옛 값.
+      rightPunchDamageAtLevel1: 5, rightPunchDamageAtLevel18: 100, rightPunchCurveGuessed: true, rightPunchBonusAdRatio: 0.55,
       rightHandAttackSpeedMultiplier: 8, leftHandTimeoutSec: 2,
-      // 초당 추가 체력 재생 수치(레벨 구간별): 1/6/11/16레벨에 적용.
-      regenByLevelBreakpoints: { breakpoints: [1, 6, 11, 16], values: [0.15, 0.5, 1, 2] },
+      // 잃은 체력 5%당 초당 추가 체력 재생(PC 위키: 0.5초마다 0.075/0.25/0.5/1/1.025/1.05 → 초당 2배).
+      // 6단계가 어느 레벨에 적용되는지는 위키에 없다 - 앞 4단계는 기존 1/6/11/16, 뒤 2단계는 17/18로
+      // 추정(regenBreakpointsGuessed).
+      regenByLevelBreakpoints: { breakpoints: [1, 6, 11, 16, 17, 18], values: [0.15, 0.5, 1, 2, 2.05, 2.1] }, regenBreakpointsGuessed: true,
     },
     Q: {
       name: '주먹다짐', cooldown: [9, 8, 7, 6, 5], mana: 0,
       moveSpeedBonusPercent: 30, moveSpeedDuration: 1.5, leftHandRangeBonus: 50,
-      perHitFlatByLevel: [10, 20, 30, 40, 50], perHitMaxHpPercentByLevel: [1, 1.5, 2, 2.5, 3], perHitAdRatioByLevel: [0.01, 0.015, 0.02, 0.025, 0.03],
+      // PC 위키 Template:Data Sett/Knuckle Down: 10~50 + 대상 최대 체력의 (1% + 공격력 100당 1/1.5/2/2.5/3%).
+      // 버그 수정: 예전엔 "공격력 100당 %"를 공격력 × 0.01~0.03 고정 피해로 계산했고, 기본 체력 비율도
+      // 1~3%로 들어가 있었다(V14.5부터 전 레벨 1%).
+      perHitFlatByLevel: [10, 20, 30, 40, 50], perHitMaxHpPercent: 1, perHitMaxHpPercentPer100AdByLevel: [1, 1.5, 2, 2.5, 3],
       damageType: 'PHYSICAL',
     },
     W: {
       name: '강펀치', cooldown: [18, 16.5, 15, 13.5, 12], mana: 0,
       gritMaxHpPercent: 50, gritDecayDelay: 4, gritDecayPercentPerSec: 30, shieldDuration: 3,
-      damageBaseByLevel: [80, 100, 120, 140, 160], gritSpendPercent: 25, bonusAdRatio: 0.25,
+      shieldDecayDelaySec: 0.75, // PC 위키: 보호막 3초, 0.75초 뒤부터 감소
+      // PC 위키 Template:Data Sett/Haymaker: 80~160 + 소모한 투지의 (25% + 추가 공격력 100당 25%).
+      // 버그 수정: 예전엔 추가 공격력 25%를 고정 피해로 더했다(투지 비율에 붙는 계수였음).
+      damageBaseByLevel: [80, 100, 120, 140, 160], gritSpendPercent: 25, gritSpendPercentPer100BonusAd: 25,
       range: 790, damageType: 'TRUE',
       // 버그 수정(공식 수치 확인함 - League Wiki Sett/Patch_history:
       // "Target Range: 790. Width: 805 / 180. Angle: 27°."): 예전엔
@@ -1767,7 +1780,8 @@ const CHAMPION_DATA = {
       // 방어구 관통/생명흡수는 출시 초기 수치(30%/20%)가 그대로 남아있었다.
       // 여러 차례 밸런스 패치를 거쳐 현재는 방어구 관통 0~33%, 생명흡수 0~15%
       // (크리티컬 확률에 비례)로 확정되어 있다.
-      armorPenFromCritPercent: 33, lifestealFromCritPercent: 15,
+      // V26.01: 방어구 관통 0~33% → 0~30%. 흡혈(챔피언 대상 회복)은 현재 0~20%(PC 위키).
+      armorPenFromCritPercent: 30, lifestealFromCritPercent: 20,
       damageBaseByLevel: [0,10,20,30,40], totalAdRatio: 1.0,
       critMultiplier: 1.7, critMultiplierIE: 1.91,
       rangeBonus: 125, empoweredDuration: 4,
@@ -1798,7 +1812,7 @@ const CHAMPION_DATA = {
       name: '급류', cooldown: 0.5,
       // 데이터 수정: E 마나 비용이 40으로 되어 있었는데, 현재 패치 기준
       // 실제 값은 30이다(위키 3곳 이상 교차 확인).
-      mana: 30, range: 550, maxCharges: 2,
+      mana: 40, range: 550, maxCharges: 2, // Data Dragon 16.20.1: 40(예전 30)
       // 데이터 수정: 재충전 시간 [26,22.5,19,15.5,12]는 출시 초반 상향
       // 이후의 값(12.13 패치에서 강화 시간이 늘어난 값)이 그대로 남아있던
       // 것으로 보인다 - 이후 다시 조정되어 현재는 [22,19.5,17,14.5,12]다.
@@ -1813,7 +1827,9 @@ const CHAMPION_DATA = {
     R: {
       name: '환희', cooldown: [110,95,80], mana: 100, damageRadius: 450, healRadius: 1500,
       channelDuration: 1, tickInterval: 0.25,
-      tickDamageByLevel: [60,100,140], tickBonusAdRatio: 0.4,
+      // 버그 수정: 틱(0.25초×4회)마다 총합값(60/100/140 + 40%)을 넣어 4배 피해가 들어갔다.
+      // PC 위키: 틱당 15/25/35 + 추가 AD 10%(총 60/100/140 + 40%).
+      tickDamageByLevel: [15,25,35], tickBonusAdRatio: 0.1,
       finalDamageByLevel: [125,225,325], finalBonusAdRatio: 1.0,
       healBasePercent: 20, healCritPercentPerCrit: 0.3, nonChampionHealMultiplier: 0.10,
       shieldDuration: 6,
@@ -1827,7 +1843,8 @@ const CHAMPION_DATA = {
       // [125,225,325]와 DamageBase 인덱스 1~3이 정확히 일치한다) - 그래서
       // ShieldBase도 같은 규칙으로 인덱스 1~3인 [65,115,165]를 실제 랭크
       // 1/2/3 값으로 사용한다.
-      shieldBaseByLevel: [65,115,165], shieldBonusAdRatio: 1.0,
+      // 예전 "시전 즉시 고정 보호막(ShieldBase + 추가 AD 100%)"은 PC 위키 어디에도 없어 제거 - 원작 R의
+      // 보호막은 초과 회복량 전환(6초)뿐이다.
       // 미구현이었던 부분 추가: 원작 R은 "각 타격마다 대상을 10% 슬로우
       // (3초, 다시 맞으면 갱신)"시킨다 - 지금까지 데미지/끌어당기기만
       // 구현되어 있고 슬로우 자체가 완전히 빠져 있었다.
@@ -1848,27 +1865,35 @@ const CHAMPION_DATA = {
       name: '암흑 탄생',
       desc: '기본 공격에 주문력 40% 추가 마법 피해. 기본 스킬/공격 3회 적중 시 4초간 오라 피해+이동속도(적중마다 갱신).',
       apRatio: 0.4, hitsForAura: 3, auraDuration: 4,
-      auraDamagePerSec: 5, auraApRatio: 0.3, auraTargetMaxHpPercent: 1, // 최소치(1~5%는 레벨 비례, 여기선 최소치만 사용 - 정밀 곡선 미공개)
+      // PC 위키: 초당 5(+주문력 30%)(+대상 최대 체력 1~5%, 레벨 비례). 레벨 사이 곡선은 공개돼 있지 않아
+      // 1→18 선형 보간(auraHpCurveGuessed). 예전엔 1% 고정이었다.
+      auraDamagePerSec: 5, auraApRatio: 0.3, auraTargetMaxHpPercentAtLevel1: 1, auraTargetMaxHpPercentAtLevel18: 5, auraHpCurveGuessed: true,
+      auraTickSec: 0.25, // 피해는 짧은 틱으로 나눠 들어감(원작 0.125초 단위 - 여기선 0.25초)
+      // 이동 속도 3/6/9%(레벨 비례)라는 기록과 "전 레벨 3%로 하향" 기록이 엇갈려 3% 유지(미확인).
       auraMoveSpeedPercent: 3, auraRange: 375,
+      stackDuration: 4, // 중첩은 챔피언/대형 몬스터 적중마다 1, 4초 지속(적중 시 갱신), 최대 3
     },
     Q: {
-      name: '말살', cooldown: [8, 7, 6, 5, 4], mana: 0, range: 575,
+      // PC 위키: 사거리 625(가장자리 22.5~625), 폭 90~150의 전방 직사각형 판정. 예전 575 + 지점 원형 판정은 근거 없음.
+      name: '말살', cooldown: [8, 7, 6, 5, 4], mana: 0, range: 625, width: 150,
       damageByLevel: [80, 115, 150, 185, 220], bonusAdRatio: 1.2, apRatio: 0.7,
       // 챔피언 레벨(스킬 레벨과 별개) 보너스 고정 피해: 10레벨부터 매
       // 레벨 +5, 18레벨에 45로 최대(요청 그대로 "0~45(10레벨부터 5씩 증가)").
       // 단일 대상 적중 시 보너스%까지 함께 곱해진다(사용자가 준 "최대
       // 마법피해" 수치의 +67.5 = 45×1.5와 정확히 일치 - Node로 검증 완료).
-      levelBonusDamage: { startLevel: 10, perLevel: 5, maxLevel: 18 },
+      // V26.20: 0~45 → 0~63(레벨 비례). 10레벨부터 레벨당 +7로 18레벨 63(예전 +5×9=45와 같은 구조로 추정).
+      levelBonusDamage: { startLevel: 10, perLevel: 7, maxLevel: 18 },
       singleTargetBonusPercentByLevel: [30, 35, 40, 45, 50], damageType: 'MAGICAL',
     },
     W: {
       name: '불멸', cooldown: [12, 11, 10, 9, 8], mana: 0,
       dealtDamageBankPercent: 45, takenDamageBankPercent: 7.5, nonChampionBankPercent: 25, // 챔피언 아닌 유닛 피해는 75% 감소 흡수 = 25%만 반영
-      minShieldMaxHpPercent: 5, maxShieldMaxHpPercent: 30, shieldDecayDuration: 6,
+      minShieldMaxHpPercent: 5, maxShieldMaxHpPercent: 30, shieldDecayDuration: 4, // PC 위키: 보호막 4초(감소) - 예전 6초
       recastHealPercentByLevel: [35, 37.5, 40, 42.5, 45],
     },
     E: {
-      name: '죽음의 손아귀', cooldown: [16, 14, 12, 10, 8], mana: 0, range: 900,
+      // PC 위키: 시전 사거리 700, 판정 직사각형 길이 800·폭 200, 0.5초 뒤 250 유닛 끌어당김.
+      name: '죽음의 손아귀', cooldown: [16, 14, 12, 10, 8], mana: 0, range: 700, areaLength: 800, areaWidth: 200, pullDistance: 250,
       magicPenPercentByLevel: [5, 7.5, 10, 12.5, 15],
       damageByLevel: [60, 80, 100, 120, 140], apRatio: 0.45, pullDelay: 0.5, damageType: 'MAGICAL',
     },
@@ -1924,7 +1949,7 @@ const CHAMPION_DATA = {
       damageByLevel: [150, 275, 400], apRatio: 0.8,
       pathDamageByLevel: [125, 175, 225], pathApRatio: 0.4,
       stunByLevel: [1, 1.5, 2], // 주 대상 에어본+기절 총합
-      pathKnockupSec: 0.75, // 미확인
+      pathKnockupSec: 1, // PC 위키: 경로 폭발에 맞은 적은 1초 공중에 뜸(0.5초 → 1초 패치). 예전 0.75는 근거 없던 값
       pathWidth: 300, // 미확인 - 경로 충격파 판정 폭
       // PC 위키 Template:Data Nautilus/Depth Charge: 시전 0.46초, 충격파 속도 275에서 초당 +466.67 가속.
       shockwaveSpeed: 275, shockwaveAccelPerSec: 466.67,
@@ -2009,19 +2034,21 @@ const CHAMPION_DATA = {
       healBase: 16, healPerLevel: 2, manaBase: 4.44, manaPerLevel: 0.28,
     },
     Q: {
-      name: '파열', cooldown: 6 /* Data Dragon 16.20.1 */, mana: 60, range: 950, castTime: 0.25, impactDelay: 0.625,
-      damageByLevel: [80, 140, 200, 260, 320], apRatio: 1.0,
+      // V25.23: 80/140/200/260/320 → 80/135/190/245/300. 마나 50(Data Dragon), 폭발 반경 250, 지연 0.627초(PC 위키).
+      name: '파열', cooldown: 6 /* Data Dragon 16.20.1 */, mana: 50, range: 950, castTime: 0.25, impactDelay: 0.627, radius: 250,
+      damageByLevel: [80, 135, 190, 245, 300], apRatio: 1.0,
       knockupDuration: 1, slowPercent: 60, slowDuration: 1.5, damageType: 'MAGICAL',
     },
     W: {
-      name: '흉포한 울부짖음', cooldown: [11, 10.5, 10, 9.5, 9] /* Data Dragon 16.20.1 */, manaByLevel: [70, 80, 90, 100, 110],
+      // V25.23: 80/135/190/245/300 → 80/130/180/230/280. 마나 70~90(Data Dragon).
+      name: '흉포한 울부짖음', cooldown: [11, 10.5, 10, 9.5, 9] /* Data Dragon 16.20.1 */, mana: [70, 75, 80, 85, 90],
       range: 650, coneAngleDeg: 60,
-      damageByLevel: [80, 135, 190, 245, 300], apRatio: 0.7,
+      damageByLevel: [80, 130, 180, 230, 280], apRatio: 0.7,
       silenceDurationByLevel: [1.6, 1.7, 1.8, 1.9, 2.0], damageType: 'MAGICAL',
     },
     E: {
       name: '날카로운 가시', cooldown: [8, 7, 6, 5, 4], mana: 30, charges: 3, rangeMax: 500,
-      perHitDamageByLevel: [20, 40, 60, 80, 100], apRatio: 0.3,
+      perHitDamageByLevel: [30, 50, 70, 90, 110], apRatio: 0.3, // V26.17: 20~100 → 30~110
       perHitMaxHpPercentByLevel: [2.5, 2.85, 3.2, 3.55, 3.9], perStackMaxHpPercent: 0.5,
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDuration: 1.5, damageType: 'MAGICAL',
     },
@@ -2106,7 +2133,7 @@ const CHAMPION_DATA = {
 
      Q: {
       name: '오싹한 미사일',
-     cooldown: [8, 7, 6, 5, 4], mana: 45,
+     cooldown: [8, 7, 6, 5, 4], mana: [45, 50, 55, 60, 65], // Data Dragon
      range: 1200,speed1: 600, speed2: 3200,
      accelerationDistance: 500, width: 180,
      damageByLevel: [75, 115, 155, 195, 235],
@@ -2119,13 +2146,14 @@ const CHAMPION_DATA = {
      W: {
       name: '거리 두기', cooldown: [16, 15, 14, 13, 12] /* Data Dragon 16.20.1 */, mana: 75,
       range: 475, damageByLevel: [80, 120, 160, 200, 240],
-      apRatio: 0.3, shieldByLevel: [50, 80, 110, 140, 170], shieldApRatio: 0.75, shieldDuration: 2,
-      shieldApRatio: 0.75, damageType: 'MAGICAL',
+      // PC 위키: 보호막 50/75/100/125/150(+주문력 75%), 2.5초. 예전 50~170은 주문력 80% 시절 기본값.
+      apRatio: 0.3, shieldByLevel: [50, 75, 100, 125, 150], shieldApRatio: 0.75, shieldDuration: 2.5,
+      damageType: 'MAGICAL',
       //적에게 적중하면 우울을 소모
      },
 
      E: {
-      name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: 70,
+      name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: [70, 80, 90, 100, 110], // Data Dragon
       range: 800, damageByLevel: [60, 105, 150, 195, 240],
       apRatio: 0.4, slowPercentByLevel: [30, 35, 40, 45, 50],
       slowDuration: 2, damageType: 'MAGICAL',
@@ -2204,7 +2232,7 @@ const CHAMPION_DATA = {
       // 다른 스킬들과 달리 보너스 공격력이 아니라 "총" 공격력에 곱한다),
       // BaseDamageAPRatio=0.40, CDRefund(적중 시 다른 기본 스킬 쿨다운
       // 감소량)=1.5.
-      cooldown: [5.5, 5.25, 5.0, 4.75, 4.5], mana: [28, 31, 34, 37, 40], range: 1200, width: 60,
+      cooldown: [5.5, 5.25, 5.0, 4.75, 4.5], mana: [28, 31, 34, 37, 40], range: 1200, width: 120, // PC 위키: 폭 120(예전 60), 속도 2000
       damageByLevel: [20, 45, 70, 95, 120], totalAdRatio: 1.3, apRatio: 0.4,
       cdrOnHitSeconds: 1.5, damageType: 'PHYSICAL',
     },
@@ -2262,13 +2290,14 @@ const CHAMPION_DATA = {
       // minionDamageMultiplier로 그 비율(0.4)만 단순화해서 반영한다(실제
       // 공식은 미니언/몬스터 전용 추가 계수가 하나 더 있지만 이 데모
       // 범위에서는 근사치로 충분).
-      cooldown: [120, 105, 90], mana: 100, range: 25000, width: 160, castTime: 1,
+      // PC 위키: 폭 320, 미니언/일반 몬스터 50% 피해. 예전 "대상마다 10%씩 감소(최소 30%)·미니언 40%"는
+      // PC 판에 없는 규칙이라 제거.
+      cooldown: [120, 105, 90], mana: 100, range: 25000, width: 320, castTime: 1,
       damageByLevel: [350, 550, 750], bonusAdRatio: 1.0, apRatio: 1.1,
-      falloffPerUnitPercent: 10, minDamagePercent: 30,
       // 정정: 나무위키 능력치 표/본문 모두 "마법 피해"로 명시한다
       // ("이즈리얼이 거대한 에너지파를 발사하여 마법 피해를 입힙니다").
       // 이전 값(PHYSICAL)은 잘못된 데이터였다.
-      minionDamageMultiplier: 0.4, damageType: 'MAGICAL',
+      minionDamageMultiplier: 0.5, damageType: 'MAGICAL',
     },
   },
   // 아리: 사용자가 직접 제공한 실제 게임 데이터 파일(ahri.bin/ahri.bin.json -
@@ -2418,32 +2447,33 @@ const CHAMPION_DATA = {
     },
     passive: {
       name: '살아있는 복수',
-      desc: '적 챔피언을 공격하면 그 대상에게 갈수록 커지는 공격 속도를 얻는다(챔피언 대상 최대 50%, 그 외 대상 최대 10% - 챔피언 레벨에 따라 5~15초에 걸쳐 최대치 도달). 이렇게 얻은 보너스 공격 속도의 일부는 공격력으로도 함께 전환된다.',
-      championAsCap: 0.5, nonChampionAsCap: 0.1,
-      // ASDuration(최대치까지 걸리는 시간) - bin ByCharLevelBreakpoints:
-      // 1레벨 5초, 6/11/16/21/26레벨마다 +2초.
-      rampDurationBreakpoints: { breakpoints: [1, 6, 11, 16, 21, 26], values: [5, 7, 9, 11, 13, 15] },
-      adPerASPointChampion: 25, adPerASPointNonChampion: 10,
-      // AP 전환(AStoAPChampion/Minion)도 bin에 동일하게 존재하지만, 이
-      // 데모에는 주문력 아이템 시스템이 없어(항상 abilityPower=0, 다른
-      // 챔피언들과 동일한 원칙 - apRatio류 필드를 기록만 하고 실제 로직은
-      // 추가하지 않음) 수치만 기록해두고 별도 로직은 만들지 않는다.
-      apPerASPointChampion: 25, apPerASPointNonChampion: 10,
-      newAsCap: 3.33,
+      desc: '유닛을 처치하면 공격 속도가 증가하고(레벨 비례 10/15/20%), 적 챔피언 처치에 관여하면 대신 30%를 얻는다(지속 5/7/9/11초, 레벨 비례). 얻은 추가 공격 속도의 일부만큼 공격력도 증가한다.',
+      // PC 위키(V26.02/V26.12 반영): 유닛 처치 시 공속 10/15/20%(레벨 비례), 챔피언 처치 관여 시 30%,
+      // 지속 5/7/9/11초(1/6/11/16레벨 - 예전 bin 주석의 ByCharLevelBreakpoints와 일치). 추가 공속의
+      // 11%(처치)/33%(관여)만큼 공격력도 얻는다.
+      // 버그 수정: 예전 구현은 같은 bin 값(챔피언 50%/그 외 10%, 전환 25/10)을 "같은 대상을 계속 공격하면
+      // 공속이 점점 오른다"로 잘못 해석해, 처치와 무관하게 평타만으로 공속이 최대 50%까지 올랐다.
+      // 처치 공속의 레벨 구간(1/7/13)은 위키에 없어 추정(killAsBreakpointsGuessed).
+      killAsByLevel: { breakpoints: [1, 7, 13], values: [10, 15, 20] }, killAsBreakpointsGuessed: true,
+      takedownAsPercent: 30,
+      durationByLevel: { breakpoints: [1, 6, 11, 16], values: [5, 7, 9, 11] },
+      killAdPerBonusAsPercent: 0.11, takedownAdPerBonusAsPercent: 0.33,
     },
     Q: {
       name: '꿰뚫는 화살',
       desc: '충전할수록 사거리와 피해량이 늘어나는 관통 화살을 발사한다(최대 1.25초 충전). 다시 누르면 그 시점의 충전량으로 즉시 발사한다. 오한(블라이트) 표식이 있는 대상을 맞히면 표식을 함께 터뜨리며, 이때는 잃은 체력 비례 추가 마법 피해와 재사용 대기시간 감소가 충전량에 비례해 더 크게 붙는다.',
       cooldown: [16, 15, 14, 13, 12], mana: [50, 55, 60, 65, 70],
       minRange: 925, maxRange: 1600, chargeDuration: 1.25, minChargeDamageRatio: 0.667,
-      damageMaxByLevel: [80, 160, 240, 320, 400], totalAdRatioMax: [1.3, 1.4, 1.5, 1.6, 1.7],
+      // V26.05: 최대 기본 피해 80/150/220/290/360, 현재 최대 계수 추가 AD 120%(PC 위키). 예전 값은 총 AD 130~170%.
+      damageMaxByLevel: [80, 150, 220, 290, 360], bonusAdRatioMax: 1.2,
       missileSpeed: 1500, width: 75, damageType: 'PHYSICAL',
     },
     W: {
       name: '오한의 화살통',
       desc: '기본 공격이 추가 마법 피해를 입히고 오한(블라이트)을 남긴다(최대 3중첩, 중첩당 6초). 사용하면 사거리 내 오한이 남은 대상 하나를 골라 오한을 모두 터뜨려 중첩당 대상 최대 체력 비례 마법 피해를 입히고, 자신의 기본 스킬 재사용 대기시간을 중첩당 13%(최대 39%) 감소시킨다. Q로 터뜨리면 잃은 체력 비례 추가 피해와 더 큰 재사용 대기시간 감소가 함께 붙는다.',
       cooldown: 40, range: 750, maxStacks: 3, stackDuration: 6,
-      onHitDamageByLevel: [8, 17, 26, 35, 44], onHitBonusAdRatio: 0.35,
+      // V26.12: 4/13/22/31/40, V26.03: 주문력 25%(예전엔 추가 AD 35%로 잘못 들어가 있었다).
+      onHitDamageByLevel: [4, 13, 22, 31, 40], onHitApRatio: 0.25,
       detonatePercentMaxHpByLevel: [3, 3.5, 4, 4.5, 5],
       qConsumeMissingHpPercentByLevel: [6, 8, 10, 12, 14], qConsumeMaxChargeMultiplier: 1.5,
       cdrPerStackPercent: 13, cdrMaxBonusPercentFromCharge: 50,
@@ -2517,10 +2547,13 @@ const CHAMPION_DATA = {
     passive: {
       name: '서리 화살',
       desc: '애쉬의 기본 공격은 대상을 둔화시킨다. 치명타는 추가 피해 대신 훨씬 강한 둔화를 적용한다(1초에 걸쳐 원래 세기로 감쇠).',
-      slowByLevel: { breakpoints: [1, 6, 11, 16], values: [5, 15, 25, 35] },
-      qActiveBonusSlowPercent: 20, // 궁사의 집중(Q) 활성 중 추가 둔화
-      critSlowByLevel: { breakpoints: [1, 6, 11, 16], values: [40, 45, 50, 60] },
-      slowDurationSec: 1.0,
+      // PC 위키 Frost Shot: 2초간 20~30%(레벨 비례) 둔화, 치명타는 둔화 2배(40~60%)로 시작해 첫 1초에 걸쳐
+      // 원래 세기로 감소. 치명타는 추가 피해가 없고, 대신 평타가 치명타 확률 비례 추가 피해(0~100%, 무한의
+      // 대검 +0~30%)를 준다. 레벨 사이 곡선은 공개돼 있지 않아 선형 보간(slowCurveGuessed).
+      // 예전 5/15/25/35%·1초·Q 활성 중 +20%(현재 판에서 삭제됨)는 옛 값.
+      slowPercentAtLevel1: 20, slowPercentAtLevel18: 30, slowCurveGuessed: true,
+      slowDurationSec: 2.0, critSlowMultiplier: 2, critDecaySec: 1.0,
+      critChanceBonusDamageRatio: 1.0, critChanceBonusDamageRatioIE: 0.3,
       // 매 기본 공격마다 짧은(1초) 시야를 대상 방향으로 부여 - 공식 설명
       // "기본 공격이 짧은 시야를 부여한다"를 새 시야 시스템(vision_system.js)에
       // 연결한 것. 공식 수치(반경) 미확인이라 근사값.
@@ -2530,27 +2563,34 @@ const CHAMPION_DATA = {
       name: '궁사의 집중',
       desc: '기본 공격마다 집중 중첩을 얻는다(최대 4중첩, 공격할 때마다 지속시간 갱신). 최대 중첩에서 사용하면 중첩을 모두 소모해 6초간 공격 속도를 얻고, 그 동안의 첫 기본 공격이 강력한 다발 공격(화살 6발)으로 바뀌어 총 피해를 맞은 대상들에게 나누어 입힌다.',
       maxStacks: 4, stackWindowSec: 4.0, buffDurationSec: 6.0,
-      attackSpeedPercentByLevel: [20, 30, 40, 50, 60],
-      flurryArrowCount: 6,
-      flurryTotalAdPercentByLevel: [132, 138, 144, 150, 156],
-      flurrySpreadRange: 400, // 다발 공격이 여러 대상을 나눠 맞히는 탐색 반경(공식 수치 미확인 - 근사)
+      // PC 위키: 6초간 공속 20/25/30/35/40%, 그동안 모든 평타가 대상에게 화살 5발(발당 AD 22~26%,
+      // 총 110~130%)의 다발 공격으로 바뀐다. 시전 후 첫 다발은 1발 더(6발, 총 132~156%). 화살마다 서리 화살,
+      // 적중 시 효과는 다발당 1회. 마나 30(Data Dragon).
+      // 버그 수정: 예전 구현은 "시전 후 첫 평타 1번만, 주변 여러 대상에 나눠서"였다.
+      attackSpeedPercentByLevel: [20, 25, 30, 35, 40],
+      flurryArrowCount: 5, firstFlurryBonusArrows: 1,
+      flurryArrowAdPercentByLevel: [22, 23, 24, 25, 26],
       flurryMissileSpeed: 3200,
-      cooldown: 0, mana: 0, // 재사용 대기시간/마나 없음 - 4중첩 확보가 실제 사용 제약
+      cooldown: 0, mana: 30,
       damageType: 'PHYSICAL',
     },
     W: {
       name: '일제 사격',
       desc: '전방에 부채꼴로 여러 발의 화살을 발사한다. 화살들은 서로 다른 대상을 노리지만, 한 대상은 한 번만 피해를 입는다.',
-      cooldown: [18, 14.5, 11, 7.5, 4] /* Data Dragon 16.20.1 */, mana: [50, 60, 70, 80, 90], // 마나 수치는 공식 확인 못함 - 유사 포크류 스킬 관례로 근사
-      range: 1200, coneAngleDeg: 46, // 사거리/각도는 공식 확인 못함 - 널리 알려진 근사값
-      damageByLevel: [25, 45, 65, 85, 105], bonusAdRatio: 1.2,
+      // PC 위키 Template:Data Ashe/Volley: 60/95/130/165/200(+추가 AD 100%), 화살 7~11발, 부채꼴 27.75/37/37/
+      // 46.25/46.25°, 사거리 1200. 마나 75~55(Data Dragon).
+      cooldown: [18, 14.5, 11, 7.5, 4] /* Data Dragon 16.20.1 */, mana: [75, 70, 65, 60, 55],
+      range: 1200, coneAngleDegByLevel: [27.75, 37, 37, 46.25, 46.25], arrowsByLevel: [7, 8, 9, 10, 11],
+      damageByLevel: [60, 95, 130, 165, 200], bonusAdRatio: 1.0,
       castTimeSec: 0.25,
       damageType: 'PHYSICAL',
     },
     E: {
       name: '매 날리기',
       desc: '매의 영혼을 지정한 위치로 보내 경로와 도착 지점의 시야를 밝힌다. 피해를 주지 않는 순수 정찰 스킬이다.',
-      cooldown: [20, 18, 16, 14, 12], mana: 40, // 공식 쿨다운은 2중첩 재충전형이나, 이 엔진에 공용 "충전" 자원 시스템이 없어 단일 쿨다운으로 근사
+      // PC 위키/Data Dragon: 충전 2회, 재충전 90/80/70/60/50초, 사용 간격 5초, 마나 없음
+      // (예전엔 충전 시스템이 없다며 20~12초 단일 쿨다운·마나 40으로 근사했었다).
+      cooldown: 5, mana: 0, maxCharges: 2, rechargeTime: [90, 80, 70, 60, 50],
       range: 4000, missileSpeed: 1700,
       visionRadius: 900, visionDurationSec: 5.0,
       castTimeSec: 0.25,
@@ -2558,11 +2598,11 @@ const CHAMPION_DATA = {
     R: {
       name: '마법의 수정화살',
       desc: '전 맵 사거리로 거대한 얼음 화살을 발사한다. 처음 맞힌 적 챔피언에게 마법 피해를 입히고 기절시키며(비행 거리가 길수록 기절 시간 증가), 주변의 다른 적에게도 같은 피해를 입히지만 기절은 걸지 않는다.',
-      cooldown: [100, 80, 60] /* Data Dragon 16.20.1 */, mana: [150, 175, 200],
+      cooldown: [100, 80, 60] /* Data Dragon 16.20.1 */, mana: 100, // Data Dragon: 100(예전 150~200)
       range: 20000, // "글로벌" 사거리 - ezreal.js의 R(정조준 사격)과 동일한 관례(20000) 재사용
-      missileSpeed: 1650, width: 130,
+      missileSpeed: 1500, missileMaxSpeed: 2100, missileAccelPerSec: 600, width: 260, // PC 위키: 속도 1500→2100(가속률은 미공개라 초당 600 추정), 폭 260
       damageByLevel: [200, 400, 600], apRatio: 1.2,
-      splashDamagePercent: 100, splashRadius: 400,
+      splashDamagePercent: 100, splashRadius: 400, // 주변 적도 같은 피해 + 서리 화살(PC 위키). 반경 400은 미확인
       minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 20000,
       castTimeSec: 0.5,
       visionRadius: 900, visionDurationSec: 3.0, // 비행 경로/명중 지점에도 짧은 시야(공식 설명: "1초간 경로의 시야를 밝힌다" - 근사)
@@ -9121,7 +9161,7 @@ class CharacterController {
     // 존재하는 상태(방향/시작 시각) - 릴리즈(재입력 또는 최대 충전시간
     // 도달) 즉시 null로 정리된다(_varusReleaseQ 참고). lv는 패시브(살아있는
     // 복수)의 대상별 공격 속도 램프업 진행 상태(_varusLvTick 참고).
-    this._varus = { qCharge: null, lv: { target: null, rampStartAt: 0, lastHitAt: 0 } };
+    this._varus = { qCharge: null, lv: { until: 0, asPercent: 0, adRatio: 0, takedown: false } };
     // 애쉬 전용 상태: focusStacks/focusExpiresAt은 패시브 안에 포함된
     // "집중"(Q 궁사의 집중) 자원 - 기본 공격마다 쌓이고(최대 4), 일정
     // 시간(stackWindowSec) 안에 다시 공격하지 않으면 만료된다(_asheUpdate
@@ -9135,6 +9175,7 @@ class CharacterController {
     this._ashe = {
       focusStacks: 0, focusExpiresAt: 0,
       qActiveUntil: 0, flurryPending: false,
+      eCharges: 2, eRechargeEndAt: 0, // E(매 날리기) 충전 2회 - 한 번에 하나씩 재충전(원작 충전형 스킬 규칙)
       wPending: null, ePending: null, rPending: null, rTravel: null,
     };
     this._nautilus = {
@@ -9163,7 +9204,7 @@ class CharacterController {
       eSpirit: null, // { startedAt, duration, bodyPos, bodyQuat, dir, marks: Map }
       rTravel: null,
     };
-    this._chogath = { predationStacks: 0, eChargesRemaining: 0 };
+    this._chogath = { predationStacks: 0, nonEpicStacks: 0, eChargesRemaining: 0 };
     this._leesin = { qMarkTarget: null, qMarkExpiresAt: 0, wMarkReadyUntil: 0, eMarkHits: [], eMarkExpiresAt: 0, passiveHitsLeft: 0 };
     this._nilah = {
       qEmpoweredUntil: 0, qWaveLockUntil: 0,
@@ -10094,7 +10135,9 @@ class CharacterController {
     }
     this.stats.percentMoveSpeedBonus = msBuff + (this.itemBonusMoveSpeedPercent || 0);
     this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? getFlatMoveSpeedBuff(this) : 0;
-    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld(this._itemTempAttackRangeBonusLol || 0);
+    // 레넥톤 R(강신): 지속 중 사거리 +25(PC 위키).
+    const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
+    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange);
     this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0)
       + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
@@ -10659,8 +10702,10 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
       const cd = this._champData();
       // 패시브: 기본 공격에 주문력 40% 추가 마법 피해(이 데모는 AP 아이템이 없어 0으로 기여).
       const bonus = cd.passive.apRatio * this.stats.abilityPower;
-      if (bonus > 0) applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent });
-      this._mordeOnDealtHit(target, this.stats.attackDamage + bonus);
+      const aaDealt = target._lastDamageTakenAmount != null ? target._lastDamageTakenAmount : this.stats.attackDamage;
+      let bonusDealt = 0;
+      if (bonus > 0 && !target.isTurret) bonusDealt = applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, source: this }) || 0;
+      this._mordeOnDealtHit(target, aaDealt + bonusDealt); // 실제 입힌 피해 기준
     }
     if (this.championId === 'chogath') {
       this._chogathEOnHit(target); // E 활성화 중이면 이 평타에 가시 피해 추가
@@ -11382,17 +11427,21 @@ CharacterController.prototype._beginAttackSwing = function() {
         // _onBasicAttackHit()을 전혀 거치지 않고 완전히 분리된 전용 함수
         // (_asheFireFlurry)로 처리한다(요네 아자카나 분기와 동일한 위치의
         // "이번 스윙이 특수한가" 확인).
-        if (this.championId === 'ashe' && this._ashe && this._ashe.flurryPending) {
+        // 버그 수정: 예전엔 Q 후 "첫 평타 1번"만 다발 공격이었다 - 원작은 Q 지속시간(6초) 동안의 모든
+        // 평타가 다발 공격(첫 다발만 화살 1발 추가).
+        if (this.championId === 'ashe' && this._ashe && performance.now() < (this._ashe.qActiveUntil || 0)) {
+          const isFirst = !!this._ashe.flurryPending;
           this._ashe.flurryPending = false;
           vfx.spawn('basicAttack', originPos, dirToTarget);
-          this._asheFireFlurry(target, originPos, dirToTarget, willCrit);
+          this._asheFireFlurry(target, originPos, dirToTarget, willCrit, isFirst);
           return;
         }
         const attackResult = {
-          rawDamage: this.stats.attackDamage,
+          // 애쉬 서리 화살: 치명타는 추가 피해 없음(둔화만 강화), 대신 모든 평타가 치명타 확률 비례 추가 피해.
+          rawDamage: this.championId === 'ashe' ? this.stats.attackDamage * this._asheBasicAttackDamageMultiplier() : this.stats.attackDamage,
           damageType: DAMAGE_TYPE.PHYSICAL,
-          isCritical: willCrit,
-          critMultiplier: this.stats.critMultiplier,
+          isCritical: this.championId === 'ashe' ? false : willCrit,
+          critMultiplier: this.championId === 'ashe' ? 1 : this.stats.critMultiplier,
           armorPenPercent: this.armorPenPercent || 0,
           // 야스오 R 이후 15초: "치명타" 공격만 추가 방어력 일부 무시(예전엔 치명타가 아니어도 적용).
           bonusArmorIgnorePercent: (this.championId === 'yasuo' && willCrit && this._yasuo.rArmorBuffUntil > performance.now()) ? this._champData().R.armorIgnoreBonusPercent : 0,
@@ -12384,11 +12433,8 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
           // 지역 판정(Point-target Area)이다 - 직선이 아니라 사거리 안에서
           // 마우스가 가리킨 지점(범위를 넘으면 사거리로 clamp)을 중심으로
           // 반경 판정을 한다.
-          const q = this._champData().Q;
-          const worldRange = lolRangeToWorld(q.range);
-          const rawDist = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0).length() : worldRange;
-          const impactPoint = this.root.position.clone().addScaledVector(dir, Math.min(rawDist, worldRange));
-          this._mordeQOnCast(impactPoint);
+          // PC 위키: 지점 원형이 아니라 전방 직사각형(사거리 625, 폭 90~150) 판정.
+          this._mordeQOnCast(this.root.position.clone(), dir.clone());
           return;
         }
         // 버그 수정(논타겟 스킬 Hit Detection): dir는 이미 마우스 방향으로
@@ -12955,13 +13001,15 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
         } else if (this.championId === 'mordekaiser') {
           // 모데카이저 E(죽음의 손아귀)는 "투사체가 아닌 장판형" 스킬이라
           // 다리우스 E와 달리 직선이 아니라 지정 지점 중심의 범위 판정이다.
+          // PC 위키: 시전 사거리 700, 지정 지점에서 모데카이저 쪽으로 길이 800·폭 200 직사각형에 맞은
+          // 모든 적을 250 끌어당긴다. 버그 수정: 예전엔 지점 반경 150 원 안의 "첫 대상 하나"만 끌어왔다.
           const cd = this._champData();
           const dir = facing || new THREE.Vector3(0, 0, 1);
           const worldRange = lolRangeToWorld(cd.E.range);
           const rawDist = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0).length() : worldRange;
-          const point = this.root.position.clone().addScaledVector(dir, Math.min(rawDist, worldRange));
-          const hits = findEnemiesInRadius(point, 150); // 정확한 장판 반경이 기획안에 없어 근접 범위로 근사(LoL 단위, findEnemiesInRadius 내부에서 world로 변환됨)
-          if (hits.length) this._mordeEOnCast(hits[0].unit);
+          const dist = Math.min(rawDist, worldRange);
+          const hits = this._mordeEAreaHits(this.root.position.clone(), dir, dist);
+          if (hits.length) hits.forEach((u) => this._mordeEOnCast(u));
           else debugSkillMiss('Mordekaiser E', 'no target in impact area');
         } else if (this.currentTarget && this.currentTarget.hp > 0) {
           applyDamage(this.currentTarget, { rawDamage: data.dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
@@ -13934,7 +13982,8 @@ CharacterController.prototype._settOnBasicAttackHit = function(target, attackHan
     this._sett.lastPunchAt = performance.now();
     this._sett.punchSide = attackHand ? attackHand.toLowerCase() : this._sett.punchSide; // 디버그 표시(예: [SETT Q] Next Attack)용 미러링일 뿐, 판정에는 쓰지 않음
     if (attackHand === 'RIGHT') {
-      const dmg = p.rightPunchDamageBase + p.rightPunchDamageGrowth * (this.champLevel - 1) + p.rightPunchBonusAdRatio * this._getBonusAD();
+      const t = Math.min(1, Math.max(0, (this.champLevel - 1) / 17));
+      const dmg = p.rightPunchDamageAtLevel1 + (p.rightPunchDamageAtLevel18 - p.rightPunchDamageAtLevel1) * t + p.rightPunchBonusAdRatio * this._getBonusAD();
       applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
     }
     if (this._settQOnHit) this._settQOnHit(target); // Q 활성 중이면 추가 타격 처리(아래)
@@ -13983,7 +14032,9 @@ CharacterController.prototype._settQOnHit = function(target) {
     const cd = this._champData(); if (!cd) return;
     const q = cd.Q;
     const lvl = Math.max(1, this.skillLevels.Q || 1);
-    const dmg = skillVal(q.perHitFlatByLevel, lvl) + (target.maxHp || 0) * (skillVal(q.perHitMaxHpPercentByLevel, lvl) / 100) + skillVal(q.perHitAdRatioByLevel, lvl) * this.stats.attackDamage;
+    // 대상 최대 체력의 (1% + 공격력 100당 1~3%) - 공격력은 총 공격력 기준(PC 위키 "per 100 AD").
+    const hpPercent = q.perHitMaxHpPercent + (this.stats.attackDamage / 100) * skillVal(q.perHitMaxHpPercentPer100AdByLevel, lvl);
+    const dmg = skillVal(q.perHitFlatByLevel, lvl) + (target.maxHp || 0) * (hpPercent / 100);
     applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
     this._sett.qUsesRemaining -= 1;
     console.log(`[SETT Q] Q EMPOWERED HIT (uses left: ${this._sett.qUsesRemaining})`);
@@ -14041,6 +14092,7 @@ CharacterController.prototype._settGritTick = function(dt) {
 // Extracted from CharacterController: _settShieldDecayTick
 CharacterController.prototype._settShieldDecayTick = function(dt) { 
     if (this.championId !== 'sett' || !this._sett.wShieldDecayPerSec || this.shield <= 0) return;
+    if (this._sett.wShieldDecayStartAt && performance.now() < this._sett.wShieldDecayStartAt) return;
     this.shield = Math.max(0, this.shield - this._sett.wShieldDecayPerSec * dt);
     if (this.shield <= 0) this._sett.wShieldDecayPerSec = 0;
     updateBars(this);
@@ -14085,7 +14137,10 @@ CharacterController.prototype._settWApplyShield = function() {
     // 큰 값을 덮어씌우지 않는다.
     const shieldAmt = spent * getShieldReceivedMultiplier(this); // 소모한 투지의 100% = 보호막(보호막 효과 증가 적용)
     this.shield = Math.max(this.shield, shieldAmt);
-    this._sett.wShieldDecayPerSec = w.shieldDuration > 0 ? shieldAmt / w.shieldDuration : 0;
+    // PC 위키: 보호막은 3초 지속, 0.75초 뒤부터 남은 2.25초에 걸쳐 0까지 감소한다.
+    const decayDelay = w.shieldDecayDelaySec || 0;
+    this._sett.wShieldDecayStartAt = performance.now() + decayDelay * 1000;
+    this._sett.wShieldDecayPerSec = w.shieldDuration > decayDelay ? shieldAmt / (w.shieldDuration - decayDelay) : 0;
     updateBars(this);
 
 };
@@ -14101,20 +14156,22 @@ CharacterController.prototype._settWOnCast = function(origin, forward) {
     const spent = this._sett.wPendingSpent || 0;
 
     const bonusAd = this._getBonusAD();
+    // 소모한 투지의 25% + 추가 공격력 100당 25%(PC 위키).
+    const gritRatio = w.gritSpendPercent + (bonusAd / 100) * (w.gritSpendPercentPer100BonusAd || 0);
     let centerHit = 0, sideHits = 0;
     for (const unit of getAllEnemyUnits()) {
       const zone = isPointInsideSettWTrapezoid(unit, origin, forward, w.range, w.centerHalfWidth, w.endHalfWidth);
       if (!zone) continue;
       if (zone === 'CENTER') {
         // 중앙 적중: 투지 비례 고정 피해(True Damage) - Armor/MR 무시.
-        const dmg = skillVal(w.damageBaseByLevel, lvl) + spent * (w.gritSpendPercent / 100) + w.bonusAdRatio * bonusAd;
+        const dmg = skillVal(w.damageBaseByLevel, lvl) + spent * (gritRatio / 100);
         applyDamage(unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
         console.log(`[SETT W] CENTER HIT -> TRUE DAMAGE ${dmg.toFixed(1)} (flow ${spent.toFixed(0)})`);
         centerHit++;
       } else {
         // 양옆 적중: 같은 공식이지만 물리 피해(방어력 적용) - 중앙과 절대
         // 같은 대상에게 동시에 들어가지 않는다(둘 중 하나만, 요청 15).
-        const dmg = skillVal(w.damageBaseByLevel, lvl) + spent * (w.gritSpendPercent / 100) + w.bonusAdRatio * bonusAd;
+        const dmg = skillVal(w.damageBaseByLevel, lvl) + spent * (gritRatio / 100);
         applyDamage(unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
         console.log(`[SETT W] SIDE HIT -> PHYSICAL DAMAGE ${dmg.toFixed(1)} (flow ${spent.toFixed(0)})`);
         sideHits++;
@@ -14613,7 +14670,7 @@ CharacterController.prototype._renektonMarkCombat = function() {
     if (this.championId !== 'renekton') return;
     const now = performance.now();
     this._renekton.lastCombatAt = now;
-    this._renekton.nextRageDecayAt = now + 12000 + 5000;
+    this._renekton.nextRageDecayAt = 0; // 비전투 12초가 지나면 그때부터 0.25초마다 1씩 감소(PC 위키)
   
 };
 
@@ -14747,7 +14804,12 @@ CharacterController.prototype._renektonCastW = function(mouseWorldPoint, free=fa
     const empowered = !free && this._renekton.rage>=50;
     if (empowered) this._renekton.rage-=50;
     this._renekton.wArmed=true; this._renekton.wEmpowered=empowered;
+    // PC 위키: 7초 안의 다음 평타만 강화(예전엔 시간 제한이 없었다).
+    this._renekton.wArmedUntil = performance.now() + (w.empowerWindowSec || 7) * 1000;
     updateBars(this);
+    // 버그 수정: 평타 도중 W를 쓰면 공용 시전 경로가 평타를 취소하는데, W는 강화만 걸고 공격을
+    // 재개하지 않아 레넥톤이 그 자리에 멈춰 있었다. 원작 W는 평타 타이머를 초기화하므로 바로 공격을 이어간다.
+    if (!this.currentActionKey) this._resumeAfterAction();
   
 };
 
@@ -14811,8 +14873,9 @@ CharacterController.prototype._renektonResolveWHit = function(seq) {
       applyDamage(target,{rawDamage:raw/seq.hits,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1});
     } else {
       applyDamage(target,{rawDamage:raw/seq.hits,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1});
-      this._renektonGainRage(5);
-      if (target.isChampion || (!target.isMinion&&!target.isTurret&&!target.isNexus&&!target.isInhibitor)) this._renektonGainRage(10);
+      this._renektonGainRage(5); // 타격마다 평타 분노
+      // 챔피언 적중 추가 분노 10은 스킬 한 번에 1회(예전엔 타격마다 들어가 2회 = 20이었다).
+      if (seq.hitIndex===0 && (target.isChampion || (!target.isMinion&&!target.isTurret&&!target.isNexus&&!target.isInhibitor))) this._renektonGainRage(10);
     }
     this._renektonMarkCombat();
     if (seq.hitIndex===seq.hits-1 && !seq.empowered) applyStatus(target,{id:'renektonWstun',type:'STUN',duration:seq.stun,value:1});
@@ -14913,21 +14976,27 @@ CharacterController.prototype._renektonTick = function(dt) {
       r.rRageAccum+=dt;
       while(r.rRageAccum>=1){r.rRageAccum-=1;this._renektonGainRage(5);}
       r.rAuraAccum+=dt;
-      while(r.rAuraAccum>=1){
-        r.rAuraAccum-=1;
-        const rd=this._renektonData().R,lvl=this.skillLevels.R||1;
-        const raw=skillVal(rd.damagePerSecond,lvl)+rd.bonusAdRatio*this._renektonExtraAD()+rd.apRatio*(this.stats.abilityPower||0);
+      const rdTick=this._renektonData().R; const tickSec=rdTick.tickSec||1;
+      while(r.rAuraAccum>=tickSec){
+        r.rAuraAccum-=tickSec;
+        const rd=rdTick,lvl=this.skillLevels.R||1;
+        // 0.5초마다 초당 피해의 절반(PC 위키: 30/75/120 + 추가 AD 5% + AP 5%).
+        const raw=(skillVal(rd.damagePerSecond,lvl)+rd.bonusAdRatio*this._renektonExtraAD()+rd.apRatio*(this.stats.abilityPower||0))*tickSec;
         const radius=rd.range;
         for(const h of findEnemiesInRadius(this.root.position,radius))applyDamage(h.unit,{rawDamage:raw,damageType:DAMAGE_TYPE.MAGICAL,isCritical:false,critMultiplier:1});
       }
       if(now>=r.rActiveUntil)this._renektonEndR();
     } else {
+      // 버그 수정: 예전엔 비전투 17초 뒤부터 5초마다 20씩 깎였다. PC 위키: 12초 뒤부터 0.25초마다 1(초당 4).
+      const pd=this._renektonData().passive;
       const since=(now-r.lastCombatAt)/1000;
-      if(r.rage>0 && since>=12){
-        if(!r.nextRageDecayAt)r.nextRageDecayAt=r.lastCombatAt+17000;
-        while(now>=r.nextRageDecayAt && r.rage>0){r.rage=Math.max(0,r.rage-20);r.nextRageDecayAt+=5000;}
-      } else if(since<12) r.nextRageDecayAt=0;
+      const exitSec=pd.combatExitSec||12, stepMs=(pd.rageDecayInterval||0.25)*1000, stepAmt=pd.rageDecayAmount||1;
+      if(r.rage>0 && since>=exitSec){
+        if(!r.nextRageDecayAt)r.nextRageDecayAt=r.lastCombatAt+exitSec*1000+stepMs;
+        while(now>=r.nextRageDecayAt && r.rage>0){r.rage=Math.max(0,r.rage-stepAmt);r.nextRageDecayAt+=stepMs;}
+      } else if(since<exitSec) r.nextRageDecayAt=0;
     }
+    if(r.wArmed && r.wArmedUntil && now>=r.wArmedUntil && !r.wSeq){r.wArmed=false;r.wEmpowered=false;r.wArmedUntil=0;}
     // E 2단 재사용 창 만료
     if(r.eSecondReadyUntil && now>=r.eSecondReadyUntil){r.eSecondReadyUntil=0;r.eFirstHit=false;}
     updateBars(this);
@@ -16532,7 +16601,9 @@ CharacterController.prototype._nilahData = function() {  return CHAMPION_DATA.ni
 };
 
 // Extracted from CharacterController: _nilahQCritMultiplier
-CharacterController.prototype._nilahQCritMultiplier = function() {  return (this.ieEquipped === true) ? this._nilahData().Q.critMultiplierIE : this._nilahData().Q.critMultiplier; 
+// 버그 수정: 예전엔 this.ieEquipped를 봤는데 이 값은 어디서도 설정되지 않아 무한의 대검 보너스가
+// 한 번도 적용되지 않았다. 아이템 시스템이 실제로 채우는 치명타 피해 보너스(무한의 대검 30%)로 판정한다.
+CharacterController.prototype._nilahQCritMultiplier = function() {  return ((this.itemBonusCritDamagePercent || 0) > 0) ? this._nilahData().Q.critMultiplierIE : this._nilahData().Q.critMultiplier; 
 };
 
 // Extracted from CharacterController: _nilahCurrentQASPercent
@@ -17150,9 +17221,7 @@ CharacterController.prototype._nilahCastR = function(free=false) {
     // 데이터 추가(실제 bin 확인 - ShieldCalc): R 시전 시 확정 보호막을
     // 즉시 부여한다. 지금까지 있던 "초과 회복량 → 보호막 전환"과는 완전히
     // 별개의, 실제 스펠 데이터에 있는 고정 보호막 공식이다.
-    const bonusAd = Math.max(0, this.stats.attackDamage - (computeChampionStats('nilah', this.champLevel)?.attackDamage || 0));
-    const shieldAmount = skillVal(r.shieldBaseByLevel, lvl) + r.shieldBonusAdRatio * bonusAd;
-    this._nilahApplyShield(shieldAmount, r.shieldDuration, 'nilahR');
+    // (예전 시전 즉시 고정 보호막은 PC 판에 없는 효과라 제거 - 보호막은 R 회복의 초과분 전환만.)
     // 사용자가 제공한 VFX v2 - 실제 R 반경(damageRadius)과 전체 지속시간
     // (선딜 + 채널링)에 맞춰 한 번만 재생한다(틱마다 반복 재생하지 않음).
     nilahVfx2.playRLoL({
@@ -18240,13 +18309,14 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
       // 정확한 파열 폭발 반경이 기획안에 없어(사거리 950은 "시전 가능
       // 거리") 근접 판정 반경(200)으로 근사한다 - 섹션 18 원칙에 따라
       // 새 피해 수치를 만들지는 않았고, 오직 판정 반경만 근사치다.
-      const hits = findEnemiesInRadius(impactPoint, 200);
+      const hits = findEnemiesInRadius(impactPoint, q.radius || 250); // PC 위키: 반경 250(예전 200)
       if (hits.length) {
         for (const h of hits) {
           const dmg = skillVal(q.damageByLevel, lvl) + q.apRatio * this.stats.abilityPower;
-          const wouldKill = h.unit.hp > 0 && h.unit.hp <= dmg;
-          applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
-          applyStatus(h.unit, { id: 'chogathQ_knockup', type: 'STUN', duration: q.knockupDuration, value: 1 });
+          const hpB = h.unit.hp, flB = isFlooredTrainingDummy(h.unit);
+          const dealt = applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
+          const wouldKill = !flB && hpB > 0 && hpB <= dealt; // 실제 입힌 피해(마법 저항 적용 후) 기준
+          applyStatus(h.unit, { id: 'chogathQ_knockup', type: 'KNOCKUP', duration: q.knockupDuration, value: 1 }); // 공중에 뜸(예전엔 기절로 처리)
           const unit = h.unit;
           setTimeout(() => { if (unit.hp > 0) applyStatus(unit, { id: 'chogathQ_slow', type: 'SLOW', duration: q.slowDuration, value: q.slowPercent / 100 }); }, q.knockupDuration * 1000);
           if (wouldKill) this._chogathOnKill(h.unit);
@@ -18281,8 +18351,9 @@ CharacterController.prototype._chogathCastW = function(free) {
       if (hits.length) {
         for (const h of hits) {
           const dmg = skillVal(w.damageByLevel, lvl) + w.apRatio * this.stats.abilityPower;
-          const wouldKill = h.unit.hp > 0 && h.unit.hp <= dmg;
-          applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
+          const hpB = h.unit.hp, flB = isFlooredTrainingDummy(h.unit);
+          const dealt = applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
+          const wouldKill = !flB && hpB > 0 && hpB <= dealt;
           applyStatus(h.unit, { id: 'chogathW_silence', type: 'SILENCE', duration: skillVal(w.silenceDurationByLevel, lvl), value: 1 });
           if (wouldKill) this._chogathOnKill(h.unit);
         }
@@ -18314,8 +18385,9 @@ CharacterController.prototype._chogathEOnHit = function(target) {
     const stacks = this._chogath.predationStacks || 0;
     const dmg = skillVal(e.perHitDamageByLevel, lvl) + e.apRatio * this.stats.abilityPower
       + (target.maxHp || 0) * ((skillVal(e.perHitMaxHpPercentByLevel, lvl) + e.perStackMaxHpPercent * stacks) / 100);
-    const wouldKill = target.hp > 0 && target.hp <= dmg;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
+    const hpB = target.hp, flB = isFlooredTrainingDummy(target);
+    const dealt = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
+    const wouldKill = !flB && hpB > 0 && hpB <= dealt;
     applyStatus(target, { id: 'chogathE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100 });
     if (wouldKill) this._chogathOnKill(target);
     this._chogath.eChargesRemaining -= 1;
@@ -18328,17 +18400,26 @@ CharacterController.prototype._chogathROnHit = function(target) {
     const cd = this._champData(); if (!cd) return;
     const r = cd.R;
     const lvl = Math.max(1, this.skillLevels.R || 1);
-    const isChampionTarget = !target.isMonster;
-    const bonusHp = Math.max(0, (this.maxHp || 0) - CHAMPION_DATA.chogath.stats.hp);
+    // 버그 수정: 예전엔 "몬스터가 아니면 챔피언"으로 판정해 미니언에게도 챔피언 피해(300~650)가 들어갔고,
+    // 추가 체력도 1레벨 기본 체력 기준이라 레벨업 체력이 전부 추가 체력으로 계산됐다.
+    const isChampionTarget = !!target.isChampion;
+    const bonusHp = Math.max(0, (this.maxHp || 0) - (computeChampionStats('chogath', this.champLevel)?.maxHp || CHAMPION_DATA.chogath.stats.hp));
     const dmg = isChampionTarget
       ? skillVal(r.championDamageByLevel, lvl) + r.championApRatio * this.stats.abilityPower + r.championBonusHpRatio * bonusHp
       : r.nonChampionDamage + r.nonChampionApRatio * this.stats.abilityPower + r.nonChampionBonusHpRatio * bonusHp;
-    const wouldKill = target.hp > 0 && target.hp <= dmg;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+    const hpB = target.hp, flB = isFlooredTrainingDummy(target);
+    const dealt = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: this }) || 0;
+    const wouldKill = !flB && hpB > 0 && hpB <= dealt;
     if (wouldKill) {
-      this._chogath.predationStacks = (this._chogath.predationStacks || 0) + 1;
-      this.bonusMaxHp = (this.bonusMaxHp || 0) + skillVal(r.hpGrowthByLevel, lvl);
-      this.recomputeStats();
+      // 중첩: 챔피언/에픽 몬스터는 제한 없음, 미니언/일반 몬스터로 얻는 중첩은 최대 6(PC 위키).
+      const fromNonEpic = !target.isChampion && !target.isEpicMonster;
+      const nonEpicStacks = this._chogath.nonEpicStacks || 0;
+      if (!fromNonEpic || nonEpicStacks < (r.nonEpicStackCap || 6)) {
+        if (fromNonEpic) this._chogath.nonEpicStacks = nonEpicStacks + 1;
+        this._chogath.predationStacks = (this._chogath.predationStacks || 0) + 1;
+        this.bonusMaxHp = (this.bonusMaxHp || 0) + skillVal(r.hpGrowthByLevel, lvl);
+        this.recomputeStats();
+      }
       this._chogathOnKill(target);
       debugSkillHit("Cho'Gath R (처치)", target, { stacks: this._chogath.predationStacks });
     }
@@ -18816,20 +18897,29 @@ CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
 
 /* ===== src/champions/mordekaiser.js ===== */
 // Extracted from CharacterController: _mordeOnDealtHit
-CharacterController.prototype._mordeOnDealtHit = function(target, rawDamageDealt) { 
+// 패시브(암흑 탄생) 중첩 + W(불멸) 잠재 보호막 저장. dealt는 실제로 입힌 피해(방어 적용 후).
+// PC 위키: 중첩은 "적 챔피언/대형 몬스터를 평타·기본 스킬로 맞힐 때마다" 1, 4초 지속(적중 시 갱신), 최대 3.
+// 3중첩이면 오라 활성(중첩이 유지되는 동안). 버그 수정: 예전엔 미니언까지 중첩이 쌓였고 중첩이 만료되지 않아
+// 한 번 3이 되면 이후 적중마다 오라가 켜졌다. 잠재 보호막은 "방어 적용 후 입힌 피해의 45%(챔피언 아닌 대상은
+// 25% 효율)" - 예전엔 방어 적용 전 피해로 저장했고, 미니언에게도 챔피언 비율이 들어갔다.
+CharacterController.prototype._mordeOnDealtHit = function(target, dealt, opts = {}) {
     const cd = this._champData();
     if (!cd || this.championId !== 'mordekaiser' || !target) return;
     const p = cd.passive;
-    this._morde.hitStacks = (this._morde.hitStacks || 0) + 1;
-    if (this._morde.hitStacks >= p.hitsForAura) {
-      this._morde.auraExpiresAt = performance.now() + p.auraDuration * 1000;
-      this._morde.auraCenter = target; // 오라 중심 - 마지막으로 적중한 대상 근처(자기 자신 위치를 기준으로 판정에 사용)
+    const now = performance.now();
+    if (!opts.fromUltimate && (target.isChampion || target.isEpicMonster || target.isLargeMonster)) {
+      if (now >= (this._morde.stacksExpireAt || 0)) this._morde.hitStacks = 0;
+      this._morde.hitStacks = Math.min(p.hitsForAura, (this._morde.hitStacks || 0) + 1);
+      this._morde.stacksExpireAt = now + (p.stackDuration || 4) * 1000;
+      if (this._morde.hitStacks >= p.hitsForAura) {
+        this._morde.auraExpiresAt = this._morde.stacksExpireAt;
+        this._morde.auraCenter = target;
+      }
     }
-    // W 패시브: 입힌 피해의 45%를 축적(챔피언 아닌 유닛은 25%만 - nonChampionBankPercent)
     const w = cd.W;
-    const bankPercent = target.isMonster ? w.nonChampionBankPercent : w.dealtDamageBankPercent;
-    this._morde.dealtBank = (this._morde.dealtBank || 0) + rawDamageDealt * (bankPercent / 100);
-  
+    const bankPercent = target.isChampion ? w.dealtDamageBankPercent : w.dealtDamageBankPercent * (w.nonChampionBankPercent / 100);
+    const cap = this.maxHp * (w.maxShieldMaxHpPercent / 100);
+    this._morde.dealtBank = Math.min(cap, (this._morde.dealtBank || 0) + Math.max(0, dealt || 0) * (bankPercent / 100));
 };
 
 // Extracted from CharacterController: _mordePassiveAuraTick
@@ -18839,24 +18929,30 @@ CharacterController.prototype._mordePassiveAuraTick = function(dt) {
     const p = cd.passive;
     if (performance.now() >= this._morde.auraExpiresAt) return;
     this._morde._auraAccum = (this._morde._auraAccum || 0) + dt;
-    if (this._morde._auraAccum >= 1.0) {
-      this._morde._auraAccum -= 1.0;
+    const tick = p.auraTickSec || 1;
+    // 대상 최대 체력 1%→5%(레벨 비례, 선형 보간 - 곡선 미공개).
+    const lvT = Math.min(1, Math.max(0, (this.champLevel - 1) / 17));
+    const hpPct = p.auraTargetMaxHpPercentAtLevel1 + (p.auraTargetMaxHpPercentAtLevel18 - p.auraTargetMaxHpPercentAtLevel1) * lvT;
+    while (this._morde._auraAccum >= tick) {
+      this._morde._auraAccum -= tick;
       const hits = findEnemiesInRadius(this.root.position, p.auraRange);
       for (const h of hits) {
-        const dmg = p.auraDamagePerSec + p.auraApRatio * this.stats.abilityPower + (h.unit.maxHp || 0) * (p.auraTargetMaxHpPercent / 100);
-        applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent });
+        const dmgPerSec = p.auraDamagePerSec + p.auraApRatio * this.stats.abilityPower + (h.unit.maxHp || 0) * (hpPct / 100);
+        applyDamage(h.unit, { rawDamage: dmgPerSec * tick, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, source: this });
       }
     }
-    this.stats.percentMoveSpeedBonus = Math.max(this.stats.percentMoveSpeedBonus, p.auraMoveSpeedPercent / 100);
+    // % 이동 속도 증가는 서로 더해진다(공용 규칙) - 예전 Math.max는 다른 버프와 겹치면 오라가 무시됐다.
+    this.stats.percentMoveSpeedBonus += p.auraMoveSpeedPercent / 100;
   
 };
 
 // Extracted from CharacterController: _mordeQOnCast
-CharacterController.prototype._mordeQOnCast = function(centerPos) { 
+CharacterController.prototype._mordeQOnCast = function(origin, dir) { 
     const cd = this._champData(); if (!cd) return;
     const q = cd.Q;
     const lvl = Math.max(1, this.skillLevels.Q || 1);
-    const hits = findEnemiesInRadius(centerPos, 150); // 문서에 폭발 반경 수치가 없어 지팡이 타격 지점의 근접 범위로 근사
+    // 전방 직사각형(사거리 625, 폭 150 - 원작은 시작 90에서 끝 150으로 넓어짐, 여기선 150으로 단순화).
+    const hits = findEnemiesInLine(origin, dir, q.range, q.width || 150).map((unit) => ({ unit }));
     if (!hits.length) { debugSkillMiss('Mordekaiser Q', 'no target in impact area'); return; }
     const isSingle = hits.length === 1;
     // 챔피언 레벨(스킬 레벨과 별개) 보너스 고정 피해 - 10레벨부터 매
@@ -18870,8 +18966,8 @@ CharacterController.prototype._mordeQOnCast = function(centerPos) {
     for (const h of hits) {
       let dmg = skillVal(q.damageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD() + q.apRatio * this.stats.abilityPower + levelBonus;
       if (isSingle) dmg *= 1 + skillVal(q.singleTargetBonusPercentByLevel, lvl) / 100;
-      applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent });
-      this._mordeOnDealtHit(h.unit, dmg);
+      const dealtQ = applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, source: this }) || 0;
+      this._mordeOnDealtHit(h.unit, dealtQ);
     }
     debugSkillHit('Mordekaiser Q', hits[0].unit, { count: hits.length, levelBonus });
   
@@ -18952,47 +19048,41 @@ CharacterController.prototype._mordeWOnRecast = function() {
 };
 
 // Extracted from CharacterController: _mordeEOnCast
+// 죽음의 손아귀 판정: 지정 지점(사거리 700 이내)에서 모데카이저 쪽으로 길이 800·폭 200 직사각형.
+CharacterController.prototype._mordeEAreaHits = function(origin, dir, dist) {
+    const e = this._champData().E;
+    const lenWorld = lolRangeToWorld(e.areaLength || 800);
+    const half = lolRangeToWorld(e.areaWidth || 200) * 0.5;
+    const out = [];
+    for (const u of getTargetableEnemyUnits()) {
+      const p = getWorldPosition(u); if (!p) continue;
+      const r = getCollisionRadius(u);
+      const v = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
+      const along = v.dot(dir);
+      if (along > dist + r || along < dist - lenWorld - r) continue;
+      const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
+      if (lateral <= half + r) out.push(u);
+    }
+    return out;
+};
+
 CharacterController.prototype._mordeEOnCast = function(target) { 
     const cd = this._champData(); if (!cd) return;
     const e = cd.E;
     const lvl = Math.max(1, this.skillLevels.E || 1);
-    // magicPenPercent는 이제 매 프레임(update loop)에서 항상 최신 E 스킬
-    // 레벨 기준으로 갱신되므로 여기서 다시 설정할 필요 없다(패시브는 E를
-    // 시전하지 않아도 이미 적용돼 있어야 하기 때문).
     if (!target || target.hp <= 0) { debugSkillMiss('Mordekaiser E', 'no target in range'); return; }
-    // 실제로 대상 위치를 모데카이저 쪽으로 당긴다(섹션 4 "이펙트만 표시하고
-    // 위치가 안 바뀌면 인정하지 않는다" 요구사항 반영) - 실시간 tween으로 처리.
     const from = target.mesh.position.clone();
     const dir = new THREE.Vector3().subVectors(this.root.position, from); dir.y = 0;
     const gap = dir.length();
-    // 최소/최대 거리를 LoL 단위(120~250)로 정하고 공통 변환 함수로 world
-    // 거리로 바꾼다 - 근접 거리에서 시전해도 눈에 띄게 당겨오되, 실제
-    // 간격(gap)을 넘어서 시전자를 뚫고 지나가지 않게 상한도 같이 건다.
-    const pullDist = gap > 0.05 ? Math.min(THREE.MathUtils.clamp(gap * 0.6, lolRangeToWorld(120), lolRangeToWorld(250)), Math.max(0, gap - this.collisionRadius * 2)) : 0;
+    // PC 위키: 250 유닛 끌어당김(모데카이저를 지나치지 않게 충돌 반경까지만). 예전엔 거리의 60%(120~250)로 근사했다.
+    const pullDist = gap > 0.05 ? Math.min(lolRangeToWorld(e.pullDistance || 250), Math.max(0, gap - this.collisionRadius - getCollisionRadius(target))) : 0;
     if (gap > 0.05) dir.normalize();
     const to = from.clone().addScaledVector(dir, pullDist);
     target._pullState = { from, to, duration: 0.4, elapsed: 0 };
-    // 버그 수정(E 명세 13/14/15절 - "판정 순서가 실제로 맞아떨어져야 한다"):
-    // 이 함수는 이미 SKILL_TIMING_DATABASE.mordekaiser.E.eventTime(0.5초)로
-    // "실제 판정 시점"까지 지연된 뒤 runAction()의 onFire 콜백에서 호출된다
-    // (해당 주석: "Cast Time과 별개로 실제 효과는 0.5초 후에 발생" - 즉
-    // eventTime 자체가 이미 최종 판정 시점이다). 그런데 예전에는 여기서
-    // e.pullDelay(0.5초)만큼 또 한 번 setTimeout으로 미뤄서, 실제 피해/
-    // 끌어오기가 입력 시점부터 총 1.0초(0.5+0.5) 뒤에야 발생했다 - 반면
-    // recovery(ENGINE_BUFFER=0.15초)는 onFire 직후(0.5초 시점)부터 흘러서
-    // 0.65초에 행동 잠금이 풀렸다. 즉 실제 피해/끌어오기가 터지기도 전에
-    // (0.65초 vs 1.0초) 플레이어가 이미 자유롭게 이동/Q 시전이 가능해져서,
-    // "E로 끌려온 위치에 Q가 정확히 판정"(문서 15/TEST 7)이 깨질 수 있었다.
-    // onFire 시점이 이미 공식 이벤트 타이밍이므로, 여기서 또 지연시키지
-    // 않고 즉시(동기적으로) 피해를 적용한다 - 끌어오기 자체는 위
-    // _pullState 트윈(0.4초)이 여전히 자연스러운 이동으로 처리한다(명세
-    // 7절 "즉시 순간이동 금지"는 그대로 유지됨, 지연되는 건 피해가 아니라
-    // 대상의 시각적 이동뿐).
     const dmg = skillVal(e.damageByLevel, lvl) + e.apRatio * this.stats.abilityPower;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent });
-    this._mordeOnDealtHit(target, dmg);
+    const dealt = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, source: this }) || 0;
+    this._mordeOnDealtHit(target, dealt);
     debugSkillHit('Mordekaiser E', target);
-  
 };
 
 // Extracted from CharacterController: _mordeROnHit
@@ -19597,9 +19687,9 @@ CharacterController.prototype._ezrealTickRTravel = function(dt) {
     if (!u || u.hp <= 0 || travel.hitSet.has(u)) continue;
     if (isInCircle(u, travel.pos, travel.halfWidth)) {
       travel.hitSet.add(u);
-      const falloff = Math.max((r.minDamagePercent || 10) / 100, 1 - ((r.falloffPerUnitPercent || 0) / 100) * travel.hitCount);
+      // PC 판 정조준 일격은 맞힌 수에 따른 감소가 없다(미니언/일반 몬스터만 50%) - 예전 "대상마다 10% 감소"는 제거.
       travel.hitCount++;
-      let dmg = baseDmg * falloff;
+      let dmg = baseDmg;
       // 버그 수정: u.isMonster는 이 뷰어에서 포탑/억제기/넥서스에도 true로
       // 설정돼 있어(구조물 자체를 표시하는 용도로 겹쳐 쓰임 - turret_system.js
       // 참고), 그대로 쓰면 정조준 일격이 구조물에도 미니언 감소 배율을
@@ -19610,7 +19700,7 @@ CharacterController.prototype._ezrealTickRTravel = function(dt) {
       if (u.isMinion) dmg *= (r.minionDamageMultiplier != null ? r.minionDamageMultiplier : 1);
       applyDamage(u, { rawDamage: dmg, damageType: r.damageType === 'MAGICAL' ? DAMAGE_TYPE.MAGICAL : DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
       vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone());
-      debugSkillHit('Ezreal R', u, { falloff: falloff.toFixed(2) });
+      debugSkillHit('Ezreal R', u, { dmg: dmg.toFixed(1) });
       this._ezrealGainPassiveStack();
       // R이 W 표식 대상을 맞히면 표식도 함께 터진다(이 R의 마나 소모량 + 60 환불).
       this._ezrealDetonateMark(u, 'ability', r.mana);
@@ -20322,12 +20412,11 @@ CharacterController.prototype._varusDetonateBlight = function(target, { viaQ = f
   const w = this._champData().W;
   const wLvl = Math.max(1, this.skillLevels.W || 1);
   const targetMaxHp = (target.maxHp != null ? target.maxHp : (target.stats && target.stats.maxHp)) || 0;
-  let raw = (skillVal(w.detonatePercentMaxHpByLevel, wLvl) / 100) * stacks * targetMaxHp;
-  if (viaQ) {
-    const missingHp = Math.max(0, targetMaxHp - Math.max(0, target.hp));
-    const chargeMult = 1 + ((w.qConsumeMaxChargeMultiplier || 1.5) - 1) * chargeFraction;
-    raw += (skillVal(w.qConsumeMissingHpPercentByLevel, wLvl) / 100) * chargeMult * missingHp;
-  }
+  // 중첩당 대상 최대 체력 3~5%(+주문력 100당 1.3%). Q로 터뜨리면 충전량에 따라 최대 50% 증가(PC 위키).
+  // 버그 수정: 예전엔 Q로 터뜨릴 때마다 잃은 체력 비례 피해를 더했다 - 그건 W를 "사용"한 뒤의 다음 Q 효과다.
+  const perStackPercent = skillVal(w.detonatePercentMaxHpByLevel, wLvl) + 1.3 * ((this.stats.abilityPower || 0) / 100);
+  let raw = (perStackPercent / 100) * stacks * targetMaxHp;
+  if (viaQ) raw *= 1 + ((w.qConsumeMaxChargeMultiplier || 1.5) - 1) * chargeFraction;
   applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
   vfx.spawn('hit', getWorldPosition(target)?.clone() || target.mesh.position.clone(), undefined, { color: 0x8fd6ff });
   debugSkillHit('Varus W (오한 소모)', target, { stacks, viaQ });
@@ -20354,44 +20443,44 @@ CharacterController.prototype._varusDetonateBlight = function(target, { viaQ = f
 // 투자해야만(bin VarusWOnHitDamage의 랭크0 sentinel=-1) 발동한다.
 CharacterController.prototype._varusOnBasicAttackHit = function(target) {
   if (!target) return;
-  const now = performance.now();
-  const lv = this._varus.lv;
-  if (lv.target !== target) { lv.target = target; lv.rampStartAt = now; }
-  lv.lastHitAt = now;
-
   if ((this.skillLevels.W || 0) >= 1) {
     const w = this._champData().W;
     const wLvl = Math.max(1, this.skillLevels.W);
-    const raw = skillVal(w.onHitDamageByLevel, wLvl) + (w.onHitBonusAdRatio || 0) * this._getBonusAD();
+    // 적중 시 추가 마법 피해: 4~40 + 주문력 25%(PC 위키 V26.12/V26.03).
+    const raw = skillVal(w.onHitDamageByLevel, wLvl) + (w.onHitApRatio || 0) * (this.stats.abilityPower || 0);
     applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     vfx.spawn('hit', getWorldPosition(target)?.clone() || target.mesh.position.clone(), undefined, { color: 0x8fd6ff });
     this._varusApplyBlight(target);
   }
 };
 
-// 패시브(살아있는 복수) 매 프레임 램프 - 마지막 공격 대상 기준으로 공격
-// 속도가 점점 오르다가(챔피언 레벨에 따라 5~15초에 걸쳐 최대치), 일정
-// 시간(2초) 이상 그 대상을 다시 때리지 못하면 램프가 초기화된다. 얻은
-// 보너스 공격 속도의 일부는 공격력(bonusAD)으로도 전환된다(AP 전환분은
-// 파일 상단 주석 참고 - 이 데모에서는 실제 기여가 없어 생략).
+// 패시브(살아있는 복수): 유닛 처치 → 공속 10/15/20%, 챔피언 처치 관여 → 30%(지속 5/7/9/11초).
+// 챔피언 관여로 얻은 강화 상태는 챔피언 관여로만 갱신된다(유닛 처치가 덮어쓰지 않음).
+CharacterController.prototype._varusOnKill = function(target, isChampionTakedown) {
+  if (this.championId !== 'varus') return;
+  const p = this._champData().passive;
+  const lv = this._varus.lv;
+  const now = performance.now();
+  const durMs = valueByBreakpoints(p.durationByLevel, this.champLevel) * 1000;
+  if (isChampionTakedown) {
+    lv.takedown = true; lv.asPercent = p.takedownAsPercent; lv.adRatio = p.takedownAdPerBonusAsPercent; lv.until = now + durMs;
+  } else if (!(lv.takedown && now < lv.until)) {
+    lv.takedown = false; lv.asPercent = valueByBreakpoints(p.killAsByLevel, this.champLevel); lv.adRatio = p.killAdPerBonusAsPercent; lv.until = now + durMs;
+  }
+  applyStatus(this, { id: 'varusLivingVengeance', type: 'AS_BUFF', duration: (lv.until - now) / 1000, value: lv.asPercent / 100 });
+};
+
+// 매 프레임: 강화 중이면 "추가 공격 속도(%)의 11%/33%"만큼 공격력(bonusAD).
 CharacterController.prototype._varusLvTick = function(dt) {
   const lv = this._varus.lv;
   const now = performance.now();
-  if (lv.target && (lv.target.hp <= 0 || now - lv.lastHitAt > 2000)) lv.target = null;
-  if (!lv.target) {
+  if (!lv.until || now >= lv.until) {
+    if (lv.until) { lv.until = 0; lv.takedown = false; lv.asPercent = 0; lv.adRatio = 0; }
     if (this.bonusAD) this.bonusAD = 0;
     return;
   }
-  const p = this._champData().passive;
-  const isChampionLike = !(lv.target.isMinion || lv.target.isTurret || lv.target.isInhibitor || lv.target.isNexus);
-  const rampDurationSec = valueByBreakpoints(p.rampDurationBreakpoints, this.champLevel);
-  const elapsedSec = (now - lv.rampStartAt) / 1000;
-  const frac = Math.max(0, Math.min(1, rampDurationSec > 0 ? elapsedSec / rampDurationSec : 1));
-  const cap = isChampionLike ? p.championAsCap : p.nonChampionAsCap;
-  const asPercent = cap * frac;
-  applyStatus(this, { id: 'varusLivingVengeance', type: 'AS_BUFF', duration: 0.35, value: asPercent });
-  const divisor = isChampionLike ? p.adPerASPointChampion : p.adPerASPointNonChampion;
-  this.bonusAD = divisor > 0 ? (asPercent * 100) / divisor : 0;
+  const bonusAsPercent = ((this.stats.levelBonusAttackSpeed || 0) + (this.stats.bonusAttackSpeedPercent || 0)) * 100;
+  this.bonusAD = Math.max(0, bonusAsPercent) * (lv.adRatio || 0);
 };
 
 // Q(꿰뚫는 화살): 홀드-충전 스킬샷. 이미 충전 중일 때 다시 호출되면(재입력
@@ -20442,7 +20531,11 @@ CharacterController.prototype._varusReleaseQ = function() {
   const chargeDamageMult = (q.minChargeDamageRatio || 0.667) + (1 - (q.minChargeDamageRatio || 0.667)) * chargeFraction;
   const halfWidth = lolRangeToWorld(q.width || 75) * 0.5;
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
-  const hitUnit = findFirstInLine(this.root.position, dir, lolRange, halfWidth);
+  // 관통: 경로의 모든 적에게 피해, 맞힌 적마다 15%씩 감소(최소 33% - PC 위키 "적 수에 따라 0~67% 감소").
+  const lineHits = findEnemiesInLine(this.root.position, dir, lolRange, q.width || 75)
+    .map((u) => ({ u, d: getHorizontalDistance(getWorldPosition(u), this.root.position) }))
+    .sort((a, b) => a.d - b.d);
+  const hitUnit = lineHits.length ? lineHits[0].u : null;
   const worldRange = lolRangeToWorld(lolRange);
   let impactDistance = worldRange;
   if (hitUnit) {
@@ -20452,17 +20545,38 @@ CharacterController.prototype._varusReleaseQ = function() {
   const targetPoint = origin.clone().addScaledVector(dir, worldRange);
 
   const lvl = Math.max(1, this.skillLevels.Q || 1);
-  const dmgMax = skillVal(q.damageMaxByLevel, lvl) + skillVal(q.totalAdRatioMax, lvl) * this.stats.attackDamage;
+  // 최대 피해 80~360 + 추가 AD 120%(PC 위키), 충전 0%면 2/3.
+  const dmgMax = skillVal(q.damageMaxByLevel, lvl) + (q.bonusAdRatioMax || 0) * this._getBonusAD();
   const raw = dmgMax * chargeDamageMult;
+  const empowered = !!this._varus.wEmpowerQ;
+  this._varus.wEmpowerQ = false;
+  const w = this._champData().W;
+  const wLvl = Math.max(1, this.skillLevels.W || 1);
+  const resolveHit = (t, index) => {
+    if (!t || t.hp <= 0) return;
+    const mult = Math.max(0.33, 1 - 0.15 * index);
+    applyDamage(t, { rawDamage: raw * mult, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
+    if (empowered && t.hp > 0) {
+      const tMax = (t.maxHp != null ? t.maxHp : (t.stats && t.stats.maxHp)) || 0;
+      const missing = Math.max(0, tMax - t.hp);
+      const pct = skillVal(w.qConsumeMissingHpPercentByLevel, wLvl) * (1 + ((w.qConsumeMaxChargeMultiplier || 1.5) - 1) * chargeFraction);
+      applyDamage(t, { rawDamage: missing * pct / 100, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    }
+    vfx.spawn('hit', getWorldPosition(t)?.clone() || t.mesh.position.clone(), undefined, { color: 0x8fd6ff });
+    debugSkillHit('Varus Q', t, { chargeFraction: chargeFraction.toFixed(2), index, mult });
+    this._varusDetonateBlight(t, { viaQ: true, chargeFraction });
+  };
+  const speedWorld = lolRangeToWorld(q.missileSpeed || 1500);
+  lineHits.slice(1).forEach((h, k) => {
+    const t = setTimeout(() => resolveHit(h.u, k + 1), (h.d / Math.max(1e-6, speedWorld)) * 1000);
+    void t; // 발사된 화살은 바루스가 다른 행동을 해도 계속 날아가므로 _actionTimers에 넣지 않는다
+  });
 
   projectiles.spawn({
     from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(q.missileSpeed || 1500), damage: 0,
     color: 0x8fd6ff, realmId: this.realmId,
     onHit: (t) => {
-      applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
-      vfx.spawn('hit', getWorldPosition(t)?.clone() || t.mesh.position.clone(), undefined, { color: 0x8fd6ff });
-      debugSkillHit('Varus Q', t, { chargeFraction: chargeFraction.toFixed(2) });
-      this._varusDetonateBlight(t, { viaQ: true, chargeFraction });
+      resolveHit(t, 0);
     },
   });
   if (!hitUnit) debugSkillMiss('Varus Q', `no target in line (충전 ${(chargeFraction * 100).toFixed(0)}%, 사거리 ${impactDistance.toFixed(1)})`);
@@ -20483,25 +20597,12 @@ CharacterController.prototype._varusReleaseQ = function() {
 // 그대로 실패한다(빈 사용으로 40초 재사용 대기시간을 낭비하지 않음).
 CharacterController.prototype._varusCastW = function(mouseWorldPoint, free = false) {
   if (isSilenced(this)) return;
-  // 실제 대상 탐색을 비용 지불보다 먼저 한다 - 사거리 내 오한이 남은
-  // 대상이 없으면 비용/쿨다운을 전혀 소모하지 않고 그대로 실패한다(빈
-  // 사용으로 40초 재사용 대기시간을 낭비하지 않음). free(모션 테스트)일
-  // 때도 학습 여부(_payCost 내부 게이트)는 다른 챔피언들과 동일하게
-  // free===true면 우회된다.
-  const w = this._champData().W;
-  const worldRange = lolRangeToWorld(w.range || 750);
-  let target = (this.currentTarget && getStatus(this.currentTarget, 'varusBlight')) ? this.currentTarget : null;
-  if (!target) {
-    let bestDist = Infinity;
-    for (const u of getAllEnemyUnits()) {
-      if (!getStatus(u, 'varusBlight')) continue;
-      const d = getHorizontalDistance(getWorldPosition(u), this.root.position);
-      if (d <= worldRange && d < bestDist) { bestDist = d; target = u; }
-    }
-  }
-  if (!target) { debugSkillMiss('Varus W', '사거리 내 오한이 남은 대상이 없음'); return; }
+  // 사용 효과(PC 위키): 다음 꿰뚫는 화살이 대상 잃은 체력의 6~14%(충전 시 최대 9~21%) 추가 마법 피해.
+  // 버그 수정: 예전엔 W 사용이 "가까운 대상의 오한을 즉시 터뜨리기"로 구현돼 있었다(원작에 없는 효과).
   if (!this._payCost('W', free)) return;
-  this._varusDetonateBlight(target, { viaQ: false, chargeFraction: 0 });
+  this._varus.wEmpowerQ = true;
+  vfx.spawn('hit', this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 1.2, 0)), undefined, { color: 0x8fd6ff });
+  debugSkillHit('Varus W (다음 Q 강화)', this);
 };
 
 // E(화살비): 지정 지점 범위 공격. 착탄 시점에 범위 안의 적 전체에게 물리
@@ -20704,18 +20805,17 @@ CharacterController.prototype._asheIsAlive = function() {
 CharacterController.prototype._asheApplyFrostShot = function(target, isCritical) {
   if (!target || target.hp <= 0) return;
   const p = this._champData().passive;
-  const lvl = this.champLevel || 1;
-  let slowPercent;
+  const slowPercent = this._asheFrostSlowPercent();
+  const duration = p.slowDurationSec || 2.0;
+  applyStatus(target, { id: 'asheFrostShot', type: 'SLOW', duration, value: slowPercent / 100, source: this });
+  // 치명타: 둔화 2배로 시작해 첫 1초에 걸쳐 원래 세기로 감소(PC 위키). 둔화는 가장 강한 것 하나만 적용되므로
+  // "2배 세기에서 2초에 걸쳐 0으로 선형 감소"하는 상태를 함께 걸면 처음 1초는 2배→1배로 내려오고
+  // 그 뒤엔 기본 둔화가 남는다 - 원작 곡선과 정확히 같다.
   if (isCritical) {
-    slowPercent = valueByBreakpoints(p.critSlowByLevel, lvl);
-  } else {
-    slowPercent = valueByBreakpoints(p.slowByLevel, lvl);
-    if (this._ashe && performance.now() < (this._ashe.qActiveUntil || 0)) {
-      slowPercent += p.qActiveBonusSlowPercent || 0;
-    }
+    const mult = p.critSlowMultiplier || 2;
+    const decaySec = p.critDecaySec || 1.0;
+    applyStatus(target, { id: 'asheFrostShotCrit', type: 'SLOW', duration: decaySec * mult / (mult - 1), value: Math.min(0.99, slowPercent * mult / 100), decayLinear: true, source: this });
   }
-  slowPercent = Math.max(0, Math.min(90, slowPercent)); // 안전 상한 - 공식 상한 수치가 아니라 다른 챔피언 슬로우들과 동일한 엔진 관례
-  applyStatus(target, { id: 'asheFrostShot', type: 'SLOW', duration: p.slowDurationSec || 1.0, value: slowPercent / 100, source: this });
   vfx.spawn('hit', getWorldPosition(target)?.clone() || target.mesh.position.clone(), undefined, { color: 0xbfe8ff });
 };
 
@@ -20723,6 +20823,21 @@ CharacterController.prototype._asheApplyFrostShot = function(target, isCritical)
 // 궁사의 집중(Q) 스택 획득. Q의 다발 공격(_asheFireFlurry)은 다중 대상이라
 // 이 단일 대상 훅을 거치지 않고 완전히 분리 처리하므로, 여기서는 항상
 // "일반 평타"만 다룬다 - 다발 공격 때문에 스택이 이중으로 쌓일 걱정이 없다.
+// 서리 화살 둔화 세기(%): 1레벨 20% → 18레벨 30%(레벨 사이는 선형 보간 - 곡선 미공개).
+CharacterController.prototype._asheFrostSlowPercent = function() {
+  const p = this._champData().passive;
+  const t = Math.min(1, Math.max(0, ((this.champLevel || 1) - 1) / 17));
+  return p.slowPercentAtLevel1 + (p.slowPercentAtLevel18 - p.slowPercentAtLevel1) * t;
+};
+
+// 서리 화살 추가 피해 배율: 평타가 치명타 확률 × (100% + 무한의 대검 30%)만큼 추가 피해, 치명타 자체는 추가 피해 없음.
+CharacterController.prototype._asheBasicAttackDamageMultiplier = function() {
+  const p = this._champData().passive;
+  const crit = Math.max(0, Math.min(1, this.stats.critChance || 0));
+  const ratio = (p.critChanceBonusDamageRatio || 1) + (((this.itemBonusCritDamagePercent || 0) > 0) ? (p.critChanceBonusDamageRatioIE || 0) : 0);
+  return 1 + crit * ratio;
+};
+
 CharacterController.prototype._asheOnBasicAttackHit = function(target, isCritical) {
   if (!target) return;
   this._asheApplyFrostShot(target, isCritical);
@@ -20755,47 +20870,41 @@ CharacterController.prototype._asheCastQ = function(free = false) {
   const durationSec = q.buffDurationSec || 6.0;
   applyStatus(this, { id: 'asheRangersFocus', type: 'AS_BUFF', duration: durationSec, value: asPercent / 100 });
   this._ashe.qActiveUntil = performance.now() + durationSec * 1000;
-  this._ashe.flurryPending = true; // 다음 기본 공격 한 번이 다발 공격(화살 6발)으로 바뀐다
+  this._ashe.flurryPending = true; // 시전 후 첫 다발은 화살 1발 추가(6발). 이후 지속시간 동안의 평타는 5발 다발.
   vfx.spawn('hit', this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 1.2, 0)), undefined, { color: 0xbfe8ff });
   debugSkillHit('Ashe Q (궁사의 집중 발동)', this, { attackSpeedPercent: asPercent, durationSec });
 };
 
 // Q로 강화된 첫 기본 공격 - character_controller.js의 _beginAttackSwing()이
 // flurryPending을 확인해 일반 단일 대상 공격 대신 이 함수를 호출한다.
-CharacterController.prototype._asheFireFlurry = function(originalTarget, originPos, dirToTarget, willCrit) {
+// 궁사의 집중 다발 공격: 평타 대상 하나에게 화살 5발(첫 다발 6발). 화살마다 피해·서리 화살,
+// 적중 시 효과(아이템 등)는 다발당 1회. 평타처럼 서리 화살 추가 피해 배율이 적용된다.
+CharacterController.prototype._asheFireFlurry = function(originalTarget, originPos, dirToTarget, willCrit, isFirst) {
   const q = this._champData().Q;
   const lvl = Math.max(1, this.skillLevels.Q || 1);
-  const totalDamage = (skillVal(q.flurryTotalAdPercentByLevel, lvl) / 100) * this.stats.attackDamage;
-  const arrowCount = q.flurryArrowCount || 6;
-  const center = (originalTarget && originalTarget.hp > 0) ? (getWorldPosition(originalTarget) || originPos) : originPos;
-  let targets = findEnemiesInRadius(center, q.flurrySpreadRange || 400).map((h) => h.unit);
-  if (!targets.length && originalTarget && originalTarget.hp > 0) targets = [originalTarget];
-  targets = targets.slice(0, arrowCount);
-  if (!targets.length) {
-    debugSkillMiss('Ashe Q (다발 공격)', '사거리 내 대상 없음');
-    return;
-  }
-  const perArrow = totalDamage / arrowCount;
-  const baseArrows = Math.floor(arrowCount / targets.length);
-  const extra = arrowCount % targets.length;
-  targets.forEach((t, i) => {
-    const arrows = baseArrows + (i < extra ? 1 : 0);
-    if (arrows <= 0) return;
-    const dmg = perArrow * arrows;
+  const arrows = (q.flurryArrowCount || 5) + (isFirst ? (q.firstFlurryBonusArrows || 0) : 0);
+  const perArrow = (skillVal(q.flurryArrowAdPercentByLevel, lvl) / 100) * this.stats.attackDamage * this._asheBasicAttackDamageMultiplier();
+  if (!originalTarget || originalTarget.hp <= 0) { debugSkillMiss('Ashe Q (다발 공격)', '대상 없음'); return; }
+  const t = originalTarget;
+  for (let i = 0; i < arrows; i++) {
+    const dmg = perArrow;
+    const firstArrow = i === 0;
     projectiles.spawn({
       from: originPos, target: t, speed: q.flurryMissileSpeed ? lolRangeToWorld(q.flurryMissileSpeed) : this.stats.projectileSpeed * 2,
       color: 0xbfe8ff, realmId: this.realmId,
       onHit: (u) => {
         if (u.isTurret) { applyDamageToTurret(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, { isRanged: true, source: this }); return; }
-        if (u.isMinion) { applyDamageToMinion(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true }, true); this._asheApplyFrostShot(u, willCrit); return; }
+        if (u.isMinion) { applyDamageToMinion(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: firstArrow }, true); this._asheApplyFrostShot(u, willCrit); return; }
         if (u.isInhibitor) { applyDamageToInhibitor(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
         if (u.isNexus) { applyDamageToNexus(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
         applyDamage(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true });
         this._asheApplyFrostShot(u, willCrit);
-        debugSkillHit('Ashe Q (다발 공격)', u, { arrows, dmg: dmg.toFixed(1) });
+        // 적중 시 효과(아이템·집중 중첩 등)는 다발당 한 번 - 첫 화살에서만.
+        if (firstArrow && typeof itemOnBasicAttackHit === 'function') itemOnBasicAttackHit(this, u, willCrit);
+        debugSkillHit('Ashe Q (다발 공격)', u, { arrow: i + 1, of: arrows, dmg: dmg.toFixed(1) });
       },
     });
-  });
+  }
 };
 
 /* ---------------------------------------------------------------
@@ -20828,7 +20937,27 @@ CharacterController.prototype._asheCastW = function(mouseWorldPoint, free = fals
 CharacterController.prototype._asheResolveWImpact = function(p) {
   const w = this._champData().W;
   const origin = this.root.position.clone();
-  const hits = findEnemiesInRadius(origin, w.range || 1200, { forward: p.dir, maxAngleDeg: (w.coneAngleDeg || 46) / 2 });
+  // 화살 N발(7~11)이 부채꼴(27.75~46.25°)로 퍼진다. 화살마다 처음 맞은 적 하나에만 피해(한 대상은 한 번만).
+  const coneDeg = skillVal(w.coneAngleDegByLevel, p.lvl) || 46;
+  const arrows = skillVal(w.arrowsByLevel, p.lvl) || 9;
+  const candidates = findEnemiesInRadius(origin, w.range || 1200, { forward: p.dir, maxAngleDeg: coneDeg / 2 });
+  const hits = [];
+  const taken = new Set();
+  for (let i = 0; i < arrows; i++) {
+    const ang = THREE.MathUtils.degToRad(-coneDeg / 2 + (arrows > 1 ? (coneDeg * i) / (arrows - 1) : coneDeg / 2));
+    const adir = p.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), ang);
+    let best = null;
+    for (const h of candidates) {
+      if (taken.has(h.unit)) continue;
+      const up = getWorldPosition(h.unit); if (!up) continue;
+      const v = new THREE.Vector3(up.x - origin.x, 0, up.z - origin.z);
+      const along = v.dot(adir); if (along < 0) continue;
+      const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
+      if (lateral > lolRangeToWorld(20) + getCollisionRadius(h.unit)) continue; // 화살 폭(미공개 - 20 근사)
+      if (!best || along < best.along) best = { unit: h.unit, along };
+    }
+    if (best) { taken.add(best.unit); hits.push(best); }
+  }
   if (!hits.length) { debugSkillMiss('Ashe W (일제 사격)', '부채꼴 범위 내 대상 없음'); return; }
   const raw = skillVal(w.damageByLevel, p.lvl) + (w.bonusAdRatio || 0) * this._getBonusAD();
   for (const { unit } of hits) {
@@ -20858,7 +20987,13 @@ CharacterController.prototype._asheCastE = function(mouseWorldPoint, free = fals
   const rawDist = dir.length();
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
+  // 충전 2회(재충전 90~50초, 하나씩) + 사용 간격 5초(PC 위키).
+  if (!free && (this._ashe.eCharges || 0) <= 0) { showSkillToast('E - 충전 없음'); return; }
   if (!this._payCost('E', free)) return;
+  if (!free) {
+    this._ashe.eCharges -= 1;
+    if (!this._ashe.eRechargeEndAt) this._ashe.eRechargeEndAt = performance.now() + abilityHasteCooldown(this, skillVal(e.rechargeTime, Math.max(1, this.skillLevels.E || 1))) * 1000;
+  }
   this.faceDirectionInstant(dir);
   this._clearActionTimers();
   this.currentActionKey = 'asheE'; this.currentPhase = 'STARTUP'; this.phaseCancelable = true;
@@ -20933,7 +21068,9 @@ CharacterController.prototype._asheResolveRFire = function(p) {
     dir: p.dir.clone(), pos: origin.clone(),
     maxDist: lolRangeToWorld(r.range || 20000),
     halfWidth: lolRangeToWorld(r.width || 130) * 0.5,
-    speed: lolRangeToWorld(r.missileSpeed || 1650),
+    speed: lolRangeToWorld(r.missileSpeed || 1500),
+    maxSpeed: lolRangeToWorld(r.missileMaxSpeed || r.missileSpeed || 1500),
+    accel: lolRangeToWorld(r.missileAccelPerSec || 0),
     traveled: 0, vfxAccum: 0,
   };
   vfx.spawn('hit', origin.clone(), undefined, { color: 0x9fd7ff });
@@ -20944,6 +21081,7 @@ CharacterController.prototype._asheResolveRFire = function(p) {
 CharacterController.prototype._asheTickRTravel = function(dt) {
   const travel = this._ashe && this._ashe.rTravel;
   if (!travel) return;
+  if (travel.accel > 0) travel.speed = Math.min(travel.maxSpeed, travel.speed + travel.accel * dt); // 1500→2100 가속
   const remaining = Math.max(0, travel.maxDist - travel.traveled);
   const step = Math.min(remaining, Math.max(0, travel.speed * dt));
   travel.pos.addScaledVector(travel.dir, step);
@@ -20993,6 +21131,7 @@ CharacterController.prototype._asheResolveRHit = function(primary, travel) {
     if (!u || u === primary || u.hp <= 0) continue;
     if (!isInCircle(u, travel.pos, splashRadius)) continue;
     applyDamage(u, { rawDamage: raw * splashMult, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    this._asheApplyFrostShot(u, false); // PC 위키: 주변 적에게도 서리 화살
     vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0x9fd7ff });
     debugSkillHit('Ashe R (마법의 수정화살 - 주변 피해)', u);
   }
@@ -21008,6 +21147,13 @@ CharacterController.prototype._asheUpdate = function(dt) {
 
   if (this._ashe.focusStacks > 0 && now >= this._ashe.focusExpiresAt) {
     this._ashe.focusStacks = 0;
+  }
+  // E 충전: 하나씩 재충전, 최대 2회.
+  if (this._ashe.eRechargeEndAt && now >= this._ashe.eRechargeEndAt) {
+    const e = this._champData().E;
+    this._ashe.eCharges = Math.min(e.maxCharges || 2, (this._ashe.eCharges || 0) + 1);
+    this._ashe.eRechargeEndAt = this._ashe.eCharges < (e.maxCharges || 2)
+      ? now + abilityHasteCooldown(this, skillVal(e.rechargeTime, Math.max(1, this.skillLevels.E || 1))) * 1000 : 0;
   }
   if (this._ashe.qActiveUntil && now >= this._ashe.qActiveUntil) {
     this._ashe.qActiveUntil = 0;
@@ -24132,6 +24278,11 @@ function killMinion(minion) {
   if (typeof controller !== 'undefined' && controller && minion._lastHitBy === controller
       && typeof itemOnMinionKillByPlayer === 'function') {
     itemOnMinionKillByPlayer(controller);
+  }
+  // 바루스 패시브(살아있는 복수) - 유닛 처치 시 공격 속도.
+  if (typeof controller !== 'undefined' && controller && controller.championId === 'varus'
+      && minion._lastHitBy === controller && typeof controller._varusOnKill === 'function') {
+    controller._varusOnKill(minion, false);
   }
   // 가렌 W(용기) 패시브 - 가렌이 마지막으로 때린 미니언이 죽으면 처치 스택.
   if (typeof controller !== 'undefined' && controller && controller.championId === 'garen'

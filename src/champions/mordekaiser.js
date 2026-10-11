@@ -1,18 +1,27 @@
 // Extracted from CharacterController: _mordeOnDealtHit
-CharacterController.prototype._mordeOnDealtHit = function(target, rawDamageDealt) { 
+// 패시브(암흑 탄생) 중첩 + W(불멸) 잠재 보호막 저장. dealt는 실제로 입힌 피해(방어 적용 후).
+// PC 위키: 중첩은 "적 챔피언/대형 몬스터를 평타·기본 스킬로 맞힐 때마다" 1, 4초 지속(적중 시 갱신), 최대 3.
+// 3중첩이면 오라 활성(중첩이 유지되는 동안). 버그 수정: 예전엔 미니언까지 중첩이 쌓였고 중첩이 만료되지 않아
+// 한 번 3이 되면 이후 적중마다 오라가 켜졌다. 잠재 보호막은 "방어 적용 후 입힌 피해의 45%(챔피언 아닌 대상은
+// 25% 효율)" - 예전엔 방어 적용 전 피해로 저장했고, 미니언에게도 챔피언 비율이 들어갔다.
+CharacterController.prototype._mordeOnDealtHit = function(target, dealt, opts = {}) {
     const cd = this._champData();
     if (!cd || this.championId !== 'mordekaiser' || !target) return;
     const p = cd.passive;
-    this._morde.hitStacks = (this._morde.hitStacks || 0) + 1;
-    if (this._morde.hitStacks >= p.hitsForAura) {
-      this._morde.auraExpiresAt = performance.now() + p.auraDuration * 1000;
-      this._morde.auraCenter = target; // 오라 중심 - 마지막으로 적중한 대상 근처(자기 자신 위치를 기준으로 판정에 사용)
+    const now = performance.now();
+    if (!opts.fromUltimate && (target.isChampion || target.isEpicMonster || target.isLargeMonster)) {
+      if (now >= (this._morde.stacksExpireAt || 0)) this._morde.hitStacks = 0;
+      this._morde.hitStacks = Math.min(p.hitsForAura, (this._morde.hitStacks || 0) + 1);
+      this._morde.stacksExpireAt = now + (p.stackDuration || 4) * 1000;
+      if (this._morde.hitStacks >= p.hitsForAura) {
+        this._morde.auraExpiresAt = this._morde.stacksExpireAt;
+        this._morde.auraCenter = target;
+      }
     }
-    // W 패시브: 입힌 피해의 45%를 축적(챔피언 아닌 유닛은 25%만 - nonChampionBankPercent)
     const w = cd.W;
-    const bankPercent = target.isMonster ? w.nonChampionBankPercent : w.dealtDamageBankPercent;
-    this._morde.dealtBank = (this._morde.dealtBank || 0) + rawDamageDealt * (bankPercent / 100);
-  
+    const bankPercent = target.isChampion ? w.dealtDamageBankPercent : w.dealtDamageBankPercent * (w.nonChampionBankPercent / 100);
+    const cap = this.maxHp * (w.maxShieldMaxHpPercent / 100);
+    this._morde.dealtBank = Math.min(cap, (this._morde.dealtBank || 0) + Math.max(0, dealt || 0) * (bankPercent / 100));
 };
 
 // Extracted from CharacterController: _mordePassiveAuraTick
@@ -22,24 +31,30 @@ CharacterController.prototype._mordePassiveAuraTick = function(dt) {
     const p = cd.passive;
     if (performance.now() >= this._morde.auraExpiresAt) return;
     this._morde._auraAccum = (this._morde._auraAccum || 0) + dt;
-    if (this._morde._auraAccum >= 1.0) {
-      this._morde._auraAccum -= 1.0;
+    const tick = p.auraTickSec || 1;
+    // 대상 최대 체력 1%→5%(레벨 비례, 선형 보간 - 곡선 미공개).
+    const lvT = Math.min(1, Math.max(0, (this.champLevel - 1) / 17));
+    const hpPct = p.auraTargetMaxHpPercentAtLevel1 + (p.auraTargetMaxHpPercentAtLevel18 - p.auraTargetMaxHpPercentAtLevel1) * lvT;
+    while (this._morde._auraAccum >= tick) {
+      this._morde._auraAccum -= tick;
       const hits = findEnemiesInRadius(this.root.position, p.auraRange);
       for (const h of hits) {
-        const dmg = p.auraDamagePerSec + p.auraApRatio * this.stats.abilityPower + (h.unit.maxHp || 0) * (p.auraTargetMaxHpPercent / 100);
-        applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent });
+        const dmgPerSec = p.auraDamagePerSec + p.auraApRatio * this.stats.abilityPower + (h.unit.maxHp || 0) * (hpPct / 100);
+        applyDamage(h.unit, { rawDamage: dmgPerSec * tick, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, source: this });
       }
     }
-    this.stats.percentMoveSpeedBonus = Math.max(this.stats.percentMoveSpeedBonus, p.auraMoveSpeedPercent / 100);
+    // % 이동 속도 증가는 서로 더해진다(공용 규칙) - 예전 Math.max는 다른 버프와 겹치면 오라가 무시됐다.
+    this.stats.percentMoveSpeedBonus += p.auraMoveSpeedPercent / 100;
   
 };
 
 // Extracted from CharacterController: _mordeQOnCast
-CharacterController.prototype._mordeQOnCast = function(centerPos) { 
+CharacterController.prototype._mordeQOnCast = function(origin, dir) { 
     const cd = this._champData(); if (!cd) return;
     const q = cd.Q;
     const lvl = Math.max(1, this.skillLevels.Q || 1);
-    const hits = findEnemiesInRadius(centerPos, 150); // 문서에 폭발 반경 수치가 없어 지팡이 타격 지점의 근접 범위로 근사
+    // 전방 직사각형(사거리 625, 폭 150 - 원작은 시작 90에서 끝 150으로 넓어짐, 여기선 150으로 단순화).
+    const hits = findEnemiesInLine(origin, dir, q.range, q.width || 150).map((unit) => ({ unit }));
     if (!hits.length) { debugSkillMiss('Mordekaiser Q', 'no target in impact area'); return; }
     const isSingle = hits.length === 1;
     // 챔피언 레벨(스킬 레벨과 별개) 보너스 고정 피해 - 10레벨부터 매
@@ -53,8 +68,8 @@ CharacterController.prototype._mordeQOnCast = function(centerPos) {
     for (const h of hits) {
       let dmg = skillVal(q.damageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD() + q.apRatio * this.stats.abilityPower + levelBonus;
       if (isSingle) dmg *= 1 + skillVal(q.singleTargetBonusPercentByLevel, lvl) / 100;
-      applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent });
-      this._mordeOnDealtHit(h.unit, dmg);
+      const dealtQ = applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, source: this }) || 0;
+      this._mordeOnDealtHit(h.unit, dealtQ);
     }
     debugSkillHit('Mordekaiser Q', hits[0].unit, { count: hits.length, levelBonus });
   
@@ -135,47 +150,41 @@ CharacterController.prototype._mordeWOnRecast = function() {
 };
 
 // Extracted from CharacterController: _mordeEOnCast
+// 죽음의 손아귀 판정: 지정 지점(사거리 700 이내)에서 모데카이저 쪽으로 길이 800·폭 200 직사각형.
+CharacterController.prototype._mordeEAreaHits = function(origin, dir, dist) {
+    const e = this._champData().E;
+    const lenWorld = lolRangeToWorld(e.areaLength || 800);
+    const half = lolRangeToWorld(e.areaWidth || 200) * 0.5;
+    const out = [];
+    for (const u of getTargetableEnemyUnits()) {
+      const p = getWorldPosition(u); if (!p) continue;
+      const r = getCollisionRadius(u);
+      const v = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
+      const along = v.dot(dir);
+      if (along > dist + r || along < dist - lenWorld - r) continue;
+      const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
+      if (lateral <= half + r) out.push(u);
+    }
+    return out;
+};
+
 CharacterController.prototype._mordeEOnCast = function(target) { 
     const cd = this._champData(); if (!cd) return;
     const e = cd.E;
     const lvl = Math.max(1, this.skillLevels.E || 1);
-    // magicPenPercent는 이제 매 프레임(update loop)에서 항상 최신 E 스킬
-    // 레벨 기준으로 갱신되므로 여기서 다시 설정할 필요 없다(패시브는 E를
-    // 시전하지 않아도 이미 적용돼 있어야 하기 때문).
     if (!target || target.hp <= 0) { debugSkillMiss('Mordekaiser E', 'no target in range'); return; }
-    // 실제로 대상 위치를 모데카이저 쪽으로 당긴다(섹션 4 "이펙트만 표시하고
-    // 위치가 안 바뀌면 인정하지 않는다" 요구사항 반영) - 실시간 tween으로 처리.
     const from = target.mesh.position.clone();
     const dir = new THREE.Vector3().subVectors(this.root.position, from); dir.y = 0;
     const gap = dir.length();
-    // 최소/최대 거리를 LoL 단위(120~250)로 정하고 공통 변환 함수로 world
-    // 거리로 바꾼다 - 근접 거리에서 시전해도 눈에 띄게 당겨오되, 실제
-    // 간격(gap)을 넘어서 시전자를 뚫고 지나가지 않게 상한도 같이 건다.
-    const pullDist = gap > 0.05 ? Math.min(THREE.MathUtils.clamp(gap * 0.6, lolRangeToWorld(120), lolRangeToWorld(250)), Math.max(0, gap - this.collisionRadius * 2)) : 0;
+    // PC 위키: 250 유닛 끌어당김(모데카이저를 지나치지 않게 충돌 반경까지만). 예전엔 거리의 60%(120~250)로 근사했다.
+    const pullDist = gap > 0.05 ? Math.min(lolRangeToWorld(e.pullDistance || 250), Math.max(0, gap - this.collisionRadius - getCollisionRadius(target))) : 0;
     if (gap > 0.05) dir.normalize();
     const to = from.clone().addScaledVector(dir, pullDist);
     target._pullState = { from, to, duration: 0.4, elapsed: 0 };
-    // 버그 수정(E 명세 13/14/15절 - "판정 순서가 실제로 맞아떨어져야 한다"):
-    // 이 함수는 이미 SKILL_TIMING_DATABASE.mordekaiser.E.eventTime(0.5초)로
-    // "실제 판정 시점"까지 지연된 뒤 runAction()의 onFire 콜백에서 호출된다
-    // (해당 주석: "Cast Time과 별개로 실제 효과는 0.5초 후에 발생" - 즉
-    // eventTime 자체가 이미 최종 판정 시점이다). 그런데 예전에는 여기서
-    // e.pullDelay(0.5초)만큼 또 한 번 setTimeout으로 미뤄서, 실제 피해/
-    // 끌어오기가 입력 시점부터 총 1.0초(0.5+0.5) 뒤에야 발생했다 - 반면
-    // recovery(ENGINE_BUFFER=0.15초)는 onFire 직후(0.5초 시점)부터 흘러서
-    // 0.65초에 행동 잠금이 풀렸다. 즉 실제 피해/끌어오기가 터지기도 전에
-    // (0.65초 vs 1.0초) 플레이어가 이미 자유롭게 이동/Q 시전이 가능해져서,
-    // "E로 끌려온 위치에 Q가 정확히 판정"(문서 15/TEST 7)이 깨질 수 있었다.
-    // onFire 시점이 이미 공식 이벤트 타이밍이므로, 여기서 또 지연시키지
-    // 않고 즉시(동기적으로) 피해를 적용한다 - 끌어오기 자체는 위
-    // _pullState 트윈(0.4초)이 여전히 자연스러운 이동으로 처리한다(명세
-    // 7절 "즉시 순간이동 금지"는 그대로 유지됨, 지연되는 건 피해가 아니라
-    // 대상의 시각적 이동뿐).
     const dmg = skillVal(e.damageByLevel, lvl) + e.apRatio * this.stats.abilityPower;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent });
-    this._mordeOnDealtHit(target, dmg);
+    const dealt = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, source: this }) || 0;
+    this._mordeOnDealtHit(target, dealt);
     debugSkillHit('Mordekaiser E', target);
-  
 };
 
 // Extracted from CharacterController: _mordeROnHit

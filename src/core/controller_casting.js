@@ -846,11 +846,8 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
           // 지역 판정(Point-target Area)이다 - 직선이 아니라 사거리 안에서
           // 마우스가 가리킨 지점(범위를 넘으면 사거리로 clamp)을 중심으로
           // 반경 판정을 한다.
-          const q = this._champData().Q;
-          const worldRange = lolRangeToWorld(q.range);
-          const rawDist = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0).length() : worldRange;
-          const impactPoint = this.root.position.clone().addScaledVector(dir, Math.min(rawDist, worldRange));
-          this._mordeQOnCast(impactPoint);
+          // PC 위키: 지점 원형이 아니라 전방 직사각형(사거리 625, 폭 90~150) 판정.
+          this._mordeQOnCast(this.root.position.clone(), dir.clone());
           return;
         }
         // 버그 수정(논타겟 스킬 Hit Detection): dir는 이미 마우스 방향으로
@@ -1417,13 +1414,15 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
         } else if (this.championId === 'mordekaiser') {
           // 모데카이저 E(죽음의 손아귀)는 "투사체가 아닌 장판형" 스킬이라
           // 다리우스 E와 달리 직선이 아니라 지정 지점 중심의 범위 판정이다.
+          // PC 위키: 시전 사거리 700, 지정 지점에서 모데카이저 쪽으로 길이 800·폭 200 직사각형에 맞은
+          // 모든 적을 250 끌어당긴다. 버그 수정: 예전엔 지점 반경 150 원 안의 "첫 대상 하나"만 끌어왔다.
           const cd = this._champData();
           const dir = facing || new THREE.Vector3(0, 0, 1);
           const worldRange = lolRangeToWorld(cd.E.range);
           const rawDist = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0).length() : worldRange;
-          const point = this.root.position.clone().addScaledVector(dir, Math.min(rawDist, worldRange));
-          const hits = findEnemiesInRadius(point, 150); // 정확한 장판 반경이 기획안에 없어 근접 범위로 근사(LoL 단위, findEnemiesInRadius 내부에서 world로 변환됨)
-          if (hits.length) this._mordeEOnCast(hits[0].unit);
+          const dist = Math.min(rawDist, worldRange);
+          const hits = this._mordeEAreaHits(this.root.position.clone(), dir, dist);
+          if (hits.length) hits.forEach((u) => this._mordeEOnCast(u));
           else debugSkillMiss('Mordekaiser E', 'no target in impact area');
         } else if (this.currentTarget && this.currentTarget.hp > 0) {
           applyDamage(this.currentTarget, { rawDamage: data.dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });

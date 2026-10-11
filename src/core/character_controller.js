@@ -280,7 +280,7 @@ class CharacterController {
     // 존재하는 상태(방향/시작 시각) - 릴리즈(재입력 또는 최대 충전시간
     // 도달) 즉시 null로 정리된다(_varusReleaseQ 참고). lv는 패시브(살아있는
     // 복수)의 대상별 공격 속도 램프업 진행 상태(_varusLvTick 참고).
-    this._varus = { qCharge: null, lv: { target: null, rampStartAt: 0, lastHitAt: 0 } };
+    this._varus = { qCharge: null, lv: { until: 0, asPercent: 0, adRatio: 0, takedown: false } };
     // 애쉬 전용 상태: focusStacks/focusExpiresAt은 패시브 안에 포함된
     // "집중"(Q 궁사의 집중) 자원 - 기본 공격마다 쌓이고(최대 4), 일정
     // 시간(stackWindowSec) 안에 다시 공격하지 않으면 만료된다(_asheUpdate
@@ -294,6 +294,7 @@ class CharacterController {
     this._ashe = {
       focusStacks: 0, focusExpiresAt: 0,
       qActiveUntil: 0, flurryPending: false,
+      eCharges: 2, eRechargeEndAt: 0, // E(매 날리기) 충전 2회 - 한 번에 하나씩 재충전(원작 충전형 스킬 규칙)
       wPending: null, ePending: null, rPending: null, rTravel: null,
     };
     this._nautilus = {
@@ -322,7 +323,7 @@ class CharacterController {
       eSpirit: null, // { startedAt, duration, bodyPos, bodyQuat, dir, marks: Map }
       rTravel: null,
     };
-    this._chogath = { predationStacks: 0, eChargesRemaining: 0 };
+    this._chogath = { predationStacks: 0, nonEpicStacks: 0, eChargesRemaining: 0 };
     this._leesin = { qMarkTarget: null, qMarkExpiresAt: 0, wMarkReadyUntil: 0, eMarkHits: [], eMarkExpiresAt: 0, passiveHitsLeft: 0 };
     this._nilah = {
       qEmpoweredUntil: 0, qWaveLockUntil: 0,
@@ -1253,7 +1254,9 @@ class CharacterController {
     }
     this.stats.percentMoveSpeedBonus = msBuff + (this.itemBonusMoveSpeedPercent || 0);
     this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? getFlatMoveSpeedBuff(this) : 0;
-    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld(this._itemTempAttackRangeBonusLol || 0);
+    // 레넥톤 R(강신): 지속 중 사거리 +25(PC 위키).
+    const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
+    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange);
     this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0)
       + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();

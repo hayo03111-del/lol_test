@@ -193,12 +193,13 @@ const CHAMPION_DATA = {
       // PC 위키 기본 스탯: 평타 선딜 17.73%
       windupPercent: 0.1773,
     },
-    passive: { name: '분노의 지배', rageMax: 100, empoweredThreshold: 50, lowHpThreshold: 0.5, lowHpMultiplier: 1.5, combatExitSec: 12, rageDecayInterval: 5, rageDecayAmount: 20 },
+    // PC 위키: 평타당 분노 5, 체력 50% 미만이면 분노 획득 50% 증가, 12초 비전투 후 0.25초마다 1씩(초당 4) 감소.
+    passive: { name: '분노의 지배', rageMax: 100, empoweredThreshold: 50, lowHpThreshold: 0.5, lowHpMultiplier: 1.5, combatExitSec: 12, rageDecayInterval: 0.25, rageDecayAmount: 1 },
     Q: {
       name: '양떼 도륙', cooldown: 7, mana: 0, range: 325, damageByLevel: [60,90,120,150,180], bonusAdRatio: 1.0,
       healNonChampion: [2,3,4,5,6], healNonChampionAdRatio: 0.02,
       healChampion: [12,20,28,36,44], healChampionAdRatio: 0.17, healChampionCap: [50,75,100,125,150],
-      empoweredDamageByLevel: [90,135,180,225,275], empoweredBonusAdRatio: 1.4,
+      empoweredDamageByLevel: [90,135,180,225,270], empoweredBonusAdRatio: 1.4, // PC 위키: 5레벨 270(예전 275)
       empoweredHealNonChampion: [6,9,12,15,18], empoweredHealNonChampionAdRatio: 0.06,
       empoweredHealChampion: [36,60,84,108,132], empoweredHealChampionAdRatio: 0.51,
       empoweredHealChampionCap: [200,300,400,500,600], nonChampionRage: 2.5, championRage: 10, maxRageGenerated: 30,
@@ -208,10 +209,10 @@ const CHAMPION_DATA = {
       name: '무자비한 포식자', cooldown: [16,14,12,10,8], mana: 0, range: 175,
       damageByLevel: [10,40,70,100,130], totalAdRatio: 1.5, hits: 2, stunDuration: 0.75,
       empoweredDamageByLevel: [15,60,105,150,195], empoweredTotalAdRatio: 2.25, empoweredHits: 3, empoweredStunDuration: 1.5,
-      bonusChampionRage: 10, damageType: 'PHYSICAL'
+      bonusChampionRage: 10, empowerWindowSec: 7, damageType: 'PHYSICAL' // PC 위키: 7초 안의 다음 평타 강화
     },
     E: {
-      name: '자르고 토막내기', cooldown: [16,14.5,13,11.5,10], mana: 0, range: 550,
+      name: '자르고 토막내기', cooldown: [16,14.5,13,11.5,10], mana: 0, range: 450, // Data Dragon: 돌진 450(예전 550)
       damageByLevel: [40,70,100,130,160], bonusAdRatio: 0.9,
       empoweredDamageByLevel: [70,115,160,205,250], empoweredBonusAdRatio: 1.35,
       armorShredByLevel: [25,27.5,30,32.5,35], armorShredDuration: 4,
@@ -220,7 +221,7 @@ const CHAMPION_DATA = {
     R: {
       name: '강신', cooldown: [120,100,80], mana: 0, range: 350, castTime: 0.125, duration: 15,
       bonusMaxHp: [300,500,700], immediateRage: 20, ragePerSecond: 5,
-      damagePerSecond: [60,150,240], bonusAdRatio: 0.1, apRatio: 0.1, damageType: 'MAGICAL'
+      damagePerSecond: [60,150,240], bonusAdRatio: 0.1, apRatio: 0.1, tickSec: 0.5, bonusAttackRange: 25, damageType: 'MAGICAL' // PC 위키: 0.5초마다 30/75/120(+추가 AD 5%+AP 5%), 사거리 +25
     },
   },
   garen: {
@@ -344,21 +345,31 @@ const CHAMPION_DATA = {
     passive: {
       name: '투기장의 투지',
       desc: '왼손-오른손 번갈아 기본 공격(오른손이 추가 물리피해 + 8배 공격속도로 즉시 이어짐). 왼손 이후 2초 안에 오른손이 안 나가면 다시 왼손부터.',
-      rightPunchDamageBase: 5, rightPunchDamageGrowth: 5, rightPunchBonusAdRatio: 0.55,
+      // PC 위키 Template:Data Sett/Pit Grit(V25.17): 오른손 추가 피해 5~100(레벨 비례) + 추가 AD 55%.
+      // 레벨 사이 곡선은 공개돼 있지 않아 1→18 선형 보간(rightPunchCurveGuessed). 예전 5+5×(레벨-1)=5~90은 옛 값.
+      rightPunchDamageAtLevel1: 5, rightPunchDamageAtLevel18: 100, rightPunchCurveGuessed: true, rightPunchBonusAdRatio: 0.55,
       rightHandAttackSpeedMultiplier: 8, leftHandTimeoutSec: 2,
-      // 초당 추가 체력 재생 수치(레벨 구간별): 1/6/11/16레벨에 적용.
-      regenByLevelBreakpoints: { breakpoints: [1, 6, 11, 16], values: [0.15, 0.5, 1, 2] },
+      // 잃은 체력 5%당 초당 추가 체력 재생(PC 위키: 0.5초마다 0.075/0.25/0.5/1/1.025/1.05 → 초당 2배).
+      // 6단계가 어느 레벨에 적용되는지는 위키에 없다 - 앞 4단계는 기존 1/6/11/16, 뒤 2단계는 17/18로
+      // 추정(regenBreakpointsGuessed).
+      regenByLevelBreakpoints: { breakpoints: [1, 6, 11, 16, 17, 18], values: [0.15, 0.5, 1, 2, 2.05, 2.1] }, regenBreakpointsGuessed: true,
     },
     Q: {
       name: '주먹다짐', cooldown: [9, 8, 7, 6, 5], mana: 0,
       moveSpeedBonusPercent: 30, moveSpeedDuration: 1.5, leftHandRangeBonus: 50,
-      perHitFlatByLevel: [10, 20, 30, 40, 50], perHitMaxHpPercentByLevel: [1, 1.5, 2, 2.5, 3], perHitAdRatioByLevel: [0.01, 0.015, 0.02, 0.025, 0.03],
+      // PC 위키 Template:Data Sett/Knuckle Down: 10~50 + 대상 최대 체력의 (1% + 공격력 100당 1/1.5/2/2.5/3%).
+      // 버그 수정: 예전엔 "공격력 100당 %"를 공격력 × 0.01~0.03 고정 피해로 계산했고, 기본 체력 비율도
+      // 1~3%로 들어가 있었다(V14.5부터 전 레벨 1%).
+      perHitFlatByLevel: [10, 20, 30, 40, 50], perHitMaxHpPercent: 1, perHitMaxHpPercentPer100AdByLevel: [1, 1.5, 2, 2.5, 3],
       damageType: 'PHYSICAL',
     },
     W: {
       name: '강펀치', cooldown: [18, 16.5, 15, 13.5, 12], mana: 0,
       gritMaxHpPercent: 50, gritDecayDelay: 4, gritDecayPercentPerSec: 30, shieldDuration: 3,
-      damageBaseByLevel: [80, 100, 120, 140, 160], gritSpendPercent: 25, bonusAdRatio: 0.25,
+      shieldDecayDelaySec: 0.75, // PC 위키: 보호막 3초, 0.75초 뒤부터 감소
+      // PC 위키 Template:Data Sett/Haymaker: 80~160 + 소모한 투지의 (25% + 추가 공격력 100당 25%).
+      // 버그 수정: 예전엔 추가 공격력 25%를 고정 피해로 더했다(투지 비율에 붙는 계수였음).
+      damageBaseByLevel: [80, 100, 120, 140, 160], gritSpendPercent: 25, gritSpendPercentPer100BonusAd: 25,
       range: 790, damageType: 'TRUE',
       // 버그 수정(공식 수치 확인함 - League Wiki Sett/Patch_history:
       // "Target Range: 790. Width: 805 / 180. Angle: 27°."): 예전엔
@@ -423,7 +434,8 @@ const CHAMPION_DATA = {
       // 방어구 관통/생명흡수는 출시 초기 수치(30%/20%)가 그대로 남아있었다.
       // 여러 차례 밸런스 패치를 거쳐 현재는 방어구 관통 0~33%, 생명흡수 0~15%
       // (크리티컬 확률에 비례)로 확정되어 있다.
-      armorPenFromCritPercent: 33, lifestealFromCritPercent: 15,
+      // V26.01: 방어구 관통 0~33% → 0~30%. 흡혈(챔피언 대상 회복)은 현재 0~20%(PC 위키).
+      armorPenFromCritPercent: 30, lifestealFromCritPercent: 20,
       damageBaseByLevel: [0,10,20,30,40], totalAdRatio: 1.0,
       critMultiplier: 1.7, critMultiplierIE: 1.91,
       rangeBonus: 125, empoweredDuration: 4,
@@ -454,7 +466,7 @@ const CHAMPION_DATA = {
       name: '급류', cooldown: 0.5,
       // 데이터 수정: E 마나 비용이 40으로 되어 있었는데, 현재 패치 기준
       // 실제 값은 30이다(위키 3곳 이상 교차 확인).
-      mana: 30, range: 550, maxCharges: 2,
+      mana: 40, range: 550, maxCharges: 2, // Data Dragon 16.20.1: 40(예전 30)
       // 데이터 수정: 재충전 시간 [26,22.5,19,15.5,12]는 출시 초반 상향
       // 이후의 값(12.13 패치에서 강화 시간이 늘어난 값)이 그대로 남아있던
       // 것으로 보인다 - 이후 다시 조정되어 현재는 [22,19.5,17,14.5,12]다.
@@ -469,7 +481,9 @@ const CHAMPION_DATA = {
     R: {
       name: '환희', cooldown: [110,95,80], mana: 100, damageRadius: 450, healRadius: 1500,
       channelDuration: 1, tickInterval: 0.25,
-      tickDamageByLevel: [60,100,140], tickBonusAdRatio: 0.4,
+      // 버그 수정: 틱(0.25초×4회)마다 총합값(60/100/140 + 40%)을 넣어 4배 피해가 들어갔다.
+      // PC 위키: 틱당 15/25/35 + 추가 AD 10%(총 60/100/140 + 40%).
+      tickDamageByLevel: [15,25,35], tickBonusAdRatio: 0.1,
       finalDamageByLevel: [125,225,325], finalBonusAdRatio: 1.0,
       healBasePercent: 20, healCritPercentPerCrit: 0.3, nonChampionHealMultiplier: 0.10,
       shieldDuration: 6,
@@ -483,7 +497,8 @@ const CHAMPION_DATA = {
       // [125,225,325]와 DamageBase 인덱스 1~3이 정확히 일치한다) - 그래서
       // ShieldBase도 같은 규칙으로 인덱스 1~3인 [65,115,165]를 실제 랭크
       // 1/2/3 값으로 사용한다.
-      shieldBaseByLevel: [65,115,165], shieldBonusAdRatio: 1.0,
+      // 예전 "시전 즉시 고정 보호막(ShieldBase + 추가 AD 100%)"은 PC 위키 어디에도 없어 제거 - 원작 R의
+      // 보호막은 초과 회복량 전환(6초)뿐이다.
       // 미구현이었던 부분 추가: 원작 R은 "각 타격마다 대상을 10% 슬로우
       // (3초, 다시 맞으면 갱신)"시킨다 - 지금까지 데미지/끌어당기기만
       // 구현되어 있고 슬로우 자체가 완전히 빠져 있었다.
@@ -504,27 +519,35 @@ const CHAMPION_DATA = {
       name: '암흑 탄생',
       desc: '기본 공격에 주문력 40% 추가 마법 피해. 기본 스킬/공격 3회 적중 시 4초간 오라 피해+이동속도(적중마다 갱신).',
       apRatio: 0.4, hitsForAura: 3, auraDuration: 4,
-      auraDamagePerSec: 5, auraApRatio: 0.3, auraTargetMaxHpPercent: 1, // 최소치(1~5%는 레벨 비례, 여기선 최소치만 사용 - 정밀 곡선 미공개)
+      // PC 위키: 초당 5(+주문력 30%)(+대상 최대 체력 1~5%, 레벨 비례). 레벨 사이 곡선은 공개돼 있지 않아
+      // 1→18 선형 보간(auraHpCurveGuessed). 예전엔 1% 고정이었다.
+      auraDamagePerSec: 5, auraApRatio: 0.3, auraTargetMaxHpPercentAtLevel1: 1, auraTargetMaxHpPercentAtLevel18: 5, auraHpCurveGuessed: true,
+      auraTickSec: 0.25, // 피해는 짧은 틱으로 나눠 들어감(원작 0.125초 단위 - 여기선 0.25초)
+      // 이동 속도 3/6/9%(레벨 비례)라는 기록과 "전 레벨 3%로 하향" 기록이 엇갈려 3% 유지(미확인).
       auraMoveSpeedPercent: 3, auraRange: 375,
+      stackDuration: 4, // 중첩은 챔피언/대형 몬스터 적중마다 1, 4초 지속(적중 시 갱신), 최대 3
     },
     Q: {
-      name: '말살', cooldown: [8, 7, 6, 5, 4], mana: 0, range: 575,
+      // PC 위키: 사거리 625(가장자리 22.5~625), 폭 90~150의 전방 직사각형 판정. 예전 575 + 지점 원형 판정은 근거 없음.
+      name: '말살', cooldown: [8, 7, 6, 5, 4], mana: 0, range: 625, width: 150,
       damageByLevel: [80, 115, 150, 185, 220], bonusAdRatio: 1.2, apRatio: 0.7,
       // 챔피언 레벨(스킬 레벨과 별개) 보너스 고정 피해: 10레벨부터 매
       // 레벨 +5, 18레벨에 45로 최대(요청 그대로 "0~45(10레벨부터 5씩 증가)").
       // 단일 대상 적중 시 보너스%까지 함께 곱해진다(사용자가 준 "최대
       // 마법피해" 수치의 +67.5 = 45×1.5와 정확히 일치 - Node로 검증 완료).
-      levelBonusDamage: { startLevel: 10, perLevel: 5, maxLevel: 18 },
+      // V26.20: 0~45 → 0~63(레벨 비례). 10레벨부터 레벨당 +7로 18레벨 63(예전 +5×9=45와 같은 구조로 추정).
+      levelBonusDamage: { startLevel: 10, perLevel: 7, maxLevel: 18 },
       singleTargetBonusPercentByLevel: [30, 35, 40, 45, 50], damageType: 'MAGICAL',
     },
     W: {
       name: '불멸', cooldown: [12, 11, 10, 9, 8], mana: 0,
       dealtDamageBankPercent: 45, takenDamageBankPercent: 7.5, nonChampionBankPercent: 25, // 챔피언 아닌 유닛 피해는 75% 감소 흡수 = 25%만 반영
-      minShieldMaxHpPercent: 5, maxShieldMaxHpPercent: 30, shieldDecayDuration: 6,
+      minShieldMaxHpPercent: 5, maxShieldMaxHpPercent: 30, shieldDecayDuration: 4, // PC 위키: 보호막 4초(감소) - 예전 6초
       recastHealPercentByLevel: [35, 37.5, 40, 42.5, 45],
     },
     E: {
-      name: '죽음의 손아귀', cooldown: [16, 14, 12, 10, 8], mana: 0, range: 900,
+      // PC 위키: 시전 사거리 700, 판정 직사각형 길이 800·폭 200, 0.5초 뒤 250 유닛 끌어당김.
+      name: '죽음의 손아귀', cooldown: [16, 14, 12, 10, 8], mana: 0, range: 700, areaLength: 800, areaWidth: 200, pullDistance: 250,
       magicPenPercentByLevel: [5, 7.5, 10, 12.5, 15],
       damageByLevel: [60, 80, 100, 120, 140], apRatio: 0.45, pullDelay: 0.5, damageType: 'MAGICAL',
     },
@@ -580,7 +603,7 @@ const CHAMPION_DATA = {
       damageByLevel: [150, 275, 400], apRatio: 0.8,
       pathDamageByLevel: [125, 175, 225], pathApRatio: 0.4,
       stunByLevel: [1, 1.5, 2], // 주 대상 에어본+기절 총합
-      pathKnockupSec: 0.75, // 미확인
+      pathKnockupSec: 1, // PC 위키: 경로 폭발에 맞은 적은 1초 공중에 뜸(0.5초 → 1초 패치). 예전 0.75는 근거 없던 값
       pathWidth: 300, // 미확인 - 경로 충격파 판정 폭
       // PC 위키 Template:Data Nautilus/Depth Charge: 시전 0.46초, 충격파 속도 275에서 초당 +466.67 가속.
       shockwaveSpeed: 275, shockwaveAccelPerSec: 466.67,
@@ -665,19 +688,21 @@ const CHAMPION_DATA = {
       healBase: 16, healPerLevel: 2, manaBase: 4.44, manaPerLevel: 0.28,
     },
     Q: {
-      name: '파열', cooldown: 6 /* Data Dragon 16.20.1 */, mana: 60, range: 950, castTime: 0.25, impactDelay: 0.625,
-      damageByLevel: [80, 140, 200, 260, 320], apRatio: 1.0,
+      // V25.23: 80/140/200/260/320 → 80/135/190/245/300. 마나 50(Data Dragon), 폭발 반경 250, 지연 0.627초(PC 위키).
+      name: '파열', cooldown: 6 /* Data Dragon 16.20.1 */, mana: 50, range: 950, castTime: 0.25, impactDelay: 0.627, radius: 250,
+      damageByLevel: [80, 135, 190, 245, 300], apRatio: 1.0,
       knockupDuration: 1, slowPercent: 60, slowDuration: 1.5, damageType: 'MAGICAL',
     },
     W: {
-      name: '흉포한 울부짖음', cooldown: [11, 10.5, 10, 9.5, 9] /* Data Dragon 16.20.1 */, manaByLevel: [70, 80, 90, 100, 110],
+      // V25.23: 80/135/190/245/300 → 80/130/180/230/280. 마나 70~90(Data Dragon).
+      name: '흉포한 울부짖음', cooldown: [11, 10.5, 10, 9.5, 9] /* Data Dragon 16.20.1 */, mana: [70, 75, 80, 85, 90],
       range: 650, coneAngleDeg: 60,
-      damageByLevel: [80, 135, 190, 245, 300], apRatio: 0.7,
+      damageByLevel: [80, 130, 180, 230, 280], apRatio: 0.7,
       silenceDurationByLevel: [1.6, 1.7, 1.8, 1.9, 2.0], damageType: 'MAGICAL',
     },
     E: {
       name: '날카로운 가시', cooldown: [8, 7, 6, 5, 4], mana: 30, charges: 3, rangeMax: 500,
-      perHitDamageByLevel: [20, 40, 60, 80, 100], apRatio: 0.3,
+      perHitDamageByLevel: [30, 50, 70, 90, 110], apRatio: 0.3, // V26.17: 20~100 → 30~110
       perHitMaxHpPercentByLevel: [2.5, 2.85, 3.2, 3.55, 3.9], perStackMaxHpPercent: 0.5,
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDuration: 1.5, damageType: 'MAGICAL',
     },
@@ -762,7 +787,7 @@ const CHAMPION_DATA = {
 
      Q: {
       name: '오싹한 미사일',
-     cooldown: [8, 7, 6, 5, 4], mana: 45,
+     cooldown: [8, 7, 6, 5, 4], mana: [45, 50, 55, 60, 65], // Data Dragon
      range: 1200,speed1: 600, speed2: 3200,
      accelerationDistance: 500, width: 180,
      damageByLevel: [75, 115, 155, 195, 235],
@@ -775,13 +800,14 @@ const CHAMPION_DATA = {
      W: {
       name: '거리 두기', cooldown: [16, 15, 14, 13, 12] /* Data Dragon 16.20.1 */, mana: 75,
       range: 475, damageByLevel: [80, 120, 160, 200, 240],
-      apRatio: 0.3, shieldByLevel: [50, 80, 110, 140, 170], shieldApRatio: 0.75, shieldDuration: 2,
-      shieldApRatio: 0.75, damageType: 'MAGICAL',
+      // PC 위키: 보호막 50/75/100/125/150(+주문력 75%), 2.5초. 예전 50~170은 주문력 80% 시절 기본값.
+      apRatio: 0.3, shieldByLevel: [50, 75, 100, 125, 150], shieldApRatio: 0.75, shieldDuration: 2.5,
+      damageType: 'MAGICAL',
       //적에게 적중하면 우울을 소모
      },
 
      E: {
-      name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: 70,
+      name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: [70, 80, 90, 100, 110], // Data Dragon
       range: 800, damageByLevel: [60, 105, 150, 195, 240],
       apRatio: 0.4, slowPercentByLevel: [30, 35, 40, 45, 50],
       slowDuration: 2, damageType: 'MAGICAL',
@@ -860,7 +886,7 @@ const CHAMPION_DATA = {
       // 다른 스킬들과 달리 보너스 공격력이 아니라 "총" 공격력에 곱한다),
       // BaseDamageAPRatio=0.40, CDRefund(적중 시 다른 기본 스킬 쿨다운
       // 감소량)=1.5.
-      cooldown: [5.5, 5.25, 5.0, 4.75, 4.5], mana: [28, 31, 34, 37, 40], range: 1200, width: 60,
+      cooldown: [5.5, 5.25, 5.0, 4.75, 4.5], mana: [28, 31, 34, 37, 40], range: 1200, width: 120, // PC 위키: 폭 120(예전 60), 속도 2000
       damageByLevel: [20, 45, 70, 95, 120], totalAdRatio: 1.3, apRatio: 0.4,
       cdrOnHitSeconds: 1.5, damageType: 'PHYSICAL',
     },
@@ -918,13 +944,14 @@ const CHAMPION_DATA = {
       // minionDamageMultiplier로 그 비율(0.4)만 단순화해서 반영한다(실제
       // 공식은 미니언/몬스터 전용 추가 계수가 하나 더 있지만 이 데모
       // 범위에서는 근사치로 충분).
-      cooldown: [120, 105, 90], mana: 100, range: 25000, width: 160, castTime: 1,
+      // PC 위키: 폭 320, 미니언/일반 몬스터 50% 피해. 예전 "대상마다 10%씩 감소(최소 30%)·미니언 40%"는
+      // PC 판에 없는 규칙이라 제거.
+      cooldown: [120, 105, 90], mana: 100, range: 25000, width: 320, castTime: 1,
       damageByLevel: [350, 550, 750], bonusAdRatio: 1.0, apRatio: 1.1,
-      falloffPerUnitPercent: 10, minDamagePercent: 30,
       // 정정: 나무위키 능력치 표/본문 모두 "마법 피해"로 명시한다
       // ("이즈리얼이 거대한 에너지파를 발사하여 마법 피해를 입힙니다").
       // 이전 값(PHYSICAL)은 잘못된 데이터였다.
-      minionDamageMultiplier: 0.4, damageType: 'MAGICAL',
+      minionDamageMultiplier: 0.5, damageType: 'MAGICAL',
     },
   },
   // 아리: 사용자가 직접 제공한 실제 게임 데이터 파일(ahri.bin/ahri.bin.json -
@@ -1074,32 +1101,33 @@ const CHAMPION_DATA = {
     },
     passive: {
       name: '살아있는 복수',
-      desc: '적 챔피언을 공격하면 그 대상에게 갈수록 커지는 공격 속도를 얻는다(챔피언 대상 최대 50%, 그 외 대상 최대 10% - 챔피언 레벨에 따라 5~15초에 걸쳐 최대치 도달). 이렇게 얻은 보너스 공격 속도의 일부는 공격력으로도 함께 전환된다.',
-      championAsCap: 0.5, nonChampionAsCap: 0.1,
-      // ASDuration(최대치까지 걸리는 시간) - bin ByCharLevelBreakpoints:
-      // 1레벨 5초, 6/11/16/21/26레벨마다 +2초.
-      rampDurationBreakpoints: { breakpoints: [1, 6, 11, 16, 21, 26], values: [5, 7, 9, 11, 13, 15] },
-      adPerASPointChampion: 25, adPerASPointNonChampion: 10,
-      // AP 전환(AStoAPChampion/Minion)도 bin에 동일하게 존재하지만, 이
-      // 데모에는 주문력 아이템 시스템이 없어(항상 abilityPower=0, 다른
-      // 챔피언들과 동일한 원칙 - apRatio류 필드를 기록만 하고 실제 로직은
-      // 추가하지 않음) 수치만 기록해두고 별도 로직은 만들지 않는다.
-      apPerASPointChampion: 25, apPerASPointNonChampion: 10,
-      newAsCap: 3.33,
+      desc: '유닛을 처치하면 공격 속도가 증가하고(레벨 비례 10/15/20%), 적 챔피언 처치에 관여하면 대신 30%를 얻는다(지속 5/7/9/11초, 레벨 비례). 얻은 추가 공격 속도의 일부만큼 공격력도 증가한다.',
+      // PC 위키(V26.02/V26.12 반영): 유닛 처치 시 공속 10/15/20%(레벨 비례), 챔피언 처치 관여 시 30%,
+      // 지속 5/7/9/11초(1/6/11/16레벨 - 예전 bin 주석의 ByCharLevelBreakpoints와 일치). 추가 공속의
+      // 11%(처치)/33%(관여)만큼 공격력도 얻는다.
+      // 버그 수정: 예전 구현은 같은 bin 값(챔피언 50%/그 외 10%, 전환 25/10)을 "같은 대상을 계속 공격하면
+      // 공속이 점점 오른다"로 잘못 해석해, 처치와 무관하게 평타만으로 공속이 최대 50%까지 올랐다.
+      // 처치 공속의 레벨 구간(1/7/13)은 위키에 없어 추정(killAsBreakpointsGuessed).
+      killAsByLevel: { breakpoints: [1, 7, 13], values: [10, 15, 20] }, killAsBreakpointsGuessed: true,
+      takedownAsPercent: 30,
+      durationByLevel: { breakpoints: [1, 6, 11, 16], values: [5, 7, 9, 11] },
+      killAdPerBonusAsPercent: 0.11, takedownAdPerBonusAsPercent: 0.33,
     },
     Q: {
       name: '꿰뚫는 화살',
       desc: '충전할수록 사거리와 피해량이 늘어나는 관통 화살을 발사한다(최대 1.25초 충전). 다시 누르면 그 시점의 충전량으로 즉시 발사한다. 오한(블라이트) 표식이 있는 대상을 맞히면 표식을 함께 터뜨리며, 이때는 잃은 체력 비례 추가 마법 피해와 재사용 대기시간 감소가 충전량에 비례해 더 크게 붙는다.',
       cooldown: [16, 15, 14, 13, 12], mana: [50, 55, 60, 65, 70],
       minRange: 925, maxRange: 1600, chargeDuration: 1.25, minChargeDamageRatio: 0.667,
-      damageMaxByLevel: [80, 160, 240, 320, 400], totalAdRatioMax: [1.3, 1.4, 1.5, 1.6, 1.7],
+      // V26.05: 최대 기본 피해 80/150/220/290/360, 현재 최대 계수 추가 AD 120%(PC 위키). 예전 값은 총 AD 130~170%.
+      damageMaxByLevel: [80, 150, 220, 290, 360], bonusAdRatioMax: 1.2,
       missileSpeed: 1500, width: 75, damageType: 'PHYSICAL',
     },
     W: {
       name: '오한의 화살통',
       desc: '기본 공격이 추가 마법 피해를 입히고 오한(블라이트)을 남긴다(최대 3중첩, 중첩당 6초). 사용하면 사거리 내 오한이 남은 대상 하나를 골라 오한을 모두 터뜨려 중첩당 대상 최대 체력 비례 마법 피해를 입히고, 자신의 기본 스킬 재사용 대기시간을 중첩당 13%(최대 39%) 감소시킨다. Q로 터뜨리면 잃은 체력 비례 추가 피해와 더 큰 재사용 대기시간 감소가 함께 붙는다.',
       cooldown: 40, range: 750, maxStacks: 3, stackDuration: 6,
-      onHitDamageByLevel: [8, 17, 26, 35, 44], onHitBonusAdRatio: 0.35,
+      // V26.12: 4/13/22/31/40, V26.03: 주문력 25%(예전엔 추가 AD 35%로 잘못 들어가 있었다).
+      onHitDamageByLevel: [4, 13, 22, 31, 40], onHitApRatio: 0.25,
       detonatePercentMaxHpByLevel: [3, 3.5, 4, 4.5, 5],
       qConsumeMissingHpPercentByLevel: [6, 8, 10, 12, 14], qConsumeMaxChargeMultiplier: 1.5,
       cdrPerStackPercent: 13, cdrMaxBonusPercentFromCharge: 50,
@@ -1173,10 +1201,13 @@ const CHAMPION_DATA = {
     passive: {
       name: '서리 화살',
       desc: '애쉬의 기본 공격은 대상을 둔화시킨다. 치명타는 추가 피해 대신 훨씬 강한 둔화를 적용한다(1초에 걸쳐 원래 세기로 감쇠).',
-      slowByLevel: { breakpoints: [1, 6, 11, 16], values: [5, 15, 25, 35] },
-      qActiveBonusSlowPercent: 20, // 궁사의 집중(Q) 활성 중 추가 둔화
-      critSlowByLevel: { breakpoints: [1, 6, 11, 16], values: [40, 45, 50, 60] },
-      slowDurationSec: 1.0,
+      // PC 위키 Frost Shot: 2초간 20~30%(레벨 비례) 둔화, 치명타는 둔화 2배(40~60%)로 시작해 첫 1초에 걸쳐
+      // 원래 세기로 감소. 치명타는 추가 피해가 없고, 대신 평타가 치명타 확률 비례 추가 피해(0~100%, 무한의
+      // 대검 +0~30%)를 준다. 레벨 사이 곡선은 공개돼 있지 않아 선형 보간(slowCurveGuessed).
+      // 예전 5/15/25/35%·1초·Q 활성 중 +20%(현재 판에서 삭제됨)는 옛 값.
+      slowPercentAtLevel1: 20, slowPercentAtLevel18: 30, slowCurveGuessed: true,
+      slowDurationSec: 2.0, critSlowMultiplier: 2, critDecaySec: 1.0,
+      critChanceBonusDamageRatio: 1.0, critChanceBonusDamageRatioIE: 0.3,
       // 매 기본 공격마다 짧은(1초) 시야를 대상 방향으로 부여 - 공식 설명
       // "기본 공격이 짧은 시야를 부여한다"를 새 시야 시스템(vision_system.js)에
       // 연결한 것. 공식 수치(반경) 미확인이라 근사값.
@@ -1186,27 +1217,34 @@ const CHAMPION_DATA = {
       name: '궁사의 집중',
       desc: '기본 공격마다 집중 중첩을 얻는다(최대 4중첩, 공격할 때마다 지속시간 갱신). 최대 중첩에서 사용하면 중첩을 모두 소모해 6초간 공격 속도를 얻고, 그 동안의 첫 기본 공격이 강력한 다발 공격(화살 6발)으로 바뀌어 총 피해를 맞은 대상들에게 나누어 입힌다.',
       maxStacks: 4, stackWindowSec: 4.0, buffDurationSec: 6.0,
-      attackSpeedPercentByLevel: [20, 30, 40, 50, 60],
-      flurryArrowCount: 6,
-      flurryTotalAdPercentByLevel: [132, 138, 144, 150, 156],
-      flurrySpreadRange: 400, // 다발 공격이 여러 대상을 나눠 맞히는 탐색 반경(공식 수치 미확인 - 근사)
+      // PC 위키: 6초간 공속 20/25/30/35/40%, 그동안 모든 평타가 대상에게 화살 5발(발당 AD 22~26%,
+      // 총 110~130%)의 다발 공격으로 바뀐다. 시전 후 첫 다발은 1발 더(6발, 총 132~156%). 화살마다 서리 화살,
+      // 적중 시 효과는 다발당 1회. 마나 30(Data Dragon).
+      // 버그 수정: 예전 구현은 "시전 후 첫 평타 1번만, 주변 여러 대상에 나눠서"였다.
+      attackSpeedPercentByLevel: [20, 25, 30, 35, 40],
+      flurryArrowCount: 5, firstFlurryBonusArrows: 1,
+      flurryArrowAdPercentByLevel: [22, 23, 24, 25, 26],
       flurryMissileSpeed: 3200,
-      cooldown: 0, mana: 0, // 재사용 대기시간/마나 없음 - 4중첩 확보가 실제 사용 제약
+      cooldown: 0, mana: 30,
       damageType: 'PHYSICAL',
     },
     W: {
       name: '일제 사격',
       desc: '전방에 부채꼴로 여러 발의 화살을 발사한다. 화살들은 서로 다른 대상을 노리지만, 한 대상은 한 번만 피해를 입는다.',
-      cooldown: [18, 14.5, 11, 7.5, 4] /* Data Dragon 16.20.1 */, mana: [50, 60, 70, 80, 90], // 마나 수치는 공식 확인 못함 - 유사 포크류 스킬 관례로 근사
-      range: 1200, coneAngleDeg: 46, // 사거리/각도는 공식 확인 못함 - 널리 알려진 근사값
-      damageByLevel: [25, 45, 65, 85, 105], bonusAdRatio: 1.2,
+      // PC 위키 Template:Data Ashe/Volley: 60/95/130/165/200(+추가 AD 100%), 화살 7~11발, 부채꼴 27.75/37/37/
+      // 46.25/46.25°, 사거리 1200. 마나 75~55(Data Dragon).
+      cooldown: [18, 14.5, 11, 7.5, 4] /* Data Dragon 16.20.1 */, mana: [75, 70, 65, 60, 55],
+      range: 1200, coneAngleDegByLevel: [27.75, 37, 37, 46.25, 46.25], arrowsByLevel: [7, 8, 9, 10, 11],
+      damageByLevel: [60, 95, 130, 165, 200], bonusAdRatio: 1.0,
       castTimeSec: 0.25,
       damageType: 'PHYSICAL',
     },
     E: {
       name: '매 날리기',
       desc: '매의 영혼을 지정한 위치로 보내 경로와 도착 지점의 시야를 밝힌다. 피해를 주지 않는 순수 정찰 스킬이다.',
-      cooldown: [20, 18, 16, 14, 12], mana: 40, // 공식 쿨다운은 2중첩 재충전형이나, 이 엔진에 공용 "충전" 자원 시스템이 없어 단일 쿨다운으로 근사
+      // PC 위키/Data Dragon: 충전 2회, 재충전 90/80/70/60/50초, 사용 간격 5초, 마나 없음
+      // (예전엔 충전 시스템이 없다며 20~12초 단일 쿨다운·마나 40으로 근사했었다).
+      cooldown: 5, mana: 0, maxCharges: 2, rechargeTime: [90, 80, 70, 60, 50],
       range: 4000, missileSpeed: 1700,
       visionRadius: 900, visionDurationSec: 5.0,
       castTimeSec: 0.25,
@@ -1214,11 +1252,11 @@ const CHAMPION_DATA = {
     R: {
       name: '마법의 수정화살',
       desc: '전 맵 사거리로 거대한 얼음 화살을 발사한다. 처음 맞힌 적 챔피언에게 마법 피해를 입히고 기절시키며(비행 거리가 길수록 기절 시간 증가), 주변의 다른 적에게도 같은 피해를 입히지만 기절은 걸지 않는다.',
-      cooldown: [100, 80, 60] /* Data Dragon 16.20.1 */, mana: [150, 175, 200],
+      cooldown: [100, 80, 60] /* Data Dragon 16.20.1 */, mana: 100, // Data Dragon: 100(예전 150~200)
       range: 20000, // "글로벌" 사거리 - ezreal.js의 R(정조준 사격)과 동일한 관례(20000) 재사용
-      missileSpeed: 1650, width: 130,
+      missileSpeed: 1500, missileMaxSpeed: 2100, missileAccelPerSec: 600, width: 260, // PC 위키: 속도 1500→2100(가속률은 미공개라 초당 600 추정), 폭 260
       damageByLevel: [200, 400, 600], apRatio: 1.2,
-      splashDamagePercent: 100, splashRadius: 400,
+      splashDamagePercent: 100, splashRadius: 400, // 주변 적도 같은 피해 + 서리 화살(PC 위키). 반경 400은 미확인
       minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 20000,
       castTimeSec: 0.5,
       visionRadius: 900, visionDurationSec: 3.0, // 비행 경로/명중 지점에도 짧은 시야(공식 설명: "1초간 경로의 시야를 밝힌다" - 근사)
