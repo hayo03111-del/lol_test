@@ -397,7 +397,10 @@ CharacterController.prototype._settCastR = function(free) {
       seq.durations = { DASH: dashC.duration, GRAB: grabC.duration, CARRY: spinC.duration, IMPACT: bombC.duration };
       seq.useAnimTiming = true;
       const totalDuration = resolvedClips.reduce((s, c) => s + c.duration, 0);
-      applyStatus(target, { id: 'settR_suppress', type: 'SUPPRESSION', duration: totalDuration + 0.5, value: 1 }); // 실제 총 재생시간 기준으로 안전 상한 재설정
+      // 버그 수정(브라우저 테스트로 발견): 제압이 "클립 재생시간 + 0.5초"(실제 시간) 뒤 자동으로 풀렸는데,
+      // 애니메이션은 게임 프레임 시간으로 흐르므로 프레임이 낮으면 운반 도중에 제압이 먼저 풀렸다. 제압은
+      // 시퀀스가 끝나거나 취소될 때 _settEndR()이 해제하므로, 여기서는 넉넉한 안전 상한만 둔다.
+      applyStatus(target, { id: 'settR_suppress', type: 'SUPPRESSION', duration: Math.max(10, totalDuration * 4), value: 1 });
       console.log(`[SETT R] 실제 애니메이션 클립 재생 - 총 ${totalDuration.toFixed(2)}s (Dash ${dashC.duration.toFixed(2)}/Grab ${grabC.duration.toFixed(2)}/Spin ${spinC.duration.toFixed(2)}/PowerBomb ${bombC.duration.toFixed(2)})`);
       this.sequencePlayer.play({
         steps: resolvedClips.map((c) => ({ animation: c.name, clipStart: 0, clipEnd: c.duration })),
