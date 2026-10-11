@@ -85,6 +85,12 @@ function applyStatus(target, effect) {
     target._yasuoAirborne = { baseY: base, elapsed: 0, duration: Math.max(0.05, effect.duration), height: effect.airborneHeight ?? 1.6 };
   }
   const idx = target.statusEffects.findIndex((e) => e.id === effect.id);
+  // 버그 수정: 같은 지속 피해(DOT)를 다시 걸면 틱 진행도(_tickAccum)가 0으로 초기화돼, 다시
+  // 거는 간격이 틱 간격보다 짧으면(다리우스가 공속 1 이상으로 계속 평타 → 출혈 갱신) 출혈이
+  // 한 번도 들어가지 않았다. 진행 중이던 틱 시간을 이어받는다(지속시간/총 피해는 새 값).
+  if (idx >= 0 && rec.type === 'DOT' && target.statusEffects[idx].type === 'DOT' && target.statusEffects[idx].expiresAt > now) {
+    rec._tickAccum = target.statusEffects[idx]._tickAccum || 0;
+  }
   if (idx >= 0) target.statusEffects[idx] = rec; else target.statusEffects.push(rec);
   if (CC_TYPES.has(effect.type)) {
     console.log(`[CC]\nTarget: ${unitLabel(target)}\nType: ${effect.type}\nDuration: ${effDuration}`); // 강인함 적용 후 실제 지속시간(디버깅 혼동 방지)
@@ -206,7 +212,9 @@ function getMoveSpeedBuffPercent(target) {
       const remainingSec = (e.expiresAt - now) / 1000;
       val = e.value * Math.max(0, Math.min(1, remainingSec / e.duration));
     }
-    v = Math.max(v, val);
+    // 버그 수정: 서로 다른 % 이동 속도 증가는 원작에서 "더해진다"(예: 가렌 Q 35% + 다른
+    // 버프). 예전엔 가장 큰 것 하나만 적용됐다. 같은 버프 재적용은 같은 id라 중복되지 않는다.
+    v += val;
   }
   return v;
 }

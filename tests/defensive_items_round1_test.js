@@ -337,7 +337,7 @@ this.applyItemPhysicalVamp = applyItemPhysicalVamp;
   ctx2.buyItem(ctrl, 'ghostlyHood'); ctx2.buyItem(ctrl, 'kircheisShard');
   ctx2.buildOrBuyItem(ctrl, 'spiritVisage');
   ctrl.hp = 1000; ctrl.maxHp = 2000; ctrl.itemPhysicalVampPercent = 0.20;
-  ctx2.applyItemPhysicalVamp(ctrl, 100, 'PHYSICAL');
+  ctx2.applyItemPhysicalVamp(ctrl, 100, 'PHYSICAL', true); // 기본 공격 피해
   assert(Math.abs(ctrl.hp - (1000 + 100 * 0.20 * 1.25)) < 1e-6, '무한한 활력: 생명력 흡수로 받는 회복량도 25% 증폭된다(20*1.25=25)');
 }
 

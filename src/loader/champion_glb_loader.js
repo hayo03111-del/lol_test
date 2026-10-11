@@ -1379,7 +1379,9 @@ function tickOneDummy(unit, dt) {
   // (명세 4절 "Death Realm → Mordekaiser ↔ Target 가능") 그대로 통과된다.
   if (!canRealmInteract(unit, controller)) return;
   unit.attackCooldown = Math.max(0, (unit.attackCooldown || 0) - dt);
-  if (isStunned(unit) || isSilenced(unit)) return; // 요청 11: STUN/SILENCE 중에는 더미도 실제로 반격하지 못한다
+  // 기절/공중에 뜸/제압/매혹 중에는 반격 불가. 침묵/속박은 원작대로 기본 공격을 막지 않는다
+  // (예전엔 둘 다 반격을 막았다).
+  if (isStunned(unit)) return;
   const dist = getHorizontalDistance(unit.mesh.position, controller.root.position);
   if (dist <= unit.attackRange && unit.attackCooldown <= 0) {
     unit.attackCooldown = 1.4;

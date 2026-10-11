@@ -284,13 +284,13 @@ function makeTarget(overrides = {}) {
   // hp/maxHp는 구매 이후에 직접 설정한다(essenceReaver/hubris 때와 동일한 이유).
   ctrl.maxHp = 1000; ctrl.hp = 950;
   // finalDmg=1000 -> 흡혈량 150, 950+150=1100, maxHp=1000이므로 초과분 100.
-  applyItemPhysicalVamp(ctrl, 1000, 'PHYSICAL');
+  applyItemPhysicalVamp(ctrl, 1000, 'PHYSICAL', true); // 기본 공격 피해(생명력 흡수는 평타에만)
   assert(ctrl.hp === 1000, '피바라기(영액의 보호막): 체력은 최대치에서 멈춘다');
   assert(Math.abs(ctrl.shield - 100) < 1e-6, '피바라기(영액의 보호막): 최대 체력을 초과하는 회복량(100)이 보호막으로 전환된다');
 
   // 보호막은 레벨 비례 최대치(18레벨=315)에서 캡된다 - 충분히 여러 번
   // 초과 회복시켜 315를 넘어서려 해도 캡에 걸리는지 확인한다.
-  for (let i = 0; i < 10; i++) applyItemPhysicalVamp(ctrl, 1000, 'PHYSICAL');
+  for (let i = 0; i < 10; i++) applyItemPhysicalVamp(ctrl, 1000, 'PHYSICAL', true); // 기본 공격 피해(생명력 흡수는 평타에만)
   assert(ctrl.shield === 315, '피바라기(영액의 보호막): 보호막이 레벨 비례 최대치(18레벨=315)에서 정확히 캡된다');
 }
 

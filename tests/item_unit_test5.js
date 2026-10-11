@@ -133,14 +133,16 @@ const c7 = makeFakeCtrl();
 buyItem(c7, 'lastWhisper');
 assert(Math.abs(c7.itemBonusArmorPenMultiplier - (1 - 0.18)) < 1e-9, 'last whisper grants 18% armor pen (stored as multiplier)');
 
-// --- Physical vamp only triggers on PHYSICAL damage ---
+// --- Life steal only triggers on BASIC ATTACK damage (원작 정의 - 스킬 피해는 제외) ---
 const c8 = makeFakeCtrl();
 buyItem(c8, 'vampiricScepter');
 c8.hp = 400;
-applyItemPhysicalVamp(c8, 100, 'MAGICAL');
-assert(c8.hp === 400, 'physical vamp does NOT trigger on magical damage');
-applyItemPhysicalVamp(c8, 100, 'PHYSICAL');
-assert(Math.abs(c8.hp - 407) < 1e-9, 'physical vamp triggers on physical damage (7% of 100 = 7)');
+applyItemPhysicalVamp(c8, 100, 'PHYSICAL', false);
+assert(c8.hp === 400, 'life steal does NOT trigger on ability damage (physical skill)');
+applyItemPhysicalVamp(c8, 100, 'MAGICAL', false);
+assert(c8.hp === 400, 'life steal does NOT trigger on magical ability damage');
+applyItemPhysicalVamp(c8, 100, 'PHYSICAL', true);
+assert(Math.abs(c8.hp - 407) < 1e-9, 'life steal triggers on basic attack damage (7% of 100 = 7)');
 
 // --- Executioner's Calling: grievous on physical hit to champion ---
 const c9 = makeFakeCtrl();

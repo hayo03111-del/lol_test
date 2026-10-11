@@ -1281,8 +1281,7 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
       // 타격 간격만 짧아진다.
       const eData = this._champData() && this._champData().E;
       this._eChannelDuration = eData ? eData.spinDuration : (channelCfg.duration ?? 4.0);
-      // "추가 공격 속도"에는 레벨 성장분도 포함된다(원작 규칙). 이 프로젝트는 레벨
-      // 성장분을 baseAttackSpeed에 녹여두므로 1레벨 기본값 대비 비율로 되살려 더한다.
+      // "추가 공격 속도"에는 레벨 성장분도 포함된다(원작 규칙 - _totalBonusAttackSpeed).
       const bonusAsForSpins = this._totalBonusAttackSpeed();
       this._eHitsTotal = eData ? (eData.baseHits + Math.floor(bonusAsForSpins / 0.25 + 1e-9)) : 0;
       this._eHitsDone = 0;

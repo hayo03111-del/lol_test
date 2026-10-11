@@ -37,15 +37,22 @@ CharacterController.prototype._yoneLevelValue = function(arr, lvl) {
 // 양 끝 값을 유지하는 보간"임을 분명히 한다.
 const YONE_REF_CAP_BONUS_AS = 1.115;
 CharacterController.prototype._yoneASReduction = function(maxReductionFraction) {
-  const bonusAS = Math.max(0, this.stats.bonusAttackSpeedPercent || 0);
+  const bonusAS = this._totalBonusAttackSpeed(); // 레벨 성장분 포함(원작의 "추가 공격 속도")
   return Math.min(maxReductionFraction, (bonusAS / YONE_REF_CAP_BONUS_AS) * maxReductionFraction);
 };
 // 필멸의 검(Q): Cooldown 4 -> 1.33, Cast Time 0.35 -> 0.175 (공식 위키)
+// 버그 수정: Q는 champion_data 주석에 적힌 요네.bin 관계식(추가 공속 1%당 쿨다운 0.6%,
+// 최대 66.67% / 시전 시간 0.41667%, 최대 50%)이 있는데도 "양 끝값 보간"을 쓰고 있었다.
+// 추가 공속에는 레벨 성장분도 포함한다(_totalBonusAttackSpeed - 야스오와 같은 식).
 CharacterController.prototype._yoneQCooldown = function() {
-  return 4 * (1 - this._yoneASReduction(1 - 1.33 / 4));
+  const q = this._champData().Q;
+  const bonusPct = this._totalBonusAttackSpeed() * 100;
+  return this._yoneLevelValue(q.cooldown, this.skillLevels.Q || 1) * (1 - Math.min(0.6667, bonusPct * 0.6 / 100));
 };
 CharacterController.prototype._yoneQCastTime = function() {
-  return 0.35 * (1 - this._yoneASReduction(1 - 0.175 / 0.35));
+  const q = this._champData().Q;
+  const bonusPct = this._totalBonusAttackSpeed() * 100;
+  return this._yoneLevelValue(q.castTime, this.skillLevels.Q || 1) * (1 - Math.min(0.5, bonusPct * 0.41667 / 100));
 };
 // 영혼 가르기(W): Cooldown 14 -> 6, Cast Time 0.5 -> 0.19 (공식 위키)
 CharacterController.prototype._yoneWCooldown = function() {
@@ -78,19 +85,16 @@ CharacterController.prototype._yoneWMaxDamageVsMonster = function() {
 // 아이템 시스템이 없는 이 뷰어에서 "보너스 공격력"은 레벨 기본 공격력을
 // 초과하는 몫으로 근사한다(this.bonusAD 임시 버프까지 포함). R/W처럼
 // 공식 수치가 "보너스 AD" 계수인 항목에 사용한다.
-CharacterController.prototype._yoneBonusAD = function() {
-  const s = this._champData()?.stats;
-  if (!s) return this.bonusAD || 0;
-  const baseAD = growLinear(s.ad, s.adGrowth, this.champLevel || 1);
-  return Math.max(0, this.stats.attackDamage - baseAD);
-};
+CharacterController.prototype._yoneBonusAD = function() { return this._getBonusAD(); }; // 공용 "추가 공격력"(레벨 성장 제외)
 
 /* ---------------- 패시브: 사냥꾼의 길 ---------------- */
 
 // 치명타 피해 배율(요네.bin 실데이터 기준 190%, 무한의 검 보유 시 217% -
 // 이 데모에는 아이템 시스템이 없어 항상 기본값만 사용한다).
+// 버그 수정: 예전 190%는 "기본 치명타 200%" 시절 bin 값(200%×0.95)이었다. 현재 PC는 기본
+// 치명타 175%이고 요네는 치명타 피해 10% 감소(V14.20 이후) → 175%×0.9 = 157.5%.
 CharacterController.prototype._yoneCritMultiplier = function() {
-  return this._champData().passive.critDamage;
+  return (this.stats.critMultiplier || 1.75);
 };
 // 치명타 확률 2배/초과분 추가 공격력은 recomputeStats()의 공용 "의지" 처리(야스오와 공유).
 // Steel and Spirit: 평타가 강철 검(물리)/아자카나의 검(물리 50%+마법
@@ -112,11 +116,11 @@ CharacterController.prototype._yoneAdvanceSwordState = function() {
 // 취급되어 치명타/생명력 흡수가 자연스럽게 적용된다").
 CharacterController.prototype._yoneApplyAlternatingAttackDamage = function(target, attackResult) {
   const half = attackResult.rawDamage * 0.5;
-  applyDamage(target, { ...attackResult, rawDamage: half, damageType: DAMAGE_TYPE.PHYSICAL });
+  let dealt = applyDamage(target, { ...attackResult, rawDamage: half, damageType: DAMAGE_TYPE.PHYSICAL }) || 0;
   if (!target || target.hp > 0) {
-    applyDamage(target, { ...attackResult, rawDamage: half, damageType: DAMAGE_TYPE.MAGICAL });
+    dealt += applyDamage(target, { ...attackResult, rawDamage: half, damageType: DAMAGE_TYPE.MAGICAL }) || 0;
   }
-  this._yoneRecordMark(target, half + half);
+  this._yoneRecordMark(target, dealt);
 };
 
 /* ---------------- E(영혼해방) 표식 기록 공용 헬퍼 ---------------- */
@@ -201,7 +205,9 @@ CharacterController.prototype._yoneClearAllMarkIndicators = function() {
 CharacterController.prototype._yoneRecordMark = function(target, rawDamageDealt) {
   const spirit = this._yone && this._yone.eSpirit;
   if (!spirit || !target || rawDamageDealt <= 0) return;
-  if (target.isMinion || target.isTurret || target.isInhibitor || target.isNexus) return;
+  // 원작: 정신체 동안 "적 챔피언"에게 입힌 피해만 표식으로 저장(몬스터/미니언/구조물 제외).
+  // 넘겨받는 값은 방어력/마저 적용 "후" 실제 피해(applyDamage 반환값) - 예전엔 적용 전 원본 피해였다.
+  if (!target.isChampion) return;
   const e = this._champData().E;
   const lvl = Math.max(1, Math.min(5, this.skillLevels.E || 1));
   const pct = this._yoneLevelValue(e.markPercentByLevel, lvl) / 100;
@@ -237,20 +243,22 @@ CharacterController.prototype._yoneApplyQHit = function(target, { empowered = fa
   const base = this._yoneLevelValue(q.damageByLevel, lvl);
   // 버그 수정: 예전엔 치명타 확률을 항상 100%로 고정하고 Q도 무조건 치명타였다.
   // 이제 패시브 "의지"(치명타 확률 2배, recomputeStats)로 계산된 확률대로 굴린다.
-  const crit = Math.random() < (this.stats.critChance || 0);
-  const critMult = this._yoneCritMultiplier();
+  const crit = this._yoneQCritRoll != null ? this._yoneQCritRoll : (Math.random() < (this.stats.critChance || 0));
+  // 무한의 대검 보너스를 AD 계수 부분에만 반영한다(예전엔 isCritical로 넘겨 기본 피해까지 곱해졌다).
+  const critMult = this._yoneCritMultiplier() + (this.itemBonusCritDamagePercent || 0);
   const ratio = crit ? q.totalAdRatio * critMult : q.totalAdRatio;
   const raw = base + this.stats.attackDamage * ratio;
-  applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: crit, critMultiplier: 1, source: this });
+  const dealt = applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
   if (empowered) applyStatus(target, { id: 'yoneQKnockup', type: 'KNOCKUP', duration: q.knockupDuration, value: 1 });
-  this._yoneRecordMark(target, raw);
+  this._yoneRecordMark(target, dealt);
   return raw;
 };
 
+// 버그 수정: 원작 Q는 폭 80의 직선이다(예전엔 반각 6도 부채꼴 - 가까이선 너무 좁고
+// 멀리선 넓었다).
 CharacterController.prototype._yoneFindQTargets = function(dir, lolRange) {
-  return findEnemiesInRadius(this.root.position, lolRange, { forward: dir, maxAngleDeg: 6 })
-    .map((h) => h.unit)
-    .filter((u) => u && u.hp > 0);
+  const q = this._champData().Q;
+  return findEnemiesInLine(this.root.position, dir, lolRange, q.width || 80).filter((u) => u && u.hp > 0);
 };
 
 // 2중첩(폭풍 구름) 상태에서 발동하는 강화 필멸의 검: 요네 본체는 고정
@@ -278,7 +286,12 @@ CharacterController.prototype._yoneStartEmpoweredQ = function(dir) {
     missileDuration: Math.max(0.05, missileDist / speed),
     missileElapsed: 0,
     hitSet: new Set(),
+    critRoll: Math.random() < (this.stats.critChance || 0),
   };
+  // 중첩은 돌진을 "시작"할 때 소모 - 예전엔 돌풍이 끝까지 간 뒤 0으로 돌려, 그 사이(공속이
+  // 높으면 쿨다운 1.33초) Q를 다시 쓰면 강화 Q가 또 나갔다.
+  this._yone.qStacks = 0; this._yone.qStackExpiresAt = 0;
+  if (typeof window !== 'undefined' && window.yoneSetQStacks) window.yoneSetQStacks(0);
   vfx.spawn('q', origin.clone().addScaledVector(forward, 1.2), forward, { tornado: true, size: 1.25 });
 };
 
@@ -310,12 +323,12 @@ CharacterController.prototype._yoneTickEmpoweredQ = function(dt) {
     const lateral = Math.sqrt(Math.max(0, toUnit.lengthSq() - along * along));
     if (lateral > halfWidth + (getCollisionRadius(u) || 0)) continue;
     travel.hitSet.add(u);
+    this._yoneQCritRoll = travel.critRoll;
     this._yoneApplyQHit(u, { empowered: true });
+    this._yoneQCritRoll = null;
   }
   if (travel.missileElapsed >= travel.missileDuration - 1e-4) {
     this._yone.qDashTravel = null;
-    this._yone.qStacks = 0; this._yone.qStackExpiresAt = 0;
-    if (window.yoneSetQStacks) window.yoneSetQStacks(0);
   }
 };
 
@@ -341,8 +354,8 @@ CharacterController.prototype._yonePlayExitTransition = function(idleClipNames, 
 
 CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = false) {
   if (isSilenced(this) || isCrowdControlled(this)) return;
-  const qLevel = Math.max(1, Math.min(5, Number(this.skillLevels.Q) || 1));
-  this.skillLevels.Q = qLevel;
+  // 버그 수정: 예전엔 skillLevels를 강제로 1 이상으로 덮어써, 스킬 포인트를 찍지 않은
+  // 스킬도 _payCost()의 "아직 배우지 않음" 검사를 통과했다(Q/W/E/R 공통).
   if (!this._payCost('Q', free)) return;
   this._yoneQStackTick();
   const q = this._champData().Q;
@@ -408,7 +421,9 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
     const targets = this._yoneFindQTargets(dir, q.range);
     if (targets.length) {
       targets.sort((a, b) => this.root.position.distanceToSquared(getWorldPosition(a)) - this.root.position.distanceToSquared(getWorldPosition(b)));
+      this._yoneQCritRoll = Math.random() < (this.stats.critChance || 0);
       targets.forEach((t) => this._yoneApplyQHit(t, { empowered: false }));
+      this._yoneQCritRoll = null;
       this._yone.qStacks = Math.min(q.maxStacks || 2, this._yone.qStacks + 1);
       this._yone.qStackExpiresAt = performance.now() + (q.stackDuration || 6) * 1000;
       if (window.yoneSetQStacks) window.yoneSetQStacks(this._yone.qStacks);
@@ -432,9 +447,8 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
 
 CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = false) {
   if (isSilenced(this) || isCrowdControlled(this)) return;
-  const wLevel = Math.max(1, Math.min(5, Number(this.skillLevels.W) || 1));
-  this.skillLevels.W = wLevel;
   if (!this._payCost('W', free)) return;
+  const wLevel = Math.max(1, Math.min(5, Number(this.skillLevels.W) || 1));
   const w = this._champData().W;
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
@@ -462,10 +476,11 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
       if (t.isMinion) total = Math.max(total, this._yoneWMinDamageVsMinion());
       else if (t.isMonster) total = Math.min(total, this._yoneWMaxDamageVsMonster());
       const half = total * 0.5;
-      applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
-      if (t.hp > 0) applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
-      this._yoneRecordMark(t, total);
-      if (!t.isMinion && !t.isTurret) championHits++;
+      let dealtW = applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
+      if (t.hp > 0) dealtW += applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
+      this._yoneRecordMark(t, dealtW);
+      // 버그 수정: 예전엔 미니언/포탑만 빼서 몬스터까지 "챔피언 적중"으로 셌다.
+      if (t.isChampion) championHits++;
     }
     if (targets.length) {
       // 보호막: 기본값(챔피언 레벨 기준 40->90 선형, 요네.bin WShield 실데이터) + 보너스 AD 65%,
@@ -474,7 +489,14 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
       let mult = 1;
       if (championHits >= 1) mult += 1.0;
       if (championHits >= 2) mult += 0.5 * (championHits - 1);
-      this.shield = Math.max(this.shield, base * mult * getShieldReceivedMultiplier(this));
+      // 버그 수정: 예전엔 max(기존, W)로 덮고, 만료 시 보호막을 통째로 0으로 만들어 다른
+      // 보호막(아이템 등)까지 지웠다. 이제 W 몫만 더하고 만료 때 남은 W 몫만 걷어낸다.
+      if (this._yone.wShieldApplied > 0 && this._yone.wShieldUntil > performance.now()) {
+        this.shield = Math.max(0, (this.shield || 0) - Math.min(this._yone.wShieldApplied, this.shield || 0));
+      }
+      const wAmt = base * mult * getShieldReceivedMultiplier(this);
+      this.shield = Math.max(0, this.shield || 0) + wAmt;
+      this._yone.wShieldApplied = wAmt;
       this._yone.wShieldUntil = performance.now() + (w.shieldDuration || 1.5) * 1000;
       updateBars(this);
       vfx.spawn('w', this.root.position.clone());
@@ -659,9 +681,8 @@ CharacterController.prototype._yoneCleanupSpiritVisuals = function() {
 CharacterController.prototype._yoneCastE = function(mouseWorldPoint, free = false) {
   if (this._yone.eSpirit) { this._yoneRecastE(); return; }
   if (isSilenced(this) || isCrowdControlled(this)) return;
-  const eLevel = Math.max(1, Math.min(5, Number(this.skillLevels.E) || 1));
-  this.skillLevels.E = eLevel;
   if (!this._payCost('E', free)) return;
+  const eLevel = Math.max(1, Math.min(5, Number(this.skillLevels.E) || 1));
   const e = this._champData().E;
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
@@ -690,7 +711,8 @@ CharacterController.prototype._yoneCastE = function(mouseWorldPoint, free = fals
     recastLockedUntil: performance.now() + (e.recastMinDelay || 0.5) * 1000,
     husk,
   };
-  this.isUntargetable = true;
+  // 버그 수정(원작 대조): 대상 지정 불가인 것은 "남겨진 몸"이고, 정신체(요네 본인)는
+  // 평소처럼 맞는다. 예전엔 5초 내내 요네를 대상 지정 불가로 만들어 사실상 무적이었다.
   // 돌진(Spell3_Dash) -> 정신체 진입 포즈(Yone_Spell3_spiritIn.anm) 순서로
   // 이어 재생한다(닐라와 동일하게 한 상황에 여러 모션을 체인). 실제 이동
   // 보간은 _yoneUpdateESpirit(dt)가 별도로 매 프레임 처리하므로, 이 클립
@@ -733,7 +755,6 @@ CharacterController.prototype._yoneRecastE = function() {
   const spirit = this._yone.eSpirit;
   if (!spirit) return;
   if (performance.now() < spirit.recastLockedUntil) return; // 위키: 최초 시전 후 최소 0.5초 지나야 재시전 가능
-  this.isUntargetable = false;
   this.root.position.copy(spirit.bodyPos);
   this.root.quaternion.copy(spirit.bodyQuat);
   // 복귀(Spell3_Out) -> 마무리 동작(Spell3_End1) 순서로 이어 재생하고,
@@ -797,9 +818,8 @@ CharacterController.prototype._yoneUpdateESpirit = function(dt) {
 
 CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = false) {
   if (isSilenced(this) || isCrowdControlled(this)) return;
-  const rLevel = Math.max(1, Math.min(3, Number(this.skillLevels.R) || 1));
-  this.skillLevels.R = rLevel;
   if (!this._payCost('R', free)) return;
+  const rLevel = Math.max(1, Math.min(3, Number(this.skillLevels.R) || 1));
   const r = this._champData().R;
   // 버그 수정("R이 마우스 커서 쪽으로 나가지 않는다"): 운명봉인은 직선
   // 스킬샷이라 우선 마우스 방향을 써야 한다. currentTarget은 마우스
@@ -853,38 +873,51 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
       hits.push({ unit: u, along });
     }
     hits.forEach((h) => applyStatus(h.unit, { id: 'yoneRStun', type: 'STUN', duration: r.stunDuration || 1, value: 1 }));
-    // 2단계: 가장 먼 대상 뒤쪽(또는 최대 사거리)으로 블링크.
+    // 피해는 베는 순간(1단계)에 들어간다 - 예전엔 0.3초 뒤 돌풍 때 들어갔다.
+    const base = this._yoneLevelValue(r.totalMixedDamageByLevel, rLevel);
+    const total = base + this._yoneBonusAD() * (r.bonusAdRatio || 0.8);
+    hits.forEach((h) => {
+      const t = h.unit;
+      const half = total * 0.5;
+      let dealtR = applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
+      if (t.hp > 0) dealtR += applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
+      this._yoneRecordMark(t, dealtR);
+    });
+    // 2단계: 맞은 "적 챔피언" 중 가장 먼 대상 뒤 200(없으면 최대 사거리)으로 블링크.
+    // 버그 수정: 예전엔 미니언까지 포함한 가장 먼 유닛 기준이었다.
     let blinkPos;
-    if (hits.length) {
-      hits.sort((a, b) => b.along - a.along);
-      const furthest = hits[0].along;
-      blinkPos = origin.clone().addScaledVector(dir, Math.min(worldRange, furthest + lolRangeToWorld(200)));
+    const champHits = hits.filter((h) => h.unit.isChampion);
+    if (champHits.length) {
+      champHits.sort((a, b) => b.along - a.along);
+      const furthest = champHits[0].along;
+      blinkPos = origin.clone().addScaledVector(dir, Math.min(worldRange, furthest + lolRangeToWorld(r.blinkDistanceBehindTarget || 200)));
     } else {
       blinkPos = origin.clone().addScaledVector(dir, worldRange);
     }
+    const map = (typeof window !== 'undefined' && window.HOWLING_ABYSS_MAP) || null;
+    if (map && typeof map.clampPosition === 'function') map.clampPosition(blinkPos);
     this.root.position.copy(blinkPos);
     vfx.spawn('r', blinkPos.clone());
-    // 3단계(약 0.3초 후): 돌풍 - 표식된(=1단계에서 맞은) 적을 블링크
-    // 지점 쪽으로 당기고, 혼합 피해 + 에어본(0.75초)을 적용한다.
-    const gustTimer = setTimeout(() => {
-      hits.forEach((h) => {
-        const t = h.unit;
-        if (!t || t.hp <= 0) return;
-        const pullTarget = blinkPos.clone();
-        if (t.root && t.root.position) t.root.position.copy(pullTarget);
-        else if (t.mesh && t.mesh.position) t.mesh.position.copy(pullTarget);
-        else if (t.position) t.position.copy(pullTarget);
-        applyStatus(t, { id: 'yoneRKnockup', type: 'KNOCKUP', duration: (r.knockupDuration || 0.75) + 0.15, value: 1 });
-        const base = this._yoneLevelValue(r.totalMixedDamageByLevel, rLevel);
-        const total = base + this._yoneBonusAD() * (r.bonusAdRatio || 0.8);
-        const half = total * 0.5;
-        applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
-        if (t.hp > 0) applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
-        this._yoneRecordMark(t, total);
-      });
-      if (hits.length) debugSkillHit('Yone R', hits[0].unit); else debugSkillMiss('R', '사거리 내 대상 없음');
-    }, 300);
-    this._actionTimers.push(gustTimer);
+    // 3단계(PC 위키): 시전 종료 시점에 표식된 적을 블링크 지점 쪽으로 3000 속도로 끌어오고,
+    // 끌려가는 순간 기절(1초)이 끝나며, 끌려간 "뒤"에 0.75초 공중에 뜬다. 예전엔 0.3초 뒤에
+    // 모두를 블링크 지점 한 점으로 순간이동시키고 기절과 공중에 뜸을 겹쳐 걸었다.
+    const side = new THREE.Vector3(-dir.z, 0, dir.x);
+    hits.forEach((h, i) => {
+      const t = h.unit;
+      if (!t || t.hp <= 0 || !t.mesh || !t.mesh.position) return;
+      const pullTarget = blinkPos.clone().addScaledVector(dir, -lolRangeToWorld(100))
+        .addScaledVector(side, ((i % 3) - 1) * lolRangeToWorld(60));
+      pullTarget.y = t.mesh.position.y;
+      const dist = new THREE.Vector3().subVectors(pullTarget, t.mesh.position).setY(0).length();
+      const pullSec = Math.max(0.05, dist / lolRangeToWorld(r.pullSpeed || 3000));
+      if (typeof clearStatus === 'function') clearStatus(t, 'yoneRStun');
+      t._pullState = { from: t.mesh.position.clone(), to: pullTarget, duration: pullSec, elapsed: 0 };
+      const kt = setTimeout(() => {
+        if (t.hp > 0) applyStatus(t, { id: 'yoneRKnockup', type: 'KNOCKUP', duration: (r.knockupDuration || 0.75), value: 1 });
+      }, pullSec * 1000);
+      void kt; // 요네가 다른 행동을 시작해도 이미 끌려가는 대상의 공중에 뜸은 취소되면 안 된다
+    });
+    if (hits.length) debugSkillHit('Yone R', hits[0].unit); else debugSkillMiss('R', '사거리 내 대상 없음');
     this.currentPhase = 'RECOVERY';
     const rec = setTimeout(() => { if (this.currentActionKey === key) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } }, 450); // 위키: 시전 후 0.45초 행동 잠금(Lockout)
     this._actionTimers.push(rec);
@@ -902,7 +935,8 @@ CharacterController.prototype._yoneTick = function(dt) {
   this._yoneUpdateESpirit(dt);
   // W 보호막 지속시간 만료 처리(다른 챔피언이 보호막을 다시 걸지 않았다면).
   if (this._yone.wShieldUntil && performance.now() >= this._yone.wShieldUntil) {
-    this.shield = 0; this._yone.wShieldUntil = 0; updateBars(this);
+    this.shield = Math.max(0, (this.shield || 0) - Math.min(this._yone.wShieldApplied || 0, this.shield || 0));
+    this._yone.wShieldUntil = 0; this._yone.wShieldApplied = 0; updateBars(this);
   }
   // 치명타 확률/초과분 추가 공격력은 recomputeStats()의 공용 "의지" 처리로 옮겼다
   // (예전엔 매 프레임 치명타 확률 100% 강제 + 매 프레임 recomputeStats 호출).

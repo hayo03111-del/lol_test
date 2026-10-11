@@ -257,7 +257,7 @@ CharacterController.prototype._yasuoFinishEDash = function() {
     if (!this._yasuo.eDashDamageApplied) {
       this._yasuo.eDashDamageApplied = true;
       const min = this._yasuoLevelValue(e.damageMin, lvl);
-      const baseAd = growLinear(CHAMPION_DATA.yasuo.stats.ad, CHAMPION_DATA.yasuo.stats.adGrowth, this.champLevel);
+      const baseAd = computeChampionStats('yasuo', this.champLevel).attackDamage; // 레벨 기본 AD(원작 성장 공식)
       const bonusAd = Math.max(0, this.stats.attackDamage - baseAd);
       const raw = (min + e.bonusAdRatioMin * bonusAd + e.apRatioMin * this.stats.abilityPower) * mult;
 

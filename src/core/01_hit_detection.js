@@ -163,9 +163,13 @@ function isSilenced(target) { return hasStatus(target, 'SILENCE'); }
 // 동일하게 이동/공격/스킬을 막는 CC다 - 이 함수 하나에서 전부 인식하면
 // moveTo/castAbility/_tryEngageTarget 등 이 함수를 참조하는 모든 곳에
 // 자동으로 반영된다(호출부를 일일이 고칠 필요 없음).
+// 버그 수정(원작 규칙): 속박(ROOT)은 "이동/돌진"만 막고 기본 공격·스킬은 막지 않는다.
+// 예전엔 여기에 ROOT가 들어 있어 속박된 허수아비가 반격하지 못하고, 속박을 기절처럼 다뤘다.
+// 이동 제한은 isRooted()로 따로 확인한다(moveTo 등).
 function isStunned(target) {
-  return hasStatus(target, 'STUN') || hasStatus(target, 'ROOT') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM');
+  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM');
 }
+function isRooted(target) { return hasStatus(target, 'ROOT'); }
 // CC(기절/속박류)로 이동/행동이 실제로 막히는지 - 사용처: moveTo/castAbility/_tryEngageTarget
 function isCrowdControlled(target) { return isStunned(target); }
 // 매 프레임 상태이상을 갱신(DOT 틱 적용 + 만료 제거)
@@ -185,7 +189,8 @@ function tickStatusEffects(target, dt) {
         e._tickAccum -= tickInterval;
         e._ticksFired += 1;
         const perTick = e.totalDamage / totalTicks;
-        if (target.hp > 0) applyDamage(target, { rawDamage: perTick, damageType: e.damageType || DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isStatusTick: true });
+        // 시전자(source)를 넘겨 관통력/피해 증폭/흡혈이 실제 시전자 기준으로 계산되게 한다.
+        if (target.hp > 0) applyDamage(target, { rawDamage: perTick, damageType: e.damageType || DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isStatusTick: true, source: e.source || undefined });
       }
     }
   }

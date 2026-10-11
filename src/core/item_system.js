@@ -1287,12 +1287,13 @@ function applyItemVamp(source, finalDmg) {
   source.hp = Math.min(source.maxHp, source.hp + finalDmg * vampPercent * healMult);
 }
 
-// 생명력 흡수(흡혈의 낫) - "모든 피해 흡혈"(위 applyItemVamp)과 달리
-// 물리 피해에만 적용된다. 실제 LoL 생명력 흡수도 기본 공격/물리 스킬
-// 모두에 적용되므로 damageType만으로 판정한다.
-function applyItemPhysicalVamp(source, finalDmg, damageType) {
+// 생명력 흡수(흡혈의 낫 등) - "모든 피해 흡혈"(위 applyItemVamp)과 달리 "기본 공격"
+// 피해에만 적용된다(원작 정의). 버그 수정: 예전엔 물리 피해면 스킬까지 전부 흡혈했다
+// (다리우스 Q/가렌 E/야스오 Q 등). 기본 공격이면 피해 종류와 무관(요네 아자카나 평타의
+// 마법 절반 포함).
+function applyItemPhysicalVamp(source, finalDmg, damageType, isBasicAttack = false) {
   if (!source || !(source.itemPhysicalVampPercent > 0) || !(finalDmg > 0)) return;
-  if (damageType !== DAMAGE_TYPE.PHYSICAL) return;
+  if (!isBasicAttack) return;
   if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
   // 정령의형상(무한한 활력). 그리버스 치유 감소도 같은 지점에 곱한다
   // (applyItemVamp와 동일한 이유 - 생명력 흡수도 그리버스의 직접 적용 대상).

@@ -58,12 +58,15 @@ CharacterController.prototype._garenWOnCast = function() {
     const shieldAmt = (skillVal(w.shieldBaseByLevel, lvl) + this._garenBonusHp() * (w.shieldBonusHpPercent / 100)) * getShieldReceivedMultiplier(this);
     // 같은 0.75초 동안 강인함 60%(공용 TENACITY 상태 - applyStatus가 CC 지속시간 계산에 반영).
     if (w.tenacityPercent) applyStatus(this, { id: 'garenW_tenacity', type: 'TENACITY', duration: w.tenacityDuration, value: w.tenacityPercent / 100 });
-    // W가 다른 보호막을 덮어쓴 뒤 종료될 때 타 보호막까지 같이 깎지 않도록
-    // 시전 직전의 기존 보호막 값을 기준선으로 보존한다. W 종료 시점에
-    // 기준선보다 늘어난 양에서만 W가 만든 보호막을 제거한다.
-    const shieldBefore = Math.max(0, this.shield || 0);
-    const appliedShield = Math.max(0, shieldAmt - shieldBefore);
-    this.shield = Math.max(this.shield, shieldAmt);
+    // 버그 수정(원작 규칙): 보호막끼리는 "합산"된다. 예전엔 max(기존, W)로 덮어써서 다른
+    // 보호막이 있으면 W 보호막이 일부/전부 사라졌다. 이제 W 몫을 더하고, 종료 시 W 몫만
+    // 걷어낸다(재시전 시 이전 W 몫은 먼저 제거 - 중첩 금지).
+    if (this._garenWShieldApplied > 0 && this._garenWShieldTimer) {
+      this.shield = Math.max(0, (this.shield || 0) - Math.min(this._garenWShieldApplied, this.shield || 0));
+    }
+    const appliedShield = shieldAmt;
+    this.shield = Math.max(0, this.shield || 0) + appliedShield;
+    this._garenWShieldApplied = appliedShield;
     const dur = w.shieldDuration;
     this._garenWShieldToken = (this._garenWShieldToken || 0) + 1;
     const token = this._garenWShieldToken;
@@ -79,7 +82,7 @@ CharacterController.prototype._garenWOnCast = function() {
     this._garenWShieldTimer = setTimeout(() => {
       if (this._garenWShieldToken !== token || this.championId !== 'garen') return;
       if (appliedShield > 0) this.shield = Math.max(0, this.shield - Math.min(appliedShield, this.shield));
-      this._garenWShieldTimer = null;
+      this._garenWShieldTimer = null; this._garenWShieldApplied = 0;
     }, dur * 1000);
   
 };

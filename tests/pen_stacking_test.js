@@ -117,14 +117,15 @@ function makeFakeCtrl(overrides = {}) {
   const expectedArmor = 100 * expectedMultiplier;
   assert(Math.abs(dmg - 200 * 100 / (100 + expectedArmor)) < 1e-6, '퍼센트 방어구 관통력: calculateDamage()에 정확히 반영된다');
 
-  // 고정 관통력이 퍼센트 관통력보다 먼저 적용되는지(실제 LoL 공식과 동일 순서).
+  // 실제 LoL 순서: 방어력 감소(고정→%) → 방어구 관통력(%) → 물리 관통력(고정).
+  // 수정 전 테스트는 고정 관통을 먼저 적용하는 잘못된 순서를 검증하고 있었다.
   const ctrl2 = makeFakeCtrl();
   buyItem(ctrl2, 'serratedDirk'); // 고정 10
   buyItem(ctrl2, 'lastWhisper'); // 퍼센트 18%
   const dmg2 = calculateDamage({ rawDamage: 200, damageType: 'PHYSICAL', target, source: ctrl2 });
-  const armorAfterFlat = 100 - 10;
-  const armorAfterBoth = armorAfterFlat * (1 - 0.18);
-  assert(Math.abs(dmg2 - 200 * 100 / (100 + armorAfterBoth)) < 1e-6, '고정+퍼센트 관통력 혼합: 고정 관통이 먼저 적용된 뒤 퍼센트 관통이 그 결과에 곱해진다(순서 정확)');
+  const armorAfterPercent = 100 * (1 - 0.18);
+  const armorAfterBoth = armorAfterPercent - 10;
+  assert(Math.abs(dmg2 - 200 * 100 / (100 + armorAfterBoth)) < 1e-6, '고정+퍼센트 관통력 혼합: 퍼센트 관통이 먼저, 고정 관통(물리 관통력)이 나중(원작 순서)');
 }
 
 // ========================================================================

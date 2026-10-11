@@ -14,14 +14,10 @@
 // 게임 내내 0으로 계산되고 있었다(레벨업으로 공격력이 올라도 전혀
 // 반영 안 됨). 실제 추가 공격력은 "현재 총 공격력 - 1레벨 기본 공격력"
 // 이고, 여기에 다리우스의 임시 empower 보너스가 있으면 더해준다.
-// "추가 공격 속도"(LoL 규칙: 레벨 성장분 + 버프/아이템) - 이 프로젝트는 레벨 성장분을
-// baseAttackSpeed에 녹여 두므로 1레벨 기본 공속 대비 비율로 되살려 더한다. 가렌 E 회전
-// 수, 야스오 Q 쿨다운/시전 시간 등 "추가 공속 비례" 스킬이 공용으로 쓴다.
+// "추가 공격 속도"(LoL 규칙: 레벨 성장분 + 버프/아이템). 가렌 E 회전 수, 야스오/요네 Q
+// 쿨다운/시전 시간 등 "추가 공속 비례" 스킬이 공용으로 쓴다.
 CharacterController.prototype._totalBonusAttackSpeed = function() {
-    const cd = this._champData();
-    const baseAs1 = (cd && cd.stats.attackSpeed) || 0;
-    const growth = baseAs1 > 0 ? Math.max(0, (this.stats.baseAttackSpeed || baseAs1) / baseAs1 - 1) : 0;
-    return growth + Math.max(0, this.stats.bonusAttackSpeedPercent || 0);
+    return Math.max(0, this.stats.levelBonusAttackSpeed || 0) + Math.max(0, this.stats.bonusAttackSpeedPercent || 0);
 };
 
 CharacterController.prototype._getBonusAD = function() {
@@ -694,7 +690,8 @@ CharacterController.prototype._beginAttackSwing = function() {
     }
     const target = this.currentTarget;
     if (!target || target.hp <= 0) { this.currentTarget = null; return; }
-    if (isSilenced(this)) return; // 기획안 8절: 침묵 중에는 기본 공격도 나가지 않는다
+    // 버그 수정(원작 규칙): 침묵은 스킬만 막고 기본 공격은 막지 않는다(예전 기획안 8절의
+    // "침묵 중 평타 불가"는 원작과 달라 제거).
     if (isCrowdControlled(this)) return; // 기절/속박 중에도 마찬가지
     const dirToTarget = new THREE.Vector3().subVectors(target.mesh.position, this.root.position);
     dirToTarget.y = 0; dirToTarget.normalize();
@@ -948,7 +945,10 @@ CharacterController.prototype._beginAttackSwing = function() {
             this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
           } else {
             const wouldKill = target.hp > 0 && target.hp <= attackResult.rawDamage;
-            applyDamage(target, attackResult);
+            const dealtAA = applyDamage(target, attackResult);
+            // 요네 정신체(E) 중에는 강철 검(일반) 평타 피해도 표식에 쌓인다 - 예전엔 아자카나
+            // 평타만 기록돼 일반 평타 피해가 표식에서 빠졌다.
+            if (this.championId === 'yone') this._yoneRecordMark(target, dealtAA || 0);
             this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
           }
         }

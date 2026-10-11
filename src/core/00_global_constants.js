@@ -406,7 +406,8 @@ function getFinalMoveSpeed(stats) {
 }
 
 function getFinalAttackSpeed(stats) {
-  let as = stats.baseAttackSpeed * (1 + stats.bonusAttackSpeedPercent) * stats.attackSpeedMultiplier;
+  // 원작: 기본 공속 × (1 + 레벨 성장 추가 공속 + 아이템/버프 추가 공속)
+  let as = stats.baseAttackSpeed * (1 + (stats.levelBonusAttackSpeed || 0) + stats.bonusAttackSpeedPercent) * stats.attackSpeedMultiplier;
   as = Math.max(stats.minAttackSpeed, Math.min(stats.maxAttackSpeed, as));
   return as;
 }
@@ -445,14 +446,15 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     if (bonusArmorIgnorePercent > 0 && target) { const baseArmor = target.baseArmor ?? target.stats?.baseArmor ?? armor; const bonusArmor = Math.max(0, armor - baseArmor); armor = baseArmor + bonusArmor * (1 - Math.min(1, bonusArmorIgnorePercent)); }
     // 기획안 8절 ARMOR_SHRED(예: 가렌 E 6회 피격 시 방어력 25% 감소) 반영.
     if (typeof getArmorShredPercent === 'function') armor *= (1 - getArmorShredPercent(target));
-    // 아이템 패시브(톱날 단검 - 고정 물리 관통력 10) - 마법사의 신발(고정
-    // 마법 관통력)과 동일한 원칙으로 퍼센트 관통보다 먼저 적용한다.
+    // 아이템 패시브(톱날 단검 - 고정 물리 관통력 10) - 원작 순서대로 % 관통
+    // 뒤(맨 마지막)에 적용한다(아래).
     const atkP = resolveDamageSource(source, target);
     // 벼락폭풍검(창공)의 "4초간 물리 관통력 획득"은 영구 스탯(itemBonusArmorPenFlat,
     // 구매/판매 시에만 재계산)과 별개로 지속시간이 있는 임시 버프라 자체
     // 필드(itemTempArmorPenFlat)에 더해서 같은 자리에서 합산한다.
     const flatArmorPen = ((atkP && atkP.itemBonusArmorPenFlat) || 0) + ((atkP && atkP.itemTempArmorPenFlat) || 0);
-    armor = Math.max(0, armor - flatArmorPen);
+    // 버그 수정(원작 적용 순서): 방어력 감소(고정→%) → 방어구 관통력(%) → 물리 관통력(고정).
+    // 예전엔 고정 관통을 % 관통보다 먼저 빼서 % 관통 효율이 실제보다 낮게 나왔다.
     armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등
     // 경계(빛과 어둠 - 어둠)의 "10%(최대 30%) 방어구 관통력"도 영구
     // 곱연산 필드(itemBonusArmorPenMultiplier)와 별개인 임시 버프라
@@ -461,6 +463,7 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 아이템 패시브(최후의 속삭임 - 방어구 관통력 18%) - 마법 관통력(위
     // MAGICAL 분기)과 동일한 이유로 공격자를 source||controller로 찾는다.
     if (atkP && atkP.itemBonusArmorPenMultiplier < 1) armor *= atkP.itemBonusArmorPenMultiplier;
+    armor = Math.max(0, armor - flatArmorPen); // 고정 관통은 맨 마지막(0 아래로는 못 내림)
     dmg *= 100 / (100 + Math.max(0, armor));
   } else if (damageType === DAMAGE_TYPE.MAGICAL) {
     // 버그 수정: 지금까지 MAGICAL 분기에는 관통력을 반영할 파라미터 자체가
@@ -471,25 +474,33 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 아이템 패시브(악의 "증오안개" - 마법 저항력 10 감소, MR_SHRED 상태이상) -
     // ARMOR_SHRED(칠흑의양날도끼)와 동일한 자리(관통 적용 전)에서 먼저 깎는다.
     if (typeof getMrShredFlat === 'function') mr = Math.max(0, mr - getMrShredFlat(target));
-    // 아이템 패시브(마법사의 신발 - 고정 마법 관통력) - 고정 관통은 항상
-    // 퍼센트 관통보다 먼저 적용한다(실제 LoL 공식과 동일 순서). `source`가
+    // 아이템 패시브(마법사의 신발 - 고정 마법 관통력) - 원작 순서대로 마법 저항력
+    // 감소 → % 마법 관통 → 고정 마법 관통(맨 마지막)으로 적용한다. `source`가
     // 없는 호출(대부분의 스킬 피해 호출)은 흡혈/영광 처치 훅과 동일한
     // 이유로 전역 `controller`(이 데모의 유일한 챔피언 피해원)로 대체한다.
     const atk = resolveDamageSource(source, target);
     const flatMagicPen = (atk && atk.itemBonusMagicPenFlat) || 0;
-    mr = Math.max(0, mr - flatMagicPen);
+    // (고정 마법 관통은 아래 % 관통 뒤에 적용 - 원작 순서)
     // 경계(빛과 어둠 - 어둠)의 임시 마법 관통력(최대 30%) - PHYSICAL 분기의
     // itemTempArmorPenPercent와 동일한 자리.
     const tempMagicPenPercent = (atk && atk.itemTempMagicPenPercent) || 0;
     // 아이템 패시브(역병의 보석/공허의지팡이 - 퍼센트 마법 관통력) - 최후의
     // 속삭임(itemBonusArmorPenMultiplier)과 동일한 자리/원칙의 영구 곱연산 관통력.
     const itemMagicPenMultiplier = (atk && atk.itemBonusMagicPenMultiplier < 1) ? atk.itemBonusMagicPenMultiplier : 1;
-    const effectiveMr = mr * (1 - Math.max(0, Math.min(1, magicPenPercent))) * (1 - Math.max(0, Math.min(1, tempMagicPenPercent))) * itemMagicPenMultiplier;
+    const effectiveMr = Math.max(0, mr * (1 - Math.max(0, Math.min(1, magicPenPercent))) * (1 - Math.max(0, Math.min(1, tempMagicPenPercent))) * itemMagicPenMultiplier - flatMagicPen);
     dmg *= 100 / (100 + Math.max(0, effectiveMr));
-    dmg *= 1 - getMagicDamageReductionPercent(target);
   }
   // TRUE: 방어 수치를 그대로 무시
   dmg = Math.max(0, dmg);
+  // 피해 감소(DAMAGE_REDUCTION / 마법 피해 감소): 피격 처리 함수(takeDamage)가 있는 대상은
+  // 그쪽에서 한 번만 적용한다. 버그 수정: 예전엔 여기서도 마법 피해 감소를 곱해, 플레이어가
+  // 받는 마법 피해에 감소가 두 번 들어갔다(가렌 W 30%가 마법 피해엔 51%처럼 작동). 반대로
+  // takeDamage가 없는 대상(허수아비)은 물리/고정 피해에 피해 감소가 아예 적용되지 않았다.
+  if (target && typeof target.takeDamage !== 'function') {
+    let red = typeof getDamageReductionPercent === 'function' ? getDamageReductionPercent(target) : 0;
+    if (damageType === DAMAGE_TYPE.MAGICAL && typeof getMagicDamageReductionPercent === 'function') red = Math.max(red, getMagicDamageReductionPercent(target));
+    dmg *= 1 - Math.max(0, Math.min(1, red));
+  }
   // 아이템 패시브(쇼진의창 "집중된 의지" - 스택당 피해량 증폭) - 실제
   // LoL처럼 모든 피해 계산이 끝난 뒤 최종 피해에 곱하는 증폭으로 적용한다.
   // 원문대로 "챔피언 스킬과 기본 지속 효과 피해량"만 증폭한다 - 기본
@@ -556,7 +567,7 @@ function applyDamage(target, result) {
   if (dmgSource && typeof dmgSource.championId === 'string') {
     if (typeof applyItemVamp === 'function') applyItemVamp(dmgSource, finalDmg);
     const dealtDamageType = result.damageType || DAMAGE_TYPE.PHYSICAL; // calculateDamage()의 기본값과 동일하게 맞춘다
-    if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(dmgSource, finalDmg, dealtDamageType);
+    if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(dmgSource, finalDmg, dealtDamageType, !!result.isBasicAttack);
     if (target.isChampion) dmgSource._itemLastDealtChampionDamageAt = performance.now();
     if (typeof target._itemLastTookChampionDamageAt !== 'undefined') target._itemLastTookChampionDamageAt = performance.now();
     if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, finalDmg, dealtDamageType, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });

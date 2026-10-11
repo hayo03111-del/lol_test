@@ -61,7 +61,7 @@ class CharacterController {
 
       attackDamage: 10, attackRange: ATTACK_RANGE,
       baseAttackSpeed: 1.0, bonusAttackSpeedPercent: 0, attackSpeedMultiplier: 1,
-      minAttackSpeed: 0.2, maxAttackSpeed: 3.5,
+      minAttackSpeed: 0.2, maxAttackSpeed: 2.5, // 원작 공격 속도 상한 2.5(예전 3.5)
       windupPercent: 0.4,
 
       projectileSpeed: 30,
@@ -469,6 +469,7 @@ class CharacterController {
       // 증가" 계열은 itemBonusAP 합연산 전부가 끝난 뒤 곱하는 배율이다.
       this.stats.abilityPower = (this.itemBonusAP || 0) * (1 + (this.itemTotalApMultiplierBonus || 0));
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
+      this.stats.levelBonusAttackSpeed = base.levelBonusAttackSpeed || 0;
       this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0);
       this.stats.baseArmor = base.armor;
       this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0) + (this.itemTempMrBonus || 0);

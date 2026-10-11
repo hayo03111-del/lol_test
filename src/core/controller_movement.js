@@ -9,7 +9,7 @@
 /* ---------------- movement ---------------- */
 CharacterController.prototype.moveTo = function(point) {
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
-    if (isCrowdControlled(this)) return; // 기획안 8절: 기절/속박 중에는 이동 명령을 받지 않는다
+    if (isCrowdControlled(this) || isRooted(this)) return; // 기절/속박 중에는 이동 명령을 받지 않는다
     if (this.currentActionKey === 'rWindup' || this.currentActionKey === 'rChannel' || this.currentActionKey === 'rCast'
         || this._isLeeSinCastLock()) return;
     // 모데카이저 R "죽음의 세계" 명세 6절 "경계 밖으로 나가지 못함": 이

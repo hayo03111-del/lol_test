@@ -11,6 +11,12 @@
    ============================================================ */
 function growLinear(base, growth, level) { return base + growth * (level - 1); }
 function growPercent(base, growthPercent, level) { return base * (1 + (growthPercent / 100) * (level - 1)); }
+// 챔피언 "기본 스탯" 성장 공식(원작): 기본 + 성장 × (레벨-1) × (0.7025 + 0.0175 × (레벨-1)).
+// 18레벨 값은 단순 직선과 같지만 중간 레벨에서는 더 낮다. 버그 수정: 예전엔 스탯에도
+// growLinear(단순 직선)를 써서 2~17레벨 체력/공격력/방어력 등이 원작보다 높았다.
+// (growLinear는 아리 패시브 회복처럼 "레벨에 정비례"하는 스킬 수치용으로 그대로 둔다.)
+function statGrowthFactor(level) { const n = Math.max(0, (level || 1) - 1); return n * (0.7025 + 0.0175 * n); }
+function growStat(base, growth, level) { return base + (growth || 0) * statGrowthFactor(level); }
 
 const CHAMPION_DATA = {
   yasuo: {
@@ -97,8 +103,11 @@ const CHAMPION_DATA = {
       // 수치를 우선한다는 원칙(프로젝트 공통 원칙 - 닐라 등에서도 이미
       // 적용된 선례)에 따라 bin 값(190%)으로 교체한다. 무한의 검 보너스
       // (+27%p)는 위키에 나온 그대로 가산한다: 190%+27%=217%.
+      // 업데이트(PC 패치 기록 대조): 위 190%는 "기본 치명타 피해 200%" 시절 기준이었다.
+      // 현재 PC 기본 치명타 피해는 175%이고 요네는 치명타 피해 10% 감소(V14.20에서 -20%→-10%)
+      // → 175% × 0.9 = 157.5%. 무한의 대검 보너스는 calculateDamage/Q 계산에서 더한다.
       critChanceMultiplier: 2.0, overcapCritToAd: 0.5,
-      critDamage: 1.90, critDamageWithIE: 2.17,
+      critDamage: 1.575, critDamageModifier: 0.9,
       // Steel and Spirit: 평타가 강철 검/아자카나의 검을 번갈아 사용하며,
       // 아자카나의 검 공격은 물리 50% + 마법 50%로 나뉘어 들어간다.
       // (요네.bin YonePassive.MagicDamageSplit=0.5로 재확인됨)
@@ -131,7 +140,10 @@ const CHAMPION_DATA = {
       // 수치 출처 갱신(요네.bin YoneW 실데이터로 재확인):
       // MaxHealthDamage(레벨1~5) = 7/8/9/10/11% (이전에 위키 문서 프로즈를
       // 옮기며 8/9/10/11/12%로 한 칸씩 밀려 잘못 반영했던 것을 수정).
-      totalMixedDamageByLevel: [10,20,30,40,50], maxHpRatioByLevel: [7,8,9,10,11],
+      // 재수정(PC 위키 패치 기록 + RiftPatchNotes 두 출처 일치): 현재 8/9/10/11/12%(V25.8/26.10
+      // 하향, 이전 10~14%). 위 "bin 7~11%"는 bin 배열의 0번(0랭크 자리)부터 읽어 한 칸 밀린
+      // 것으로 보인다 - 공개 패치 기록 값으로 되돌린다.
+      totalMixedDamageByLevel: [10,20,30,40,50], maxHpRatioByLevel: [8,9,10,11,12],
       // WShield 공식(bin GameCalculation): ByCharLevelInterpolation(40 -> 90,
       // 챔피언 레벨 1~18) + 보너스AD*0.65. 이전에 위키 문서의 "95.88"은
       // 오독이었다(bin 원본은 90.0으로 명시) - bin 수치로 교체.
@@ -1189,14 +1201,18 @@ function computeChampionStats(championId, level) {
   if (!cd) return null;
   const s = cd.stats;
   return {
-    maxHp: growLinear(s.hp, s.hpGrowth, level),
-    hpRegen: growLinear(s.hpRegen, s.hpRegenGrowth, level),
-    maxMp: growLinear(s.mana, s.manaGrowth, level),
-    mpRegen: growLinear(s.manaRegen || 0, s.manaRegenGrowth || 0, level),
-    attackDamage: growLinear(s.ad, s.adGrowth, level),
-    baseAttackSpeed: growPercent(s.attackSpeed, s.attackSpeedGrowthPercent, level),
-    armor: growLinear(s.armor, s.armorGrowth, level),
-    magicResist: growLinear(s.mr, s.mrGrowth, level),
+    maxHp: growStat(s.hp, s.hpGrowth, level),
+    hpRegen: growStat(s.hpRegen, s.hpRegenGrowth, level),
+    maxMp: growStat(s.mana, s.manaGrowth, level),
+    mpRegen: growStat(s.manaRegen || 0, s.manaRegenGrowth || 0, level),
+    attackDamage: growStat(s.ad, s.adGrowth, level),
+    // 공격 속도: 1레벨 기본값은 그대로 두고, 레벨 성장분은 "추가 공격 속도"로 따로 둔다
+    // (원작 공식: 최종 = 기본 × (1 + 레벨 성장% + 아이템/버프 추가%)). 버그 수정: 예전엔
+    // 성장분을 기본값에 곱해 넣어 아이템 공속과 곱연산이 됐다(원작은 합산).
+    baseAttackSpeed: s.attackSpeed,
+    levelBonusAttackSpeed: ((s.attackSpeedGrowthPercent || 0) / 100) * statGrowthFactor(level),
+    armor: growStat(s.armor, s.armorGrowth, level),
+    magicResist: growStat(s.mr, s.mrGrowth, level),
     // 버그 수정: s.range/s.moveSpeed는 LoL 원본 수치(예: 175, 340)다. 여기서
     // 딱 한 번 WORLD_DISTANCE_SCALE로 변환해서, 이 값을 그대로 받는
     // this.stats.attackRange/baseMoveSpeed는 항상 월드 단위로 일관되게
