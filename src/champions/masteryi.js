@@ -20,11 +20,11 @@ CharacterController.prototype._masteryiOnBasicAttackHit = function(target) {
       this._masteryiArmPassiveAttack();
     }
     if (this._masteryi.attackCount % p.everyNAttacks === 0) {
-      const willCrit = Math.random() < this.stats.critChance;
+      const willCrit = this._rollBasicAttackCrit(); // 2연속 공격 2타도 기본 공격 치명타 판정(PRD)
       const dmg = this.stats.attackDamage * p.secondHitAdRatio;
-      const wouldKill = target.hp > 0 && target.hp <= dmg;
-      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: this.stats.critMultiplier, isBasicAttack: true });
-      if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
+      const hpB = target.hp;
+      const dealt2 = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: this.stats.critMultiplier, isBasicAttack: true }) || 0;
+      if (hpB > 0 && hpB <= dealt2) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' }); // 실제 피해 기준
       debugSkillHit('Master Yi passive (2nd strike)', target);
       // 2연속 공격의 두 번째 타격도 적중 시 효과가 적용된다(원작) - E 고정 피해가
       // 2타에도 붙는다. 예전엔 1타에만 붙었다.
@@ -212,9 +212,10 @@ CharacterController.prototype._masteryiResolveAlphaStrikeHit = function(alpha, t
     alpha.alreadyHitCount.set(target, (alpha.alreadyHitCount.get(target) || 0) + 1);
     const apply = () => {
       if (!target || target.hp <= 0) return;
-      const wouldKill = target.hp > 0 && target.hp <= dmg;
+      const hpB = target.hp;
       // dmg는 이미 치명타 배율이 반영된 값이라 isCritical로 한 번 더 곱하지 않는다.
-      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true });
+      const dealtQ = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true }) || 0;
+      const wouldKill = hpB > 0 && hpB <= dealtQ; // 방어력 적용 후 실제 피해 기준
       vfx.spawn('hit', getWorldPosition(target).clone(), undefined, { color: willCrit ? 0xffdf6b : 0xffffff });
       if (wouldKill) this._masteryiOnKill(target, { type: 'ALPHA_STRIKE' });
       this._masteryiApplyAlphaStrikeOnHit(alpha, target);
@@ -800,6 +801,8 @@ CharacterController.prototype._masteryiCastR = function(free) {
     // 없이 즉시 상태 효과만 적용한다.
     applyStatus(this, { id: 'masteryiR_as', type: 'MASTERYI_R_AS', duration: r.duration, value: skillVal(r.attackSpeedPercentByLevel, lvl) / 100 });
     applyStatus(this, { id: 'masteryiR_ms', type: 'MS_BUFF', duration: r.duration, value: skillVal(r.moveSpeedPercentByLevel, lvl) / 100 });
+    // PC 위키: 최후의 전사 동안 유령화(유닛을 통과해 이동).
+    applyStatus(this, { id: 'masteryiR_ghost', type: 'GHOST', duration: r.duration, value: 1 });
     this._masteryi.rActiveUntil = performance.now() + r.duration * 1000;
     // 문서(R): "이동 중이면 Run -> 2013_Run_Haste로 즉시 전환, ACTION_STATE는
     // 점유하지 않는다." setSubState는 currentActionKey/currentPhase를 전혀

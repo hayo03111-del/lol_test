@@ -103,10 +103,14 @@ this.getMoveSpeedBuffPercent = getMoveSpeedBuffPercent;
 this.getWindupDuration = getWindupDuration;
 this.getDamageReductionPercent = getDamageReductionPercent;
 this.SKILL_TIMING_DATABASE = SKILL_TIMING_DATABASE;
+this.applyMoveSpeedSoftCap = applyMoveSpeedSoftCap;
+this.resistDamageMultiplier = resistDamageMultiplier;
+this.prdConstant = prdConstant;
+this.isGhosted = isGhosted;
 this.setController = (c) => { controller = c; };
 `, context);
 const { CharacterController, CHAMPION_DATA, STATE, applyStatus, applyDamage, getStatus, getSlowPercent,
-  getAttackSpeedBuffPercent, getTenacity, computeChampionStats, lolRangeToWorld, setController, worldDistanceToLol, calculateDamage, isStunned, isRooted, tickStatusEffects, getMoveSpeedBuffPercent, getFinalAttackSpeed, getWindupDuration, getDamageReductionPercent } = context;
+  getAttackSpeedBuffPercent, getTenacity, computeChampionStats, lolRangeToWorld, setController, worldDistanceToLol, calculateDamage, isStunned, isRooted, tickStatusEffects, getMoveSpeedBuffPercent, getFinalAttackSpeed, getWindupDuration, getDamageReductionPercent, applyMoveSpeedSoftCap, resistDamageMultiplier, prdConstant, isGhosted } = context;
 
 function makeChamp(championId, clipNames = [], overrides = {}) {
   const c = Object.create(CharacterController.prototype);
@@ -237,4 +241,48 @@ stubs.scene = { add() {}, remove() {} };
   y._yasuoApplyQHit(a); y._yasuoApplyQHit(b);
   assert(calls.length === 1 && calls[0].target === a && calls[0].opts.fromAbility, '야스오 Q: 처음 맞은 대상에게만 적중 시 효과(주문검 제외 옵션)');
   assert(CHAMPION_DATA.yasuo.R.knockupDuration === 1 && CHAMPION_DATA.yasuo.stats.adGrowth === 2.5, '야스오: R 공중에 뜸 1초, 레벨당 공격력 2.5(PC 위키)');
+}
+
+// ================= 4차: 추가 전투 요소 =================
+{
+  assert(applyMoveSpeedSoftCap(400) === 400 && near(applyMoveSpeedSoftCap(450), 415 + 35 * 0.8) && near(applyMoveSpeedSoftCap(600), 415 + 75 * 0.8 + 110 * 0.5) && near(applyMoveSpeedSoftCap(200), 210), '이동 속도 소프트캡(415 초과 80%, 490 초과 50%, 220 미만 50%)');
+  assert(near(resistDamageMultiplier(100), 0.5) && near(resistDamageMultiplier(-20), 2 - 100 / 120), '음수 저항: 2 - 100/(100 - 저항)');
+  const tgt = { magicResist: 5, statusEffects: [{ type: 'MR_SHRED', value: 15, expiresAt: now + 5000 }] };
+  assert(near(calculateDamage({ rawDamage: 100, damageType: 'MAGICAL', target: tgt, source: {} }), 100 * (2 - 100 / 110)), '고정 마법 저항 감소는 음수까지 내려가 피해가 증가(예전엔 0에서 멈춤)');
+  assert(near(prdConstant(0.25), 0.0847, 2e-4) && near(prdConstant(0.5), 0.3021, 2e-4), '치명타 PRD 상수(원작 알려진 값: 25%→0.0847, 50%→0.302)');
+  const c = makeChamp('garen'); c.stats.critChance = 0.25;
+  let hits = 0; for (let i = 0; i < 40000; i++) if (c._rollBasicAttackCrit()) hits++;
+  assert(Math.abs(hits / 40000 - 0.25) < 0.01, '치명타 PRD: 장기 평균은 표기 확률(25%) 그대로');
+}
+{
+  const c = makeChamp('garen', [], { champLevel: 5 });
+  CharacterController.prototype.recomputeStats.call(c);
+  c.hp = c.maxHp - 300;
+  const before = c.maxHp;
+  c.champLevel = 6; CharacterController.prototype.recomputeStats.call(c);
+  assert(near(c.maxHp - c.hp, 300), '레벨업: 늘어난 최대 체력만큼 현재 체력도 증가(잃은 체력 300 유지 - 원작)');
+  c.itemBonusMaxHp = 400; CharacterController.prototype.recomputeStats.call(c);
+  assert(near(c.maxHp - c.hp, 300), '체력 아이템 구매: 현재 체력도 같이 증가');
+  c.itemBonusMaxHp = 0; CharacterController.prototype.recomputeStats.call(c);
+  assert(c.hp <= c.maxHp, '판매: 현재 체력은 새 최대치로만 잘림');
+}
+{
+  const y = makeChamp('masteryi'); y._payCost = () => true; y.setSubState = () => {};
+  y._masteryiCastR(true);
+  assert(isGhosted(y), '마스터 이 R: 유령화(유닛 통과)');
+  const y2 = makeChamp('masteryi'); y2.cooldowns.Q = 10;
+  const t = makeEnemy(0, 1, { hp: 10, maxHp: 1000 });
+  y2._onBasicAttackHit(t, null, true, null, false);
+  assert(near(y2.cooldowns.Q, 10 * 0.3 - 1) || y2.cooldowns.Q < 10 * 0.3 + 0.01, '마스터 이: 평타로 챔피언 처치 시 기본 스킬 쿨감 70% 발동(예전엔 누락)');
+}
+{
+  const l = makeChamp('leesin', [], { hp: 500, maxHp: 1000 });
+  applyStatus(l, { id: 'leesinW_vamp', type: 'LEESIN_W_VAMP', duration: 4, value: 0.1 });
+  const t = makeEnemy(0, 1); t._lastDamageTakenAmount = 100;
+  l._leesin.passiveHitsLeft = 0;
+  l._leesinOnBasicAttackHit(t);
+  assert(near(l.hp, 510), '리 신 W2: 패시브 없이도 평타 흡혈 적용(예전엔 패시브 횟수가 있어야만)');
+  l._leesin.passiveHitsLeft = 2; const mp0 = l.mp; // 패시브 버프(3초) 없음
+  l._leesinOnBasicAttackHit(t);
+  assert(l.mp === mp0 && l._leesin.passiveHitsLeft === 0, '리 신 패시브: 3초 버프가 끝나면 남은 기력 회복 횟수도 소멸');
 }

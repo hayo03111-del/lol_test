@@ -14,6 +14,17 @@
 // 게임 내내 0으로 계산되고 있었다(레벨업으로 공격력이 올라도 전혀
 // 반영 안 됨). 실제 추가 공격력은 "현재 총 공격력 - 1레벨 기본 공격력"
 // 이고, 여기에 다리우스의 임시 empower 보너스가 있으면 더해준다.
+// 기본 공격 치명타 판정 - 원작처럼 의사 난수(PRD)로 굴린다(prdConstant 참고).
+CharacterController.prototype._rollBasicAttackCrit = function() {
+    const p = Math.max(0, Math.min(1, this.stats.critChance || 0));
+    if (p <= 0) return false;
+    if (p >= 1) return true;
+    this._critPrdN = (this._critPrdN || 0) + 1;
+    const crit = Math.random() < prdConstant(p) * this._critPrdN;
+    if (crit) this._critPrdN = 0;
+    return crit;
+};
+
 // "추가 공격 속도"(LoL 규칙: 레벨 성장분 + 버프/아이템). 가렌 E 회전 수, 야스오/요네 Q
 // 쿨다운/시전 시간 등 "추가 공속 비례" 스킬이 공용으로 쓴다.
 CharacterController.prototype._totalBonusAttackSpeed = function() {
@@ -137,6 +148,8 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
     }
     if (this.championId === 'sett') this._settOnBasicAttackHit(target, attackHand);
     if (this.championId === 'masteryi') {
+      // 평타 자체로 챔피언을 처치해도 R 패시브(기본 스킬 쿨감 70%)/R 연장이 발동해야 한다(예전엔 누락).
+      if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
       this._masteryiOnBasicAttackHit(target);
       // 요청 2/3: HIT가 방금 확정됐으니, 그 이전에 눌러뒀던 W 예약이
       // 있으면 지금(가능한 가장 이른 시점 - RECOVERY 시작 전)) 즉시
@@ -704,7 +717,7 @@ CharacterController.prototype._beginAttackSwing = function() {
     // 굴린다. 즉 1타/2타는 이미 서로 다른 주사위를 굴려 각자의 치명타 여부와
     // 피해량을 정확히 계산한다 - 여기서 바뀌는 것은 "어떤 애니메이션을
     // 보여주는가"뿐이다.
-    const willCrit = Math.random() < this.stats.critChance;
+    const willCrit = this._rollBasicAttackCrit();
     // 요청(다리우스/노틸러스형): 치명타가 기본적으로 최우선("치명타는 이 큐와
     // 무관하게 최우선"), 그 다음이 활성 오버라이드 중 priority가 가장
     // 높은 것, 마지막이 평소의 attack1/2/3 콤보 순환이다. 단, 마스터 이
@@ -925,7 +938,9 @@ CharacterController.prototype._beginAttackSwing = function() {
               }
               if (t.isInhibitor) { applyDamageToInhibitor(t, attackResult); return; }
               if (t.isNexus) { applyDamageToNexus(t, attackResult); return; }
-              const wouldKill = t.hp > 0 && t.hp <= attackResult.rawDamage; applyDamage(t, attackResult); this._onBasicAttackHit(t, overrideId, wouldKill, null, willCrit);
+              const hpB = t.hp, flB = isFlooredTrainingDummy(t); const dealtR = applyDamage(t, attackResult) || 0;
+              const wouldKill = !flB && hpB > 0 && hpB <= dealtR; // 실제 입힌 피해(방어력·치명타 반영) 기준 처치 판정
+              this._onBasicAttackHit(t, overrideId, wouldKill, null, willCrit);
             },
           });
         } else if (target.hp > 0) {
@@ -939,13 +954,16 @@ CharacterController.prototype._beginAttackSwing = function() {
           }
           if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); return; }
           if (target.isNexus) { applyDamageToNexus(target, attackResult); return; }
+          // 처치 판정(버그 수정): 예전엔 방어력·치명타 적용 "전" 원본 공격력으로 판정해, 방어력이 높으면
+          // 처치가 아닌데도 처치로, 치명타로 처치했는데도 처치 아님으로 판정됐다. 실제 피해 기준으로 바꿈.
+          const hpBeforeAA = target.hp, flooredAA = isFlooredTrainingDummy(target);
           if (attackResult.yoneAzakana) {
-            const wouldKill = target.hp > 0 && target.hp <= attackResult.rawDamage;
-            this._yoneApplyAlternatingAttackDamage(target, attackResult);
+            const dealtAz = this._yoneApplyAlternatingAttackDamage(target, attackResult) || 0;
+            const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= dealtAz;
             this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
           } else {
-            const wouldKill = target.hp > 0 && target.hp <= attackResult.rawDamage;
             const dealtAA = applyDamage(target, attackResult);
+            const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= (dealtAA || 0);
             // 요네 정신체(E) 중에는 강철 검(일반) 평타 피해도 표식에 쌓인다 - 예전엔 아자카나
             // 평타만 기록돼 일반 평타 피해가 표식에서 빠졌다.
             if (this.championId === 'yone') this._yoneRecordMark(target, dealtAA || 0);

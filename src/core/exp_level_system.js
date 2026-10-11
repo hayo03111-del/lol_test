@@ -720,8 +720,13 @@ function updateMinionCombat(minion, dt) {
   // 이유로 여기에도 추가한다.
   if (typeof tickStatusEffects === 'function') tickStatusEffects(minion, dt);
   if (minion.isDead || minion.hp <= 0) { killMinion(minion); return; }
-  updateMinionMovement(minion, dt);
-  updateMinionAttack(minion, dt);
+  // 버그 수정(기존 한계 "미니언은 CC에 반응하지 않음" 해소): 기절/공중에 뜸/제압/매혹 중에는
+  // 이동·공격 모두 불가, 속박 중에는 이동만 불가(공격은 가능) - 챔피언과 같은 규칙.
+  // 노틸러스 패시브/E, 리 신 R 충돌, 야스오 Q3, 요네 R 등으로 미니언이 실제로 멈춘다.
+  const minionStunned = typeof isStunned === 'function' && isStunned(minion);
+  const minionRooted = typeof isRooted === 'function' && isRooted(minion);
+  if (!minionStunned && !minionRooted && !minion._pullState) updateMinionMovement(minion, dt);
+  if (!minionStunned) updateMinionAttack(minion, dt);
   updateMinionRegeneration(minion, dt);
 }
 // 플레이어가 미니언을 공격할 때 쓰는 진입점(포탑의 applyDamageToTurret과

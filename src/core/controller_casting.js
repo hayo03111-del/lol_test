@@ -1293,6 +1293,8 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
       this._eHitsDone = 0;
       this._eHitsPerTarget = new Map(); // 방어력 감소는 "대상별" 적중 횟수로 판정
       this._eHitInterval = this._eHitsTotal > 0 ? this._eChannelDuration / this._eHitsTotal : 0.5;
+      // 원작: 심판 회전 중에는 유닛을 통과해 이동(유령화).
+      if (this.championId === 'garen') applyStatus(this, { id: 'garenE_ghost', type: 'GHOST', duration: this._eChannelDuration, value: 1 });
       const allClips = Object.values(channelCfg.clips);
       this.playFirstAvailable([channelCfg.clips.front, ...allClips], { loop: THREE.LoopRepeat, fade: 0.1 });
       vfx.spawn('e', this.root.position.clone());
@@ -1460,6 +1462,7 @@ CharacterController.prototype._endEChannel = function() {
     if (this.currentActionKey !== 'eChannel') return;
     this.currentActionKey = null; this.currentPhase = null;
     this._eChannelCfg = null; this._eChannelDir = null; this._eChannelTimer = 0; this._eChannelDamageAccum = 0;
+    if (typeof clearStatus === 'function') clearStatus(this, 'garenE_ghost');
     this._resumeAfterAction();
 };
 CharacterController.prototype.updateEChannel = function(dt) {

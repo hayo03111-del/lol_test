@@ -121,6 +121,7 @@ CharacterController.prototype._yoneApplyAlternatingAttackDamage = function(targe
     dealt += applyDamage(target, { ...attackResult, rawDamage: half, damageType: DAMAGE_TYPE.MAGICAL }) || 0;
   }
   this._yoneRecordMark(target, dealt);
+  return dealt;
 };
 
 /* ---------------- E(영혼해방) 표식 기록 공용 헬퍼 ---------------- */

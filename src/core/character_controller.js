@@ -454,7 +454,8 @@ class CharacterController {
   recomputeStats() {
     const base = this.championId && computeChampionStats(this.championId, this.champLevel);
     if (base) {
-      const hpPct = this.maxHp ? this.hp / this.maxHp : 1; // 최대체력이 바뀌어도(초가스 R 포식 등) 현재 비율을 유지한 채 재계산
+      const hpPct = this.maxHp ? this.hp / this.maxHp : 1; // 첫 계산(최대 체력 미정) 때만 쓰임
+      const prevMaxHp = this.maxHp || 0, prevMaxMp = this.maxMp || 0;
       // 아이템 시스템(item_system.js) 연동 - itemBonus* 필드는 recomputeItemStats()가
       // this.items 배열(장착한 아이템 id 목록)을 합산해서 채워두는 값이다.
       // 기존 bonusAD/bonusArmor/bonusMr/bonusMaxHp(챔피언 전용 임시 버프 필드 -
@@ -504,8 +505,15 @@ class CharacterController {
       // base.baseMoveSpeed와 동일하게 여기서 한 번만 lolRangeToWorld()로
       // 변환한다(기본 이동속도 자체가 이미 그 변환을 거친 값이라 단위를 맞춤).
       this.stats.baseMoveSpeed = base.baseMoveSpeed + lolRangeToWorld(this.itemBonusMoveSpeedLol || 0);
-      this.hp = Math.min(this.hp || this.maxHp * hpPct, this.maxHp);
-      this.mp = Math.min(this.mp || this.maxMp, this.maxMp);
+      // 원작: 최대 체력/마나가 늘면(레벨업·체력 아이템 구매·버프) 늘어난 만큼 현재 값도 함께 늘고,
+      // 줄면(판매·버프 종료) 현재 값은 새 최대치로만 잘린다. 버그 수정: 예전엔 아이템을 사도 현재
+      // 체력이 그대로였고, 레벨업은 "비율 유지"로 처리했다(원작과 다름).
+      const gainHp = Math.max(0, this.maxHp - (prevMaxHp || 0));
+      const gainMp = Math.max(0, this.maxMp - (prevMaxMp || 0));
+      if (!prevMaxHp) this.hp = this.hp || this.maxHp * hpPct;
+      else this.hp = (this.hp || 0) + gainHp;
+      this.hp = Math.min(this.hp, this.maxHp);
+      this.mp = Math.min(prevMaxMp ? (this.mp || 0) + gainMp : (this.mp || this.maxMp), this.maxMp);
     }
     updateBars(this);
   }
@@ -516,11 +524,8 @@ class CharacterController {
     // 요청 1: "레벨업 시 스킬 포인트를 1개 획득한다" - 수동 레벨업 버튼과
     // EXP 자동 레벨업 둘 다 이 메서드를 거치므로 한 곳만 고치면 된다.
     this.skillPoints = (this.skillPoints || 0) + 1;
-    const hpPct = this.maxHp ? this.hp / this.maxHp : 1;
-    const mpPct = this.maxMp ? this.mp / this.maxMp : 1;
+    // 레벨업으로 늘어난 최대 체력/마나만큼 현재 값도 늘어난다(recomputeStats가 처리 - 원작).
     this.recomputeStats();
-    this.hp = Math.max(1, Math.round(this.maxHp * hpPct));
-    this.mp = Math.round(this.maxMp * mpPct);
     updateBars(this);
     if (typeof showLevelUpEffect === 'function') showLevelUpEffect(this); // 요청 8: 레벨업 시각 효과
     if (typeof updateExpUI === 'function') updateExpUI(this);

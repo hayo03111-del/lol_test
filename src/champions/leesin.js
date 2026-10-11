@@ -124,6 +124,17 @@ CharacterController.prototype._leesinOnSkillUsed = function() {
 
 // Extracted from CharacterController: _leesinOnBasicAttackHit
 CharacterController.prototype._leesinOnBasicAttackHit = function(target) { 
+    // 강철의 의지(W 재시전): 평타로 실제 입힌 피해(방어력 적용 후)의 일부만큼 흡혈.
+    // 버그 수정: 예전엔 이 처리가 패시브(질풍격) 횟수가 남아 있을 때만 실행되는 위치에 있어,
+    // 패시브가 없으면 W2 흡혈이 전혀 적용되지 않았다.
+    if (hasStatus(this, 'LEESIN_W_VAMP')) {
+      const st = getStatus(this, 'leesinW_vamp');
+      const dealt = target && target._lastDamageTakenAmount != null ? target._lastDamageTakenAmount : this.stats.attackDamage;
+      if (st) { this.hp = Math.min(this.maxHp, this.hp + dealt * st.value * getHealReceivedMultiplier(this)); updateBars(this); }
+    }
+    // 질풍격은 "스킬 사용 후 3초 안"의 2회 평타만 강화한다 - 버프가 끝났으면 남은 횟수도 소멸
+    // (버그 수정: 예전엔 횟수가 만료되지 않아 한참 뒤 평타에도 기력이 회복됐다).
+    if (this._leesin.passiveHitsLeft > 0 && !getStatus(this, 'leesinPassive_as')) this._leesin.passiveHitsLeft = 0;
     if (!this._leesin.passiveHitsLeft || this._leesin.passiveHitsLeft <= 0) return;
     const cd = this._champData(); const p = cd.passive;
     const table = this._leesin.passiveHitsLeft === 2 ? p.energyByLevelBreakpoints1 : p.energyByLevelBreakpoints2;
@@ -132,15 +143,6 @@ CharacterController.prototype._leesinOnBasicAttackHit = function(target) {
     this._leesin.passiveHitsLeft -= 1;
     if (this._leesin.passiveHitsLeft <= 0) clearStatus(this, 'leesinPassive_as');
     updateBars(this);
-    // 강철의 의지(W 재시전) 활성 중이면 평타로 입힌 피해의 일부만큼 흡혈.
-    if (hasStatus(this, 'LEESIN_W_VAMP')) {
-      const st = getStatus(this, 'leesinW_vamp');
-      // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소) - 흡혈 계열 효과도 적용 대상.
-      // 실제로 입힌 피해(방어력 적용 후) 기준 - 예전엔 공격력 수치 그대로를 썼다.
-      const dealt = target && target._lastDamageTakenAmount != null ? target._lastDamageTakenAmount : this.stats.attackDamage;
-      if (st) { this.hp = Math.min(this.maxHp, this.hp + dealt * st.value * getHealReceivedMultiplier(this)); updateBars(this); }
-    }
-  
 };
 
 // Extracted from CharacterController: _leesinCastQ
@@ -418,7 +420,7 @@ CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
     if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1); else dir.normalize();
     const pullDist = lolRangeToWorld(r.knockbackDistance);
     const to = from.clone().addScaledVector(dir, pullDist);
-    target._pullState = { from, to, duration: r.airborneDuration, elapsed: 0 };
+    target._pullState = { from, to, duration: r.knockbackSec || 0.8, elapsed: 0 };
     // 경로 충돌: 넉백 선분(from→to)에서 (차인 대상 반경 + 상대 반경) 안에 들어오는 적.
     const kickedRadius = typeof getCollisionRadius === 'function' ? getCollisionRadius(target) : 0;
     const bonusHp = Math.max(0, target.bonusHealth || 0);
@@ -438,7 +440,7 @@ CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
         applyDamage(u, { rawDamage: collideDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
         applyStatus(u, { id: 'leesinR_collide_air', type: 'KNOCKUP', duration: r.collisionAirborneSec || 1, value: 1 });
         debugSkillHit('Lee Sin R (충돌)', u, { dmg: Math.round(collideDmg) });
-      }, (along / Math.max(1e-6, pullDist)) * r.airborneDuration * 1000);
+      }, (along / Math.max(1e-6, pullDist)) * (r.knockbackSec || 0.8) * 1000);
       // _actionTimers에 넣지 않는다 - 리 신이 곧바로 다른 행동을 시작해도(그때
       // _clearActionTimers가 불림) 이미 날아가는 대상의 충돌 판정은 취소되면 안 된다.
       void t;

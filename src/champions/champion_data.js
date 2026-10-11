@@ -733,7 +733,9 @@ const CHAMPION_DATA = {
     R: {
       name: '용의 분노', cooldown: [110, 85, 60], mana: 0, range: 375,
       damageByLevel: [175, 400, 625], bonusAdRatio: 2.0,
-      knockbackDistance: 1200, airborneDuration: 1, castTimeSec: 0.25, collisionAirborneSec: 1,
+      // PC 위키: 800 밀어냄(0.8초 동안), 대상 공중에 뜸 1초. 충돌한 적의 공중에 뜸 시간은 PC 문서에
+      // "짧게"로만 나와 미확인(collisionAirborneGuessed). 예전 1200은 출처 불명.
+      knockbackDistance: 800, knockbackSec: 0.8, airborneDuration: 1, castTimeSec: 0.25, collisionAirborneSec: 1, collisionAirborneGuessed: true,
       collisionBonusHpRatioByLevel: [12, 15, 18], damageType: 'PHYSICAL',
     },
   },

@@ -286,7 +286,8 @@ function getCollisionRadius(entity) {
 }
 
 function isGhosted(entity) {
-  return !!entity && hasStatus(entity, 'NILAH_GHOST');
+  // GHOST: 공용 유령화(유닛 충돌 무시) - 마스터 이 R, 가렌 E 등. NILAH_GHOST는 닐라 전용 기존 이름.
+  return !!entity && (hasStatus(entity, 'NILAH_GHOST') || hasStatus(entity, 'GHOST'));
 }
 // A. Center Distance - 두 중심점 사이의 실제 3D 거리(높이 포함).
 function getCenterDistance(a, b) {
@@ -395,11 +396,50 @@ function isInAttackRange(attacker, target) {
   return getEffectiveDistance(attacker, target) <= attackRange;
 }
 
+// 치명타 의사 난수(PRD, 원작): N번째 시도의 치명타 확률 = C × N(치명타가 나면 N=1로 초기화).
+// C는 평균 확률이 표기 확률 p가 되도록 정한 상수 - 연속 치명타/연속 불발이 순수 무작위보다 적다.
+const _prdCache = new Map();
+function prdConstant(p) {
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  const key = Math.round(p * 10000);
+  if (_prdCache.has(key)) return _prdCache.get(key);
+  const avgFromC = (C) => {
+    // 기대 시도 횟수 E = Σ n·P(n번째에 처음 성공) → 평균 확률 = 1/E
+    let pPrev = 0, sum = 0, notYet = 1;
+    for (let n = 1; notYet > 1e-12 && n < 10000; n++) {
+      const pn = Math.min(1, C * n);
+      const first = notYet * pn;
+      sum += n * first;
+      notYet *= (1 - pn);
+      if (pn >= 1) break;
+    }
+    return 1 / sum;
+  };
+  let lo = 0, hi = p;
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (avgFromC(mid) < p) lo = mid; else hi = mid; }
+  const C = (lo + hi) / 2;
+  _prdCache.set(key, C);
+  return C;
+}
+function applyMoveSpeedSoftCap(ms) {
+  if (ms > 490) return 415 + (490 - 415) * 0.8 + (ms - 490) * 0.5;
+  if (ms > 415) return 415 + (ms - 415) * 0.8;
+  if (ms < 220) return 220 - (220 - ms) * 0.5;
+  return ms;
+}
+// 방어력/마법 저항력 → 피해 배율(원작): 0 이상이면 100/(100+저항), 음수면 2 - 100/(100-저항).
+function resistDamageMultiplier(resist) {
+  return resist >= 0 ? 100 / (100 + resist) : 2 - 100 / (100 - resist);
+}
 function getFinalMoveSpeed(stats) {
   let speed = stats.baseMoveSpeed + stats.flatMoveSpeedBonus;
   speed *= 1 + stats.percentMoveSpeedBonus;
   speed *= 1 - Math.min(1, Math.max(0, stats.slowPercent));
   speed *= stats.moveSpeedMultiplier;
+  // 이동 속도 소프트캡(원작, LoL 단위): 415 초과분 80%, 490 초과분 50%만 적용, 220 미만은
+  // 220과의 차이의 50%만 깎인다. 버그 수정: 예전엔 단순 상/하한만 있어 이속 버프가 무한히 선형으로 쌓였다.
+  speed = lolRangeToWorld(applyMoveSpeedSoftCap(worldDistanceToLol(speed)));
   speed = Math.max(stats.minMoveSpeed, speed);
   speed = Math.min(stats.maxMoveSpeed, speed);
   return speed;
@@ -466,16 +506,16 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     const flatArmorPen = ((atkP && atkP.itemBonusArmorPenFlat) || 0) + ((atkP && atkP.itemTempArmorPenFlat) || 0);
     // 버그 수정(원작 적용 순서): 방어력 감소(고정→%) → 방어구 관통력(%) → 물리 관통력(고정).
     // 예전엔 고정 관통을 % 관통보다 먼저 빼서 % 관통 효율이 실제보다 낮게 나왔다.
-    armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등
+    if (armor > 0) armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등(양수일 때만)
     // 경계(빛과 어둠 - 어둠)의 "10%(최대 30%) 방어구 관통력"도 영구
     // 곱연산 필드(itemBonusArmorPenMultiplier)와 별개인 임시 버프라
     // 똑같이 곱으로 추가 적용한다.
-    if (atkP && atkP.itemTempArmorPenPercent > 0) armor *= (1 - Math.max(0, Math.min(1, atkP.itemTempArmorPenPercent)));
+    if (armor > 0 && atkP && atkP.itemTempArmorPenPercent > 0) armor *= (1 - Math.max(0, Math.min(1, atkP.itemTempArmorPenPercent)));
     // 아이템 패시브(최후의 속삭임 - 방어구 관통력 18%) - 마법 관통력(위
     // MAGICAL 분기)과 동일한 이유로 공격자를 source||controller로 찾는다.
-    if (atkP && atkP.itemBonusArmorPenMultiplier < 1) armor *= atkP.itemBonusArmorPenMultiplier;
-    armor = Math.max(0, armor - flatArmorPen); // 고정 관통은 맨 마지막(0 아래로는 못 내림)
-    dmg *= 100 / (100 + Math.max(0, armor));
+    if (armor > 0 && atkP && atkP.itemBonusArmorPenMultiplier < 1) armor *= atkP.itemBonusArmorPenMultiplier;
+    armor = armor > 0 ? Math.max(0, armor - flatArmorPen) : armor; // 고정 관통은 맨 마지막(관통으로는 0 아래로 못 내림)
+    dmg *= resistDamageMultiplier(armor);
   } else if (damageType === DAMAGE_TYPE.MAGICAL) {
     // 버그 수정: 지금까지 MAGICAL 분기에는 관통력을 반영할 파라미터 자체가
     // 없었다 - 모데카이저 E 패시브("마법 관통력을 얻습니다")가 magicPenPercent를
@@ -484,7 +524,8 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     let mr = (target && (target.magicResist ?? target.stats?.magicResist)) || 0;
     // 아이템 패시브(악의 "증오안개" - 마법 저항력 10 감소, MR_SHRED 상태이상) -
     // ARMOR_SHRED(칠흑의양날도끼)와 동일한 자리(관통 적용 전)에서 먼저 깎는다.
-    if (typeof getMrShredFlat === 'function') mr = Math.max(0, mr - getMrShredFlat(target));
+    // 고정 감소는 원작처럼 마법 저항력을 음수로도 만들 수 있다(관통과 달리). 예전엔 0에서 멈췄다.
+    if (typeof getMrShredFlat === 'function') mr = mr - getMrShredFlat(target);
     // 아이템 패시브(마법사의 신발 - 고정 마법 관통력) - 원작 순서대로 마법 저항력
     // 감소 → % 마법 관통 → 고정 마법 관통(맨 마지막)으로 적용한다. `source`가
     // 없는 호출(대부분의 스킬 피해 호출)은 흡혈/영광 처치 훅과 동일한
@@ -498,8 +539,9 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 아이템 패시브(역병의 보석/공허의지팡이 - 퍼센트 마법 관통력) - 최후의
     // 속삭임(itemBonusArmorPenMultiplier)과 동일한 자리/원칙의 영구 곱연산 관통력.
     const itemMagicPenMultiplier = (atk && atk.itemBonusMagicPenMultiplier < 1) ? atk.itemBonusMagicPenMultiplier : 1;
-    const effectiveMr = Math.max(0, mr * (1 - Math.max(0, Math.min(1, magicPenPercent))) * (1 - Math.max(0, Math.min(1, tempMagicPenPercent))) * itemMagicPenMultiplier - flatMagicPen);
-    dmg *= 100 / (100 + Math.max(0, effectiveMr));
+    // % 관통/고정 관통은 저항이 양수일 때만 적용되고 0 아래로 내리지 못한다.
+    const effectiveMr = mr > 0 ? Math.max(0, mr * (1 - Math.max(0, Math.min(1, magicPenPercent))) * (1 - Math.max(0, Math.min(1, tempMagicPenPercent))) * itemMagicPenMultiplier - flatMagicPen) : mr;
+    dmg *= resistDamageMultiplier(effectiveMr);
   }
   // TRUE: 방어 수치를 그대로 무시
   dmg = Math.max(0, dmg);
