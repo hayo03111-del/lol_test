@@ -299,7 +299,7 @@ function skillValLocal(byLevel, lvl) {
 
   // 이제 실제로 명중했다고 가정하고 확정 소비 함수를 부른다(실제
   // _onBasicAttackHit()이 _garenQOnHit() 직후 호출하는 지점과 동일).
-  ctrl._consumeGarenQOnConfirmedHit();
+  ctrl._consumeAttackOverrideOnConfirmedHit('Q');
   override = ctrl.attackOverrides.find((o) => o.id === 'Q');
   assert(!override, '가렌 Q: 실제 적중이 확정되면 그 시점에 1회분이 소모되어(uses=1) 오버라이드가 해제된다');
 }
@@ -360,7 +360,7 @@ function skillValLocal(byLevel, lvl) {
 
   // 실제 명중이 확정된 시점(_onBasicAttackHit()이 _dariusWOnHit() 직후
   // 호출하는 지점과 동일).
-  ctrl._consumeDariusWOnConfirmedHit();
+  ctrl._consumeAttackOverrideOnConfirmedHit('W');
   override = ctrl.attackOverrides.find((o) => o.id === 'W');
   assert(!override, '다리우스 W: 실제 적중이 확정되면 그 시점에 1회분이 소모되어(uses=1) 오버라이드가 해제된다');
 }

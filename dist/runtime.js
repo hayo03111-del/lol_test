@@ -3982,7 +3982,7 @@ const championAbilityDatabase = {
     // 스윙이 "시작"되는 _beginAttackSwing 시점에 일어나서, 문서 12/13절의
     // "Q 소모는 HIT 성공 시점" 원칙과 실제로는 어긋나 있었다(사거리 이탈/
     // 대상 소멸로 스윙이 끝내 맞지 않아도 Q가 사라졌다). 이제
-    // character_controller.js의 _consumeGarenQOnConfirmedHit()이 HIT가
+    // character_controller.js의 _consumeAttackOverrideOnConfirmedHit()이 HIT가
     // 실제로 확정되는 _onBasicAttackHit() 시점에만 clearSubState하므로,
     // Q_ARMED(Run_Spell1) 애니메이션도 실제 소모 시점까지 정확히 유지된다.
     Q: {
@@ -10044,10 +10044,10 @@ class CharacterController {
     // 화살통) 추가 마법 피해/오한 적용.
     if (this.championId === 'varus') this._varusOnBasicAttackHit(target);
 
-    if (this.championId === 'garen' && overrideId === 'Q') { this._garenQOnHit(target); this._consumeGarenQOnConfirmedHit(); }
+    if (this.championId === 'garen' && overrideId === 'Q') { this._garenQOnHit(target); this._consumeAttackOverrideOnConfirmedHit('Q'); }
     if (this.championId === 'darius') {
       this._dariusApplyBleed(target);
-      if (overrideId === 'W') { this._dariusWOnHit(target); this._consumeDariusWOnConfirmedHit(); }
+      if (overrideId === 'W') { this._dariusWOnHit(target); this._consumeAttackOverrideOnConfirmedHit('W'); }
     }
     if (this.championId === 'sett') this._settOnBasicAttackHit(target, attackHand);
     if (this.championId === 'masteryi') {
@@ -10552,9 +10552,10 @@ class CharacterController {
     // 효과가 사라지는 버그가 된다. 세트 Q처럼 "스윙을 시작한 것 자체가
     // 소비 조건"인 다른 오버라이드는 기존과 동일하게 여기서 즉시 소모하고,
     // 가렌 Q는 예외로 두어 실제 소모를 _onBasicAttackHit()의 HIT 확정
-    // 시점(_consumeGarenQOnConfirmedHit, 아래)으로 미룬다 - 스윙이 끝내
-    // HIT에 도달하지 못하면(_onBasicAttackHit 자체가 호출되지 않음) 애초에
-    // 깎지 않았으므로 되돌릴 필요 없이 자연히 다음 스윙에 다시 쓸 수 있다.
+    // 시점(_consumeAttackOverrideOnConfirmedHit, 아래)으로 미룬다 - 스윙이
+    // 끝내 HIT에 도달하지 못하면(_onBasicAttackHit 자체가 호출되지 않음)
+    // 애초에 깎지 않았으므로 되돌릴 필요 없이 자연히 다음 스윙에 다시 쓸 수
+    // 있다.
     // 버그 수정(전투 시스템 보완 점검 - 가렌 Q와 완전히 동일한 패턴):
     // 다리우스 W(처단) 역시 champion_ability_database.js에 attackOverrideMode:
     // 'oneShot'/uses:1로 등록되는 "다음 평타 1회 강화"라서 가렌 Q와 똑같이
@@ -10562,7 +10563,7 @@ class CharacterController {
     // 끊는 우선순위 규칙) 대상이 사거리를 벗어나 실제 HIT(_dariusWOnHit -
     // 추가 피해/슬로우/처치 시 쿨다운·마나 환급)가 한 번도 발동되지 못한
     // 채로 W가 허비된다 - 가렌 Q와 동일하게 소모를 HIT 확정 시점
-    // (_consumeDariusWOnConfirmedHit, 아래)으로 미룬다.
+    // (_consumeAttackOverrideOnConfirmedHit, 아래)으로 미룬다.
     const deferToConfirmedHit = (this.championId === 'garen' && overrideId === 'Q')
       || (this.championId === 'darius' && overrideId === 'W');
     if (override.oneShot && !deferToConfirmedHit) {
@@ -10577,31 +10578,20 @@ class CharacterController {
     return { overrideId, key, attackData };
   }
 
-  // 가렌 Q 전용 - 위 _consumeAttackOverride가 미뤄둔 소모를 _onBasicAttackHit()이
-  // 실제 적중을 확정한 시점에 수행한다. 이 함수가 호출된다는 것 자체가
-  // 이번 스윙이 명중했다는 뜻이므로(미스/대상 소실 시에는 _onBasicAttackHit
-  // 자체가 호출되지 않는다), 한 번의 명중 이벤트당 정확히 한 번만 소모된다.
-  _consumeGarenQOnConfirmedHit() {
-    const override = this.attackOverrides.find((o) => o.id === 'Q');
+  // 가렌 Q/다리우스 W 공용 - 위 _consumeAttackOverride가 미뤄둔 소모를
+  // _onBasicAttackHit()이 실제 적중을 확정한 시점에 수행한다. 이 함수가
+  // 호출된다는 것 자체가 이번 스윙이 명중했다는 뜻이므로(미스/대상 소실
+  // 시에는 _onBasicAttackHit 자체가 호출되지 않는다), 한 번의 명중
+  // 이벤트당 정확히 한 번만 소모된다. 두 챔피언이 완전히 동일한 패턴이라
+  // (코드 정리) 오버라이드 id만 받는 공용 함수 하나로 합쳤다 - 호출부와
+  // 동작은 그대로다.
+  _consumeAttackOverrideOnConfirmedHit(overrideId) {
+    const override = this.attackOverrides.find((o) => o.id === overrideId);
     if (!override) return; // 이미 소모돼 등록 해제됐거나(이론상 도달 불가) 애초에 없음
     override.usesRemaining -= 1;
     if (override.usesRemaining <= 0) {
-      this.clearAttackOverride('Q');
-      this.clearSubState('Q');
-    }
-  }
-
-  // 다리우스 W 전용 - 위 _consumeAttackOverride가 미뤄둔 소모를
-  // _onBasicAttackHit()이 _dariusWOnHit() 직후 호출하는 지점에서 수행한다.
-  // _consumeGarenQOnConfirmedHit와 완전히 동일한 패턴(한 번의 명중 이벤트당
-  // 정확히 한 번만 소모).
-  _consumeDariusWOnConfirmedHit() {
-    const override = this.attackOverrides.find((o) => o.id === 'W');
-    if (!override) return;
-    override.usesRemaining -= 1;
-    if (override.usesRemaining <= 0) {
-      this.clearAttackOverride('W');
-      this.clearSubState('W');
+      this.clearAttackOverride(overrideId);
+      this.clearSubState(overrideId);
     }
   }
 

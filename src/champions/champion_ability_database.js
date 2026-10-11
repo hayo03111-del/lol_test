@@ -99,7 +99,7 @@ const championAbilityDatabase = {
     // 스윙이 "시작"되는 _beginAttackSwing 시점에 일어나서, 문서 12/13절의
     // "Q 소모는 HIT 성공 시점" 원칙과 실제로는 어긋나 있었다(사거리 이탈/
     // 대상 소멸로 스윙이 끝내 맞지 않아도 Q가 사라졌다). 이제
-    // character_controller.js의 _consumeGarenQOnConfirmedHit()이 HIT가
+    // character_controller.js의 _consumeAttackOverrideOnConfirmedHit()이 HIT가
     // 실제로 확정되는 _onBasicAttackHit() 시점에만 clearSubState하므로,
     // Q_ARMED(Run_Spell1) 애니메이션도 실제 소모 시점까지 정확히 유지된다.
     Q: {
