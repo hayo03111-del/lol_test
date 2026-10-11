@@ -77,6 +77,9 @@ CharacterController.prototype._yasuoApplyQHit = function(target, { tornado=false
     // R 이후 15초 "치명타 공격"의 추가 방어력 무시는 치명타가 실제로 터졌을 때만.
     applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, bonusArmorIgnorePercent: (crit && this._yasuo.rArmorBuffUntil > performance.now() ? this._champData().R.armorIgnoreBonusPercent : 0), source: this });
     if (first) this._yasuoQHitConsumed = true;
+    // 적중 시 효과(PC 위키): 일반 Q/회오리는 "처음 맞은 대상"에게, E 중 Q(원형)는 맞은 모두에게
+    // 아이템 적중 시 효과·공격 시 효과를 적용한다(주문검 발동은 제외). 예전엔 전혀 적용되지 않았다.
+    if ((first || circle) && typeof itemOnBasicAttackHit === 'function' && target.hp > 0) itemOnBasicAttackHit(this, target, crit, { fromAbility: true });
     if (tornado) applyStatus(target, { id:'yasuoQKnockup', type:'KNOCKUP', duration:q.knockupDuration, value:1 });
     return raw;
 
@@ -90,7 +93,10 @@ CharacterController.prototype._yasuoFindQTargets = function(dir, range, radius =
     const alive = (u) => u && u.hp > 0;
     if (radius != null) return findEnemiesInRadius(this.root.position, radius).map(h => h.unit).filter(alive);
     const q = this._champData().Q;
-    return findEnemiesInLine(this.root.position, dir, range, q.width || 80).filter(alive);
+    // 가까운 순으로 정렬 - "처음 맞은 대상"(적중 시 효과 적용 대상)을 정확히 고르기 위해.
+    const o = this.root.position;
+    return findEnemiesInLine(o, dir, range, q.width || 80).filter(alive)
+      .sort((a, b) => o.distanceToSquared(getWorldPosition(a)) - o.distanceToSquared(getWorldPosition(b)));
 };
 
 // Extracted from CharacterController: _yasuoStartQ3Tornado
@@ -397,6 +403,9 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
     }
     if (!this._payCost('R', free)) return;
     this._yasuoClearPostQMoveEntry();
+    // E 돌진 중 R: 돌진을 먼저 마무리(피해/중첩 처리)한 뒤 R로 넘어간다 - 그러지 않으면 돌진 종료
+    // 타이머가 R로 이동한 야스오를 돌진 끝 지점으로 다시 끌어당긴다.
+    if (this.currentActionKey === 'yasuoE' && this._yasuo.eDashStart) this._yasuoFinishEDash();
 
     // Yasuo's R pulls in every airborne(KNOCKUP) enemy around him - not just the
     // anchor - and strikes them together. Stunned/rooted/suppressed-but-not-airborne
@@ -443,7 +452,8 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
       applyStatus(target, {
         id: 'yasuoRKnockup',
         type: 'KNOCKUP',
-        duration: dur + 0.25,
+        // PC 위키: 주변 공중에 뜬 적 챔피언을 1초 동안 띄운다(예전엔 모션 길이+0.25초).
+        duration: r.knockupDuration || 1,
         value: 1
       });
       // 버그 수정(요청 - "궁 맞는 적은 바닥으로 떨어지지 않고 야스오와 같은

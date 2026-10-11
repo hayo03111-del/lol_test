@@ -184,19 +184,29 @@ function getVulnerablePercent(target) {
   for (const e of target.statusEffects) if (e.type === 'VULNERABLE' && e.expiresAt > now) v += e.value;
   return v;
 }
-function getDamageReductionPercent(target) {
+// 피해 감소 합산(원작): 서로 다른 출처는 곱연산 1-(1-a)(1-b). 단 같은 스킬의 여러 단계(drGroup -
+// 예: 마스터 이 명상 70%→45%)는 그룹 안에서 최대값만. halfVsTurret 효과는 포탑 피해에 절반만.
+// 버그 수정: 예전엔 모든 출처 중 최대값 하나만 적용해, 가렌 W와 다른 감소 효과가 겹치지 않았다.
+function _combineDamageReduction(target, types, source) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();
-  let v = 0;
-  for (const e of target.statusEffects) if (e.type === 'DAMAGE_REDUCTION' && e.expiresAt > now) v = Math.max(v, e.value);
-  return v;
+  const byGroup = new Map();
+  for (const e of target.statusEffects) {
+    if (!types.includes(e.type) || e.expiresAt <= now) continue;
+    let v = Math.max(0, Math.min(1, e.value || 0));
+    if (e.halfVsTurret && source && source.isTurret) v *= 0.5;
+    const key = e.drGroup || e.id || e.type;
+    byGroup.set(key, Math.max(byGroup.get(key) || 0, v));
+  }
+  let keep = 1;
+  for (const v of byGroup.values()) keep *= 1 - v;
+  return 1 - keep;
 }
-function getMagicDamageReductionPercent(target) {
-  if (!target || !target.statusEffects) return 0;
-  const now = performance.now();
-  let v = 0;
-  for (const e of target.statusEffects) if ((e.type === 'MAGIC_DAMAGE_REDUCTION' || e.type === 'DAMAGE_REDUCTION') && e.expiresAt > now) v = Math.max(v, e.value);
-  return Math.max(0, Math.min(1, v));
+function getDamageReductionPercent(target, source = null) {
+  return _combineDamageReduction(target, ['DAMAGE_REDUCTION'], source);
+}
+function getMagicDamageReductionPercent(target, source = null) {
+  return Math.max(0, Math.min(1, _combineDamageReduction(target, ['MAGIC_DAMAGE_REDUCTION', 'DAMAGE_REDUCTION'], source)));
 }
 function getMoveSpeedBuffPercent(target) {
   if (!target || !target.statusEffects) return 0;

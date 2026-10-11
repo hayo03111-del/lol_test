@@ -62,8 +62,8 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     }
     this.passiveState.lastDamageTakenAt = performance.now(); // 가렌 인내심: 피해를 입으면 무피해 타이머 리셋
     if (this.championId === 'renekton') this._renektonMarkCombat();
-    let reduction = getDamageReductionPercent(this);
-    if (damageType === DAMAGE_TYPE.MAGICAL) reduction = Math.max(reduction, getMagicDamageReductionPercent(this));
+    // 마법 피해는 일반+마법 피해 감소를 함께 곱연산(getMagicDamageReductionPercent가 둘 다 포함).
+    let reduction = damageType === DAMAGE_TYPE.MAGICAL ? getMagicDamageReductionPercent(this, source) : getDamageReductionPercent(this, source);
     let remaining = Math.max(0, dmg) * (1 - Math.min(1, Math.max(0, reduction))); // 일반 피해감소 + 닐라 W 마법피해감소
     // 아이템 패시브(멜모셔스의 아귀/스테락의도전 - 생명선) - 이 피해로
     // 체력이 문턱 밑으로 "떨어질" 보호막을 먼저 걸어서, 바로 아래 shield

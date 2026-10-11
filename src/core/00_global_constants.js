@@ -406,13 +406,24 @@ function getFinalMoveSpeed(stats) {
 }
 
 function getFinalAttackSpeed(stats) {
-  // 원작: 기본 공속 × (1 + 레벨 성장 추가 공속 + 아이템/버프 추가 공속)
-  let as = stats.baseAttackSpeed * (1 + (stats.levelBonusAttackSpeed || 0) + stats.bonusAttackSpeedPercent) * stats.attackSpeedMultiplier;
+  // 원작(PC 위키 Attack speed): 총 공속 = 기본 공속 + 추가 공속 × 공속 계수(attackSpeedRatio).
+  // 공속 계수는 보통 기본 공속과 같지만 챔피언마다 다를 수 있다(노틸러스 0.612, 야스오 0.67).
+  const ratio = stats.attackSpeedRatio || stats.baseAttackSpeed;
+  let as = (stats.baseAttackSpeed + ratio * ((stats.levelBonusAttackSpeed || 0) + stats.bonusAttackSpeedPercent)) * stats.attackSpeedMultiplier;
   as = Math.max(stats.minAttackSpeed, Math.min(stats.maxAttackSpeed, as));
   return as;
 }
 function getAttackInterval(stats) { return 1 / getFinalAttackSpeed(stats); }
-function getWindupDuration(stats) { return getAttackInterval(stats) * stats.windupPercent; }
+// 평타 선딜레이(PC 위키 Attack speed): 선딜 = 기본 선딜 + 보정치 × (현재 공격 시간 × 선딜% − 기본 선딜).
+// 기본 선딜 = 선딜% / 기본 공속. 보정치(windupModifier)는 기본 1(가렌/다리우스 0.5 - 공속이 올라도
+// 선딜이 덜 줄어든다). 선딜%는 챔피언마다 다르다(대부분 15~30%). 버그 수정: 예전엔 모든 챔피언
+// 40% 고정이라 평타가 원작보다 훨씬 늦게 나갔다.
+function getWindupDuration(stats) {
+  const pct = stats.windupPercent;
+  const baseWindup = pct / (stats.baseAttackSpeed || 1);
+  const mod = stats.windupModifier == null ? 1 : stats.windupModifier;
+  return baseWindup + mod * (getAttackInterval(stats) * pct - baseWindup);
+}
 function getRecoveryDuration(stats) { return Math.max(0, getAttackInterval(stats) - getWindupDuration(stats)); }
 
 const DAMAGE_TYPE = { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' };
@@ -497,8 +508,8 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   // 받는 마법 피해에 감소가 두 번 들어갔다(가렌 W 30%가 마법 피해엔 51%처럼 작동). 반대로
   // takeDamage가 없는 대상(허수아비)은 물리/고정 피해에 피해 감소가 아예 적용되지 않았다.
   if (target && typeof target.takeDamage !== 'function') {
-    let red = typeof getDamageReductionPercent === 'function' ? getDamageReductionPercent(target) : 0;
-    if (damageType === DAMAGE_TYPE.MAGICAL && typeof getMagicDamageReductionPercent === 'function') red = Math.max(red, getMagicDamageReductionPercent(target));
+    let red = typeof getDamageReductionPercent === 'function' ? getDamageReductionPercent(target, source) : 0;
+    if (damageType === DAMAGE_TYPE.MAGICAL && typeof getMagicDamageReductionPercent === 'function') red = getMagicDamageReductionPercent(target, source);
     dmg *= 1 - Math.max(0, Math.min(1, red));
   }
   // 아이템 패시브(쇼진의창 "집중된 의지" - 스택당 피해량 증폭) - 실제

@@ -18,14 +18,18 @@ function growPercent(base, growthPercent, level) { return base * (1 + (growthPer
 function statGrowthFactor(level) { const n = Math.max(0, (level || 1) - 1); return n * (0.7025 + 0.0175 * n); }
 function growStat(base, growth, level) { return base + (growth || 0) * statGrowthFactor(level); }
 
+// 기본 스탯/쿨다운/비용/사거리는 라이엇 공식 Data Dragon 16.20.1(PC 최신)과 전수 대조했다
+// (tools/ddragon_compare.js 결과 - 레벨당 공격력은 Data Dragon이 0으로 내보내는 알려진 문제로 제외).
 const CHAMPION_DATA = {
   yasuo: {
     displayName: '야스오',
     stats: {
       hp: 590, hpGrowth: 110, hpRegen: 6.5, hpRegenGrowth: 0.9,
-      ad: 60, adGrowth: 3, attackSpeed: 0.697, attackSpeedGrowthPercent: 3.5,
+      ad: 60, adGrowth: 2.5, attackSpeed: 0.697, attackSpeedGrowthPercent: 3.5,
       armor: 32, armorGrowth: 4.6, mr: 32, mrGrowth: 2.05,
       range: 175, moveSpeed: 345, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 22%, 공속 계수 0.67
+      windupPercent: 0.22, attackSpeedRatio: 0.67,
     },
     passive: {
       name: '낭인의 길',
@@ -45,12 +49,12 @@ const CHAMPION_DATA = {
       // 요네.bin YoneQ 수치와 champion_data 요네 주석 참고). 예전 [4,3.33,…,1.33]/
       // [0.4,…,0.13]은 "추가 공속에 따라 줄어드는 범위"를 레벨별 값으로 잘못 옮긴 것이었다.
       // 추가 공속 1%당 쿨다운 0.6%(최대 66.67%), 시전 시간 0.41667%(최대 50%) 감소.
-      name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 450, width: 80,
+      name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 475, width: 80,
       damageByLevel: [20,45,70,95,120], totalAdRatio: 1.05,
       stackDuration: 6, knockupDuration: 1, tornadoRange: 1150, circleRadius: 375,
       castTime: [0.35, 0.35, 0.35, 0.35, 0.35],
       cdReductionPerBonusAs: 0.6, cdReductionMax: 0.6667, castReductionPerBonusAs: 0.41667, castReductionMax: 0.5,
-      tornadoWidth: 180, tornadoSpeed: 1200, tornadoGuessed: true, // 회오리 폭/속도 미확인
+      tornadoWidth: 180, tornadoSpeed: 1200, // PC 위키 야스오 문서: 회오리 사거리 1150, 폭 180, 속도 1200
       damageType: 'PHYSICAL',
     },
     W: {
@@ -67,9 +71,9 @@ const CHAMPION_DATA = {
     },
     R: {
       name: '최후의 숨결', cooldown: [70,50,30], range: 1400,
-      // 대상(공중에 뜬 적 챔피언) 주변 400 안의 공중에 뜬 적 챔피언 전부(반경 미확인 -
-      // rTargetRadiusGuessed). 피해 계수는 "추가" 공격력 150%.
-      damageByLevel: [200,350,500], bonusAdRatio: 1.5, knockupDuration: 1, targetRadius: 400, rTargetRadiusGuessed: true,
+      // 대상(공중에 뜬 적 챔피언) 주변 400 안의 공중에 뜬 적 챔피언 전부를 1초 동안 띄운다(PC 위키).
+      // 피해 계수는 "추가" 공격력 150%.
+      damageByLevel: [200,350,500], bonusAdRatio: 1.5, knockupDuration: 1, targetRadius: 400,
       armorIgnoreBonusPercent: 0.60, buffDuration: 15, damageType: 'PHYSICAL',
     },
   },
@@ -90,6 +94,8 @@ const CHAMPION_DATA = {
       ad: 62, adGrowth: 2, attackSpeed: 0.625, attackSpeedGrowthPercent: 3.5,
       armor: 33, armorGrowth: 4.6, mr: 32, mrGrowth: 2.05,
       range: 175, moveSpeed: 345, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 22%
+      windupPercent: 0.22,
     },
     passive: {
       name: '사냥꾼의 길',
@@ -136,7 +142,7 @@ const CHAMPION_DATA = {
     W: {
       name: '영혼 가르기',
       cooldown: 14, cooldownFloor: 6, castTime: 0.5, castTimeFloor: 0.19,
-      range: 600, angleDeg: 80,
+      range: 700, angleDeg: 80,
       // 수치 출처 갱신(요네.bin YoneW 실데이터로 재확인):
       // MaxHealthDamage(레벨1~5) = 7/8/9/10/11% (이전에 위키 문서 프로즈를
       // 옮기며 8/9/10/11/12%로 한 칸씩 밀려 잘못 반영했던 것을 수정).
@@ -182,8 +188,10 @@ const CHAMPION_DATA = {
     stats: {
       hp: 660, hpGrowth: 111, hpRegen: 8, hpRegenGrowth: 0.75,
       ad: 69, adGrowth: 3.1, attackSpeed: 0.665, attackSpeedGrowthPercent: 2.75,
-      armor: 35, armorGrowth: 5.2, mr: 32, mrGrowth: 2.05,
+      armor: 35, armorGrowth: 5.2, mr: 28, mrGrowth: 2.05,
       range: 125, moveSpeed: 345, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 17.73%
+      windupPercent: 0.1773,
     },
     passive: { name: '분노의 지배', rageMax: 100, empoweredThreshold: 50, lowHpThreshold: 0.5, lowHpMultiplier: 1.5, combatExitSec: 12, rageDecayInterval: 5, rageDecayAmount: 20 },
     Q: {
@@ -222,6 +230,8 @@ const CHAMPION_DATA = {
       ad: 69, adGrowth: 4.5, attackSpeed: 0.625, attackSpeedGrowthPercent: 3.65,
       armor: 38, armorGrowth: 4.2, mr: 32, mrGrowth: 1.55,
       range: 175, moveSpeed: 340, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 18% (보정 0.5)
+      windupPercent: 0.18, windupModifier: 0.5,
     },
     passive: {
       name: '인내심',
@@ -269,12 +279,15 @@ const CHAMPION_DATA = {
       hp: 652, hpGrowth: 114, hpRegen: 10, hpRegenGrowth: 0.95,
       ad: 64, adGrowth: 5, attackSpeed: 0.625, attackSpeedGrowthPercent: 1,
       armor: 37, armorGrowth: 5.2, mr: 32, mrGrowth: 2.05,
-      range: 175, moveSpeed: 340, mana: 263, manaGrowth: 57.5, manaRegen: 6.6, manaRegenGrowth: 0.35,
+      range: 175, moveSpeed: 340, mana: 263, manaGrowth: 58, manaRegen: 6.6, manaRegenGrowth: 0.35,
+      // PC 위키 기본 스탯: 평타 선딜 20% (보정 0.5)
+      windupPercent: 0.20, windupModifier: 0.5,
     },
     passive: {
       name: '과다출혈',
       desc: '기본 공격/공격 스킬이 대상에게 5초에 걸친 물리 피해 출혈을 남긴다(최대 5중첩). 몬스터에는 250% 피해.',
-      maxStacks: 5, dotDuration: 5, dotTickInterval: 1,
+      // PC 위키: 중첩당 1.25초마다 3.25~7.5(+추가 공격력 7.5%) = 5초간 4틱(예전 1초 간격은 오류).
+      maxStacks: 5, dotDuration: 5, dotTickInterval: 1.25,
       // 1중첩 총 피해 13~30(레벨당 +1) + 0.3 추가AD, 최대(5)중첩 총 피해 65~150(레벨당 +5) + 1.5 추가AD
       oneStackBase: 13, oneStackGrowth: 1, oneStackBonusAdRatio: 0.3,
       maxStackBase: 65, maxStackGrowth: 5, maxStackBonusAdRatio: 1.5,
@@ -305,9 +318,8 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '포획', cooldown: [26, 23.5, 21, 18.5, 16], manaByLevel: [70, 60, 50, 40, 30],
-      // 전방 부채꼴 안의 모든 적을 끌어온다. 부채꼴 각도는 공개 수치를 확인하지 못해
-      // 임시값(coneAngleGuessed) - 확인되면 이 값만 바꾸면 된다.
-      range: 535, castTime: 0.25, slowPercent: 40, slowDuration: 1, coneAngleDeg: 50, coneAngleGuessed: true,
+      // 전방 부채꼴(50°, 반경 535) 안의 모든 적을 끌어온다.
+      range: 535, castTime: 0.25, slowPercent: 40, slowDuration: 1, coneAngleDeg: 50, // PC 위키 Template:Data Darius/Apprehend: 각도 50°
       armorPenPercentByLevel: [20, 25, 30, 35, 40],
     },
     R: {
@@ -326,6 +338,8 @@ const CHAMPION_DATA = {
       ad: 60, adGrowth: 4, attackSpeed: 0.625, attackSpeedGrowthPercent: 1.75,
       armor: 33, armorGrowth: 4.7, mr: 28, mrGrowth: 2.05,
       range: 125, moveSpeed: 340, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 21.429%
+      windupPercent: 0.21429,
     },
     passive: {
       name: '투기장의 투지',
@@ -385,6 +399,8 @@ const CHAMPION_DATA = {
       ad: 58, adGrowth: 2, attackSpeed: 0.697, attackSpeedGrowthPercent: 1.25,
       armor: 27, armorGrowth: 4.2, mr: 32, mrGrowth: 2.05,
       range: 225, moveSpeed: 340, mana: 350, manaGrowth: 35, manaRegen: 8.2, manaRegenGrowth: 0.7,
+      // PC 위키 기본 스탯: 평타 선딜 22%
+      windupPercent: 0.22,
     },
     passive: {
       name: '영원한 기쁨',
@@ -481,6 +497,8 @@ const CHAMPION_DATA = {
       ad: 61, adGrowth: 4, attackSpeed: 0.625, attackSpeedGrowthPercent: 1,
       armor: 37, armorGrowth: 4.2, mr: 32, mrGrowth: 2.05,
       range: 175, moveSpeed: 335, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 21.133%
+      windupPercent: 0.21133,
     },
     passive: {
       name: '암흑 탄생',
@@ -511,7 +529,7 @@ const CHAMPION_DATA = {
       damageByLevel: [60, 80, 100, 120, 140], apRatio: 0.45, pullDelay: 0.5, damageType: 'MAGICAL',
     },
     R: {
-      name: '죽음의 세계', cooldown: [140, 120, 100], mana: 0, range: 650, castTime: 0.5,
+      name: '죽음의 세계', cooldown: [120, 110, 100] /* Data Dragon 16.20.1 */, mana: 0, range: 650, castTime: 0.5,
       duration: 7, statStealPercent: 10, // 훔치는 주요 능력치 비율 - 이 데모에선 방어력/마저만 실제 전투에 영향을 주므로 그 둘만 반영
     },
   },
@@ -519,24 +537,28 @@ const CHAMPION_DATA = {
     displayName: '노틸러스',
     stats: {
       hp: 646, hpGrowth: 100, hpRegen: 8.5, hpRegenGrowth: 0.55,
-      ad: 61, adGrowth: 3.3, attackSpeed: 0.613, attackSpeedGrowthPercent: 1,
-      armor: 39, armorGrowth: 4.65, mr: 32, mrGrowth: 2.05,
-      range: 175, moveSpeed: 325, mana: 400, manaGrowth: 47, manaRegen: 8.63, manaRegenGrowth: 0.5,
+      ad: 58, adGrowth: 3.3, attackSpeed: 0.706, attackSpeedGrowthPercent: 1,
+      armor: 39, armorGrowth: 4.95, mr: 32, mrGrowth: 2.05,
+      range: 175, moveSpeed: 325, mana: 400, manaGrowth: 47, manaRegen: 8.65, manaRegenGrowth: 0.5,
+      // PC 위키 기본 스탯: 평타 선딜 30.637%, 공속 계수 0.612
+      windupPercent: 0.30637, attackSpeedRatio: 0.612,
     },
     // 수치 출처: 사용자 원본 자료에는 노틸러스 스킬 수치가 없다(패시브 설명만
     // 있음). 공개 LoL 자료를 웹 검색 스니펫으로 교차 확인한 값을 쓰고, 확인하지
     // 못한 값은 옆에 "미확인"으로 표시했다 - 원문을 받으면 그 값만 바꾸면 된다.
     passive: {
       name: '강력한 일격', desc: '첫 공격이 추가 물리 피해 + 속박(동일 대상 6초 1회).',
-      bonusDamageBase: 2, bonusDamagePerLevel: 6, // 8~110(레벨 비례) - 미확인(기억 기반 공개 수치)
-      rootByLevel: { breakpoints: [1, 6, 11, 16], values: [0.75, 1.0, 1.25, 1.5] }, // 미확인(기억 기반 공개 수치)
+      // PC 위키 노틸러스 문서: 14~128(레벨 비례). 같은 문서의 패치 기록엔 14~116도 보여 18레벨
+      // 끝값은 미확인(bonusDamageGuessed) - 1레벨 14는 두 기록 모두 일치. 예전 8~110은 옛 값.
+      bonusDamageAtLevel1: 14, bonusDamageAtLevel18: 128, bonusDamageGuessed: true,
+      rootByLevel: { breakpoints: [1, 6, 11, 16], values: [0.75, 1.0, 1.25, 1.5] }, // PC 위키: 0.75~1.5초(V9.12). 구간 1/6/11/16은 미확인
       sameTargetCooldownSec: 6, // 원본 설명 "동일 대상 6초 1회"
     },
     Q: {
       name: '닻줄 견인', cooldown: [14, 13, 12, 11, 10], mana: 60, range: 1150,
       damageByLevel: [85, 125, 165, 205, 245], apRatio: 0.9, damageType: 'MAGICAL', // 26.18 피해 조정 반영, AP 계수 90%
-      missileSpeed: 2000, width: 180, // 폭 미확인
-      castTimeSec: 0.25, // 미확인 - 일반 스킬샷 기본 캐스트 타임
+      missileSpeed: 2000, width: 180, // PC 위키 Template:Data Nautilus/Dredge Line: 속도 2000, 폭 180(가장자리)
+      castTimeSec: 0.25, // PC 위키: 시전 시간 0.25
       terrainRefundPercent: 50, // 지형에 맞으면 재사용 대기시간·마나 50% 환급
     },
     W: {
@@ -548,9 +570,10 @@ const CHAMPION_DATA = {
     E: {
       name: '역류', cooldown: [7, 6.5, 6, 5.5, 5], mana: [50, 60, 70, 80, 90], radius: 600,
       damageByLevel: [55, 90, 125, 160, 195], apRatio: 0.5, damageType: 'MAGICAL',
-      explosionCount: 3, subsequentDamagePercent: 50, // 같은 대상에게 두 번째부터 50% - 미확인
-      explosionIntervalSec: 0.25, // 미확인
-      slowPercentByLevel: [30, 35, 40, 45, 50], slowDecaySec: 1.5, // 미확인(1.5초에 걸쳐 감쇠)
+      // PC 위키: 폭발 3회(의도된 간격 0.25초), 두 번째 이후 폭발은 50% 피해, 둔화는 1.5초에 걸쳐 감쇠(2→1.5초 패치).
+      explosionCount: 3, subsequentDamagePercent: 50,
+      explosionIntervalSec: 0.25,
+      slowPercentByLevel: [30, 35, 40, 45, 50], slowDecaySec: 1.5,
     },
     R: {
       name: '폭뢰', cooldown: [120, 100, 80], mana: 100, range: 825,
@@ -559,8 +582,9 @@ const CHAMPION_DATA = {
       stunByLevel: [1, 1.5, 2], // 주 대상 에어본+기절 총합
       pathKnockupSec: 0.75, // 미확인
       pathWidth: 300, // 미확인 - 경로 충격파 판정 폭
-      shockwaveSpeed: 1400, // 미확인 - 유도형이라 도착 지연에만 영향
-      castTimeSec: 0.25, // 미확인
+      // PC 위키 Template:Data Nautilus/Depth Charge: 시전 0.46초, 충격파 속도 275에서 초당 +466.67 가속.
+      shockwaveSpeed: 275, shockwaveAccelPerSec: 466.67,
+      castTimeSec: 0.46,
       damageType: 'MAGICAL',
     },
   },
@@ -569,8 +593,10 @@ const CHAMPION_DATA = {
     stats: {
       hp: 640, hpGrowth: 105, hpRegen: 7.5, hpRegenGrowth: 0.65,
       ad: 65, adGrowth: 2.5, attackSpeed: 0.679, attackSpeedGrowthPercent: 2.5,
-      armor: 33, armorGrowth: 4.5, mr: 32, mrGrowth: 2.05,
-      range: 175, moveSpeed: 355, mana: 251, manaGrowth: 42, manaRegen: 7.26, manaRegenGrowth: 0.45,
+      armor: 33, armorGrowth: 5, mr: 32, mrGrowth: 2.05,
+      range: 175, moveSpeed: 355, mana: 251, manaGrowth: 42, manaRegen: 7.25, manaRegenGrowth: 0.45,
+      // PC 위키 기본 스탯: 평타 선딜 24.375%
+      windupPercent: 0.24375,
     },
     passive: {
       name: '2연속 공격',
@@ -579,8 +605,10 @@ const CHAMPION_DATA = {
     },
     Q: {
       name: '일격필살', cooldown: [20, 19.5, 19, 18.5, 18], manaByLevel: [50, 55, 60, 65, 70], range: 600,
-      baseDamageByLevel: [20, 40, 60, 80, 100], bonusAdRatio: 0.7,
-      critDamageByLevel: [40, 80, 120, 160, 200], critBonusAdRatio: 1.4,
+      // PC 위키 Template:Data Master Yi/Alpha Strike: 20~100 + 총 공격력 70%, 몬스터 추가 60~160
+      // (V25.16), 치명타는 일반 치명타 배율(V25.16에 치명타 추가 피해 계수 75%→100%).
+      baseDamageByLevel: [20, 40, 60, 80, 100], adRatio: 0.7,
+      monsterBonusDamageByLevel: [60, 85, 110, 135, 160],
       extraHitPercent: 25, hitCount: 4, hitIntervalSec: 0.2, basicAttackCdrSec: 1,
       damageType: 'PHYSICAL',
       // Alpha Strike 상태머신 전용 설정(요청 문서 1, 섹션 32 "숫자를 코드
@@ -625,22 +653,24 @@ const CHAMPION_DATA = {
   chogath: {
     displayName: '초가스',
     stats: {
-      hp: 640, hpGrowth: 110, hpRegen: 9, hpRegenGrowth: 0.85,
-      ad: 69, adGrowth: 4.2, attackSpeed: 0.625, attackSpeedGrowthPercent: 1.44,
-      armor: 38, armorGrowth: 5, mr: 32, mrGrowth: 2.05,
+      hp: 644, hpGrowth: 94, hpRegen: 9, hpRegenGrowth: 0.85,
+      ad: 69, adGrowth: 4.2, attackSpeed: 0.658, attackSpeedGrowthPercent: 1.44,
+      armor: 38, armorGrowth: 4.5, mr: 32, mrGrowth: 2.05,
       range: 125, moveSpeed: 345, mana: 270, manaGrowth: 60, manaRegen: 7.2, manaRegenGrowth: 0.45,
+      // PC 위키 기본 스탯: 평타 선딜 21.9%
+      windupPercent: 0.219,
     },
     passive: {
       name: '육식', desc: '유닛 처치 시 체력/마나 회복(레벨 비례).',
       healBase: 16, healPerLevel: 2, manaBase: 4.44, manaPerLevel: 0.28,
     },
     Q: {
-      name: '파열', cooldown: 7, mana: 60, range: 950, castTime: 0.25, impactDelay: 0.625,
+      name: '파열', cooldown: 6 /* Data Dragon 16.20.1 */, mana: 60, range: 950, castTime: 0.25, impactDelay: 0.625,
       damageByLevel: [80, 140, 200, 260, 320], apRatio: 1.0,
       knockupDuration: 1, slowPercent: 60, slowDuration: 1.5, damageType: 'MAGICAL',
     },
     W: {
-      name: '흉포한 울부짖음', cooldown: [13, 12, 11, 10, 9], manaByLevel: [70, 80, 90, 100, 110],
+      name: '흉포한 울부짖음', cooldown: [11, 10.5, 10, 9.5, 9] /* Data Dragon 16.20.1 */, manaByLevel: [70, 80, 90, 100, 110],
       range: 650, coneAngleDeg: 60,
       damageByLevel: [80, 135, 190, 245, 300], apRatio: 0.7,
       silenceDurationByLevel: [1.6, 1.7, 1.8, 1.9, 2.0], damageType: 'MAGICAL',
@@ -670,6 +700,8 @@ const CHAMPION_DATA = {
       // 확장, 새 자원 시스템을 따로 만들지 않음). manaRegen은 다른 챔피언과 같이
       // "5초당" 회복량으로 해석된다(regenTick이 /5) - 기력 50/5초 = 초당 10(원작과 동일).
       mana: 200, manaGrowth: 0, manaRegen: 50, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 19.531%
+      windupPercent: 0.19531,
     },
     passive: {
       name: '질풍격',
@@ -680,7 +712,7 @@ const CHAMPION_DATA = {
     },
     Q: {
       name: '음파/공명의 일격', cooldown: [10, 9, 8, 7, 6], energy1: 50, energy2: 25,
-      range1: 1200, range2: 1250, markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800,
+      range1: 1100, range2: 1250, markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800,
       damageByLevel: [60, 90, 120, 150, 180], bonusAdRatio: 0.9,
       maxDamageByLevel: [120, 180, 240, 300, 360], maxBonusAdRatio: 1.8,
       damageType: 'PHYSICAL',
@@ -688,7 +720,8 @@ const CHAMPION_DATA = {
     W: {
       name: '방호/강철의 의지', cooldown: 7, energy1: 50, energy2: 25,
       range1: 700, markDuration: 3,
-      shieldByLevel: [60, 105, 150, 195, 240], shieldApRatio: 0.8, shieldDuration: 2,
+      // PC 위키 Template:Data Lee Sin/Safeguard: 70/115/160/205/250 (+ 주문력 80%).
+      shieldByLevel: [70, 115, 160, 205, 250], shieldApRatio: 0.8, shieldDuration: 2,
       lifestealPercentByLevel: [10, 14, 18, 22, 26], lifestealDuration: 4,
     },
     E: {
@@ -708,11 +741,13 @@ const CHAMPION_DATA = {
   displayName: '벡스',
 
      stats: {
-     hp: 630, hpGrowth: 104, hpRegen: 6.5, hpRegenGrowth: 0.55,
-     ad: 54, adGrowth: 2.75, attackSpeed: 0.669, attackSpeedGrowthPercent: 1.36,
-     armor: 23, armorGrowth: 4, mr: 30, mrGrowth: 1.3,
+     hp: 590, hpGrowth: 104, hpRegen: 6.5, hpRegenGrowth: 0.6,
+     ad: 54, adGrowth: 2.75, attackSpeed: 0.669, attackSpeedGrowthPercent: 1,
+     armor: 23, armorGrowth: 4.45, mr: 28, mrGrowth: 1.3,
      range: 550, moveSpeed: 335,
-     mana: 490, manaGrowth: 32, manaRegen: 8, manaRegenGrowth: 0.8,
+     mana: 490, manaGrowth: 32, manaRegen: 6, manaRegenGrowth: 0.8,
+      // PC 위키 기본 스탯: 평타 선딜 15.625%, 공속 계수 0.625
+      windupPercent: 0.15625, attackSpeedRatio: 0.625,
      },
 
      passive: {
@@ -733,10 +768,10 @@ const CHAMPION_DATA = {
       damageType: 'MAGICAL',
      //적중한 적에게 우울 소모
      //폭이 넓다가 일정시간 후 폭이 좁아짐
-     }, 
+     },
 
-     W: { 
-      name: '거리 두기', cooldown: 13, mana: 75,
+     W: {
+      name: '거리 두기', cooldown: [16, 15, 14, 13, 12] /* Data Dragon 16.20.1 */, mana: 75,
       range: 475, damageByLevel: [80, 120, 160, 200, 240],
       apRatio: 0.3, shieldByLevel: [50, 80, 110, 140, 170], shieldApRatio: 0.75, shieldDuration: 2,
       shieldApRatio: 0.75, damageType: 'MAGICAL',
@@ -744,11 +779,11 @@ const CHAMPION_DATA = {
      },
 
      E: {
-      name: '커지는 안개', cooldown: [13, 12, 11, 10, 9], mana: 70,
+      name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: 70,
       range: 800, damageByLevel: [60, 105, 150, 195, 240],
       apRatio: 0.4, slowPercentByLevel: [30, 35, 40, 45, 50],
       slowDuration: 2, damageType: 'MAGICAL',
-      piercesUnits: true, 
+      piercesUnits: true,
       //챔피언을 처치하면 파멸과 우울 재사용 대기시간의 25%를 돌려받음
       //적중한 적에게 우울 적용
      },
@@ -798,10 +833,12 @@ const CHAMPION_DATA = {
       // baseStaticHPRegenModifiable=0.8) 이 프로젝트가 쓰는 "HP5" 단위와
       // 직접 대응이 불확실하다 - 다른 챔피언들과 동일한 관례(예: 다리우스
       // hpRegen=10)에 맞춰 커뮤니티에 잘 알려진 근사치를 그대로 둔다.
-      hp: 600, hpGrowth: 102, hpRegen: 4.7, hpRegenGrowth: 0.55,
+      hp: 600, hpGrowth: 102, hpRegen: 4, hpRegenGrowth: 0.65,
       ad: 60, adGrowth: 3.75, attackSpeed: 0.625, attackSpeedGrowthPercent: 2.5,
       armor: 24, armorGrowth: 4.2, mr: 33, mrGrowth: 1.1,
-      range: 550, moveSpeed: 325, mana: 375, manaGrowth: 45, manaRegen: 8.5, manaRegenGrowth: 0.65,
+      range: 550, moveSpeed: 325, mana: 375, manaGrowth: 70, manaRegen: 8.5, manaRegenGrowth: 1,
+      // PC 위키 기본 스탯: 평타 선딜 18.839%
+      windupPercent: 0.18839,
     },
     passive: {
       name: '치솟는 마력',
@@ -913,6 +950,8 @@ const CHAMPION_DATA = {
       ad: 53, adGrowth: 3, attackSpeed: 0.668, attackSpeedGrowthPercent: 2.2,
       armor: 21, armorGrowth: 4.2, mr: 30, mrGrowth: 1.3,
       range: 550, moveSpeed: 330, mana: 418, manaGrowth: 25, manaRegen: 8, manaRegenGrowth: 0.8,
+      // PC 위키 기본 스탯: 평타 선딜 20%, 공속 계수 0.625
+      windupPercent: 0.20, attackSpeedRatio: 0.625,
     },
     passive: {
       name: '정기 흡수',
@@ -1026,8 +1065,10 @@ const CHAMPION_DATA = {
     stats: {
       hp: 600, hpGrowth: 105, hpRegen: 3.5, hpRegenGrowth: 0.55,
       ad: 59, adGrowth: 3.4, attackSpeed: 0.658, attackSpeedGrowthPercent: 3.5,
-      armor: 24, armorGrowth: 4.6, mr: 30, mrGrowth: 1.3,
+      armor: 24, armorGrowth: 4, mr: 33, mrGrowth: 1.1,
       range: 575, moveSpeed: 330, mana: 320, manaGrowth: 40, manaRegen: 8, manaRegenGrowth: 0.8,
+      // PC 위키 기본 스탯: 평타 선딜 17.544%
+      windupPercent: 0.17544,
     },
     passive: {
       name: '살아있는 복수',
@@ -1120,10 +1161,12 @@ const CHAMPION_DATA = {
   ashe: {
     displayName: '애쉬',
     stats: {
-      hp: 610, hpGrowth: 99, hpRegen: 3.75, hpRegenGrowth: 0.65,
-      ad: 59, adGrowth: 3.3, attackSpeed: 0.658, attackSpeedGrowthPercent: 1.0,
-      armor: 26, armorGrowth: 4.45, mr: 30, mrGrowth: 1.3,
-      range: 600, moveSpeed: 325, mana: 280, manaGrowth: 35, manaRegen: 6.75, manaRegenGrowth: 0.65,
+      hp: 610, hpGrowth: 101, hpRegen: 3.5, hpRegenGrowth: 0.55,
+      ad: 59, adGrowth: 3.3, attackSpeed: 0.658, attackSpeedGrowthPercent: 3,
+      armor: 26, armorGrowth: 4.6, mr: 33, mrGrowth: 1.1,
+      range: 600, moveSpeed: 325, mana: 280, manaGrowth: 35, manaRegen: 7, manaRegenGrowth: 0.65,
+      // PC 위키 기본 스탯: 평타 선딜 21.93%
+      windupPercent: 0.2193,
     },
     passive: {
       name: '서리 화살',
@@ -1152,7 +1195,7 @@ const CHAMPION_DATA = {
     W: {
       name: '일제 사격',
       desc: '전방에 부채꼴로 여러 발의 화살을 발사한다. 화살들은 서로 다른 대상을 노리지만, 한 대상은 한 번만 피해를 입는다.',
-      cooldown: [18, 17, 16, 15, 14], mana: [50, 60, 70, 80, 90], // 마나 수치는 공식 확인 못함 - 유사 포크류 스킬 관례로 근사
+      cooldown: [18, 14.5, 11, 7.5, 4] /* Data Dragon 16.20.1 */, mana: [50, 60, 70, 80, 90], // 마나 수치는 공식 확인 못함 - 유사 포크류 스킬 관례로 근사
       range: 1200, coneAngleDeg: 46, // 사거리/각도는 공식 확인 못함 - 널리 알려진 근사값
       damageByLevel: [25, 45, 65, 85, 105], bonusAdRatio: 1.2,
       castTimeSec: 0.25,
@@ -1169,7 +1212,7 @@ const CHAMPION_DATA = {
     R: {
       name: '마법의 수정화살',
       desc: '전 맵 사거리로 거대한 얼음 화살을 발사한다. 처음 맞힌 적 챔피언에게 마법 피해를 입히고 기절시키며(비행 거리가 길수록 기절 시간 증가), 주변의 다른 적에게도 같은 피해를 입히지만 기절은 걸지 않는다.',
-      cooldown: [120, 100, 80], mana: [150, 175, 200],
+      cooldown: [100, 80, 60] /* Data Dragon 16.20.1 */, mana: [150, 175, 200],
       range: 20000, // "글로벌" 사거리 - ezreal.js의 R(정조준 사격)과 동일한 관례(20000) 재사용
       missileSpeed: 1650, width: 130,
       damageByLevel: [200, 400, 600], apRatio: 1.2,
@@ -1220,6 +1263,10 @@ function computeChampionStats(championId, level) {
     // 둬도 자동으로 올바르게 동작).
     attackRange: lolRangeToWorld(s.range),
     baseMoveSpeed: lolRangeToWorld(s.moveSpeed),
+    // 평타 선딜%/보정치/공속 계수(PC 위키 기본 스탯 상자). 값이 없는 챔피언은 엔진 기본값 유지.
+    windupPercent: s.windupPercent,
+    windupModifier: s.windupModifier,
+    attackSpeedRatio: s.attackSpeedRatio,
   };
 }
 

@@ -277,6 +277,11 @@ CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
     }
 
     if (this.championId === 'yasuo' && slot === 'Q' && this.currentActionKey === 'yasuoE' && this.currentPhase === 'ACTIVE') { this._dispatchCast(slot, mouseWorldPoint, false); return; }
+    // PC 위키: 야스오 R은 E(질풍검) 돌진 중에도 쓸 수 있다.
+    if (this.championId === 'yasuo' && slot === 'R' && this.currentActionKey === 'yasuoE' && this.currentPhase === 'ACTIVE') { this._dispatchCast(slot, mouseWorldPoint, false); return; }
+    // PC 패치 기록(V1.0.0.97 이후): 가렌은 E(심판) 회전 중에도 모든 스킬을 쓸 수 있고 회전은 계속된다.
+    // Q/W는 원래 허용돼 있었고, R도 회전을 끊지 않는 전용 경로로 처리한다(예전엔 막혀 있었다).
+    if (this.championId === 'garen' && slot === 'R' && this.currentActionKey === 'eChannel') { this._garenCastRDuringE(); return; }
     // 닐라 E 돌진 중 Q는 같은 돌진 경로에 Q를 겹쳐서 사용할 수 있다. E의
     // 돌진 액션을 끊지 않고 Q만 별도로 실행한다.
     if (this.championId === 'nilah' && slot === 'Q' && this.currentActionKey === 'nilahE' && this.currentPhase === 'ACTIVE') {
@@ -1258,7 +1263,8 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
     const channelCfg = db && db.E && db.E.directionalChannel;
 
     if (channelCfg) {
-      if (this.currentActionKey === 'eChannel') { this._endEChannel(); return; }
+      // PC 위키: 심판은 시전 1초 뒤부터 재입력으로 일찍 끝낼 수 있다(예전엔 즉시 끝낼 수 있었다).
+      if (this.currentActionKey === 'eChannel') { if ((this._eChannelTimer || 0) >= (channelCfg.recastMinSec ?? 1)) this._endEChannel(); return; }
       if (!this.canStartNewAction()) return;
       if (isSilenced(this)) return;
       if (!this._payCost('E', free)) return;
@@ -1480,7 +1486,10 @@ CharacterController.prototype.updateEChannel = function(dt) {
             let dmg = skillVal(eData.perHitDamageByLevel, lvl) + skillVal(eData.adRatioByLevel, lvl) * this.stats.attackDamage;
             if (h.unit === nearest.unit) dmg *= 1 + eData.nearestBonusPercent / 100;
             const willCrit = Math.random() < this.stats.critChance;
-            applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: eData.critMultiplier, isAbility: true });
+            // 치명타(PC 위키): 회전당 피해 130%, 무한의 대검 등 추가 치명타 피해는 30% 효율로만
+            // 반영. 예전엔 무한의 대검 보너스가 100% 그대로 더해졌다.
+            if (willCrit) dmg *= eData.critMultiplier + 0.3 * (this.itemBonusCritDamagePercent || 0);
+            applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true });
             // 버그 수정(원작 대조): 예전엔 전체 회전 횟수(_eHitsDone)가 6을 넘으면
             // 그 뒤로 범위에 "처음 들어온" 적에게까지 즉시 방어력 감소가 걸렸고,
             // 미니언에도 걸렸다. 원작은 "적 챔피언이 6번 맞으면" 25% 감소(6초),

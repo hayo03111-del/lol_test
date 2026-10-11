@@ -47,7 +47,7 @@ CharacterController.prototype._nautilusOnBasicAttackHit = function(target) {
   if (now >= readyAt) {
     this._nautilus.passiveReadyAt.set(target, now + p.sameTargetCooldownSec * 1000);
     const lvl = this.champLevel || 1;
-    const dmg = p.bonusDamageBase + p.bonusDamagePerLevel * lvl;
+    const dmg = p.bonusDamageAtLevel1 + (p.bonusDamageAtLevel18 - p.bonusDamageAtLevel1) * (Math.min(18, Math.max(1, lvl)) - 1) / 17;
     applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true });
     applyStatus(target, { id: 'nautilusPassive_root', type: 'ROOT', duration: valueByBreakpoints(p.rootByLevel, lvl), value: 1, source: this });
     debugSkillHit('Nautilus 패시브(강력한 일격)', target);
@@ -337,7 +337,10 @@ CharacterController.prototype._nautilusTickRTravel = function(dt) {
   const goal = getWorldPosition(target);
   const toGoal = new THREE.Vector3().subVectors(goal, t.pos).setY(0);
   const dist = toGoal.length();
-  const step = lolRangeToWorld(r.shockwaveSpeed) * dt;
+  // 충격파는 처음엔 느리다가 점점 빨라진다(PC 위키: 275 + 초당 466.67 가속).
+  t.elapsed = (t.elapsed || 0) + dt;
+  const speedLol = r.shockwaveSpeed + (r.shockwaveAccelPerSec || 0) * t.elapsed;
+  const step = lolRangeToWorld(speedLol) * dt;
   if (dist > 1e-6) t.pos.addScaledVector(toGoal.divideScalar(dist), Math.min(step, dist));
   vfx.spawn('hit', t.pos.clone(), undefined, { color: 0x3f7fa8 });
 

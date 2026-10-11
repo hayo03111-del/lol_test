@@ -827,7 +827,7 @@ CharacterController.prototype._beginAttackSwing = function() {
     // 나눠서 스윙 전체 시간이 1/8이 됐는데, 실제로는 선딜레이만 줄어들고
     // recovery(후딜레이)는 왼손과 동일한 정상 값을 그대로 유지해야 한다.
     const baseInterval = getAttackInterval(this.stats);
-    const baseWindup = baseInterval * this.stats.windupPercent;
+    const baseWindup = Math.min(baseInterval, getWindupDuration(this.stats)); // 챔피언별 선딜%/보정치(PC 위키)
     const baseRecovery = Math.max(0, baseInterval - baseWindup);
     let windup = baseWindup;
     const recovery = baseRecovery; // 오른손이어도 recovery는 그대로 - 선딜레이만 줄어든다

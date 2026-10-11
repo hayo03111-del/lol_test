@@ -1149,13 +1149,24 @@ function getFinalMoveSpeed(stats) {
 }
 
 function getFinalAttackSpeed(stats) {
-  // 원작: 기본 공속 × (1 + 레벨 성장 추가 공속 + 아이템/버프 추가 공속)
-  let as = stats.baseAttackSpeed * (1 + (stats.levelBonusAttackSpeed || 0) + stats.bonusAttackSpeedPercent) * stats.attackSpeedMultiplier;
+  // 원작(PC 위키 Attack speed): 총 공속 = 기본 공속 + 추가 공속 × 공속 계수(attackSpeedRatio).
+  // 공속 계수는 보통 기본 공속과 같지만 챔피언마다 다를 수 있다(노틸러스 0.612, 야스오 0.67).
+  const ratio = stats.attackSpeedRatio || stats.baseAttackSpeed;
+  let as = (stats.baseAttackSpeed + ratio * ((stats.levelBonusAttackSpeed || 0) + stats.bonusAttackSpeedPercent)) * stats.attackSpeedMultiplier;
   as = Math.max(stats.minAttackSpeed, Math.min(stats.maxAttackSpeed, as));
   return as;
 }
 function getAttackInterval(stats) { return 1 / getFinalAttackSpeed(stats); }
-function getWindupDuration(stats) { return getAttackInterval(stats) * stats.windupPercent; }
+// 평타 선딜레이(PC 위키 Attack speed): 선딜 = 기본 선딜 + 보정치 × (현재 공격 시간 × 선딜% − 기본 선딜).
+// 기본 선딜 = 선딜% / 기본 공속. 보정치(windupModifier)는 기본 1(가렌/다리우스 0.5 - 공속이 올라도
+// 선딜이 덜 줄어든다). 선딜%는 챔피언마다 다르다(대부분 15~30%). 버그 수정: 예전엔 모든 챔피언
+// 40% 고정이라 평타가 원작보다 훨씬 늦게 나갔다.
+function getWindupDuration(stats) {
+  const pct = stats.windupPercent;
+  const baseWindup = pct / (stats.baseAttackSpeed || 1);
+  const mod = stats.windupModifier == null ? 1 : stats.windupModifier;
+  return baseWindup + mod * (getAttackInterval(stats) * pct - baseWindup);
+}
 function getRecoveryDuration(stats) { return Math.max(0, getAttackInterval(stats) - getWindupDuration(stats)); }
 
 const DAMAGE_TYPE = { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' };
@@ -1240,8 +1251,8 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   // 받는 마법 피해에 감소가 두 번 들어갔다(가렌 W 30%가 마법 피해엔 51%처럼 작동). 반대로
   // takeDamage가 없는 대상(허수아비)은 물리/고정 피해에 피해 감소가 아예 적용되지 않았다.
   if (target && typeof target.takeDamage !== 'function') {
-    let red = typeof getDamageReductionPercent === 'function' ? getDamageReductionPercent(target) : 0;
-    if (damageType === DAMAGE_TYPE.MAGICAL && typeof getMagicDamageReductionPercent === 'function') red = Math.max(red, getMagicDamageReductionPercent(target));
+    let red = typeof getDamageReductionPercent === 'function' ? getDamageReductionPercent(target, source) : 0;
+    if (damageType === DAMAGE_TYPE.MAGICAL && typeof getMagicDamageReductionPercent === 'function') red = getMagicDamageReductionPercent(target, source);
     dmg *= 1 - Math.max(0, Math.min(1, red));
   }
   // 아이템 패시브(쇼진의창 "집중된 의지" - 스택당 피해량 증폭) - 실제
@@ -1551,19 +1562,29 @@ function getVulnerablePercent(target) {
   for (const e of target.statusEffects) if (e.type === 'VULNERABLE' && e.expiresAt > now) v += e.value;
   return v;
 }
-function getDamageReductionPercent(target) {
+// 피해 감소 합산(원작): 서로 다른 출처는 곱연산 1-(1-a)(1-b). 단 같은 스킬의 여러 단계(drGroup -
+// 예: 마스터 이 명상 70%→45%)는 그룹 안에서 최대값만. halfVsTurret 효과는 포탑 피해에 절반만.
+// 버그 수정: 예전엔 모든 출처 중 최대값 하나만 적용해, 가렌 W와 다른 감소 효과가 겹치지 않았다.
+function _combineDamageReduction(target, types, source) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();
-  let v = 0;
-  for (const e of target.statusEffects) if (e.type === 'DAMAGE_REDUCTION' && e.expiresAt > now) v = Math.max(v, e.value);
-  return v;
+  const byGroup = new Map();
+  for (const e of target.statusEffects) {
+    if (!types.includes(e.type) || e.expiresAt <= now) continue;
+    let v = Math.max(0, Math.min(1, e.value || 0));
+    if (e.halfVsTurret && source && source.isTurret) v *= 0.5;
+    const key = e.drGroup || e.id || e.type;
+    byGroup.set(key, Math.max(byGroup.get(key) || 0, v));
+  }
+  let keep = 1;
+  for (const v of byGroup.values()) keep *= 1 - v;
+  return 1 - keep;
 }
-function getMagicDamageReductionPercent(target) {
-  if (!target || !target.statusEffects) return 0;
-  const now = performance.now();
-  let v = 0;
-  for (const e of target.statusEffects) if ((e.type === 'MAGIC_DAMAGE_REDUCTION' || e.type === 'DAMAGE_REDUCTION') && e.expiresAt > now) v = Math.max(v, e.value);
-  return Math.max(0, Math.min(1, v));
+function getDamageReductionPercent(target, source = null) {
+  return _combineDamageReduction(target, ['DAMAGE_REDUCTION'], source);
+}
+function getMagicDamageReductionPercent(target, source = null) {
+  return Math.max(0, Math.min(1, _combineDamageReduction(target, ['MAGIC_DAMAGE_REDUCTION', 'DAMAGE_REDUCTION'], source)));
 }
 function getMoveSpeedBuffPercent(target) {
   if (!target || !target.statusEffects) return 0;
@@ -2035,14 +2056,18 @@ function growPercent(base, growthPercent, level) { return base * (1 + (growthPer
 function statGrowthFactor(level) { const n = Math.max(0, (level || 1) - 1); return n * (0.7025 + 0.0175 * n); }
 function growStat(base, growth, level) { return base + (growth || 0) * statGrowthFactor(level); }
 
+// 기본 스탯/쿨다운/비용/사거리는 라이엇 공식 Data Dragon 16.20.1(PC 최신)과 전수 대조했다
+// (tools/ddragon_compare.js 결과 - 레벨당 공격력은 Data Dragon이 0으로 내보내는 알려진 문제로 제외).
 const CHAMPION_DATA = {
   yasuo: {
     displayName: '야스오',
     stats: {
       hp: 590, hpGrowth: 110, hpRegen: 6.5, hpRegenGrowth: 0.9,
-      ad: 60, adGrowth: 3, attackSpeed: 0.697, attackSpeedGrowthPercent: 3.5,
+      ad: 60, adGrowth: 2.5, attackSpeed: 0.697, attackSpeedGrowthPercent: 3.5,
       armor: 32, armorGrowth: 4.6, mr: 32, mrGrowth: 2.05,
       range: 175, moveSpeed: 345, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 22%, 공속 계수 0.67
+      windupPercent: 0.22, attackSpeedRatio: 0.67,
     },
     passive: {
       name: '낭인의 길',
@@ -2062,12 +2087,12 @@ const CHAMPION_DATA = {
       // 요네.bin YoneQ 수치와 champion_data 요네 주석 참고). 예전 [4,3.33,…,1.33]/
       // [0.4,…,0.13]은 "추가 공속에 따라 줄어드는 범위"를 레벨별 값으로 잘못 옮긴 것이었다.
       // 추가 공속 1%당 쿨다운 0.6%(최대 66.67%), 시전 시간 0.41667%(최대 50%) 감소.
-      name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 450, width: 80,
+      name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 475, width: 80,
       damageByLevel: [20,45,70,95,120], totalAdRatio: 1.05,
       stackDuration: 6, knockupDuration: 1, tornadoRange: 1150, circleRadius: 375,
       castTime: [0.35, 0.35, 0.35, 0.35, 0.35],
       cdReductionPerBonusAs: 0.6, cdReductionMax: 0.6667, castReductionPerBonusAs: 0.41667, castReductionMax: 0.5,
-      tornadoWidth: 180, tornadoSpeed: 1200, tornadoGuessed: true, // 회오리 폭/속도 미확인
+      tornadoWidth: 180, tornadoSpeed: 1200, // PC 위키 야스오 문서: 회오리 사거리 1150, 폭 180, 속도 1200
       damageType: 'PHYSICAL',
     },
     W: {
@@ -2084,9 +2109,9 @@ const CHAMPION_DATA = {
     },
     R: {
       name: '최후의 숨결', cooldown: [70,50,30], range: 1400,
-      // 대상(공중에 뜬 적 챔피언) 주변 400 안의 공중에 뜬 적 챔피언 전부(반경 미확인 -
-      // rTargetRadiusGuessed). 피해 계수는 "추가" 공격력 150%.
-      damageByLevel: [200,350,500], bonusAdRatio: 1.5, knockupDuration: 1, targetRadius: 400, rTargetRadiusGuessed: true,
+      // 대상(공중에 뜬 적 챔피언) 주변 400 안의 공중에 뜬 적 챔피언 전부를 1초 동안 띄운다(PC 위키).
+      // 피해 계수는 "추가" 공격력 150%.
+      damageByLevel: [200,350,500], bonusAdRatio: 1.5, knockupDuration: 1, targetRadius: 400,
       armorIgnoreBonusPercent: 0.60, buffDuration: 15, damageType: 'PHYSICAL',
     },
   },
@@ -2107,6 +2132,8 @@ const CHAMPION_DATA = {
       ad: 62, adGrowth: 2, attackSpeed: 0.625, attackSpeedGrowthPercent: 3.5,
       armor: 33, armorGrowth: 4.6, mr: 32, mrGrowth: 2.05,
       range: 175, moveSpeed: 345, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 22%
+      windupPercent: 0.22,
     },
     passive: {
       name: '사냥꾼의 길',
@@ -2153,7 +2180,7 @@ const CHAMPION_DATA = {
     W: {
       name: '영혼 가르기',
       cooldown: 14, cooldownFloor: 6, castTime: 0.5, castTimeFloor: 0.19,
-      range: 600, angleDeg: 80,
+      range: 700, angleDeg: 80,
       // 수치 출처 갱신(요네.bin YoneW 실데이터로 재확인):
       // MaxHealthDamage(레벨1~5) = 7/8/9/10/11% (이전에 위키 문서 프로즈를
       // 옮기며 8/9/10/11/12%로 한 칸씩 밀려 잘못 반영했던 것을 수정).
@@ -2199,8 +2226,10 @@ const CHAMPION_DATA = {
     stats: {
       hp: 660, hpGrowth: 111, hpRegen: 8, hpRegenGrowth: 0.75,
       ad: 69, adGrowth: 3.1, attackSpeed: 0.665, attackSpeedGrowthPercent: 2.75,
-      armor: 35, armorGrowth: 5.2, mr: 32, mrGrowth: 2.05,
+      armor: 35, armorGrowth: 5.2, mr: 28, mrGrowth: 2.05,
       range: 125, moveSpeed: 345, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 17.73%
+      windupPercent: 0.1773,
     },
     passive: { name: '분노의 지배', rageMax: 100, empoweredThreshold: 50, lowHpThreshold: 0.5, lowHpMultiplier: 1.5, combatExitSec: 12, rageDecayInterval: 5, rageDecayAmount: 20 },
     Q: {
@@ -2239,6 +2268,8 @@ const CHAMPION_DATA = {
       ad: 69, adGrowth: 4.5, attackSpeed: 0.625, attackSpeedGrowthPercent: 3.65,
       armor: 38, armorGrowth: 4.2, mr: 32, mrGrowth: 1.55,
       range: 175, moveSpeed: 340, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 18% (보정 0.5)
+      windupPercent: 0.18, windupModifier: 0.5,
     },
     passive: {
       name: '인내심',
@@ -2286,12 +2317,15 @@ const CHAMPION_DATA = {
       hp: 652, hpGrowth: 114, hpRegen: 10, hpRegenGrowth: 0.95,
       ad: 64, adGrowth: 5, attackSpeed: 0.625, attackSpeedGrowthPercent: 1,
       armor: 37, armorGrowth: 5.2, mr: 32, mrGrowth: 2.05,
-      range: 175, moveSpeed: 340, mana: 263, manaGrowth: 57.5, manaRegen: 6.6, manaRegenGrowth: 0.35,
+      range: 175, moveSpeed: 340, mana: 263, manaGrowth: 58, manaRegen: 6.6, manaRegenGrowth: 0.35,
+      // PC 위키 기본 스탯: 평타 선딜 20% (보정 0.5)
+      windupPercent: 0.20, windupModifier: 0.5,
     },
     passive: {
       name: '과다출혈',
       desc: '기본 공격/공격 스킬이 대상에게 5초에 걸친 물리 피해 출혈을 남긴다(최대 5중첩). 몬스터에는 250% 피해.',
-      maxStacks: 5, dotDuration: 5, dotTickInterval: 1,
+      // PC 위키: 중첩당 1.25초마다 3.25~7.5(+추가 공격력 7.5%) = 5초간 4틱(예전 1초 간격은 오류).
+      maxStacks: 5, dotDuration: 5, dotTickInterval: 1.25,
       // 1중첩 총 피해 13~30(레벨당 +1) + 0.3 추가AD, 최대(5)중첩 총 피해 65~150(레벨당 +5) + 1.5 추가AD
       oneStackBase: 13, oneStackGrowth: 1, oneStackBonusAdRatio: 0.3,
       maxStackBase: 65, maxStackGrowth: 5, maxStackBonusAdRatio: 1.5,
@@ -2322,9 +2356,8 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '포획', cooldown: [26, 23.5, 21, 18.5, 16], manaByLevel: [70, 60, 50, 40, 30],
-      // 전방 부채꼴 안의 모든 적을 끌어온다. 부채꼴 각도는 공개 수치를 확인하지 못해
-      // 임시값(coneAngleGuessed) - 확인되면 이 값만 바꾸면 된다.
-      range: 535, castTime: 0.25, slowPercent: 40, slowDuration: 1, coneAngleDeg: 50, coneAngleGuessed: true,
+      // 전방 부채꼴(50°, 반경 535) 안의 모든 적을 끌어온다.
+      range: 535, castTime: 0.25, slowPercent: 40, slowDuration: 1, coneAngleDeg: 50, // PC 위키 Template:Data Darius/Apprehend: 각도 50°
       armorPenPercentByLevel: [20, 25, 30, 35, 40],
     },
     R: {
@@ -2343,6 +2376,8 @@ const CHAMPION_DATA = {
       ad: 60, adGrowth: 4, attackSpeed: 0.625, attackSpeedGrowthPercent: 1.75,
       armor: 33, armorGrowth: 4.7, mr: 28, mrGrowth: 2.05,
       range: 125, moveSpeed: 340, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 21.429%
+      windupPercent: 0.21429,
     },
     passive: {
       name: '투기장의 투지',
@@ -2402,6 +2437,8 @@ const CHAMPION_DATA = {
       ad: 58, adGrowth: 2, attackSpeed: 0.697, attackSpeedGrowthPercent: 1.25,
       armor: 27, armorGrowth: 4.2, mr: 32, mrGrowth: 2.05,
       range: 225, moveSpeed: 340, mana: 350, manaGrowth: 35, manaRegen: 8.2, manaRegenGrowth: 0.7,
+      // PC 위키 기본 스탯: 평타 선딜 22%
+      windupPercent: 0.22,
     },
     passive: {
       name: '영원한 기쁨',
@@ -2498,6 +2535,8 @@ const CHAMPION_DATA = {
       ad: 61, adGrowth: 4, attackSpeed: 0.625, attackSpeedGrowthPercent: 1,
       armor: 37, armorGrowth: 4.2, mr: 32, mrGrowth: 2.05,
       range: 175, moveSpeed: 335, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 21.133%
+      windupPercent: 0.21133,
     },
     passive: {
       name: '암흑 탄생',
@@ -2528,7 +2567,7 @@ const CHAMPION_DATA = {
       damageByLevel: [60, 80, 100, 120, 140], apRatio: 0.45, pullDelay: 0.5, damageType: 'MAGICAL',
     },
     R: {
-      name: '죽음의 세계', cooldown: [140, 120, 100], mana: 0, range: 650, castTime: 0.5,
+      name: '죽음의 세계', cooldown: [120, 110, 100] /* Data Dragon 16.20.1 */, mana: 0, range: 650, castTime: 0.5,
       duration: 7, statStealPercent: 10, // 훔치는 주요 능력치 비율 - 이 데모에선 방어력/마저만 실제 전투에 영향을 주므로 그 둘만 반영
     },
   },
@@ -2536,24 +2575,28 @@ const CHAMPION_DATA = {
     displayName: '노틸러스',
     stats: {
       hp: 646, hpGrowth: 100, hpRegen: 8.5, hpRegenGrowth: 0.55,
-      ad: 61, adGrowth: 3.3, attackSpeed: 0.613, attackSpeedGrowthPercent: 1,
-      armor: 39, armorGrowth: 4.65, mr: 32, mrGrowth: 2.05,
-      range: 175, moveSpeed: 325, mana: 400, manaGrowth: 47, manaRegen: 8.63, manaRegenGrowth: 0.5,
+      ad: 58, adGrowth: 3.3, attackSpeed: 0.706, attackSpeedGrowthPercent: 1,
+      armor: 39, armorGrowth: 4.95, mr: 32, mrGrowth: 2.05,
+      range: 175, moveSpeed: 325, mana: 400, manaGrowth: 47, manaRegen: 8.65, manaRegenGrowth: 0.5,
+      // PC 위키 기본 스탯: 평타 선딜 30.637%, 공속 계수 0.612
+      windupPercent: 0.30637, attackSpeedRatio: 0.612,
     },
     // 수치 출처: 사용자 원본 자료에는 노틸러스 스킬 수치가 없다(패시브 설명만
     // 있음). 공개 LoL 자료를 웹 검색 스니펫으로 교차 확인한 값을 쓰고, 확인하지
     // 못한 값은 옆에 "미확인"으로 표시했다 - 원문을 받으면 그 값만 바꾸면 된다.
     passive: {
       name: '강력한 일격', desc: '첫 공격이 추가 물리 피해 + 속박(동일 대상 6초 1회).',
-      bonusDamageBase: 2, bonusDamagePerLevel: 6, // 8~110(레벨 비례) - 미확인(기억 기반 공개 수치)
-      rootByLevel: { breakpoints: [1, 6, 11, 16], values: [0.75, 1.0, 1.25, 1.5] }, // 미확인(기억 기반 공개 수치)
+      // PC 위키 노틸러스 문서: 14~128(레벨 비례). 같은 문서의 패치 기록엔 14~116도 보여 18레벨
+      // 끝값은 미확인(bonusDamageGuessed) - 1레벨 14는 두 기록 모두 일치. 예전 8~110은 옛 값.
+      bonusDamageAtLevel1: 14, bonusDamageAtLevel18: 128, bonusDamageGuessed: true,
+      rootByLevel: { breakpoints: [1, 6, 11, 16], values: [0.75, 1.0, 1.25, 1.5] }, // PC 위키: 0.75~1.5초(V9.12). 구간 1/6/11/16은 미확인
       sameTargetCooldownSec: 6, // 원본 설명 "동일 대상 6초 1회"
     },
     Q: {
       name: '닻줄 견인', cooldown: [14, 13, 12, 11, 10], mana: 60, range: 1150,
       damageByLevel: [85, 125, 165, 205, 245], apRatio: 0.9, damageType: 'MAGICAL', // 26.18 피해 조정 반영, AP 계수 90%
-      missileSpeed: 2000, width: 180, // 폭 미확인
-      castTimeSec: 0.25, // 미확인 - 일반 스킬샷 기본 캐스트 타임
+      missileSpeed: 2000, width: 180, // PC 위키 Template:Data Nautilus/Dredge Line: 속도 2000, 폭 180(가장자리)
+      castTimeSec: 0.25, // PC 위키: 시전 시간 0.25
       terrainRefundPercent: 50, // 지형에 맞으면 재사용 대기시간·마나 50% 환급
     },
     W: {
@@ -2565,9 +2608,10 @@ const CHAMPION_DATA = {
     E: {
       name: '역류', cooldown: [7, 6.5, 6, 5.5, 5], mana: [50, 60, 70, 80, 90], radius: 600,
       damageByLevel: [55, 90, 125, 160, 195], apRatio: 0.5, damageType: 'MAGICAL',
-      explosionCount: 3, subsequentDamagePercent: 50, // 같은 대상에게 두 번째부터 50% - 미확인
-      explosionIntervalSec: 0.25, // 미확인
-      slowPercentByLevel: [30, 35, 40, 45, 50], slowDecaySec: 1.5, // 미확인(1.5초에 걸쳐 감쇠)
+      // PC 위키: 폭발 3회(의도된 간격 0.25초), 두 번째 이후 폭발은 50% 피해, 둔화는 1.5초에 걸쳐 감쇠(2→1.5초 패치).
+      explosionCount: 3, subsequentDamagePercent: 50,
+      explosionIntervalSec: 0.25,
+      slowPercentByLevel: [30, 35, 40, 45, 50], slowDecaySec: 1.5,
     },
     R: {
       name: '폭뢰', cooldown: [120, 100, 80], mana: 100, range: 825,
@@ -2576,8 +2620,9 @@ const CHAMPION_DATA = {
       stunByLevel: [1, 1.5, 2], // 주 대상 에어본+기절 총합
       pathKnockupSec: 0.75, // 미확인
       pathWidth: 300, // 미확인 - 경로 충격파 판정 폭
-      shockwaveSpeed: 1400, // 미확인 - 유도형이라 도착 지연에만 영향
-      castTimeSec: 0.25, // 미확인
+      // PC 위키 Template:Data Nautilus/Depth Charge: 시전 0.46초, 충격파 속도 275에서 초당 +466.67 가속.
+      shockwaveSpeed: 275, shockwaveAccelPerSec: 466.67,
+      castTimeSec: 0.46,
       damageType: 'MAGICAL',
     },
   },
@@ -2586,8 +2631,10 @@ const CHAMPION_DATA = {
     stats: {
       hp: 640, hpGrowth: 105, hpRegen: 7.5, hpRegenGrowth: 0.65,
       ad: 65, adGrowth: 2.5, attackSpeed: 0.679, attackSpeedGrowthPercent: 2.5,
-      armor: 33, armorGrowth: 4.5, mr: 32, mrGrowth: 2.05,
-      range: 175, moveSpeed: 355, mana: 251, manaGrowth: 42, manaRegen: 7.26, manaRegenGrowth: 0.45,
+      armor: 33, armorGrowth: 5, mr: 32, mrGrowth: 2.05,
+      range: 175, moveSpeed: 355, mana: 251, manaGrowth: 42, manaRegen: 7.25, manaRegenGrowth: 0.45,
+      // PC 위키 기본 스탯: 평타 선딜 24.375%
+      windupPercent: 0.24375,
     },
     passive: {
       name: '2연속 공격',
@@ -2596,8 +2643,10 @@ const CHAMPION_DATA = {
     },
     Q: {
       name: '일격필살', cooldown: [20, 19.5, 19, 18.5, 18], manaByLevel: [50, 55, 60, 65, 70], range: 600,
-      baseDamageByLevel: [20, 40, 60, 80, 100], bonusAdRatio: 0.7,
-      critDamageByLevel: [40, 80, 120, 160, 200], critBonusAdRatio: 1.4,
+      // PC 위키 Template:Data Master Yi/Alpha Strike: 20~100 + 총 공격력 70%, 몬스터 추가 60~160
+      // (V25.16), 치명타는 일반 치명타 배율(V25.16에 치명타 추가 피해 계수 75%→100%).
+      baseDamageByLevel: [20, 40, 60, 80, 100], adRatio: 0.7,
+      monsterBonusDamageByLevel: [60, 85, 110, 135, 160],
       extraHitPercent: 25, hitCount: 4, hitIntervalSec: 0.2, basicAttackCdrSec: 1,
       damageType: 'PHYSICAL',
       // Alpha Strike 상태머신 전용 설정(요청 문서 1, 섹션 32 "숫자를 코드
@@ -2642,22 +2691,24 @@ const CHAMPION_DATA = {
   chogath: {
     displayName: '초가스',
     stats: {
-      hp: 640, hpGrowth: 110, hpRegen: 9, hpRegenGrowth: 0.85,
-      ad: 69, adGrowth: 4.2, attackSpeed: 0.625, attackSpeedGrowthPercent: 1.44,
-      armor: 38, armorGrowth: 5, mr: 32, mrGrowth: 2.05,
+      hp: 644, hpGrowth: 94, hpRegen: 9, hpRegenGrowth: 0.85,
+      ad: 69, adGrowth: 4.2, attackSpeed: 0.658, attackSpeedGrowthPercent: 1.44,
+      armor: 38, armorGrowth: 4.5, mr: 32, mrGrowth: 2.05,
       range: 125, moveSpeed: 345, mana: 270, manaGrowth: 60, manaRegen: 7.2, manaRegenGrowth: 0.45,
+      // PC 위키 기본 스탯: 평타 선딜 21.9%
+      windupPercent: 0.219,
     },
     passive: {
       name: '육식', desc: '유닛 처치 시 체력/마나 회복(레벨 비례).',
       healBase: 16, healPerLevel: 2, manaBase: 4.44, manaPerLevel: 0.28,
     },
     Q: {
-      name: '파열', cooldown: 7, mana: 60, range: 950, castTime: 0.25, impactDelay: 0.625,
+      name: '파열', cooldown: 6 /* Data Dragon 16.20.1 */, mana: 60, range: 950, castTime: 0.25, impactDelay: 0.625,
       damageByLevel: [80, 140, 200, 260, 320], apRatio: 1.0,
       knockupDuration: 1, slowPercent: 60, slowDuration: 1.5, damageType: 'MAGICAL',
     },
     W: {
-      name: '흉포한 울부짖음', cooldown: [13, 12, 11, 10, 9], manaByLevel: [70, 80, 90, 100, 110],
+      name: '흉포한 울부짖음', cooldown: [11, 10.5, 10, 9.5, 9] /* Data Dragon 16.20.1 */, manaByLevel: [70, 80, 90, 100, 110],
       range: 650, coneAngleDeg: 60,
       damageByLevel: [80, 135, 190, 245, 300], apRatio: 0.7,
       silenceDurationByLevel: [1.6, 1.7, 1.8, 1.9, 2.0], damageType: 'MAGICAL',
@@ -2687,6 +2738,8 @@ const CHAMPION_DATA = {
       // 확장, 새 자원 시스템을 따로 만들지 않음). manaRegen은 다른 챔피언과 같이
       // "5초당" 회복량으로 해석된다(regenTick이 /5) - 기력 50/5초 = 초당 10(원작과 동일).
       mana: 200, manaGrowth: 0, manaRegen: 50, manaRegenGrowth: 0,
+      // PC 위키 기본 스탯: 평타 선딜 19.531%
+      windupPercent: 0.19531,
     },
     passive: {
       name: '질풍격',
@@ -2697,7 +2750,7 @@ const CHAMPION_DATA = {
     },
     Q: {
       name: '음파/공명의 일격', cooldown: [10, 9, 8, 7, 6], energy1: 50, energy2: 25,
-      range1: 1200, range2: 1250, markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800,
+      range1: 1100, range2: 1250, markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800,
       damageByLevel: [60, 90, 120, 150, 180], bonusAdRatio: 0.9,
       maxDamageByLevel: [120, 180, 240, 300, 360], maxBonusAdRatio: 1.8,
       damageType: 'PHYSICAL',
@@ -2705,7 +2758,8 @@ const CHAMPION_DATA = {
     W: {
       name: '방호/강철의 의지', cooldown: 7, energy1: 50, energy2: 25,
       range1: 700, markDuration: 3,
-      shieldByLevel: [60, 105, 150, 195, 240], shieldApRatio: 0.8, shieldDuration: 2,
+      // PC 위키 Template:Data Lee Sin/Safeguard: 70/115/160/205/250 (+ 주문력 80%).
+      shieldByLevel: [70, 115, 160, 205, 250], shieldApRatio: 0.8, shieldDuration: 2,
       lifestealPercentByLevel: [10, 14, 18, 22, 26], lifestealDuration: 4,
     },
     E: {
@@ -2725,11 +2779,13 @@ const CHAMPION_DATA = {
   displayName: '벡스',
 
      stats: {
-     hp: 630, hpGrowth: 104, hpRegen: 6.5, hpRegenGrowth: 0.55,
-     ad: 54, adGrowth: 2.75, attackSpeed: 0.669, attackSpeedGrowthPercent: 1.36,
-     armor: 23, armorGrowth: 4, mr: 30, mrGrowth: 1.3,
+     hp: 590, hpGrowth: 104, hpRegen: 6.5, hpRegenGrowth: 0.6,
+     ad: 54, adGrowth: 2.75, attackSpeed: 0.669, attackSpeedGrowthPercent: 1,
+     armor: 23, armorGrowth: 4.45, mr: 28, mrGrowth: 1.3,
      range: 550, moveSpeed: 335,
-     mana: 490, manaGrowth: 32, manaRegen: 8, manaRegenGrowth: 0.8,
+     mana: 490, manaGrowth: 32, manaRegen: 6, manaRegenGrowth: 0.8,
+      // PC 위키 기본 스탯: 평타 선딜 15.625%, 공속 계수 0.625
+      windupPercent: 0.15625, attackSpeedRatio: 0.625,
      },
 
      passive: {
@@ -2750,10 +2806,10 @@ const CHAMPION_DATA = {
       damageType: 'MAGICAL',
      //적중한 적에게 우울 소모
      //폭이 넓다가 일정시간 후 폭이 좁아짐
-     }, 
+     },
 
-     W: { 
-      name: '거리 두기', cooldown: 13, mana: 75,
+     W: {
+      name: '거리 두기', cooldown: [16, 15, 14, 13, 12] /* Data Dragon 16.20.1 */, mana: 75,
       range: 475, damageByLevel: [80, 120, 160, 200, 240],
       apRatio: 0.3, shieldByLevel: [50, 80, 110, 140, 170], shieldApRatio: 0.75, shieldDuration: 2,
       shieldApRatio: 0.75, damageType: 'MAGICAL',
@@ -2761,11 +2817,11 @@ const CHAMPION_DATA = {
      },
 
      E: {
-      name: '커지는 안개', cooldown: [13, 12, 11, 10, 9], mana: 70,
+      name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: 70,
       range: 800, damageByLevel: [60, 105, 150, 195, 240],
       apRatio: 0.4, slowPercentByLevel: [30, 35, 40, 45, 50],
       slowDuration: 2, damageType: 'MAGICAL',
-      piercesUnits: true, 
+      piercesUnits: true,
       //챔피언을 처치하면 파멸과 우울 재사용 대기시간의 25%를 돌려받음
       //적중한 적에게 우울 적용
      },
@@ -2815,10 +2871,12 @@ const CHAMPION_DATA = {
       // baseStaticHPRegenModifiable=0.8) 이 프로젝트가 쓰는 "HP5" 단위와
       // 직접 대응이 불확실하다 - 다른 챔피언들과 동일한 관례(예: 다리우스
       // hpRegen=10)에 맞춰 커뮤니티에 잘 알려진 근사치를 그대로 둔다.
-      hp: 600, hpGrowth: 102, hpRegen: 4.7, hpRegenGrowth: 0.55,
+      hp: 600, hpGrowth: 102, hpRegen: 4, hpRegenGrowth: 0.65,
       ad: 60, adGrowth: 3.75, attackSpeed: 0.625, attackSpeedGrowthPercent: 2.5,
       armor: 24, armorGrowth: 4.2, mr: 33, mrGrowth: 1.1,
-      range: 550, moveSpeed: 325, mana: 375, manaGrowth: 45, manaRegen: 8.5, manaRegenGrowth: 0.65,
+      range: 550, moveSpeed: 325, mana: 375, manaGrowth: 70, manaRegen: 8.5, manaRegenGrowth: 1,
+      // PC 위키 기본 스탯: 평타 선딜 18.839%
+      windupPercent: 0.18839,
     },
     passive: {
       name: '치솟는 마력',
@@ -2930,6 +2988,8 @@ const CHAMPION_DATA = {
       ad: 53, adGrowth: 3, attackSpeed: 0.668, attackSpeedGrowthPercent: 2.2,
       armor: 21, armorGrowth: 4.2, mr: 30, mrGrowth: 1.3,
       range: 550, moveSpeed: 330, mana: 418, manaGrowth: 25, manaRegen: 8, manaRegenGrowth: 0.8,
+      // PC 위키 기본 스탯: 평타 선딜 20%, 공속 계수 0.625
+      windupPercent: 0.20, attackSpeedRatio: 0.625,
     },
     passive: {
       name: '정기 흡수',
@@ -3043,8 +3103,10 @@ const CHAMPION_DATA = {
     stats: {
       hp: 600, hpGrowth: 105, hpRegen: 3.5, hpRegenGrowth: 0.55,
       ad: 59, adGrowth: 3.4, attackSpeed: 0.658, attackSpeedGrowthPercent: 3.5,
-      armor: 24, armorGrowth: 4.6, mr: 30, mrGrowth: 1.3,
+      armor: 24, armorGrowth: 4, mr: 33, mrGrowth: 1.1,
       range: 575, moveSpeed: 330, mana: 320, manaGrowth: 40, manaRegen: 8, manaRegenGrowth: 0.8,
+      // PC 위키 기본 스탯: 평타 선딜 17.544%
+      windupPercent: 0.17544,
     },
     passive: {
       name: '살아있는 복수',
@@ -3137,10 +3199,12 @@ const CHAMPION_DATA = {
   ashe: {
     displayName: '애쉬',
     stats: {
-      hp: 610, hpGrowth: 99, hpRegen: 3.75, hpRegenGrowth: 0.65,
-      ad: 59, adGrowth: 3.3, attackSpeed: 0.658, attackSpeedGrowthPercent: 1.0,
-      armor: 26, armorGrowth: 4.45, mr: 30, mrGrowth: 1.3,
-      range: 600, moveSpeed: 325, mana: 280, manaGrowth: 35, manaRegen: 6.75, manaRegenGrowth: 0.65,
+      hp: 610, hpGrowth: 101, hpRegen: 3.5, hpRegenGrowth: 0.55,
+      ad: 59, adGrowth: 3.3, attackSpeed: 0.658, attackSpeedGrowthPercent: 3,
+      armor: 26, armorGrowth: 4.6, mr: 33, mrGrowth: 1.1,
+      range: 600, moveSpeed: 325, mana: 280, manaGrowth: 35, manaRegen: 7, manaRegenGrowth: 0.65,
+      // PC 위키 기본 스탯: 평타 선딜 21.93%
+      windupPercent: 0.2193,
     },
     passive: {
       name: '서리 화살',
@@ -3169,7 +3233,7 @@ const CHAMPION_DATA = {
     W: {
       name: '일제 사격',
       desc: '전방에 부채꼴로 여러 발의 화살을 발사한다. 화살들은 서로 다른 대상을 노리지만, 한 대상은 한 번만 피해를 입는다.',
-      cooldown: [18, 17, 16, 15, 14], mana: [50, 60, 70, 80, 90], // 마나 수치는 공식 확인 못함 - 유사 포크류 스킬 관례로 근사
+      cooldown: [18, 14.5, 11, 7.5, 4] /* Data Dragon 16.20.1 */, mana: [50, 60, 70, 80, 90], // 마나 수치는 공식 확인 못함 - 유사 포크류 스킬 관례로 근사
       range: 1200, coneAngleDeg: 46, // 사거리/각도는 공식 확인 못함 - 널리 알려진 근사값
       damageByLevel: [25, 45, 65, 85, 105], bonusAdRatio: 1.2,
       castTimeSec: 0.25,
@@ -3186,7 +3250,7 @@ const CHAMPION_DATA = {
     R: {
       name: '마법의 수정화살',
       desc: '전 맵 사거리로 거대한 얼음 화살을 발사한다. 처음 맞힌 적 챔피언에게 마법 피해를 입히고 기절시키며(비행 거리가 길수록 기절 시간 증가), 주변의 다른 적에게도 같은 피해를 입히지만 기절은 걸지 않는다.',
-      cooldown: [120, 100, 80], mana: [150, 175, 200],
+      cooldown: [100, 80, 60] /* Data Dragon 16.20.1 */, mana: [150, 175, 200],
       range: 20000, // "글로벌" 사거리 - ezreal.js의 R(정조준 사격)과 동일한 관례(20000) 재사용
       missileSpeed: 1650, width: 130,
       damageByLevel: [200, 400, 600], apRatio: 1.2,
@@ -3237,6 +3301,10 @@ function computeChampionStats(championId, level) {
     // 둬도 자동으로 올바르게 동작).
     attackRange: lolRangeToWorld(s.range),
     baseMoveSpeed: lolRangeToWorld(s.moveSpeed),
+    // 평타 선딜%/보정치/공속 계수(PC 위키 기본 스탯 상자). 값이 없는 챔피언은 엔진 기본값 유지.
+    windupPercent: s.windupPercent,
+    windupModifier: s.windupModifier,
+    attackSpeedRatio: s.attackSpeedRatio,
   };
 }
 
@@ -9935,6 +10003,9 @@ class CharacterController {
       this.stats.abilityPower = (this.itemBonusAP || 0) * (1 + (this.itemTotalApMultiplierBonus || 0));
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
       this.stats.levelBonusAttackSpeed = base.levelBonusAttackSpeed || 0;
+      this.stats.windupPercent = base.windupPercent != null ? base.windupPercent : 0.4;
+      this.stats.windupModifier = base.windupModifier != null ? base.windupModifier : 1;
+      this.stats.attackSpeedRatio = base.attackSpeedRatio || base.baseAttackSpeed;
       this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0);
       this.stats.baseArmor = base.armor;
       this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0) + (this.itemTempMrBonus || 0);
@@ -11935,7 +12006,7 @@ CharacterController.prototype._beginAttackSwing = function() {
     // 나눠서 스윙 전체 시간이 1/8이 됐는데, 실제로는 선딜레이만 줄어들고
     // recovery(후딜레이)는 왼손과 동일한 정상 값을 그대로 유지해야 한다.
     const baseInterval = getAttackInterval(this.stats);
-    const baseWindup = baseInterval * this.stats.windupPercent;
+    const baseWindup = Math.min(baseInterval, getWindupDuration(this.stats)); // 챔피언별 선딜%/보정치(PC 위키)
     const baseRecovery = Math.max(0, baseInterval - baseWindup);
     let windup = baseWindup;
     const recovery = baseRecovery; // 오른손이어도 recovery는 그대로 - 선딜레이만 줄어든다
@@ -12413,6 +12484,11 @@ CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
     }
 
     if (this.championId === 'yasuo' && slot === 'Q' && this.currentActionKey === 'yasuoE' && this.currentPhase === 'ACTIVE') { this._dispatchCast(slot, mouseWorldPoint, false); return; }
+    // PC 위키: 야스오 R은 E(질풍검) 돌진 중에도 쓸 수 있다.
+    if (this.championId === 'yasuo' && slot === 'R' && this.currentActionKey === 'yasuoE' && this.currentPhase === 'ACTIVE') { this._dispatchCast(slot, mouseWorldPoint, false); return; }
+    // PC 패치 기록(V1.0.0.97 이후): 가렌은 E(심판) 회전 중에도 모든 스킬을 쓸 수 있고 회전은 계속된다.
+    // Q/W는 원래 허용돼 있었고, R도 회전을 끊지 않는 전용 경로로 처리한다(예전엔 막혀 있었다).
+    if (this.championId === 'garen' && slot === 'R' && this.currentActionKey === 'eChannel') { this._garenCastRDuringE(); return; }
     // 닐라 E 돌진 중 Q는 같은 돌진 경로에 Q를 겹쳐서 사용할 수 있다. E의
     // 돌진 액션을 끊지 않고 Q만 별도로 실행한다.
     if (this.championId === 'nilah' && slot === 'Q' && this.currentActionKey === 'nilahE' && this.currentPhase === 'ACTIVE') {
@@ -13394,7 +13470,8 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
     const channelCfg = db && db.E && db.E.directionalChannel;
 
     if (channelCfg) {
-      if (this.currentActionKey === 'eChannel') { this._endEChannel(); return; }
+      // PC 위키: 심판은 시전 1초 뒤부터 재입력으로 일찍 끝낼 수 있다(예전엔 즉시 끝낼 수 있었다).
+      if (this.currentActionKey === 'eChannel') { if ((this._eChannelTimer || 0) >= (channelCfg.recastMinSec ?? 1)) this._endEChannel(); return; }
       if (!this.canStartNewAction()) return;
       if (isSilenced(this)) return;
       if (!this._payCost('E', free)) return;
@@ -13616,7 +13693,10 @@ CharacterController.prototype.updateEChannel = function(dt) {
             let dmg = skillVal(eData.perHitDamageByLevel, lvl) + skillVal(eData.adRatioByLevel, lvl) * this.stats.attackDamage;
             if (h.unit === nearest.unit) dmg *= 1 + eData.nearestBonusPercent / 100;
             const willCrit = Math.random() < this.stats.critChance;
-            applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: eData.critMultiplier, isAbility: true });
+            // 치명타(PC 위키): 회전당 피해 130%, 무한의 대검 등 추가 치명타 피해는 30% 효율로만
+            // 반영. 예전엔 무한의 대검 보너스가 100% 그대로 더해졌다.
+            if (willCrit) dmg *= eData.critMultiplier + 0.3 * (this.itemBonusCritDamagePercent || 0);
+            applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true });
             // 버그 수정(원작 대조): 예전엔 전체 회전 횟수(_eHitsDone)가 6을 넘으면
             // 그 뒤로 범위에 "처음 들어온" 적에게까지 즉시 방어력 감소가 걸렸고,
             // 미니언에도 걸렸다. 원작은 "적 챔피언이 6번 맞으면" 25% 감소(6초),
@@ -13892,8 +13972,8 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     }
     this.passiveState.lastDamageTakenAt = performance.now(); // 가렌 인내심: 피해를 입으면 무피해 타이머 리셋
     if (this.championId === 'renekton') this._renektonMarkCombat();
-    let reduction = getDamageReductionPercent(this);
-    if (damageType === DAMAGE_TYPE.MAGICAL) reduction = Math.max(reduction, getMagicDamageReductionPercent(this));
+    // 마법 피해는 일반+마법 피해 감소를 함께 곱연산(getMagicDamageReductionPercent가 둘 다 포함).
+    let reduction = damageType === DAMAGE_TYPE.MAGICAL ? getMagicDamageReductionPercent(this, source) : getDamageReductionPercent(this, source);
     let remaining = Math.max(0, dmg) * (1 - Math.min(1, Math.max(0, reduction))); // 일반 피해감소 + 닐라 W 마법피해감소
     // 아이템 패시브(멜모셔스의 아귀/스테락의도전 - 생명선) - 이 피해로
     // 체력이 문턱 밑으로 "떨어질" 보호막을 먼저 걸어서, 바로 아래 shield
@@ -14231,8 +14311,10 @@ CharacterController.prototype._dariusQOnHit = function(target, distanceWorld = n
     const dmg = isBlade
       ? skillVal(q.bladeDamageByLevel, lvl) + skillVal(q.bladeAdRatioByLevel, lvl) * this.stats.attackDamage
       : skillVal(q.handleDamageByLevel, lvl) + skillVal(q.handleAdRatioByLevel, lvl) * this.stats.attackDamage;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, armorPenPercent: this.armorPenPercent || 0 });
-    this._dariusApplyBleed(target);
+    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, armorPenPercent: this.armorPenPercent || 0, isAbility: true });
+    // PC 위키(Template:Data Darius/Decimate): 자루(안쪽)에 맞은 적은 출혈 중첩을 얻지 않는다.
+    // 예전엔 자루 적중에도 출혈을 걸었다.
+    if (isBlade) this._dariusApplyBleed(target);
     // 회복 대상 수 집계: 도끼날(외곽)에 맞은 "챔피언/대형 몬스터"만 센다. 실제
     // 회복은 한 번의 Q가 끝난 뒤 _dariusQHeal()이 한 번에 처리한다.
     return !!(isBlade && (target.isChampion || target.isLargeMonster));
@@ -14258,8 +14340,11 @@ CharacterController.prototype._dariusWOnHit = function(target) {
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
     const dmg = this.stats.attackDamage * skillVal(w.bonusAdRatioByLevel, lvl);
-    const willKill = target.hp > 0 && target.hp <= dmg;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, armorPenPercent: this.armorPenPercent || 0 });
+    // 처치 판정은 방어력 적용 "후" 실제 피해 기준(예전엔 적용 전 원본 피해라 처치가 아닌데도 환급됐다).
+    const hpBefore = target.hp, floored = isFlooredTrainingDummy(target);
+    const dealtW = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, armorPenPercent: this.armorPenPercent || 0, isBasicAttack: true }) || 0;
+    // 평타 부분에서 이미 처치됐어도(hpBefore<=0) 강화 평타로 처치한 것이다.
+    const willKill = !floored && (hpBefore <= 0 || hpBefore <= dealtW);
     applyStatus(target, { id: 'dariusW_slow', type: 'SLOW', duration: w.slowDuration, value: w.slowPercent / 100 });
     if (willKill) {
       const cost = this._skillCostFor('W') || { mana: w.mana };
@@ -14309,8 +14394,10 @@ CharacterController.prototype._dariusROnHit = function(target) {
     const stacks = this._dariusLiveStacks(target);
     const min = skillVal(r.minDamageByLevel, lvl) + r.minAdRatio * this._getBonusAD();
     const dmg = min * (1 + (r.perStackBonusPercent / 100) * stacks);
-    const killed = target.hp > 0 && target.hp <= dmg;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+    // 처치 판정: 실제로 들어간 피해 기준 + 2% 바닥에 멈춘 허수아비 반복 타격은 처치 아님(무한 재시전 방지).
+    const hpBefore = target.hp, floored = isFlooredTrainingDummy(target);
+    const dealtR = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isAbility: true }) || 0;
+    const killed = hpBefore > 0 && hpBefore <= dealtR && !floored;
     // 버그 수정(요청 5-⑥ "재사용 가능 상태 UI 반영"): _rRecastReadyUntil은
     // _castR()의 마나/쿨다운 게이트를 우회시켜 실제로는 즉시 재사용이
     // 가능했지만, this.cooldowns.R 자체는 처치 전에 걸어둔 원래 쿨다운
@@ -14320,7 +14407,11 @@ CharacterController.prototype._dariusROnHit = function(target) {
     // 시스템을 그대로 재사용해서(새 UI 상태를 안 만들고) 처치 순간 여기서
     // 바로 0으로 되돌리면, 다음 updateCooldowns() 틱에서 자동으로 "ready"
     // 표시로 바뀐다.
-    if (killed) { this._rRecastReadyUntil = performance.now() + r.recastWindow * 1000; this.cooldowns.R = 0; }
+    if (killed) {
+      this._rRecastReadyUntil = performance.now() + r.recastWindow * 1000; this.cooldowns.R = 0;
+      // PC 위키(Hemorrhage): 녹서스의 단두대로 챔피언을 처치해도 녹서스의 힘이 발동한다(예전엔 누락).
+      if (target.isChampion) this._dariusEmpower();
+    }
   
 };
 
@@ -14470,6 +14561,25 @@ CharacterController.prototype._garenROnHit = function(target) {
   
 };
 
+// E(심판) 회전 중 R(데마시아의 정의): 회전 상태(eChannel)는 그대로 두고, 시전 시간(0.435초) 뒤
+// 고정 대상에게 피해를 준다. 사거리/대상/비용 검사는 일반 R과 같다.
+CharacterController.prototype._garenCastRDuringE = function() {
+    const cd = this._champData(); if (!cd) return;
+    const target = this.currentTarget;
+    if (!target || target.hp <= 0) { debugSkillMiss('R', 'no currentTarget selected'); return; }
+    if (isSilenced(this)) return;
+    if (!isInRange(this, target, cd.R.range)) { debugSkillMiss('R', `out of range (R range ${cd.R.range})`); return; }
+    if (!this._payCost('R', false)) return;
+    const timing = (typeof SKILL_TIMING_DATABASE !== 'undefined' && SKILL_TIMING_DATABASE.garen && SKILL_TIMING_DATABASE.garen.R) || null;
+    const delay = (timing && timing.eventTime) || cd.R.castTime || 0.435;
+    const t = setTimeout(() => {
+      if (this.championId !== 'garen' || !target || target.hp <= 0) return;
+      vfx.spawn('r', this.root.position.clone());
+      this._garenROnHit(target);
+      debugSkillHit('Garen R (회전 중)', target);
+    }, delay * 1000);
+    void t; // 회전이 끝나거나 다른 행동을 해도 이미 시전한 R은 취소되지 않는다
+};
 
 /* ===== src/champions/sett.js ===== */
 // Extracted from CharacterController: _settLeftHandRangeBonusWorld
@@ -15571,6 +15681,9 @@ CharacterController.prototype._yasuoApplyQHit = function(target, { tornado=false
     // R 이후 15초 "치명타 공격"의 추가 방어력 무시는 치명타가 실제로 터졌을 때만.
     applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, bonusArmorIgnorePercent: (crit && this._yasuo.rArmorBuffUntil > performance.now() ? this._champData().R.armorIgnoreBonusPercent : 0), source: this });
     if (first) this._yasuoQHitConsumed = true;
+    // 적중 시 효과(PC 위키): 일반 Q/회오리는 "처음 맞은 대상"에게, E 중 Q(원형)는 맞은 모두에게
+    // 아이템 적중 시 효과·공격 시 효과를 적용한다(주문검 발동은 제외). 예전엔 전혀 적용되지 않았다.
+    if ((first || circle) && typeof itemOnBasicAttackHit === 'function' && target.hp > 0) itemOnBasicAttackHit(this, target, crit, { fromAbility: true });
     if (tornado) applyStatus(target, { id:'yasuoQKnockup', type:'KNOCKUP', duration:q.knockupDuration, value:1 });
     return raw;
 
@@ -15584,7 +15697,10 @@ CharacterController.prototype._yasuoFindQTargets = function(dir, range, radius =
     const alive = (u) => u && u.hp > 0;
     if (radius != null) return findEnemiesInRadius(this.root.position, radius).map(h => h.unit).filter(alive);
     const q = this._champData().Q;
-    return findEnemiesInLine(this.root.position, dir, range, q.width || 80).filter(alive);
+    // 가까운 순으로 정렬 - "처음 맞은 대상"(적중 시 효과 적용 대상)을 정확히 고르기 위해.
+    const o = this.root.position;
+    return findEnemiesInLine(o, dir, range, q.width || 80).filter(alive)
+      .sort((a, b) => o.distanceToSquared(getWorldPosition(a)) - o.distanceToSquared(getWorldPosition(b)));
 };
 
 // Extracted from CharacterController: _yasuoStartQ3Tornado
@@ -15891,6 +16007,9 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
     }
     if (!this._payCost('R', free)) return;
     this._yasuoClearPostQMoveEntry();
+    // E 돌진 중 R: 돌진을 먼저 마무리(피해/중첩 처리)한 뒤 R로 넘어간다 - 그러지 않으면 돌진 종료
+    // 타이머가 R로 이동한 야스오를 돌진 끝 지점으로 다시 끌어당긴다.
+    if (this.currentActionKey === 'yasuoE' && this._yasuo.eDashStart) this._yasuoFinishEDash();
 
     // Yasuo's R pulls in every airborne(KNOCKUP) enemy around him - not just the
     // anchor - and strikes them together. Stunned/rooted/suppressed-but-not-airborne
@@ -15937,7 +16056,8 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
       applyStatus(target, {
         id: 'yasuoRKnockup',
         type: 'KNOCKUP',
-        duration: dur + 0.25,
+        // PC 위키: 주변 공중에 뜬 적 챔피언을 1초 동안 띄운다(예전엔 모션 길이+0.25초).
+        duration: r.knockupDuration || 1,
         value: 1
       });
       // 버그 수정(요청 - "궁 맞는 적은 바닥으로 떨어지지 않고 야스오와 같은
@@ -16371,6 +16491,11 @@ CharacterController.prototype._yoneApplyQHit = function(target, { empowered = fa
   const ratio = crit ? q.totalAdRatio * critMult : q.totalAdRatio;
   const raw = base + this.stats.attackDamage * ratio;
   const dealt = applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
+  // 적중 시 효과(야스오 Q와 같은 규칙): 한 번의 Q에서 처음 맞은 대상에게만, 주문검 발동은 제외.
+  if (!this._yoneQHitConsumed) {
+    this._yoneQHitConsumed = true;
+    if (typeof itemOnBasicAttackHit === 'function' && target.hp > 0) itemOnBasicAttackHit(this, target, crit, { fromAbility: true });
+  }
   if (empowered) applyStatus(target, { id: 'yoneQKnockup', type: 'KNOCKUP', duration: q.knockupDuration, value: 1 });
   this._yoneRecordMark(target, dealt);
   return raw;
@@ -16410,6 +16535,7 @@ CharacterController.prototype._yoneStartEmpoweredQ = function(dir) {
     hitSet: new Set(),
     critRoll: Math.random() < (this.stats.critChance || 0),
   };
+  this._yoneQHitConsumed = false;
   // 중첩은 돌진을 "시작"할 때 소모 - 예전엔 돌풍이 끝까지 간 뒤 0으로 돌려, 그 사이(공속이
   // 높으면 쿨다운 1.33초) Q를 다시 쓰면 강화 Q가 또 나갔다.
   this._yone.qStacks = 0; this._yone.qStackExpiresAt = 0;
@@ -16544,6 +16670,7 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
     if (targets.length) {
       targets.sort((a, b) => this.root.position.distanceToSquared(getWorldPosition(a)) - this.root.position.distanceToSquared(getWorldPosition(b)));
       this._yoneQCritRoll = Math.random() < (this.stats.critChance || 0);
+      this._yoneQHitConsumed = false;
       targets.forEach((t) => this._yoneApplyQHit(t, { empowered: false }));
       this._yoneQCritRoll = null;
       this._yone.qStacks = Math.min(q.maxStacks || 2, this._yone.qStacks + 1);
@@ -17917,7 +18044,7 @@ CharacterController.prototype._nilahFinalQACheck = function() {
 
 /* ===== src/champions/masteryi.js ===== */
 // Extracted from CharacterController: _masteryiOnBasicAttackHit
-CharacterController.prototype._masteryiOnBasicAttackHit = function(target) { 
+CharacterController.prototype._masteryiOnBasicAttackHit = function(target) {
     const cd = this._champData(); if (!cd) return;
     const p = cd.passive;
     // 디버그(Q 쿨다운 버그 문서 섹션 5) - 일반 평타에서만 Q 쿨다운이
@@ -17950,7 +18077,7 @@ CharacterController.prototype._masteryiOnBasicAttackHit = function(target) {
     }
     // E(우주류 검술) 활성 중이면 모든 기본 공격에 고정 피해 추가.
     this._masteryiApplyWujuTrueDamage(target);
-  
+
 };
 
 // E(우주류 검술) 활성 중 기본 공격 적중 시 고정 피해(평타 1타/2연속 공격 2타 공용).
@@ -17966,7 +18093,7 @@ CharacterController.prototype._masteryiApplyWujuTrueDamage = function(target) {
 };
 
 // Extracted from CharacterController: _masteryiArmPassiveAttack
-CharacterController.prototype._masteryiArmPassiveAttack = function() { 
+CharacterController.prototype._masteryiArmPassiveAttack = function() {
     const passive = this.actionData && this.actionData.passive;
     if (!passive || !passive.clips || !passive.clips.length) return;
     // beatsCrit:true - 4번째 평타는 이 스윙 자체가 치명타든 아니든 항상
@@ -17978,11 +18105,11 @@ CharacterController.prototype._masteryiArmPassiveAttack = function() {
     // 애니메이션 분기보다 먼저 소비하되, willCrit 자체는 건드리지 않는다"
     // 순서로 처리한다.
     this.registerAttackOverride({ id: 'masteryiPassive', clips: passive.clips, priority: 40, oneShot: true, uses: 1, beatsCrit: true });
-  
+
 };
 
 // Extracted from CharacterController: _masteryiIsChampionTarget
-CharacterController.prototype._masteryiIsChampionTarget = function(target) { 
+CharacterController.prototype._masteryiIsChampionTarget = function(target) {
     // 이 프로젝트에는 실제 미니언/몬스터 분류 시스템이 따로 없고, 현재
     // 씬의 모든 적은 학습용 허수아비(isTrainingDummy)뿐이다. 그래서
     // "챔피언급 유닛인가"의 유일하게 신뢰 가능한 신호는 isTrainingDummy가
@@ -17992,11 +18119,11 @@ CharacterController.prototype._masteryiIsChampionTarget = function(target) {
     // 2% 바닥에 이미 멈춘 허수아비를 계속 때리는 것은 새 처치가 아니므로 제외한다
     // (예전엔 허수아비 자체를 통째로 제외해 처치 쿨감/R 연장을 시험할 방법이 없었다).
     return !!target && !!target.isChampion && !isFlooredTrainingDummy(target);
-  
+
 };
 
 // Extracted from CharacterController: _masteryiOnKill
-CharacterController.prototype._masteryiOnKill = function(target, context) { 
+CharacterController.prototype._masteryiOnKill = function(target, context) {
     const cd = this._champData(); if (!cd) return;
     const label = context && context.type ? `[${context.type}]` : '[TAKEDOWN]';
     if (!this._masteryiIsChampionTarget(target)) {
@@ -18018,17 +18145,17 @@ CharacterController.prototype._masteryiOnKill = function(target, context) {
       this.setSubState('R', remainSec);
       debugSkillHit('Master Yi R (처치 관여 - 지속시간 +7초)', this, { remainSec: remainSec.toFixed(1) });
     }
-  
+
 };
 
 // Extracted from CharacterController: _masteryiIsValidAlphaTarget
-CharacterController.prototype._masteryiIsValidAlphaTarget = function(unit) { 
+CharacterController.prototype._masteryiIsValidAlphaTarget = function(unit) {
     return !!unit && unit.hp > 0 && !unit.isUntargetable;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiFindPrimaryTarget
-CharacterController.prototype._masteryiFindPrimaryTarget = function(q) { 
+CharacterController.prototype._masteryiFindPrimaryTarget = function(q) {
     if (this.currentTarget && this._masteryiIsValidAlphaTarget(this.currentTarget) && isInRange(this, this.currentTarget, q.range)) {
       return this.currentTarget;
     }
@@ -18039,11 +18166,11 @@ CharacterController.prototype._masteryiFindPrimaryTarget = function(q) {
       if (!nearest || h.distance < nearest.distance) nearest = h;
     }
     return nearest ? nearest.unit : null;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiFindNextAlphaTarget
-CharacterController.prototype._masteryiFindNextAlphaTarget = function(alpha) { 
+CharacterController.prototype._masteryiFindNextAlphaTarget = function(alpha) {
     const origin = (alpha.primaryTarget && alpha.primaryTarget.hp > 0) ? getWorldPosition(alpha.primaryTarget) : this.root.position;
     // 버그 수정: markSearchRadiusFallback(8.0)은 findEnemiesInRadius가 LoL
     // 원본 사거리를 그대로 world 거리로 오인하던 시절의 임시 보정값이었다.
@@ -18062,42 +18189,46 @@ CharacterController.prototype._masteryiFindNextAlphaTarget = function(alpha) {
     // 사거리 안에 살아있는 적이 전혀 없으면(전멸/도주) primaryTarget이라도
     // 아직 유효하면 재사용, 그마저 없으면 null(해당 타격은 스킵 - 섹션 27).
     return (alpha.primaryTarget && alpha.primaryTarget.hp > 0 && !alpha.primaryTarget.isUntargetable) ? alpha.primaryTarget : null;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiMarkAlphaTarget
-CharacterController.prototype._masteryiMarkAlphaTarget = function(alpha, unit) { 
+CharacterController.prototype._masteryiMarkAlphaTarget = function(alpha, unit) {
     alpha.markedTargets.push(unit);
     vfx.spawn('q', getWorldPosition(unit).clone()); // 참격 이펙트(섹션 21) - 기존 q VFX 재사용
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCalcAlphaStrikeDamage
-CharacterController.prototype._masteryiCalcAlphaStrikeDamage = function(alpha, hitIndex) { 
+CharacterController.prototype._masteryiCalcAlphaStrikeDamage = function(alpha, hitIndex) {
     const q = alpha.q, lvl = alpha.lvl;
-    const base = skillVal(q.baseDamageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD();
+    // PC 위키(Template:Data Master Yi/Alpha Strike): 20~100 + "총" 공격력 70%(예전엔 추가
+    // 공격력에 곱했다). 몬스터에게는 추가 물리 피해 60~160. 같은 대상 반복 타격은 25%.
+    let base = skillVal(q.baseDamageByLevel, lvl) + q.adRatio * this.stats.attackDamage;
+    if (alpha.currentTarget && alpha.currentTarget.isMonster) base += skillVal(q.monsterBonusDamageByLevel, lvl);
     return hitIndex === 0 ? base : base * (q.extraHitPercent / 100);
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCalcAlphaStrikeCritDamage
-CharacterController.prototype._masteryiCalcAlphaStrikeCritDamage = function(alpha, hitIndex) { 
+CharacterController.prototype._masteryiCalcAlphaStrikeCritDamage = function(alpha, hitIndex) {
     const q = alpha.q, lvl = alpha.lvl;
-    const base = skillVal(q.critDamageByLevel, lvl) + q.critBonusAdRatio * this._getBonusAD();
-    return hitIndex === 0 ? base : base * (q.extraHitPercent / 100);
-  
+    // 치명타: V25.16부터 치명타 추가 피해 계수가 기본값(100%)이 됐다 - 일반 치명타 배율(+무한의
+    // 대검)을 그대로 곱한다. 예전엔 별도 표(40~200 + 추가 공격력 140%)를 썼다.
+    return this._masteryiCalcAlphaStrikeDamage(alpha, hitIndex) * ((this.stats.critMultiplier || 1.75) + (this.itemBonusCritDamagePercent || 0));
+
 };
 
 // Extracted from CharacterController: _masteryiRollAlphaStrikeHit
-CharacterController.prototype._masteryiRollAlphaStrikeHit = function(alpha, hitIndex) { 
+CharacterController.prototype._masteryiRollAlphaStrikeHit = function(alpha, hitIndex) {
     const willCrit = Math.random() < this.stats.critChance;
     const dmg = willCrit ? this._masteryiCalcAlphaStrikeCritDamage(alpha, hitIndex) : this._masteryiCalcAlphaStrikeDamage(alpha, hitIndex);
     return { dmg, willCrit };
-  
+
 };
 
 // Extracted from CharacterController: _masteryiApplyAlphaStrikeOnHit
-CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, target) { 
+CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, target) {
     if (!target || target.hp <= 0) return;
     if (!hasStatus(this, 'MASTERYI_E')) return;
     const cd = this._champData(); if (!cd) return;
@@ -18112,21 +18243,23 @@ CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, t
     const wouldKill = target.hp > 0 && target.hp <= trueDmg;
     applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
     if (wouldKill) this._masteryiOnKill(target, { type: 'ALPHA_STRIKE' });
-  
+
 };
 
 // Extracted from CharacterController: _masteryiResolveAlphaStrikeHit
-CharacterController.prototype._masteryiResolveAlphaStrikeHit = function(alpha, target, hitIndex, { delayApply = false } = {}) { 
+CharacterController.prototype._masteryiResolveAlphaStrikeHit = function(alpha, target, hitIndex, { delayApply = false } = {}) {
     if (!this._masteryiIsValidAlphaTarget(target)) return;
     // 버그 수정(원작 대조): "같은 대상에 대한 추가 타격"만 25% 피해다. 예전엔
     // 두 번째 이후 타격이면 처음 맞는 다른 대상에게도 25%만 들어갔다.
     const repeatIndex = (alpha.alreadyHitCount.get(target) || 0) > 0 ? 1 : 0;
+    alpha.currentTarget = target;
     const { dmg, willCrit } = this._masteryiRollAlphaStrikeHit(alpha, repeatIndex);
     alpha.alreadyHitCount.set(target, (alpha.alreadyHitCount.get(target) || 0) + 1);
     const apply = () => {
       if (!target || target.hp <= 0) return;
       const wouldKill = target.hp > 0 && target.hp <= dmg;
-      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: this.stats.critMultiplier });
+      // dmg는 이미 치명타 배율이 반영된 값이라 isCritical로 한 번 더 곱하지 않는다.
+      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true });
       vfx.spawn('hit', getWorldPosition(target).clone(), undefined, { color: willCrit ? 0xffdf6b : 0xffffff });
       if (wouldKill) this._masteryiOnKill(target, { type: 'ALPHA_STRIKE' });
       this._masteryiApplyAlphaStrikeOnHit(alpha, target);
@@ -18138,11 +18271,11 @@ CharacterController.prototype._masteryiResolveAlphaStrikeHit = function(alpha, t
     };
     if (delayApply) alpha.markDamagePending = apply;
     else apply();
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCalculateAlphaStrikeReappearance
-CharacterController.prototype._masteryiCalculateAlphaStrikeReappearance = function(alpha) { 
+CharacterController.prototype._masteryiCalculateAlphaStrikeReappearance = function(alpha) {
     // 최종 안전망(섹션 25 "대상 사망 시 null reference 금지") - castOrigin이
     // 항상 존재하므로 이것부터 fallback으로 잡아둔다.
     const initialPos = alpha.castOrigin.clone();
@@ -18225,11 +18358,11 @@ CharacterController.prototype._masteryiCalculateAlphaStrikeReappearance = functi
     if (!isFinite(safePos.x) || !isFinite(safePos.z)) { alpha.debug.usedFallback = true; safePos = initialPos; }
     alpha.debug.safe = safePos.clone();
     return safePos;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCastQ
-CharacterController.prototype._masteryiCastQ = function(free) { 
+CharacterController.prototype._masteryiCastQ = function(free) {
     if (isSilenced(this)) return;
     if (isCrowdControlled(this)) return;
     // Master Yi Q는 기본 공격의 STARTUP/ACTIVE/RECOVERY 중에서도 스킬 우선순위를
@@ -18293,17 +18426,17 @@ CharacterController.prototype._masteryiCastQ = function(free) {
     this.playFirstAvailable(this.actionData?.q?.clips || ['Spell1'], { loop: THREE.LoopOnce, fade: 0.08 });
     vfx.spawn('q', this.root.position.clone());
     debugSkillHit('Master Yi Q (Alpha Strike 시작)', primaryTarget, { primaryTarget: unitLabel(primaryTarget) });
-  
+
 };
 
 // Extracted from CharacterController: _masteryiPauseBuffsDuringAlphaStrike
-CharacterController.prototype._masteryiPauseBuffsDuringAlphaStrike = function(alpha) { 
+CharacterController.prototype._masteryiPauseBuffsDuringAlphaStrike = function(alpha) {
     alpha._pauseStartedAt = performance.now();
-  
+
 };
 
 // Extracted from CharacterController: _masteryiResumeBuffsAfterAlphaStrike
-CharacterController.prototype._masteryiResumeBuffsAfterAlphaStrike = function(alpha) { 
+CharacterController.prototype._masteryiResumeBuffsAfterAlphaStrike = function(alpha) {
     if (!alpha._pauseStartedAt) return;
     const elapsedMs = performance.now() - alpha._pauseStartedAt;
     if (elapsedMs <= 0) return;
@@ -18315,11 +18448,11 @@ CharacterController.prototype._masteryiResumeBuffsAfterAlphaStrike = function(al
     }
     if (this._masteryi.rActiveUntil) this._masteryi.rActiveUntil += elapsedMs;
     if (this.subStates && this.subStates.R) this.subStates.R += elapsedMs;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiUpdateAlphaStrike
-CharacterController.prototype._masteryiUpdateAlphaStrike = function(dt) { 
+CharacterController.prototype._masteryiUpdateAlphaStrike = function(dt) {
     const alpha = this._masteryi && this._masteryi.alpha;
     if (!alpha) return;
 
@@ -18360,11 +18493,11 @@ CharacterController.prototype._masteryiUpdateAlphaStrike = function(dt) {
       }
       return;
     }
-  
+
 };
 
 // Extracted from CharacterController: _masteryiBeginNextAlphaHit
-CharacterController.prototype._masteryiBeginNextAlphaHit = function(alpha) { 
+CharacterController.prototype._masteryiBeginNextAlphaHit = function(alpha) {
     const target = alpha.hitIndex === 0 ? alpha.primaryTarget : this._masteryiFindNextAlphaTarget(alpha);
     alpha.markedTargets.push(target || null);
     if (!target) return false;
@@ -18387,11 +18520,11 @@ CharacterController.prototype._masteryiBeginNextAlphaHit = function(alpha) {
     if (hopDir.lengthSq() < 1e-6) hopDir.set(0, 0, 1); else hopDir.normalize();
     vfx.spawn('basicAttack', p0.clone(), hopDir);
     return true;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiFinishAlphaStrike
-CharacterController.prototype._masteryiFinishAlphaStrike = function(alpha) { 
+CharacterController.prototype._masteryiFinishAlphaStrike = function(alpha) {
     // 방향 선택 마감(재등장 알고리즘 문서 섹션 7) - 재등장 계산 시작 이후의
     // 입력은 더 이상 반영하지 않는다.
     alpha.canSelectExitDirection = false;
@@ -18414,20 +18547,20 @@ CharacterController.prototype._masteryiFinishAlphaStrike = function(alpha) {
     this._masteryi.alpha = null;
     this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
     this._resumeAfterAction(); // 대기 이동 > 재교전(currentTarget) > Idle 순으로 즉시 복귀(섹션 19) - POST_ALPHA -> NORMAL
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCancelAlphaStrike
-CharacterController.prototype._masteryiCancelAlphaStrike = function() { 
+CharacterController.prototype._masteryiCancelAlphaStrike = function() {
     if (!this._masteryi || !this._masteryi.alpha) return;
     this._masteryi.alpha = null;
     this.isUntargetable = false;
     if (this.model) this.model.visible = true;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiSetAlphaStrikeReemergeDirection
-CharacterController.prototype._masteryiSetAlphaStrikeReemergeDirection = function(worldPoint) { 
+CharacterController.prototype._masteryiSetAlphaStrikeReemergeDirection = function(worldPoint) {
     const alpha = this._masteryi && this._masteryi.alpha;
     if (!alpha || !alpha.canSelectExitDirection) return false;
     const anchor = (alpha.primaryTarget && alpha.primaryTarget.hp > 0) ? getWorldPosition(alpha.primaryTarget) : this.root.position;
@@ -18435,11 +18568,11 @@ CharacterController.prototype._masteryiSetAlphaStrikeReemergeDirection = functio
     if (dir.lengthSq() < 1e-6) return true; // 클릭 지점이 대상과 거의 겹치면 무시(방향 불명확)
     alpha.reemergeDirection = dir.normalize();
     return true;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiPauseERForMeditate
-CharacterController.prototype._masteryiPauseERForMeditate = function() { 
+CharacterController.prototype._masteryiPauseERForMeditate = function() {
     if (this.championId !== 'masteryi') return;
     if (this._masteryi.wPause) return;
     const now = performance.now();
@@ -18450,11 +18583,11 @@ CharacterController.prototype._masteryiPauseERForMeditate = function() {
       if (eff) saved.push({ id, expiresAt: eff.expiresAt });
     }
     this._masteryi.wPause = { startedAt: now, saved };
-  
+
 };
 
 // Extracted from CharacterController: _masteryiResumeERAfterMeditate
-CharacterController.prototype._masteryiResumeERAfterMeditate = function() { 
+CharacterController.prototype._masteryiResumeERAfterMeditate = function() {
     if (this.championId !== 'masteryi') return;
     const pause = this._masteryi.wPause;
     if (!pause) return;
@@ -18469,11 +18602,11 @@ CharacterController.prototype._masteryiResumeERAfterMeditate = function() {
     const rSub = this.subStates?.R;
     if (rSub?.expiresAt) rSub.expiresAt += elapsed;
     this._masteryi.wPause = null;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiResolveWAnimationClip
-CharacterController.prototype._masteryiResolveWAnimationClip = function() { 
+CharacterController.prototype._masteryiResolveWAnimationClip = function() {
     // 실제 Master Yi GLB의 확정 클립명을 1순위로 사용한다.
     // import/merge 과정에서 같은 이름에 source suffix가 붙거나 확장자가 달라져도
     // 정규화/부분 일치로 반드시 동일 애니메이션을 찾는다.
@@ -18522,20 +18655,20 @@ CharacterController.prototype._masteryiResolveWAnimationClip = function() {
 
     console.warn('[Master Yi W] animation clip not found', clips.map(c => c.name));
     return null;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiClearWStatuses
-CharacterController.prototype._masteryiClearWStatuses = function() { 
+CharacterController.prototype._masteryiClearWStatuses = function() {
     if (!this.statusEffects) return;
     this.statusEffects = this.statusEffects.filter((e) =>
       e.id !== 'masteryiW_burst' && e.id !== 'masteryiW_sustain'
     );
-  
+
 };
 
 // Extracted from CharacterController: _masteryiEndMeditate
-CharacterController.prototype._masteryiEndMeditate = function(reason = 'natural', movePoint = null) { 
+CharacterController.prototype._masteryiEndMeditate = function(reason = 'natural', movePoint = null) {
     if (this.championId !== 'masteryi') return;
     if (this.currentActionKey !== 'masteryiW') {
       // 이미 종료된 경우에도 E/R pause가 남아 있으면 복구한다.
@@ -18554,7 +18687,13 @@ CharacterController.prototype._masteryiEndMeditate = function(reason = 'natural'
     clearTimeout(this._masteryiWHealTimer);
     this._masteryiWHealTimer = null;
     this._masteryiResumeERAfterMeditate();
+    // PC 위키: 명상 피해 감소는 채널이 끝난 뒤 0.5초 더 남는다(예전엔 즉시 제거).
     this._masteryiClearWStatuses();
+    {
+      const lvlW = Math.max(1, this.skillLevels.W || 1);
+      applyStatus(this, { id: 'masteryiW_linger', type: 'DAMAGE_REDUCTION', drGroup: 'masteryiW', halfVsTurret: true,
+        duration: 0.5, value: skillVal(this._champData().W.sustainedReductionByLevel, lvlW) / 100 });
+    }
     // 모션 반복 방지용으로 등록해둔 loop 이벤트 리스너 정리 - 안 지우면
     // 다음 W 시전 때마다 리스너가 계속 쌓인다.
     if (this._masteryiWLoopHandler) {
@@ -18592,11 +18731,11 @@ CharacterController.prototype._masteryiEndMeditate = function(reason = 'natural'
     } else {
       this._resumeAfterAction();
     }
-  
+
 };
 
 // Extracted from CharacterController: _masteryiWOnCast
-CharacterController.prototype._masteryiWOnCast = function() { 
+CharacterController.prototype._masteryiWOnCast = function() {
     const cd = this._champData(); if (!cd) return;
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
@@ -18608,16 +18747,19 @@ CharacterController.prototype._masteryiWOnCast = function() {
 
     // 이미 남아 있던 W 상태가 있다면 중복시키지 않는다.
     this._masteryiClearWStatuses();
+    // 70%(처음 0.5초) → 45~55%는 "같은 스킬의 두 단계"라 서로 곱하지 않는다(drGroup - 같은
+    // 그룹은 최대값만). 포탑 피해에는 절반만 적용(halfVsTurret, PC 위키).
     applyStatus(this, {
-      id: 'masteryiW_burst', type: 'DAMAGE_REDUCTION',
+      id: 'masteryiW_burst', type: 'DAMAGE_REDUCTION', drGroup: 'masteryiW', halfVsTurret: true,
       duration: w.burstReductionDuration,
       value: w.burstReductionPercent / 100
     });
     applyStatus(this, {
-      id: 'masteryiW_sustain', type: 'DAMAGE_REDUCTION',
+      id: 'masteryiW_sustain', type: 'DAMAGE_REDUCTION', drGroup: 'masteryiW', halfVsTurret: true,
       duration: w.channelDuration,
       value: skillVal(w.sustainedReductionByLevel, lvl) / 100
     });
+    this._masteryi.wStackAccum = 0;
 
     // 버그 수정(원작 대조): 명상은 채널 동안 "초당" 체력을 회복한다(잃은 체력에
     // 비례해 최대 100% 증가). 예전엔 4초를 다 채워야 총량을 한 번에 줬고, 3.9초에
@@ -18625,17 +18767,28 @@ CharacterController.prototype._masteryiWOnCast = function() {
     clearTimeout(this._masteryiWHealTimer);
     this._masteryiWHealTimer = null;
     this._masteryi.wHealed = 0;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiWTick
-CharacterController.prototype._masteryiWTick = function(dt) { 
+CharacterController.prototype._masteryiWTick = function(dt) {
     if (this.championId !== 'masteryi' || this.currentActionKey !== 'masteryiW') {
       this._masteryi.wManaDrainPerSec = 0; // 디버그 패널용 - 명상 중이 아니면 0으로 표시
       return;
     }
     const cd = this._champData(); if (!cd) return;
     const w = cd.W;
+    // PC 위키: 명상 중 1초마다 2연속 공격 중첩 1(최대 3 - 다음 평타가 2연속 공격).
+    this._masteryi.wStackAccum = (this._masteryi.wStackAccum || 0) + dt;
+    while (this._masteryi.wStackAccum >= 1) {
+      this._masteryi.wStackAccum -= 1;
+      const n = cd.passive.everyNAttacks;
+      const stacks = (this._masteryi.attackCount || 0) % n;
+      if (stacks < n - 1) {
+        this._masteryi.attackCount = (this._masteryi.attackCount || 0) + 1;
+        if (this._masteryi.attackCount % n === n - 1) this._masteryiArmPassiveAttack();
+      }
+    }
     // 초당 회복: (레벨별 초당 회복 + 주문력 계수/채널 시간) × (1 + 잃은 체력 비율 × 100%).
     if (this.hp > 0 && this.hp < this.maxHp) {
       const lvl = Math.max(1, this.skillLevels.W || 1);
@@ -18658,11 +18811,11 @@ CharacterController.prototype._masteryiWTick = function(dt) {
       console.log('[Master Yi W] 마나 부족으로 명상 강제 종료');
       this._masteryiEndMeditate('mana');
     }
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCastE
-CharacterController.prototype._masteryiCastE = function(free) { 
+CharacterController.prototype._masteryiCastE = function(free) {
     if (isSilenced(this)) return;
     if (isCrowdControlled(this)) return;
     if (!this._payCost('E', free)) return;
@@ -18670,11 +18823,11 @@ CharacterController.prototype._masteryiCastE = function(free) {
     applyStatus(this, { id: 'masteryiE', type: 'MASTERYI_E', duration: e.buffDuration, value: 1 });
     vfx.spawn('e', this.root.position.clone()); // 무기 이펙트 ON - action state/애니메이션은 건드리지 않는다
     debugSkillHit('Master Yi E (활성화, 상태 유지)', this, { state: this.state, actionKey: this.currentActionKey });
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCastR
-CharacterController.prototype._masteryiCastR = function(free) { 
+CharacterController.prototype._masteryiCastR = function(free) {
     if (isSilenced(this)) return;
     if (isCrowdControlled(this)) return;
     // 스킬 우선순위 문서 4 섹션 5/17: R도 E와 마찬가지로 시전 애니메이션이
@@ -18699,7 +18852,7 @@ CharacterController.prototype._masteryiCastR = function(free) {
     this.setSubState('R', r.duration);
     vfx.spawn('r', this.root.position.clone());
     debugSkillHit('Master Yi R', this);
-  
+
 };
 
 
@@ -21631,7 +21784,7 @@ CharacterController.prototype._nautilusOnBasicAttackHit = function(target) {
   if (now >= readyAt) {
     this._nautilus.passiveReadyAt.set(target, now + p.sameTargetCooldownSec * 1000);
     const lvl = this.champLevel || 1;
-    const dmg = p.bonusDamageBase + p.bonusDamagePerLevel * lvl;
+    const dmg = p.bonusDamageAtLevel1 + (p.bonusDamageAtLevel18 - p.bonusDamageAtLevel1) * (Math.min(18, Math.max(1, lvl)) - 1) / 17;
     applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true });
     applyStatus(target, { id: 'nautilusPassive_root', type: 'ROOT', duration: valueByBreakpoints(p.rootByLevel, lvl), value: 1, source: this });
     debugSkillHit('Nautilus 패시브(강력한 일격)', target);
@@ -21921,7 +22074,10 @@ CharacterController.prototype._nautilusTickRTravel = function(dt) {
   const goal = getWorldPosition(target);
   const toGoal = new THREE.Vector3().subVectors(goal, t.pos).setY(0);
   const dist = toGoal.length();
-  const step = lolRangeToWorld(r.shockwaveSpeed) * dt;
+  // 충격파는 처음엔 느리다가 점점 빨라진다(PC 위키: 275 + 초당 466.67 가속).
+  t.elapsed = (t.elapsed || 0) + dt;
+  const speedLol = r.shockwaveSpeed + (r.shockwaveAccelPerSec || 0) * t.elapsed;
+  const step = lolRangeToWorld(speedLol) * dt;
   if (dist > 1e-6) t.pos.addScaledVector(toGoal.divideScalar(dist), Math.min(step, dist));
   vfx.spawn('hit', t.pos.clone(), undefined, { color: 0x3f7fa8 });
 
@@ -27332,7 +27488,10 @@ function _itemCleaveOnHit(ctrl, target) {
 // 이 훅은 메인 평타의 applyDamage()가 이미 끝난 "뒤"에 불리므로, 안에서
 // 다시 applyDamage()를 호출해도 무한 재귀가 생기지 않는다(기존 광휘의
 // 검/티아맷과 동일한 안전 지점 - item_data.js 상단 주석 참고).
-function itemOnBasicAttackHit(ctrl, target, isCritical) {
+// opts.fromAbility: 야스오/요네 Q처럼 "적중 시 효과를 적용하는 스킬"에서 호출할 때 true.
+// 원작 규칙상 이 경우 주문검(Sheen류) 발동은 막힌다(위키 Sheen: "적중 시 효과를 적용하는
+// 스킬로는 발동하지 않음") - 나머지 적중 시 효과는 그대로 적용된다.
+function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
   // 세계지도집/룬 나침반(재물 공유 - 미니언 처형) - "일정 체력(근거리
   // 챔피언은 50%, 원거리 챔피언은 30%) 이하인 미니언을 평타로 치면 스택을
   // 하나 소모하여 골드를 같이 받는다"(원문 93~95줄). 위 itemOnDamageDealt()의
@@ -27369,7 +27528,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     ctrl._itemHeartsteelIcdUntil[ctrl._itemHeartsteelReadyTargetKey] = performance.now() + p.icdSec * 1000;
     console.log('[ITEM] 강철심장 - 거인의 흡수 발동');
   }
-  if (ctrl._itemSheenArmed) {
+  if (ctrl._itemSheenArmed && !opts.fromAbility) {
     ctrl._itemSheenArmed = false;
     const spellbladeSlot = _itemSpellbladeSlot(ctrl);
     if (spellbladeSlot) {

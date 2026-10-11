@@ -1,5 +1,5 @@
 // Extracted from CharacterController: _masteryiOnBasicAttackHit
-CharacterController.prototype._masteryiOnBasicAttackHit = function(target) { 
+CharacterController.prototype._masteryiOnBasicAttackHit = function(target) {
     const cd = this._champData(); if (!cd) return;
     const p = cd.passive;
     // 디버그(Q 쿨다운 버그 문서 섹션 5) - 일반 평타에서만 Q 쿨다운이
@@ -32,7 +32,7 @@ CharacterController.prototype._masteryiOnBasicAttackHit = function(target) {
     }
     // E(우주류 검술) 활성 중이면 모든 기본 공격에 고정 피해 추가.
     this._masteryiApplyWujuTrueDamage(target);
-  
+
 };
 
 // E(우주류 검술) 활성 중 기본 공격 적중 시 고정 피해(평타 1타/2연속 공격 2타 공용).
@@ -48,7 +48,7 @@ CharacterController.prototype._masteryiApplyWujuTrueDamage = function(target) {
 };
 
 // Extracted from CharacterController: _masteryiArmPassiveAttack
-CharacterController.prototype._masteryiArmPassiveAttack = function() { 
+CharacterController.prototype._masteryiArmPassiveAttack = function() {
     const passive = this.actionData && this.actionData.passive;
     if (!passive || !passive.clips || !passive.clips.length) return;
     // beatsCrit:true - 4번째 평타는 이 스윙 자체가 치명타든 아니든 항상
@@ -60,11 +60,11 @@ CharacterController.prototype._masteryiArmPassiveAttack = function() {
     // 애니메이션 분기보다 먼저 소비하되, willCrit 자체는 건드리지 않는다"
     // 순서로 처리한다.
     this.registerAttackOverride({ id: 'masteryiPassive', clips: passive.clips, priority: 40, oneShot: true, uses: 1, beatsCrit: true });
-  
+
 };
 
 // Extracted from CharacterController: _masteryiIsChampionTarget
-CharacterController.prototype._masteryiIsChampionTarget = function(target) { 
+CharacterController.prototype._masteryiIsChampionTarget = function(target) {
     // 이 프로젝트에는 실제 미니언/몬스터 분류 시스템이 따로 없고, 현재
     // 씬의 모든 적은 학습용 허수아비(isTrainingDummy)뿐이다. 그래서
     // "챔피언급 유닛인가"의 유일하게 신뢰 가능한 신호는 isTrainingDummy가
@@ -74,11 +74,11 @@ CharacterController.prototype._masteryiIsChampionTarget = function(target) {
     // 2% 바닥에 이미 멈춘 허수아비를 계속 때리는 것은 새 처치가 아니므로 제외한다
     // (예전엔 허수아비 자체를 통째로 제외해 처치 쿨감/R 연장을 시험할 방법이 없었다).
     return !!target && !!target.isChampion && !isFlooredTrainingDummy(target);
-  
+
 };
 
 // Extracted from CharacterController: _masteryiOnKill
-CharacterController.prototype._masteryiOnKill = function(target, context) { 
+CharacterController.prototype._masteryiOnKill = function(target, context) {
     const cd = this._champData(); if (!cd) return;
     const label = context && context.type ? `[${context.type}]` : '[TAKEDOWN]';
     if (!this._masteryiIsChampionTarget(target)) {
@@ -100,17 +100,17 @@ CharacterController.prototype._masteryiOnKill = function(target, context) {
       this.setSubState('R', remainSec);
       debugSkillHit('Master Yi R (처치 관여 - 지속시간 +7초)', this, { remainSec: remainSec.toFixed(1) });
     }
-  
+
 };
 
 // Extracted from CharacterController: _masteryiIsValidAlphaTarget
-CharacterController.prototype._masteryiIsValidAlphaTarget = function(unit) { 
+CharacterController.prototype._masteryiIsValidAlphaTarget = function(unit) {
     return !!unit && unit.hp > 0 && !unit.isUntargetable;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiFindPrimaryTarget
-CharacterController.prototype._masteryiFindPrimaryTarget = function(q) { 
+CharacterController.prototype._masteryiFindPrimaryTarget = function(q) {
     if (this.currentTarget && this._masteryiIsValidAlphaTarget(this.currentTarget) && isInRange(this, this.currentTarget, q.range)) {
       return this.currentTarget;
     }
@@ -121,11 +121,11 @@ CharacterController.prototype._masteryiFindPrimaryTarget = function(q) {
       if (!nearest || h.distance < nearest.distance) nearest = h;
     }
     return nearest ? nearest.unit : null;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiFindNextAlphaTarget
-CharacterController.prototype._masteryiFindNextAlphaTarget = function(alpha) { 
+CharacterController.prototype._masteryiFindNextAlphaTarget = function(alpha) {
     const origin = (alpha.primaryTarget && alpha.primaryTarget.hp > 0) ? getWorldPosition(alpha.primaryTarget) : this.root.position;
     // 버그 수정: markSearchRadiusFallback(8.0)은 findEnemiesInRadius가 LoL
     // 원본 사거리를 그대로 world 거리로 오인하던 시절의 임시 보정값이었다.
@@ -144,42 +144,46 @@ CharacterController.prototype._masteryiFindNextAlphaTarget = function(alpha) {
     // 사거리 안에 살아있는 적이 전혀 없으면(전멸/도주) primaryTarget이라도
     // 아직 유효하면 재사용, 그마저 없으면 null(해당 타격은 스킵 - 섹션 27).
     return (alpha.primaryTarget && alpha.primaryTarget.hp > 0 && !alpha.primaryTarget.isUntargetable) ? alpha.primaryTarget : null;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiMarkAlphaTarget
-CharacterController.prototype._masteryiMarkAlphaTarget = function(alpha, unit) { 
+CharacterController.prototype._masteryiMarkAlphaTarget = function(alpha, unit) {
     alpha.markedTargets.push(unit);
     vfx.spawn('q', getWorldPosition(unit).clone()); // 참격 이펙트(섹션 21) - 기존 q VFX 재사용
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCalcAlphaStrikeDamage
-CharacterController.prototype._masteryiCalcAlphaStrikeDamage = function(alpha, hitIndex) { 
+CharacterController.prototype._masteryiCalcAlphaStrikeDamage = function(alpha, hitIndex) {
     const q = alpha.q, lvl = alpha.lvl;
-    const base = skillVal(q.baseDamageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD();
+    // PC 위키(Template:Data Master Yi/Alpha Strike): 20~100 + "총" 공격력 70%(예전엔 추가
+    // 공격력에 곱했다). 몬스터에게는 추가 물리 피해 60~160. 같은 대상 반복 타격은 25%.
+    let base = skillVal(q.baseDamageByLevel, lvl) + q.adRatio * this.stats.attackDamage;
+    if (alpha.currentTarget && alpha.currentTarget.isMonster) base += skillVal(q.monsterBonusDamageByLevel, lvl);
     return hitIndex === 0 ? base : base * (q.extraHitPercent / 100);
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCalcAlphaStrikeCritDamage
-CharacterController.prototype._masteryiCalcAlphaStrikeCritDamage = function(alpha, hitIndex) { 
+CharacterController.prototype._masteryiCalcAlphaStrikeCritDamage = function(alpha, hitIndex) {
     const q = alpha.q, lvl = alpha.lvl;
-    const base = skillVal(q.critDamageByLevel, lvl) + q.critBonusAdRatio * this._getBonusAD();
-    return hitIndex === 0 ? base : base * (q.extraHitPercent / 100);
-  
+    // 치명타: V25.16부터 치명타 추가 피해 계수가 기본값(100%)이 됐다 - 일반 치명타 배율(+무한의
+    // 대검)을 그대로 곱한다. 예전엔 별도 표(40~200 + 추가 공격력 140%)를 썼다.
+    return this._masteryiCalcAlphaStrikeDamage(alpha, hitIndex) * ((this.stats.critMultiplier || 1.75) + (this.itemBonusCritDamagePercent || 0));
+
 };
 
 // Extracted from CharacterController: _masteryiRollAlphaStrikeHit
-CharacterController.prototype._masteryiRollAlphaStrikeHit = function(alpha, hitIndex) { 
+CharacterController.prototype._masteryiRollAlphaStrikeHit = function(alpha, hitIndex) {
     const willCrit = Math.random() < this.stats.critChance;
     const dmg = willCrit ? this._masteryiCalcAlphaStrikeCritDamage(alpha, hitIndex) : this._masteryiCalcAlphaStrikeDamage(alpha, hitIndex);
     return { dmg, willCrit };
-  
+
 };
 
 // Extracted from CharacterController: _masteryiApplyAlphaStrikeOnHit
-CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, target) { 
+CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, target) {
     if (!target || target.hp <= 0) return;
     if (!hasStatus(this, 'MASTERYI_E')) return;
     const cd = this._champData(); if (!cd) return;
@@ -194,21 +198,23 @@ CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, t
     const wouldKill = target.hp > 0 && target.hp <= trueDmg;
     applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
     if (wouldKill) this._masteryiOnKill(target, { type: 'ALPHA_STRIKE' });
-  
+
 };
 
 // Extracted from CharacterController: _masteryiResolveAlphaStrikeHit
-CharacterController.prototype._masteryiResolveAlphaStrikeHit = function(alpha, target, hitIndex, { delayApply = false } = {}) { 
+CharacterController.prototype._masteryiResolveAlphaStrikeHit = function(alpha, target, hitIndex, { delayApply = false } = {}) {
     if (!this._masteryiIsValidAlphaTarget(target)) return;
     // 버그 수정(원작 대조): "같은 대상에 대한 추가 타격"만 25% 피해다. 예전엔
     // 두 번째 이후 타격이면 처음 맞는 다른 대상에게도 25%만 들어갔다.
     const repeatIndex = (alpha.alreadyHitCount.get(target) || 0) > 0 ? 1 : 0;
+    alpha.currentTarget = target;
     const { dmg, willCrit } = this._masteryiRollAlphaStrikeHit(alpha, repeatIndex);
     alpha.alreadyHitCount.set(target, (alpha.alreadyHitCount.get(target) || 0) + 1);
     const apply = () => {
       if (!target || target.hp <= 0) return;
       const wouldKill = target.hp > 0 && target.hp <= dmg;
-      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: this.stats.critMultiplier });
+      // dmg는 이미 치명타 배율이 반영된 값이라 isCritical로 한 번 더 곱하지 않는다.
+      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true });
       vfx.spawn('hit', getWorldPosition(target).clone(), undefined, { color: willCrit ? 0xffdf6b : 0xffffff });
       if (wouldKill) this._masteryiOnKill(target, { type: 'ALPHA_STRIKE' });
       this._masteryiApplyAlphaStrikeOnHit(alpha, target);
@@ -220,11 +226,11 @@ CharacterController.prototype._masteryiResolveAlphaStrikeHit = function(alpha, t
     };
     if (delayApply) alpha.markDamagePending = apply;
     else apply();
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCalculateAlphaStrikeReappearance
-CharacterController.prototype._masteryiCalculateAlphaStrikeReappearance = function(alpha) { 
+CharacterController.prototype._masteryiCalculateAlphaStrikeReappearance = function(alpha) {
     // 최종 안전망(섹션 25 "대상 사망 시 null reference 금지") - castOrigin이
     // 항상 존재하므로 이것부터 fallback으로 잡아둔다.
     const initialPos = alpha.castOrigin.clone();
@@ -307,11 +313,11 @@ CharacterController.prototype._masteryiCalculateAlphaStrikeReappearance = functi
     if (!isFinite(safePos.x) || !isFinite(safePos.z)) { alpha.debug.usedFallback = true; safePos = initialPos; }
     alpha.debug.safe = safePos.clone();
     return safePos;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCastQ
-CharacterController.prototype._masteryiCastQ = function(free) { 
+CharacterController.prototype._masteryiCastQ = function(free) {
     if (isSilenced(this)) return;
     if (isCrowdControlled(this)) return;
     // Master Yi Q는 기본 공격의 STARTUP/ACTIVE/RECOVERY 중에서도 스킬 우선순위를
@@ -375,17 +381,17 @@ CharacterController.prototype._masteryiCastQ = function(free) {
     this.playFirstAvailable(this.actionData?.q?.clips || ['Spell1'], { loop: THREE.LoopOnce, fade: 0.08 });
     vfx.spawn('q', this.root.position.clone());
     debugSkillHit('Master Yi Q (Alpha Strike 시작)', primaryTarget, { primaryTarget: unitLabel(primaryTarget) });
-  
+
 };
 
 // Extracted from CharacterController: _masteryiPauseBuffsDuringAlphaStrike
-CharacterController.prototype._masteryiPauseBuffsDuringAlphaStrike = function(alpha) { 
+CharacterController.prototype._masteryiPauseBuffsDuringAlphaStrike = function(alpha) {
     alpha._pauseStartedAt = performance.now();
-  
+
 };
 
 // Extracted from CharacterController: _masteryiResumeBuffsAfterAlphaStrike
-CharacterController.prototype._masteryiResumeBuffsAfterAlphaStrike = function(alpha) { 
+CharacterController.prototype._masteryiResumeBuffsAfterAlphaStrike = function(alpha) {
     if (!alpha._pauseStartedAt) return;
     const elapsedMs = performance.now() - alpha._pauseStartedAt;
     if (elapsedMs <= 0) return;
@@ -397,11 +403,11 @@ CharacterController.prototype._masteryiResumeBuffsAfterAlphaStrike = function(al
     }
     if (this._masteryi.rActiveUntil) this._masteryi.rActiveUntil += elapsedMs;
     if (this.subStates && this.subStates.R) this.subStates.R += elapsedMs;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiUpdateAlphaStrike
-CharacterController.prototype._masteryiUpdateAlphaStrike = function(dt) { 
+CharacterController.prototype._masteryiUpdateAlphaStrike = function(dt) {
     const alpha = this._masteryi && this._masteryi.alpha;
     if (!alpha) return;
 
@@ -442,11 +448,11 @@ CharacterController.prototype._masteryiUpdateAlphaStrike = function(dt) {
       }
       return;
     }
-  
+
 };
 
 // Extracted from CharacterController: _masteryiBeginNextAlphaHit
-CharacterController.prototype._masteryiBeginNextAlphaHit = function(alpha) { 
+CharacterController.prototype._masteryiBeginNextAlphaHit = function(alpha) {
     const target = alpha.hitIndex === 0 ? alpha.primaryTarget : this._masteryiFindNextAlphaTarget(alpha);
     alpha.markedTargets.push(target || null);
     if (!target) return false;
@@ -469,11 +475,11 @@ CharacterController.prototype._masteryiBeginNextAlphaHit = function(alpha) {
     if (hopDir.lengthSq() < 1e-6) hopDir.set(0, 0, 1); else hopDir.normalize();
     vfx.spawn('basicAttack', p0.clone(), hopDir);
     return true;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiFinishAlphaStrike
-CharacterController.prototype._masteryiFinishAlphaStrike = function(alpha) { 
+CharacterController.prototype._masteryiFinishAlphaStrike = function(alpha) {
     // 방향 선택 마감(재등장 알고리즘 문서 섹션 7) - 재등장 계산 시작 이후의
     // 입력은 더 이상 반영하지 않는다.
     alpha.canSelectExitDirection = false;
@@ -496,20 +502,20 @@ CharacterController.prototype._masteryiFinishAlphaStrike = function(alpha) {
     this._masteryi.alpha = null;
     this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
     this._resumeAfterAction(); // 대기 이동 > 재교전(currentTarget) > Idle 순으로 즉시 복귀(섹션 19) - POST_ALPHA -> NORMAL
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCancelAlphaStrike
-CharacterController.prototype._masteryiCancelAlphaStrike = function() { 
+CharacterController.prototype._masteryiCancelAlphaStrike = function() {
     if (!this._masteryi || !this._masteryi.alpha) return;
     this._masteryi.alpha = null;
     this.isUntargetable = false;
     if (this.model) this.model.visible = true;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiSetAlphaStrikeReemergeDirection
-CharacterController.prototype._masteryiSetAlphaStrikeReemergeDirection = function(worldPoint) { 
+CharacterController.prototype._masteryiSetAlphaStrikeReemergeDirection = function(worldPoint) {
     const alpha = this._masteryi && this._masteryi.alpha;
     if (!alpha || !alpha.canSelectExitDirection) return false;
     const anchor = (alpha.primaryTarget && alpha.primaryTarget.hp > 0) ? getWorldPosition(alpha.primaryTarget) : this.root.position;
@@ -517,11 +523,11 @@ CharacterController.prototype._masteryiSetAlphaStrikeReemergeDirection = functio
     if (dir.lengthSq() < 1e-6) return true; // 클릭 지점이 대상과 거의 겹치면 무시(방향 불명확)
     alpha.reemergeDirection = dir.normalize();
     return true;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiPauseERForMeditate
-CharacterController.prototype._masteryiPauseERForMeditate = function() { 
+CharacterController.prototype._masteryiPauseERForMeditate = function() {
     if (this.championId !== 'masteryi') return;
     if (this._masteryi.wPause) return;
     const now = performance.now();
@@ -532,11 +538,11 @@ CharacterController.prototype._masteryiPauseERForMeditate = function() {
       if (eff) saved.push({ id, expiresAt: eff.expiresAt });
     }
     this._masteryi.wPause = { startedAt: now, saved };
-  
+
 };
 
 // Extracted from CharacterController: _masteryiResumeERAfterMeditate
-CharacterController.prototype._masteryiResumeERAfterMeditate = function() { 
+CharacterController.prototype._masteryiResumeERAfterMeditate = function() {
     if (this.championId !== 'masteryi') return;
     const pause = this._masteryi.wPause;
     if (!pause) return;
@@ -551,11 +557,11 @@ CharacterController.prototype._masteryiResumeERAfterMeditate = function() {
     const rSub = this.subStates?.R;
     if (rSub?.expiresAt) rSub.expiresAt += elapsed;
     this._masteryi.wPause = null;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiResolveWAnimationClip
-CharacterController.prototype._masteryiResolveWAnimationClip = function() { 
+CharacterController.prototype._masteryiResolveWAnimationClip = function() {
     // 실제 Master Yi GLB의 확정 클립명을 1순위로 사용한다.
     // import/merge 과정에서 같은 이름에 source suffix가 붙거나 확장자가 달라져도
     // 정규화/부분 일치로 반드시 동일 애니메이션을 찾는다.
@@ -604,20 +610,20 @@ CharacterController.prototype._masteryiResolveWAnimationClip = function() {
 
     console.warn('[Master Yi W] animation clip not found', clips.map(c => c.name));
     return null;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiClearWStatuses
-CharacterController.prototype._masteryiClearWStatuses = function() { 
+CharacterController.prototype._masteryiClearWStatuses = function() {
     if (!this.statusEffects) return;
     this.statusEffects = this.statusEffects.filter((e) =>
       e.id !== 'masteryiW_burst' && e.id !== 'masteryiW_sustain'
     );
-  
+
 };
 
 // Extracted from CharacterController: _masteryiEndMeditate
-CharacterController.prototype._masteryiEndMeditate = function(reason = 'natural', movePoint = null) { 
+CharacterController.prototype._masteryiEndMeditate = function(reason = 'natural', movePoint = null) {
     if (this.championId !== 'masteryi') return;
     if (this.currentActionKey !== 'masteryiW') {
       // 이미 종료된 경우에도 E/R pause가 남아 있으면 복구한다.
@@ -636,7 +642,13 @@ CharacterController.prototype._masteryiEndMeditate = function(reason = 'natural'
     clearTimeout(this._masteryiWHealTimer);
     this._masteryiWHealTimer = null;
     this._masteryiResumeERAfterMeditate();
+    // PC 위키: 명상 피해 감소는 채널이 끝난 뒤 0.5초 더 남는다(예전엔 즉시 제거).
     this._masteryiClearWStatuses();
+    {
+      const lvlW = Math.max(1, this.skillLevels.W || 1);
+      applyStatus(this, { id: 'masteryiW_linger', type: 'DAMAGE_REDUCTION', drGroup: 'masteryiW', halfVsTurret: true,
+        duration: 0.5, value: skillVal(this._champData().W.sustainedReductionByLevel, lvlW) / 100 });
+    }
     // 모션 반복 방지용으로 등록해둔 loop 이벤트 리스너 정리 - 안 지우면
     // 다음 W 시전 때마다 리스너가 계속 쌓인다.
     if (this._masteryiWLoopHandler) {
@@ -674,11 +686,11 @@ CharacterController.prototype._masteryiEndMeditate = function(reason = 'natural'
     } else {
       this._resumeAfterAction();
     }
-  
+
 };
 
 // Extracted from CharacterController: _masteryiWOnCast
-CharacterController.prototype._masteryiWOnCast = function() { 
+CharacterController.prototype._masteryiWOnCast = function() {
     const cd = this._champData(); if (!cd) return;
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
@@ -690,16 +702,19 @@ CharacterController.prototype._masteryiWOnCast = function() {
 
     // 이미 남아 있던 W 상태가 있다면 중복시키지 않는다.
     this._masteryiClearWStatuses();
+    // 70%(처음 0.5초) → 45~55%는 "같은 스킬의 두 단계"라 서로 곱하지 않는다(drGroup - 같은
+    // 그룹은 최대값만). 포탑 피해에는 절반만 적용(halfVsTurret, PC 위키).
     applyStatus(this, {
-      id: 'masteryiW_burst', type: 'DAMAGE_REDUCTION',
+      id: 'masteryiW_burst', type: 'DAMAGE_REDUCTION', drGroup: 'masteryiW', halfVsTurret: true,
       duration: w.burstReductionDuration,
       value: w.burstReductionPercent / 100
     });
     applyStatus(this, {
-      id: 'masteryiW_sustain', type: 'DAMAGE_REDUCTION',
+      id: 'masteryiW_sustain', type: 'DAMAGE_REDUCTION', drGroup: 'masteryiW', halfVsTurret: true,
       duration: w.channelDuration,
       value: skillVal(w.sustainedReductionByLevel, lvl) / 100
     });
+    this._masteryi.wStackAccum = 0;
 
     // 버그 수정(원작 대조): 명상은 채널 동안 "초당" 체력을 회복한다(잃은 체력에
     // 비례해 최대 100% 증가). 예전엔 4초를 다 채워야 총량을 한 번에 줬고, 3.9초에
@@ -707,17 +722,28 @@ CharacterController.prototype._masteryiWOnCast = function() {
     clearTimeout(this._masteryiWHealTimer);
     this._masteryiWHealTimer = null;
     this._masteryi.wHealed = 0;
-  
+
 };
 
 // Extracted from CharacterController: _masteryiWTick
-CharacterController.prototype._masteryiWTick = function(dt) { 
+CharacterController.prototype._masteryiWTick = function(dt) {
     if (this.championId !== 'masteryi' || this.currentActionKey !== 'masteryiW') {
       this._masteryi.wManaDrainPerSec = 0; // 디버그 패널용 - 명상 중이 아니면 0으로 표시
       return;
     }
     const cd = this._champData(); if (!cd) return;
     const w = cd.W;
+    // PC 위키: 명상 중 1초마다 2연속 공격 중첩 1(최대 3 - 다음 평타가 2연속 공격).
+    this._masteryi.wStackAccum = (this._masteryi.wStackAccum || 0) + dt;
+    while (this._masteryi.wStackAccum >= 1) {
+      this._masteryi.wStackAccum -= 1;
+      const n = cd.passive.everyNAttacks;
+      const stacks = (this._masteryi.attackCount || 0) % n;
+      if (stacks < n - 1) {
+        this._masteryi.attackCount = (this._masteryi.attackCount || 0) + 1;
+        if (this._masteryi.attackCount % n === n - 1) this._masteryiArmPassiveAttack();
+      }
+    }
     // 초당 회복: (레벨별 초당 회복 + 주문력 계수/채널 시간) × (1 + 잃은 체력 비율 × 100%).
     if (this.hp > 0 && this.hp < this.maxHp) {
       const lvl = Math.max(1, this.skillLevels.W || 1);
@@ -740,11 +766,11 @@ CharacterController.prototype._masteryiWTick = function(dt) {
       console.log('[Master Yi W] 마나 부족으로 명상 강제 종료');
       this._masteryiEndMeditate('mana');
     }
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCastE
-CharacterController.prototype._masteryiCastE = function(free) { 
+CharacterController.prototype._masteryiCastE = function(free) {
     if (isSilenced(this)) return;
     if (isCrowdControlled(this)) return;
     if (!this._payCost('E', free)) return;
@@ -752,11 +778,11 @@ CharacterController.prototype._masteryiCastE = function(free) {
     applyStatus(this, { id: 'masteryiE', type: 'MASTERYI_E', duration: e.buffDuration, value: 1 });
     vfx.spawn('e', this.root.position.clone()); // 무기 이펙트 ON - action state/애니메이션은 건드리지 않는다
     debugSkillHit('Master Yi E (활성화, 상태 유지)', this, { state: this.state, actionKey: this.currentActionKey });
-  
+
 };
 
 // Extracted from CharacterController: _masteryiCastR
-CharacterController.prototype._masteryiCastR = function(free) { 
+CharacterController.prototype._masteryiCastR = function(free) {
     if (isSilenced(this)) return;
     if (isCrowdControlled(this)) return;
     // 스킬 우선순위 문서 4 섹션 5/17: R도 E와 마찬가지로 시전 애니메이션이
@@ -781,6 +807,6 @@ CharacterController.prototype._masteryiCastR = function(free) {
     this.setSubState('R', r.duration);
     vfx.spawn('r', this.root.position.clone());
     debugSkillHit('Master Yi R', this);
-  
+
 };
 

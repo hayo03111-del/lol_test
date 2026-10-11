@@ -127,3 +127,22 @@ CharacterController.prototype._garenROnHit = function(target) {
   
 };
 
+// E(심판) 회전 중 R(데마시아의 정의): 회전 상태(eChannel)는 그대로 두고, 시전 시간(0.435초) 뒤
+// 고정 대상에게 피해를 준다. 사거리/대상/비용 검사는 일반 R과 같다.
+CharacterController.prototype._garenCastRDuringE = function() {
+    const cd = this._champData(); if (!cd) return;
+    const target = this.currentTarget;
+    if (!target || target.hp <= 0) { debugSkillMiss('R', 'no currentTarget selected'); return; }
+    if (isSilenced(this)) return;
+    if (!isInRange(this, target, cd.R.range)) { debugSkillMiss('R', `out of range (R range ${cd.R.range})`); return; }
+    if (!this._payCost('R', false)) return;
+    const timing = (typeof SKILL_TIMING_DATABASE !== 'undefined' && SKILL_TIMING_DATABASE.garen && SKILL_TIMING_DATABASE.garen.R) || null;
+    const delay = (timing && timing.eventTime) || cd.R.castTime || 0.435;
+    const t = setTimeout(() => {
+      if (this.championId !== 'garen' || !target || target.hp <= 0) return;
+      vfx.spawn('r', this.root.position.clone());
+      this._garenROnHit(target);
+      debugSkillHit('Garen R (회전 중)', target);
+    }, delay * 1000);
+    void t; // 회전이 끝나거나 다른 행동을 해도 이미 시전한 R은 취소되지 않는다
+};

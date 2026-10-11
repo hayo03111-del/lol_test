@@ -77,8 +77,10 @@ CharacterController.prototype._dariusQOnHit = function(target, distanceWorld = n
     const dmg = isBlade
       ? skillVal(q.bladeDamageByLevel, lvl) + skillVal(q.bladeAdRatioByLevel, lvl) * this.stats.attackDamage
       : skillVal(q.handleDamageByLevel, lvl) + skillVal(q.handleAdRatioByLevel, lvl) * this.stats.attackDamage;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, armorPenPercent: this.armorPenPercent || 0 });
-    this._dariusApplyBleed(target);
+    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, armorPenPercent: this.armorPenPercent || 0, isAbility: true });
+    // PC 위키(Template:Data Darius/Decimate): 자루(안쪽)에 맞은 적은 출혈 중첩을 얻지 않는다.
+    // 예전엔 자루 적중에도 출혈을 걸었다.
+    if (isBlade) this._dariusApplyBleed(target);
     // 회복 대상 수 집계: 도끼날(외곽)에 맞은 "챔피언/대형 몬스터"만 센다. 실제
     // 회복은 한 번의 Q가 끝난 뒤 _dariusQHeal()이 한 번에 처리한다.
     return !!(isBlade && (target.isChampion || target.isLargeMonster));
@@ -104,8 +106,11 @@ CharacterController.prototype._dariusWOnHit = function(target) {
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
     const dmg = this.stats.attackDamage * skillVal(w.bonusAdRatioByLevel, lvl);
-    const willKill = target.hp > 0 && target.hp <= dmg;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, armorPenPercent: this.armorPenPercent || 0 });
+    // 처치 판정은 방어력 적용 "후" 실제 피해 기준(예전엔 적용 전 원본 피해라 처치가 아닌데도 환급됐다).
+    const hpBefore = target.hp, floored = isFlooredTrainingDummy(target);
+    const dealtW = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, armorPenPercent: this.armorPenPercent || 0, isBasicAttack: true }) || 0;
+    // 평타 부분에서 이미 처치됐어도(hpBefore<=0) 강화 평타로 처치한 것이다.
+    const willKill = !floored && (hpBefore <= 0 || hpBefore <= dealtW);
     applyStatus(target, { id: 'dariusW_slow', type: 'SLOW', duration: w.slowDuration, value: w.slowPercent / 100 });
     if (willKill) {
       const cost = this._skillCostFor('W') || { mana: w.mana };
@@ -155,8 +160,10 @@ CharacterController.prototype._dariusROnHit = function(target) {
     const stacks = this._dariusLiveStacks(target);
     const min = skillVal(r.minDamageByLevel, lvl) + r.minAdRatio * this._getBonusAD();
     const dmg = min * (1 + (r.perStackBonusPercent / 100) * stacks);
-    const killed = target.hp > 0 && target.hp <= dmg;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+    // 처치 판정: 실제로 들어간 피해 기준 + 2% 바닥에 멈춘 허수아비 반복 타격은 처치 아님(무한 재시전 방지).
+    const hpBefore = target.hp, floored = isFlooredTrainingDummy(target);
+    const dealtR = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isAbility: true }) || 0;
+    const killed = hpBefore > 0 && hpBefore <= dealtR && !floored;
     // 버그 수정(요청 5-⑥ "재사용 가능 상태 UI 반영"): _rRecastReadyUntil은
     // _castR()의 마나/쿨다운 게이트를 우회시켜 실제로는 즉시 재사용이
     // 가능했지만, this.cooldowns.R 자체는 처치 전에 걸어둔 원래 쿨다운
@@ -166,7 +173,11 @@ CharacterController.prototype._dariusROnHit = function(target) {
     // 시스템을 그대로 재사용해서(새 UI 상태를 안 만들고) 처치 순간 여기서
     // 바로 0으로 되돌리면, 다음 updateCooldowns() 틱에서 자동으로 "ready"
     // 표시로 바뀐다.
-    if (killed) { this._rRecastReadyUntil = performance.now() + r.recastWindow * 1000; this.cooldowns.R = 0; }
+    if (killed) {
+      this._rRecastReadyUntil = performance.now() + r.recastWindow * 1000; this.cooldowns.R = 0;
+      // PC 위키(Hemorrhage): 녹서스의 단두대로 챔피언을 처치해도 녹서스의 힘이 발동한다(예전엔 누락).
+      if (target.isChampion) this._dariusEmpower();
+    }
   
 };
 

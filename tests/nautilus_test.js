@@ -124,7 +124,7 @@ const mag = (lvl, arr, ratio, ap) => arr[lvl - 1] + ratio * ap;
   stubs.placedDummies = [e];
   const hp0 = e.hp;
   c._nautilusOnBasicAttackHit(e);
-  const expected = D.passive.bonusDamageBase + D.passive.bonusDamagePerLevel * 6;
+  const expected = D.passive.bonusDamageAtLevel1 + (D.passive.bonusDamageAtLevel18 - D.passive.bonusDamageAtLevel1) * 5 / 17; // 14~128 레벨 비례(PC 위키)
   assert(Math.abs((hp0 - e.hp) - expected) < 1e-6, `패시브: 첫 공격 추가 물리 피해 ${expected}(레벨 6)`);
   const root = getStatus(e, 'nautilusPassive_root');
   assert(root && root.type === 'ROOT' && Math.abs(root.duration - 1.0) < 1e-9, '패시브: 레벨 6 속박 1초');
@@ -261,14 +261,19 @@ const mag = (lvl, arr, ratio, ap) => arr[lvl - 1] + ratio * ap;
   c.currentTarget = target;
   c._nautilusCastR(false);
   assert(c.mp === 1000 - D.R.mana, 'R: 마나 100');
-  step(c, D.R.castTimeSec + d / lolRangeToWorld(D.R.shockwaveSpeed) + 0.1);
+  // 충격파는 가속한다(275 + 초당 466.67): 도착 시간 t는 275t + 466.67t²/2 = 거리(LoL 단위).
+  const dLol = d / lolRangeToWorld(1), a = D.R.shockwaveAccelPerSec, v0 = D.R.shockwaveSpeed;
+  const arrive = (-v0 + Math.sqrt(v0 * v0 + 2 * a * dLol)) / a;
+  // 경로 위 적: 맞는 순간 에어본이 걸렸는지 그때 확인(가속 때문에 주 대상 도착 시점엔 이미 끝났을 수 있음).
+  let pathKnocked = false, elapsedR = 0;
+  while (elapsedR < D.R.castTimeSec + arrive + 0.05) { step(c, 1 / 60); elapsedR += 1 / 60; if (hasStatus(onPath, 'KNOCKUP')) pathKnocked = true; }
   const main = mag(1, D.R.damageByLevel, D.R.apRatio, 100);
   const pathDmg = mag(1, D.R.pathDamageByLevel, D.R.pathApRatio, 100);
   assert(Math.abs((target.maxHp - target.hp) - main) < 1e-6, `R: 주 대상 피해 ${main}`);
   const k = getStatus(target, 'nautilusR_knockup');
   assert(k && k.type === 'KNOCKUP' && k.duration === 1, 'R: 주 대상 1초(1레벨) 에어본/기절');
   assert(Math.abs((onPath.maxHp - onPath.hp) - pathDmg) < 1e-6, `R: 경로 위 적 피해 ${pathDmg}`);
-  assert(hasStatus(onPath, 'KNOCKUP'), 'R: 경로 위 적 에어본');
+  assert(pathKnocked, 'R: 경로 위 적 에어본');
 }
 {
   const c = makeNaut();

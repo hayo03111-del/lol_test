@@ -266,7 +266,7 @@ function makeEnemy(x, z, overrides = {}) {
   const cq = makeChamp('masteryi');
   const A = makeEnemy(0, 1), B = makeEnemy(0, 2);
   const alpha = { q: CHAMPION_DATA.masteryi.Q, lvl: 1, alreadyHitCount: new Map(), maxHits: 4 };
-  const full = CHAMPION_DATA.masteryi.Q.baseDamageByLevel[0];
+  const full = CHAMPION_DATA.masteryi.Q.baseDamageByLevel[0] + CHAMPION_DATA.masteryi.Q.adRatio * 100; // 20 + 총 AD 70%(PC 위키)
   const a0 = A.hp; cq._masteryiResolveAlphaStrikeHit(alpha, A, 0);
   const b0 = B.hp; cq._masteryiResolveAlphaStrikeHit(alpha, B, 1);
   assert(near(a0 - A.hp, full) && near(b0 - B.hp, full), '마스터 이 Q: 두 번째 타격이라도 처음 맞는 대상은 100% 피해');

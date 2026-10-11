@@ -2560,7 +2560,10 @@ function _itemCleaveOnHit(ctrl, target) {
 // 이 훅은 메인 평타의 applyDamage()가 이미 끝난 "뒤"에 불리므로, 안에서
 // 다시 applyDamage()를 호출해도 무한 재귀가 생기지 않는다(기존 광휘의
 // 검/티아맷과 동일한 안전 지점 - item_data.js 상단 주석 참고).
-function itemOnBasicAttackHit(ctrl, target, isCritical) {
+// opts.fromAbility: 야스오/요네 Q처럼 "적중 시 효과를 적용하는 스킬"에서 호출할 때 true.
+// 원작 규칙상 이 경우 주문검(Sheen류) 발동은 막힌다(위키 Sheen: "적중 시 효과를 적용하는
+// 스킬로는 발동하지 않음") - 나머지 적중 시 효과는 그대로 적용된다.
+function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
   // 세계지도집/룬 나침반(재물 공유 - 미니언 처형) - "일정 체력(근거리
   // 챔피언은 50%, 원거리 챔피언은 30%) 이하인 미니언을 평타로 치면 스택을
   // 하나 소모하여 골드를 같이 받는다"(원문 93~95줄). 위 itemOnDamageDealt()의
@@ -2597,7 +2600,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     ctrl._itemHeartsteelIcdUntil[ctrl._itemHeartsteelReadyTargetKey] = performance.now() + p.icdSec * 1000;
     console.log('[ITEM] 강철심장 - 거인의 흡수 발동');
   }
-  if (ctrl._itemSheenArmed) {
+  if (ctrl._itemSheenArmed && !opts.fromAbility) {
     ctrl._itemSheenArmed = false;
     const spellbladeSlot = _itemSpellbladeSlot(ctrl);
     if (spellbladeSlot) {

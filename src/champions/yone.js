@@ -249,6 +249,11 @@ CharacterController.prototype._yoneApplyQHit = function(target, { empowered = fa
   const ratio = crit ? q.totalAdRatio * critMult : q.totalAdRatio;
   const raw = base + this.stats.attackDamage * ratio;
   const dealt = applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
+  // 적중 시 효과(야스오 Q와 같은 규칙): 한 번의 Q에서 처음 맞은 대상에게만, 주문검 발동은 제외.
+  if (!this._yoneQHitConsumed) {
+    this._yoneQHitConsumed = true;
+    if (typeof itemOnBasicAttackHit === 'function' && target.hp > 0) itemOnBasicAttackHit(this, target, crit, { fromAbility: true });
+  }
   if (empowered) applyStatus(target, { id: 'yoneQKnockup', type: 'KNOCKUP', duration: q.knockupDuration, value: 1 });
   this._yoneRecordMark(target, dealt);
   return raw;
@@ -288,6 +293,7 @@ CharacterController.prototype._yoneStartEmpoweredQ = function(dir) {
     hitSet: new Set(),
     critRoll: Math.random() < (this.stats.critChance || 0),
   };
+  this._yoneQHitConsumed = false;
   // 중첩은 돌진을 "시작"할 때 소모 - 예전엔 돌풍이 끝까지 간 뒤 0으로 돌려, 그 사이(공속이
   // 높으면 쿨다운 1.33초) Q를 다시 쓰면 강화 Q가 또 나갔다.
   this._yone.qStacks = 0; this._yone.qStackExpiresAt = 0;
@@ -422,6 +428,7 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
     if (targets.length) {
       targets.sort((a, b) => this.root.position.distanceToSquared(getWorldPosition(a)) - this.root.position.distanceToSquared(getWorldPosition(b)));
       this._yoneQCritRoll = Math.random() < (this.stats.critChance || 0);
+      this._yoneQHitConsumed = false;
       targets.forEach((t) => this._yoneApplyQHit(t, { empowered: false }));
       this._yoneQCritRoll = null;
       this._yone.qStacks = Math.min(q.maxStacks || 2, this._yone.qStacks + 1);

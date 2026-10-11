@@ -470,6 +470,9 @@ class CharacterController {
       this.stats.abilityPower = (this.itemBonusAP || 0) * (1 + (this.itemTotalApMultiplierBonus || 0));
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
       this.stats.levelBonusAttackSpeed = base.levelBonusAttackSpeed || 0;
+      this.stats.windupPercent = base.windupPercent != null ? base.windupPercent : 0.4;
+      this.stats.windupModifier = base.windupModifier != null ? base.windupModifier : 1;
+      this.stats.attackSpeedRatio = base.attackSpeedRatio || base.baseAttackSpeed;
       this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0);
       this.stats.baseArmor = base.armor;
       this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0) + (this.itemTempMrBonus || 0);
