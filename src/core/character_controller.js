@@ -1,3 +1,62 @@
+// 챔피언별 스킬 시전 라우팅 - 예전엔 _dispatchCast/_castQ/_castW/_castE/_castR에
+// "if (championId === 'x') return this._xCastQ(...)" 사슬로 흩어져 있던 것을 표로
+// 모았다. 두 단계가 있다:
+// - CHAMPION_DIRECT_CASTS: _dispatchCast()에서 가장 먼저 확인한다. 모션 테스트
+//   (free=true)의 커스텀 애니메이션 시퀀스보다도 먼저 실행된다. 마우스 방향이
+//   필요한 R(요네/이즈리얼/아리/바루스 - 공용 _castR은 마우스 좌표를 받지 않음)과
+//   챔피언 전용 시전 함수로 4슬롯 전부를 처리하는 챔피언(닐라/레넥톤/애쉬/노틸러스)이 여기 있다.
+// - CHAMPION_SLOT_CASTS: 커스텀 시퀀스 확인 뒤 _castQ/_castW/_castE/_castR 맨 앞에서
+//   확인한다. 여기 없는 챔피언/슬롯은 공용 로직(가렌/다리우스/세트 등)을 탄다.
+// 각 함수는 (컨트롤러, 마우스 지점, free)를 받는다.
+const CHAMPION_DIRECT_CASTS = {
+  nilah: {
+    Q: (c, m, f) => c._nilahCastQ(m, f), W: (c, m, f) => c._nilahCastW(m, f),
+    E: (c, m, f) => c._nilahCastE(m, f), R: (c, m, f) => c._nilahCastR(f),
+  },
+  vex: { R: (c, m, f) => c._vexCastR(f) },
+  renekton: {
+    Q: (c, m, f) => c._renektonCastQ(m, f), W: (c, m, f) => c._renektonCastW(m, f),
+    E: (c, m, f) => c._renektonCastE(m, f), R: (c, m, f) => c._renektonCastR(f),
+  },
+  // 마스터 이 E/R은 커스텀 시퀀스를 건너뛰고 _castE/_castR(→ CHAMPION_SLOT_CASTS)로 간다.
+  masteryi: { E: (c, m, f) => c._castE(m, f), R: (c, m, f) => c._castR(f) },
+  yone: { R: (c, m, f) => c._yoneCastR(m, f) },
+  ezreal: { R: (c, m, f) => c._ezrealCastR(m, f) },
+  ahri: { R: (c, m, f) => c._ahriCastR(m, f) },
+  varus: { R: (c, m, f) => c._varusCastR(m, f) },
+  nautilus: {
+    Q: (c, m, f) => c._nautilusCastQ(m, f), W: (c, m, f) => c._nautilusCastW(f),
+    E: (c, m, f) => c._nautilusCastE(f), R: (c, m, f) => c._nautilusCastR(f),
+  },
+  ashe: {
+    Q: (c, m, f) => c._asheCastQ(f), W: (c, m, f) => c._asheCastW(m, f),
+    E: (c, m, f) => c._asheCastE(m, f), R: (c, m, f) => c._asheCastR(m, f),
+  },
+};
+const CHAMPION_SLOT_CASTS = {
+  Q: {
+    ahri: (c, m, f) => c._ahriCastQ(m, f), yasuo: (c, m, f) => c._yasuoCastQ(m, f), yone: (c, m, f) => c._yoneCastQ(m, f),
+    masteryi: (c, m, f) => c._masteryiCastQ(f), chogath: (c, m, f) => c._chogathCastQ(m, f), leesin: (c, m, f) => c._leesinCastQ(m, f),
+    ezreal: (c, m, f) => c._ezrealCastQ(m, f), varus: (c, m, f) => c._varusCastQ(m, f),
+  },
+  W: {
+    ahri: (c, m, f) => c._ahriCastW(m, f), yasuo: (c, m, f) => c._yasuoCastW(m, f), yone: (c, m, f) => c._yoneCastW(m, f),
+    chogath: (c, m, f) => c._chogathCastW(f), leesin: (c, m, f) => c._leesinCastW(f, m), mordekaiser: (c, m, f) => c._mordeCastW(f),
+    ezreal: (c, m, f) => c._ezrealCastW(m, f), varus: (c, m, f) => c._varusCastW(m, f),
+  },
+  E: {
+    ahri: (c, m, f) => c._ahriCastE(m, f), yasuo: (c, m, f) => c._yasuoCastE(m, f), yone: (c, m, f) => c._yoneCastE(m, f),
+    chogath: (c, m, f) => c._chogathCastE(f), masteryi: (c, m, f) => c._masteryiCastE(f), leesin: (c, m, f) => c._leesinCastE(f),
+    ezreal: (c, m, f) => c._ezrealCastE(m, f), varus: (c, m, f) => c._varusCastE(m, f),
+  },
+  // 요네 R은 보통 위 CHAMPION_DIRECT_CASTS에서 마우스 방향과 함께 먼저 처리된다 -
+  // 여기는 우회 호출 대비 안전망(정면 방향으로 나감).
+  R: {
+    yasuo: (c, m, f) => c._yasuoCastR(f), yone: (c, m, f) => c._yoneCastR(null, f), masteryi: (c, m, f) => c._masteryiCastR(f),
+    chogath: (c, m, f) => c._chogathCastR(f), leesin: (c, m, f) => c._leesinCastR(f), sett: (c, m, f) => c._settCastR(f),
+  },
+};
+
 class CharacterController {
   // 요청 10/11: 게임 이동용 root와 AnimationMixer가 바인딩되는 실제 GLB
   // Scene/Skeleton(animationRoot)을 분리해서 받는다. root는 계속 게임 좌표/
@@ -2843,54 +2902,8 @@ class CharacterController {
     // 시전 슬롯과 시각만 기록해두면 챔피언 파일을 건드리지 않고도 "방금
     // 궁극기(R)를 썼는지"를 item_system.js에서 판정할 수 있다.
     if (!free) { this._itemLastCastSlot = slot; this._itemLastCastSlotAt = performance.now(); }
-    if (this.championId === 'nilah') {
-      if (slot === 'Q') return this._nilahCastQ(mouseWorldPoint, free);
-      if (slot === 'W') return this._nilahCastW(mouseWorldPoint, free);
-      if (slot === 'E') return this._nilahCastE(mouseWorldPoint, free);
-      if (slot === 'R') return this._nilahCastR(free);
-    }
-    if (this.championId === 'vex' && slot === 'R') return this._vexCastR(free);
-    if (this.championId === 'renekton') {
-      if (slot === 'Q') return this._renektonCastQ(mouseWorldPoint, free);
-      if (slot === 'W') return this._renektonCastW(mouseWorldPoint, free);
-      if (slot === 'E') return this._renektonCastE(mouseWorldPoint, free);
-      if (slot === 'R') return this._renektonCastR(free);
-    }
-    if (this.championId === 'masteryi' && (slot === 'E' || slot === 'R')) {
-      return slot === 'E' ? this._castE(mouseWorldPoint, free) : this._castR(free);
-    }
-    // 버그 수정("R이 마우스 커서 쪽으로 나가지 않는다"): 요네 운명봉인은
-    // 직선 스킬샷이라 마우스 방향을 그대로 받아야 하는데, 이 엔진의 공용
-    // _castR(free)는 원래 가렌/다리우스/세트/모데카이저처럼 "타겟 클릭형"
-    // 궁극기를 위한 경로라 mouseWorldPoint를 아예 넘기지 않는다(닐라/
-    // 렉사이 등 다른 R도 전부 free만 받음). 요네만 별도로 mouseWorldPoint를
-    // 그대로 전달한다.
-    if (this.championId === 'yone' && slot === 'R') return this._yoneCastR(mouseWorldPoint, free);
-    // 이즈리얼 R(정조준 사격)도 요네와 동일하게 직선 스킬샷이라 마우스
-    // 방향이 필요하다 - 같은 이유로 별도 전달한다.
-    if (this.championId === 'ezreal' && slot === 'R') return this._ezrealCastR(mouseWorldPoint, free);
-    // 아리 R(혼령 질주)도 마우스가 가리키는 방향으로 돌진하는 스킬샷이라
-    // 요네/이즈리얼 R과 동일한 이유로 mouseWorldPoint를 그대로 전달한다.
-    if (this.championId === 'ahri' && slot === 'R') return this._ahriCastR(mouseWorldPoint, free);
-    // 바루스 R(속박의 사슬)도 마우스 방향으로 나가는 직선 스킬샷이라
-    // 요네/이즈리얼/아리 R과 동일한 이유로 mouseWorldPoint를 그대로 전달한다.
-    if (this.championId === 'varus' && slot === 'R') return this._varusCastR(mouseWorldPoint, free);
-    // 애쉬 Q(궁사의 집중)는 방향이 필요 없는 자기 자신 대상 상태 스킬이고,
-    // W(일제 사격)/E(매 날리기)/R(마법의 수정화살)은 전부 마우스 방향으로
-    // 나가는 스킬샷이라 요네/이즈리얼/아리/바루스 R과 동일한 이유로
-    // mouseWorldPoint를 그대로 전달한다.
-    if (this.championId === 'nautilus') {
-      if (slot === 'Q') return this._nautilusCastQ(mouseWorldPoint, free);
-      if (slot === 'W') return this._nautilusCastW(free);
-      if (slot === 'E') return this._nautilusCastE(free);
-      if (slot === 'R') return this._nautilusCastR(free);
-    }
-    if (this.championId === 'ashe') {
-      if (slot === 'Q') return this._asheCastQ(free);
-      if (slot === 'W') return this._asheCastW(mouseWorldPoint, free);
-      if (slot === 'E') return this._asheCastE(mouseWorldPoint, free);
-      if (slot === 'R') return this._asheCastR(mouseWorldPoint, free);
-    }
+    const direct = CHAMPION_DIRECT_CASTS[this.championId] && CHAMPION_DIRECT_CASTS[this.championId][slot];
+    if (direct) return direct(this, mouseWorldPoint, free);
     if (free && this.playSkillAnimationSequence(slot, { mouseWorldPoint, free })) return;
     switch (slot) {
       case 'Q': return this._castQ(mouseWorldPoint, free);
@@ -3127,14 +3140,8 @@ class CharacterController {
 
 
   _castQ(mouseWorldPoint, free = false) {
-    if (this.championId === 'ahri') { this._ahriCastQ(mouseWorldPoint, free); return; }
-    if (this.championId === 'yasuo') { this._yasuoCastQ(mouseWorldPoint, free); return; }
-    if (this.championId === 'yone') { this._yoneCastQ(mouseWorldPoint, free); return; }
-    if (this.championId === 'masteryi') { this._masteryiCastQ(free); return; }
-    if (this.championId === 'chogath') { this._chogathCastQ(mouseWorldPoint, free); return; }
-    if (this.championId === 'leesin') { this._leesinCastQ(mouseWorldPoint, free); return; }
-    if (this.championId === 'ezreal') { this._ezrealCastQ(mouseWorldPoint, free); return; }
-    if (this.championId === 'varus') { this._varusCastQ(mouseWorldPoint, free); return; }
+    const slotCast = CHAMPION_SLOT_CASTS.Q[this.championId];
+    if (slotCast) { slotCast(this, mouseWorldPoint, free); return; }
     const db = this._championAbilityDbEntry();
     // 업데이트(다리우스 Q 문서 1~11절): Q가 방향별 단일 클립이 아니라
     // "웜업 클립 → 실제 공격 클립"을 강제로 연속 재생해야 하는 챔피언을 위한
@@ -3446,14 +3453,8 @@ class CharacterController {
   // 쪽에는 적용하지 않는다(공개 데이터상 W 자체가 이미 소모된 상태의
   // 후속 동작이라 별도 자원 소모가 아님).
   _castW(mouseWorldPoint, free = false) {
-    if (this.championId === 'ahri') { this._ahriCastW(mouseWorldPoint, free); return; }
-    if (this.championId === 'yasuo') { this._yasuoCastW(mouseWorldPoint, free); return; }
-    if (this.championId === 'yone') { this._yoneCastW(mouseWorldPoint, free); return; }
-    if (this.championId === 'chogath') { this._chogathCastW(free); return; }
-    if (this.championId === 'leesin') { this._leesinCastW(free, mouseWorldPoint); return; }
-    if (this.championId === 'mordekaiser') { this._mordeCastW(free); return; }
-    if (this.championId === 'ezreal') { this._ezrealCastW(mouseWorldPoint, free); return; }
-    if (this.championId === 'varus') { this._varusCastW(mouseWorldPoint, free); return; }
+    const slotCast = CHAMPION_SLOT_CASTS.W[this.championId];
+    if (slotCast) { slotCast(this, mouseWorldPoint, free); return; }
 
     // 가렌 W(용기): 독립 Timed Buff. E 채널링/평타/이동/기타 행동 중에도
     // 현재 ACTION_STATE와 currentClip을 절대 바꾸지 않고 즉시 효과만 적용한다.
@@ -3758,14 +3759,8 @@ class CharacterController {
   // 문서화가 실제 구현 뒤에도 갱신되지 않고 남아 있었음 - 코드 자체는
   // 이미 정확하게 동작한다).
   _castE(mouseWorldPoint, free = false) {
-    if (this.championId === 'ahri') { this._ahriCastE(mouseWorldPoint, free); return; }
-    if (this.championId === 'yasuo') { this._yasuoCastE(mouseWorldPoint, free); return; }
-    if (this.championId === 'yone') { this._yoneCastE(mouseWorldPoint, free); return; }
-    if (this.championId === 'chogath') { this._chogathCastE(free); return; }
-    if (this.championId === 'masteryi') { this._masteryiCastE(free); return; }
-    if (this.championId === 'leesin') { this._leesinCastE(free); return; }
-    if (this.championId === 'ezreal') { this._ezrealCastE(mouseWorldPoint, free); return; }
-    if (this.championId === 'varus') { this._varusCastE(mouseWorldPoint, free); return; }
+    const slotCast = CHAMPION_SLOT_CASTS.E[this.championId];
+    if (slotCast) { slotCast(this, mouseWorldPoint, free); return; }
     const db = this._championAbilityDbEntry();
     const channelCfg = db && db.E && db.E.directionalChannel;
 
@@ -4014,15 +4009,8 @@ class CharacterController {
 
 
   _castR(free = false) {
-    if (this.championId === 'yasuo') { this._yasuoCastR(free); return; }
-    // 참고: 요네 R은 _dispatchCast()에서 mouseWorldPoint와 함께 먼저
-    // 가로채지므로 보통 이 지점까지 오지 않는다 - 혹시 모를 우회 호출에
-    // 대비한 안전망으로만 남겨둔다(마우스 좌표 없이 정면 방향으로 나감).
-    if (this.championId === 'yone') { this._yoneCastR(null, free); return; }
-    if (this.championId === 'masteryi') { this._masteryiCastR(free); return; }
-    if (this.championId === 'chogath') { this._chogathCastR(free); return; }
-    if (this.championId === 'leesin') { this._leesinCastR(free); return; }
-    if (this.championId === 'sett') { this._settCastR(free); return; }
+    const slotCast = CHAMPION_SLOT_CASTS.R[this.championId];
+    if (slotCast) { slotCast(this, null, free); return; }
     // 버그 수정(명세 27절 "이미 죽음의 세계에 들어가 있는 동안 R 재입력 시
     // 새로운 R 생성 금지"): 모데카이저 전용 재시전 방지 가드. 이 시점에서
     // 막아야 아래의 쿨다운/비용 지불, 애니메이션 재생 자체가 아예 시작되지
