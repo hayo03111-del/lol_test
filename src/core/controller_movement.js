@@ -11,7 +11,7 @@ CharacterController.prototype.moveTo = function(point) {
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
     if (isCrowdControlled(this)) return; // 기획안 8절: 기절/속박 중에는 이동 명령을 받지 않는다
     if (this.currentActionKey === 'rWindup' || this.currentActionKey === 'rChannel' || this.currentActionKey === 'rCast'
-        || this.currentActionKey === 'leesinE' || this.currentActionKey === 'leesinR') return;
+        || this._isLeeSinCastLock()) return;
     // 모데카이저 R "죽음의 세계" 명세 6절 "경계 밖으로 나가지 못함": 이
     // 함수로 들어오는 이동 목적지 자체를 경계 반경 안으로 보정한다 -
     // 추격/피벗/애니메이션 전환 등 이후의 모든 이동 처리 로직은 전혀
@@ -88,7 +88,7 @@ CharacterController.prototype.moveTo = function(point) {
     // 이 방어막이 없으면 화면은 MOVE로 바뀌었는데 내부 권한 계산은 Q/스킬
     // 중으로 남아 이후 이동/스킬 입력이 전부 막히는 현상이 발생할 수 있다.
     if (this.currentActionKey && !this.currentPhase &&
-        !['rWindup', 'rChannel', 'rCast', 'leesinE', 'leesinR', 'eChannel', 'nilahR', 'qChain'].includes(this.currentActionKey)) {
+        !['rWindup', 'rChannel', 'rCast', 'eChannel', 'nilahR', 'qChain'].includes(this.currentActionKey) && !this._isLeeSinCastLock()) {
       this.currentActionKey = null;
       this.phaseCancelable = false;
     }
@@ -325,9 +325,16 @@ CharacterController.prototype.selectTarget = function(enemy) {
 // 즉시 원래 값으로 되돌리는 방식으로 기존 isInAttackRange()를 그대로 재사용한다.
 
 
+// 다리우스 W(마비의 일격) 강화 평타 대기 중에는 사거리 +25(원작).
+CharacterController.prototype._dariusWRangeBonusWorld = function() {
+    if (this.championId !== 'darius' || !(this.attackOverrides || []).some((o) => o.id === 'W')) return 0;
+    const cd = this._champData();
+    return cd ? lolRangeToWorld(cd.W.rangeBonus || 0) : 0;
+};
+
 CharacterController.prototype._tryEngageTarget = function() {
     if (!this.currentTarget || this.currentTarget.hp <= 0) { this.currentTarget = null; this.isChasing = false; return; }
-    const rangeBonus = this._settLeftHandRangeBonusWorld();
+    const rangeBonus = this._settLeftHandRangeBonusWorld() + this._dariusWRangeBonusWorld();
     if (rangeBonus > 0) this.stats.attackRange += rangeBonus;
     const inRange = isInAttackRange(this, this.currentTarget);
     if (rangeBonus > 0) this.stats.attackRange -= rangeBonus; // 판정 직후 즉시 원상복구 - 사거리 표시 링 등 다른 시스템에 영향 주지 않음

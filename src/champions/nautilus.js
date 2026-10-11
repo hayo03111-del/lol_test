@@ -55,6 +55,21 @@ CharacterController.prototype._nautilusOnBasicAttackHit = function(target) {
   if (this._nautilusWActive()) this._nautilusApplyWOnHit(target);
 };
 
+// 실제 노틸러스.glb의 'Passive' 클립(강력한 일격 전용 내려찍기 모션)을, 이번
+// 스윙이 패시브를 터뜨릴 스윙일 때(대상별 6초 쿨다운이 끝난 상태)만 평타 모션으로
+// 쓴다. 우선순위 20 - W(Attack4, 10)보다 높다(champion_ability_database.js 주석의
+// "패시브가 W보다 우선" 규칙). 실제 피해/속박은 그대로 _nautilusOnBasicAttackHit이 판정.
+CharacterController.prototype._nautilusArmPassiveAnim = function(target) {
+  const db = this._championAbilityDbEntry();
+  const clip = db && db.passiveAttackClip;
+  const ready = target && !target.isStructure && performance.now() >= (this._nautilus.passiveReadyAt.get(target) || 0);
+  if (clip && ready && typeof this.findAnimation === 'function' && this.findAnimation(clip)) {
+    this.registerAttackOverride({ id: 'nautilusPassive', clips: [clip], priority: 20, oneShot: true, uses: 1 });
+  } else {
+    this.clearAttackOverride('nautilusPassive');
+  }
+};
+
 CharacterController.prototype._nautilusApplyWOnHit = function(target) {
   const w = this._champData().W;
   const lvl = Math.max(1, this.skillLevels.W || 1);

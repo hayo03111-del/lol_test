@@ -719,8 +719,10 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
           if (this.championId === 'darius') {
             const cd = this._champData();
             const hits = findEnemiesInRadius(this.root.position, cd.Q.range);
-            if (hits.length) hits.forEach((h) => { this._dariusQOnHit(h.unit, h.distance); debugSkillHit('Darius Q', h.unit, { distance: Math.round(h.distance), zone: h.distance > lolRangeToWorld(cd.Q.handleRange) ? 'BLADE' : 'HANDLE' }); });
+            let healHits = 0;
+            if (hits.length) hits.forEach((h) => { if (this._dariusQOnHit(h.unit, h.distance)) healHits++; debugSkillHit('Darius Q', h.unit, { distance: Math.round(h.distance), zone: h.distance > lolRangeToWorld(cd.Q.handleRange) ? 'BLADE' : 'HANDLE' }); });
             else debugSkillMiss('Darius Q', 'no target in range');
+            this._dariusQHeal(healHits);
           } else if (this.currentTarget && this.currentTarget.hp > 0) {
             const dmg = this.actionData.qForward ? this.actionData.qForward.dmg : 18;
             applyDamage(this.currentTarget, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
@@ -765,7 +767,10 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
         console.log('[SETT Q] Q INPUT');
         this._settQOnCast();
       }
-      this._activateAttackOverrideFromDb('Q', 6.0);
+      // 가렌 Q 강화 평타 유효 시간은 원작 4.5초(CHAMPION_DATA.garen.Q.enhancedWindow).
+      // 예전엔 세트와 같은 임시 상한 6.0초를 그대로 썼다.
+      const qWindow = (this.championId === 'garen' && this._champData().Q.enhancedWindow) || 6.0;
+      this._activateAttackOverrideFromDb('Q', qWindow);
       if (this.championId === 'sett') {
         // 요청("Q 썼을 때 왼손/오른손 모션을 찾아줘"): 방금 등록한
         // override가 실제로 어떤 클립에 연결됐는지 콘솔에 남긴다 - Q를
@@ -808,13 +813,19 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
       // override가 실제로 소진될 때 clearSubState('Q')를 호출해 맞춘다(아래
       // 참고) - 즉 이 6.0초는 "최악의 경우"에만 쓰이는 안전장치고, 실제로는
       // 평타가 나가는 순간 그보다 먼저 꺼진다.
-      this.setSubState('Q', 6.0);
+      this.setSubState('Q', qWindow);
       // "Attack Timer Reset": 이미 평타 RECOVERY 중이면 그 잠금을 즉시 풀고
       // 바로 재교전해서 강화된 평타가 지체 없이 나가도록 한다.
       if (this.currentPhase === 'RECOVERY' && this.currentActionKey && this.currentActionKey.startsWith('attack')) {
         this._clearActionTimers();
         this.currentActionKey = null; this.currentPhase = null;
         if (this.currentTarget && this.currentTarget.hp > 0) this._tryEngageTarget();
+      } else if (this.championId === 'garen' && !this.currentActionKey && this.currentTarget && this.currentTarget.hp > 0) {
+        // 버그 수정: 평타 도중 Q를 누르면 _requestCast()의 "스킬이 평타보다 우선"
+        // 분기가 평타를 먼저 끊고(currentActionKey=null) 여기로 들어온다 - 위
+        // RECOVERY 분기는 해당되지 않아 상태가 ATTACK인 채로 멈춰 강화 평타가
+        // 나가지 않았다(다리우스 W와 같은 문제). 대상이 살아 있으면 바로 재교전.
+        this._resumeAfterAction();
       }
       return;
     }
@@ -1056,7 +1067,8 @@ CharacterController.prototype._castW = function(mouseWorldPoint, free = false) {
       // (_activateAttackOverrideFromDb)을 그대로 재사용하면 다음 평타가
       // 정확히 Spell2 애니메이션으로 나간다 - 새 애니메이션 시스템을 만들지
       // 않는다.
-      this._activateAttackOverrideFromDb('W', 6.0);
+      // 원작: "4초 안의 다음 기본 공격" 강화(예전 6.0초는 임시 상한값이었다).
+      this._activateAttackOverrideFromDb('W', this._champData().W.empowerWindow || 4.0);
       vfx.spawn('w', this.root.position.clone());
       // 버그 수정(실제 다리우스.glb로 확인): 평타를 끊은 뒤 아무도 다시 교전을
       // 시작하지 않아, 대상이 선택된 채 IDLE로 멈춰 강화 평타가 나가지 않았다.
@@ -1290,8 +1302,14 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
       // 타격 간격만 짧아진다.
       const eData = this._champData() && this._champData().E;
       this._eChannelDuration = eData ? eData.spinDuration : (channelCfg.duration ?? 4.0);
-      this._eHitsTotal = eData ? (eData.baseHits + Math.floor((this.stats.bonusAttackSpeedPercent || 0) / 0.25)) : 0;
+      // "추가 공격 속도"에는 레벨 성장분도 포함된다(원작 규칙). 이 프로젝트는 레벨
+      // 성장분을 baseAttackSpeed에 녹여두므로 1레벨 기본값 대비 비율로 되살려 더한다.
+      const baseAs1 = (this._champData() && this._champData().stats.attackSpeed) || 0;
+      const growthBonusAs = baseAs1 > 0 ? Math.max(0, (this.stats.baseAttackSpeed || baseAs1) / baseAs1 - 1) : 0;
+      const bonusAsForSpins = growthBonusAs + Math.max(0, this.stats.bonusAttackSpeedPercent || 0);
+      this._eHitsTotal = eData ? (eData.baseHits + Math.floor(bonusAsForSpins / 0.25 + 1e-9)) : 0;
       this._eHitsDone = 0;
+      this._eHitsPerTarget = new Map(); // 방어력 감소는 "대상별" 적중 횟수로 판정
       this._eHitInterval = this._eHitsTotal > 0 ? this._eChannelDuration / this._eHitsTotal : 0.5;
       const allClips = Object.values(channelCfg.clips);
       this.playFirstAvailable([channelCfg.clips.front, ...allClips], { loop: THREE.LoopRepeat, fade: 0.1 });
@@ -1405,11 +1423,13 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
         // 조준 방향(마우스 방향, 없으면 현재 정면)에 실제로 걸리는 첫 대상을
         // findFirstInLine()으로 찾아서 그 결과만 넘긴다.
         if (this.championId === 'darius') {
+          // 버그 수정(원작 대조): 포획은 직선 단일 스킬샷이 아니라 "전방 부채꼴 안의
+          // 모든 적"을 끌어오는 스킬이다. 예전엔 findFirstInLine()으로 첫 대상 하나만 잡았다.
           const cd = this._champData();
-          const dir = facing || (this.moveDir.lengthSq() > 0 ? this.moveDir.clone().normalize() : new THREE.Vector3(0, 0, 1));
-          const hitUnit = findFirstInLine(this.root.position, dir, cd.E.range, BASE_UNIT * 0.6);
-          if (hitUnit) { this._dariusEOnCast(hitUnit); debugSkillHit('Darius E', hitUnit); }
-          else debugSkillMiss('Darius E', 'no target in line');
+          const dir = facing || (this.moveDir.lengthSq() > 0 ? this.moveDir.clone().normalize() : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion));
+          const hits = findEnemiesInRadius(this.root.position, cd.E.range, { forward: dir, maxAngleDeg: cd.E.coneAngleDeg / 2 });
+          if (hits.length) hits.forEach((h) => { this._dariusEOnCast(h.unit); debugSkillHit('Darius E', h.unit); });
+          else debugSkillMiss('Darius E', 'no target in cone');
         } else if (this.championId === 'mordekaiser') {
           // 모데카이저 E(죽음의 손아귀)는 "투사체가 아닌 장판형" 스킬이라
           // 다리우스 E와 달리 직선이 아니라 지정 지점 중심의 범위 판정이다.
@@ -1484,8 +1504,17 @@ CharacterController.prototype.updateEChannel = function(dt) {
             let dmg = skillVal(eData.perHitDamageByLevel, lvl) + skillVal(eData.adRatioByLevel, lvl) * this.stats.attackDamage;
             if (h.unit === nearest.unit) dmg *= 1 + eData.nearestBonusPercent / 100;
             const willCrit = Math.random() < this.stats.critChance;
-            applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: eData.critMultiplier });
-            if (this._eHitsDone >= eData.armorShredHitsNeeded) {
+            applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: eData.critMultiplier, isAbility: true });
+            // 버그 수정(원작 대조): 예전엔 전체 회전 횟수(_eHitsDone)가 6을 넘으면
+            // 그 뒤로 범위에 "처음 들어온" 적에게까지 즉시 방어력 감소가 걸렸고,
+            // 미니언에도 걸렸다. 원작은 "적 챔피언이 6번 맞으면" 25% 감소(6초),
+            // 7번째 적중과 그 뒤 6타마다 지속시간 갱신이다.
+            if (!this._eHitsPerTarget) this._eHitsPerTarget = new Map();
+            const n = (this._eHitsPerTarget.get(h.unit) || 0) + 1;
+            this._eHitsPerTarget.set(h.unit, n);
+            const need = eData.armorShredHitsNeeded;
+            const shredNow = n === need || (n > need && (n - need - 1) % need === 0);
+            if (h.unit.isChampion && shredNow) {
               applyStatus(h.unit, { id: 'garenE_shred', type: 'ARMOR_SHRED', duration: eData.armorShredDuration, value: eData.armorShredPercent / 100 });
             }
           }
@@ -1649,6 +1678,12 @@ CharacterController.prototype._castR = function(free = false) {
       // 시전이 실제로 시작되는 이 시점에 대상을 한 번만 캡처해서 onFire가
       // 항상 그 스냅샷만 참조하게 한다.
       const lockedRTarget = this.currentTarget;
+      // 다리우스 R(녹서스의 단두대)은 원작에서 대상에게 "도약"해 내리찍는다 - 예전엔
+      // 제자리에서 Spell4만 재생했다. 판정 시점(eventTime)까지 대상 바로 앞으로
+      // 공용 돌진 트윈(_dashState - 리 신 Q2/노틸러스 Q와 같은 경로)으로 이동한다.
+      if (this.championId === 'darius' && lockedRTarget && lockedRTarget.mesh) {
+        this._dariusStartRLeap(lockedRTarget);
+      }
       this.runAction('rCast', STATE.R_CAST, {
         onFire: () => {
           vfx.spawn('r', this.root.position.clone());

@@ -315,6 +315,12 @@ function getEffectiveDistance(a, b) {
 // 실제 범위 탐색(findEnemiesInRadius/isInCone)과 동일하게
 // 중심점 거리 <= 월드 사거리 + 대상 반경으로 통일한다.
 // 지정 대상 판정과 비지정 범위 탐색이 동일한 위치에서 서로 다른 결과를 내지 않게 한다.
+// 학습용 허수아비는 죽지 않고 최대 체력 2%에서 멈춘다. 이미 그 바닥에 있는
+// 허수아비를 계속 때리는 것을 "처치"로 치면 처치 보상(가렌 W 스택, 마스터 이
+// 쿨감 등)을 무한히 얻을 수 있어, 처치 판정 쪽에서 이 함수로 걸러낸다.
+function isFlooredTrainingDummy(target) {
+  return !!(target && target.isTrainingDummy && target.hp <= Math.max(1, Math.round((target.maxHp || 0) * 0.02)));
+}
 function isInRange(source, target, lolRange) {
   if (!source || !target) return false;
   const centerDistance = getHorizontalDistanceOf(source, target);
@@ -583,6 +589,10 @@ function applyDamage(target, result) {
     // 암흑의 인장(영광) - 챔피언 처치 관여 시 중첩 획득. 위 아리 패시브와
     // 동일한 이유로 이 처형 판정 지점을 "챔피언 처치"로 재사용한다.
     if (dmgSource && typeof itemOnChampionTakedown === 'function') itemOnChampionTakedown(dmgSource);
+    // 가렌 W(용기) 패시브 - 처치 시 방어력/마법 저항력 영구 증가(미니언 처치는 killMinion에서).
+    // 학습용 허수아비는 죽지 않고 2% 바닥에 멈추므로, 이미 바닥에 있는 허수아비를
+    // 계속 때리는 것은 새 처치로 치지 않는다(같은 허수아비로 무한 적립 방지).
+    if (!isFlooredTrainingDummy(target) && dmgSource && dmgSource.championId === 'garen' && typeof dmgSource._garenOnTakedown === 'function') dmgSource._garenOnTakedown();
   }
   // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만"
   // 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 그대로 넘긴다.
@@ -630,6 +640,15 @@ const EXECUTE_ZONE_PERCENT = 25;
 // 방식으로 강제 XZ좌표 이동을 처리한다).
 // MR_SHRED(악의 "증오안개" - 마법 저항력 감소) - ARMOR_SHRED와 완전히
 // 동일한 성격(강인함 지속시간 감소 대상에는 포함 안 됨)의 마법저항력 버전.
+function getTenacity(target) {
+  if (!target) return 0;
+  let keep = 1 - Math.max(0, Math.min(1, target.itemTenacityPercent || 0));
+  const now = performance.now();
+  for (const e of (target.statusEffects || [])) {
+    if (e.type === 'TENACITY' && (!e.expiresAt || e.expiresAt > now)) keep *= 1 - Math.max(0, Math.min(1, e.value || 0));
+  }
+  return 1 - keep;
+}
 const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM']);
 function unitLabel(u) {
   if (typeof dummy !== 'undefined' && u === dummy) return '더미 타겟';
@@ -658,6 +677,10 @@ function applyStatus(target, effect) {
     return null;
   }
   const now = performance.now();
+  // 마스터 이 R(최후의 전사): 지속 중 둔화 면역(원작). 시전 시 기존 둔화는 _masteryiCastR이 제거한다.
+  if (effect.type === 'SLOW' && target && target.championId === 'masteryi' && target._masteryi && (target._masteryi.rActiveUntil || 0) > now) {
+    return null;
+  }
   // 아이템 패시브(헤르메스의 발걸음 - 강인함/신속의 장화 - 둔화 저항)를
   // 이 공용 진입점 한 곳에서 처리한다 - 어떤 챔피언이 걸든, 어떤 스킬이
   // 걸든 전부 자동으로 적용된다(개별 스킬 코드를 손댈 필요 없음, 요청
@@ -667,8 +690,11 @@ function applyStatus(target, effect) {
   // 세기(value) 자체를 깎는다(실제 "둔화 저항"의 의미와 동일).
   let effDuration = effect.duration;
   let effValue = effect.value;
-  if (target && target.itemTenacityPercent > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM'].includes(effect.type)) {
-    effDuration = effDuration * (1 - target.itemTenacityPercent);
+  // 강인함은 아이템(itemTenacityPercent)과 스킬 버프(TENACITY 상태 - 가렌 W 등)를
+  // 원작과 같이 곱연산으로 합친다: 최종 = 1 - (1-a)(1-b).
+  const tenacity = getTenacity(target);
+  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM'].includes(effect.type)) {
+    effDuration = effDuration * (1 - tenacity);
   }
   if (target && target.itemSlowResistPercent > 0 && effect.type === 'SLOW') {
     effValue = effValue * (1 - target.itemSlowResistPercent);
@@ -853,7 +879,11 @@ function getAttackSpeedBuffPercent(target) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();
   let v = 0;
-  for (const e of target.statusEffects) if ((e.type === 'MASTERYI_R_AS' || e.type === 'AS_BUFF') && e.expiresAt > now) v = Math.max(v, e.value);
+  // 버그 수정: 서로 다른 공격 속도 버프(마스터 이 R, 애쉬 Q, 이즈리얼 패시브,
+  // 아이템 중첩 등)는 원작에서 "더해진다". 예전엔 Math.max로 가장 큰 것 하나만
+  // 적용돼, 예컨대 마스터 이 R 중에는 아이템 공속 버프가 통째로 무시됐다.
+  // 같은 버프의 재적용은 applyStatus가 같은 id를 덮어쓰므로 중복 합산되지 않는다.
+  for (const e of target.statusEffects) if ((e.type === 'MASTERYI_R_AS' || e.type === 'AS_BUFF') && e.expiresAt > now) v += e.value;
   return v;
 }
 
@@ -1413,13 +1443,20 @@ const CHAMPION_DATA = {
     Q: {
       name: '결정타', cooldown: 8, mana: 0,
       moveSpeedBonusPercent: 35, moveSpeedDurationByLevel: [1.4, 1.95, 2.5, 3.05, 3.6],
-      damageByLevel: [30, 60, 90, 120, 150], adRatio: 1.5, silenceDuration: 1.5, enhancedWindow: 4.5,
+      // 위키: "추가 물리 피해 30/60/90/120/150 (+ 공격력 50%)" - 평타 피해(공격력 100%)에
+      // "더해지는" 값이다(합계 = 30~150 + 공격력 150%). 예전 adRatio: 1.5는 합계 계수를
+      // 추가 피해 계수 자리에 넣어 평타 피해까지 AD 100%가 이중으로 들어갔다.
+      damageByLevel: [30, 60, 90, 120, 150], adRatio: 0.5, silenceDuration: 1.5, enhancedWindow: 4.5,
       damageType: 'PHYSICAL',
     },
     W: {
       name: '용기', cooldown: [22, 19.5, 17, 14.5, 12], mana: 0,
       damageReductionPercentByLevel: [25, 29, 33, 37, 41], reductionDuration: 4,
+      // 보호막 계수는 "추가 체력"의 18%(위키 "+ 18% bonus health") - 최대 체력 전체가 아니다.
+      // 같은 0.75초 동안 강인함 60%도 함께 얻는다.
       shieldBaseByLevel: [65, 85, 105, 125, 145], shieldBonusHpPercent: 18, shieldDuration: 0.75,
+      tenacityPercent: 60, tenacityDuration: 0.75,
+      // 패시브: 유닛(미니언/몬스터/챔피언)을 "처치"할 때마다 방어력/마법 저항력 0.2, 최대 30.
       onTakedownArmor: 0.2, onTakedownMr: 0.2, onTakedownCap: 30,
     },
     E: {
@@ -1431,7 +1468,9 @@ const CHAMPION_DATA = {
     },
     R: {
       name: '데마시아의 정의', cooldown: [120, 100, 80], mana: 0, range: 400, castTime: 0.435,
-      baseDamageByLevel: [125, 200, 275], missingHpPercentByLevel: [25, 30, 35],
+      // 원작 PC 툴팁/패치 기록: 고정 피해 150/250/350 (+ 대상 잃은 체력의 25/30/35%).
+      // 예전 125/200/275는 어떤 패치 기록에서도 확인되지 않는 값이라 바로잡았다.
+      baseDamageByLevel: [150, 250, 350], missingHpPercentByLevel: [25, 30, 35],
       damageType: 'TRUE',
     },
   },
@@ -1469,13 +1508,17 @@ const CHAMPION_DATA = {
       healPercentOfLostHp: 17, healCapPercent: 51, damageType: 'PHYSICAL',
     },
     W: {
-      name: '마비의 일격', cooldown: 5, mana: 40, rangeBonus: 25,
-      bonusAdRatioByLevel: [0.4, 0.45, 0.5, 0.55, 0.6], slowPercent: 40, slowDuration: 1,
+      // 원작 위키: "4초 안의 다음 기본 공격이 사거리 +25, 추가 물리 피해, 대상 90% 둔화(1초)".
+      // 예전 slowPercent 40은 E(포획) 둔화 값과 혼동된 것으로 보인다.
+      name: '마비의 일격', cooldown: 5, mana: 40, rangeBonus: 25, empowerWindow: 4,
+      bonusAdRatioByLevel: [0.4, 0.45, 0.5, 0.55, 0.6], slowPercent: 90, slowDuration: 1,
       killManaRefundPercent: 90, killCdrPercent: 50, damageType: 'PHYSICAL',
     },
     E: {
       name: '포획', cooldown: [26, 23.5, 21, 18.5, 16], manaByLevel: [70, 60, 50, 40, 30],
-      range: 535, castTime: 0.25, slowPercent: 40, slowDuration: 1,
+      // 전방 부채꼴 안의 모든 적을 끌어온다. 부채꼴 각도는 공개 수치를 확인하지 못해
+      // 임시값(coneAngleGuessed) - 확인되면 이 값만 바꾸면 된다.
+      range: 535, castTime: 0.25, slowPercent: 40, slowDuration: 1, coneAngleDeg: 50, coneAngleGuessed: true,
       armorPenPercentByLevel: [20, 25, 30, 35, 40],
     },
     R: {
@@ -1835,20 +1878,20 @@ const CHAMPION_DATA = {
       range: 125, moveSpeed: 345,
       // 리 신은 마나 대신 기력(에너지)을 쓴다 - 레벨에 따라 늘지 않는 고정
       // 자원 풀이라 mana/manaGrowth로 그대로 재사용한다(기존 자원 시스템
-      // 확장, 새 자원 시스템을 따로 만들지 않음). manaRegen은 "기력회복:50"을
-      // 초당 회복량으로 그대로 사용한다.
+      // 확장, 새 자원 시스템을 따로 만들지 않음). manaRegen은 다른 챔피언과 같이
+      // "5초당" 회복량으로 해석된다(regenTick이 /5) - 기력 50/5초 = 초당 10(원작과 동일).
       mana: 200, manaGrowth: 0, manaRegen: 50, manaRegenGrowth: 0,
     },
     passive: {
       name: '질풍격',
       desc: '스킬 사용 시 다음 2회 평타 공격속도 +40%. 1타에 기력, 2타에 절반 기력 회복(레벨 구간별).',
-      attackSpeedBonusPercent: 40,
+      attackSpeedBonusPercent: 40, durationSec: 3,
       energyByLevelBreakpoints1: { breakpoints: [1, 7, 13], values: [20, 30, 40] },
       energyByLevelBreakpoints2: { breakpoints: [1, 7, 13], values: [10, 15, 20] },
     },
     Q: {
       name: '음파/공명의 일격', cooldown: [10, 9, 8, 7, 6], energy1: 50, energy2: 25,
-      range1: 1200, range2: 1250, markDuration: 3,
+      range1: 1200, range2: 1250, markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800,
       damageByLevel: [60, 90, 120, 150, 180], bonusAdRatio: 0.9,
       maxDamageByLevel: [120, 180, 240, 300, 360], maxBonusAdRatio: 1.8,
       damageType: 'PHYSICAL',
@@ -1861,14 +1904,14 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '폭풍/무력화', cooldown: 8, energy1: 50, energy2: 25,
-      range: 450, markDuration: 3,
+      range: 450, markDuration: 3, castTimeSec: 0.25,
       damageByLevel: [35, 60, 85, 110, 135], adRatio: 0.9,
       slowPercentByLevel: [35, 45, 55, 65, 75], slowDuration: 4, damageType: 'MAGICAL',
     },
     R: {
       name: '용의 분노', cooldown: [110, 85, 60], mana: 0, range: 375,
       damageByLevel: [175, 400, 625], bonusAdRatio: 2.0,
-      knockbackDistance: 1200, airborneDuration: 1,
+      knockbackDistance: 1200, airborneDuration: 1, castTimeSec: 0.25, collisionAirborneSec: 1,
       collisionBonusHpRatioByLevel: [12, 15, 18], damageType: 'PHYSICAL',
     },
   },
@@ -4308,6 +4351,7 @@ const championAbilityDatabase = {
   // Q는 Spell1(던지기) → Spell1_Idle(닻이 날아가는 동안) → Spell1_Dash(끌려감).
   nautilus: {
     attackAnimationNames: ['Attack1', 'Attack2', 'Attack3'],
+    passiveAttackClip: 'Passive', // 강력한 일격이 터지는 평타 전용 모션(nautilus.js _nautilusArmPassiveAnim)
     Q: { animationNames: ['Spell1'], animationPatterns: [/spell1/i, /dredge/i], travelClip: 'Spell1_Idle', pullClip: 'Spell1_Dash' },
     W: { animationNames: [], animationPatterns: [], attackOverrideAnimationNames: ['Attack4'], attackOverrideMode: 'duration' },
     E: { animationNames: ['Spell3'], animationPatterns: [/spell3/i, /riptide/i] },
@@ -4395,9 +4439,15 @@ const championAbilityDatabase = {
     R: { animationNames: ['Spell4'], animationPatterns: [/^spell4$/i, /spell4/i] },
     idleAnimationNames: ['Idle_Active'],
     attackAnimationNames: ['Attack1', 'Attack2', 'Attack3', 'Attack4'],
-    qRecastAnimationNames: ['Spell1_B.ASU_LeeSin.anm', 'Spell1_B.ASU_LeeSin,anm'],
-    qIdleAnimationNames: ['Spell1_Toldle'],
-    wIdleAnimationNames: ['Spell2_Toldle'],
+    // 실제 리 신.glb 클립명 기준(예전 'Spell1_Toldle'/'Spell2_Toldle'은 소문자 L 오타라
+    // 한 번도 매칭되지 않았다). 실제 사용처는 leesin.js의 _leesinPlayCast 호출부.
+    qRecastAnimationNames: ['Spell1_B.ASU_LeeSin.anm'],
+    qIdleAnimationNames: ['Spell1_ToIdle'],
+    wIdleAnimationNames: ['Spell2_ToIdle'],
+    wRecastAnimationNames: { idle: 'Spell2b_Idle.ASU_LeeSin.anm', move: 'Spell2b_Run.ASU_LeeSin.anm' },
+    eIdleAnimationNames: ['Spell3_ToIdle'],
+    eRecastAnimationNames: { idle: 'Spell3_b_idle.ASU_LeeSin.anm', move: 'Spell3_b_moving.ASU_LeeSin.anm' },
+    rIdleAnimationNames: ['Spell4_ToIdle'],
   },
   nilah: {
     Q: { animationNames: ['Spell1A','Spell1B','Spell1C'], animationPatterns: [/^Spell1/i] },
@@ -8753,6 +8803,7 @@ class CharacterController {
     this.shield = 0;
     this.bonusAD = 0; // 다리우스 과다출혈 만중첩 버프 등
     this.bonusArmor = 0; this.bonusMr = 0; // 가렌 W 처치 스택
+    this._garenCourageStacks = 0;
     this.bonusMaxHp = 0; // 초가스 R 포식 중첩
     this.armorPenPercent = 0; // 다리우스 E 패시브
     this.magicPenPercent = 0; // 모데카이저 E 패시브
@@ -9005,6 +9056,9 @@ class CharacterController {
     this._rRecastReadyUntil = 0;
     this.bonusAD = 0;
     this.bonusMaxHp = 0;
+    // 버그 수정: 가렌 W 처치 스택(bonusArmor/bonusMr)이 챔피언 교체 후에도 남아
+    // 다음 챔피언의 방어력/마저에 그대로 더해졌다.
+    this.bonusArmor = 0; this.bonusMr = 0; this._garenCourageStacks = 0;
     this.armorPenPercent = 0;
     this.championId = championId || null;
     if (!this.championId || !CHAMPION_DATA[this.championId]) return;
@@ -9492,7 +9546,7 @@ class CharacterController {
       return { canMove: true, canAttack: true, canCast: true, canTurn: true };
     }
     if (this.currentActionKey === 'rWindup' || this.currentActionKey === 'rChannel' || this.currentActionKey === 'rCast'
-        || this.currentActionKey === 'leesinE' || this.currentActionKey === 'leesinR') {
+        || this._isLeeSinCastLock()) {
       return { canMove: false, canAttack: false, canCast: false, canTurn: false };
     }
 
@@ -9835,6 +9889,7 @@ class CharacterController {
       + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
     this._garenPassiveTick(dt);
+    this._dariusPassiveTick();
     this._settPassiveTick(dt);
     this._settPassiveTimeoutTick();
     this._settGritTick(dt);
@@ -9884,7 +9939,7 @@ CharacterController.prototype.moveTo = function(point) {
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
     if (isCrowdControlled(this)) return; // 기획안 8절: 기절/속박 중에는 이동 명령을 받지 않는다
     if (this.currentActionKey === 'rWindup' || this.currentActionKey === 'rChannel' || this.currentActionKey === 'rCast'
-        || this.currentActionKey === 'leesinE' || this.currentActionKey === 'leesinR') return;
+        || this._isLeeSinCastLock()) return;
     // 모데카이저 R "죽음의 세계" 명세 6절 "경계 밖으로 나가지 못함": 이
     // 함수로 들어오는 이동 목적지 자체를 경계 반경 안으로 보정한다 -
     // 추격/피벗/애니메이션 전환 등 이후의 모든 이동 처리 로직은 전혀
@@ -9961,7 +10016,7 @@ CharacterController.prototype.moveTo = function(point) {
     // 이 방어막이 없으면 화면은 MOVE로 바뀌었는데 내부 권한 계산은 Q/스킬
     // 중으로 남아 이후 이동/스킬 입력이 전부 막히는 현상이 발생할 수 있다.
     if (this.currentActionKey && !this.currentPhase &&
-        !['rWindup', 'rChannel', 'rCast', 'leesinE', 'leesinR', 'eChannel', 'nilahR', 'qChain'].includes(this.currentActionKey)) {
+        !['rWindup', 'rChannel', 'rCast', 'eChannel', 'nilahR', 'qChain'].includes(this.currentActionKey) && !this._isLeeSinCastLock()) {
       this.currentActionKey = null;
       this.phaseCancelable = false;
     }
@@ -10198,9 +10253,16 @@ CharacterController.prototype.selectTarget = function(enemy) {
 // 즉시 원래 값으로 되돌리는 방식으로 기존 isInAttackRange()를 그대로 재사용한다.
 
 
+// 다리우스 W(마비의 일격) 강화 평타 대기 중에는 사거리 +25(원작).
+CharacterController.prototype._dariusWRangeBonusWorld = function() {
+    if (this.championId !== 'darius' || !(this.attackOverrides || []).some((o) => o.id === 'W')) return 0;
+    const cd = this._champData();
+    return cd ? lolRangeToWorld(cd.W.rangeBonus || 0) : 0;
+};
+
 CharacterController.prototype._tryEngageTarget = function() {
     if (!this.currentTarget || this.currentTarget.hp <= 0) { this.currentTarget = null; this.isChasing = false; return; }
-    const rangeBonus = this._settLeftHandRangeBonusWorld();
+    const rangeBonus = this._settLeftHandRangeBonusWorld() + this._dariusWRangeBonusWorld();
     if (rangeBonus > 0) this.stats.attackRange += rangeBonus;
     const inRange = isInAttackRange(this, this.currentTarget);
     if (rangeBonus > 0) this.stats.attackRange -= rangeBonus; // 판정 직후 즉시 원상복구 - 사거리 표시 링 등 다른 시스템에 영향 주지 않음
@@ -10372,7 +10434,7 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
       this._chogathEOnHit(target); // E 활성화 중이면 이 평타에 가시 피해 추가
       if (wouldKill) this._chogathOnKill(target); // 패시브(육식)는 평타로 처치해도 발동
     }
-    if (this.championId === 'leesin') this._leesinOnBasicAttackHit();
+    if (this.championId === 'leesin') this._leesinOnBasicAttackHit(target);
 };
 
 // ---------------- 가렌 ----------------
@@ -10924,6 +10986,7 @@ CharacterController.prototype._beginAttackSwing = function() {
     // 영향을 주지 않고 오직 재생되는 클립만 바뀐다. 오버라이드가 적용된
     // 스윙은 comboIndex를 건드리지 않는다(콤보는 그대로 유지된 채 중간에
     // 한 번 끼워넣어지는 개념).
+    if (this.championId === 'nautilus') this._nautilusArmPassiveAnim(target);
     const override = this._pickAttackOverride();
     let key, attackData, overrideId = null, attackHand = null;
     // 버그 수정(요청: "세트 Q에는 패시브가 적용되지 않고 있다"): override를
@@ -11952,8 +12015,10 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
           if (this.championId === 'darius') {
             const cd = this._champData();
             const hits = findEnemiesInRadius(this.root.position, cd.Q.range);
-            if (hits.length) hits.forEach((h) => { this._dariusQOnHit(h.unit, h.distance); debugSkillHit('Darius Q', h.unit, { distance: Math.round(h.distance), zone: h.distance > lolRangeToWorld(cd.Q.handleRange) ? 'BLADE' : 'HANDLE' }); });
+            let healHits = 0;
+            if (hits.length) hits.forEach((h) => { if (this._dariusQOnHit(h.unit, h.distance)) healHits++; debugSkillHit('Darius Q', h.unit, { distance: Math.round(h.distance), zone: h.distance > lolRangeToWorld(cd.Q.handleRange) ? 'BLADE' : 'HANDLE' }); });
             else debugSkillMiss('Darius Q', 'no target in range');
+            this._dariusQHeal(healHits);
           } else if (this.currentTarget && this.currentTarget.hp > 0) {
             const dmg = this.actionData.qForward ? this.actionData.qForward.dmg : 18;
             applyDamage(this.currentTarget, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
@@ -11998,7 +12063,10 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
         console.log('[SETT Q] Q INPUT');
         this._settQOnCast();
       }
-      this._activateAttackOverrideFromDb('Q', 6.0);
+      // 가렌 Q 강화 평타 유효 시간은 원작 4.5초(CHAMPION_DATA.garen.Q.enhancedWindow).
+      // 예전엔 세트와 같은 임시 상한 6.0초를 그대로 썼다.
+      const qWindow = (this.championId === 'garen' && this._champData().Q.enhancedWindow) || 6.0;
+      this._activateAttackOverrideFromDb('Q', qWindow);
       if (this.championId === 'sett') {
         // 요청("Q 썼을 때 왼손/오른손 모션을 찾아줘"): 방금 등록한
         // override가 실제로 어떤 클립에 연결됐는지 콘솔에 남긴다 - Q를
@@ -12041,13 +12109,19 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
       // override가 실제로 소진될 때 clearSubState('Q')를 호출해 맞춘다(아래
       // 참고) - 즉 이 6.0초는 "최악의 경우"에만 쓰이는 안전장치고, 실제로는
       // 평타가 나가는 순간 그보다 먼저 꺼진다.
-      this.setSubState('Q', 6.0);
+      this.setSubState('Q', qWindow);
       // "Attack Timer Reset": 이미 평타 RECOVERY 중이면 그 잠금을 즉시 풀고
       // 바로 재교전해서 강화된 평타가 지체 없이 나가도록 한다.
       if (this.currentPhase === 'RECOVERY' && this.currentActionKey && this.currentActionKey.startsWith('attack')) {
         this._clearActionTimers();
         this.currentActionKey = null; this.currentPhase = null;
         if (this.currentTarget && this.currentTarget.hp > 0) this._tryEngageTarget();
+      } else if (this.championId === 'garen' && !this.currentActionKey && this.currentTarget && this.currentTarget.hp > 0) {
+        // 버그 수정: 평타 도중 Q를 누르면 _requestCast()의 "스킬이 평타보다 우선"
+        // 분기가 평타를 먼저 끊고(currentActionKey=null) 여기로 들어온다 - 위
+        // RECOVERY 분기는 해당되지 않아 상태가 ATTACK인 채로 멈춰 강화 평타가
+        // 나가지 않았다(다리우스 W와 같은 문제). 대상이 살아 있으면 바로 재교전.
+        this._resumeAfterAction();
       }
       return;
     }
@@ -12289,7 +12363,8 @@ CharacterController.prototype._castW = function(mouseWorldPoint, free = false) {
       // (_activateAttackOverrideFromDb)을 그대로 재사용하면 다음 평타가
       // 정확히 Spell2 애니메이션으로 나간다 - 새 애니메이션 시스템을 만들지
       // 않는다.
-      this._activateAttackOverrideFromDb('W', 6.0);
+      // 원작: "4초 안의 다음 기본 공격" 강화(예전 6.0초는 임시 상한값이었다).
+      this._activateAttackOverrideFromDb('W', this._champData().W.empowerWindow || 4.0);
       vfx.spawn('w', this.root.position.clone());
       // 버그 수정(실제 다리우스.glb로 확인): 평타를 끊은 뒤 아무도 다시 교전을
       // 시작하지 않아, 대상이 선택된 채 IDLE로 멈춰 강화 평타가 나가지 않았다.
@@ -12523,8 +12598,14 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
       // 타격 간격만 짧아진다.
       const eData = this._champData() && this._champData().E;
       this._eChannelDuration = eData ? eData.spinDuration : (channelCfg.duration ?? 4.0);
-      this._eHitsTotal = eData ? (eData.baseHits + Math.floor((this.stats.bonusAttackSpeedPercent || 0) / 0.25)) : 0;
+      // "추가 공격 속도"에는 레벨 성장분도 포함된다(원작 규칙). 이 프로젝트는 레벨
+      // 성장분을 baseAttackSpeed에 녹여두므로 1레벨 기본값 대비 비율로 되살려 더한다.
+      const baseAs1 = (this._champData() && this._champData().stats.attackSpeed) || 0;
+      const growthBonusAs = baseAs1 > 0 ? Math.max(0, (this.stats.baseAttackSpeed || baseAs1) / baseAs1 - 1) : 0;
+      const bonusAsForSpins = growthBonusAs + Math.max(0, this.stats.bonusAttackSpeedPercent || 0);
+      this._eHitsTotal = eData ? (eData.baseHits + Math.floor(bonusAsForSpins / 0.25 + 1e-9)) : 0;
       this._eHitsDone = 0;
+      this._eHitsPerTarget = new Map(); // 방어력 감소는 "대상별" 적중 횟수로 판정
       this._eHitInterval = this._eHitsTotal > 0 ? this._eChannelDuration / this._eHitsTotal : 0.5;
       const allClips = Object.values(channelCfg.clips);
       this.playFirstAvailable([channelCfg.clips.front, ...allClips], { loop: THREE.LoopRepeat, fade: 0.1 });
@@ -12638,11 +12719,13 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
         // 조준 방향(마우스 방향, 없으면 현재 정면)에 실제로 걸리는 첫 대상을
         // findFirstInLine()으로 찾아서 그 결과만 넘긴다.
         if (this.championId === 'darius') {
+          // 버그 수정(원작 대조): 포획은 직선 단일 스킬샷이 아니라 "전방 부채꼴 안의
+          // 모든 적"을 끌어오는 스킬이다. 예전엔 findFirstInLine()으로 첫 대상 하나만 잡았다.
           const cd = this._champData();
-          const dir = facing || (this.moveDir.lengthSq() > 0 ? this.moveDir.clone().normalize() : new THREE.Vector3(0, 0, 1));
-          const hitUnit = findFirstInLine(this.root.position, dir, cd.E.range, BASE_UNIT * 0.6);
-          if (hitUnit) { this._dariusEOnCast(hitUnit); debugSkillHit('Darius E', hitUnit); }
-          else debugSkillMiss('Darius E', 'no target in line');
+          const dir = facing || (this.moveDir.lengthSq() > 0 ? this.moveDir.clone().normalize() : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion));
+          const hits = findEnemiesInRadius(this.root.position, cd.E.range, { forward: dir, maxAngleDeg: cd.E.coneAngleDeg / 2 });
+          if (hits.length) hits.forEach((h) => { this._dariusEOnCast(h.unit); debugSkillHit('Darius E', h.unit); });
+          else debugSkillMiss('Darius E', 'no target in cone');
         } else if (this.championId === 'mordekaiser') {
           // 모데카이저 E(죽음의 손아귀)는 "투사체가 아닌 장판형" 스킬이라
           // 다리우스 E와 달리 직선이 아니라 지정 지점 중심의 범위 판정이다.
@@ -12717,8 +12800,17 @@ CharacterController.prototype.updateEChannel = function(dt) {
             let dmg = skillVal(eData.perHitDamageByLevel, lvl) + skillVal(eData.adRatioByLevel, lvl) * this.stats.attackDamage;
             if (h.unit === nearest.unit) dmg *= 1 + eData.nearestBonusPercent / 100;
             const willCrit = Math.random() < this.stats.critChance;
-            applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: eData.critMultiplier });
-            if (this._eHitsDone >= eData.armorShredHitsNeeded) {
+            applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: eData.critMultiplier, isAbility: true });
+            // 버그 수정(원작 대조): 예전엔 전체 회전 횟수(_eHitsDone)가 6을 넘으면
+            // 그 뒤로 범위에 "처음 들어온" 적에게까지 즉시 방어력 감소가 걸렸고,
+            // 미니언에도 걸렸다. 원작은 "적 챔피언이 6번 맞으면" 25% 감소(6초),
+            // 7번째 적중과 그 뒤 6타마다 지속시간 갱신이다.
+            if (!this._eHitsPerTarget) this._eHitsPerTarget = new Map();
+            const n = (this._eHitsPerTarget.get(h.unit) || 0) + 1;
+            this._eHitsPerTarget.set(h.unit, n);
+            const need = eData.armorShredHitsNeeded;
+            const shredNow = n === need || (n > need && (n - need - 1) % need === 0);
+            if (h.unit.isChampion && shredNow) {
               applyStatus(h.unit, { id: 'garenE_shred', type: 'ARMOR_SHRED', duration: eData.armorShredDuration, value: eData.armorShredPercent / 100 });
             }
           }
@@ -12882,6 +12974,12 @@ CharacterController.prototype._castR = function(free = false) {
       // 시전이 실제로 시작되는 이 시점에 대상을 한 번만 캡처해서 onFire가
       // 항상 그 스냅샷만 참조하게 한다.
       const lockedRTarget = this.currentTarget;
+      // 다리우스 R(녹서스의 단두대)은 원작에서 대상에게 "도약"해 내리찍는다 - 예전엔
+      // 제자리에서 Spell4만 재생했다. 판정 시점(eventTime)까지 대상 바로 앞으로
+      // 공용 돌진 트윈(_dashState - 리 신 Q2/노틸러스 Q와 같은 경로)으로 이동한다.
+      if (this.championId === 'darius' && lockedRTarget && lockedRTarget.mesh) {
+        this._dariusStartRLeap(lockedRTarget);
+      }
       this.runAction('rCast', STATE.R_CAST, {
         onFire: () => {
           vfx.spawn('r', this.root.position.clone());
@@ -13244,8 +13342,15 @@ CharacterController.prototype._dariusApplyBleed = function(target) {
     if (!cd || this.championId !== 'darius' || !target || target.hp <= 0) return;
     const p = cd.passive;
     const lvl = this.champLevel;
-    const rec = this._darius.stacksOnTarget.get(target) || { stacks: 0 };
-    rec.stacks = Math.min(p.maxStacks, rec.stacks + 1);
+    const now = performance.now();
+    const rec = this._dariusLiveStacks(target) > 0 ? this._darius.stacksOnTarget.get(target) : { stacks: 0 };
+    // 녹서스의 힘 지속 중에는 출혈이 "즉시 최대 중첩"으로 걸린다(원작 패시브 설명).
+    const mighty = (this._darius.empoweredUntil || 0) > now;
+    rec.stacks = mighty ? p.maxStacks : Math.min(p.maxStacks, rec.stacks + 1);
+    // 중첩은 출혈 지속시간(5초)이 끝나면 함께 사라진다 - 예전엔 Map에 영원히 남아
+    // 10초 뒤 다시 때려도 이전 중첩에서 이어 쌓였고(곧바로 녹서스의 힘), R도
+    // 이미 끝난 출혈 중첩만큼 추가 피해를 줬다.
+    rec.expiresAt = now + p.dotDuration * 1000;
     this._darius.stacksOnTarget.set(target, rec);
     const oneStack = p.oneStackBase + p.oneStackGrowth * (lvl - 1) + p.oneStackBonusAdRatio * this._getBonusAD();
     const maxStackTotal = p.maxStackBase + p.maxStackGrowth * (lvl - 1) + p.maxStackBonusAdRatio * this._getBonusAD();
@@ -13256,8 +13361,26 @@ CharacterController.prototype._dariusApplyBleed = function(target) {
       id: 'dariusBleed', type: 'DOT', duration: p.dotDuration, tickInterval: p.dotTickInterval,
       totalDamage: perStackTotal * monsterMult, damageType: DAMAGE_TYPE.PHYSICAL,
     });
-    if (rec.stacks >= p.maxStacks) this._dariusEmpower();
+    if (rec.stacks >= p.maxStacks && !mighty) this._dariusEmpower();
   
+};
+
+// 대상에게 "지금 살아 있는" 출혈 중첩 수(만료됐으면 0으로 정리).
+CharacterController.prototype._dariusLiveStacks = function(target) {
+    const rec = this._darius && this._darius.stacksOnTarget.get(target);
+    if (!rec) return 0;
+    if (rec.expiresAt && rec.expiresAt <= performance.now()) { this._darius.stacksOnTarget.delete(target); return 0; }
+    return rec.stacks || 0;
+};
+
+// 패시브 성격의 매 프레임 갱신: E(포획) 패시브 방어구 관통은 E를 한 번이라도
+// "시전해야" 켜지는 게 아니라 E를 배운 순간부터 항상 적용된다. 예전엔 E 시전
+// 시점에만 armorPenPercent를 넣어서 E를 쓰기 전까지 관통이 0이었다.
+CharacterController.prototype._dariusPassiveTick = function() {
+    if (this.championId !== 'darius') return;
+    const cd = this._champData(); if (!cd) return;
+    const lvl = this.skillLevels ? (this.skillLevels.E || 0) : 0;
+    this.armorPenPercent = lvl >= 1 ? skillVal(cd.E.armorPenPercentByLevel, lvl) / 100 : 0;
 };
 
 // Extracted from CharacterController: _dariusEmpower
@@ -13265,6 +13388,7 @@ CharacterController.prototype._dariusEmpower = function() {
     const cd = this._champData(); const p = cd.passive;
     const amt = skillVal(p.empoweredAdByLevel, this.champLevel);
     this.bonusAD = amt; this.recomputeStats();
+    this._darius.empoweredUntil = performance.now() + p.empoweredDuration * 1000;
     clearTimeout(this._dariusEmpowerTimer);
     // 버그 수정(전체 시스템 감사 - "챔피언 교체 후 이전 챔피언의 setTimeout
     // 콜백이 새 챔피언 상태를 잘못 건드림"): 이 타이머는 championId나
@@ -13277,7 +13401,7 @@ CharacterController.prototype._dariusEmpower = function() {
     // 범위로 수정.
     this._dariusEmpowerTimer = setTimeout(() => {
       if (this.championId !== 'darius') return;
-      this.bonusAD = 0; this.recomputeStats();
+      this.bonusAD = 0; this._darius.empoweredUntil = 0; this.recomputeStats();
     }, p.empoweredDuration * 1000);
   
 };
@@ -13293,14 +13417,23 @@ CharacterController.prototype._dariusQOnHit = function(target, distanceWorld = n
       : skillVal(q.handleDamageByLevel, lvl) + skillVal(q.handleAdRatioByLevel, lvl) * this.stats.attackDamage;
     applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, armorPenPercent: this.armorPenPercent || 0 });
     this._dariusApplyBleed(target);
-    // 다리우스 Q 회복은 도끼날(외곽) 적중에만 발생한다. 자루 적중은 피해와 출혈만 적용한다.
-    if (isBlade) {
-      const missingHp = Math.max(0, this.maxHp - this.hp);
-      const heal = Math.min(this.maxHp * (q.healCapPercent / 100), missingHp * (q.healPercentOfLostHp / 100));
-      // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소).
-      this.hp = Math.min(this.maxHp, this.hp + heal * getHealReceivedMultiplier(this));
-      updateBars(this);
-    }
+    // 회복 대상 수 집계: 도끼날(외곽)에 맞은 "챔피언/대형 몬스터"만 센다. 실제
+    // 회복은 한 번의 Q가 끝난 뒤 _dariusQHeal()이 한 번에 처리한다.
+    return !!(isBlade && (target.isChampion || target.isLargeMonster));
+};
+
+// Q 회복(원작): 도끼날에 맞은 적 챔피언/대형 몬스터 1명당 "잃은 체력"의 17%,
+// 최대 51%(3명분)를 Q 한 번에 한 번만 회복한다. 예전엔 맞은 대상마다(미니언
+// 포함) 따로 회복해 미니언 무리에 쓰면 체력이 가득 찼고, 상한 51%도 잃은
+// 체력이 아니라 최대 체력 기준으로 잘못 걸려 있었다.
+CharacterController.prototype._dariusQHeal = function(qualifyingHits) {
+    const cd = this._champData(); if (!cd || qualifyingHits <= 0) return;
+    const q = cd.Q;
+    const pct = Math.min(q.healCapPercent, q.healPercentOfLostHp * qualifyingHits) / 100;
+    const missingHp = Math.max(0, this.maxHp - this.hp);
+    // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소).
+    this.hp = Math.min(this.maxHp, this.hp + missingHp * pct * getHealReceivedMultiplier(this));
+    updateBars(this);
 };
 
 // Extracted from CharacterController: _dariusWOnHit
@@ -13325,8 +13458,7 @@ CharacterController.prototype._dariusWOnHit = function(target) {
 CharacterController.prototype._dariusEOnCast = function(target) { 
     const cd = this._champData(); if (!cd) return;
     const e = cd.E;
-    const lvl = Math.max(1, this.skillLevels.E || 1);
-    this.armorPenPercent = skillVal(e.armorPenPercentByLevel, lvl) / 100;
+    // 방어구 관통(패시브)은 _dariusPassiveTick()이 E 레벨 기준으로 항상 유지한다.
     if (target && target.hp > 0) {
       // 버그 수정: 지금까지 슬로우/경직만 걸고 실제로는 대상을 전혀 끌어오지
       // 않았다 - "포획"은 도끼를 걸어 실제로 자신 쪽으로 당겨오는 스킬이다
@@ -13358,7 +13490,7 @@ CharacterController.prototype._dariusROnHit = function(target) {
     const cd = this._champData(); if (!cd) return;
     const r = cd.R;
     const lvl = Math.max(1, this.skillLevels.R || 1);
-    const stacks = (this._darius.stacksOnTarget.get(target) || { stacks: 0 }).stacks;
+    const stacks = this._dariusLiveStacks(target);
     const min = skillVal(r.minDamageByLevel, lvl) + r.minAdRatio * this._getBonusAD();
     const dmg = min * (1 + (r.perStackBonusPercent / 100) * stacks);
     const killed = target.hp > 0 && target.hp <= dmg;
@@ -13376,6 +13508,21 @@ CharacterController.prototype._dariusROnHit = function(target) {
   
 };
 
+// R 도약: 대상과의 거리에서 두 유닛의 충돌 반경만큼 앞에서 멈춘다.
+CharacterController.prototype._dariusStartRLeap = function(target) {
+    const from = this.root.position.clone();
+    const tp = target.mesh.position;
+    const dir = new THREE.Vector3(tp.x - from.x, 0, tp.z - from.z);
+    const dist = dir.length();
+    if (dist < 1e-4) return;
+    dir.normalize();
+    const stopGap = (this.collisionRadius || 0) + (typeof getCollisionRadius === 'function' ? getCollisionRadius(target) : 0);
+    const travel = Math.max(0, dist - stopGap);
+    if (travel <= 0.01) return;
+    const timing = (typeof SKILL_TIMING_DATABASE !== 'undefined' && SKILL_TIMING_DATABASE.darius && SKILL_TIMING_DATABASE.darius.R) || null;
+    const duration = timing && timing.eventTime > 0 ? timing.eventTime : 0.3667;
+    this._dashState = { from, to: from.clone().addScaledVector(dir, travel), duration, elapsed: 0, faceDir: dir.clone() };
+};
 
 /* ===== src/champions/garen.js ===== */
 // Extracted from CharacterController: _garenPassiveTick
@@ -13433,7 +13580,11 @@ CharacterController.prototype._garenWOnCast = function() {
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
     applyStatus(this, { id: 'garenW_dr', type: 'DAMAGE_REDUCTION', duration: w.reductionDuration, value: skillVal(w.damageReductionPercentByLevel, lvl) / 100 });
-    const shieldAmt = (skillVal(w.shieldBaseByLevel, lvl) + this.maxHp * (w.shieldBonusHpPercent / 100)) * getShieldReceivedMultiplier(this);
+    // 버그 수정(원작 대조): 보호막 계수는 "추가 체력"의 18%다. 예전엔 최대
+    // 체력 전체(기본 체력 포함)를 곱해 아이템이 없어도 보호막이 크게 부풀었다.
+    const shieldAmt = (skillVal(w.shieldBaseByLevel, lvl) + this._garenBonusHp() * (w.shieldBonusHpPercent / 100)) * getShieldReceivedMultiplier(this);
+    // 같은 0.75초 동안 강인함 60%(공용 TENACITY 상태 - applyStatus가 CC 지속시간 계산에 반영).
+    if (w.tenacityPercent) applyStatus(this, { id: 'garenW_tenacity', type: 'TENACITY', duration: w.tenacityDuration, value: w.tenacityPercent / 100 });
     // W가 다른 보호막을 덮어쓴 뒤 종료될 때 타 보호막까지 같이 깎지 않도록
     // 시전 직전의 기존 보호막 값을 기준선으로 보존한다. W 종료 시점에
     // 기준선보다 늘어난 양에서만 W가 만든 보호막을 제거한다.
@@ -13460,12 +13611,28 @@ CharacterController.prototype._garenWOnCast = function() {
   
 };
 
-// Extracted from CharacterController: _garenOnTakedown
+// 추가 체력 = 현재 최대 체력 - 현재 레벨의 기본 최대 체력(아이템/버프로 늘어난 몫).
+CharacterController.prototype._garenBonusHp = function() {
+    const base = typeof computeChampionStats === 'function' ? computeChampionStats('garen', this.champLevel) : null;
+    return Math.max(0, (this.maxHp || 0) - (base ? base.maxHp : (this.maxHp || 0)));
+};
+
+// W(용기) 패시브: 가렌이 유닛을 처치할 때마다 방어력/마법 저항력이 영구히 오른다.
+// 예전엔 R(데마시아의 정의)로 처치했을 때만 불렸다 - 원작은 평타/Q/E/R 무엇으로든
+// 미니언/몬스터/챔피언을 처치하면 쌓인다. 이제 공용 처치 지점(applyDamage의 처형
+// 판정, killMinion)에서 호출한다.
 CharacterController.prototype._garenOnTakedown = function() { 
-    const cd = this._champData(); if (!cd) return;
+    const cd = this._champData(); if (!cd || this.championId !== 'garen') return;
     const w = cd.W;
-    this.bonusArmor = Math.min(w.onTakedownCap, (this.bonusArmor || 0) + w.onTakedownArmor);
-    this.bonusMr = Math.min(w.onTakedownCap, (this.bonusMr || 0) + w.onTakedownMr);
+    // 상한(30)은 "용기 스택"에만 건다 - bonusArmor/bonusMr는 다른 효과(모데카이저 R
+    // 훔친 스탯 등)와 공유하는 필드라, 거기에 바로 min(30)을 걸면 다른 출처 몫까지 잘린다.
+    const prev = this._garenCourageStacks || 0;
+    const next = Math.min(w.onTakedownCap, prev + w.onTakedownArmor);
+    const gain = next - prev;
+    if (gain <= 0) return;
+    this._garenCourageStacks = next;
+    this.bonusArmor = (this.bonusArmor || 0) + gain;
+    this.bonusMr = (this.bonusMr || 0) + gain * (w.onTakedownMr / w.onTakedownArmor);
     this.recomputeStats();
   
 };
@@ -13479,9 +13646,8 @@ CharacterController.prototype._garenROnHit = function(target) {
     const missingPct = skillVal(r.missingHpPercentByLevel, lvl) / 100;
     const missingHp = Math.max(0, (target.maxHp || 0) - (target.hp || 0));
     const dmg = base + missingHp * missingPct;
-    const killed = target.hp > 0 && target.hp <= dmg;
+    // W 패시브 처치 스택은 applyDamage()의 공용 처치 판정에서 쌓인다(여기서 따로 부르면 이중 적립).
     applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
-    if (killed) this._garenOnTakedown();
   
 };
 
@@ -16892,20 +17058,28 @@ CharacterController.prototype._masteryiOnBasicAttackHit = function(target) {
       const willCrit = Math.random() < this.stats.critChance;
       const dmg = this.stats.attackDamage * p.secondHitAdRatio;
       const wouldKill = target.hp > 0 && target.hp <= dmg;
-      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: this.stats.critMultiplier });
+      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: this.stats.critMultiplier, isBasicAttack: true });
       if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
       debugSkillHit('Master Yi passive (2nd strike)', target);
+      // 2연속 공격의 두 번째 타격도 적중 시 효과가 적용된다(원작) - E 고정 피해가
+      // 2타에도 붙는다. 예전엔 1타에만 붙었다.
+      this._masteryiApplyWujuTrueDamage(target);
     }
     // E(우주류 검술) 활성 중이면 모든 기본 공격에 고정 피해 추가.
-    if (hasStatus(this, 'MASTERYI_E')) {
-      const e = cd.E;
-      const lvl = Math.max(1, this.skillLevels.E || 1);
-      const trueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * (this.stats.attackDamage - CHAMPION_DATA.masteryi.stats.ad);
-      const wouldKill = target.hp > 0 && target.hp <= trueDmg;
-      applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
-      if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
-    }
+    this._masteryiApplyWujuTrueDamage(target);
   
+};
+
+// E(우주류 검술) 활성 중 기본 공격 적중 시 고정 피해(평타 1타/2연속 공격 2타 공용).
+CharacterController.prototype._masteryiApplyWujuTrueDamage = function(target) {
+    if (!target || target.hp <= 0 || !hasStatus(this, 'MASTERYI_E')) return;
+    const cd = this._champData(); if (!cd) return;
+    const e = cd.E;
+    const lvl = Math.max(1, this.skillLevels.E || 1);
+    const trueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * this._getBonusAD();
+    const wouldKill = target.hp > 0 && target.hp <= trueDmg;
+    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+    if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
 };
 
 // Extracted from CharacterController: _masteryiArmPassiveAttack
@@ -16931,7 +17105,10 @@ CharacterController.prototype._masteryiIsChampionTarget = function(target) {
     // "챔피언급 유닛인가"의 유일하게 신뢰 가능한 신호는 isTrainingDummy가
     // 아니라는 것 - 나중에 실제 챔피언/미니언/몬스터 유닛이 추가되면 이
     // 함수 한 곳만 확장하면 된다.
-    return !!target && !target.isTrainingDummy;
+    // 업데이트: 학습용 허수아비도 isChampion:true인 "챔피언 역할" 유닛이다 - 다만
+    // 2% 바닥에 이미 멈춘 허수아비를 계속 때리는 것은 새 처치가 아니므로 제외한다
+    // (예전엔 허수아비 자체를 통째로 제외해 처치 쿨감/R 연장을 시험할 방법이 없었다).
+    return !!target && !!target.isChampion && !isFlooredTrainingDummy(target);
   
 };
 
@@ -17043,7 +17220,9 @@ CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, t
     const cd = this._champData(); if (!cd) return;
     const e = cd.E;
     const lvl = Math.max(1, this.skillLevels.E || 1);
-    const fullTrueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * (this.stats.attackDamage - CHAMPION_DATA.masteryi.stats.ad);
+    // "추가 공격력" = 아이템/버프 몫(_getBonusAD). 예전 식(현재 AD - 1레벨 기본 AD)은
+    // 레벨 성장 AD까지 추가 공격력으로 잘못 셌다.
+    const fullTrueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * this._getBonusAD();
     const modifier = alpha.q.onHitModifier ?? 0.75;
     const trueDmg = fullTrueDmg * modifier;
     if (trueDmg <= 0) return;
@@ -17056,7 +17235,10 @@ CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, t
 // Extracted from CharacterController: _masteryiResolveAlphaStrikeHit
 CharacterController.prototype._masteryiResolveAlphaStrikeHit = function(alpha, target, hitIndex, { delayApply = false } = {}) { 
     if (!this._masteryiIsValidAlphaTarget(target)) return;
-    const { dmg, willCrit } = this._masteryiRollAlphaStrikeHit(alpha, hitIndex);
+    // 버그 수정(원작 대조): "같은 대상에 대한 추가 타격"만 25% 피해다. 예전엔
+    // 두 번째 이후 타격이면 처음 맞는 다른 대상에게도 25%만 들어갔다.
+    const repeatIndex = (alpha.alreadyHitCount.get(target) || 0) > 0 ? 1 : 0;
+    const { dmg, willCrit } = this._masteryiRollAlphaStrikeHit(alpha, repeatIndex);
     alpha.alreadyHitCount.set(target, (alpha.alreadyHitCount.get(target) || 0) + 1);
     const apply = () => {
       if (!target || target.hp <= 0) return;
@@ -17554,20 +17736,12 @@ CharacterController.prototype._masteryiWOnCast = function() {
       value: skillVal(w.sustainedReductionByLevel, lvl) / 100
     });
 
-    const missingPercent = this.maxHp ? (this.maxHp - this.hp) / this.maxHp : 0;
-    const healMultiplier = 1 + missingPercent * (w.healMissingHpBonusMaxPercent / 100);
-    const totalHeal = skillVal(w.totalHealByLevel, lvl) * healMultiplier + w.healApRatio * this.stats.abilityPower;
-
+    // 버그 수정(원작 대조): 명상은 채널 동안 "초당" 체력을 회복한다(잃은 체력에
+    // 비례해 최대 100% 증가). 예전엔 4초를 다 채워야 총량을 한 번에 줬고, 3.9초에
+    // 평타로 끊으면(명캔) 회복이 0이었다. 이제 _masteryiWTick()이 매 프레임 회복한다.
     clearTimeout(this._masteryiWHealTimer);
-    this._masteryiWHealTimer = setTimeout(() => {
-      if (this.currentActionKey !== 'masteryiW') return;
-      // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소) - 실제 적용 시점
-      // (지연된 콜백 내부)의 상태를 반영한다(계산 시점이 아니라 적용 시점 기준).
-      this.hp = Math.min(this.maxHp, this.hp + totalHeal * getHealReceivedMultiplier(this));
-      updateBars(this);
-      debugSkillHit('Master Yi W (heal applied)', this, { heal: Math.round(totalHeal) });
-      this._masteryiWHealTimer = null;
-    }, Math.max(0, w.channelDuration) * 1000);
+    this._masteryiWHealTimer = null;
+    this._masteryi.wHealed = 0;
   
 };
 
@@ -17579,6 +17753,17 @@ CharacterController.prototype._masteryiWTick = function(dt) {
     }
     const cd = this._champData(); if (!cd) return;
     const w = cd.W;
+    // 초당 회복: (레벨별 초당 회복 + 주문력 계수/채널 시간) × (1 + 잃은 체력 비율 × 100%).
+    if (this.hp > 0 && this.hp < this.maxHp) {
+      const lvl = Math.max(1, this.skillLevels.W || 1);
+      const missingPercent = this.maxHp ? (this.maxHp - this.hp) / this.maxHp : 0;
+      const perSec = (skillVal(w.healPerSecByLevel, lvl) + w.healApRatio * (this.stats.abilityPower || 0) / Math.max(0.1, w.channelDuration))
+        * (1 + missingPercent * (w.healMissingHpBonusMaxPercent / 100));
+      const heal = perSec * dt * getHealReceivedMultiplier(this);
+      this.hp = Math.min(this.maxHp, this.hp + heal);
+      this._masteryi.wHealed = (this._masteryi.wHealed || 0) + heal;
+      updateBars(this);
+    }
     const perSecPercent = w.manaPercentMaxPerSec || 0;
     if (perSecPercent <= 0) return;
     const drainPerSec = this.maxMp * (perSecPercent / 100);
@@ -17618,6 +17803,8 @@ CharacterController.prototype._masteryiCastR = function(free) {
     if (!this._payCost('R', free)) return;
     const cd = this._champData(); const r = cd.R;
     const lvl = Math.max(1, this.skillLevels.R || 1);
+    // 원작: 시전 시 걸려 있던 둔화를 모두 제거하고, 지속 중 둔화에 면역(applyStatus 참고).
+    this.statusEffects = (this.statusEffects || []).filter((e) => e.type !== 'SLOW');
     // 하이랜더는 실제 클립이 없는 버프 전용 궁극기(문서 그대로) - 애니메이션
     // 없이 즉시 상태 효과만 적용한다.
     applyStatus(this, { id: 'masteryiR_as', type: 'MASTERYI_R_AS', duration: r.duration, value: skillVal(r.attackSpeedPercentByLevel, lvl) / 100 });
@@ -17801,81 +17988,132 @@ CharacterController.prototype._chogathCastR = function(free) {
 
 
 /* ===== src/champions/leesin.js ===== */
-// Extracted from CharacterController: _playLeeSinClip
-CharacterController.prototype._playLeeSinClip = function(names, options = {}) { 
-    if (this.championId !== 'leesin') return false;
-    const candidates = Array.isArray(names) ? names : [names];
-    const valid = candidates.filter(Boolean);
-    if (!valid.length) return false;
-    const clip = valid.map((n) => this.findAnimation(n)).find(Boolean);
-    if (!clip) return false;
-    this.playFirstAvailable(valid, { loop: THREE.LoopOnce, clampWhenFinished: false, fade: options.fade ?? 0.08 });
-    return true;
-  
+// ---------------- 리 신 애니메이션 공용 헬퍼 ----------------
+// 실제 리 신.glb(51클립) 확인 결과로 다시 짰다. 예전 구조의 문제:
+//  1) Q/W 복귀 클립 이름이 'Spell1_Toldle'/'Spell2_Toldle'(소문자 L) 오타라 실제
+//     클립 'Spell1_ToIdle'/'Spell2_ToIdle'을 한 번도 찾지 못했다.
+//  2) E는 Spell3 클립 길이(2.167초) 동안 이동/공격/스킬을 통째로 막았다 - 원작 E
+//     시전 시간은 0.25초다.
+//  3) Q1/W1은 행동 상태를 전혀 잡지 않아, 시전 순간 평타 로직이 그대로 이어지며
+//     Spell1 모션을 곧바로 덮었다(브라우저 검증에서 'Spell1|attack2'로 관찰됨).
+// 이제 모든 시전은 "원작 시전 시간(lockSec)만 행동을 잡고, 그 뒤엔 바로 입력을
+// 받되, 아무 입력도 없으면 남은 시전 모션 → 전용 복귀 클립(*_ToIdle) → Idle"
+// 순으로 자연스럽게 끝난다. 재시전(W2/E2)처럼 시전 시간이 없는 스킬은 행동을
+// 잡지 않고, 정지/이동에 따라 전용 클립(Spell2b_Idle/Run, Spell3_b_idle/moving)만
+// 얹는다(평타 중이면 평타 모션을 끊지 않는다).
+const LEESIN_LOCK_KEYS = ['leesinQ', 'leesinQ2', 'leesinW', 'leesinE', 'leesinR'];
+CharacterController.prototype._isLeeSinCastLock = function() {
+    return this.championId === 'leesin' && LEESIN_LOCK_KEYS.includes(this.currentActionKey);
 };
 
-// Extracted from CharacterController: _queueLeeSinReturnClip
-CharacterController.prototype._queueLeeSinReturnClip = function(names, delayNames) { 
-    const valid = (Array.isArray(names) ? names : [names]).filter(Boolean);
-    const delayValid = (Array.isArray(delayNames) ? delayNames : [delayNames]).filter(Boolean);
-    const returnClip = valid.map((n) => this.findAnimation(n)).find(Boolean);
-    const delayClip = delayValid.map((n) => this.findAnimation(n)).find(Boolean);
-    if (!returnClip || !delayClip) return;
-    this._clearLeeSinAnimTimer();
-    const delay = Math.max(0.05, delayClip.duration) * 1000;
-    this._leesinAnimTimer = setTimeout(() => {
-      if (this.championId === 'leesin' && !this.currentActionKey) {
-        this._playLeeSinClip(valid);
-      }
-      this._leesinAnimTimer = null;
-    }, delay);
-    this._actionTimers.push(this._leesinAnimTimer);
-  
-};
-
-// Extracted from CharacterController: _clearLeeSinAnimTimer
 CharacterController.prototype._clearLeeSinAnimTimer = function() { 
     if (this._leesinAnimTimer) {
       clearTimeout(this._leesinAnimTimer);
       this._leesinAnimTimer = null;
     }
-  
 };
 
-// Extracted from CharacterController: _playLeeSinLockedClip
-CharacterController.prototype._playLeeSinLockedClip = function(actionKey, names) { 
+CharacterController.prototype._leesinFirstClip = function(names) {
+    for (const n of (Array.isArray(names) ? names : [names])) {
+      const c = n && this.findAnimation(n);
+      if (c) return c;
+    }
+    return null;
+};
+
+// opts: { actionKey, clips, lockSec, state, exitIdle, onRelease }
+//  - lockSec > 0: 그 시간 동안 actionKey로 행동을 잡는다(이동/평타/다른 스킬 불가).
+//  - onRelease: 잠금이 풀리는 순간(=원작 시전 시간 종료) 호출 - 피해 판정 등.
+CharacterController.prototype._leesinPlayCast = function(opts) {
     this._clearLeeSinAnimTimer();
-    const valid = (Array.isArray(names) ? names : [names]).filter(Boolean);
-    const clip = valid.map((n) => this.findAnimation(n)).find(Boolean);
-    if (!clip) return false;
-    this.currentActionKey = actionKey;
-    this.currentPhase = 'ACTIVE';
-    this.phaseCancelable = false;
-    this.setState(STATE.E_CAST);
-    this.playFirstAvailable(valid, { loop: THREE.LoopOnce, clampWhenFinished: false, fade: 0.08 });
+    const clip = this._leesinFirstClip(opts.clips);
+    const lockSec = Math.max(0, opts.lockSec || 0);
+    const serial = this._actionSerial;
+    if (lockSec > 0) {
+      this.currentActionKey = opts.actionKey;
+      this.currentPhase = 'ACTIVE';
+      this.phaseCancelable = false;
+      this.setState(opts.state || STATE.Q_CAST);
+    }
+    if (clip) this.playFirstAvailable([clip.name], { loop: THREE.LoopOnce, clampWhenFinished: false, fade: 0.08 });
+    const release = () => {
+      if (this.championId !== 'leesin') return;
+      if (lockSec > 0) {
+        if (this.currentActionKey !== opts.actionKey || this._actionSerial !== serial) return; // 다른 행동으로 이미 넘어감
+        this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
+      }
+      if (opts.onRelease) opts.onRelease();
+      if (lockSec <= 0) return;
+      // 대기 입력(스킬/이동)이나 공격 대상이 있으면 즉시 그쪽으로 - 원작처럼 시전 시간이
+      // 끝난 뒤 남은 모션은 다음 행동이 끊는다.
+      const busy = this.pendingCast || this.pendingMove || this.targetPos || (this.currentTarget && this.currentTarget.hp > 0);
+      if (busy || !clip) { this._resumeAfterAction(); return; }
+      this.setState(STATE.IDLE);
+      this._leesinQueueTail(clip, lockSec, opts.exitIdle);
+    };
+    if (lockSec > 0) {
+      const t = setTimeout(release, lockSec * 1000);
+      this._actionTimers.push(t);
+    } else {
+      release();
+      if (clip) this._leesinQueueTail(clip, 0, opts.exitIdle);
+    }
+    return !!clip;
+};
+
+// 정지 상태에서 시전 모션이 끝나면 복귀 클립(*_ToIdle) → Idle. 그 사이 어떤 입력이든
+// 들어와 다른 클립이 재생되면 아무것도 하지 않는다(currentClipKey로 판별).
+CharacterController.prototype._leesinQueueTail = function(castClip, elapsedSec, exitIdleNames) {
+    const stillIdleOn = (name) => this.championId === 'leesin' && !this.currentActionKey && !this.targetPos
+      && this.state === STATE.IDLE && this.currentClipKey === name;
+    const remain = Math.max(0.05, castClip.duration - elapsedSec - 0.05);
     this._leesinAnimTimer = setTimeout(() => {
       this._leesinAnimTimer = null;
-      if (this.championId !== 'leesin' || this.currentActionKey !== actionKey) return;
-      this.currentActionKey = null;
-      this.currentPhase = null;
-      this.phaseCancelable = false;
-      this._resumeAfterAction();
-    }, Math.max(0.05, clip.duration) * 1000);
-    this._actionTimers.push(this._leesinAnimTimer);
+      if (!stillIdleOn(castClip.name)) return;
+      const exitClip = this._leesinFirstClip(exitIdleNames);
+      if (!exitClip) { this._returnToLocomotion(); return; }
+      this.playFirstAvailable([exitClip.name], { loop: THREE.LoopOnce, clampWhenFinished: true, fade: 0.12 });
+      this._leesinAnimTimer = setTimeout(() => {
+        this._leesinAnimTimer = null;
+        if (stillIdleOn(exitClip.name)) this._returnToLocomotion();
+      }, Math.max(0.05, exitClip.duration - 0.05) * 1000);
+    }, remain * 1000);
+};
+
+// 시전 시간 없는 재시전(W2/E2) 전용 연출: 평타/다른 행동 중이면 건드리지 않고,
+// 이동 중이면 이동용 클립을 "임시 이동 클립"으로 얹고, 정지 중이면 정지용 클립 → Idle.
+CharacterController.prototype._leesinPlayInstantRecastClip = function(idleNames, moveNames) {
+    if (this.currentActionKey) return false;
+    const moving = !!this.targetPos && this.state === STATE.MOVE;
+    const clip = this._leesinFirstClip(moving ? moveNames : idleNames);
+    if (!clip) return false;
+    this._clearLeeSinAnimTimer();
+    if (moving) {
+      this._beginTransientMoveClip(clip.name);
+      this.playFirstAvailable([clip.name], { loop: THREE.LoopOnce, clampWhenFinished: false, fade: 0.1 });
+      this._leesinAnimTimer = setTimeout(() => {
+        this._leesinAnimTimer = null;
+        this._endTransientMoveClip(clip.name);
+        if (this.championId === 'leesin' && !this.currentActionKey && this.currentClipKey === clip.name) this._returnToLocomotion();
+      }, Math.max(0.05, clip.duration - 0.05) * 1000);
+    } else {
+      this.playFirstAvailable([clip.name], { loop: THREE.LoopOnce, clampWhenFinished: false, fade: 0.1 });
+      this._leesinQueueTail(clip, 0, null);
+    }
     return true;
-  
 };
 
 // Extracted from CharacterController: _leesinOnSkillUsed
 CharacterController.prototype._leesinOnSkillUsed = function() { 
     const cd = this._champData(); if (!cd) return;
-    applyStatus(this, { id: 'leesinPassive_as', type: 'MASTERYI_R_AS', duration: 8, value: cd.passive.attackSpeedBonusPercent / 100 });
+    // 원작: 스킬 사용 후 "3초 안의" 다음 2회 기본 공격(예전 8초).
+    applyStatus(this, { id: 'leesinPassive_as', type: 'MASTERYI_R_AS', duration: cd.passive.durationSec || 3, value: cd.passive.attackSpeedBonusPercent / 100 });
     this._leesin.passiveHitsLeft = 2;
   
 };
 
 // Extracted from CharacterController: _leesinOnBasicAttackHit
-CharacterController.prototype._leesinOnBasicAttackHit = function() { 
+CharacterController.prototype._leesinOnBasicAttackHit = function(target) { 
     if (!this._leesin.passiveHitsLeft || this._leesin.passiveHitsLeft <= 0) return;
     const cd = this._champData(); const p = cd.passive;
     const table = this._leesin.passiveHitsLeft === 2 ? p.energyByLevelBreakpoints1 : p.energyByLevelBreakpoints2;
@@ -17888,7 +18126,9 @@ CharacterController.prototype._leesinOnBasicAttackHit = function() {
     if (hasStatus(this, 'LEESIN_W_VAMP')) {
       const st = getStatus(this, 'leesinW_vamp');
       // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소) - 흡혈 계열 효과도 적용 대상.
-      if (st) { this.hp = Math.min(this.maxHp, this.hp + this.stats.attackDamage * st.value * getHealReceivedMultiplier(this)); updateBars(this); }
+      // 실제로 입힌 피해(방어력 적용 후) 기준 - 예전엔 공격력 수치 그대로를 썼다.
+      const dealt = target && target._lastDamageTakenAmount != null ? target._lastDamageTakenAmount : this.stats.attackDamage;
+      if (st) { this.hp = Math.min(this.maxHp, this.hp + dealt * st.value * getHealReceivedMultiplier(this)); updateBars(this); }
     }
   
 };
@@ -17914,30 +18154,36 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
         debugSkillMiss('Lee Sin Q (재시전)', '표식 대상이 유효하지 않음');
         return;
       }
-      this._clearLeeSinAnimTimer();
-      this._playLeeSinClip(['Spell1_B.ASU_LeeSin.anm', 'Spell1_B.ASU_LeeSin,anm']);
       if (!free && this.mp < q.energy2) { debugSkillMiss('Lee Sin Q (재시전)', '기력 부족'); return; }
       if (!free) { this.mp -= q.energy2; updateBars(this); }
       const lvl = Math.max(1, this.skillLevels.Q || 1);
-      const lostPercent = target.maxHp ? Math.max(0, (target.maxHp - target.hp) / target.maxHp) : 0;
-      const base = skillVal(q.damageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD();
-      const max = skillVal(q.maxDamageByLevel, lvl) + q.maxBonusAdRatio * this._getBonusAD();
-      const dmg = base + (max - base) * lostPercent;
-      // 대상 위치로 실제 돌진(순간이동 스냅이 아니라 짧은 시간에 걸친 실제
-      // 이동 - tickPullEffects의 플레이어용 대시 트윈을 재사용한다).
+      this._leesin.qMarkTarget = null;
+      this._leesinOnSkillUsed();
+      // 대상 위치로 실제 돌진(공용 _dashState 트윈). 버그 수정: 예전엔 돌진을
+      // "시작"하는 순간 피해가 들어갔다 - 이제 도착(돌진 종료) 시점에 판정하고,
+      // 잃은 체력 비례 증폭도 그 순간의 체력으로 계산한다.
       const dir = new THREE.Vector3().subVectors(target.mesh.position, this.root.position); dir.y = 0;
+      let dashSec = 0.05;
       if (dir.length() > 0.05) {
         dir.normalize();
-        // Q 2타(공명의 일격) 돌진 시 실제로 날아가는 방향을 바라보도록
-        // 챔피언 루트의 Y 회전을 돌진 방향과 일치시킨다.
         this.root.rotation.y = Math.atan2(dir.x, dir.z);
         const to = target.mesh.position.clone().addScaledVector(dir, -this.collisionRadius * 2);
-        this._dashState = { from: this.root.position.clone(), to, duration: 0.35, elapsed: 0, faceDir: dir.clone() };
+        dashSec = 0.35;
+        this._dashState = { from: this.root.position.clone(), to, duration: dashSec, elapsed: 0, faceDir: dir.clone() };
       }
-      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
-      this._leesinOnSkillUsed();
-      this._leesin.qMarkTarget = null;
-      debugSkillHit('Lee Sin Q (공명의 일격)', target, { lostPercent: Math.round(lostPercent * 100) });
+      this._clearActionTimers();
+      this._leesinPlayCast({
+        actionKey: 'leesinQ2', clips: ['Spell1_B.ASU_LeeSin.anm', 'Spell1_B.ASU_LeeSin,anm'], lockSec: dashSec,
+        state: STATE.Q_CAST, exitIdle: ['Spell1_ToIdle'],
+        onRelease: () => {
+          if (!target || target.hp <= 0 || target.destroyed || target.isDead) return;
+          const lostPercent = target.maxHp ? Math.max(0, (target.maxHp - target.hp) / target.maxHp) : 0;
+          const base = skillVal(q.damageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD();
+          const max = skillVal(q.maxDamageByLevel, lvl) + q.maxBonusAdRatio * this._getBonusAD();
+          applyDamage(target, { rawDamage: base + (max - base) * lostPercent, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+          debugSkillHit('Lee Sin Q (공명의 일격)', target, { lostPercent: Math.round(lostPercent * 100) });
+        },
+      });
       return;
     }
     if (!this.canStartNewAction()) return;
@@ -17950,28 +18196,33 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
     // 마우스 커서로 계산한 dir과 동일한 방향을 사용하므로 모델의 정면과
     // 실제 음파 투사 방향이 항상 일치한다.
     this.faceDirectionInstant(dir);
-    this._clearLeeSinAnimTimer();
-    this._playLeeSinClip(['Spell1']);
-    this._queueLeeSinReturnClip(['Spell1_Toldle'], ['Spell1']);
+    // 시전 시간 0.25초(원작) 동안만 행동을 잡는다 - 음파 투사체는 바로 아래에서 발사.
+    this._clearActionTimers();
+    this._leesinPlayCast({ actionKey: 'leesinQ', clips: ['Spell1'], lockSec: q.castTimeSec || 0.25, state: STATE.Q_CAST, exitIdle: ['Spell1_ToIdle'] });
     // Q 음파는 마우스 커서가 가리키는 방향으로 실제 투사체가 날아간다.
     // 먼저 직선상 첫 적중 대상을 찾고, 대상이 있으면 그 대상까지의 거리만
     // 투사체가 이동하도록 해서 관통하지 않고 적중 순간 사라지게 한다.
     const hitUnit = findFirstInLine(origin, dir, q.range1, BASE_UNIT * 0.6);
+    // 버그 수정: 예전엔 LoL 단위 사거리(1200)를 VFX에 월드 거리로 그대로 넘기고 속도는
+    // 임의값 24를 써서, 빗나간 음파가 맵 밖까지 수십 초 동안 날아갔다. 사거리/속도
+    // 모두 월드 단위로 변환한다(원작 음파 투사체 속도 1800).
+    const rangeWorld = lolRangeToWorld(q.range1);
+    const speedWorld = lolRangeToWorld(q.missileSpeed || 1800);
     let impactDistance = null;
     if (hitUnit) {
       const toHit = new THREE.Vector3().subVectors(hitUnit.mesh.position, origin);
       toHit.y = 0;
-      impactDistance = Math.min(q.range1, toHit.dot(dir));
+      impactDistance = Math.min(rangeWorld, toHit.dot(dir));
     }
-    vfx.spawn('q', origin, dir, { projectile: true, range: q.range1, speed: 24, impactDistance });
+    vfx.spawn('q', origin, dir, { projectile: true, range: rangeWorld, speed: speedWorld, impactDistance });
     if (hitUnit) {
       const lvl = Math.max(1, this.skillLevels.Q || 1);
       const dmg = skillVal(q.damageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD();
       // 화면의 음파가 대상까지 실제로 날아간 뒤에만 피해/표식을 적용한다.
       // 기존에는 투사체 VFX를 생성한 직후 즉시 applyDamage()를 호출해서
       // '아직 음파가 도착하지 않았는데 이미 피해를 받은' 판정 불일치가 있었다.
-      const travelDistance = Math.max(0.05, impactDistance ?? q.range1);
-      const travelTimeMs = (travelDistance / 24) * 1000;
+      const travelDistance = Math.max(0.05, impactDistance ?? rangeWorld);
+      const travelTimeMs = (travelDistance / speedWorld) * 1000;
       const impactTimer = setTimeout(() => {
         if (this.championId !== 'leesin' || !hitUnit || hitUnit.hp <= 0 || hitUnit.destroyed || hitUnit.isDead) return;
         applyDamage(hitUnit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
@@ -17982,7 +18233,10 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
           debugSkillHit('Lee Sin Q (음파)', hitUnit);
         }
       }, travelTimeMs);
-      this._actionTimers.push(impactTimer);
+      // 버그 수정: 예전엔 이 착탄 타이머를 _actionTimers에 넣어서, 음파가 날아가는
+      // 도중 리 신이 평타/이동 등 새 행동을 시작하면(_clearActionTimers) 착탄 판정
+      // 자체가 취소돼 피해/표식이 사라졌다. 이미 발사된 투사체는 독립적으로 맞아야 한다.
+      void impactTimer;
     } else debugSkillMiss('Lee Sin Q (음파)', 'no target in line');
   
 };
@@ -17997,10 +18251,11 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
       // W 2타(강철의 의지) - 재시전은 canStartNewAction() 게이트 없이 항상
       // 받는다(모데카이저 W와 동일한 이유: 재시전은 별도 행동을 점유하지
       // 않는다).
-      this._clearLeeSinAnimTimer();
-      // 강철의 의지는 모션 없음. 재시전 입력 시 현재 애니메이션을 강제로 바꾸지 않는다.
       if (!free && this.mp < w.energy2) { debugSkillMiss('Lee Sin W (재시전)', '기력 부족'); return; }
       if (!free) { this.mp -= w.energy2; updateBars(this); }
+      // 강철의 의지는 시전 시간이 없다 - 실제 GLB의 전용 클립(Spell2b_Idle/Run)만
+      // 얹고 행동 상태는 잡지 않는다(평타 중이면 평타 모션 유지).
+      this._leesinPlayInstantRecastClip(['Spell2b_Idle.ASU_LeeSin.anm'], ['Spell2b_Run.ASU_LeeSin.anm']);
       const lvl = Math.max(1, this.skillLevels.W || 1);
       applyStatus(this, { id: 'leesinW_vamp', type: 'LEESIN_W_VAMP', duration: w.lifestealDuration, value: skillVal(w.lifestealPercentByLevel, lvl) / 100 });
       this._leesinOnSkillUsed();
@@ -18011,9 +18266,6 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
     if (!this.canStartNewAction()) return;
     if (!free && this.mp < w.energy1) { debugSkillMiss('Lee Sin W', '기력 부족'); return; }
     if (!free) { this.mp -= w.energy1; this.cooldowns.W = abilityHasteCooldown(this, w.cooldown); updateBars(this); }
-    this._clearLeeSinAnimTimer();
-    this._playLeeSinClip(['Spell2']);
-    this._queueLeeSinReturnClip(['Spell2_Toldle'], ['Spell2']);
     vfx.spawn('w', this.root.position.clone());
     this._leesinOnSkillUsed();
     this._leesin.wMarkReadyUntil = now + w.markDuration * 1000;
@@ -18032,6 +18284,14 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
         this._dashState = { from: this.root.position.clone(), to, duration: 0.35, elapsed: 0, faceDir: dir.clone() }; // Q2 돌진과 같은 시간
       }
       if (typeof shieldAlly === 'function') shieldAlly(this, ally, amount, w.shieldDuration);
+    }
+    // 아군에게 돌진하면 돌진 시간(0.35초) 동안 행동을 잡고, 자기 시전은 시전 시간이
+    // 없으므로 행동을 잡지 않는다(평타/이동 중이면 모션도 끼워 넣지 않음).
+    if (ally) {
+      this._clearActionTimers();
+      this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: 0.35, state: STATE.W_CAST, exitIdle: ['Spell2_ToIdle'] });
+    } else if (!this.currentActionKey && !this.targetPos) {
+      this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: 0, exitIdle: ['Spell2_ToIdle'] });
     }
     this._leesinApplySelfWShield(amount, w.shieldDuration);
     debugSkillHit(`Lee Sin W (방호${ally ? ' - 아군에게 돌진' : ' - 자기 시전'})`, ally || this, { shield: amount.toFixed(1) });
@@ -18083,9 +18343,11 @@ CharacterController.prototype._leesinCastE = function(free) {
       if (!free && this.mp < e.energy2) { debugSkillMiss('Lee Sin E (재시전)', '기력 부족'); return; }
       if (!free) { this.mp -= e.energy2; updateBars(this); }
       const lvl = Math.max(1, this.skillLevels.E || 1);
+      // 원작: 35~75% 둔화가 4초에 걸쳐 점점 약해진다(decayLinear - 노틸러스 E와 같은 방식).
       for (const unit of this._leesin.eMarkHits) {
-        if (unit.hp > 0) applyStatus(unit, { id: 'leesinE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100 });
+        if (unit.hp > 0) applyStatus(unit, { id: 'leesinE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100, decayLinear: true, source: this });
       }
+      this._leesinPlayInstantRecastClip(['Spell3_b_idle.ASU_LeeSin.anm'], ['Spell3_b_moving.ASU_LeeSin.anm']);
       this._leesinOnSkillUsed();
       debugSkillHit('Lee Sin E (무력화)', this._leesin.eMarkHits[0], { count: this._leesin.eMarkHits.length });
       this._leesin.eMarkHits = [];
@@ -18094,8 +18356,8 @@ CharacterController.prototype._leesinCastE = function(free) {
     if (!this.canStartNewAction()) return;
     if (!free && this.mp < e.energy1) { debugSkillMiss('Lee Sin E', '기력 부족'); return; }
     if (!free) { this.mp -= e.energy1; this.cooldowns.E = abilityHasteCooldown(this, e.cooldown); updateBars(this); }
-    this._clearLeeSinAnimTimer();
-    this._playLeeSinLockedClip('leesinE', ['Spell3']);
+    this._clearActionTimers();
+    this._leesinPlayCast({ actionKey: 'leesinE', clips: ['Spell3'], lockSec: e.castTimeSec || 0.25, state: STATE.E_CAST, exitIdle: ['Spell3_ToIdle'] });
     vfx.spawn('e', this.root.position.clone());
     const hits = findEnemiesInRadius(this.root.position, e.range);
     if (hits.length) {
@@ -18122,22 +18384,55 @@ CharacterController.prototype._leesinCastR = function(free) {
     if (!isInRange(this, this.currentTarget, r.range)) { debugSkillMiss('Lee Sin R', 'out of range'); return; }
     if (!this._payCost('R', free)) return;
     const target = this.currentTarget;
-    this._clearLeeSinAnimTimer();
-    this._playLeeSinLockedClip('leesinR', ['Spell4']);
     const lvl = Math.max(1, this.skillLevels.R || 1);
     const dmg = skillVal(r.damageByLevel, lvl) + r.bonusAdRatio * this._getBonusAD();
+    this.faceDirectionInstant(new THREE.Vector3().subVectors(target.mesh.position, this.root.position).setY(0));
+    this._clearActionTimers();
+    // 시전 시간 0.25초 뒤 발차기가 꽂힌다(예전엔 시전 즉시 피해/넉백).
+    this._leesinPlayCast({
+      actionKey: 'leesinR', clips: ['Spell4'], lockSec: r.castTimeSec || 0.25, state: STATE.R_CAST, exitIdle: ['Spell4_ToIdle'],
+      onRelease: () => { if (target && target.hp > 0) this._leesinRKick(target, dmg, lvl); },
+    });
+};
+
+// 용의 분노 착탄: 대상 피해 + 공중에 뜸 + 넉백. 날아가는 대상과 부딪힌 다른 적은
+// 같은 피해 + (차인 대상 추가 체력의 12/15/18%) + 1초 공중에 뜸(원작) - 예전엔
+// collisionBonusHpRatioByLevel 데이터만 있고 충돌 판정이 아예 없었다.
+CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
+    const r = this._champData().R;
     vfx.spawn('r', this.root.position.clone());
     applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
     applyStatus(target, { id: 'leesinR_air', type: 'KNOCKUP', duration: r.airborneDuration, value: 1 });
-    // 실제 넉백: 시전자 반대 방향으로 knockbackDistance만큼 좌표 이동(요청:
-    // "이펙트만 표시되고 위치가 그대로면 인정 안 함" - Mordekaiser E와 동일한
-    // 범용 tickPullEffects 트윈을 밀어내는 방향으로 재사용).
     const from = target.mesh.position.clone();
     const dir = new THREE.Vector3().subVectors(from, this.root.position); dir.y = 0;
     if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1); else dir.normalize();
-    const pullDist = lolRangeToWorld(r.knockbackDistance); // 버그 수정: 예전엔 /10 같은 임시 배율을 이 스킬에서만 따로 썼다 - 이제 공통 변환 함수 하나로 통일
+    const pullDist = lolRangeToWorld(r.knockbackDistance);
     const to = from.clone().addScaledVector(dir, pullDist);
     target._pullState = { from, to, duration: r.airborneDuration, elapsed: 0 };
+    // 경로 충돌: 넉백 선분(from→to)에서 (차인 대상 반경 + 상대 반경) 안에 들어오는 적.
+    const kickedRadius = typeof getCollisionRadius === 'function' ? getCollisionRadius(target) : 0;
+    const bonusHp = Math.max(0, target.bonusHealth || 0);
+    const collideDmg = dmg + bonusHp * (skillVal(r.collisionBonusHpRatioByLevel, lvl) / 100);
+    const units = typeof getTargetableEnemyUnits === 'function' ? getTargetableEnemyUnits() : [];
+    for (const u of units) {
+      if (!u || u === target || u.hp <= 0) continue;
+      const p = getWorldPosition(u); if (!p) continue;
+      const rel = new THREE.Vector3(p.x - from.x, 0, p.z - from.z);
+      const along = rel.dot(dir);
+      if (along < 0 || along > pullDist) continue;
+      const lateral = Math.sqrt(Math.max(0, rel.lengthSq() - along * along));
+      if (lateral > kickedRadius + getCollisionRadius(u)) continue;
+      // 차인 대상이 그 지점에 도달하는 시각에 맞춰 판정.
+      const t = setTimeout(() => {
+        if (u.hp <= 0) return;
+        applyDamage(u, { rawDamage: collideDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+        applyStatus(u, { id: 'leesinR_collide_air', type: 'KNOCKUP', duration: r.collisionAirborneSec || 1, value: 1 });
+        debugSkillHit('Lee Sin R (충돌)', u, { dmg: Math.round(collideDmg) });
+      }, (along / Math.max(1e-6, pullDist)) * r.airborneDuration * 1000);
+      // _actionTimers에 넣지 않는다 - 리 신이 곧바로 다른 행동을 시작해도(그때
+      // _clearActionTimers가 불림) 이미 날아가는 대상의 충돌 판정은 취소되면 안 된다.
+      void t;
+    }
     debugSkillHit('Lee Sin R', target, { pullDistWorld: pullDist.toFixed(2) });
   
 };
@@ -20459,6 +20754,21 @@ CharacterController.prototype._nautilusOnBasicAttackHit = function(target) {
     debugSkillHit('Nautilus 패시브(강력한 일격)', target);
   }
   if (this._nautilusWActive()) this._nautilusApplyWOnHit(target);
+};
+
+// 실제 노틸러스.glb의 'Passive' 클립(강력한 일격 전용 내려찍기 모션)을, 이번
+// 스윙이 패시브를 터뜨릴 스윙일 때(대상별 6초 쿨다운이 끝난 상태)만 평타 모션으로
+// 쓴다. 우선순위 20 - W(Attack4, 10)보다 높다(champion_ability_database.js 주석의
+// "패시브가 W보다 우선" 규칙). 실제 피해/속박은 그대로 _nautilusOnBasicAttackHit이 판정.
+CharacterController.prototype._nautilusArmPassiveAnim = function(target) {
+  const db = this._championAbilityDbEntry();
+  const clip = db && db.passiveAttackClip;
+  const ready = target && !target.isStructure && performance.now() >= (this._nautilus.passiveReadyAt.get(target) || 0);
+  if (clip && ready && typeof this.findAnimation === 'function' && this.findAnimation(clip)) {
+    this.registerAttackOverride({ id: 'nautilusPassive', clips: [clip], priority: 20, oneShot: true, uses: 1 });
+  } else {
+    this.clearAttackOverride('nautilusPassive');
+  }
 };
 
 CharacterController.prototype._nautilusApplyWOnHit = function(target) {
@@ -23443,6 +23753,11 @@ function killMinion(minion) {
   if (typeof controller !== 'undefined' && controller && minion._lastHitBy === controller
       && typeof itemOnMinionKillByPlayer === 'function') {
     itemOnMinionKillByPlayer(controller);
+  }
+  // 가렌 W(용기) 패시브 - 가렌이 마지막으로 때린 미니언이 죽으면 처치 스택.
+  if (typeof controller !== 'undefined' && controller && controller.championId === 'garen'
+      && minion._lastHitBy === controller && typeof controller._garenOnTakedown === 'function') {
+    controller._garenOnTakedown();
   }
   minions = minions.filter((m) => m !== minion); // 요청 18-7: 다른 AI가 더 이상 살아있는 유닛으로 인식하지 않게 즉시 목록에서 제거
   if (typeof controller !== 'undefined' && controller && controller.currentTarget === minion) {

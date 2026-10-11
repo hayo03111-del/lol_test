@@ -205,13 +205,20 @@ const CHAMPION_DATA = {
     Q: {
       name: '결정타', cooldown: 8, mana: 0,
       moveSpeedBonusPercent: 35, moveSpeedDurationByLevel: [1.4, 1.95, 2.5, 3.05, 3.6],
-      damageByLevel: [30, 60, 90, 120, 150], adRatio: 1.5, silenceDuration: 1.5, enhancedWindow: 4.5,
+      // 위키: "추가 물리 피해 30/60/90/120/150 (+ 공격력 50%)" - 평타 피해(공격력 100%)에
+      // "더해지는" 값이다(합계 = 30~150 + 공격력 150%). 예전 adRatio: 1.5는 합계 계수를
+      // 추가 피해 계수 자리에 넣어 평타 피해까지 AD 100%가 이중으로 들어갔다.
+      damageByLevel: [30, 60, 90, 120, 150], adRatio: 0.5, silenceDuration: 1.5, enhancedWindow: 4.5,
       damageType: 'PHYSICAL',
     },
     W: {
       name: '용기', cooldown: [22, 19.5, 17, 14.5, 12], mana: 0,
       damageReductionPercentByLevel: [25, 29, 33, 37, 41], reductionDuration: 4,
+      // 보호막 계수는 "추가 체력"의 18%(위키 "+ 18% bonus health") - 최대 체력 전체가 아니다.
+      // 같은 0.75초 동안 강인함 60%도 함께 얻는다.
       shieldBaseByLevel: [65, 85, 105, 125, 145], shieldBonusHpPercent: 18, shieldDuration: 0.75,
+      tenacityPercent: 60, tenacityDuration: 0.75,
+      // 패시브: 유닛(미니언/몬스터/챔피언)을 "처치"할 때마다 방어력/마법 저항력 0.2, 최대 30.
       onTakedownArmor: 0.2, onTakedownMr: 0.2, onTakedownCap: 30,
     },
     E: {
@@ -223,7 +230,9 @@ const CHAMPION_DATA = {
     },
     R: {
       name: '데마시아의 정의', cooldown: [120, 100, 80], mana: 0, range: 400, castTime: 0.435,
-      baseDamageByLevel: [125, 200, 275], missingHpPercentByLevel: [25, 30, 35],
+      // 원작 PC 툴팁/패치 기록: 고정 피해 150/250/350 (+ 대상 잃은 체력의 25/30/35%).
+      // 예전 125/200/275는 어떤 패치 기록에서도 확인되지 않는 값이라 바로잡았다.
+      baseDamageByLevel: [150, 250, 350], missingHpPercentByLevel: [25, 30, 35],
       damageType: 'TRUE',
     },
   },
@@ -261,13 +270,17 @@ const CHAMPION_DATA = {
       healPercentOfLostHp: 17, healCapPercent: 51, damageType: 'PHYSICAL',
     },
     W: {
-      name: '마비의 일격', cooldown: 5, mana: 40, rangeBonus: 25,
-      bonusAdRatioByLevel: [0.4, 0.45, 0.5, 0.55, 0.6], slowPercent: 40, slowDuration: 1,
+      // 원작 위키: "4초 안의 다음 기본 공격이 사거리 +25, 추가 물리 피해, 대상 90% 둔화(1초)".
+      // 예전 slowPercent 40은 E(포획) 둔화 값과 혼동된 것으로 보인다.
+      name: '마비의 일격', cooldown: 5, mana: 40, rangeBonus: 25, empowerWindow: 4,
+      bonusAdRatioByLevel: [0.4, 0.45, 0.5, 0.55, 0.6], slowPercent: 90, slowDuration: 1,
       killManaRefundPercent: 90, killCdrPercent: 50, damageType: 'PHYSICAL',
     },
     E: {
       name: '포획', cooldown: [26, 23.5, 21, 18.5, 16], manaByLevel: [70, 60, 50, 40, 30],
-      range: 535, castTime: 0.25, slowPercent: 40, slowDuration: 1,
+      // 전방 부채꼴 안의 모든 적을 끌어온다. 부채꼴 각도는 공개 수치를 확인하지 못해
+      // 임시값(coneAngleGuessed) - 확인되면 이 값만 바꾸면 된다.
+      range: 535, castTime: 0.25, slowPercent: 40, slowDuration: 1, coneAngleDeg: 50, coneAngleGuessed: true,
       armorPenPercentByLevel: [20, 25, 30, 35, 40],
     },
     R: {
@@ -627,20 +640,20 @@ const CHAMPION_DATA = {
       range: 125, moveSpeed: 345,
       // 리 신은 마나 대신 기력(에너지)을 쓴다 - 레벨에 따라 늘지 않는 고정
       // 자원 풀이라 mana/manaGrowth로 그대로 재사용한다(기존 자원 시스템
-      // 확장, 새 자원 시스템을 따로 만들지 않음). manaRegen은 "기력회복:50"을
-      // 초당 회복량으로 그대로 사용한다.
+      // 확장, 새 자원 시스템을 따로 만들지 않음). manaRegen은 다른 챔피언과 같이
+      // "5초당" 회복량으로 해석된다(regenTick이 /5) - 기력 50/5초 = 초당 10(원작과 동일).
       mana: 200, manaGrowth: 0, manaRegen: 50, manaRegenGrowth: 0,
     },
     passive: {
       name: '질풍격',
       desc: '스킬 사용 시 다음 2회 평타 공격속도 +40%. 1타에 기력, 2타에 절반 기력 회복(레벨 구간별).',
-      attackSpeedBonusPercent: 40,
+      attackSpeedBonusPercent: 40, durationSec: 3,
       energyByLevelBreakpoints1: { breakpoints: [1, 7, 13], values: [20, 30, 40] },
       energyByLevelBreakpoints2: { breakpoints: [1, 7, 13], values: [10, 15, 20] },
     },
     Q: {
       name: '음파/공명의 일격', cooldown: [10, 9, 8, 7, 6], energy1: 50, energy2: 25,
-      range1: 1200, range2: 1250, markDuration: 3,
+      range1: 1200, range2: 1250, markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800,
       damageByLevel: [60, 90, 120, 150, 180], bonusAdRatio: 0.9,
       maxDamageByLevel: [120, 180, 240, 300, 360], maxBonusAdRatio: 1.8,
       damageType: 'PHYSICAL',
@@ -653,14 +666,14 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '폭풍/무력화', cooldown: 8, energy1: 50, energy2: 25,
-      range: 450, markDuration: 3,
+      range: 450, markDuration: 3, castTimeSec: 0.25,
       damageByLevel: [35, 60, 85, 110, 135], adRatio: 0.9,
       slowPercentByLevel: [35, 45, 55, 65, 75], slowDuration: 4, damageType: 'MAGICAL',
     },
     R: {
       name: '용의 분노', cooldown: [110, 85, 60], mana: 0, range: 375,
       damageByLevel: [175, 400, 625], bonusAdRatio: 2.0,
-      knockbackDistance: 1200, airborneDuration: 1,
+      knockbackDistance: 1200, airborneDuration: 1, castTimeSec: 0.25, collisionAirborneSec: 1,
       collisionBonusHpRatioByLevel: [12, 15, 18], damageType: 'PHYSICAL',
     },
   },

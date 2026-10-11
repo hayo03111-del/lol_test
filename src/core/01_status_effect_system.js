@@ -20,6 +20,15 @@
 // 방식으로 강제 XZ좌표 이동을 처리한다).
 // MR_SHRED(악의 "증오안개" - 마법 저항력 감소) - ARMOR_SHRED와 완전히
 // 동일한 성격(강인함 지속시간 감소 대상에는 포함 안 됨)의 마법저항력 버전.
+function getTenacity(target) {
+  if (!target) return 0;
+  let keep = 1 - Math.max(0, Math.min(1, target.itemTenacityPercent || 0));
+  const now = performance.now();
+  for (const e of (target.statusEffects || [])) {
+    if (e.type === 'TENACITY' && (!e.expiresAt || e.expiresAt > now)) keep *= 1 - Math.max(0, Math.min(1, e.value || 0));
+  }
+  return 1 - keep;
+}
 const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM']);
 function unitLabel(u) {
   if (typeof dummy !== 'undefined' && u === dummy) return '더미 타겟';
@@ -48,6 +57,10 @@ function applyStatus(target, effect) {
     return null;
   }
   const now = performance.now();
+  // 마스터 이 R(최후의 전사): 지속 중 둔화 면역(원작). 시전 시 기존 둔화는 _masteryiCastR이 제거한다.
+  if (effect.type === 'SLOW' && target && target.championId === 'masteryi' && target._masteryi && (target._masteryi.rActiveUntil || 0) > now) {
+    return null;
+  }
   // 아이템 패시브(헤르메스의 발걸음 - 강인함/신속의 장화 - 둔화 저항)를
   // 이 공용 진입점 한 곳에서 처리한다 - 어떤 챔피언이 걸든, 어떤 스킬이
   // 걸든 전부 자동으로 적용된다(개별 스킬 코드를 손댈 필요 없음, 요청
@@ -57,8 +70,11 @@ function applyStatus(target, effect) {
   // 세기(value) 자체를 깎는다(실제 "둔화 저항"의 의미와 동일).
   let effDuration = effect.duration;
   let effValue = effect.value;
-  if (target && target.itemTenacityPercent > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM'].includes(effect.type)) {
-    effDuration = effDuration * (1 - target.itemTenacityPercent);
+  // 강인함은 아이템(itemTenacityPercent)과 스킬 버프(TENACITY 상태 - 가렌 W 등)를
+  // 원작과 같이 곱연산으로 합친다: 최종 = 1 - (1-a)(1-b).
+  const tenacity = getTenacity(target);
+  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM'].includes(effect.type)) {
+    effDuration = effDuration * (1 - tenacity);
   }
   if (target && target.itemSlowResistPercent > 0 && effect.type === 'SLOW') {
     effValue = effValue * (1 - target.itemSlowResistPercent);
@@ -243,7 +259,11 @@ function getAttackSpeedBuffPercent(target) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();
   let v = 0;
-  for (const e of target.statusEffects) if ((e.type === 'MASTERYI_R_AS' || e.type === 'AS_BUFF') && e.expiresAt > now) v = Math.max(v, e.value);
+  // 버그 수정: 서로 다른 공격 속도 버프(마스터 이 R, 애쉬 Q, 이즈리얼 패시브,
+  // 아이템 중첩 등)는 원작에서 "더해진다". 예전엔 Math.max로 가장 큰 것 하나만
+  // 적용돼, 예컨대 마스터 이 R 중에는 아이템 공속 버프가 통째로 무시됐다.
+  // 같은 버프의 재적용은 applyStatus가 같은 id를 덮어쓰므로 중복 합산되지 않는다.
+  for (const e of target.statusEffects) if ((e.type === 'MASTERYI_R_AS' || e.type === 'AS_BUFF') && e.expiresAt > now) v += e.value;
   return v;
 }
 

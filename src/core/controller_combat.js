@@ -152,7 +152,7 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
       this._chogathEOnHit(target); // E 활성화 중이면 이 평타에 가시 피해 추가
       if (wouldKill) this._chogathOnKill(target); // 패시브(육식)는 평타로 처치해도 발동
     }
-    if (this.championId === 'leesin') this._leesinOnBasicAttackHit();
+    if (this.championId === 'leesin') this._leesinOnBasicAttackHit(target);
 };
 
 // ---------------- 가렌 ----------------
@@ -704,6 +704,7 @@ CharacterController.prototype._beginAttackSwing = function() {
     // 영향을 주지 않고 오직 재생되는 클립만 바뀐다. 오버라이드가 적용된
     // 스윙은 comboIndex를 건드리지 않는다(콤보는 그대로 유지된 채 중간에
     // 한 번 끼워넣어지는 개념).
+    if (this.championId === 'nautilus') this._nautilusArmPassiveAnim(target);
     const override = this._pickAttackOverride();
     let key, attackData, overrideId = null, attackHand = null;
     // 버그 수정(요청: "세트 Q에는 패시브가 적용되지 않고 있다"): override를

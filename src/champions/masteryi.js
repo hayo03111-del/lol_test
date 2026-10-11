@@ -23,20 +23,28 @@ CharacterController.prototype._masteryiOnBasicAttackHit = function(target) {
       const willCrit = Math.random() < this.stats.critChance;
       const dmg = this.stats.attackDamage * p.secondHitAdRatio;
       const wouldKill = target.hp > 0 && target.hp <= dmg;
-      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: this.stats.critMultiplier });
+      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: willCrit, critMultiplier: this.stats.critMultiplier, isBasicAttack: true });
       if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
       debugSkillHit('Master Yi passive (2nd strike)', target);
+      // 2연속 공격의 두 번째 타격도 적중 시 효과가 적용된다(원작) - E 고정 피해가
+      // 2타에도 붙는다. 예전엔 1타에만 붙었다.
+      this._masteryiApplyWujuTrueDamage(target);
     }
     // E(우주류 검술) 활성 중이면 모든 기본 공격에 고정 피해 추가.
-    if (hasStatus(this, 'MASTERYI_E')) {
-      const e = cd.E;
-      const lvl = Math.max(1, this.skillLevels.E || 1);
-      const trueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * (this.stats.attackDamage - CHAMPION_DATA.masteryi.stats.ad);
-      const wouldKill = target.hp > 0 && target.hp <= trueDmg;
-      applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
-      if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
-    }
+    this._masteryiApplyWujuTrueDamage(target);
   
+};
+
+// E(우주류 검술) 활성 중 기본 공격 적중 시 고정 피해(평타 1타/2연속 공격 2타 공용).
+CharacterController.prototype._masteryiApplyWujuTrueDamage = function(target) {
+    if (!target || target.hp <= 0 || !hasStatus(this, 'MASTERYI_E')) return;
+    const cd = this._champData(); if (!cd) return;
+    const e = cd.E;
+    const lvl = Math.max(1, this.skillLevels.E || 1);
+    const trueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * this._getBonusAD();
+    const wouldKill = target.hp > 0 && target.hp <= trueDmg;
+    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+    if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
 };
 
 // Extracted from CharacterController: _masteryiArmPassiveAttack
@@ -62,7 +70,10 @@ CharacterController.prototype._masteryiIsChampionTarget = function(target) {
     // "챔피언급 유닛인가"의 유일하게 신뢰 가능한 신호는 isTrainingDummy가
     // 아니라는 것 - 나중에 실제 챔피언/미니언/몬스터 유닛이 추가되면 이
     // 함수 한 곳만 확장하면 된다.
-    return !!target && !target.isTrainingDummy;
+    // 업데이트: 학습용 허수아비도 isChampion:true인 "챔피언 역할" 유닛이다 - 다만
+    // 2% 바닥에 이미 멈춘 허수아비를 계속 때리는 것은 새 처치가 아니므로 제외한다
+    // (예전엔 허수아비 자체를 통째로 제외해 처치 쿨감/R 연장을 시험할 방법이 없었다).
+    return !!target && !!target.isChampion && !isFlooredTrainingDummy(target);
   
 };
 
@@ -174,7 +185,9 @@ CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, t
     const cd = this._champData(); if (!cd) return;
     const e = cd.E;
     const lvl = Math.max(1, this.skillLevels.E || 1);
-    const fullTrueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * (this.stats.attackDamage - CHAMPION_DATA.masteryi.stats.ad);
+    // "추가 공격력" = 아이템/버프 몫(_getBonusAD). 예전 식(현재 AD - 1레벨 기본 AD)은
+    // 레벨 성장 AD까지 추가 공격력으로 잘못 셌다.
+    const fullTrueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * this._getBonusAD();
     const modifier = alpha.q.onHitModifier ?? 0.75;
     const trueDmg = fullTrueDmg * modifier;
     if (trueDmg <= 0) return;
@@ -187,7 +200,10 @@ CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, t
 // Extracted from CharacterController: _masteryiResolveAlphaStrikeHit
 CharacterController.prototype._masteryiResolveAlphaStrikeHit = function(alpha, target, hitIndex, { delayApply = false } = {}) { 
     if (!this._masteryiIsValidAlphaTarget(target)) return;
-    const { dmg, willCrit } = this._masteryiRollAlphaStrikeHit(alpha, hitIndex);
+    // 버그 수정(원작 대조): "같은 대상에 대한 추가 타격"만 25% 피해다. 예전엔
+    // 두 번째 이후 타격이면 처음 맞는 다른 대상에게도 25%만 들어갔다.
+    const repeatIndex = (alpha.alreadyHitCount.get(target) || 0) > 0 ? 1 : 0;
+    const { dmg, willCrit } = this._masteryiRollAlphaStrikeHit(alpha, repeatIndex);
     alpha.alreadyHitCount.set(target, (alpha.alreadyHitCount.get(target) || 0) + 1);
     const apply = () => {
       if (!target || target.hp <= 0) return;
@@ -685,20 +701,12 @@ CharacterController.prototype._masteryiWOnCast = function() {
       value: skillVal(w.sustainedReductionByLevel, lvl) / 100
     });
 
-    const missingPercent = this.maxHp ? (this.maxHp - this.hp) / this.maxHp : 0;
-    const healMultiplier = 1 + missingPercent * (w.healMissingHpBonusMaxPercent / 100);
-    const totalHeal = skillVal(w.totalHealByLevel, lvl) * healMultiplier + w.healApRatio * this.stats.abilityPower;
-
+    // 버그 수정(원작 대조): 명상은 채널 동안 "초당" 체력을 회복한다(잃은 체력에
+    // 비례해 최대 100% 증가). 예전엔 4초를 다 채워야 총량을 한 번에 줬고, 3.9초에
+    // 평타로 끊으면(명캔) 회복이 0이었다. 이제 _masteryiWTick()이 매 프레임 회복한다.
     clearTimeout(this._masteryiWHealTimer);
-    this._masteryiWHealTimer = setTimeout(() => {
-      if (this.currentActionKey !== 'masteryiW') return;
-      // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소) - 실제 적용 시점
-      // (지연된 콜백 내부)의 상태를 반영한다(계산 시점이 아니라 적용 시점 기준).
-      this.hp = Math.min(this.maxHp, this.hp + totalHeal * getHealReceivedMultiplier(this));
-      updateBars(this);
-      debugSkillHit('Master Yi W (heal applied)', this, { heal: Math.round(totalHeal) });
-      this._masteryiWHealTimer = null;
-    }, Math.max(0, w.channelDuration) * 1000);
+    this._masteryiWHealTimer = null;
+    this._masteryi.wHealed = 0;
   
 };
 
@@ -710,6 +718,17 @@ CharacterController.prototype._masteryiWTick = function(dt) {
     }
     const cd = this._champData(); if (!cd) return;
     const w = cd.W;
+    // 초당 회복: (레벨별 초당 회복 + 주문력 계수/채널 시간) × (1 + 잃은 체력 비율 × 100%).
+    if (this.hp > 0 && this.hp < this.maxHp) {
+      const lvl = Math.max(1, this.skillLevels.W || 1);
+      const missingPercent = this.maxHp ? (this.maxHp - this.hp) / this.maxHp : 0;
+      const perSec = (skillVal(w.healPerSecByLevel, lvl) + w.healApRatio * (this.stats.abilityPower || 0) / Math.max(0.1, w.channelDuration))
+        * (1 + missingPercent * (w.healMissingHpBonusMaxPercent / 100));
+      const heal = perSec * dt * getHealReceivedMultiplier(this);
+      this.hp = Math.min(this.maxHp, this.hp + heal);
+      this._masteryi.wHealed = (this._masteryi.wHealed || 0) + heal;
+      updateBars(this);
+    }
     const perSecPercent = w.manaPercentMaxPerSec || 0;
     if (perSecPercent <= 0) return;
     const drainPerSec = this.maxMp * (perSecPercent / 100);
@@ -749,6 +768,8 @@ CharacterController.prototype._masteryiCastR = function(free) {
     if (!this._payCost('R', free)) return;
     const cd = this._champData(); const r = cd.R;
     const lvl = Math.max(1, this.skillLevels.R || 1);
+    // 원작: 시전 시 걸려 있던 둔화를 모두 제거하고, 지속 중 둔화에 면역(applyStatus 참고).
+    this.statusEffects = (this.statusEffects || []).filter((e) => e.type !== 'SLOW');
     // 하이랜더는 실제 클립이 없는 버프 전용 궁극기(문서 그대로) - 애니메이션
     // 없이 즉시 상태 효과만 적용한다.
     applyStatus(this, { id: 'masteryiR_as', type: 'MASTERYI_R_AS', duration: r.duration, value: skillVal(r.attackSpeedPercentByLevel, lvl) / 100 });

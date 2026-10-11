@@ -308,6 +308,12 @@ function getEffectiveDistance(a, b) {
 // 실제 범위 탐색(findEnemiesInRadius/isInCone)과 동일하게
 // 중심점 거리 <= 월드 사거리 + 대상 반경으로 통일한다.
 // 지정 대상 판정과 비지정 범위 탐색이 동일한 위치에서 서로 다른 결과를 내지 않게 한다.
+// 학습용 허수아비는 죽지 않고 최대 체력 2%에서 멈춘다. 이미 그 바닥에 있는
+// 허수아비를 계속 때리는 것을 "처치"로 치면 처치 보상(가렌 W 스택, 마스터 이
+// 쿨감 등)을 무한히 얻을 수 있어, 처치 판정 쪽에서 이 함수로 걸러낸다.
+function isFlooredTrainingDummy(target) {
+  return !!(target && target.isTrainingDummy && target.hp <= Math.max(1, Math.round((target.maxHp || 0) * 0.02)));
+}
 function isInRange(source, target, lolRange) {
   if (!source || !target) return false;
   const centerDistance = getHorizontalDistanceOf(source, target);
@@ -576,6 +582,10 @@ function applyDamage(target, result) {
     // 암흑의 인장(영광) - 챔피언 처치 관여 시 중첩 획득. 위 아리 패시브와
     // 동일한 이유로 이 처형 판정 지점을 "챔피언 처치"로 재사용한다.
     if (dmgSource && typeof itemOnChampionTakedown === 'function') itemOnChampionTakedown(dmgSource);
+    // 가렌 W(용기) 패시브 - 처치 시 방어력/마법 저항력 영구 증가(미니언 처치는 killMinion에서).
+    // 학습용 허수아비는 죽지 않고 2% 바닥에 멈추므로, 이미 바닥에 있는 허수아비를
+    // 계속 때리는 것은 새 처치로 치지 않는다(같은 허수아비로 무한 적립 방지).
+    if (!isFlooredTrainingDummy(target) && dmgSource && dmgSource.championId === 'garen' && typeof dmgSource._garenOnTakedown === 'function') dmgSource._garenOnTakedown();
   }
   // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만"
   // 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 그대로 넘긴다.

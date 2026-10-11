@@ -53,7 +53,11 @@ CharacterController.prototype._garenWOnCast = function() {
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
     applyStatus(this, { id: 'garenW_dr', type: 'DAMAGE_REDUCTION', duration: w.reductionDuration, value: skillVal(w.damageReductionPercentByLevel, lvl) / 100 });
-    const shieldAmt = (skillVal(w.shieldBaseByLevel, lvl) + this.maxHp * (w.shieldBonusHpPercent / 100)) * getShieldReceivedMultiplier(this);
+    // 버그 수정(원작 대조): 보호막 계수는 "추가 체력"의 18%다. 예전엔 최대
+    // 체력 전체(기본 체력 포함)를 곱해 아이템이 없어도 보호막이 크게 부풀었다.
+    const shieldAmt = (skillVal(w.shieldBaseByLevel, lvl) + this._garenBonusHp() * (w.shieldBonusHpPercent / 100)) * getShieldReceivedMultiplier(this);
+    // 같은 0.75초 동안 강인함 60%(공용 TENACITY 상태 - applyStatus가 CC 지속시간 계산에 반영).
+    if (w.tenacityPercent) applyStatus(this, { id: 'garenW_tenacity', type: 'TENACITY', duration: w.tenacityDuration, value: w.tenacityPercent / 100 });
     // W가 다른 보호막을 덮어쓴 뒤 종료될 때 타 보호막까지 같이 깎지 않도록
     // 시전 직전의 기존 보호막 값을 기준선으로 보존한다. W 종료 시점에
     // 기준선보다 늘어난 양에서만 W가 만든 보호막을 제거한다.
@@ -80,12 +84,28 @@ CharacterController.prototype._garenWOnCast = function() {
   
 };
 
-// Extracted from CharacterController: _garenOnTakedown
+// 추가 체력 = 현재 최대 체력 - 현재 레벨의 기본 최대 체력(아이템/버프로 늘어난 몫).
+CharacterController.prototype._garenBonusHp = function() {
+    const base = typeof computeChampionStats === 'function' ? computeChampionStats('garen', this.champLevel) : null;
+    return Math.max(0, (this.maxHp || 0) - (base ? base.maxHp : (this.maxHp || 0)));
+};
+
+// W(용기) 패시브: 가렌이 유닛을 처치할 때마다 방어력/마법 저항력이 영구히 오른다.
+// 예전엔 R(데마시아의 정의)로 처치했을 때만 불렸다 - 원작은 평타/Q/E/R 무엇으로든
+// 미니언/몬스터/챔피언을 처치하면 쌓인다. 이제 공용 처치 지점(applyDamage의 처형
+// 판정, killMinion)에서 호출한다.
 CharacterController.prototype._garenOnTakedown = function() { 
-    const cd = this._champData(); if (!cd) return;
+    const cd = this._champData(); if (!cd || this.championId !== 'garen') return;
     const w = cd.W;
-    this.bonusArmor = Math.min(w.onTakedownCap, (this.bonusArmor || 0) + w.onTakedownArmor);
-    this.bonusMr = Math.min(w.onTakedownCap, (this.bonusMr || 0) + w.onTakedownMr);
+    // 상한(30)은 "용기 스택"에만 건다 - bonusArmor/bonusMr는 다른 효과(모데카이저 R
+    // 훔친 스탯 등)와 공유하는 필드라, 거기에 바로 min(30)을 걸면 다른 출처 몫까지 잘린다.
+    const prev = this._garenCourageStacks || 0;
+    const next = Math.min(w.onTakedownCap, prev + w.onTakedownArmor);
+    const gain = next - prev;
+    if (gain <= 0) return;
+    this._garenCourageStacks = next;
+    this.bonusArmor = (this.bonusArmor || 0) + gain;
+    this.bonusMr = (this.bonusMr || 0) + gain * (w.onTakedownMr / w.onTakedownArmor);
     this.recomputeStats();
   
 };
@@ -99,9 +119,8 @@ CharacterController.prototype._garenROnHit = function(target) {
     const missingPct = skillVal(r.missingHpPercentByLevel, lvl) / 100;
     const missingHp = Math.max(0, (target.maxHp || 0) - (target.hp || 0));
     const dmg = base + missingHp * missingPct;
-    const killed = target.hp > 0 && target.hp <= dmg;
+    // W 패시브 처치 스택은 applyDamage()의 공용 처치 판정에서 쌓인다(여기서 따로 부르면 이중 적립).
     applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
-    if (killed) this._garenOnTakedown();
   
 };
 

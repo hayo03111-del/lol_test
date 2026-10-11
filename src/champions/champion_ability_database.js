@@ -248,6 +248,7 @@ const championAbilityDatabase = {
   // Q는 Spell1(던지기) → Spell1_Idle(닻이 날아가는 동안) → Spell1_Dash(끌려감).
   nautilus: {
     attackAnimationNames: ['Attack1', 'Attack2', 'Attack3'],
+    passiveAttackClip: 'Passive', // 강력한 일격이 터지는 평타 전용 모션(nautilus.js _nautilusArmPassiveAnim)
     Q: { animationNames: ['Spell1'], animationPatterns: [/spell1/i, /dredge/i], travelClip: 'Spell1_Idle', pullClip: 'Spell1_Dash' },
     W: { animationNames: [], animationPatterns: [], attackOverrideAnimationNames: ['Attack4'], attackOverrideMode: 'duration' },
     E: { animationNames: ['Spell3'], animationPatterns: [/spell3/i, /riptide/i] },
@@ -335,9 +336,15 @@ const championAbilityDatabase = {
     R: { animationNames: ['Spell4'], animationPatterns: [/^spell4$/i, /spell4/i] },
     idleAnimationNames: ['Idle_Active'],
     attackAnimationNames: ['Attack1', 'Attack2', 'Attack3', 'Attack4'],
-    qRecastAnimationNames: ['Spell1_B.ASU_LeeSin.anm', 'Spell1_B.ASU_LeeSin,anm'],
-    qIdleAnimationNames: ['Spell1_Toldle'],
-    wIdleAnimationNames: ['Spell2_Toldle'],
+    // 실제 리 신.glb 클립명 기준(예전 'Spell1_Toldle'/'Spell2_Toldle'은 소문자 L 오타라
+    // 한 번도 매칭되지 않았다). 실제 사용처는 leesin.js의 _leesinPlayCast 호출부.
+    qRecastAnimationNames: ['Spell1_B.ASU_LeeSin.anm'],
+    qIdleAnimationNames: ['Spell1_ToIdle'],
+    wIdleAnimationNames: ['Spell2_ToIdle'],
+    wRecastAnimationNames: { idle: 'Spell2b_Idle.ASU_LeeSin.anm', move: 'Spell2b_Run.ASU_LeeSin.anm' },
+    eIdleAnimationNames: ['Spell3_ToIdle'],
+    eRecastAnimationNames: { idle: 'Spell3_b_idle.ASU_LeeSin.anm', move: 'Spell3_b_moving.ASU_LeeSin.anm' },
+    rIdleAnimationNames: ['Spell4_ToIdle'],
   },
   nilah: {
     Q: { animationNames: ['Spell1A','Spell1B','Spell1C'], animationPatterns: [/^Spell1/i] },

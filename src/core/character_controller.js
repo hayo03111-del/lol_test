@@ -149,6 +149,7 @@ class CharacterController {
     this.shield = 0;
     this.bonusAD = 0; // 다리우스 과다출혈 만중첩 버프 등
     this.bonusArmor = 0; this.bonusMr = 0; // 가렌 W 처치 스택
+    this._garenCourageStacks = 0;
     this.bonusMaxHp = 0; // 초가스 R 포식 중첩
     this.armorPenPercent = 0; // 다리우스 E 패시브
     this.magicPenPercent = 0; // 모데카이저 E 패시브
@@ -401,6 +402,9 @@ class CharacterController {
     this._rRecastReadyUntil = 0;
     this.bonusAD = 0;
     this.bonusMaxHp = 0;
+    // 버그 수정: 가렌 W 처치 스택(bonusArmor/bonusMr)이 챔피언 교체 후에도 남아
+    // 다음 챔피언의 방어력/마저에 그대로 더해졌다.
+    this.bonusArmor = 0; this.bonusMr = 0; this._garenCourageStacks = 0;
     this.armorPenPercent = 0;
     this.championId = championId || null;
     if (!this.championId || !CHAMPION_DATA[this.championId]) return;
@@ -888,7 +892,7 @@ class CharacterController {
       return { canMove: true, canAttack: true, canCast: true, canTurn: true };
     }
     if (this.currentActionKey === 'rWindup' || this.currentActionKey === 'rChannel' || this.currentActionKey === 'rCast'
-        || this.currentActionKey === 'leesinE' || this.currentActionKey === 'leesinR') {
+        || this._isLeeSinCastLock()) {
       return { canMove: false, canAttack: false, canCast: false, canTurn: false };
     }
 
@@ -1231,6 +1235,7 @@ class CharacterController {
       + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
     this._garenPassiveTick(dt);
+    this._dariusPassiveTick();
     this._settPassiveTick(dt);
     this._settPassiveTimeoutTick();
     this._settGritTick(dt);

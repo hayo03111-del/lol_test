@@ -4,8 +4,15 @@ CharacterController.prototype._dariusApplyBleed = function(target) {
     if (!cd || this.championId !== 'darius' || !target || target.hp <= 0) return;
     const p = cd.passive;
     const lvl = this.champLevel;
-    const rec = this._darius.stacksOnTarget.get(target) || { stacks: 0 };
-    rec.stacks = Math.min(p.maxStacks, rec.stacks + 1);
+    const now = performance.now();
+    const rec = this._dariusLiveStacks(target) > 0 ? this._darius.stacksOnTarget.get(target) : { stacks: 0 };
+    // 녹서스의 힘 지속 중에는 출혈이 "즉시 최대 중첩"으로 걸린다(원작 패시브 설명).
+    const mighty = (this._darius.empoweredUntil || 0) > now;
+    rec.stacks = mighty ? p.maxStacks : Math.min(p.maxStacks, rec.stacks + 1);
+    // 중첩은 출혈 지속시간(5초)이 끝나면 함께 사라진다 - 예전엔 Map에 영원히 남아
+    // 10초 뒤 다시 때려도 이전 중첩에서 이어 쌓였고(곧바로 녹서스의 힘), R도
+    // 이미 끝난 출혈 중첩만큼 추가 피해를 줬다.
+    rec.expiresAt = now + p.dotDuration * 1000;
     this._darius.stacksOnTarget.set(target, rec);
     const oneStack = p.oneStackBase + p.oneStackGrowth * (lvl - 1) + p.oneStackBonusAdRatio * this._getBonusAD();
     const maxStackTotal = p.maxStackBase + p.maxStackGrowth * (lvl - 1) + p.maxStackBonusAdRatio * this._getBonusAD();
@@ -16,8 +23,26 @@ CharacterController.prototype._dariusApplyBleed = function(target) {
       id: 'dariusBleed', type: 'DOT', duration: p.dotDuration, tickInterval: p.dotTickInterval,
       totalDamage: perStackTotal * monsterMult, damageType: DAMAGE_TYPE.PHYSICAL,
     });
-    if (rec.stacks >= p.maxStacks) this._dariusEmpower();
+    if (rec.stacks >= p.maxStacks && !mighty) this._dariusEmpower();
   
+};
+
+// 대상에게 "지금 살아 있는" 출혈 중첩 수(만료됐으면 0으로 정리).
+CharacterController.prototype._dariusLiveStacks = function(target) {
+    const rec = this._darius && this._darius.stacksOnTarget.get(target);
+    if (!rec) return 0;
+    if (rec.expiresAt && rec.expiresAt <= performance.now()) { this._darius.stacksOnTarget.delete(target); return 0; }
+    return rec.stacks || 0;
+};
+
+// 패시브 성격의 매 프레임 갱신: E(포획) 패시브 방어구 관통은 E를 한 번이라도
+// "시전해야" 켜지는 게 아니라 E를 배운 순간부터 항상 적용된다. 예전엔 E 시전
+// 시점에만 armorPenPercent를 넣어서 E를 쓰기 전까지 관통이 0이었다.
+CharacterController.prototype._dariusPassiveTick = function() {
+    if (this.championId !== 'darius') return;
+    const cd = this._champData(); if (!cd) return;
+    const lvl = this.skillLevels ? (this.skillLevels.E || 0) : 0;
+    this.armorPenPercent = lvl >= 1 ? skillVal(cd.E.armorPenPercentByLevel, lvl) / 100 : 0;
 };
 
 // Extracted from CharacterController: _dariusEmpower
@@ -25,6 +50,7 @@ CharacterController.prototype._dariusEmpower = function() {
     const cd = this._champData(); const p = cd.passive;
     const amt = skillVal(p.empoweredAdByLevel, this.champLevel);
     this.bonusAD = amt; this.recomputeStats();
+    this._darius.empoweredUntil = performance.now() + p.empoweredDuration * 1000;
     clearTimeout(this._dariusEmpowerTimer);
     // 버그 수정(전체 시스템 감사 - "챔피언 교체 후 이전 챔피언의 setTimeout
     // 콜백이 새 챔피언 상태를 잘못 건드림"): 이 타이머는 championId나
@@ -37,7 +63,7 @@ CharacterController.prototype._dariusEmpower = function() {
     // 범위로 수정.
     this._dariusEmpowerTimer = setTimeout(() => {
       if (this.championId !== 'darius') return;
-      this.bonusAD = 0; this.recomputeStats();
+      this.bonusAD = 0; this._darius.empoweredUntil = 0; this.recomputeStats();
     }, p.empoweredDuration * 1000);
   
 };
@@ -53,14 +79,23 @@ CharacterController.prototype._dariusQOnHit = function(target, distanceWorld = n
       : skillVal(q.handleDamageByLevel, lvl) + skillVal(q.handleAdRatioByLevel, lvl) * this.stats.attackDamage;
     applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, armorPenPercent: this.armorPenPercent || 0 });
     this._dariusApplyBleed(target);
-    // 다리우스 Q 회복은 도끼날(외곽) 적중에만 발생한다. 자루 적중은 피해와 출혈만 적용한다.
-    if (isBlade) {
-      const missingHp = Math.max(0, this.maxHp - this.hp);
-      const heal = Math.min(this.maxHp * (q.healCapPercent / 100), missingHp * (q.healPercentOfLostHp / 100));
-      // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소).
-      this.hp = Math.min(this.maxHp, this.hp + heal * getHealReceivedMultiplier(this));
-      updateBars(this);
-    }
+    // 회복 대상 수 집계: 도끼날(외곽)에 맞은 "챔피언/대형 몬스터"만 센다. 실제
+    // 회복은 한 번의 Q가 끝난 뒤 _dariusQHeal()이 한 번에 처리한다.
+    return !!(isBlade && (target.isChampion || target.isLargeMonster));
+};
+
+// Q 회복(원작): 도끼날에 맞은 적 챔피언/대형 몬스터 1명당 "잃은 체력"의 17%,
+// 최대 51%(3명분)를 Q 한 번에 한 번만 회복한다. 예전엔 맞은 대상마다(미니언
+// 포함) 따로 회복해 미니언 무리에 쓰면 체력이 가득 찼고, 상한 51%도 잃은
+// 체력이 아니라 최대 체력 기준으로 잘못 걸려 있었다.
+CharacterController.prototype._dariusQHeal = function(qualifyingHits) {
+    const cd = this._champData(); if (!cd || qualifyingHits <= 0) return;
+    const q = cd.Q;
+    const pct = Math.min(q.healCapPercent, q.healPercentOfLostHp * qualifyingHits) / 100;
+    const missingHp = Math.max(0, this.maxHp - this.hp);
+    // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소).
+    this.hp = Math.min(this.maxHp, this.hp + missingHp * pct * getHealReceivedMultiplier(this));
+    updateBars(this);
 };
 
 // Extracted from CharacterController: _dariusWOnHit
@@ -85,8 +120,7 @@ CharacterController.prototype._dariusWOnHit = function(target) {
 CharacterController.prototype._dariusEOnCast = function(target) { 
     const cd = this._champData(); if (!cd) return;
     const e = cd.E;
-    const lvl = Math.max(1, this.skillLevels.E || 1);
-    this.armorPenPercent = skillVal(e.armorPenPercentByLevel, lvl) / 100;
+    // 방어구 관통(패시브)은 _dariusPassiveTick()이 E 레벨 기준으로 항상 유지한다.
     if (target && target.hp > 0) {
       // 버그 수정: 지금까지 슬로우/경직만 걸고 실제로는 대상을 전혀 끌어오지
       // 않았다 - "포획"은 도끼를 걸어 실제로 자신 쪽으로 당겨오는 스킬이다
@@ -118,7 +152,7 @@ CharacterController.prototype._dariusROnHit = function(target) {
     const cd = this._champData(); if (!cd) return;
     const r = cd.R;
     const lvl = Math.max(1, this.skillLevels.R || 1);
-    const stacks = (this._darius.stacksOnTarget.get(target) || { stacks: 0 }).stacks;
+    const stacks = this._dariusLiveStacks(target);
     const min = skillVal(r.minDamageByLevel, lvl) + r.minAdRatio * this._getBonusAD();
     const dmg = min * (1 + (r.perStackBonusPercent / 100) * stacks);
     const killed = target.hp > 0 && target.hp <= dmg;
@@ -136,3 +170,18 @@ CharacterController.prototype._dariusROnHit = function(target) {
   
 };
 
+// R 도약: 대상과의 거리에서 두 유닛의 충돌 반경만큼 앞에서 멈춘다.
+CharacterController.prototype._dariusStartRLeap = function(target) {
+    const from = this.root.position.clone();
+    const tp = target.mesh.position;
+    const dir = new THREE.Vector3(tp.x - from.x, 0, tp.z - from.z);
+    const dist = dir.length();
+    if (dist < 1e-4) return;
+    dir.normalize();
+    const stopGap = (this.collisionRadius || 0) + (typeof getCollisionRadius === 'function' ? getCollisionRadius(target) : 0);
+    const travel = Math.max(0, dist - stopGap);
+    if (travel <= 0.01) return;
+    const timing = (typeof SKILL_TIMING_DATABASE !== 'undefined' && SKILL_TIMING_DATABASE.darius && SKILL_TIMING_DATABASE.darius.R) || null;
+    const duration = timing && timing.eventTime > 0 ? timing.eventTime : 0.3667;
+    this._dashState = { from, to: from.clone().addScaledVector(dir, travel), duration, elapsed: 0, faceDir: dir.clone() };
+};

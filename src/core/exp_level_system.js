@@ -682,6 +682,11 @@ function killMinion(minion) {
       && typeof itemOnMinionKillByPlayer === 'function') {
     itemOnMinionKillByPlayer(controller);
   }
+  // 가렌 W(용기) 패시브 - 가렌이 마지막으로 때린 미니언이 죽으면 처치 스택.
+  if (typeof controller !== 'undefined' && controller && controller.championId === 'garen'
+      && minion._lastHitBy === controller && typeof controller._garenOnTakedown === 'function') {
+    controller._garenOnTakedown();
+  }
   minions = minions.filter((m) => m !== minion); // 요청 18-7: 다른 AI가 더 이상 살아있는 유닛으로 인식하지 않게 즉시 목록에서 제거
   if (typeof controller !== 'undefined' && controller && controller.currentTarget === minion) {
     controller.currentTarget = null;
