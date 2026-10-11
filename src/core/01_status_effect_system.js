@@ -125,7 +125,12 @@ function getSlowPercent(target) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();
   let v = 0;
-  for (const e of target.statusEffects) if (e.type === 'SLOW' && e.expiresAt > now) v = Math.max(v, e.value);
+  for (const e of target.statusEffects) {
+    if (e.type !== 'SLOW' || e.expiresAt <= now) continue;
+    // decayLinear - "N% 둔화가 M초에 걸쳐 감소"(노틸러스 E 등). MS_BUFF와 동일한 방식.
+    const val = (e.decayLinear && e.duration > 0) ? e.value * Math.max(0, Math.min(1, ((e.expiresAt - now) / 1000) / e.duration)) : e.value;
+    v = Math.max(v, val);
+  }
   return v;
 }
 function getArmorShredPercent(target) {
@@ -227,6 +232,12 @@ function getGrievousPercent(target) {
 function getHealReceivedMultiplier(target) {
   if (!target) return 1;
   return (1 + (target.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(target));
+}
+// 받는 보호막 배율(정령의형상/월석재생기 등의 "보호막 효과 증가") - 아이템
+// 보호막은 이미 이 필드를 곱하고 있었다. 챔피언 스킬 보호막도 같은 배율을 쓴다.
+function getShieldReceivedMultiplier(target) {
+  if (!target) return 1;
+  return 1 + (target.itemShieldReceivedBonusPercent || 0);
 }
 function getAttackSpeedBuffPercent(target) {
   if (!target || !target.statusEffects) return 0;

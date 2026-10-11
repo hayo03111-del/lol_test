@@ -379,4 +379,15 @@ function skillValLocal(byLevel, lvl) {
   assert(!!slow && slow.type === 'SLOW' && Math.abs(slow.value - w.slowPercent / 100) < 1e-9, '다리우스 W: 적중 시 슬로우가 정확한 수치로 걸린다');
 }
 
+// 챔피언 스킬 보호막에도 "보호막 효과 증가"(정령의형상 등)가 적용된다 -
+// 아이템 보호막만 적용되던 비대칭 수정. 피해 계산용 투지 값은 그대로다.
+{
+  const ctrl = makeMinimalChamp('sett', { itemShieldReceivedBonusPercent: 0.25 });
+  ctrl._sett.gritEntries = [{ amount: 300, gainedAt: now - 100 }];
+  ctrl._sett.grit = 300;
+  ctrl._settWApplyShield();
+  assert(Math.abs(ctrl.shield - 375) < 1e-6, `세트 W: 보호막 효과 +25%가 적용된다(got ${ctrl.shield})`);
+  assert(ctrl._sett.wPendingSpent === 300, '세트 W: 피해 계산용 소모 투지는 보호막 증가와 무관하게 300');
+}
+
 console.log(process.exitCode ? '\nSOME CHECKS FAILED' : '\nALL CHECKS PASSED');

@@ -130,6 +130,10 @@ const SKILL_HITBOX_SHAPE = {
     W: { type: 'cone', angleDeg: 46 },
     R: { type: 'line', halfWidthWorld: lolRangeToWorld(130) * 0.5 },
   },
+  // 노틸러스 Q(닻줄 견인) - 직선 스킬샷(champion_data.js의 nautilus.Q.width).
+  nautilus: {
+    Q: { type: 'line', halfWidthWorld: lolRangeToWorld(180) * 0.5 },
+  },
 };
 // 세트 W처럼 형태 자체가 챔피언 고유 파라미터(centerHalfWidth 등)를 쓰는
 // 경우, CHAMPION_DATA에서 직접 읽어와 shape 파라미터를 채운다.
@@ -265,6 +269,7 @@ class RangeIndicatorSystem {
         // 전부 최선을 다해 해석한다 - 못 찾으면 그냥 표시하지 않는다.
         if (data.range != null) range = skillVal(data.range, lvl);
         else if (data.range1 != null) range = data.range1;
+        else if (data.radius != null) range = data.radius; // 자기중심 범위 스킬(노틸러스 E 등)
         else if (data.rangeBase != null) range = data.rangeBase + (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0);
         else if (data.rangeMax != null) range = data.rangeMax;
       }

@@ -165,8 +165,9 @@ CharacterController.prototype._settWApplyShield = function() {
     // 일부 소모돼도(this.shield는 takeDamage에서 흡수될 때마다 줄어듦)
     // 감쇠는 "그 시점의 실제 남은 값"에서 계속 이어지고, 공식으로 다시
     // 큰 값을 덮어씌우지 않는다.
-    this.shield = Math.max(this.shield, spent); // 소모한 투지의 100% = 보호막
-    this._sett.wShieldDecayPerSec = w.shieldDuration > 0 ? spent / w.shieldDuration : 0;
+    const shieldAmt = spent * getShieldReceivedMultiplier(this); // 소모한 투지의 100% = 보호막(보호막 효과 증가 적용)
+    this.shield = Math.max(this.shield, shieldAmt);
+    this._sett.wShieldDecayPerSec = w.shieldDuration > 0 ? shieldAmt / w.shieldDuration : 0;
     updateBars(this);
 
 };

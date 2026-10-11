@@ -53,7 +53,7 @@ CharacterController.prototype._garenWOnCast = function() {
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
     applyStatus(this, { id: 'garenW_dr', type: 'DAMAGE_REDUCTION', duration: w.reductionDuration, value: skillVal(w.damageReductionPercentByLevel, lvl) / 100 });
-    const shieldAmt = skillVal(w.shieldBaseByLevel, lvl) + this.maxHp * (w.shieldBonusHpPercent / 100);
+    const shieldAmt = (skillVal(w.shieldBaseByLevel, lvl) + this.maxHp * (w.shieldBonusHpPercent / 100)) * getShieldReceivedMultiplier(this);
     // W가 다른 보호막을 덮어쓴 뒤 종료될 때 타 보호막까지 같이 깎지 않도록
     // 시전 직전의 기존 보호막 값을 기준선으로 보존한다. W 종료 시점에
     // 기준선보다 늘어난 양에서만 W가 만든 보호막을 제거한다.

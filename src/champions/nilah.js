@@ -92,6 +92,7 @@ CharacterController.prototype._nilahUpdateBladeGlow = function(dt) {
 // Extracted from CharacterController: _nilahApplyShield
 CharacterController.prototype._nilahApplyShield = function(amount, duration, kind='nilahP') { 
     if (!(amount > 0)) return 0;
+    amount *= getShieldReceivedMultiplier(this);
     this.shield = Math.max(this.shield || 0, amount);
     this._nilah.shieldUntil = Math.max(this._nilah.shieldUntil || 0, performance.now() + duration * 1000);
     this._nilah.shieldKind = kind;

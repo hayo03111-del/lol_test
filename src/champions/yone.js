@@ -480,7 +480,7 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
       let mult = 1;
       if (championHits >= 1) mult += 1.0;
       if (championHits >= 2) mult += 0.5 * (championHits - 1);
-      this.shield = Math.max(this.shield, base * mult);
+      this.shield = Math.max(this.shield, base * mult * getShieldReceivedMultiplier(this));
       this._yone.wShieldUntil = performance.now() + (w.shieldDuration || 1.5) * 1000;
       updateBars(this);
       vfx.spawn('w', this.root.position.clone());

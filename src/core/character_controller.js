@@ -159,6 +159,12 @@ class CharacterController {
       qActiveUntil: 0, flurryPending: false,
       wPending: null, ePending: null, rPending: null, rTravel: null,
     };
+    this._nautilus = {
+      passiveReadyAt: new Map(),
+      qPending: null, qTravel: null, qPull: null,
+      wUntil: 0, wShieldRemaining: 0, wShieldSeen: 0,
+      eSeq: null, rPending: null, rTravel: null,
+    };
     this.champLevel = 1;
     // 요청("LoL 경험치 및 레벨 시스템 구현") - currentExp는 챔피언 레벨
     // 시스템(champion.currentExp)에서 쓰는 "현재 레벨 내 누적치"다(전체
@@ -403,6 +409,8 @@ class CharacterController {
       qActiveUntil: 0, flurryPending: false,
       wPending: null, ePending: null, rPending: null, rTravel: null,
     };
+    // 노틸러스 - 교체 시 W 보호막 잔량까지 걷어내고 상태를 초기화한다.
+    if (typeof this._nautilusReset === 'function') this._nautilusReset(); else this._nautilus = null;
     this._dashState = null;
     this._rRecastReadyUntil = 0;
     this.bonusAD = 0;
@@ -1618,6 +1626,7 @@ class CharacterController {
     // 더 강한 둔화로 대체). Q(궁사의 집중)의 다발 공격(_asheFireFlurry)은
     // 다중 대상이라 이 단일 대상 훅을 거치지 않고 자체적으로 처리한다.
     if (this.championId === 'ashe') this._asheOnBasicAttackHit(target, isCritical);
+    if (this.championId === 'nautilus') this._nautilusOnBasicAttackHit(target);
     if (this.championId === 'nilah') this._nilahOnBasicAttackHit(target, target._lastDamageTakenAmount || 0, wouldKill);
     if (this.championId === 'renekton') this._renektonOnBasicAttackHit(target);
     // 아리: 여우불의 "아리가 공격한 적" 우선순위 판정에 쓸 마지막 평타
@@ -2689,6 +2698,12 @@ class CharacterController {
       this._dispatchCast(slot, mouseWorldPoint, false);
       return;
     }
+    // 노틸러스 W(타이탄의 분노)도 시전 모션 없는 즉시 보호막이라 평타 중에도
+    // 바로 쓸 수 있다(애쉬 Q와 같은 이유 - 진행 중 행동 상태를 건드리지 않음).
+    if (this.championId === 'nautilus' && slot === 'W') {
+      this._dispatchCast(slot, mouseWorldPoint, false);
+      return;
+    }
 
     // 스킬 우선순위: 다리우스/가렌도 기본 공격보다 스킬을 우선한다.
     // 기본 공격 계열(attack*/crit) 진행 중에 Q/W/E/R 입력이 들어오면
@@ -2884,6 +2899,12 @@ class CharacterController {
     // W(일제 사격)/E(매 날리기)/R(마법의 수정화살)은 전부 마우스 방향으로
     // 나가는 스킬샷이라 요네/이즈리얼/아리/바루스 R과 동일한 이유로
     // mouseWorldPoint를 그대로 전달한다.
+    if (this.championId === 'nautilus') {
+      if (slot === 'Q') return this._nautilusCastQ(mouseWorldPoint, free);
+      if (slot === 'W') return this._nautilusCastW(free);
+      if (slot === 'E') return this._nautilusCastE(free);
+      if (slot === 'R') return this._nautilusCastR(free);
+    }
     if (this.championId === 'ashe') {
       if (slot === 'Q') return this._asheCastQ(free);
       if (slot === 'W') return this._asheCastW(mouseWorldPoint, free);
@@ -4405,6 +4426,7 @@ class CharacterController {
       this._ashe.wPending = null; this._ashe.ePending = null; this._ashe.rPending = null; this._ashe.rTravel = null;
       clearStatus(this, 'asheRangersFocus');
     }
+    if (this.championId === 'nautilus' && typeof this._nautilusReset === 'function') this._nautilusReset();
     this.currentActionKey = null; this.currentPhase = null;
     this.targetPos = null; this.currentTarget = null; this.pendingMove = null; this.pendingCast = null;
     targetRing.clear();
@@ -4655,6 +4677,7 @@ class CharacterController {
     this._ahriUpdate(dt);
     this._varusUpdate(dt);
     this._asheUpdate(dt);
+    if (typeof this._nautilusUpdate === 'function') this._nautilusUpdate(dt);
     if (typeof itemSystemTick === 'function') itemSystemTick(this, dt);
   }
 }

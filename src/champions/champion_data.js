@@ -483,7 +483,46 @@ const CHAMPION_DATA = {
       armor: 39, armorGrowth: 4.65, mr: 32, mrGrowth: 2.05,
       range: 175, moveSpeed: 325, mana: 400, manaGrowth: 47, manaRegen: 8.63, manaRegenGrowth: 0.5,
     },
-    passive: { name: '강력한 일격', desc: '첫 공격이 추가 물리 피해 + 속박(동일 대상 6초 1회).' },
+    // 수치 출처: 사용자 원본 자료에는 노틸러스 스킬 수치가 없다(패시브 설명만
+    // 있음). 공개 LoL 자료를 웹 검색 스니펫으로 교차 확인한 값을 쓰고, 확인하지
+    // 못한 값은 옆에 "미확인"으로 표시했다 - 원문을 받으면 그 값만 바꾸면 된다.
+    passive: {
+      name: '강력한 일격', desc: '첫 공격이 추가 물리 피해 + 속박(동일 대상 6초 1회).',
+      bonusDamageBase: 2, bonusDamagePerLevel: 6, // 8~110(레벨 비례) - 미확인(기억 기반 공개 수치)
+      rootByLevel: { breakpoints: [1, 6, 11, 16], values: [0.75, 1.0, 1.25, 1.5] }, // 미확인(기억 기반 공개 수치)
+      sameTargetCooldownSec: 6, // 원본 설명 "동일 대상 6초 1회"
+    },
+    Q: {
+      name: '닻줄 견인', cooldown: [14, 13, 12, 11, 10], mana: 60, range: 1150,
+      damageByLevel: [85, 125, 165, 205, 245], apRatio: 0.9, damageType: 'MAGICAL', // 26.18 피해 조정 반영, AP 계수 90%
+      missileSpeed: 2000, width: 180, // 폭 미확인
+      castTimeSec: 0.25, // 미확인 - 일반 스킬샷 기본 캐스트 타임
+      terrainRefundPercent: 50, // 지형에 맞으면 재사용 대기시간·마나 50% 환급
+    },
+    W: {
+      name: '타이탄의 분노', cooldown: 12, mana: 60, durationSec: 6,
+      shieldByLevel: [50, 60, 70, 80, 90], shieldMaxHpPercentByLevel: [8, 9, 10, 11, 12],
+      onHitDamageByLevel: [30, 40, 50, 60, 70], onHitApRatio: 0.4, onHitDotDurationSec: 2, splashRadius: 350,
+      damageType: 'MAGICAL',
+    },
+    E: {
+      name: '역류', cooldown: [7, 6.5, 6, 5.5, 5], mana: [50, 60, 70, 80, 90], radius: 600,
+      damageByLevel: [55, 90, 125, 160, 195], apRatio: 0.5, damageType: 'MAGICAL',
+      explosionCount: 3, subsequentDamagePercent: 50, // 같은 대상에게 두 번째부터 50% - 미확인
+      explosionIntervalSec: 0.25, // 미확인
+      slowPercentByLevel: [30, 35, 40, 45, 50], slowDecaySec: 1.5, // 미확인(1.5초에 걸쳐 감쇠)
+    },
+    R: {
+      name: '폭뢰', cooldown: [120, 100, 80], mana: 100, range: 825,
+      damageByLevel: [150, 275, 400], apRatio: 0.8,
+      pathDamageByLevel: [125, 175, 225], pathApRatio: 0.4,
+      stunByLevel: [1, 1.5, 2], // 주 대상 에어본+기절 총합
+      pathKnockupSec: 0.75, // 미확인
+      pathWidth: 300, // 미확인 - 경로 충격파 판정 폭
+      shockwaveSpeed: 1400, // 미확인 - 유도형이라 도착 지연에만 영향
+      castTimeSec: 0.25, // 미확인
+      damageType: 'MAGICAL',
+    },
   },
   masteryi: {
     displayName: '마스터 이',

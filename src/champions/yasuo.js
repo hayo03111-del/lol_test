@@ -563,7 +563,7 @@ CharacterController.prototype._yasuoTick = function(dt) {
 };
 
 // Extracted from CharacterController: _yasuoOnTakeDamage
-CharacterController.prototype._yasuoOnTakeDamage = function() {  if(this._yasuo.flow>=100){ this.shield=Math.max(this.shield,this._yasuoShieldAmount()); this._yasuo.flow=0; updateBars(this); } 
+CharacterController.prototype._yasuoOnTakeDamage = function() {  if(this._yasuo.flow>=100){ this.shield=Math.max(this.shield,this._yasuoShieldAmount()*getShieldReceivedMultiplier(this)); this._yasuo.flow=0; updateBars(this); } 
 };
 
 // Extracted from CharacterController: _yasuoPlayPostQMoveEntry
