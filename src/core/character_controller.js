@@ -422,12 +422,15 @@ class CharacterController {
       this.mp = 0;
       this.playFirstAvailable(['Idle1'], { loop: THREE.LoopRepeat, fade: 0 });
     }
-    if (this.championId === 'yasuo') { this.stats.critChance = 1; this.stats.critMultiplier = this._champData().passive.critDamage; this._yasuo.lastMovePosition = this.root.position.clone(); this.mp = 0; }
+    // 치명타 배율은 챔피언마다 기본값(1.75)으로 되돌린다 - 예전엔 요네(190%)에서 다른
+    // 챔피언으로 바꿔도 그 배율이 그대로 남았다. 치명타 확률은 recomputeStats()가 계산.
+    this.stats.critMultiplier = 1.75;
+    if (this.championId === 'yasuo') { this._yasuo.lastMovePosition = this.root.position.clone(); this.mp = 0; }
     // 요네: 사냥꾼의 길(치명타 확률 2배 + 초과분 AD 환산 + 치명타 피해 감소)은
     // 야스오와 달리 이동 누적형 Flow 보호막이 없으므로 그 부분만 제외하고
     // 크리티컬 관련 스탯만 매 tick(_yoneTick)에서 계속 갱신한다. 여기서는
     // 챔피언 교체 시 상태 초기화만 담당.
-    if (this.championId === 'yone') { this.stats.critChance = 1; this.stats.critMultiplier = this._champData().passive.critDamage; this.mp = 0; }
+    if (this.championId === 'yone') { this.stats.critMultiplier = this._champData().passive.critDamage; this.mp = 0; }
     if (this.championId === 'nilah') {
       this.armorPenPercent = 0;
       // 데이터 수정(실제 bin 확인): 충돌 반경은 원래 "챔피언별 실제 수치가
@@ -476,6 +479,17 @@ class CharacterController {
       // 프레임 또는 그다음 프레임에 자신의 틱 함수가 다시 1로 되돌리므로
       // 문제없다(최대 한 프레임짜리 눈에 띄지 않는 과도 상태).
       this.stats.critChance = (this.itemBonusCritChance || 0);
+      // 야스오/요네 패시브 "의지": 다른 출처 치명타 확률 2배, 100% 초과분 1%당 추가
+      // 공격력 0.5. 버그 수정: 예전엔 아이템이 없어도 치명타 확률을 매 프레임 100%로
+      // 강제해 1레벨부터 모든 평타/Q가 치명타였다.
+      if (this.championId === 'yasuo' || this.championId === 'yone') {
+        const pv = this._champData().passive;
+        const raw = this.stats.critChance * (pv.critChanceMultiplier || 2);
+        this.stats.critChance = Math.min(1, raw);
+        const intentAd = Math.max(0, raw - 1) * 100 * (pv.overcapCritToAd || 0.5);
+        this.stats.attackDamage += intentAd; // attackDamage는 위에서 매번 새로 계산되므로 그냥 더한다
+        this._intentBonusAD = intentAd;
+      }
       this.stats.attackRange = base.attackRange;
       // 마법광학 장치 C44(비전 조준)/고속연사포(저격수)의 임시 사거리
       // 보너스가 매 프레임(update()) 덧씌우는 "기준값"을 여기 따로

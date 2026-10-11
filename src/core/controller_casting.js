@@ -569,28 +569,7 @@ CharacterController.prototype._resumeAfterAction = function() {
 
 
 
-// 버그 수정(패시브 치명타 초과분 이중 계산): _yasuoTick()에서 이미
-// this.stats.critChance를 낭인의 길 +100%까지 포함한 "최종 확률"로
-// 강제 설정하므로(아이템 시스템이 없어 그 값 자체가 그대로 최종값),
-// 여기서 +1.0을 또 더하면 아이템 없이도 항상 100%p 초과(=50 고정
-// 추가AD)가 발생했다. stats.critChance를 그대로 최종 확률로 사용한다.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// (야스오 치명타 확률/초과분 공격력은 recomputeStats()의 공용 "의지" 처리로 옮김)
 
 // Q3(회오리바람)를 실제 투사체처럼 야스오 정면 방향으로 시간에 따라
 // 전진시킨다. 매 프레임 현재 위치 기준 좁은 반경(halfWidth)만 검사하므로
@@ -1304,9 +1283,7 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
       this._eChannelDuration = eData ? eData.spinDuration : (channelCfg.duration ?? 4.0);
       // "추가 공격 속도"에는 레벨 성장분도 포함된다(원작 규칙). 이 프로젝트는 레벨
       // 성장분을 baseAttackSpeed에 녹여두므로 1레벨 기본값 대비 비율로 되살려 더한다.
-      const baseAs1 = (this._champData() && this._champData().stats.attackSpeed) || 0;
-      const growthBonusAs = baseAs1 > 0 ? Math.max(0, (this.stats.baseAttackSpeed || baseAs1) / baseAs1 - 1) : 0;
-      const bonusAsForSpins = growthBonusAs + Math.max(0, this.stats.bonusAttackSpeedPercent || 0);
+      const bonusAsForSpins = this._totalBonusAttackSpeed();
       this._eHitsTotal = eData ? (eData.baseHits + Math.floor(bonusAsForSpins / 0.25 + 1e-9)) : 0;
       this._eHitsDone = 0;
       this._eHitsPerTarget = new Map(); // 방어력 감소는 "대상별" 적중 횟수로 판정

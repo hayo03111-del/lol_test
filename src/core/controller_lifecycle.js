@@ -90,7 +90,7 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     // "야스오가 피해를 입었을 때(패시브: 낭인의 길 - 기류 최대치에서 피격 시
     // 보호막)" 발동해야 하므로, 실제로 피해를 받는 이 지점(takeDamage, 이미
     // 계산된 actualHpLoss 사용)으로 옮긴다.
-    if (this.championId === 'yasuo' && actualHpLoss > 0) this._yasuoOnTakeDamage();
+    if (this.championId === 'yasuo' && actualHpLoss > 0) this._yasuoOnTakeDamage(source);
     if (this.championId === 'mordekaiser') {
       const cd = this._champData();
       this._morde.dealtBank = (this._morde.dealtBank || 0) + actualHpLoss * (cd.W.takenDamageBankPercent / 100);

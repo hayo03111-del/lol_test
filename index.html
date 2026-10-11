@@ -1747,6 +1747,25 @@ function findFirstInLine(origin, dir, lolRange, halfWidth) {
   }
   return best ? best.unit : null;
 }
+// 일정 폭 직선(사각형) 범위 안의 "모든" 적 - 야스오 Q1/Q2처럼 관통하는 직선 스킬용.
+// lolRange/lolWidth는 LoL 원본 단위(전체 폭). 대상 충돌 반경만큼 여유를 준다.
+function findEnemiesInLine(origin, dir, lolRange, lolWidth) {
+  const range = lolRangeToWorld(lolRange);
+  const halfWidth = lolRangeToWorld(lolWidth) * 0.5;
+  const out = [];
+  for (const u of getTargetableEnemyUnits()) {
+    const p = getWorldPosition(u);
+    if (!p) continue;
+    const r = getCollisionRadius(u);
+    const toTarget = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
+    const along = toTarget.dot(dir);
+    if (along < -r || along > range + r) continue;
+    const lateral = Math.sqrt(Math.max(0, toTarget.lengthSq() - along * along));
+    if (lateral > halfWidth + r) continue;
+    out.push(u);
+  }
+  return out;
+}
 function debugSkillHit(label, unit, extra) {
   console.log(`[SKILL HIT] ${label}`, extra || '', unit);
 }
@@ -1997,16 +2016,28 @@ const CHAMPION_DATA = {
     },
     passive: {
       name: '낭인의 길',
-      flowMax: 100, shieldBase: 125, shieldPerLevel: 27.941,
-      critChanceBonus: 1.0, critDamage: 1.80, critDamageWithIE: 2.073,
-      overcapCritToAd: 0.5, flowDistance: 59.5,
+      // 의지(Intent): 다른 모든 출처의 치명타 확률 2배(V14.10에 2.5→2), 100% 초과분
+      // 1%당 추가 공격력 0.5. 치명타 피해 감소는 V15.4에서 삭제됐다 - 치명타 배율은
+      // 다른 챔피언과 같은 기본값(stats.critMultiplier)+무한의 대검 보너스를 쓴다.
+      // 예전 구조는 아이템이 없어도 치명타 확률을 항상 100%로 고정했다.
+      critChanceMultiplier: 2.0, overcapCritToAd: 0.5,
+      // 결의(Resolve): 이동한 거리 59/52.5/46(레벨 구간) 유닛마다 기류 1, 100에서
+      // 챔피언/몬스터에게 피해를 받으면 1초 동안 보호막 125~600(레벨 비례).
+      // 레벨 구간(1/7/13)은 확인하지 못한 임시값(flowBreakpointsGuessed).
+      flowMax: 100, shieldBase: 125, shieldPerLevel: 27.941, shieldDurationSec: 1,
+      flowUnitsPerStack: { breakpoints: [1, 7, 13], values: [59, 52.5, 46] }, flowBreakpointsGuessed: true,
     },
     Q: {
-      name: '강철 폭풍', cooldown: [4, 3.33, 2.66, 2.0, 1.33], range: 450,
+      // 쿨다운 4초·시전 시간 0.35초는 스킬 레벨과 무관한 고정 기준값이다(요네와 동일 -
+      // 요네.bin YoneQ 수치와 champion_data 요네 주석 참고). 예전 [4,3.33,…,1.33]/
+      // [0.4,…,0.13]은 "추가 공속에 따라 줄어드는 범위"를 레벨별 값으로 잘못 옮긴 것이었다.
+      // 추가 공속 1%당 쿨다운 0.6%(최대 66.67%), 시전 시간 0.41667%(최대 50%) 감소.
+      name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 450, width: 80,
       damageByLevel: [20,45,70,95,120], totalAdRatio: 1.05,
-      critTotalAdRatio: 1.65375, critTotalAdRatioIE: 2.03175,
       stackDuration: 6, knockupDuration: 1, tornadoRange: 1150, circleRadius: 375,
-      castTime: [0.4,0.333,0.266,0.2,0.13], attackSpeedCap: 1.43,
+      castTime: [0.35, 0.35, 0.35, 0.35, 0.35],
+      cdReductionPerBonusAs: 0.6, cdReductionMax: 0.6667, castReductionPerBonusAs: 0.41667, castReductionMax: 0.5,
+      tornadoWidth: 180, tornadoSpeed: 1200, tornadoGuessed: true, // 회오리 폭/속도 미확인
       damageType: 'PHYSICAL',
     },
     W: {
@@ -2014,7 +2045,8 @@ const CHAMPION_DATA = {
       width: [320,390,460,530,600], duration: 4, damageType: 'NONE',
     },
     E: {
-      name: '질풍검', cooldown: [0.5,0.4,0.3,0.2,0.1], range: 475,
+      // 대상을 "관통해" 고정 거리(475)만큼 돌진, 돌진 속도 750 + 이동 속도의 60%.
+      name: '질풍검', cooldown: [0.5,0.4,0.3,0.2,0.1], range: 475, dashDistance: 475, dashSpeedBase: 750, dashSpeedMsRatio: 0.6,
       damageMin: [70,85,100,115,130], damageMax: [140,170,200,230,260],
       bonusAdRatioMin: 0.2, bonusAdRatioMax: 0.4, apRatioMin: 0.6, apRatioMax: 1.2,
       targetCooldown: [10,9,8,7,6], stackDuration: 5, stackBonusPercent: 25, maxStacks: 4,
@@ -2022,7 +2054,9 @@ const CHAMPION_DATA = {
     },
     R: {
       name: '최후의 숨결', cooldown: [70,50,30], range: 1400,
-      damageByLevel: [200,350,500], bonusAdRatio: 1.5, knockupDuration: 1,
+      // 대상(공중에 뜬 적 챔피언) 주변 400 안의 공중에 뜬 적 챔피언 전부(반경 미확인 -
+      // rTargetRadiusGuessed). 피해 계수는 "추가" 공격력 150%.
+      damageByLevel: [200,350,500], bonusAdRatio: 1.5, knockupDuration: 1, targetRadius: 400, rTargetRadiusGuessed: true,
       armorIgnoreBonusPercent: 0.60, buffDuration: 15, damageType: 'PHYSICAL',
     },
   },
@@ -8572,8 +8606,9 @@ class ProjectileSystem {
       proj.life -= dt;
       // 버그 수정(요청 27): 포탑 공격/광선은 막지 않는다 - fromTurret 발사체는
       // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
+      // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
       if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret) {
-        const wall=controller._yasuo.windwall, progress=Math.min(1,(performance.now()-wall.createdAt)/180), wp=controller.root.position.clone().addScaledVector(wall.dir, wall.width*0.75*progress), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this.totalMisses++; this._releaseArrowMesh(proj._meshEntry); this.projectiles.splice(i,1); continue; }
+        const wall=controller._yasuo.windwall, progress=Math.min(1,(performance.now()-wall.createdAt)/180), wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, wall.width*0.75*progress), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this.totalMisses++; this._releaseArrowMesh(proj._meshEntry); this.projectiles.splice(i,1); continue; }
       }
       const aim = this._currentAimPoint(proj);
       if (!aim || proj.life <= 0) { this.totalMisses++; this._releaseArrowMesh(proj._meshEntry); this.projectiles.splice(i, 1); continue; }
@@ -9812,12 +9847,15 @@ class CharacterController {
       this.mp = 0;
       this.playFirstAvailable(['Idle1'], { loop: THREE.LoopRepeat, fade: 0 });
     }
-    if (this.championId === 'yasuo') { this.stats.critChance = 1; this.stats.critMultiplier = this._champData().passive.critDamage; this._yasuo.lastMovePosition = this.root.position.clone(); this.mp = 0; }
+    // 치명타 배율은 챔피언마다 기본값(1.75)으로 되돌린다 - 예전엔 요네(190%)에서 다른
+    // 챔피언으로 바꿔도 그 배율이 그대로 남았다. 치명타 확률은 recomputeStats()가 계산.
+    this.stats.critMultiplier = 1.75;
+    if (this.championId === 'yasuo') { this._yasuo.lastMovePosition = this.root.position.clone(); this.mp = 0; }
     // 요네: 사냥꾼의 길(치명타 확률 2배 + 초과분 AD 환산 + 치명타 피해 감소)은
     // 야스오와 달리 이동 누적형 Flow 보호막이 없으므로 그 부분만 제외하고
     // 크리티컬 관련 스탯만 매 tick(_yoneTick)에서 계속 갱신한다. 여기서는
     // 챔피언 교체 시 상태 초기화만 담당.
-    if (this.championId === 'yone') { this.stats.critChance = 1; this.stats.critMultiplier = this._champData().passive.critDamage; this.mp = 0; }
+    if (this.championId === 'yone') { this.stats.critMultiplier = this._champData().passive.critDamage; this.mp = 0; }
     if (this.championId === 'nilah') {
       this.armorPenPercent = 0;
       // 데이터 수정(실제 bin 확인): 충돌 반경은 원래 "챔피언별 실제 수치가
@@ -9866,6 +9904,17 @@ class CharacterController {
       // 프레임 또는 그다음 프레임에 자신의 틱 함수가 다시 1로 되돌리므로
       // 문제없다(최대 한 프레임짜리 눈에 띄지 않는 과도 상태).
       this.stats.critChance = (this.itemBonusCritChance || 0);
+      // 야스오/요네 패시브 "의지": 다른 출처 치명타 확률 2배, 100% 초과분 1%당 추가
+      // 공격력 0.5. 버그 수정: 예전엔 아이템이 없어도 치명타 확률을 매 프레임 100%로
+      // 강제해 1레벨부터 모든 평타/Q가 치명타였다.
+      if (this.championId === 'yasuo' || this.championId === 'yone') {
+        const pv = this._champData().passive;
+        const raw = this.stats.critChance * (pv.critChanceMultiplier || 2);
+        this.stats.critChance = Math.min(1, raw);
+        const intentAd = Math.max(0, raw - 1) * 100 * (pv.overcapCritToAd || 0.5);
+        this.stats.attackDamage += intentAd; // attackDamage는 위에서 매번 새로 계산되므로 그냥 더한다
+        this._intentBonusAD = intentAd;
+      }
       this.stats.attackRange = base.attackRange;
       // 마법광학 장치 C44(비전 조준)/고속연사포(저격수)의 임시 사거리
       // 보너스가 매 프레임(update()) 덧씌우는 "기준값"을 여기 따로
@@ -11032,14 +11081,27 @@ CharacterController.prototype._tryEngageTarget = function() {
 // 게임 내내 0으로 계산되고 있었다(레벨업으로 공격력이 올라도 전혀
 // 반영 안 됨). 실제 추가 공격력은 "현재 총 공격력 - 1레벨 기본 공격력"
 // 이고, 여기에 다리우스의 임시 empower 보너스가 있으면 더해준다.
+// "추가 공격 속도"(LoL 규칙: 레벨 성장분 + 버프/아이템) - 이 프로젝트는 레벨 성장분을
+// baseAttackSpeed에 녹여 두므로 1레벨 기본 공속 대비 비율로 되살려 더한다. 가렌 E 회전
+// 수, 야스오 Q 쿨다운/시전 시간 등 "추가 공속 비례" 스킬이 공용으로 쓴다.
+CharacterController.prototype._totalBonusAttackSpeed = function() {
+    const cd = this._champData();
+    const baseAs1 = (cd && cd.stats.attackSpeed) || 0;
+    const growth = baseAs1 > 0 ? Math.max(0, (this.stats.baseAttackSpeed || baseAs1) / baseAs1 - 1) : 0;
+    return growth + Math.max(0, this.stats.bonusAttackSpeedPercent || 0);
+};
+
 CharacterController.prototype._getBonusAD = function() {
     const cd = this._champData();
-    const baseAd = cd ? cd.stats.ad : 0;
-    // 주의: this.bonusAD (다리우스 임시 empower 보너스)는 recomputeStats()가
-    // 이미 this.stats.attackDamage에 합산해뒀다(3146행 참고) - 여기서 또
-    // 더하면 다리우스 empower 중에 이중으로 계산된다. 그래서 여기서는
-    // stats.attackDamage 하나만 기준으로 계산한다 - 그 안에 이미 레벨
-    // 성장분과 다리우스 empower 보너스가 전부 반영되어 있다.
+    // 주의: this.bonusAD (다리우스 녹서스의 힘 등)는 recomputeStats()가 이미
+    // this.stats.attackDamage에 합산해뒀다 - 여기서 또 더하면 이중 계산이라
+    // stats.attackDamage 하나만 기준으로 계산한다.
+    // 버그 수정(원작 규칙): "추가 공격력"에는 레벨 성장 공격력이 들어가지 않는다.
+    // 예전엔 1레벨 기본 공격력만 빼서 레벨이 오를수록 성장분까지 추가 공격력으로
+    // 셌다(18레벨이면 챔피언에 따라 +40~80). 현재 레벨의 기본 공격력을 뺀다.
+    const levelBase = (this.championId && typeof computeChampionStats === 'function')
+      ? computeChampionStats(this.championId, this.champLevel || 1) : null;
+    const baseAd = levelBase ? levelBase.attackDamage : (cd ? cd.stats.ad : 0);
     return Math.max(0, (this.stats.attackDamage || 0) - baseAd);
 };
 
@@ -11897,7 +11959,8 @@ CharacterController.prototype._beginAttackSwing = function() {
           isCritical: willCrit,
           critMultiplier: this.stats.critMultiplier,
           armorPenPercent: this.armorPenPercent || 0,
-          bonusArmorIgnorePercent: (this.championId === 'yasuo' && this._yasuo.rArmorBuffUntil > performance.now()) ? this._champData().R.armorIgnoreBonusPercent : 0,
+          // 야스오 R 이후 15초: "치명타" 공격만 추가 방어력 일부 무시(예전엔 치명타가 아니어도 적용).
+          bonusArmorIgnorePercent: (this.championId === 'yasuo' && willCrit && this._yasuo.rArmorBuffUntil > performance.now()) ? this._champData().R.armorIgnoreBonusPercent : 0,
           yoneAzakana,
           isBasicAttack: true,
         };
@@ -12601,28 +12664,7 @@ CharacterController.prototype._resumeAfterAction = function() {
 
 
 
-// 버그 수정(패시브 치명타 초과분 이중 계산): _yasuoTick()에서 이미
-// this.stats.critChance를 낭인의 길 +100%까지 포함한 "최종 확률"로
-// 강제 설정하므로(아이템 시스템이 없어 그 값 자체가 그대로 최종값),
-// 여기서 +1.0을 또 더하면 아이템 없이도 항상 100%p 초과(=50 고정
-// 추가AD)가 발생했다. stats.critChance를 그대로 최종 확률로 사용한다.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+// (야스오 치명타 확률/초과분 공격력은 recomputeStats()의 공용 "의지" 처리로 옮김)
 
 // Q3(회오리바람)를 실제 투사체처럼 야스오 정면 방향으로 시간에 따라
 // 전진시킨다. 매 프레임 현재 위치 기준 좁은 반경(halfWidth)만 검사하므로
@@ -13336,9 +13378,7 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
       this._eChannelDuration = eData ? eData.spinDuration : (channelCfg.duration ?? 4.0);
       // "추가 공격 속도"에는 레벨 성장분도 포함된다(원작 규칙). 이 프로젝트는 레벨
       // 성장분을 baseAttackSpeed에 녹여두므로 1레벨 기본값 대비 비율로 되살려 더한다.
-      const baseAs1 = (this._champData() && this._champData().stats.attackSpeed) || 0;
-      const growthBonusAs = baseAs1 > 0 ? Math.max(0, (this.stats.baseAttackSpeed || baseAs1) / baseAs1 - 1) : 0;
-      const bonusAsForSpins = growthBonusAs + Math.max(0, this.stats.bonusAttackSpeedPercent || 0);
+      const bonusAsForSpins = this._totalBonusAttackSpeed();
       this._eHitsTotal = eData ? (eData.baseHits + Math.floor(bonusAsForSpins / 0.25 + 1e-9)) : 0;
       this._eHitsDone = 0;
       this._eHitsPerTarget = new Map(); // 방어력 감소는 "대상별" 적중 횟수로 판정
@@ -13840,7 +13880,7 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     // "야스오가 피해를 입었을 때(패시브: 낭인의 길 - 기류 최대치에서 피격 시
     // 보호막)" 발동해야 하므로, 실제로 피해를 받는 이 지점(takeDamage, 이미
     // 계산된 actualHpLoss 사용)으로 옮긴다.
-    if (this.championId === 'yasuo' && actualHpLoss > 0) this._yasuoOnTakeDamage();
+    if (this.championId === 'yasuo' && actualHpLoss > 0) this._yasuoOnTakeDamage(source);
     if (this.championId === 'mordekaiser') {
       const cd = this._champData();
       this._morde.dealtBank = (this._morde.dealtBank || 0) + actualHpLoss * (cd.W.takenDamageBankPercent / 100);
@@ -15410,101 +15450,102 @@ CharacterController.prototype._renektonTick = function(dt) {
 
 /* ===== src/champions/yasuo.js ===== */
 // Extracted from CharacterController: _yasuoLevelValue
-CharacterController.prototype._yasuoLevelValue = function(arr, lvl) {  return arr[Math.max(1, Math.min(arr.length, lvl)) - 1]; 
+CharacterController.prototype._yasuoLevelValue = function(arr, lvl) {  return arr[Math.max(1, Math.min(arr.length, lvl)) - 1];
 };
 
-// Extracted from CharacterController: _yasuoQCooldown
-CharacterController.prototype._yasuoQCooldown = function() { 
+// 강철 폭풍 쿨다운/시전 시간 공용 감소율. 추가 공격 속도(레벨 성장분 포함)
+// 1%당 쿨다운 0.6%(최대 66.67%) / 시전 시간 0.41667%(최대 50%) 감소 - 요네와 동일한
+// 관계식(요네.bin YoneQ 수치). 버그 수정: 예전 식 (최종공속 - 0.697) / 0.011은
+// 100으로 나누는 것을 빠뜨려 추가 공속 2%만 있어도 곧바로 상한(66%)에 붙었다.
+CharacterController.prototype._yasuoQReduction = function(perBonusAs, max) {
+    const bonusAsPercent = this._totalBonusAttackSpeed() * 100;
+    return Math.min(max, Math.max(0, bonusAsPercent * perBonusAs / 100));
+};
+
+CharacterController.prototype._yasuoQCooldown = function() {
     const q = this._champData().Q;
     const lvl = Math.max(1, Math.min(5, Number(this.skillLevels.Q) || 1));
-    const base = this._yasuoLevelValue(q.cooldown, lvl);
-    const as = getFinalAttackSpeed(this.stats);
-    const reduction = Math.min(0.66, Math.max(0, (as - 0.697) / 0.011));
-    return base * (1 - reduction);
-  
+    return this._yasuoLevelValue(q.cooldown, lvl) * (1 - this._yasuoQReduction(q.cdReductionPerBonusAs, q.cdReductionMax));
 };
 
-// Extracted from CharacterController: _yasuoQCastTime
-CharacterController.prototype._yasuoQCastTime = function() { 
+CharacterController.prototype._yasuoQCastTime = function() {
     const q = this._champData().Q;
     const lvl = Math.max(1, Math.min(5, Number(this.skillLevels.Q) || 1));
-    const base = this._yasuoLevelValue(q.castTime, lvl);
-    const as = getFinalAttackSpeed(this.stats);
-    const reduction = Math.min(0.66, Math.max(0, (as - 0.697) / 0.011));
-    return base * (1 - reduction);
-  
+    return this._yasuoLevelValue(q.castTime, lvl) * (1 - this._yasuoQReduction(q.castReductionPerBonusAs, q.castReductionMax));
 };
 
-// Extracted from CharacterController: _yasuoCritMultiplier
-CharacterController.prototype._yasuoCritMultiplier = function() {  return this._champData().passive.critDamage; 
+// 치명타 배율 - 다른 챔피언과 같은 기본값(무한의 대검 보너스는 calculateDamage/아래
+// Q 계산이 따로 더한다). 치명타 확률 2배/초과분 추가 공격력은 recomputeStats()의
+// 공용 처리(applyIntentPassive)가 맡는다.
+CharacterController.prototype._yasuoCritMultiplier = function() { return this.stats.critMultiplier || 1.75; };
+
+CharacterController.prototype._yasuoShieldAmount = function() {  const p = this._champData().passive; return p.shieldBase + Math.max(0, this.champLevel - 1) * p.shieldPerLevel;
 };
 
-// Extracted from CharacterController: _yasuoFinalCritChance
-CharacterController.prototype._yasuoFinalCritChance = function() {  return Math.min(10, this.stats.critChance || 0); 
-};
-
-// Extracted from CharacterController: _yasuoBonusADFromCrit
-CharacterController.prototype._yasuoBonusADFromCrit = function() {  const excess = Math.max(0, this._yasuoFinalCritChance() - 1); return excess * 100 * 0.5; 
-};
-
-// Extracted from CharacterController: _yasuoShieldAmount
-CharacterController.prototype._yasuoShieldAmount = function() {  const p = this._champData().passive; return p.shieldBase + Math.max(0, this.champLevel - 1) * p.shieldPerLevel; 
-};
-
-// Extracted from CharacterController: _yasuoGainFlowFromMovement
-CharacterController.prototype._yasuoGainFlowFromMovement = function(dt) { 
+// 결의: 이동한 거리(LoL 단위)만큼 기류를 얻는다. 버그 수정: 예전엔 "월드 거리"에
+// LoL 단위 기준값(59.5)을 그대로 적용해, 실제로는 수만 유닛을 걸어야 기류가 찼다.
+CharacterController.prototype._yasuoGainFlowFromMovement = function(dt) {
     if (!this._yasuo || this.state === STATE.DEAD) return;
     if (!this._yasuo.lastMovePosition) this._yasuo.lastMovePosition = this.root.position.clone();
-    const d = this.root.position.distanceTo(this._yasuo.lastMovePosition); this._yasuo.lastMovePosition.copy(this.root.position);
-    if (d <= 0 || this._yasuo.flow >= 100) return;
+    const dWorld = this.root.position.distanceTo(this._yasuo.lastMovePosition); this._yasuo.lastMovePosition.copy(this.root.position);
+    if (dWorld <= 0 || this._yasuo.flow >= 100) return;
     const p = this._champData().passive;
-    const gainPerDistance = 10 / p.flowDistance;
-    this._yasuo.flow = Math.min(100, this._yasuo.flow + d * gainPerDistance);
-  
+    const unitsPerStack = valueByBreakpoints(p.flowUnitsPerStack, this.champLevel || 1);
+    this._yasuo.flow = Math.min(p.flowMax || 100, this._yasuo.flow + worldDistanceToLol(dWorld) / unitsPerStack);
 };
 
 // Extracted from CharacterController: _yasuoQStackTick
-CharacterController.prototype._yasuoQStackTick = function() { 
+CharacterController.prototype._yasuoQStackTick = function() {
     if (this._yasuo.qStacks > 0 && performance.now() > this._yasuo.qStackExpiresAt) { this._yasuo.qStacks = 0; this._yasuo.qStackExpiresAt = 0; }
-  
+
 };
 
 // Extracted from CharacterController: _yasuoEStackTick
-CharacterController.prototype._yasuoEStackTick = function() { 
+CharacterController.prototype._yasuoEStackTick = function() {
     if (this._yasuo.eStacks > 0 && performance.now() > this._yasuo.eStacksExpiresAt) { this._yasuo.eStacks = 0; this._yasuo.eStacksExpiresAt = 0; }
     const now = performance.now(); for (const [id, until] of this._yasuo.eTargetCooldowns) if (now >= until) this._yasuo.eTargetCooldowns.delete(id);
-  
+
 };
 
 // Extracted from CharacterController: _yasuoTargetKey
-CharacterController.prototype._yasuoTargetKey = function(t) {  return t?.id || t?.uuid || t; 
+CharacterController.prototype._yasuoTargetKey = function(t) {  return t?.id || t?.uuid || t;
 };
 
 // Extracted from CharacterController: _yasuoApplyQHit
-CharacterController.prototype._yasuoApplyQHit = function(target, { tornado=false, circle=false } = {}) { 
+CharacterController.prototype._yasuoApplyQHit = function(target, { tornado=false, circle=false } = {}) {
     const q = this._champData().Q;
     const lvl = Math.max(1, Math.min(5, Number(this.skillLevels.Q) || 1));
     const base = this._yasuoLevelValue(q.damageByLevel, lvl);
-    const crit = true; // 낭인의 길 +100% crit, 이 데모에는 별도 아이템 crit가 없으므로 항상 100%.
-    const critMult = this._yasuoCritMultiplier();
-    const raw = base + this.stats.attackDamage * (crit ? q.critTotalAdRatio : q.totalAdRatio);
+    // 버그 수정: (1) 치명타가 항상 터지도록 crit=true로 고정돼 있었고, (2) 이미 치명타
+    // 배율을 곱해 둔 계수(critTotalAdRatio)에 isCritical로 배율을 "한 번 더" 곱해 Q 피해가
+    // 약 1.8배 부풀었다. 이제 치명타 확률대로 굴리고, 치명타면 AD 계수 부분에만 치명타
+    // 배율(+무한의 대검)을 곱한다(기본 피해는 치명타 영향 없음). 같은 Q 한 번에 맞은
+    // 대상들은 한 번 굴린 결과(_yasuoQCritRoll)를 공유한다.
+    const crit = this._yasuoQCritRoll != null ? this._yasuoQCritRoll : (Math.random() < (this.stats.critChance || 0));
+    const critMult = this._yasuoCritMultiplier() + (this.itemBonusCritDamagePercent || 0);
+    const raw = base + this.stats.attackDamage * q.totalAdRatio * (crit ? critMult : 1);
     const first = !this._yasuoQHitConsumed;
-    applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: crit, critMultiplier: crit ? critMult : 1, bonusArmorIgnorePercent: (this._yasuo.rArmorBuffUntil > performance.now() ? this._champData().R.armorIgnoreBonusPercent : 0), source: this });
+    // R 이후 15초 "치명타 공격"의 추가 방어력 무시는 치명타가 실제로 터졌을 때만.
+    applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, bonusArmorIgnorePercent: (crit && this._yasuo.rArmorBuffUntil > performance.now() ? this._champData().R.armorIgnoreBonusPercent : 0), source: this });
     if (first) this._yasuoQHitConsumed = true;
     if (tornado) applyStatus(target, { id:'yasuoQKnockup', type:'KNOCKUP', duration:q.knockupDuration, value:1 });
     return raw;
-  
+
 };
 
 // Extracted from CharacterController: _yasuoFindQTargets
-CharacterController.prototype._yasuoFindQTargets = function(dir, range, radius = null) { 
-    if (radius != null) return findEnemiesInRadius(this.root.position, radius).map(h => h.unit);
-    return findEnemiesInRadius(this.root.position, range, this, { forward: dir, maxAngleDeg: 12 });
-  
+// Q1/Q2 직선(사거리 450, 폭 80) / EQ 원형 판정. 버그 수정: 예전엔 인자 자리에
+// this를 넣어 옵션이 통째로 무시되고(직선이 아니라 원형 판정) 반환값도 {unit} 객체
+// 배열이라 호출부와 형식이 달랐다. 또 실제 Q는 "부채꼴"이 아니라 일정 폭의 직선이다.
+CharacterController.prototype._yasuoFindQTargets = function(dir, range, radius = null) {
+    const alive = (u) => u && u.hp > 0;
+    if (radius != null) return findEnemiesInRadius(this.root.position, radius).map(h => h.unit).filter(alive);
+    const q = this._champData().Q;
+    return findEnemiesInLine(this.root.position, dir, range, q.width || 80).filter(alive);
 };
 
 // Extracted from CharacterController: _yasuoStartQ3Tornado
-CharacterController.prototype._yasuoStartQ3Tornado = function(dir) { 
+CharacterController.prototype._yasuoStartQ3Tornado = function(dir) {
     const q = this._champData().Q;
     const forward = dir.clone().setY(0);
     if (forward.lengthSq() < 1e-8) forward.set(0, 0, 1); else forward.normalize();
@@ -15513,17 +15554,21 @@ CharacterController.prototype._yasuoStartQ3Tornado = function(dir) {
       dir: forward,
       pos: origin.clone(),
       maxDist: lolRangeToWorld(q.tornadoRange),
-      halfWidth: lolRangeToWorld(q.tornadoWidth != null ? q.tornadoWidth : 250),
+      halfWidth: lolRangeToWorld(q.tornadoWidth != null ? q.tornadoWidth : 180) * 0.5, // 예전엔 "폭" 값을 반폭으로 써서 판정이 2배 넓었다
       speed: lolRangeToWorld(q.tornadoSpeed != null ? q.tornadoSpeed : 1000),
       traveled: 0,
       hitSet: new Set(),
+      critRoll: Math.random() < (this.stats.critChance || 0),
     };
+    // 회오리를 날리는 순간 중첩을 소모한다 - 예전엔 회오리가 끝까지 날아간 "뒤"에야
+    // 0으로 돌려서, 비행 중(약 1초)에 Q를 다시 쓰면 회오리가 또 나갔다.
+    this._yasuo.qStacks = 0;
+    if (typeof window !== 'undefined' && window.yasuoSetQStacks) window.yasuoSetQStacks(0);
     vfx.spawn('q', origin.clone().addScaledVector(forward, 1.2), forward, { tornado: true, size: 1.25 });
-  
 };
 
 // Extracted from CharacterController: _yasuoTickQ3Tornado
-CharacterController.prototype._yasuoTickQ3Tornado = function(dt) { 
+CharacterController.prototype._yasuoTickQ3Tornado = function(dt) {
     const travel = this._yasuo && this._yasuo.qTornadoTravel;
     if (!travel) return;
     const remaining = Math.max(0, travel.maxDist - travel.traveled);
@@ -15535,37 +15580,39 @@ CharacterController.prototype._yasuoTickQ3Tornado = function(dt) {
       if (!u || u.hp <= 0 || travel.hitSet.has(u)) continue;
       if (isInCircle(u, travel.pos, travel.halfWidth)) {
         travel.hitSet.add(u);
+        this._yasuoQCritRoll = travel.critRoll;
         this._yasuoApplyQHit(u, { tornado: true, circle: false });
+        this._yasuoQCritRoll = null;
       }
     }
 
     if (travel.traveled >= travel.maxDist - 1e-4) this._yasuoFinishQ3Tornado();
-  
+
 };
 
 // Extracted from CharacterController: _yasuoFinishQ3Tornado
-CharacterController.prototype._yasuoFinishQ3Tornado = function() { 
+CharacterController.prototype._yasuoFinishQ3Tornado = function() {
     if (!this._yasuo || !this._yasuo.qTornadoTravel) return;
     this._yasuo.qTornadoTravel = null;
     this._yasuo.qStacks = 0;
     if (window.yasuoSetQStacks) window.yasuoSetQStacks(0);
-  
+
 };
 
 // Extracted from CharacterController: _yasuoClearPostQMoveEntry
-CharacterController.prototype._yasuoClearPostQMoveEntry = function() { 
+CharacterController.prototype._yasuoClearPostQMoveEntry = function() {
     if (this._transientMoveClipNames && this._transientMoveClipNames.has('Run1_IN_Raw')) {
       this._endTransientMoveClip('Run1_IN_Raw');
     }
     if (this._yasuo) this._yasuo.qMoveEntryPending = false;
-  
+
 };
 
 // Extracted from CharacterController: _yasuoCastQ
-CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false) { 
+CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false) {
     if (isSilenced(this) || isCrowdControlled(this)) return;
-    const qLevel = Math.max(1, Math.min(5, Number(this.skillLevels.Q) || 1));
-    this.skillLevels.Q = qLevel;
+    // 버그 수정: 예전엔 여기서 skillLevels.Q를 강제로 1 이상으로 덮어써, 스킬 포인트를
+    // 찍지 않은 Q도 _payCost()의 "아직 배우지 않음" 검사를 통과했다.
     if (this.currentActionKey === 'yasuoQ' && this.currentPhase == null) {
       this.currentActionKey = null;
     }
@@ -15581,20 +15628,13 @@ CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false
     // 기존 runAction()은 새 액션 시작 시 이전 타이머를 전부 지워 E가 끝나지 않는
     // 문제가 있었기 때문에, E 중 Q는 별도 one-shot 경로로 처리한다.
     if (inEDash) {
+      // E 돌진 중 Q(EQ): 원작은 시전 시간 없이, 돌진이 "끝나는 순간" 야스오 주변
+      // 원형 범위를 친다(3중첩이면 그 원 안 전원 공중에 뜸). 버그 수정: 예전엔 별도
+      // 타이머로 시전 시간 뒤에 판정했고, 3중첩 EQ의 반경으로 회오리 사거리(1150)를
+      // 써서 주변 1150 안의 모든 적을 띄웠다.
       this._yasuoQHitConsumed = false;
-      const tornadoNow = stackBefore >= 2;
-      const animNow = 'Spell1_Dash';
-      const castNow = this._yasuoQCastTime();
-      this.playFirstAvailable([animNow], { loop: THREE.LoopOnce, fade: 0.03, clampWhenFinished: true, timeScale: castNow > 0 ? 1 : 1 });
-      const timer = setTimeout(() => {
-        const hitTargets = tornadoNow ? findEnemiesInRadius(this.root.position, q.tornadoRange).map(h=>h.unit) : findEnemiesInRadius(this.root.position, q.circleRadius).map(h=>h.unit);
-        const unique=[]; for (const t of (hitTargets||[])) if (t && t.hp>0 && !unique.includes(t)) unique.push(t);
-        for (const t of unique) this._yasuoApplyQHit(t, { tornado:tornadoNow, circle:true });
-        if (unique.length) { this._yasuo.qStacks = tornadoNow ? 0 : Math.min(2, stackBefore + 1); if (window.yasuoSetQStacks) window.yasuoSetQStacks(this._yasuo.qStacks); this._yasuo.qStackExpiresAt = performance.now() + q.stackDuration*1000; }
-        else if (tornadoNow) { this._yasuo.qStacks = 0; if (window.yasuoSetQStacks) window.yasuoSetQStacks(0); }
-        if (tornadoNow) vfx.spawn('q', this.root.position.clone(), dir, { tornado:true, size:1.25 });
-      }, Math.max(20, castNow * 1000));
-      this._actionTimers.push(timer);
+      this.playFirstAvailable(['Spell1_Dash'], { loop: THREE.LoopOnce, fade: 0.03, clampWhenFinished: true });
+      this._yasuo.eqPending = { tornado: stackBefore >= 2, stackBefore, dir: dir.clone() };
       if (!free) this.cooldowns.Q = abilityHasteCooldown(this, this._yasuoQCooldown());
       return;
     }
@@ -15612,39 +15652,48 @@ CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false
         this._yasuoStartQ3Tornado(dir);
         return;
       }
-      const hitTargets = findEnemiesInRadius(this.root.position, q.range, { forward:dir, maxAngleDeg:12 }).map(h=>h.unit);
-      const unique=[]; for (const t of (hitTargets||[])) if (t && t.hp>0 && !unique.includes(t)) unique.push(t);
+      const unique = this._yasuoFindQTargets(dir, q.range);
+      this._yasuoQCritRoll = Math.random() < (this.stats.critChance || 0);
       for (const t of unique) this._yasuoApplyQHit(t, { tornado:false, circle:false });
+      this._yasuoQCritRoll = null;
       if (unique.length) { this._yasuo.qStacks = Math.min(2, stackBefore + 1); if (window.yasuoSetQStacks) window.yasuoSetQStacks(this._yasuo.qStacks); this._yasuo.qStackExpiresAt = performance.now() + q.stackDuration*1000; }
     },});
     const cd = this._yasuoQCooldown(); if (!free) this.cooldowns.Q = abilityHasteCooldown(this, cd);
-  
+
 };
 
 // Extracted from CharacterController: _yasuoCastW
-CharacterController.prototype._yasuoCastW = function(mouseWorldPoint, free=false) { 
+CharacterController.prototype._yasuoCastW = function(mouseWorldPoint, free=false) {
     if (isSilenced(this) || isCrowdControlled(this)) return;
     if (!this._payCost('W', free)) return;
     this._yasuoClearPostQMoveEntry();
     const w=this._champData().W, lvl=this.skillLevels.W||1, width=this._yasuoLevelValue(w.width,lvl);
-    const dir = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint,this.root.position).setY(0) : new THREE.Vector3(0,0,1).applyQuaternion(this.root.quaternion); if(dir.lengthSq()<1e-6)dir.set(0,0,1);dir.normalize(); this.faceDirectionInstant(dir);
-    const angle=Math.atan2(dir.x,dir.z)*180/Math.PI;
-    let anim='Spell2_BASE'; if(angle>=135||angle<=-135) anim=angle>=0?'Spell2_180':'Spell2_-180'; else if(angle>45) anim='Spell2_90'; else if(angle<-45) anim='Spell2_-90'; else anim='Spell2_0';
+    const dir = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint,this.root.position).setY(0) : new THREE.Vector3(0,0,1).applyQuaternion(this.root.quaternion); if(dir.lengthSq()<1e-6)dir.set(0,0,1);dir.normalize();
+    // 버그 수정: Spell2_0/90/-90/180/-180은 "야스오가 보는 방향 기준" 시전 방향별 모션이다
+    // (몸을 돌리지 않고 옆/뒤로 장막을 펼침). 예전엔 먼저 몸을 시전 방향으로 돌려 놓고
+    // 월드 좌표 각도로 클립을 골라서, 화면상 방향에 따라 엉뚱한 옆/뒤 모션이 나왔다.
+    const local = dir.clone().applyQuaternion(this.root.quaternion.clone().invert());
+    const angle = Math.atan2(local.x, local.z) * 180 / Math.PI; // 0=정면, +90=오른쪽
+    let anim; if(angle>=135||angle<=-135) anim=angle>=0?'Spell2_180':'Spell2_-180'; else if(angle>45) anim='Spell2_90'; else if(angle<-45) anim='Spell2_-90'; else anim='Spell2_0';
+    if (!this.findAnimation(anim)) anim = 'Spell2_BASE';
     const clip=this.findAnimation(anim); const dur=clip?clip.duration:0.35;
     this.currentActionKey='yasuoW'; this.currentPhase='ACTIVE'; this.setState(STATE.W_CAST);
-    this.runAction('yasuoW',STATE.W_CAST,{faceDir:dir,startupOverride:Math.min(0.25,dur),recoveryOverride:Math.max(0.05,dur-Math.min(0.25,dur)),dataOverride:{clips:[anim],startup:Math.min(0.25,dur),recovery:Math.max(0.05,dur-Math.min(0.25,dur)),cancelToMove:false,cancelToSpell:false,cancelable:false,dmg:0},onFire:()=>{ this._yasuoCreateWindwall(dir,width); }});
+    this.runAction('yasuoW',STATE.W_CAST,{startupOverride:Math.min(0.25,dur),recoveryOverride:Math.max(0.05,dur-Math.min(0.25,dur)),dataOverride:{clips:[anim],startup:Math.min(0.25,dur),recovery:Math.max(0.05,dur-Math.min(0.25,dur)),cancelToMove:false,cancelToSpell:false,cancelable:false,dmg:0},onFire:()=>{ this._yasuoCreateWindwall(dir,width); }});
     if(!free) this.cooldowns.W=abilityHasteCooldown(this, this._yasuoLevelValue(w.cooldown,lvl));
-  
+
 };
 
 // Extracted from CharacterController: _yasuoCreateWindwall
-CharacterController.prototype._yasuoCreateWindwall = function(dir,width) { 
-    this._yasuo.windwall={dir:dir.clone(),width:lolRangeToWorld(width),expiresAt:performance.now()+4000,createdAt:performance.now()};
-  
+CharacterController.prototype._yasuoCreateWindwall = function(dir,width) {
+    // 바람 장막은 시전한 자리에 고정된다 - 예전엔 판정 기준점이 매 프레임 야스오의
+    // 현재 위치라 야스오를 따라다녔다(projectile_system.js가 origin을 읽음).
+    const w = this._champData().W;
+    this._yasuo.windwall={dir:dir.clone(),origin:this.root.position.clone(),width:lolRangeToWorld(width),expiresAt:performance.now()+(w.duration||4)*1000,createdAt:performance.now()};
+
 };
 
 // Extracted from CharacterController: _yasuoFinishEDash
-CharacterController.prototype._yasuoFinishEDash = function() { 
+CharacterController.prototype._yasuoFinishEDash = function() {
     if (!this._yasuo || !this._yasuo.eDashStart || this.currentActionKey !== 'yasuoE') return;
     const target = this._yasuo.eDashTarget;
     const key = this._yasuo.eDashTargetKey;
@@ -15654,6 +15703,7 @@ CharacterController.prototype._yasuoFinishEDash = function() {
     const mult = 1 + stacks * 0.25;
 
     this.root.position.copy(this._yasuo.eDashEnd);
+    if (this._yasuo.eqPending) { const eq = this._yasuo.eqPending; this._yasuo.eqPending = null; this._yasuoResolveEQ(eq); }
 
     if (!this._yasuo.eDashDamageApplied) {
       this._yasuo.eDashDamageApplied = true;
@@ -15679,9 +15729,6 @@ CharacterController.prototype._yasuoFinishEDash = function() {
       }
       this._yasuo.eStacks = Math.min(4, stacks + 1);
 
-      if (this.cooldowns.Q > 0 && this.cooldowns.Q <= 0.5) {
-        this.cooldowns.Q = 0;
-      }
       this._yasuo.eStacksExpiresAt = performance.now() + e.stackDuration * 1000;
     }
 
@@ -15708,11 +15755,11 @@ CharacterController.prototype._yasuoFinishEDash = function() {
       // 그 경우에만 _resumeAfterAction()이 정상적으로 MOVE로 복귀시킨다.
       this._resumeAfterAction();
     }
-  
+
 };
 
 // Extracted from CharacterController: _yasuoCastE
-CharacterController.prototype._yasuoCastE = function(mouseWorldPoint, free=false) { 
+CharacterController.prototype._yasuoCastE = function(mouseWorldPoint, free=false) {
     if (isSilenced(this) || isCrowdControlled(this)) return;
     if (!this.currentTarget || this.currentTarget.hp<=0) return;
 
@@ -15735,9 +15782,16 @@ CharacterController.prototype._yasuoCastE = function(mouseWorldPoint, free=false
     const stacks = this._yasuo.eStacks;
     const mult = 1 + Math.min(4, stacks) * 0.25;
     const start = this.root.position.clone();
-    const end = targetPos.clone().addScaledVector(dir, -Math.min(0.35, lolRangeToWorld(60)));
-    const clip = this.findAnimation('Spell3');
-    const dur = clip ? clip.duration : 0.55;
+    // 버그 수정(원작 대조): 질풍검은 대상을 "관통해" 고정 거리(475)만큼 돌진한다.
+    // 예전엔 대상 바로 앞에서 멈췄다. 돌진 속도는 750 + 이동 속도의 60%(LoL 단위).
+    const dashLol = e.dashDistance || 475;
+    const end = start.clone().addScaledVector(dir, lolRangeToWorld(dashLol));
+    const map = (typeof window !== 'undefined' && window.HOWLING_ABYSS_MAP) || null;
+    if (map && typeof map.clampPosition === 'function') map.clampPosition(end);
+    end.y = start.y;
+    const msWorld = typeof getFinalMoveSpeed === 'function' ? getFinalMoveSpeed(this.stats) : 0;
+    const moveSpeedLol = msWorld > 0 ? worldDistanceToLol(msWorld) : CHAMPION_DATA.yasuo.stats.moveSpeed;
+    const dashSec = dashLol / ((e.dashSpeedBase || 750) + (e.dashSpeedMsRatio || 0.6) * moveSpeedLol);
 
     // E is a continuous dash. Keep this state independent from the generic action
     // timer so Q/animation changes cannot freeze the physical movement.
@@ -15760,7 +15814,7 @@ CharacterController.prototype._yasuoCastE = function(mouseWorldPoint, free=false
     this._yasuo.eDashStart = start.clone();
     this._yasuo.eDashEnd = end.clone();
     this._yasuo.eDashElapsed = 0;
-    this._yasuo.eDashDuration = Math.max(0.12, dur * 0.75);
+    this._yasuo.eDashDuration = Math.max(0.12, dashSec);
     this._yasuo.eDashTarget = target;
     this._yasuo.eDashTargetKey = key;
     this._yasuo.eDashDamageApplied = false;
@@ -15776,11 +15830,11 @@ CharacterController.prototype._yasuoCastE = function(mouseWorldPoint, free=false
     this._actionTimers.push(finishTimer);
 
     if (!free) this.cooldowns.E = abilityHasteCooldown(this, this._yasuoLevelValue(e.cooldown, lvl));
-  
+
 };
 
 // Extracted from CharacterController: _yasuoCastR
-CharacterController.prototype._yasuoCastR = function(free=false) { 
+CharacterController.prototype._yasuoCastR = function(free=false) {
     if (isSilenced(this) || isCrowdControlled(this)) return;
 
     const r = this._champData().R;
@@ -15798,7 +15852,7 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
     // Yasuo's R pulls in every airborne(KNOCKUP) enemy around him - not just the
     // anchor - and strikes them together. Stunned/rooted/suppressed-but-not-airborne
     // enemies are NOT valid R targets (요청 3).
-    const targets = this._yasuoFindRTargets();
+    const targets = this._yasuoFindRTargets(anchor);
     if (!targets.length) return;
 
     const anchorPos = getWorldPosition(anchor).clone();
@@ -15870,7 +15924,8 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
         dmg:0
       },
       onFire:()=>{
-        const raw=this._yasuoLevelValue(r.damageByLevel,lvl)+r.bonusAdRatio*this.stats.attackDamage;
+        // 버그 수정: 계수는 "추가" 공격력 150%다(예전엔 총 공격력에 곱함).
+        const raw=this._yasuoLevelValue(r.damageByLevel,lvl)+r.bonusAdRatio*this._getBonusAD();
 
         // Every airborne target in range receives the R strike.
         targets.forEach(target=>{
@@ -15903,44 +15958,39 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
     });
 
     if(!free) this.cooldowns.R=abilityHasteCooldown(this, this._yasuoLevelValue(r.cooldown,lvl));
-  
+
 };
 
-// Extracted from CharacterController: _yasuoFindRTarget
-CharacterController.prototype._yasuoFindRTarget = function() { 
+// R 활성 조건/기준 대상: 사거리(1400) 안의 "공중에 뜬 적 챔피언". 버그 수정: 예전엔
+// 미니언 등 모든 유닛을 받았다(원작 R은 챔피언 전용).
+CharacterController.prototype._yasuoRCandidates = function() {
     const range = this._champData().R.range;
-    const candidates = findEnemiesInRadius(this.root.position, range) || [];
-    const units = candidates.map(h => h.unit).filter(Boolean);
-    const eligible = units.filter(t => t && t.hp > 0 &&
-      hasStatus(t,'KNOCKUP'));
-
-    // Used only to decide whether R is available and where Yasuo anchors.
-    if (this.currentTarget && this.currentTarget.hp > 0 &&
-        eligible.includes(this.currentTarget)) return this.currentTarget;
-
+    return (findEnemiesInRadius(this.root.position, range) || []).map(h => h.unit)
+      .filter(t => t && t.hp > 0 && t.isChampion && hasStatus(t, 'KNOCKUP'));
+};
+CharacterController.prototype._yasuoFindRTarget = function() {
+    const eligible = this._yasuoRCandidates();
+    if (this.currentTarget && this.currentTarget.hp > 0 && eligible.includes(this.currentTarget)) return this.currentTarget;
     eligible.sort((a,b) =>
       this.root.position.distanceToSquared(getWorldPosition(a)) -
       this.root.position.distanceToSquared(getWorldPosition(b))
     );
     return eligible[0] || null;
-  
 };
 
-// Extracted from CharacterController: _yasuoFindRTargets
-CharacterController.prototype._yasuoFindRTargets = function() { 
-    const range = this._champData().R.range;
-    const candidates = findEnemiesInRadius(this.root.position, range) || [];
-    // 요청 3: R 대상은 반드시 KNOCKUP(에어본) 상태여야 한다. STUN/ROOT/
-    // SUPPRESSION은 R 대상 조건에서 제외한다 - 활성화 판정(_yasuoFindRTarget)과
-    // 반드시 동일한 조건(KNOCKUP)을 사용한다.
-    return candidates
-      .map(h => h.unit)
-      .filter(t => t && t.hp > 0 && hasStatus(t, 'KNOCKUP'));
-  
+// 함께 맞는 대상: 기준 대상 주변 targetRadius(400) 안의 공중에 뜬 적 챔피언.
+// 버그 수정: 예전엔 "야스오 주변 1400 안"의 공중에 뜬 모든 유닛을 끌어모았다.
+CharacterController.prototype._yasuoFindRTargets = function(anchor) {
+    const r = this._champData().R;
+    const eligible = this._yasuoRCandidates();
+    if (!anchor) return eligible;
+    const center = getWorldPosition(anchor);
+    const radius = lolRangeToWorld(r.targetRadius || 400);
+    return eligible.filter(t => t === anchor || isInCircle(t, center, radius));
 };
 
 // Extracted from CharacterController: _yasuoTick
-CharacterController.prototype._yasuoTick = function(dt) { 
+CharacterController.prototype._yasuoTick = function(dt) {
     // 버그 수정(요네 등 CHAMPION_DATA에 없는/다른 챔피언일 때 매 프레임 크래시):
     // 이 함수는 원래 챔피언과 무관하게 항상 호출되고 있었는데(this._yasuo는
     // 생성자에서 모든 챔피언에 공통으로 만들어지므로 위의 !this._yasuo 가드가
@@ -15969,16 +16019,46 @@ CharacterController.prototype._yasuoTick = function(dt) {
     this._yasuoTickQ3Tornado(dt);
     this._yasuoQStackTick(); this._yasuoEStackTick(); this._yasuoGainFlowFromMovement(dt);
     if(this._yasuo.windwall && performance.now()>=this._yasuo.windwall.expiresAt)this._yasuo.windwall=null;
-    if(this.championId==='yasuo'){ this.stats.critChance=1; this.stats.critMultiplier=this._yasuoCritMultiplier(); this.bonusAD=this._yasuoBonusADFromCrit(); this.recomputeStats(); }
-  
+    // 결의 보호막은 1초 뒤 남은 만큼 사라진다(예전엔 영구 보호막이었다).
+    if (this._yasuo.shieldExpiresAt && performance.now() >= this._yasuo.shieldExpiresAt) {
+      this.shield = Math.max(0, (this.shield || 0) - Math.min(this._yasuo.shieldApplied || 0, this.shield || 0));
+      this._yasuo.shieldExpiresAt = 0; this._yasuo.shieldApplied = 0; updateBars(this);
+    }
+
 };
 
 // Extracted from CharacterController: _yasuoOnTakeDamage
-CharacterController.prototype._yasuoOnTakeDamage = function() {  if(this._yasuo.flow>=100){ this.shield=Math.max(this.shield,this._yasuoShieldAmount()*getShieldReceivedMultiplier(this)); this._yasuo.flow=0; updateBars(this); } 
+// 결의: 기류가 가득 찬 상태에서 "챔피언/몬스터"에게 피해를 받으면 1초 보호막.
+// 버그 수정: 예전엔 출처를 가리지 않았고(포탑/미니언 포함) 보호막이 사라지지 않았다.
+CharacterController.prototype._yasuoOnTakeDamage = function(source) {
+    if (this._yasuo.flow < 100) return;
+    if (source && !(source.isChampion || source.isMonster || source.championId)) return;
+    const amt = this._yasuoShieldAmount() * getShieldReceivedMultiplier(this);
+    this.shield = Math.max(0, this.shield || 0) + amt;
+    this._yasuo.shieldApplied = amt;
+    this._yasuo.shieldExpiresAt = performance.now() + (this._champData().passive.shieldDurationSec || 1) * 1000;
+    this._yasuo.flow = 0;
+    updateBars(this);
+};
+
+// EQ 판정(돌진 종료 시점): 야스오 주변 원형(circleRadius). 3중첩이면 원 안 전원 공중에 뜸.
+CharacterController.prototype._yasuoResolveEQ = function(eq) {
+    const q = this._champData().Q;
+    const unique = this._yasuoFindQTargets(eq.dir, q.range, q.circleRadius);
+    this._yasuoQHitConsumed = false;
+    this._yasuoQCritRoll = Math.random() < (this.stats.critChance || 0);
+    for (const t of unique) this._yasuoApplyQHit(t, { tornado: eq.tornado, circle: true });
+    this._yasuoQCritRoll = null;
+    if (unique.length) {
+      this._yasuo.qStacks = eq.tornado ? 0 : Math.min(2, eq.stackBefore + 1);
+      this._yasuo.qStackExpiresAt = performance.now() + q.stackDuration * 1000;
+    } else if (eq.tornado) this._yasuo.qStacks = 0;
+    if (typeof window !== 'undefined' && window.yasuoSetQStacks) window.yasuoSetQStacks(this._yasuo.qStacks);
+    if (eq.tornado) vfx.spawn('q', this.root.position.clone(), eq.dir, { tornado: true, size: 1.25 });
 };
 
 // Extracted from CharacterController: _yasuoPlayPostQMoveEntry
-CharacterController.prototype._yasuoPlayPostQMoveEntry = function() { 
+CharacterController.prototype._yasuoPlayPostQMoveEntry = function() {
     if (this.championId !== 'yasuo' || !this._yasuo?.qMoveEntryPending) return false;
     if (!this.targetPos) return false;
     const clip = this.findAnimation('Run1_IN_Raw');
@@ -15992,7 +16072,7 @@ CharacterController.prototype._yasuoPlayPostQMoveEntry = function() {
     }, Math.max(0, clip.duration - 0.02) * 1000);
     this._actionTimers.push(t);
     return true;
-  
+
 };
 
 
@@ -16091,15 +16171,7 @@ CharacterController.prototype._yoneBonusAD = function() {
 CharacterController.prototype._yoneCritMultiplier = function() {
   return this._champData().passive.critDamage;
 };
-// 야스오와 동일한 구조(치명타 확률 100%로 강제 - 아이템 시스템 부재로
-// "초과분"이 항상 0이라 사실상 비활성 상태인 것도 야스오와 동일하다).
-CharacterController.prototype._yoneFinalCritChance = function() {
-  return Math.min(10, this.stats.critChance || 0);
-};
-CharacterController.prototype._yoneBonusADFromCrit = function() {
-  const excess = Math.max(0, this._yoneFinalCritChance() - 1);
-  return excess * 100 * (this._champData().passive.overcapCritToAd || 0);
-};
+// 치명타 확률 2배/초과분 추가 공격력은 recomputeStats()의 공용 "의지" 처리(야스오와 공유).
 // Steel and Spirit: 평타가 강철 검(물리)/아자카나의 검(물리 50%+마법
 // 50%)을 번갈아 사용한다. azakanaNext가 true면 "이번" 스윙이 아자카나의
 // 검 차례라는 뜻 - character_controller.js의 온힛 처리부에서 읽기만
@@ -16242,7 +16314,9 @@ CharacterController.prototype._yoneApplyQHit = function(target, { empowered = fa
   const q = this._champData().Q;
   const lvl = Math.max(1, Math.min(5, this.skillLevels.Q || 1));
   const base = this._yoneLevelValue(q.damageByLevel, lvl);
-  const crit = true; // 이 데모는 치명타 확률이 항상 100%로 고정된다(패시브 참고)
+  // 버그 수정: 예전엔 치명타 확률을 항상 100%로 고정하고 Q도 무조건 치명타였다.
+  // 이제 패시브 "의지"(치명타 확률 2배, recomputeStats)로 계산된 확률대로 굴린다.
+  const crit = Math.random() < (this.stats.critChance || 0);
   const critMult = this._yoneCritMultiplier();
   const ratio = crit ? q.totalAdRatio * critMult : q.totalAdRatio;
   const raw = base + this.stats.attackDamage * ratio;
@@ -16909,12 +16983,8 @@ CharacterController.prototype._yoneTick = function(dt) {
   if (this._yone.wShieldUntil && performance.now() >= this._yone.wShieldUntil) {
     this.shield = 0; this._yone.wShieldUntil = 0; updateBars(this);
   }
-  if (this.championId === 'yone') {
-    this.stats.critChance = 1;
-    this.stats.critMultiplier = this._yoneCritMultiplier();
-    this.bonusAD = this._yoneBonusADFromCrit();
-    this.recomputeStats();
-  }
+  // 치명타 확률/초과분 추가 공격력은 recomputeStats()의 공용 "의지" 처리로 옮겼다
+  // (예전엔 매 프레임 치명타 확률 100% 강제 + 매 프레임 recomputeStats 호출).
 };
 
 /* ===== src/champions/nilah.js ===== */
@@ -17956,8 +18026,8 @@ CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, t
     const cd = this._champData(); if (!cd) return;
     const e = cd.E;
     const lvl = Math.max(1, this.skillLevels.E || 1);
-    // "추가 공격력" = 아이템/버프 몫(_getBonusAD). 예전 식(현재 AD - 1레벨 기본 AD)은
-    // 레벨 성장 AD까지 추가 공격력으로 잘못 셌다.
+    // "추가 공격력" = 현재 AD - 현재 레벨 기본 AD(_getBonusAD). 예전 식(현재 AD - 1레벨
+    // 기본 AD)은 레벨 성장 AD까지 추가 공격력으로 잘못 셌다.
     const fullTrueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * this._getBonusAD();
     const modifier = alpha.q.onHitModifier ?? 0.75;
     const trueDmg = fullTrueDmg * modifier;

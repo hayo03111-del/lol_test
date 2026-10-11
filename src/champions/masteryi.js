@@ -185,8 +185,8 @@ CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, t
     const cd = this._champData(); if (!cd) return;
     const e = cd.E;
     const lvl = Math.max(1, this.skillLevels.E || 1);
-    // "추가 공격력" = 아이템/버프 몫(_getBonusAD). 예전 식(현재 AD - 1레벨 기본 AD)은
-    // 레벨 성장 AD까지 추가 공격력으로 잘못 셌다.
+    // "추가 공격력" = 현재 AD - 현재 레벨 기본 AD(_getBonusAD). 예전 식(현재 AD - 1레벨
+    // 기본 AD)은 레벨 성장 AD까지 추가 공격력으로 잘못 셌다.
     const fullTrueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * this._getBonusAD();
     const modifier = alpha.q.onHitModifier ?? 0.75;
     const trueDmg = fullTrueDmg * modifier;

@@ -23,16 +23,28 @@ const CHAMPION_DATA = {
     },
     passive: {
       name: '낭인의 길',
-      flowMax: 100, shieldBase: 125, shieldPerLevel: 27.941,
-      critChanceBonus: 1.0, critDamage: 1.80, critDamageWithIE: 2.073,
-      overcapCritToAd: 0.5, flowDistance: 59.5,
+      // 의지(Intent): 다른 모든 출처의 치명타 확률 2배(V14.10에 2.5→2), 100% 초과분
+      // 1%당 추가 공격력 0.5. 치명타 피해 감소는 V15.4에서 삭제됐다 - 치명타 배율은
+      // 다른 챔피언과 같은 기본값(stats.critMultiplier)+무한의 대검 보너스를 쓴다.
+      // 예전 구조는 아이템이 없어도 치명타 확률을 항상 100%로 고정했다.
+      critChanceMultiplier: 2.0, overcapCritToAd: 0.5,
+      // 결의(Resolve): 이동한 거리 59/52.5/46(레벨 구간) 유닛마다 기류 1, 100에서
+      // 챔피언/몬스터에게 피해를 받으면 1초 동안 보호막 125~600(레벨 비례).
+      // 레벨 구간(1/7/13)은 확인하지 못한 임시값(flowBreakpointsGuessed).
+      flowMax: 100, shieldBase: 125, shieldPerLevel: 27.941, shieldDurationSec: 1,
+      flowUnitsPerStack: { breakpoints: [1, 7, 13], values: [59, 52.5, 46] }, flowBreakpointsGuessed: true,
     },
     Q: {
-      name: '강철 폭풍', cooldown: [4, 3.33, 2.66, 2.0, 1.33], range: 450,
+      // 쿨다운 4초·시전 시간 0.35초는 스킬 레벨과 무관한 고정 기준값이다(요네와 동일 -
+      // 요네.bin YoneQ 수치와 champion_data 요네 주석 참고). 예전 [4,3.33,…,1.33]/
+      // [0.4,…,0.13]은 "추가 공속에 따라 줄어드는 범위"를 레벨별 값으로 잘못 옮긴 것이었다.
+      // 추가 공속 1%당 쿨다운 0.6%(최대 66.67%), 시전 시간 0.41667%(최대 50%) 감소.
+      name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 450, width: 80,
       damageByLevel: [20,45,70,95,120], totalAdRatio: 1.05,
-      critTotalAdRatio: 1.65375, critTotalAdRatioIE: 2.03175,
       stackDuration: 6, knockupDuration: 1, tornadoRange: 1150, circleRadius: 375,
-      castTime: [0.4,0.333,0.266,0.2,0.13], attackSpeedCap: 1.43,
+      castTime: [0.35, 0.35, 0.35, 0.35, 0.35],
+      cdReductionPerBonusAs: 0.6, cdReductionMax: 0.6667, castReductionPerBonusAs: 0.41667, castReductionMax: 0.5,
+      tornadoWidth: 180, tornadoSpeed: 1200, tornadoGuessed: true, // 회오리 폭/속도 미확인
       damageType: 'PHYSICAL',
     },
     W: {
@@ -40,7 +52,8 @@ const CHAMPION_DATA = {
       width: [320,390,460,530,600], duration: 4, damageType: 'NONE',
     },
     E: {
-      name: '질풍검', cooldown: [0.5,0.4,0.3,0.2,0.1], range: 475,
+      // 대상을 "관통해" 고정 거리(475)만큼 돌진, 돌진 속도 750 + 이동 속도의 60%.
+      name: '질풍검', cooldown: [0.5,0.4,0.3,0.2,0.1], range: 475, dashDistance: 475, dashSpeedBase: 750, dashSpeedMsRatio: 0.6,
       damageMin: [70,85,100,115,130], damageMax: [140,170,200,230,260],
       bonusAdRatioMin: 0.2, bonusAdRatioMax: 0.4, apRatioMin: 0.6, apRatioMax: 1.2,
       targetCooldown: [10,9,8,7,6], stackDuration: 5, stackBonusPercent: 25, maxStacks: 4,
@@ -48,7 +61,9 @@ const CHAMPION_DATA = {
     },
     R: {
       name: '최후의 숨결', cooldown: [70,50,30], range: 1400,
-      damageByLevel: [200,350,500], bonusAdRatio: 1.5, knockupDuration: 1,
+      // 대상(공중에 뜬 적 챔피언) 주변 400 안의 공중에 뜬 적 챔피언 전부(반경 미확인 -
+      // rTargetRadiusGuessed). 피해 계수는 "추가" 공격력 150%.
+      damageByLevel: [200,350,500], bonusAdRatio: 1.5, knockupDuration: 1, targetRadius: 400, rTargetRadiusGuessed: true,
       armorIgnoreBonusPercent: 0.60, buffDuration: 15, damageType: 'PHYSICAL',
     },
   },

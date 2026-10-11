@@ -97,8 +97,9 @@ class ProjectileSystem {
       proj.life -= dt;
       // 버그 수정(요청 27): 포탑 공격/광선은 막지 않는다 - fromTurret 발사체는
       // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
+      // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
       if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret) {
-        const wall=controller._yasuo.windwall, progress=Math.min(1,(performance.now()-wall.createdAt)/180), wp=controller.root.position.clone().addScaledVector(wall.dir, wall.width*0.75*progress), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this.totalMisses++; this._releaseArrowMesh(proj._meshEntry); this.projectiles.splice(i,1); continue; }
+        const wall=controller._yasuo.windwall, progress=Math.min(1,(performance.now()-wall.createdAt)/180), wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, wall.width*0.75*progress), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this.totalMisses++; this._releaseArrowMesh(proj._meshEntry); this.projectiles.splice(i,1); continue; }
       }
       const aim = this._currentAimPoint(proj);
       if (!aim || proj.life <= 0) { this.totalMisses++; this._releaseArrowMesh(proj._meshEntry); this.projectiles.splice(i, 1); continue; }

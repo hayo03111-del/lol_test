@@ -14,14 +14,27 @@
 // 게임 내내 0으로 계산되고 있었다(레벨업으로 공격력이 올라도 전혀
 // 반영 안 됨). 실제 추가 공격력은 "현재 총 공격력 - 1레벨 기본 공격력"
 // 이고, 여기에 다리우스의 임시 empower 보너스가 있으면 더해준다.
+// "추가 공격 속도"(LoL 규칙: 레벨 성장분 + 버프/아이템) - 이 프로젝트는 레벨 성장분을
+// baseAttackSpeed에 녹여 두므로 1레벨 기본 공속 대비 비율로 되살려 더한다. 가렌 E 회전
+// 수, 야스오 Q 쿨다운/시전 시간 등 "추가 공속 비례" 스킬이 공용으로 쓴다.
+CharacterController.prototype._totalBonusAttackSpeed = function() {
+    const cd = this._champData();
+    const baseAs1 = (cd && cd.stats.attackSpeed) || 0;
+    const growth = baseAs1 > 0 ? Math.max(0, (this.stats.baseAttackSpeed || baseAs1) / baseAs1 - 1) : 0;
+    return growth + Math.max(0, this.stats.bonusAttackSpeedPercent || 0);
+};
+
 CharacterController.prototype._getBonusAD = function() {
     const cd = this._champData();
-    const baseAd = cd ? cd.stats.ad : 0;
-    // 주의: this.bonusAD (다리우스 임시 empower 보너스)는 recomputeStats()가
-    // 이미 this.stats.attackDamage에 합산해뒀다(3146행 참고) - 여기서 또
-    // 더하면 다리우스 empower 중에 이중으로 계산된다. 그래서 여기서는
-    // stats.attackDamage 하나만 기준으로 계산한다 - 그 안에 이미 레벨
-    // 성장분과 다리우스 empower 보너스가 전부 반영되어 있다.
+    // 주의: this.bonusAD (다리우스 녹서스의 힘 등)는 recomputeStats()가 이미
+    // this.stats.attackDamage에 합산해뒀다 - 여기서 또 더하면 이중 계산이라
+    // stats.attackDamage 하나만 기준으로 계산한다.
+    // 버그 수정(원작 규칙): "추가 공격력"에는 레벨 성장 공격력이 들어가지 않는다.
+    // 예전엔 1레벨 기본 공격력만 빼서 레벨이 오를수록 성장분까지 추가 공격력으로
+    // 셌다(18레벨이면 챔피언에 따라 +40~80). 현재 레벨의 기본 공격력을 뺀다.
+    const levelBase = (this.championId && typeof computeChampionStats === 'function')
+      ? computeChampionStats(this.championId, this.champLevel || 1) : null;
+    const baseAd = levelBase ? levelBase.attackDamage : (cd ? cd.stats.ad : 0);
     return Math.max(0, (this.stats.attackDamage || 0) - baseAd);
 };
 
@@ -879,7 +892,8 @@ CharacterController.prototype._beginAttackSwing = function() {
           isCritical: willCrit,
           critMultiplier: this.stats.critMultiplier,
           armorPenPercent: this.armorPenPercent || 0,
-          bonusArmorIgnorePercent: (this.championId === 'yasuo' && this._yasuo.rArmorBuffUntil > performance.now()) ? this._champData().R.armorIgnoreBonusPercent : 0,
+          // 야스오 R 이후 15초: "치명타" 공격만 추가 방어력 일부 무시(예전엔 치명타가 아니어도 적용).
+          bonusArmorIgnorePercent: (this.championId === 'yasuo' && willCrit && this._yasuo.rArmorBuffUntil > performance.now()) ? this._champData().R.armorIgnoreBonusPercent : 0,
           yoneAzakana,
           isBasicAttack: true,
         };

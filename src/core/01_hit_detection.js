@@ -120,6 +120,25 @@ function findFirstInLine(origin, dir, lolRange, halfWidth) {
   }
   return best ? best.unit : null;
 }
+// 일정 폭 직선(사각형) 범위 안의 "모든" 적 - 야스오 Q1/Q2처럼 관통하는 직선 스킬용.
+// lolRange/lolWidth는 LoL 원본 단위(전체 폭). 대상 충돌 반경만큼 여유를 준다.
+function findEnemiesInLine(origin, dir, lolRange, lolWidth) {
+  const range = lolRangeToWorld(lolRange);
+  const halfWidth = lolRangeToWorld(lolWidth) * 0.5;
+  const out = [];
+  for (const u of getTargetableEnemyUnits()) {
+    const p = getWorldPosition(u);
+    if (!p) continue;
+    const r = getCollisionRadius(u);
+    const toTarget = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
+    const along = toTarget.dot(dir);
+    if (along < -r || along > range + r) continue;
+    const lateral = Math.sqrt(Math.max(0, toTarget.lengthSq() - along * along));
+    if (lateral > halfWidth + r) continue;
+    out.push(u);
+  }
+  return out;
+}
 function debugSkillHit(label, unit, extra) {
   console.log(`[SKILL HIT] ${label}`, extra || '', unit);
 }

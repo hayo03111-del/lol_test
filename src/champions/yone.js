@@ -92,15 +92,7 @@ CharacterController.prototype._yoneBonusAD = function() {
 CharacterController.prototype._yoneCritMultiplier = function() {
   return this._champData().passive.critDamage;
 };
-// 야스오와 동일한 구조(치명타 확률 100%로 강제 - 아이템 시스템 부재로
-// "초과분"이 항상 0이라 사실상 비활성 상태인 것도 야스오와 동일하다).
-CharacterController.prototype._yoneFinalCritChance = function() {
-  return Math.min(10, this.stats.critChance || 0);
-};
-CharacterController.prototype._yoneBonusADFromCrit = function() {
-  const excess = Math.max(0, this._yoneFinalCritChance() - 1);
-  return excess * 100 * (this._champData().passive.overcapCritToAd || 0);
-};
+// 치명타 확률 2배/초과분 추가 공격력은 recomputeStats()의 공용 "의지" 처리(야스오와 공유).
 // Steel and Spirit: 평타가 강철 검(물리)/아자카나의 검(물리 50%+마법
 // 50%)을 번갈아 사용한다. azakanaNext가 true면 "이번" 스윙이 아자카나의
 // 검 차례라는 뜻 - character_controller.js의 온힛 처리부에서 읽기만
@@ -243,7 +235,9 @@ CharacterController.prototype._yoneApplyQHit = function(target, { empowered = fa
   const q = this._champData().Q;
   const lvl = Math.max(1, Math.min(5, this.skillLevels.Q || 1));
   const base = this._yoneLevelValue(q.damageByLevel, lvl);
-  const crit = true; // 이 데모는 치명타 확률이 항상 100%로 고정된다(패시브 참고)
+  // 버그 수정: 예전엔 치명타 확률을 항상 100%로 고정하고 Q도 무조건 치명타였다.
+  // 이제 패시브 "의지"(치명타 확률 2배, recomputeStats)로 계산된 확률대로 굴린다.
+  const crit = Math.random() < (this.stats.critChance || 0);
   const critMult = this._yoneCritMultiplier();
   const ratio = crit ? q.totalAdRatio * critMult : q.totalAdRatio;
   const raw = base + this.stats.attackDamage * ratio;
@@ -910,10 +904,6 @@ CharacterController.prototype._yoneTick = function(dt) {
   if (this._yone.wShieldUntil && performance.now() >= this._yone.wShieldUntil) {
     this.shield = 0; this._yone.wShieldUntil = 0; updateBars(this);
   }
-  if (this.championId === 'yone') {
-    this.stats.critChance = 1;
-    this.stats.critMultiplier = this._yoneCritMultiplier();
-    this.bonusAD = this._yoneBonusADFromCrit();
-    this.recomputeStats();
-  }
+  // 치명타 확률/초과분 추가 공격력은 recomputeStats()의 공용 "의지" 처리로 옮겼다
+  // (예전엔 매 프레임 치명타 확률 100% 강제 + 매 프레임 recomputeStats 호출).
 };
