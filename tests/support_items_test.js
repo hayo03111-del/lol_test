@@ -70,6 +70,7 @@ const stubs = {
     Mesh: class { constructor(){ this.position = { copy(){}, set(){}, y: 0 }; } },
   },
   lolRangeToWorld: (r) => r,
+  getCollisionRadius: () => 0,
   scene: { add(){}, remove(){} },
   visionSystem: { grantVision(){} },
 };
@@ -77,7 +78,9 @@ const context = vm.createContext(stubs);
 const itemDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/item_data.js'), 'utf8');
 const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8');
 const statusSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8');
-vm.runInContext(statusSrc + '\n' + itemDataSrc + '\n' + itemSystemSrc + `
+const allySrc = fs.readFileSync(path.join(ROOT, 'src/core/ally_system.js'), 'utf8');
+vm.runInContext(statusSrc + '\n' + allySrc + '\n' + itemDataSrc + '\n' + itemSystemSrc + `
+this.placedAllies = placedAllies;
 this.ITEM_DATA = ITEM_DATA;
 this.buyItem = buyItem;
 this.buildOrBuyItem = buildOrBuyItem;
@@ -209,8 +212,17 @@ function makeTarget(overrides = {}) {
   assert(ctrl.gold === goldBefore && (ctrl._itemSpoilsCharges || 0) === 1, '재물 공유: 체력이 문턱(근접 50%) 이상인 미니언에게는 발동하지 않는다');
 
   const lowHpMinion = { isMinion: true, isChampion: false, hp: 400, maxHp: 1000 }; // 40% - 문턱 이하
+  context.placedAllies.length = 0;
   itemOnBasicAttackHit(ctrl, lowHpMinion, false);
-  assert(ctrl.gold === goldBefore + ITEM_DATA.worldAtlas.spoilsOfWarPassive.minionGold, '재물 공유: 체력이 문턱 이하인 미니언을 처형하면 미니언 골드를 받는다');
+  assert(ctrl.gold === goldBefore && (ctrl._itemSpoilsCharges || 0) === 1, '재물 공유: 근처에 아군 챔피언이 없으면 미니언을 처형하지 않는다(원문 "아군 챔피언 근처에서")');
+  const farAlly = { isChampion: true, isAlly: true, hp: 500, maxHp: 1000, root: { position: { x: 5000, y: 0, z: 0 } } };
+  context.placedAllies.push(farAlly);
+  itemOnBasicAttackHit(ctrl, lowHpMinion, false);
+  assert(ctrl.gold === goldBefore, '재물 공유: 아군이 멀리(1050 밖) 있어도 처형하지 않는다');
+  context.placedAllies.push({ isChampion: true, isAlly: true, hp: 500, maxHp: 1000, root: { position: { x: 500, y: 0, z: 0 } } });
+  itemOnBasicAttackHit(ctrl, lowHpMinion, false);
+  assert(ctrl.gold === goldBefore + ITEM_DATA.worldAtlas.spoilsOfWarPassive.minionGold, '재물 공유: 근처에 아군이 있으면 체력이 문턱 이하인 미니언을 처형하고 미니언 골드를 받는다');
+  context.placedAllies.length = 0;
   assert((ctrl._itemSpoilsCharges || 0) === 0, '재물 공유: 미니언 처형도 충전을 소모한다(챔피언 피해와 같은 풀)');
 }
 

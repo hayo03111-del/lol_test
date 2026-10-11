@@ -1269,12 +1269,12 @@ const ITEM_DATA = {
     // _itemGrantSupportGold()가 이 누적을 전담한다.
     questPassive: { goldThreshold: 400, transformsInto: 'runesteelSpaulders' },
     // 재물 공유(재사용대기 20초, 최대 충전 3회, 첫 충전은 게임 시작 65초
-    // 후) - "아군 챔피언 근처에서"는 아군이 없는 이 데모에서 플레이어 자신
-    // 기준으로 근사한다(스스로는 항상 "근처"에 있으므로 조건이 trivially
-    // 성립). 미니언 처형 문턱(근접50%｜원거리30%)과 충전 소모는 원문
+    // 후) - 미니언 처형은 원문대로 "아군 챔피언 근처에서"만 발동한다(아군
+    // 더미 기준 - ally_system.js). 범위 1050은 미확인(이전 서포터 아이템
+    // 공개 수치). 미니언 처형 문턱(근접50%｜원거리30%)과 충전 소모는 원문
     // 93~95줄의 상세 설명을 그대로 반영했다.
     spoilsOfWarPassive: {
-      maxCharges: 3, rechargeSec: 20, firstChargeDelaySec: 65,
+      maxCharges: 3, rechargeSec: 20, firstChargeDelaySec: 65, allyNearbyRadius: 1050, allyNearbyRadiusGuessed: true,
       meleeDamageGold: 22, rangedDamageGold: 20, minionGold: 15,
       minionHpThresholdMelee: 0.50, minionHpThresholdRanged: 0.30,
     },
@@ -1284,7 +1284,7 @@ const ITEM_DATA = {
     stats: { maxHp: 100, hpRegenPercent: 0.5, mpRegenPercent: 0.5 },
     questPassive: { goldThreshold: 800, transformsInto: 'bountyOfWorlds' },
     spoilsOfWarPassive: {
-      maxCharges: 3, rechargeSec: 20, firstChargeDelaySec: 65,
+      maxCharges: 3, rechargeSec: 20, firstChargeDelaySec: 65, allyNearbyRadius: 1050, allyNearbyRadiusGuessed: true,
       meleeDamageGold: 24, rangedDamageGold: 22, minionGold: 20,
       minionHpThresholdMelee: 0.50, minionHpThresholdRanged: 0.30,
     },
@@ -1348,7 +1348,7 @@ const ITEM_DATA = {
     // 만들면 50~230(레벨비례) 체력 회복 + 자신과 주변 체력이 가장 낮은
     // 아군이 2.5초간 이동속도 20% 획득." 아군이 없는 이 데모는 자신에게만
     // 이동속도를 적용한다(명시적 한계 - 어시스트 생략과 동일한 이유).
-    ccTriggerPassive: { icdSec: 30, minHeal: 50, maxHeal: 230, levelMin: 1, levelMax: 18, msPercent: 0.20, msDurationSec: 2.5 },
+    ccTriggerPassive: { icdSec: 30, minHeal: 50, maxHeal: 230, levelMin: 1, levelMax: 18, msPercent: 0.20, msDurationSec: 2.5, allyRadius: 1000, allyRadiusGuessed: true },
   },
   dreamMaker: {
     id: 'dreamMaker', nameKo: '꿈 생성기', cost: 0, recipe: ['bountyOfWorlds'],
@@ -1357,12 +1357,14 @@ const ITEM_DATA = {
     wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
     durationSecGuessed: true,
     maxCharges: 4, refillOnShopUse: true,
-    // 꿈 생성기(8초) - "다른 아군에게 체력을 회복시키거나 보호막을 씌우면"
-    // 발동 조건 자체가 "아군을 회복/보호막시킨다"는, 이 1인 플레이 데모
-    // 구조상 절대 성립할 수 없는 동작이다(플레이어가 자기 자신이 아닌
-    // 다른 플레이어 챔피언을 조종할 방법이 없음) - 어시스트와 동일한
-    // "아군 챔피언 없음" 한계로 고유 패시브는 구현하지 않고 스탯+와드만
-    // 제공한다(명시적 스킵 - README/KNOWN_LIMITATIONS 참고).
+    // 꿈 생성기(8초) - 8초마다 파란/보라 꿈 거품을 얻고, 다른 아군 챔피언을
+    // 회복시키거나 보호막을 씌우면 두 거품을 3초 동안 그 아군에게 넘긴다.
+    // 파란 거품: 미니언이 아닌 출처의 다음 피해를 50~194(내 레벨) 감소.
+    // 보라 거품: 그 아군의 다음 피해 공격/스킬에 40~160(내 레벨) 추가 마법
+    // 피해(챔피언 아닌 대상 광역 피해는 33.3%). 수치는 공개 자료(26.11) 기준 -
+    // 원본 자료에 수치가 없었다. 아군 더미는 공격하지 않아 보라 거품은 걸리기만
+    // 하고 터지지 않는다.
+    dreamBubblePassive: { intervalSec: 8, allyDurationSec: 3, blueMin: 50, blueMax: 194, purpleMin: 40, purpleMax: 160, purpleNonChampionAoePercent: 0.333, levelMin: 1, levelMax: 18 },
   },
   celestialOpposition: {
     id: 'celestialOpposition', nameKo: '천상의 이의', cost: 0, recipe: ['bountyOfWorlds'],
@@ -1412,7 +1414,7 @@ const ITEM_DATA = {
   shurelyasBattlesong: {
     id: 'shurelyasBattlesong', nameKo: '슈렐리아의군가', cost: 2200, recipe: ['aetherialWisp', 'bandleglassMirror'],
     stats: { abilityPower: 50, abilityHaste: 15, moveSpeedPercent: 0.04, mpRegenPercent: 1.25 },
-    teamMoveSpeedActive: { nameKo: '고무적인 연설', cooldownSec: 75, msPercent: 0.30, durationSec: 4.0 },
+    teamMoveSpeedActive: { nameKo: '고무적인 연설', cooldownSec: 75, msPercent: 0.30, durationSec: 4.0, allyRadius: 1000, allyRadiusGuessed: true },
   },
   // 월석재생기 - "별빛 은총". 원문 자체가 "근처에 아군이 없으면 같은
   // 대상(=자기 자신)에게 적용"이라는 조항을 명시하고 있고, 이 데모는
@@ -1422,7 +1424,11 @@ const ITEM_DATA = {
   moonstoneRenewer: {
     id: 'moonstoneRenewer', nameKo: '월석재생기', cost: 2200, recipe: ['kircheisShard', 'bandleglassMirror'],
     stats: { abilityPower: 25, maxHp: 200, abilityHaste: 20, mpRegenPercent: 1.25 },
-    healAndShieldPowerPassive: { healPercent: 0.30, shieldPercent: 0.35 },
+    // 별빛 은총 - 아군을 회복/보호막시키면 그 양의 30%(회복)/35%(보호막)를
+    // 근처 다른 아군에게도 주고, 근처에 다른 아군이 없으면 같은 대상에게 준다.
+    // 자기 자신에게 쓰는 회복/보호막에는 적용되지 않는다(아군 대상 효과).
+    // 연쇄 범위 800은 공개 자료 기준.
+    healAndShieldPowerPassive: { healPercent: 0.30, shieldPercent: 0.35, chainRadius: 800 },
   },
   // 강철의 솔라리 팬던트 - "헌신"(주변 "아군들"에게 보호막 - 월석재생기와
   // 달리 "근처에 아군이 없으면 자신에게" 같은 자기 대상 전환 조항이 원문에
@@ -1432,6 +1438,10 @@ const ITEM_DATA = {
   ironSolariLocket: {
     id: 'ironSolariLocket', nameKo: '강철의 솔라리 팬던트', cost: 2200, recipe: ['kircheisShard', 'chainVest', 'negatronCloak'],
     stats: { maxHp: 200, armor: 30, magicResist: 30, abilityHaste: 10 },
+    // 헌신(사용) - 자신과 주변 아군에게 아군 레벨 비례 보호막, 2.5초에 걸쳐
+    // 감소. 보호막 290~360은 공개 자료(26.20) 기준. 재사용 대기시간과 범위는
+    // 미확인(이전 시즌 자료/일반적인 값).
+    devotionActive: { nameKo: '헌신', cooldownSec: 90, shieldMin: 290, shieldMax: 360, levelMin: 1, levelMax: 18, decaySec: 2.5, radius: 850, cooldownGuessed: true, radiusGuessed: true },
   },
   // 밴들파이프 - "팡파르"(적을 둔화/이동 불가시키면 이동속도+공격속도).
   // "자신을 포함한 주변 아군"이라 자신에게는 원문 그대로 적용되고, 다른
@@ -1439,7 +1449,7 @@ const ITEM_DATA = {
   bandlePipe: {
     id: 'bandlePipe', nameKo: '밴들파이프', cost: 2300, recipe: ['kircheisShard', 'chainVest', 'negatronCloak'],
     stats: { maxHp: 200, armor: 20, magicResist: 20, abilityHaste: 15 },
-    fanfarePassive: { meleeDurationSec: 8, rangedDurationSec: 4, msFlat: 20, meleeAsPercent: 0.30, rangedAsPercent: 0.20 },
+    fanfarePassive: { meleeDurationSec: 8, rangedDurationSec: 4, msFlat: 20, meleeAsPercent: 0.30, rangedAsPercent: 0.20, allyRadius: 1000, allyRadiusGuessed: true },
   },
   // 제국의명령 - "통제"(이동 불가 스킬 전용 스킬 가속 +20)는 어떤 스킬이
   // "이동 불가"를 거는지 챔피언별로 태그하는 시스템이 없어 구현하지 않는다
@@ -1450,6 +1460,9 @@ const ITEM_DATA = {
     id: 'imperialMandate', nameKo: '제국의명령', cost: 2400, recipe: ['amplifyingTome', 'bandleglassMirror', 'amplifyingTome'],
     stats: { abilityPower: 60, abilityHaste: 15, mpRegenPercent: 1.50 },
     commandPassive: { vulnerablePercent: 0.07, durationSec: 4.0 },
+    // 통제 - "이동 불가 효과를 지닌 스킬의 스킬 가속이 20 증가"(원문). 어떤
+    // 스킬이 이동 불가를 거는지는 item_system.js의 IMMOBILIZING_SKILL_SLOTS 참고.
+    controlPassive: { abilityHaste: 20 },
   },
 };
 const ITEM_ORDER = [

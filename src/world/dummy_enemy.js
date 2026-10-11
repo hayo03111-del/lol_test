@@ -66,8 +66,10 @@ function createDummyEnemy(position) {
   };
 }
 
-function damageEnemy(enemy, dmg) {
+function damageEnemy(enemy, dmg, result = null) {
   if (!enemy) return;
+  // 아군 더미 - 보호막/꿈 생성기 파란 거품이 먼저 피해를 받는다(ally_system.js).
+  if (enemy.isAlly && typeof allyAbsorbIncoming === 'function') dmg = allyAbsorbIncoming(enemy, dmg, result);
   if (!enemy.isTrainingDummy && enemy.hp <= 0) return; // 일반 유닛은 기존처럼 사망 후 추가 피해를 무시
   // 요청 12/13: "단순히 HP를 무한대로 만들지 마라 - 처형/궁극기 판정을
   // 테스트할 수 있어야 한다." 그래서 피해 계산/HP 차감은 100% 그대로 두고,

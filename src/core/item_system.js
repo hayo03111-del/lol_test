@@ -53,6 +53,7 @@ function recomputeItemStats(ctrl) {
   // 보호막 증폭률이 같은 아이템은 item.healingReceivedBonusPercent 하나로
   // 양쪽 필드에 동일하게 더해진다(아래 집계 루프 참고).
   ctrl.itemShieldReceivedBonusPercent = 0;
+  ctrl.itemImmobilizeSkillHaste = 0;
   // 무한의 대검 - 치명타 피해량 +30%(영구 스탯, calculateDamage()가 각
   // 챔피언이 넘기는 critMultiplier에 더해서 읽는다).
   ctrl.itemBonusCritDamagePercent = 0;
@@ -121,11 +122,10 @@ function recomputeItemStats(ctrl) {
     // 숫자라 양쪽 필드에 동일하게 더한다.
     ctrl.itemHealingReceivedBonusPercent += item.healingReceivedBonusPercent || 0;
     ctrl.itemShieldReceivedBonusPercent += item.healingReceivedBonusPercent || 0;
-    // 월석재생기(별빛 은총) - 회복/보호막 증폭률이 서로 다른 경우.
-    if (item.healAndShieldPowerPassive) {
-      ctrl.itemHealingReceivedBonusPercent += item.healAndShieldPowerPassive.healPercent || 0;
-      ctrl.itemShieldReceivedBonusPercent += item.healAndShieldPowerPassive.shieldPercent || 0;
-    }
+    // 월석재생기(별빛 은총)는 "아군에게 주는" 회복/보호막에만 붙는 연쇄 효과라
+    // 자신이 받는 배율에는 더하지 않는다(itemOnAllyHealOrShield 참고).
+    // 제국의명령(통제) - 이동 불가 스킬 전용 스킬 가속.
+    ctrl.itemImmobilizeSkillHaste += (item.controlPassive && item.controlPassive.abilityHaste) || 0;
     // 어둠불꽃횃불(어둠불꽃) - 불타는 대상 하나당 총 주문력 4% 증가. 현재
     // 불타고 있는 대상 수(_itemBlackfireBurnTargets)는 itemOnDamageDealt()가
     // DOT를 걸 때 기록하고 itemSystemTick()이 만료분을 정리한다.
@@ -222,6 +222,12 @@ function recomputeItemStats(ctrl) {
 // slot(선택) - 악의(경멸)의 "궁극기 가속"은 R 쿨다운에만 더해지므로,
 // R을 설정하는 호출에서만 itemBonusUltimateHaste를 함께 넣는다(호출하는
 // 쪽이 slot을 안 넘기면 기존처럼 스킬 가속만 적용 - 하위 호환).
+// 제국의명령(통제)용 - 각 챔피언의 실제 스킬 코드에서 기절/속박/제압/공중에
+// 뜸/매혹(이동 불가)을 거는 스킬 슬롯. 둔화만 거는 스킬은 포함하지 않는다.
+const IMMOBILIZING_SKILL_SLOTS = {
+  ahri: ['E'], ashe: ['R'], chogath: ['Q'], leesin: ['R'], nautilus: ['Q', 'R'], nilah: ['R'],
+  renekton: ['W'], sett: ['E', 'R'], varus: ['R'], yasuo: ['Q'], yone: ['Q', 'R'],
+};
 function abilityHasteCooldown(ctrl, baseCd, slot) {
   // itemDynamicAbilityHaste - 끝없는 갈망(기아)처럼 추가 공격력에 비례해
   // 매 순간 바뀌는 스킬 가속(itemSystemTick에서 매 프레임 재계산 - 지배자의
@@ -229,6 +235,7 @@ function abilityHasteCooldown(ctrl, baseCd, slot) {
   // (구매/판매 시에만 재계산)와 별도 필드로 둔다.
   let ah = (ctrl && ((ctrl.itemBonusAbilityHaste || 0) + (ctrl.itemDynamicAbilityHaste || 0))) || 0;
   if (slot === 'R') ah += (ctrl && ctrl.itemBonusUltimateHaste) || 0;
+  if (ctrl && ctrl.itemImmobilizeSkillHaste > 0 && slot && (IMMOBILIZING_SKILL_SLOTS[ctrl.championId] || []).includes(slot)) ah += ctrl.itemImmobilizeSkillHaste;
   if (ah <= 0) return baseCd;
   return baseCd * (100 / (100 + ah));
 }
@@ -457,6 +464,8 @@ function useItem(ctrl, slotIndex) {
   // 슈렐리아의군가(고무적인 연설) - 요우무의 유령검(망령의 발걸음)과
   // 동일한 구조(즉시 발동형 자가 이동속도 버프, 근접/원거리 구분 없음).
   if (item.teamMoveSpeedActive) return _useTeamMoveSpeedActive(ctrl, item);
+  // 강철의 솔라리 팬던트(헌신) - 자신+주변 아군 보호막.
+  if (item.devotionActive) return _useDevotionActive(ctrl, item);
   // 마법공학총검(번개 화살) - 자기 주변이 아니라 "현재 선택한 적 챔피언
   // 1명"을 노리는 최초의 아이템 액티브.
   if (item.noxiousBladeActive) return _useNoxiousBladeActive(ctrl, item);
@@ -572,8 +581,7 @@ function _useGhostStepActive(ctrl, item) {
 }
 
 // 슈렐리아의군가(고무적인 연설) - "주변 아군의 이동 속도를 4초 동안 30%
-// 상승시킵니다"를 1인용 데모 한계로 자신에게만 적용한다(아군 전체 효과
-// 아이템의 공용 한계 - 세계지도집 계열과 동일한 전례).
+// 상승시킵니다" - 자신과 주변 아군 더미 전부에게 적용한다.
 function _useTeamMoveSpeedActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
@@ -583,8 +591,37 @@ function _useTeamMoveSpeedActive(ctrl, item) {
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   if (typeof applyStatus === 'function') {
     applyStatus(ctrl, { id: 'itemShurelyasSpeech', type: 'MS_BUFF', duration: p.durationSec, value: p.msPercent });
+    if (typeof findAlliesInRadius === 'function' && ctrl.root) {
+      for (const { unit } of findAlliesInRadius(ctrl.root.position, p.allyRadius, { exclude: [ctrl] })) {
+        applyStatus(unit, { id: 'itemShurelyasSpeech', type: 'MS_BUFF', duration: p.durationSec, value: p.msPercent, source: ctrl });
+      }
+    }
   }
   console.log(`[ITEM] ${item.nameKo}(${p.nameKo}) 사용`);
+  return true;
+}
+
+// 강철의 솔라리 팬던트(헌신) - 자신과 주변 아군에게 아군 레벨 비례 보호막,
+// 2.5초에 걸쳐 감소. 자신 몫은 단일 보호막 풀(ctrl.shield)에 더하고 감소분을
+// itemSystemTick()이 직접 깎는다(_itemDevotionShield).
+function _useDevotionActive(ctrl, item) {
+  const now = performance.now();
+  ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
+  const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
+  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  const p = item.devotionActive;
+  ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
+  const selfAmt = _itemScaleByLevel(ctrl, p.shieldMin, p.shieldMax, p.levelMin, p.levelMax) * (typeof getShieldReceivedMultiplier === 'function' ? getShieldReceivedMultiplier(ctrl) : 1);
+  if (ctrl._itemDevotionShield && ctrl._itemDevotionShield.remaining > 0) ctrl.shield = Math.max(0, (ctrl.shield || 0) - ctrl._itemDevotionShield.remaining);
+  ctrl.shield = (ctrl.shield || 0) + selfAmt;
+  ctrl._itemDevotionShield = { remaining: selfAmt, decayPerSec: selfAmt / p.decaySec, seen: ctrl.shield };
+  if (typeof findAlliesInRadius === 'function' && typeof shieldAlly === 'function' && ctrl.root) {
+    for (const { unit } of findAlliesInRadius(ctrl.root.position, p.radius, { exclude: [ctrl] })) {
+      shieldAlly(ctrl, unit, _itemScaleByLevel(unit, p.shieldMin, p.shieldMax, p.levelMin, p.levelMax), p.decaySec, { decay: true, id: 'itemDevotion' });
+    }
+  }
+  if (typeof updateBars === 'function') updateBars(ctrl);
+  console.log(`[ITEM] ${item.nameKo}(${p.nameKo}) 사용 - 보호막 ${selfAmt.toFixed(0)}`);
   return true;
 }
 
@@ -964,6 +1001,25 @@ function itemSystemTick(ctrl, dt) {
       ctrl._itemCombatRampVampApplied = !!atMax;
       recomputeItemStats(ctrl);
     }
+  }
+  // 꿈 생성기 - 8초마다 파란/보라 거품을 얻는다(이미 들고 있으면 그대로).
+  const dreamSlotT = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].dreamBubblePassive);
+  if (!dreamSlotT) { ctrl._itemDreamBubblesReady = false; ctrl._itemDreamNextAt = 0; }
+  else if (!ctrl._itemDreamBubblesReady) {
+    if (!ctrl._itemDreamNextAt) ctrl._itemDreamNextAt = now + ITEM_DATA[dreamSlotT.id].dreamBubblePassive.intervalSec * 1000;
+    if (now >= ctrl._itemDreamNextAt) ctrl._itemDreamBubblesReady = true;
+  }
+  // 강철의 솔라리 팬던트(헌신) - 자신 몫 보호막 감소. 피해로 줄어든 만큼은
+  // 헌신 몫에서 먼저 빠졌다고 보고, 남은 헌신 몫만 시간에 따라 깎는다.
+  const dev = ctrl._itemDevotionShield;
+  if (dev && dev.remaining > 0) {
+    const lost = Math.max(0, (dev.seen || 0) - (ctrl.shield || 0));
+    dev.remaining = Math.max(0, dev.remaining - lost);
+    const decay = Math.min(dev.remaining, dev.decayPerSec * dt);
+    dev.remaining -= decay;
+    ctrl.shield = Math.max(0, (ctrl.shield || 0) - decay);
+    dev.seen = ctrl.shield;
+    if (dev.remaining <= 1e-6) ctrl._itemDevotionShield = null;
   }
   // 신록의 장벽/벤시의장막(무효화) - 재사용대기시간이 끝나면 방어막이
   // "생성"된다(실제로 막는 건 itemOnTakeDamage()). 벤시의장막은 챔피언에게
@@ -1972,14 +2028,21 @@ function itemOnSlowOrImmobilize(ctrl, target, effectType) {
       if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal);
       if (typeof applyStatus === 'function') {
         applyStatus(ctrl, { id: 'itemSolsticeSleighMs', type: 'MS_BUFF', duration: p.msDurationSec, value: p.msPercent });
+        // "자신과 주변 체력이 가장 낮은 아군" - 체력 비율이 가장 낮은 아군 더미 1명.
+        if (typeof findAlliesInRadius === 'function' && ctrl.root) {
+          const allies = findAlliesInRadius(ctrl.root.position, p.allyRadius, { exclude: [ctrl] }).map((h) => h.unit);
+          const lowest = allies.sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0];
+          if (lowest) applyStatus(lowest, { id: 'itemSolsticeSleighMs', type: 'MS_BUFF', duration: p.msDurationSec, value: p.msPercent, source: ctrl });
+        }
       }
       console.log('[ITEM] 태양의 썰매 - 썰매 질주 발동');
     }
   }
 
   // 밴들파이프(팡파르) - "적 챔피언을 둔화시키거나 이동 불가 상태로
-  // 만들면" 근접8초｜원거리4초간 이동속도 +20(고정) + 자신(및 "주변
-  // 아군" - 1인용 데모라 자신으로 근사)의 공격속도 근접+30%｜원거리+20%.
+  // 만들면" 근접8초｜원거리4초간 이동속도 +20(고정) + 공격속도
+  // 근접+30%｜원거리+20% - 자신을 포함한 주변 아군 전부(근접/원거리는
+  // 아이템 소유자 기준).
   // 재사용대기시간 없이 매번 지속시간을 "갱신"한다(applyStatus가 같은
   // id를 다시 걸면 자동으로 지속시간을 덮어쓴다 - 원문에 쿨다운 표기가
   // 없으므로 그대로 따른다).
@@ -1990,12 +2053,17 @@ function itemOnSlowOrImmobilize(ctrl, target, effectType) {
     const dur = isMelee ? p.meleeDurationSec : p.rangedDurationSec;
     applyStatus(ctrl, { id: 'itemFanfareMs', type: 'MS_BUFF_FLAT', duration: dur, value: p.msFlat });
     applyStatus(ctrl, { id: 'itemFanfareAs', type: 'AS_BUFF', duration: dur, value: isMelee ? p.meleeAsPercent : p.rangedAsPercent });
+    if (typeof findAlliesInRadius === 'function' && ctrl.root) {
+      for (const { unit } of findAlliesInRadius(ctrl.root.position, p.allyRadius, { exclude: [ctrl] })) {
+        applyStatus(unit, { id: 'itemFanfareMs', type: 'MS_BUFF_FLAT', duration: dur, value: p.msFlat, source: ctrl });
+        applyStatus(unit, { id: 'itemFanfareAs', type: 'AS_BUFF', duration: dur, value: isMelee ? p.meleeAsPercent : p.rangedAsPercent, source: ctrl });
+      }
+    }
     console.log('[ITEM] 밴들파이프 - 팡파르 발동');
   }
 
-  // 제국의명령(명령) - "통제"(이동 불가 스킬 전용 스킬 가속)는 챔피언별로
-  // 어떤 스킬이 "이동 불가"를 거는지 태그하는 시스템이 없어 구현하지
-  // 않는다(docs/KNOWN_LIMITATIONS.md 명시). "명령"만 구현한다 - 둔화가
+  // 제국의명령(명령) - "통제"(이동 불가 스킬 전용 스킬 가속)는
+  // abilityHasteCooldown()의 IMMOBILIZING_SKILL_SLOTS가 처리한다. 둔화가
   // 아니라 "이동 불가"(기절/속박/제압/공중에 뜸/매혹)에 걸렸을 때만,
   // 대상이 챔피언이면 4초간 취약 표식(VULNERABLE 7%)을 남긴다. 같은
   // 표식을 다시 걸면 "중첩 없이 지속시간만 연장"(원문 그대로) - applyStatus가
@@ -2007,6 +2075,34 @@ function itemOnSlowOrImmobilize(ctrl, target, effectType) {
     const p = ITEM_DATA[mandateSlot.id].commandPassive;
     applyStatus(target, { id: 'itemImperialMandateVulnerable', type: 'VULNERABLE', duration: p.durationSec, value: p.vulnerablePercent, source: ctrl });
     console.log('[ITEM] 제국의명령 - 명령 발동(취약 표식)');
+  }
+}
+
+// 아군 회복/보호막 공용 훅 - ally_system.js의 healAlly()/shieldAlly()가 호출한다
+// (source가 자기 자신이 아닌 아군 챔피언 target을 회복/보호막했을 때).
+function itemOnAllyHealOrShield(source, target, kind, amount, opts = {}) {
+  if (!source || !target || target === source || !target.isChampion || !(amount > 0)) return;
+  const now = performance.now();
+  // 꿈 생성기 - 들고 있던 파란/보라 거품을 3초 동안 그 아군에게 넘긴다.
+  const dreamSlot = (source.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].dreamBubblePassive);
+  if (dreamSlot && source._itemDreamBubblesReady) {
+    const p = ITEM_DATA[dreamSlot.id].dreamBubblePassive;
+    const exp = now + p.allyDurationSec * 1000;
+    target._dreamBlue = { amount: _itemScaleByLevel(source, p.blueMin, p.blueMax, p.levelMin, p.levelMax), expiresAt: exp };
+    target._dreamPurple = { amount: _itemScaleByLevel(source, p.purpleMin, p.purpleMax, p.levelMin, p.levelMax), expiresAt: exp, nonChampionAoePercent: p.purpleNonChampionAoePercent };
+    source._itemDreamBubblesReady = false;
+    source._itemDreamNextAt = now + p.intervalSec * 1000;
+    console.log('[ITEM] 꿈 생성기 - 꿈 거품 전달');
+  }
+  // 월석재생기(별빛 은총) - 그 양의 일부를 근처 다른 아군에게, 없으면 같은 대상에게.
+  const moonSlot = (source.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].healAndShieldPowerPassive);
+  if (moonSlot && typeof findAlliesInRadius === 'function') {
+    const p = ITEM_DATA[moonSlot.id].healAndShieldPowerPassive;
+    const extra = amount * (kind === 'heal' ? p.healPercent : p.shieldPercent);
+    const other = findAlliesInRadius(getWorldPosition(target), p.chainRadius, { exclude: [target, source] })[0];
+    const recipient = other ? other.unit : target;
+    if (kind === 'heal') healAlly(source, recipient, extra, { noItemHook: true });
+    else shieldAlly(source, recipient, extra, opts.durationSec || 2, { decay: !!opts.decay, noItemHook: true });
   }
 }
 
@@ -2473,7 +2569,9 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     const item = ITEM_DATA[spoilsSlotA.id];
     const p = item.spoilsOfWarPassive;
     const threshold = _itemIsMelee(ctrl) ? p.minionHpThresholdMelee : p.minionHpThresholdRanged;
-    if ((target.hp / (target.maxHp || 1)) <= threshold) {
+    // 원문 "아군 챔피언 근처에서" - 근처에 아군 챔피언이 없으면 처형하지 않는다.
+    const allyNearby = typeof findAlliesInRadius === 'function' && ctrl.root && findAlliesInRadius(ctrl.root.position, p.allyNearbyRadius, { exclude: [ctrl] }).length > 0;
+    if (allyNearby && (target.hp / (target.maxHp || 1)) <= threshold) {
       ctrl._itemSpoilsCharges -= 1;
       _itemGrantSupportGold(ctrl, spoilsSlotA, item, p.minionGold);
       console.log(`[ITEM] ${item.nameKo} - 재물 공유 발동(미니언 처형, +${p.minionGold}골드)`);

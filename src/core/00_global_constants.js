@@ -580,7 +580,7 @@ function applyDamage(target, result) {
   // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만"
   // 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 그대로 넘긴다.
   if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
-  else damageEnemy(target, finalDmg);
+  else damageEnemy(target, finalDmg, result);
   return finalDmg;
 }
 // 처형 판정 시 콘솔 로그 + 화면 시각 효과(네임플레이트 붉은 섬광). 새

@@ -3470,7 +3470,7 @@ class CharacterController {
     if (this.championId === 'yasuo') { this._yasuoCastW(mouseWorldPoint, free); return; }
     if (this.championId === 'yone') { this._yoneCastW(mouseWorldPoint, free); return; }
     if (this.championId === 'chogath') { this._chogathCastW(free); return; }
-    if (this.championId === 'leesin') { this._leesinCastW(free); return; }
+    if (this.championId === 'leesin') { this._leesinCastW(free, mouseWorldPoint); return; }
     if (this.championId === 'mordekaiser') { this._mordeCastW(free); return; }
     if (this.championId === 'ezreal') { this._ezrealCastW(mouseWorldPoint, free); return; }
     if (this.championId === 'varus') { this._varusCastW(mouseWorldPoint, free); return; }

@@ -36,6 +36,9 @@ const stubs = {
     ConeGeometry: class {}, MeshBasicMaterial: class {}, Mesh: class { constructor(){ this.position = { copy(){}, set(){}, y: 0 }; } },
   },
   lolRangeToWorld: (r) => r,
+  getWorldPosition: (e) => (e && e.root && e.root.position) || (e && e.mesh && e.mesh.position) || e,
+  getHorizontalDistance: (a, b) => Math.hypot((a.x || 0) - (b.x || 0), (a.z || 0) - (b.z || 0)),
+  getCollisionRadius: () => 0,
   scene: { add(){}, remove(){} },
   visionSystem: { grantVision(){} },
 };
@@ -43,7 +46,13 @@ const context = vm.createContext(stubs);
 const statusSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8');
 const itemDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/item_data.js'), 'utf8');
 const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8');
-vm.runInContext(statusSrc + '\n' + itemDataSrc + '\n' + itemSystemSrc + `
+const allySrc = fs.readFileSync(path.join(ROOT, 'src/core/ally_system.js'), 'utf8');
+vm.runInContext(statusSrc + '\n' + allySrc + '\n' + itemDataSrc + '\n' + itemSystemSrc + `
+this.placedAllies = placedAllies;
+this.healAlly = healAlly;
+this.shieldAlly = shieldAlly;
+this.allyAbsorbIncoming = allyAbsorbIncoming;
+this.tickAllyUnits = tickAllyUnits;
 this.ITEM_DATA = ITEM_DATA;
 this.buyItem = buyItem;
 this.buildOrBuyItem = buildOrBuyItem;
@@ -65,7 +74,13 @@ const {
   ITEM_DATA, buyItem, buildOrBuyItem, recomputeItemStats, itemSystemTick,
   itemOnDamageDealt, itemOnBasicAttackHit, itemOnAbilityDispatch, itemOnTakeDamage,
   itemOnChampionDeath, useItem, combineCost, applyStatus, abilityHasteCooldown, applyItemVamp,
+  placedAllies, healAlly, shieldAlly, allyAbsorbIncoming, tickAllyUnits,
 } = context;
+function makeAlly(x, z, overrides = {}) {
+  const pos = { x, y: 0, z };
+  return Object.assign({ isChampion: true, isAlly: true, team: 'BLUE', hp: 500, maxHp: 1000, shield: 0, shieldEntries: [], statusEffects: [], champLevel: 1, mesh: { position: pos }, root: { position: pos } }, overrides);
+}
+function setAllies(...list) { placedAllies.length = 0; placedAllies.push(...list); }
 
 function makeFakeCtrl(overrides = {}) {
   return Object.assign({
@@ -241,45 +256,65 @@ function makeTarget(overrides = {}) {
   const ok2 = useItem(ctrl, slotIndex);
   assert(ok2 === false, '슈렐리아의군가: 재사용 대기시간(75초) 중에는 다시 쓸 수 없다');
   now += 75100;
+  const near = makeAlly(500, 0), far = makeAlly(3000, 0);
+  setAllies(near, far);
   const ok3 = useItem(ctrl, slotIndex);
   assert(ok3 === true, '슈렐리아의군가: 75초가 지나면 다시 쓸 수 있다');
+  assert(near.statusEffects.some((e) => e.id === 'itemShurelyasSpeech' && Math.abs(e.value - 0.30) < 1e-9), '슈렐리아의군가: 주변 아군도 이동속도 +30%');
+  assert(!far.statusEffects.some((e) => e.id === 'itemShurelyasSpeech'), '슈렐리아의군가: 멀리 있는 아군은 제외');
+  setAllies();
 }
 
 // ========================================================================
-// 월석재생기 - "별빛 은총"(회복 +30%｜보호막 +35%, 서로 다른 증폭률이
-// 섞이지 않는지).
+// 월석재생기 - "별빛 은총": 아군을 회복/보호막시키면 30%(회복)/35%(보호막)를
+// 근처 다른 아군에게, 근처에 다른 아군이 없으면 같은 대상에게 추가로 준다.
+// 자기 자신이 받는 회복/보호막 배율은 바뀌지 않는다(아군 대상 효과).
 // ========================================================================
 {
   const ctrl = makeFakeCtrl();
   buildOrBuyItem(ctrl, 'kircheisShard');
   buildOrBuyItem(ctrl, 'moonstoneRenewer');
   recomputeItemStats(ctrl);
-  assert(Math.abs(ctrl.itemHealingReceivedBonusPercent - 0.30) < 1e-9, '월석재생기: 받는 회복 효과 +30%');
-  assert(Math.abs(ctrl.itemShieldReceivedBonusPercent - 0.35) < 1e-9, '월석재생기: 받는 보호막 효과 +35%(회복과 다른 수치)');
+  assert(ctrl.itemHealingReceivedBonusPercent === 0 && ctrl.itemShieldReceivedBonusPercent === 0, '월석재생기: 자신이 받는 회복/보호막 배율은 바뀌지 않는다(아군에게 주는 효과)');
 
-  // 실제 보호막 생성 경로(스테락의도전 생명선)에 35%가 적용되는지 직접 확인.
-  const ctrl2 = makeFakeCtrl();
-  buildOrBuyItem(ctrl2, 'kircheisShard');
-  buildOrBuyItem(ctrl2, 'moonstoneRenewer');
-  buildOrBuyItem(ctrl2, 'giantsBelt');
-  buildOrBuyItem(ctrl2, 'sterakssGage');
-  recomputeItemStats(ctrl2);
-  ctrl2.itemBonusMaxHp = 800; ctrl2.hp = 100; ctrl2.maxHp = 2000;
-  itemOnTakeDamage(ctrl2, 1, 'PHYSICAL', null);
-  const p = ITEM_DATA.sterakssGage.lifelinePassive;
-  const bonusHp = ctrl2.itemBonusMaxHp || 0;
-  const baseShield = bonusHp * p.bonusHpShieldPercent;
-  const expectedShield = baseShield * 1.35;
-  assert(Math.abs(ctrl2.shield - expectedShield) < 1e-6, `월석재생기: 스테락의도전 생명선 보호막에 35%가 곱해진다(got ${ctrl2.shield.toFixed(2)}, 기대 ${expectedShield.toFixed(2)})`);
+  const a = makeAlly(100, 0), b = makeAlly(400, 0);
+  setAllies(a, b);
+  healAlly(ctrl, a, 100);
+  assert(Math.abs(a.hp - 600) < 1e-6, '월석재생기: 대상 아군은 원래 회복량(100)만 받는다');
+  assert(Math.abs(b.hp - 530) < 1e-6, '월석재생기: 근처 다른 아군이 회복량의 30%(30)를 받는다');
+  shieldAlly(ctrl, a, 200, 2);
+  assert(Math.abs(a.shield - 200) < 1e-6 && Math.abs(b.shield - 70) < 1e-6, '월석재생기: 보호막은 35%(70)가 근처 다른 아군에게 간다');
+
+  const lone = makeAlly(100, 0);
+  setAllies(lone, makeAlly(5000, 0));
+  healAlly(ctrl, lone, 100);
+  assert(Math.abs(lone.hp - 630) < 1e-6, '월석재생기: 근처(800)에 다른 아군이 없으면 같은 대상이 30%를 추가로 받는다');
+  setAllies();
 }
 
 // ========================================================================
-// 강철의 솔라리 팬던트 - 아군 전용 액티브라 고유 패시브 미구현(명시적 스킵).
+// 강철의 솔라리 팬던트 - "헌신"(사용): 자신과 주변 아군에게 아군 레벨 비례
+// 보호막(290~360), 2.5초에 걸쳐 감소.
 // ========================================================================
 {
-  const item = ITEM_DATA.ironSolariLocket;
-  assert(item.stats.maxHp === 200 && item.stats.armor === 30 && item.stats.magicResist === 30, '강철의 솔라리 팬던트: 스탯은 제공된다');
-  assert(!item.activeAbility && !item.healAndShieldPowerPassive && !item.devotionActive, '강철의 솔라리 팬던트: "헌신" 고유 액티브는 구현되지 않았다(명시적 스킵 - 아군 전용, 자기 대상 전환 조항 없음)');
+  const ctrl = makeFakeCtrl({ champLevel: 1 });
+  buildOrBuyItem(ctrl, 'kircheisShard'); buildOrBuyItem(ctrl, 'chainVest'); buildOrBuyItem(ctrl, 'negatronCloak');
+  buildOrBuyItem(ctrl, 'ironSolariLocket');
+  const p = ITEM_DATA.ironSolariLocket.devotionActive;
+  const ally18 = makeAlly(300, 0, { champLevel: 18 }), far = makeAlly(3000, 0);
+  setAllies(ally18, far);
+  const idx = ctrl.items.findIndex((s) => s.id === 'ironSolariLocket');
+  assert(useItem(ctrl, idx) === true, '강철의 솔라리 팬던트: 헌신 사용 성공');
+  assert(Math.abs(ctrl.shield - p.shieldMin) < 1e-6, `강철의 솔라리 팬던트: 자신(레벨 1) 보호막 ${p.shieldMin}`);
+  assert(Math.abs(ally18.shield - p.shieldMax) < 1e-6, `강철의 솔라리 팬던트: 주변 아군(레벨 18) 보호막 ${p.shieldMax} - 아군 레벨 비례`);
+  assert(far.shield === 0, '강철의 솔라리 팬던트: 범위 밖 아군은 제외');
+  assert(useItem(ctrl, idx) === false, '강철의 솔라리 팬던트: 재사용 대기시간 중에는 다시 쓸 수 없다');
+  now += 1250; itemSystemTick(ctrl, 1.25); tickAllyUnits(1.25);
+  assert(Math.abs(ctrl.shield - p.shieldMin / 2) < 1e-6, '강철의 솔라리 팬던트: 자신 보호막이 2.5초에 걸쳐 감소(절반 지점)');
+  assert(Math.abs(ally18.shield - p.shieldMax / 2) < 1e-6, '강철의 솔라리 팬던트: 아군 보호막도 감소(절반 지점)');
+  now += 1300; itemSystemTick(ctrl, 1.3); tickAllyUnits(1.3);
+  assert(ctrl.shield < 1e-6 && ally18.shield === 0, '강철의 솔라리 팬던트: 2.5초 뒤 보호막이 모두 사라진다');
+  setAllies();
 }
 
 // ========================================================================
@@ -296,6 +331,11 @@ function makeTarget(overrides = {}) {
   assert(!!msBuff && msBuff.type === 'MS_BUFF_FLAT' && msBuff.value === 20, '밴들파이프(팡파르): 둔화를 걸면 이동속도 +20(고정) 버프가 걸린다');
   assert(!!asBuff && asBuff.type === 'AS_BUFF' && Math.abs(asBuff.value - 0.30) < 1e-9, '밴들파이프(팡파르): 근접 기준 공격속도 +30% 버프가 걸린다');
   assert(msBuff.duration === 8 && asBuff.duration === 8, '밴들파이프(팡파르): 근접 기준 8초 지속');
+  const ally = makeAlly(300, 0);
+  setAllies(ally);
+  applyStatus(makeTarget(), { id: 'testSlow2', type: 'SLOW', duration: 1.0, value: 0.3, source: ctrl });
+  assert(ally.statusEffects.some((e) => e.id === 'itemFanfareMs') && ally.statusEffects.some((e) => e.id === 'itemFanfareAs'), '밴들파이프(팡파르): 주변 아군도 이동속도/공격속도 버프를 받는다');
+  setAllies();
 
   // 원거리는 지속시간/수치가 다르다.
   const ctrl2 = makeFakeCtrl({ stats: { attackDamage: 100, attackRange: 500, critChance: 0 } });
@@ -329,8 +369,47 @@ function makeTarget(overrides = {}) {
   mark = (target.statusEffects || []).find((e) => e.id === 'itemImperialMandateVulnerable');
   assert(!!mark && mark.type === 'VULNERABLE' && Math.abs(mark.value - 0.07) < 1e-9 && mark.duration === 4.0, '제국의명령(명령): 기절(이동 불가)을 걸면 4초간 취약 표식(7%)이 걸린다');
 
-  // "통제"(이동 불가 스킬 전용 스킬 가속)는 구현하지 않았다 - 문서화된 스킵.
-  assert(!ITEM_DATA.imperialMandate.controlPassive, '제국의명령: "통제"(이동 불가 스킬 전용 스킬 가속)는 구현되지 않았다(명시적 스킵 - 스킬별 CC 태깅 시스템 없음)');
+  // "통제" - 이동 불가 효과를 지닌 스킬만 스킬 가속 +20.
+  recomputeItemStats(ctrl);
+  ctrl.championId = 'nautilus';
+  const base = ctrl.itemBonusAbilityHaste;
+  const cdQ = abilityHasteCooldown(ctrl, 10, 'Q');
+  const cdW = abilityHasteCooldown(ctrl, 10, 'W');
+  assert(Math.abs(cdQ - 10 * 100 / (100 + base + 20)) < 1e-9, '제국의명령(통제): 이동 불가 스킬(노틸러스 Q)은 스킬 가속 +20 추가');
+  assert(Math.abs(cdW - 10 * 100 / (100 + base)) < 1e-9, '제국의명령(통제): 이동 불가가 없는 스킬(노틸러스 W)은 그대로');
+  ctrl.championId = 'garen';
+  assert(Math.abs(abilityHasteCooldown(ctrl, 10, 'Q') - 10 * 100 / (100 + base)) < 1e-9, '제국의명령(통제): 침묵(가렌 Q)은 이동 불가가 아니라 제외');
+}
+
+// ========================================================================
+// 꿈 생성기 - 8초마다 파란/보라 거품, 아군을 회복/보호막시키면 3초간 넘겨준다.
+// ========================================================================
+{
+  const ctrl = makeFakeCtrl({ champLevel: 1 });
+  ctrl.items.push({ id: 'dreamMaker' });
+  recomputeItemStats(ctrl);
+  const p = ITEM_DATA.dreamMaker.dreamBubblePassive;
+  itemSystemTick(ctrl, 0.016);
+  assert(!ctrl._itemDreamBubblesReady, '꿈 생성기: 처음엔 거품이 없다(8초 뒤 생성)');
+  now += 8100; itemSystemTick(ctrl, 0.016);
+  assert(ctrl._itemDreamBubblesReady === true, '꿈 생성기: 8초 뒤 파란/보라 거품 생성');
+  const ally = makeAlly(300, 0);
+  setAllies(ally);
+  healAlly(ctrl, ally, 50);
+  assert(ally._dreamBlue && Math.abs(ally._dreamBlue.amount - p.blueMin) < 1e-9, '꿈 생성기: 회복시킨 아군에게 파란 거품(레벨 1 기준 50) 전달');
+  assert(ally._dreamPurple && Math.abs(ally._dreamPurple.amount - p.purpleMin) < 1e-9, '꿈 생성기: 보라 거품(40)도 함께 전달');
+  assert(!ctrl._itemDreamBubblesReady, '꿈 생성기: 넘겨준 뒤엔 다시 8초를 기다린다');
+  const left = allyAbsorbIncoming(ally, 120, { source: { isTurret: true } });
+  assert(Math.abs(left - 70) < 1e-9 && !ally._dreamBlue, '꿈 생성기: 파란 거품이 미니언이 아닌 출처의 다음 피해를 50 줄이고 사라진다');
+  const ally2 = makeAlly(300, 0);
+  setAllies(ally2);
+  now += 8100; itemSystemTick(ctrl, 0.016);
+  shieldAlly(ctrl, ally2, 50, 2);
+  const left2 = allyAbsorbIncoming(ally2, 100, { source: { isMinion: true } });
+  assert(ally2._dreamBlue && Math.abs(left2 - 50) < 1e-9, '꿈 생성기: 미니언 피해에는 파란 거품이 반응하지 않는다(보호막만 흡수)');
+  now += 3100; tickAllyUnits(0.016);
+  assert(!ally2._dreamBlue && !ally2._dreamPurple, '꿈 생성기: 거품은 아군에게 3초만 유지된다');
+  setAllies();
 }
 
 // ========================================================================

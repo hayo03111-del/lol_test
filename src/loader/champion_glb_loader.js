@@ -1464,6 +1464,7 @@ function animate() {
     updateInhibitorBuildingAnim(dt);
     if (howlingAbyssMap) howlingAbyssMap.updateSnow(dt, controller ? controller.root.position : null); // 요청 18: 카메라(플레이어) 주변에서 자연스럽게 보이도록 재활용
     tickPullEffects(dt);
+    if (typeof tickAllyUnits === 'function') tickAllyUnits(dt);
     vfx.update(dt);
     nilahVfx2.update(dt);
     projectiles.update(dt);

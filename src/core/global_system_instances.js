@@ -379,7 +379,7 @@ function updateItemUI(ctrl) {
       const usable = !!(
         data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect
         || data.empoweredCleaveActive || data.shockwaveActive || data.ghostStepActive
-        || data.rocketbeltActive || data.teamMoveSpeedActive || data.noxiousBladeActive || data.stasisActive
+        || data.rocketbeltActive || data.teamMoveSpeedActive || data.noxiousBladeActive || data.stasisActive || data.devotionActive
       );
       el.className = 'invSlot' + (usable ? ' usable' : '');
       el.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
@@ -580,6 +580,28 @@ if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.addEventListener('change', () => 
 const clearDummiesBtnEl = document.getElementById('clearDummiesBtn');
 if (clearDummiesBtnEl) clearDummiesBtnEl.addEventListener('click', clearPlacedDummies);
 
+// 아군 더미 설치(아군이 필요한 아이템/스킬 효과 테스트용 - ally_system.js 참고).
+// 적 더미 설치 모드와 동시에 켜지지 않는다.
+let allyPlaceMode = false;
+const allyPlaceCheckboxEl = document.getElementById('allyPlaceCheckbox');
+function setAllyPlaceMode(v) {
+  allyPlaceMode = v;
+  if (v && dummyPlaceMode) { setDummyPlaceMode(false); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = false; }
+  if (allyPlaceCheckboxEl) allyPlaceCheckboxEl.checked = v;
+  renderer.domElement.style.cursor = v ? 'crosshair' : '';
+}
+if (allyPlaceCheckboxEl) allyPlaceCheckboxEl.addEventListener('change', () => setAllyPlaceMode(allyPlaceCheckboxEl.checked));
+const clearAlliesBtnEl = document.getElementById('clearAlliesBtn');
+if (clearAlliesBtnEl) clearAlliesBtnEl.addEventListener('click', clearPlacedAllies);
+const damageAlliesBtnEl = document.getElementById('damageAlliesBtn');
+if (damageAlliesBtnEl) damageAlliesBtnEl.addEventListener('click', () => {
+  const raw = Number(document.getElementById('dummyDamageInput')?.value);
+  if (!Number.isFinite(raw) || raw <= 0) { console.log('[아군 더미 피해 테스트] 올바른 양수를 입력하세요'); return; }
+  const type = document.getElementById('dummyDamageType')?.value || DAMAGE_TYPE.PHYSICAL;
+  for (const a of placedAllies) if (a.hp > 0) applyDamage(a, { rawDamage: raw, damageType: type, isCritical: false, critMultiplier: 1 });
+  console.log(`[아군 더미 피해 테스트] 아군 더미 ${placedAllies.length}개에 ${raw}(${type})`);
+});
+
 // 요청: 허수아비에 숫자로 데미지를 테스트할 수 있는 기능. 새 피해 계산을
 // 만들지 않고 기존 applyDamage() 파이프라인을 그대로 재사용한다 - 그래야
 // 방어력/마법저항력/방어구 관통 등 실제 스킬과 동일한 계산 결과를 확인할
@@ -644,6 +666,11 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
       if (groundPoint) placeDummyAt(groundPoint);
       return;
     }
+    if (allyPlaceMode) {
+      const groundPoint = getGroundPoint(e.clientX, e.clientY);
+      if (groundPoint) placeAllyAt(groundPoint);
+      return;
+    }
     const enemyHit = getEnemyHit(e.clientX, e.clientY);
     if (enemyHit) controller.selectTarget(enemyHit);
     else { controller.currentTarget = null; targetRing.clear(); }
@@ -656,7 +683,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 // 있을 때는 값이 안 바뀌므로 매 프레임이 아니라 실제 mousemove 이벤트가
 // 있을 때만 계산되고, 후보 수도 최대 수십 개 수준이라 비용이 거의 없다.
 renderer.domElement.addEventListener('pointermove', (e) => {
-  if (paused || !controller || dummyPlaceMode) { renderer.domElement.style.cursor = ''; return; }
+  if (paused || !controller || dummyPlaceMode || allyPlaceMode) { renderer.domElement.style.cursor = ''; return; }
   const enemyHit = getEnemyHit(e.clientX, e.clientY);
   renderer.domElement.style.cursor = enemyHit ? 'pointer' : '';
 });
@@ -678,7 +705,8 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') { togglePause(); return; }
   if (e.code === 'F1') { e.preventDefault(); debugPanelVisible = !debugPanelVisible; return; }
   if (e.code === 'KeyV') { rangeIndicators.toggle(); const cb = document.getElementById('rangeIndicatorCheckbox'); if (cb) cb.checked = rangeIndicators.visible; return; }
-  if (e.code === 'KeyP') { setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
+  if (e.code === 'KeyP') { if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
+  if (e.code === 'KeyO') { setAllyPlaceMode(!allyPlaceMode); return; }
   if (paused) return;
   // 버그 수정(핵심 - "마스터 이 W 모션이 반복된다"의 진짜 원인): 이
   // 리스너에 OS 키 반복(long-press) 방지 처리가 전혀 없었다. 키를 누르고

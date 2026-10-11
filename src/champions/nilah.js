@@ -183,6 +183,15 @@ CharacterController.prototype._nilahHealUnit = function(target, amount, shieldDu
     // 영원한 기쁨의 7.5%/15% 증가는 '아군이 닐라에게 제공하는' 회복/보호막에만 적용한다.
     // 닐라 R이 아군을 직접 회복시키는 경우에는 닐라의 제공 효과를 임의로 증폭하지 않는다.
     const p=this._nilahData().passive;
+    // 아군 더미는 ally_system.js 경로로 회복/보호막한다(받는 회복 배율과
+    // 월석재생기/꿈 생성기 같은 "아군에게 준 회복" 아이템 효과가 함께 적용됨).
+    if (target.isAlly && typeof healAlly === 'function') {
+      const eff = amount * getHealReceivedMultiplier(target);
+      const applied = healAlly(this, target, amount);
+      const over = Math.max(0, eff - applied);
+      if (over > 0) shieldAlly(this, target, over, kind === 'nilahP_R' ? shieldDuration : Math.min(shieldDuration, p.sharedShieldMaxDuration), { id: 'nilahShared' });
+      return over;
+    }
     const boostedHeal=amount;
     const maxHp = target.maxHp || 0;
     const before = target.hp || 0;

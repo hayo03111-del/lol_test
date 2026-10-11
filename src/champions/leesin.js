@@ -185,7 +185,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
 };
 
 // Extracted from CharacterController: _leesinCastW
-CharacterController.prototype._leesinCastW = function(free) { 
+CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = null) { 
     if (isSilenced(this)) return;
     if (isCrowdControlled(this)) return;
     const cd = this._champData(); const w = cd.W;
@@ -214,8 +214,58 @@ CharacterController.prototype._leesinCastW = function(free) {
     vfx.spawn('w', this.root.position.clone());
     this._leesinOnSkillUsed();
     this._leesin.wMarkReadyUntil = now + w.markDuration * 1000;
-    debugSkillHit('Lee Sin W (방호, 대상 아군 없음 - 재시전 창만 활성화)', this);
+    // 방호 - 커서 근처의 아군 챔피언(사거리 700 안)에게 돌진해 둘 다 보호막,
+    // 아군이 없으면 자기 자신에게 보호막(원작의 자기 시전).
+    const lvl = Math.max(1, this.skillLevels.W || 1);
+    const amount = skillVal(w.shieldByLevel, lvl) + (w.shieldApRatio || 0) * (this.stats.abilityPower || 0);
+    const ally = this._leesinPickWAlly(mouseWorldPoint);
+    if (ally) {
+      const to = getWorldPosition(ally).clone();
+      const dir = new THREE.Vector3().subVectors(to, this.root.position).setY(0);
+      if (dir.lengthSq() > 1e-6) {
+        dir.normalize();
+        to.addScaledVector(dir, -(this.collisionRadius + getCollisionRadius(ally)));
+        to.y = this.root.position.y;
+        this._dashState = { from: this.root.position.clone(), to, duration: 0.35, elapsed: 0, faceDir: dir.clone() }; // Q2 돌진과 같은 시간
+      }
+      if (typeof shieldAlly === 'function') shieldAlly(this, ally, amount, w.shieldDuration);
+    }
+    this._leesinApplySelfWShield(amount, w.shieldDuration);
+    debugSkillHit(`Lee Sin W (방호${ally ? ' - 아군에게 돌진' : ' - 자기 시전'})`, ally || this, { shield: amount.toFixed(1) });
   
+};
+
+// 방호 대상 아군 - 커서에서 가장 가까운 아군 더미 중, 커서가 그 아군 근처
+// (클릭 판정 여유 150)이고 리 신의 W 사거리(range1) 안에 있는 경우만.
+CharacterController.prototype._leesinPickWAlly = function(mouseWorldPoint) {
+  if (!mouseWorldPoint || typeof getAllyChampions !== 'function') return null;
+  const w = this._champData().W;
+  let best = null, bestD = Infinity;
+  for (const a of getAllyChampions(this)) {
+    const p = getWorldPosition(a);
+    const dMouse = getHorizontalDistance(p, mouseWorldPoint);
+    if (dMouse > lolRangeToWorld(150) + getCollisionRadius(a)) continue;
+    if (!isInRange(this, a, w.range1)) continue;
+    if (dMouse < bestD) { best = a; bestD = dMouse; }
+  }
+  return best;
+};
+
+// 리 신 자신의 방호 보호막 - 가렌 W와 같은 방식(지속시간 뒤 이 보호막이
+// 늘린 몫만 걷어낸다).
+CharacterController.prototype._leesinApplySelfWShield = function(amount, durationSec) {
+  const amt = amount * getShieldReceivedMultiplier(this);
+  const before = Math.max(0, this.shield || 0);
+  this.shield = before + amt;
+  updateBars(this);
+  this._leesinWShieldToken = (this._leesinWShieldToken || 0) + 1;
+  const token = this._leesinWShieldToken;
+  clearTimeout(this._leesinWShieldTimer);
+  this._leesinWShieldTimer = setTimeout(() => {
+    if (this._leesinWShieldToken !== token || this.championId !== 'leesin') return;
+    this.shield = Math.max(0, this.shield - Math.min(amt, this.shield));
+    updateBars(this);
+  }, durationSec * 1000);
 };
 
 // Extracted from CharacterController: _leesinCastE
