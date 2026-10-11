@@ -646,7 +646,7 @@ function updateTurretCombat(turret, dt) {
     realmId: turret.realmId, // Phase 2 요청 17 - 발사 시점 realm 스냅샷(포탑은 realmId가 바뀌지 않지만 대칭성을 위해 항상 넘긴다)
     fromTurret: true, // 버그 수정(요청 27): 야스오 바람 장막은 포탑 공격/광선을 막지 않는다 -
     // ProjectileSystem.update()의 windwall 충돌 검사가 이 플래그를 보고 포탑 발사체는 건너뛴다.
-    onHit: (t) => { if (t.isMinion) applyDamageToMinion(t, result); else applyDamage(t, result); },
+    onHit: (t) => { if (t.isMinion) applyDamageToMinion(t, result); else applyDamage(t, { ...result, isBasicAttack: true, source: turret }); },
   });
 }
 // O. 우물(기지) - 요청 6/43: 일반 포탑 전투 시스템을
@@ -682,7 +682,7 @@ function updateNexusWell(well, dt) {
       && well.team !== PLAYER_TEAM && canRealmInteract(well, controller)) {
     const dist = getHorizontalDistance(getWorldPosition(well), controller.root.position);
     if (dist <= well.radius) {
-      applyDamage(controller, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+      applyDamage(controller, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: well, isStatusTick: true });
     }
   }
   // 적 미니언도 같은 원칙으로 상대 진영 우물 범위에 들어오면 공격당한다.

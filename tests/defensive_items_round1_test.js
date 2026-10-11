@@ -136,8 +136,8 @@ function makeTarget(overrides = {}) {
 }
 
 // ========================================================================
-// 벤시의장막 - 무효화(다음 피해 1회 완전 차단) + 챔피언에게 피해를 입히면
-// 재사용대기시간 초기화
+// 벤시의장막 - 무효화(적 챔피언의 다음 스킬 1회만 차단) + 챔피언에게 피해를
+// "입으면" 재사용대기시간 초기화
 // ========================================================================
 {
   const ctrl = makeFakeCtrl();
@@ -148,16 +148,49 @@ function makeTarget(overrides = {}) {
   now += 40000;
   itemSystemTick(ctrl, 0.016);
   assert(ctrl._itemNullifyShieldUp === true, '벤시의장막: 재사용대기시간(40초)이 지나면 방어막이 생성된다');
-  const blocked = itemOnTakeDamage(ctrl, 500, 'MAGICAL', null);
-  assert(blocked === 0, '벤시의장막: 방어막이 떠 있으면 다음 피해를 완전히 차단한다(0 반환)');
+
+  const enemyChamp = makeTarget({ championId: 'enemy' });
+  const minion = { isMinion: true };
+  const turret = { isTurret: true };
+  assert(itemOnTakeDamage(ctrl, 200, 'PHYSICAL', minion, { isBasicAttack: true }) === 200, '벤시의장막: 미니언 기본 공격은 막지 않는다');
+  assert(itemOnTakeDamage(ctrl, 300, 'PHYSICAL', turret, { isBasicAttack: true }) === 300, '벤시의장막: 포탑 공격은 막지 않는다');
+  assert(itemOnTakeDamage(ctrl, 100, 'TRUE', null, { isStatusTick: true }) === 100, '벤시의장막: 출처 없는 피해(우물 등)는 막지 않는다');
+  assert(itemOnTakeDamage(ctrl, 150, 'PHYSICAL', enemyChamp, { isBasicAttack: true }) === 150, '벤시의장막: 적 챔피언의 기본 공격은 막지 않는다(스킬 전용 주문 방어막)');
+  assert(itemOnTakeDamage(ctrl, 50, 'MAGICAL', enemyChamp, { isStatusTick: true }) === 50, '벤시의장막: 적 챔피언 스킬의 도트 틱은 막지 않는다');
+  assert(ctrl._itemNullifyShieldUp === true, '벤시의장막: 스킬이 아닌 피해로는 방어막이 소모되지 않는다');
+
+  const blocked = itemOnTakeDamage(ctrl, 500, 'MAGICAL', enemyChamp, {});
+  assert(blocked === 0, '벤시의장막: 적 챔피언의 스킬 피해를 완전히 차단한다(0 반환)');
   assert(ctrl._itemNullifyShieldUp === false, '벤시의장막: 방어막을 한 번 쓰면 소모된다');
 
-  // 챔피언에게 피해를 입히면 재사용대기시간이 초기화된다(아직 방어막이 없을 때).
+  // 내가 챔피언에게 피해를 "입혀도" 초기화되지 않는다(예전 버그).
   const before = ctrl._itemNullifyReadyAt;
   now += 1000;
   itemOnDamageDealt(ctrl, makeTarget(), 100, 'MAGICAL');
-  assert(ctrl._itemNullifyReadyAt === now + ITEM_DATA.banshees.nullifyPassive.icdSec * 1000, '벤시의장막: 챔피언에게 피해를 입히면 재사용대기시간이 그 순간부터 다시 40초로 초기화된다');
+  assert(ctrl._itemNullifyReadyAt === before, '벤시의장막: 챔피언에게 피해를 입혀도 재사용대기시간은 그대로다(원문은 "입으면")');
+
+  // 챔피언에게 피해를 "입으면" 초기화된다(아직 방어막이 없을 때).
+  itemOnTakeDamage(ctrl, 100, 'PHYSICAL', enemyChamp, { isBasicAttack: true });
+  assert(ctrl._itemNullifyReadyAt === now + ITEM_DATA.banshees.nullifyPassive.icdSec * 1000, '벤시의장막: 챔피언에게 피해를 입으면 재사용대기시간이 그 순간부터 다시 40초로 초기화된다');
   assert(ctrl._itemNullifyReadyAt > before, '벤시의장막: 초기화된 재사용대기시간이 원래보다 더 늦춰진다(그만큼 충전이 늦어짐)');
+  now += 1000;
+  const afterChamp = ctrl._itemNullifyReadyAt;
+  itemOnTakeDamage(ctrl, 100, 'PHYSICAL', minion, { isBasicAttack: true });
+  assert(ctrl._itemNullifyReadyAt === afterChamp, '벤시의장막: 미니언에게 맞는 건 초기화 조건이 아니다');
+}
+
+// 신록의 장벽 - 같은 무효화지만 초기화 조항이 없다.
+{
+  const ctrl = makeFakeCtrl();
+  buyItem(ctrl, 'verdantBarrier');
+  now += 60000;
+  itemSystemTick(ctrl, 0.016);
+  assert(ctrl._itemNullifyShieldUp === true, '신록의 장벽: 재사용대기시간(60초) 뒤 방어막 생성');
+  itemOnTakeDamage(ctrl, 500, 'MAGICAL', makeTarget({ championId: 'enemy' }), {});
+  const readyAt = ctrl._itemNullifyReadyAt;
+  now += 1000;
+  itemOnTakeDamage(ctrl, 100, 'PHYSICAL', makeTarget({ championId: 'enemy' }), { isBasicAttack: true });
+  assert(ctrl._itemNullifyReadyAt === readyAt, '신록의 장벽: 챔피언에게 피해를 입어도 재사용대기시간이 초기화되지 않는다(벤시의장막 전용 조항)');
 }
 
 // ========================================================================

@@ -417,16 +417,28 @@ function getRecoveryDuration(stats) { return Math.max(0, getAttackInterval(stats
 
 const DAMAGE_TYPE = { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' };
 
+// 피해 공격자 결정 - `source`를 넘기지 않은 호출(대부분의 챔피언 스킬)은
+// 이 데모의 유일한 챔피언 피해원인 플레이어(전역 controller)로 대체한다.
+// 단, 대상이 플레이어 자신이면 절대 대체하지 않는다: 미니언/포탑/우물이
+// 플레이어를 때릴 때 source가 없으면 플레이어가 "자기 자신을 공격한
+// 것"으로 처리돼, 자신의 흡혈·관통력·치명타 피해·피해 증폭이 자기가
+// "받는" 피해에 적용되는 버그가 있었다.
+function resolveDamageSource(source, target) {
+  if (source) return source;
+  if (typeof controller === 'undefined' || !controller || target === controller) return null;
+  return controller;
+}
+
 // 요청 16: 방어력/마법저항 공식 100/(100+armor). TRUE 데미지는 저항 무시.
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
 // 넘어온다 - 여기서 다시 굴리지 않는다(같은 공격 인스턴스의 결과가 명중
 // 시점에 바뀌면 안 되므로).
-function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0 }) {
+function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false }) {
   // 무한의 대검(치명타 피해량 +30%) - 각 챔피언 스킬이 저마다 다른
   // critMultiplier를 넘기므로(공용 필드가 아님), 공격자의 아이템 보너스를
   // 여기서 한 곳에서 더해 넣는다 - 치명타가 아니면 critMultiplier 자체가
   // 안 쓰이므로 영향이 없다.
-  const critAtk = source || (typeof controller !== 'undefined' ? controller : null);
+  const critAtk = resolveDamageSource(source, target);
   const critBonus = (critAtk && critAtk.itemBonusCritDamagePercent) || 0;
   let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critMultiplier + critBonus) : 1);
   if (damageType === DAMAGE_TYPE.PHYSICAL) {
@@ -436,7 +448,7 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     if (typeof getArmorShredPercent === 'function') armor *= (1 - getArmorShredPercent(target));
     // 아이템 패시브(톱날 단검 - 고정 물리 관통력 10) - 마법사의 신발(고정
     // 마법 관통력)과 동일한 원칙으로 퍼센트 관통보다 먼저 적용한다.
-    const atkP = source || (typeof controller !== 'undefined' ? controller : null);
+    const atkP = resolveDamageSource(source, target);
     // 벼락폭풍검(창공)의 "4초간 물리 관통력 획득"은 영구 스탯(itemBonusArmorPenFlat,
     // 구매/판매 시에만 재계산)과 별개로 지속시간이 있는 임시 버프라 자체
     // 필드(itemTempArmorPenFlat)에 더해서 같은 자리에서 합산한다.
@@ -464,7 +476,7 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 퍼센트 관통보다 먼저 적용한다(실제 LoL 공식과 동일 순서). `source`가
     // 없는 호출(대부분의 스킬 피해 호출)은 흡혈/영광 처치 훅과 동일한
     // 이유로 전역 `controller`(이 데모의 유일한 챔피언 피해원)로 대체한다.
-    const atk = source || (typeof controller !== 'undefined' ? controller : null);
+    const atk = resolveDamageSource(source, target);
     const flatMagicPen = (atk && atk.itemBonusMagicPenFlat) || 0;
     mr = Math.max(0, mr - flatMagicPen);
     // 경계(빛과 어둠 - 어둠)의 임시 마법 관통력(최대 30%) - PHYSICAL 분기의
@@ -481,13 +493,10 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   dmg = Math.max(0, dmg);
   // 아이템 패시브(쇼진의창 "집중된 의지" - 스택당 피해량 증폭) - 실제
   // LoL처럼 모든 피해 계산이 끝난 뒤 최종 피해에 곱하는 증폭으로 적용한다.
-  // 원문은 "챔피언 스킬과 기본 지속 효과 피해량"만 증폭한다고 돼 있지만,
-  // 이 프로젝트는 "이번 피해가 스킬인지 평타인지" 구분하는 공용 플래그가
-  // 없다(여신의 눈물/운명의 재/억겁의 카탈리스트 때와 동일한 한계) - 그
-  // 아이템들과 같은 원칙으로 공격자가 입히는 피해 전체(평타+스킬)에
-  // 근사 적용한다(명시적 근사 - README 참고).
-  const ampSource = source || (typeof controller !== 'undefined' ? controller : null);
-  if (ampSource && ampSource.itemSpellDamageAmpPercent > 0) dmg *= (1 + ampSource.itemSpellDamageAmpPercent);
+  // 원문대로 "챔피언 스킬과 기본 지속 효과 피해량"만 증폭한다 - 기본
+  // 공격(isBasicAttack)은 제외한다.
+  const ampSource = resolveDamageSource(source, target);
+  if (!isBasicAttack && ampSource && ampSource.itemSpellDamageAmpPercent > 0) dmg *= (1 + ampSource.itemSpellDamageAmpPercent);
   // 아이템 패시브(피의 노래 "약점 노출" - 대상이 받는 피해량 증가) - 공격자
   // 기준 증폭(itemSpellDamageAmpPercent, 위)과 반대로 "대상"이 받는 모든
   // 피해(물리/마법/고정 전부)에 적용되는 VULNERABLE 상태이상이다.
@@ -509,7 +518,7 @@ function applyDamage(target, result) {
   // 스킬 코드를 하나도 건드릴 필요가 없다(요청 20-C와 동일한 원칙).
   if (target.isMinion) return applyDamageToMinion(target, result, true); // applyDamage()는 항상 챔피언(플레이어) 스킬/공격 경로에서만 호출됨
   if (target.isTurret) {
-    const turretDmgSource = result.source || (typeof controller !== 'undefined' ? controller : null);
+    const turretDmgSource = resolveDamageSource(result.source, target);
     const turretFinalDmg = applyDamageToTurret(target, result, { source: turretDmgSource });
     // 마법의 영약("챔피언이나 포탑에 피해를 입히면 25의 추가 고정 피해") -
     // 포탑 전용 좁은 훅(itemOnDamageDealtToTurret)만 호출한다. 기존
@@ -544,14 +553,14 @@ function applyDamage(target, result) {
   // `result.source`가 없으면 전역 `controller`(플레이어 자신)로 안전하게
   // 대체한다(미니언 경로의 `applyDamageToMinion()`이 이미 쓰던 것과 동일한
   // 원칙 - killMinion()의 전역 controller 참조 참고).
-  const dmgSource = result.source || (typeof controller !== 'undefined' ? controller : null);
+  const dmgSource = resolveDamageSource(result.source, target);
   if (dmgSource && typeof dmgSource.championId === 'string') {
     if (typeof applyItemVamp === 'function') applyItemVamp(dmgSource, finalDmg);
     const dealtDamageType = result.damageType || DAMAGE_TYPE.PHYSICAL; // calculateDamage()의 기본값과 동일하게 맞춘다
     if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(dmgSource, finalDmg, dealtDamageType);
     if (target.isChampion) dmgSource._itemLastDealtChampionDamageAt = performance.now();
     if (typeof target._itemLastTookChampionDamageAt !== 'undefined') target._itemLastTookChampionDamageAt = performance.now();
-    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, finalDmg, dealtDamageType);
+    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, finalDmg, dealtDamageType, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
   }
   // 요청(처형 시스템): 이 피해로 대상이 실제로 죽는지를 데미지 적용 "전"에
   // 먼저 판정한다 - 학습용 더미는 damageEnemy()에서 2% 바닥에 멈추도록
@@ -575,7 +584,9 @@ function applyDamage(target, result) {
     // 동일한 이유로 이 처형 판정 지점을 "챔피언 처치"로 재사용한다.
     if (dmgSource && typeof itemOnChampionTakedown === 'function') itemOnChampionTakedown(dmgSource);
   }
-  if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL);
+  // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만"
+  // 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 그대로 넘긴다.
+  if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
   else damageEnemy(target, finalDmg);
   return finalDmg;
 }
@@ -2509,8 +2520,8 @@ const ITEM_DATA = {
   embersOfFate: {
     id: 'embersOfFate', nameKo: '운명의 재', cost: 900, recipe: ['amplifyingTome'],
     stats: { abilityPower: 30 },
-    // 발화 - 챔피언/더미 대상 피해를 입히면(스킬 한정이 원문이지만, 여신의
-    // 눈물과 동일한 이유로 평타+스킬 전체 피해를 트리거로 근사했다) 3초간
+    // 발화 - 스킬로 피해를 입히면(원문 그대로 스킬 한정 - item_system.js의
+    // _itemIsAbilityDamage로 평타/도트 틱/아이템 효과 피해는 제외) 3초간
     // 불태워 매초 5의 마법 고정 피해(이미 있는 DOT 상태이상 타입 - 다리우스
     // 출혈이 쓰던 것과 동일한 범용 틱 시스템을 재사용). 몬스터(미니언) 대상은
     // 매초 15(5+10)의 추가 피해(원문 "몬스터에게는 매초 15의 추가 피해")를
@@ -2538,8 +2549,9 @@ const ITEM_DATA = {
   // [전설급 아이템] 2차분 - 삼위일체~지배자의 피갑옷(사용자가 올려준 원본
   // 텍스트 625~758줄). 복잡한 적중 시 효과가 많아 하나씩 신중하게 구현한다.
   // 공용 엔지니어링 메모(item_system.js 상단 참고):
-  // - "스킬로 피해를 입히면" 계열은 전부 기존 여신의 눈물/운명의 재와 동일한
-  //   이유(스킬/평타 구분 플래그가 없음)로 "평타+스킬 피해 전체"에 근사한다.
+  // - "스킬로 피해를 입히면" 계열은 applyDamage()가 넘기는 피해 메타
+  //   (isBasicAttack/isStatusTick/isItemEffect)로 스킬 피해만 골라 발동한다
+  //   (item_system.js의 _itemIsAbilityDamage 참고).
   // - 기본 공격 전용 효과(안개의 검/쪼기/충격/선장/라이트쉴드 타격 등)는
   //   itemOnBasicAttackHit()(광휘의 검/티아맷이 이미 쓰던 공용 훅)에서
   //   처리한다 - 이 훅은 applyDamage()"안"이 아니라 메인 평타의 applyDamage()가
@@ -3061,8 +3073,7 @@ const ITEM_DATA = {
   // 90초간 "파괴 공작" 보유 - 그 상태로 에픽 몬스터/포탑 공격 시 3초에
   // 걸친 거대한 고정 피해. 이 프로젝트엔 정글 몬스터가 없어 포탑 분기만
   // 구현한다(명시적 한계 - 선체파괴자 등과 동일한 성격). "스킬로" 피해를
-  // 입히는 트리거는 이 프로젝트의 공용 한계(스킬/평타 구분 불가)로 평타+
-  // 스킬 전체에 근사한다(여신의 눈물 등과 동일 - README 참고).
+  // 입히는 트리거는 원문 그대로 스킬 피해에만 발동한다.
   fortressBreaker: {
     id: 'fortressBreaker', nameKo: '요새파괴자', cost: 3000, recipe: ['feralization', 'serratedDirk'],
     stats: { attackDamage: 55, abilityHaste: 15 }, armorPenFlat: 22,
@@ -10803,6 +10814,7 @@ class CharacterController {
           armorPenPercent: this.armorPenPercent || 0,
           bonusArmorIgnorePercent: (this.championId === 'yasuo' && this._yasuo.rArmorBuffUntil > performance.now()) ? this._champData().R.armorIgnoreBonusPercent : 0,
           yoneAzakana,
+          isBasicAttack: true,
         };
         vfx.spawn('basicAttack', originPos, dirToTarget);
         // 버그 수정: 지금까지 모든 챔피언의 평타가 예외 없이 물리 투사체를
@@ -12700,7 +12712,7 @@ class CharacterController {
   }
 
   /* ---------------- health / death / respawn ---------------- */
-  takeDamage(dmg, source = null, damageType = DAMAGE_TYPE.PHYSICAL) {
+  takeDamage(dmg, source = null, damageType = DAMAGE_TYPE.PHYSICAL, damageMeta = null) {
     if (this.state === STATE.DEAD) return;
     // Alpha Strike 비대상 상태 - 섹션 6: "모든 피격 판정에서 확인해야 한다".
     if (this.isUntargetable) return;
@@ -12724,7 +12736,7 @@ class CharacterController {
     // 적용되기 직전에 발동). 죽음의무도(고통 무시)는 받는 피해 자체를
     // 바꾸므로(일부를 지연 피해로 돌림) 반환값을 그대로 remaining에
     // 반영한다 - `?? remaining`으로 다른 효과들의 기존 void 반환과도 안전하게 호환.
-    if (typeof itemOnTakeDamage === 'function') remaining = itemOnTakeDamage(this, remaining, damageType, source) ?? remaining;
+    if (typeof itemOnTakeDamage === 'function') remaining = itemOnTakeDamage(this, remaining, damageType, source, damageMeta) ?? remaining;
     // 버그 수정(세트 패시브 문서 4절 "실제로 HP에 적용된 피해를 기준으로
     // 한다"): 예전에는 Shield로 흡수되기 전의 remaining을 그대로 투지
     // 계산에 넘겨서, Shield가 300 있는 상태에서 500 피해를 받아 실제로는
@@ -14197,7 +14209,7 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
     const clip=this.findAnimation(clipName); const interval=getAttackInterval(this.stats); const windup=getWindupDuration(this.stats); const recovery=getRecoveryDuration(this.stats);
     this.runAction(`renektonAA${this.comboIndex}`,STATE.ATTACK,{faceDir:dir,startupOverride:windup,recoveryOverride:recovery,timeScaleOverride:clip&&interval>0?THREE.MathUtils.clamp(clip.duration/interval,0.4,3):1,dataOverride:{clips:[clipName],startup:windup,recovery,cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{
       if(!targetLockValid(target)) return;
-      const attackResult={rawDamage:this.stats.attackDamage,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1};
+      const attackResult={rawDamage:this.stats.attackDamage,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,isBasicAttack:true};
       applyDamage(target,attackResult); this._renektonOnBasicAttackHit(target);
     }});
     function targetLockValid(t){return t && t.hp>0;}
@@ -19899,10 +19911,10 @@ CharacterController.prototype._asheFireFlurry = function(originalTarget, originP
       color: 0xbfe8ff, realmId: this.realmId,
       onHit: (u) => {
         if (u.isTurret) { applyDamageToTurret(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, { isRanged: true, source: this }); return; }
-        if (u.isMinion) { applyDamageToMinion(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true); this._asheApplyFrostShot(u, willCrit); return; }
+        if (u.isMinion) { applyDamageToMinion(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true }, true); this._asheApplyFrostShot(u, willCrit); return; }
         if (u.isInhibitor) { applyDamageToInhibitor(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
         if (u.isNexus) { applyDamageToNexus(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
-        applyDamage(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
+        applyDamage(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true });
         this._asheApplyFrostShot(u, willCrit);
         debugSkillHit('Ashe Q (다발 공격)', u, { arrows, dmg: dmg.toFixed(1) });
       },
@@ -21381,7 +21393,7 @@ function updateTurretCombat(turret, dt) {
     realmId: turret.realmId, // Phase 2 요청 17 - 발사 시점 realm 스냅샷(포탑은 realmId가 바뀌지 않지만 대칭성을 위해 항상 넘긴다)
     fromTurret: true, // 버그 수정(요청 27): 야스오 바람 장막은 포탑 공격/광선을 막지 않는다 -
     // ProjectileSystem.update()의 windwall 충돌 검사가 이 플래그를 보고 포탑 발사체는 건너뛴다.
-    onHit: (t) => { if (t.isMinion) applyDamageToMinion(t, result); else applyDamage(t, result); },
+    onHit: (t) => { if (t.isMinion) applyDamageToMinion(t, result); else applyDamage(t, { ...result, isBasicAttack: true, source: turret }); },
   });
 }
 // O. 우물(기지) - 요청 6/43: 일반 포탑 전투 시스템을
@@ -21417,7 +21429,7 @@ function updateNexusWell(well, dt) {
       && well.team !== PLAYER_TEAM && canRealmInteract(well, controller)) {
     const dist = getHorizontalDistance(getWorldPosition(well), controller.root.position);
     if (dist <= well.radius) {
-      applyDamage(controller, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+      applyDamage(controller, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: well, isStatusTick: true });
     }
   }
   // 적 미니언도 같은 원칙으로 상대 진영 우물 범위에 들어오면 공격당한다.
@@ -22689,7 +22701,7 @@ function updateMinionAttack(minion, dt) {
   }
   const dealHit = () => {
     if (minion.isDead || !isValidMinionTarget(minion, target)) return; // 요청 16/37: 타격 시점에 대상이 이미 무효화됐으면 피해를 주지 않는다
-    const dmg = { rawDamage: minion.attackDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 };
+    const dmg = { rawDamage: minion.attackDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, source: minion };
     if (target.isTurret) {
       minion.hasAttackedStructure = true;
       // 버그 수정: getTurretDamage()는 "포탑이 미니언에게 주는 피해"(포탑
@@ -22830,7 +22842,7 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
       // 운명의 재(발화)/여신의 눈물(마나순환) - 챔피언 전용 효과(그리버스/
       // 카탈리스트 마나 회복)는 itemOnDamageDealt() 내부에서 target.isChampion
       // 으로 걸러지므로 미니언 대상으로 호출해도 안전하다.
-      if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(controller, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL);
+      if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(controller, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
     }
   }
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }
@@ -23395,7 +23407,7 @@ function _useActiveAbilityItem(ctrl, item) {
     const hits = findEnemiesInRadius(ctrl.root.position, item.activeAbility.radius);
     for (const { unit } of hits) {
       if (!unit || unit.hp <= 0 || unit.isTurret || unit.isInhibitor || unit.isNexus) continue; // 구조물 제외(원문 그대로)
-      applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
     }
   }
   console.log(`[ITEM] ${item.nameKo}(${item.activeAbility.nameKo}) 사용`);
@@ -23433,7 +23445,7 @@ function _useShockwaveActive(ctrl, item) {
     const hits = findEnemiesInRadius(ctrl.root.position, p.radius);
     for (const { unit } of hits) {
       if (!unit || unit.hp <= 0 || unit.isTurret || unit.isInhibitor || unit.isNexus) continue; // 구조물 제외(원문 그대로)
-      applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
       if (unit.isChampion && typeof applyStatus === 'function') {
         applyStatus(unit, { id: 'itemHydraShockwaveSlow', type: 'SLOW', duration: p.slowDurationSec, value: p.slowPercent, source: ctrl });
         championHits += 1;
@@ -23502,7 +23514,7 @@ function _useRocketbeltActive(ctrl, item) {
       // "구조물 제외" 문구가 없다(이 프로젝트의 확립된 원칙 - QA 재점검에서
       // 근거 없는 구조물 제외를 여러 번 버그로 찾아 고친 적이 있다).
       if (!unit || unit.hp <= 0) continue;
-      applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
     }
   }
   console.log(`[ITEM] ${item.nameKo}(${p.nameKo}) 사용`);
@@ -23527,7 +23539,7 @@ function _useNoxiousBladeActive(ctrl, item) {
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
   const base = _itemScaleByLevel(ctrl, p.minDmg, p.maxDmg, p.levelMin, p.levelMax);
-  applyDamage(target, { rawDamage: base + ap * p.apPercent, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+  applyDamage(target, { rawDamage: base + ap * p.apPercent, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
   if (typeof applyStatus === 'function') {
     applyStatus(target, { id: 'itemNoxiousBladeSlow', type: 'SLOW', duration: p.slowDurationSec, value: p.slowPercent, source: ctrl });
   }
@@ -23943,7 +23955,7 @@ function itemSystemTick(ctrl, dt) {
           const hits = findEnemiesInRadius(ctrl.root.position, p.radius);
           for (const { unit } of hits) {
             if (!unit || unit.hp <= 0 || !unit.isChampion) continue;
-            totalDealt += applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+            totalDealt += applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
           }
         }
         if (totalDealt > 0) {
@@ -24082,12 +24094,12 @@ function itemSystemTick(ctrl, dt) {
           const hits = findEnemiesInRadius(g.target.mesh ? g.target.mesh.position : ctrl.root.position, gp.explosionRadius);
           for (const { unit } of hits) {
             if (!unit || unit.hp <= 0) continue;
-            applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+            applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
           }
         }
         console.log('[ITEM] 폭풍쇄도 - 질풍(대상 사망, 즉시 폭발)');
       } else if (now >= g.triggerAt) {
-        applyDamage(g.target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+        applyDamage(g.target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
         console.log('[ITEM] 폭풍쇄도 - 질풍 타격');
       } else {
         remaining.push(g);
@@ -24171,16 +24183,25 @@ function applyItemPhysicalVamp(source, finalDmg, damageType) {
 // 이번에 받는 피해량 자체를 바꿔야 하는 효과라서 반환값을 쓰는 구조로
 // 바꿨다 - 호출부(takeDamage())는 `itemOnTakeDamage(...) ?? remaining`로
 // undefined(아무것도 안 바꿈)와 "새 피해량"을 모두 안전하게 받는다.
-function itemOnTakeDamage(ctrl, incomingDamage, damageType, source) {
+function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null) {
   if (!ctrl) return incomingDamage;
   let remaining = incomingDamage;
   const now = performance.now();
 
-  // 신록의 장벽/벤시의장막(무효화) - "적의 다음 스킬을 막아 주는 주문
-  // 방어막"을 이 엔진의 공용 한계(스킬/평타 구분 불가)에 따라 "다음 피해
-  // 1회 전체 무효화"로 근사한다. 방어막이 떠 있으면 이번 피해를 통째로
-  // 막고 소모한다 - itemSystemTick()이 재사용대기시간 뒤에 다시 생성한다.
-  if (ctrl._itemNullifyShieldUp) {
+  // 신록의 장벽/벤시의장막(무효화) - 원문 그대로 "적 챔피언의 다음 스킬"만
+  // 막는 주문 방어막이다. 미니언/포탑 기본 공격, 우물, 도트 틱, 아이템 효과
+  // 피해에는 반응하지 않고 소모되지도 않는다. 막으면 소모되고
+  // itemSystemTick()이 재사용대기시간 뒤에 다시 생성한다.
+  const fromEnemyChampion = !!source && source !== ctrl && (typeof source.championId === 'string' || !!source.isChampion);
+  const isAbilityHit = fromEnemyChampion && _itemIsAbilityDamage(meta || {});
+  // 벤시의장막 전용 - "챔피언에게 피해를 입으면 아이템 재사용 대기시간이
+  // 초기화됩니다." 이미 방어막이 떠 있으면 건드리지 않고(item_data.js 주석
+  // 참고), 아직 충전 중일 때만 지금부터 다시 센다.
+  if (fromEnemyChampion && !ctrl._itemNullifyShieldUp) {
+    const banshSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].nullifyPassive && ITEM_DATA[s.id].nullifyPassive.resetOnChampionDamage);
+    if (banshSlot) ctrl._itemNullifyReadyAt = now + ITEM_DATA[banshSlot.id].nullifyPassive.icdSec * 1000;
+  }
+  if (ctrl._itemNullifyShieldUp && isAbilityHit) {
     const nullifySlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].nullifyPassive);
     if (nullifySlot) {
       const p = ITEM_DATA[nullifySlot.id].nullifyPassive;
@@ -24333,22 +24354,31 @@ function _itemTickDeathsDanceDot(ctrl, dt) {
 // 안전하게 no-op된다. 여신의 눈물(마나순환)/처형인의 대검(그리버스)/
 // 억겁의 카탈리스트(피해 시 마나 회복)/운명의 재(발화 DOT)를 전부
 // 여기서 처리한다.
-function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
+// 피해 메타(applyDamage()가 넘김)로 "스킬 피해"인지 판정한다. 평타/도트
+// 틱/아이템 자체 효과 피해가 아니면 스킬이다. 메타 없이 호출되는 경로는
+// 예전 동작(모든 피해를 트리거로 취급)을 그대로 유지한다.
+function _itemIsAbilityDamage(meta) {
+  if (!meta) return true;
+  if (meta.isAbility != null) return !!meta.isAbility;
+  return !(meta.isBasicAttack || meta.isStatusTick || meta.isItemEffect);
+}
+
+function itemOnDamageDealt(ctrl, target, finalDmg, damageType, meta = null) {
+  const isAbility = _itemIsAbilityDamage(meta);
   // 처형인의 대검 - 챔피언 대상 물리 피해에 그리버스(고통스러운 상처)를 건다.
   if (target.isChampion && damageType === DAMAGE_TYPE.PHYSICAL && ctrl.itemGrievousOnHitPercent > 0 && typeof applyStatus === 'function') {
-    applyStatus(target, { id: 'itemGrievousWounds', type: 'GRIEVOUS', duration: ctrl.itemGrievousOnHitDurationSec, value: ctrl.itemGrievousOnHitPercent, source: ctrl });
+    applyStatus(target, { id: 'itemGrievousWounds', type: 'GRIEVOUS', duration: ctrl.itemGrievousOnHitDurationSec, value: ctrl.itemGrievousOnHitPercent, source: ctrl, isItemEffect: true });
   }
   // 억겁의 카탈리스트 - 챔피언에게 피해를 입히면 그 피해량의 7%만큼 마나 회복.
   if (target.isChampion && ctrl.itemManaOnDamagePercent > 0 && (ctrl.maxMp || 0) > 0) {
     ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + finalDmg * ctrl.itemManaOnDamagePercent);
   }
-  // 운명의 재(발화) - 챔피언/더미/미니언 대상 피해 전체를 트리거로 근사
-  // (item_data.js 주석 참고 - "스킬 적중 시"를 평타+스킬 전체로 근사).
+  // 운명의 재(발화) - 원문 "스킬 적중 시" 그대로 스킬 피해에만 발동한다.
   // 몬스터(미니언) 대상은 원문 그대로 더 센 초당 피해(monsterDmgPerSec)를
   // 쓴다. 같은 id로 다시 걸면 지속시간이 갱신될 뿐 중첩되지 않는다
   // (01_status_effect_system.js의 upsert 원칙 그대로).
   const embersSlot = (ctrl.items || []).find((s) => s.id === 'embersOfFate');
-  if (embersSlot && typeof applyStatus === 'function') {
+  if (embersSlot && isAbility && typeof applyStatus === 'function') {
     const p = ITEM_DATA.embersOfFate.burnOnDamagePassive;
     const perSec = target.isMinion ? p.monsterDmgPerSec : p.dmgPerSec;
     applyStatus(target, { id: p.id, type: 'DOT', duration: p.durationSec, totalDamage: perSec * p.durationSec, damageType: DAMAGE_TYPE.MAGICAL, tickInterval: 1.0, source: ctrl });
@@ -24359,8 +24389,9 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
   // 않고 manaCirculationPassive 필드 보유 여부로 찾는다 - 그래야 여신의
   // 눈물을 조합해 마나무네가 된 뒤에도(_itemTearState는 ctrl 레벨 상태라
   // 그대로 이어짐) 충전이 계속 쌓여 360 마나 도달 시 무라마나로 변신할 수 있다.
+  // 원문 "스킬이나 기본 공격으로 적중" - 도트 틱/아이템 효과 피해는 충전을 쓰지 않는다.
   const tearSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].manaCirculationPassive);
-  if (tearSlot) {
+  if (tearSlot && !(meta && (meta.isStatusTick || meta.isItemEffect))) {
     const p = ITEM_DATA[tearSlot.id].manaCirculationPassive;
     ctrl._itemTearState = ctrl._itemTearState || { charges: p.maxCharges, gained: 0 };
     const st = ctrl._itemTearState;
@@ -24404,20 +24435,23 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
       ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + finalDmg * eff.championPhysicalVampPercent);
     }
   }
-  // 전설급 2차분 - "스킬로 피해를 입히면" 계열(월식/무라마나 충격/쇼진의창)은
-  // 평타 경로에서 이미 호출되는 것과 동일한 공용 함수를 재사용해서 평타+
-  // 스킬 양쪽에서 동작하게 한다(여신의 눈물 때와 동일한 "스킬/평타 구분
-  // 불가" 근사 - item_data.js 주석 참고).
-  _itemEclipseOnHit(ctrl, target);
-  _itemMuramanaShockOnHit(ctrl, target, false);
-  // 쇼진의창(집중된 의지) - 피해를 입힐 때마다 스택(최대 4, 스택당 3%,
+  // 전설급 2차분 - "스킬로 피해를 입히면" 계열(월식/무라마나 충격/쇼진의창).
+  // 기본 공격 쪽은 itemOnBasicAttackHit()이 따로 처리하므로 여기서는 스킬
+  // 피해일 때만 부른다 - 예전엔 평타 한 번이 이 경로와 평타 경로를 둘 다
+  // 타서 월식의 "2회 적중"이 평타 1회로 발동되고, 무라마나는 평타 보너스와
+  // 스킬 보너스가 한 번에 같이 터지는 버그가 있었다.
+  if (isAbility) {
+    _itemEclipseOnHit(ctrl, target);
+    _itemMuramanaShockOnHit(ctrl, target, false);
+  }
+  // 쇼진의창(집중된 의지) - 스킬로 피해를 입힐 때마다 스택(최대 4, 스택당 3%,
   // 6초 지속·재적중 시 갱신) - 실제 수치 반영은 itemSystemTick()이 매
   // 프레임 ctrl.itemSpellDamageAmpPercent에 다시 써넣는다(calculateDamage()
   // 가 매 프레임이 아니라 피해가 발생할 때마다 호출되므로, "스택이 아직
   // 안 꺼졌는지"는 여기서 매번 갱신해도 안전하다 - 중복 호출 방지 로직
   // 불필요, 그냥 스택+시간만 갱신).
   const shojinSlot = (ctrl.items || []).find((s) => s.id === 'shojinSpear');
-  if (shojinSlot) {
+  if (shojinSlot && isAbility) {
     const p = ITEM_DATA.shojinSpear.focusedWillPassive;
     const now = performance.now();
     if (now >= (ctrl._itemShojinExpiresAt || 0)) ctrl._itemShojinStacks = 0;
@@ -24516,11 +24550,9 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
   }
 
   // 벼락폭풍검(전류 자극) - "스킬로 챔피언에게 피해를 입히면" 충전 상태가
-  // 준비된다(다른 아이템들과 동일한 한계로 평타+스킬 전체에 근사한다 -
-  // 이 함수 자체가 이미 "스킬이든 평타든 피해를 입히면" 공용 경로이므로
-  // 추가 근사 없이 자연스럽게 맞물린다).
+  // 준비된다(원문 그대로 스킬 피해만).
   const stormsurgeDmgSlot = (ctrl.items || []).find((s) => s.id === 'stormsurge');
-  if (stormsurgeDmgSlot && target.isChampion) ctrl._itemSkillChargeReady = true;
+  if (stormsurgeDmgSlot && isAbility && target.isChampion) ctrl._itemSkillChargeReady = true;
 
   // 오만(명성) - 피해를 입힌 챔피언을 기록해둔다(itemOnChampionDeath()가
   // 3초 안의 죽음을 판정). 죽음의무도 "반항"/마법광학 장치 C44 "비전
@@ -24540,12 +24572,12 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
     ctrl._itemEternalThirstTargets.set(_itemTargetKey(target), performance.now() + p.windowSec * 1000);
   }
 
-  // 요새파괴자(성형작약) - 챔피언에게 스킬로 피해를 입히면(평타+스킬 근사)
+  // 요새파괴자(성형작약) - 챔피언에게 스킬로 피해를 입히면
   // 추가 고정 피해, 자신의 물리 방어구 관통력 비례(재사용대기 20초).
   // calculateDamage()를 다시 거치지 않고 "고정 피해"를 그대로 깎는다
   // (TRUE 취급 - 마법의 영약의 고정 피해와 동일한 패턴).
   const fortressDmgSlot = (ctrl.items || []).find((s) => s.id === 'fortressBreaker');
-  if (fortressDmgSlot && target.isChampion) {
+  if (fortressDmgSlot && isAbility && target.isChampion) {
     const p = ITEM_DATA.fortressBreaker.shapedChargePassive;
     const now = performance.now();
     if ((ctrl._itemShapedChargeReadyAt || 0) <= now) {
@@ -24559,10 +24591,10 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
     }
   }
 
-  // 세릴다의 원한(매서운 추위) - 스킬로(평타+스킬 근사) 체력 50% 이하인
+  // 세릴다의 원한(매서운 추위) - 스킬로 체력 50% 이하인
   // 적에게 피해를 입히면 1초간 30% 둔화.
   const seryldaSlot = (ctrl.items || []).find((s) => s.id === 'serylasGrudge');
-  if (seryldaSlot && (target.hp / (target.maxHp || 1)) <= ITEM_DATA.serylasGrudge.frostPassive.hpThresholdPercent && typeof applyStatus === 'function') {
+  if (seryldaSlot && isAbility && (target.hp / (target.maxHp || 1)) <= ITEM_DATA.serylasGrudge.frostPassive.hpThresholdPercent && typeof applyStatus === 'function') {
     const p = ITEM_DATA.serylasGrudge.frostPassive;
     applyStatus(target, { id: 'itemSeryldaSlow', type: 'SLOW', duration: p.slowDurationSec, value: p.slowPercent, source: ctrl });
   }
@@ -24714,14 +24746,6 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
     }
   }
 
-  // 벤시의장막(무효화) - "챔피언에게 피해를 입으면 재사용 대기시간이
-  // 초기화됩니다." 이미 방어막이 떠 있는 상태는 건드리지 않고(보수적
-  // 해석 - item_data.js 주석 참고), 아직 충전 중일 때만 타이머를 다시
-  // 지금부터 전체 재사용대기시간만큼 센다.
-  const banshSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].nullifyPassive && ITEM_DATA[s.id].nullifyPassive.resetOnChampionDamage);
-  if (banshSlot && target.isChampion && !ctrl._itemNullifyShieldUp) {
-    ctrl._itemNullifyReadyAt = performance.now() + ITEM_DATA[banshSlot.id].nullifyPassive.icdSec * 1000;
-  }
 
   // 세계지도집/룬 나침반(재물 공유 - 챔피언/구조물 피해) - "스킬 및 기본
   // 공격으로 챔피언 및 구조물에 피해를 입히면 (근거리22｜원거리20)골드를
@@ -24738,11 +24762,11 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
   }
 
   // 자자크의 세계가시(공허 폭발, 재사용대기 10초) - "챔피언에게 스킬로
-  // 피해를 입히면"(평타+스킬 전체 근사) 대상 위치에서 폭발 - 대상+주변
+  // 피해를 입히면" 대상 위치에서 폭발 - 대상+주변
   // 적에게 10+주문력15%+최대체력3% 마법 피해(몬스터는 최대체력 항을
   // 300으로 캡).
   const zazakSlot = (ctrl.items || []).find((s) => s.id === 'zaZaksRealmspike');
-  if (zazakSlot && target.isChampion) {
+  if (zazakSlot && isAbility && target.isChampion) {
     const p = ITEM_DATA.zaZaksRealmspike.voidBurstPassive;
     const nowZ = performance.now();
     if ((ctrl._itemZazakReadyAt || 0) <= nowZ) {
@@ -24751,7 +24775,7 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType) {
       const doBurst = (unit) => {
         if (!unit || unit.hp <= 0) return;
         const hpBonus = unit.isMinion ? Math.min(p.monsterMaxHpBonusCap, (unit.maxHp || 0) * p.maxHpPercent) : (unit.maxHp || 0) * p.maxHpPercent;
-        applyDamage(unit, { rawDamage: p.baseDmg + ap * p.apPercent + hpBonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+        applyDamage(unit, { rawDamage: p.baseDmg + ap * p.apPercent + hpBonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
       };
       doBurst(target);
       if (typeof findEnemiesInRadius === 'function') {
@@ -25325,13 +25349,13 @@ function _itemCleaveOnHit(ctrl, target) {
   }
   const basis = ctrl.maxHp || 0;
   const targetRaw = targetPercent * basis;
-  if (targetRaw > 0) applyDamage(target, { rawDamage: targetRaw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+  if (targetRaw > 0) applyDamage(target, { rawDamage: targetRaw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
   const splashRaw = splashPercent * basis;
   if (splashRaw > 0 && typeof findEnemiesInRadius === 'function') {
     const hits = findEnemiesInRadius(target.mesh ? target.mesh.position : ctrl.root.position, p.radius);
     for (const { unit } of hits) {
       if (!unit || unit === target || unit.hp <= 0 || _itemIsStructure(unit)) continue;
-      applyDamage(unit, { rawDamage: splashRaw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      applyDamage(unit, { rawDamage: splashRaw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
     }
   }
 }
@@ -25367,7 +25391,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     ctrl._itemHeartsteelReady = false; ctrl._itemHeartsteelProgress = 0; ctrl._itemHeartsteelChargeTarget = null;
     const p = ITEM_DATA.heartsteel.giantAbsorbPassive;
     const bonusDmg = p.flatDmg + (ctrl.maxHp || 0) * p.bonusHpPercent;
-    applyDamage(target, { rawDamage: bonusDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    applyDamage(target, { rawDamage: bonusDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
     // 영구 최대 체력 획득분은 암흑의 인장 영광/영겁의지팡이 불멸의 시간과
     // 동일한 패턴 - 중첩 상태(_itemHeartsteelPermanentHpGain)를 따로 저장해두고
     // recomputeItemStats()의 applyOne()이 매번 다시 더해 넣는다(여기서
@@ -25411,7 +25435,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
         // 이 피해 자체가 한 번 더 들어가는 것으로 단순화했다(item_data.js
         // 주석 참고) - extraProc이 없는 기존 아이템은 1회만 적용된다.
         const procs = p.extraProc ? 2 : 1;
-        for (let i = 0; i < procs; i++) applyDamage(target, { rawDamage: bonus, damageType: dmgType, isCritical: false, critMultiplier: 1, source: ctrl });
+        for (let i = 0; i < procs; i++) applyDamage(target, { rawDamage: bonus, damageType: dmgType, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
       }
       if ((p.manaAdPercent || p.manaPerCritChance) && (ctrl.maxMp || 0) > 0) {
         const manaGain = (p.manaAdPercent || 0) * baseAd + (p.manaPerCritChance || 0) * (ctrl.stats.critChance || 0);
@@ -25443,7 +25467,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
       const hits = findEnemiesInRadius(target.mesh ? target.mesh.position : ctrl.root.position, p.radius);
       for (const { unit } of hits) {
         if (!unit || unit === target || unit.hp <= 0 || unit.isTurret || unit.isInhibitor || unit.isNexus) continue;
-        applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+        applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
       }
     }
   }
@@ -25466,7 +25490,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
   // 제외 가드가 들어가 있었다 - 포탑 대상에도 그대로 적용되게 고친다.
   const onHitPhysSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && typeof ITEM_DATA[s.id].onHitFlatPhysicalPassive === 'number');
   if (onHitPhysSlot) {
-    applyDamage(target, { rawDamage: ITEM_DATA[onHitPhysSlot.id].onHitFlatPhysicalPassive, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    applyDamage(target, { rawDamage: ITEM_DATA[onHitPhysSlot.id].onHitFlatPhysicalPassive, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
   }
   // 버그 수정: 마법사의 최후(쪼기)도 원문에 구조물 제외 언급이 없다 -
   // 동일하게 제거한다(구인수의 격노검 "분노"도 같은 필드를 공유하므로
@@ -25474,7 +25498,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
   const onHitMagicSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && typeof ITEM_DATA[s.id].onHitFlatMagicDamage === 'number');
   if (onHitMagicSlot) {
     const flatMagic = ITEM_DATA[onHitMagicSlot.id].onHitFlatMagicDamage;
-    applyDamage(target, { rawDamage: flatMagic, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    applyDamage(target, { rawDamage: flatMagic, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
     // 구인수의 격노검(들끓는 일격) - 최대 중첩(4, 공격속도 32%) 도달 시
     // 3번째 기본 공격마다 "분노"(위에서 이미 적용한 고정 마법 피해)를
     // 한 번 더 입힌다. 다른 아이템(마법사의 최후 등)은 ragingBlowsPassive가
@@ -25495,7 +25519,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
         ctrl._itemWrathbladeMaxStackHits = (ctrl._itemWrathbladeMaxStackHits || 0) + 1;
         if (ctrl._itemWrathbladeMaxStackHits >= rp.doubleProcHitsNeeded) {
           ctrl._itemWrathbladeMaxStackHits = 0;
-          applyDamage(target, { rawDamage: flatMagic, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+          applyDamage(target, { rawDamage: flatMagic, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
         }
       } else {
         ctrl._itemWrathbladeMaxStackHits = 0; // 최대 중첩이 풀리면(공격 공백) 카운트도 초기화
@@ -25510,7 +25534,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
   if (onHitMagicApSlot) {
     const p = ITEM_DATA[onHitMagicApSlot.id].onHitMagicDamagePassive;
     const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
-    applyDamage(target, { rawDamage: p.flat + ap * p.apPercent, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    applyDamage(target, { rawDamage: p.flat + ap * p.apPercent, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
   }
   // 경계(그림자) - 기본 공격 시 고정+추가공격력%+주문력% 온히트 마법 피해.
   // 버그 수정(QA 재점검): 원문에 구조물 제외 언급이 없는데 다른 코드를
@@ -25519,7 +25543,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
   if (hybridSlot) {
     const p = ITEM_DATA.vigilance.onHitHybridPassive;
     const raw = p.flat + _itemBonusAD(ctrl) * p.bonusAdPercent + (ctrl.stats.abilityPower || 0) * p.apPercent;
-    if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
   }
   // 경계(빛과 어둠) - 챔피언 상대 기본 공격마다 빛/어둠을 번갈아 적용하고
   // 각각 최대 3중첩까지 쌓인다(만료되면 다음 적용 때 1부터 다시 시작).
@@ -25555,7 +25579,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     const isMelee = _itemIsMelee(ctrl);
     let raw = (isMelee ? p.meleePercentCurrentHp : p.rangedPercentCurrentHp) * (target.hp || 0);
     if (!target.isChampion) raw = Math.min(raw, p.nonChampionCap);
-    if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
     if (target.isChampion) {
       const sp = ITEM_DATA.bladeOfTheRuinedKing.scurryingStrikePassive;
       ctrl._itemBotrkHitCounts = ctrl._itemBotrkHitCounts || new Map();
@@ -25601,7 +25625,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
         const raw = isStructure
           ? (isMelee ? p.meleeStructurePercentBaseAd * baseAd + p.meleeStructurePercentMaxHp * maxHp : p.rangedStructurePercentBaseAd * baseAd + p.rangedStructurePercentMaxHp * maxHp)
           : (isMelee ? p.meleePercentBaseAd * baseAd + p.meleePercentMaxHp * maxHp : p.rangedPercentBaseAd * baseAd + p.rangedPercentMaxHp * maxHp);
-        if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+        if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
       }
     }
   }
@@ -25677,7 +25701,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     const distLol = typeof worldDistanceToLol === 'function' ? worldDistanceToLol(distWorld) : distWorld;
     const ratio = Math.max(0, Math.min(1, distLol / p.maxDistanceLol));
     const bonusRaw = ratio * p.maxBonusPercent * (ctrl.stats.attackDamage || 0);
-    if (bonusRaw > 0) applyDamage(target, { rawDamage: bonusRaw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    if (bonusRaw > 0) applyDamage(target, { rawDamage: bonusRaw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
   }
 
   // 크라켄 학살자(벼락) - 대상별 3번째 기본 공격마다 잃은 체력 비례 추가
@@ -25699,7 +25723,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
       const level = Math.max(p.levelMin, Math.min(p.levelMax, ctrl.champLevel || p.levelMin));
       const levelRatio = (level - p.levelMin) / (p.levelMax - p.levelMin);
       const raw = min + (max - min) * levelRatio;
-      if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
     } else {
       ctrl._itemKrakenHitCounts.set(key, count);
     }
@@ -25716,7 +25740,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     // 그대로 적용된다(마법 피해로 들어가므로 포탑의 물리 방어력을 무시한다는
     // 차이만 있을 뿐, 발동 자체를 막을 이유가 없다).
     if (p.bonusMagicDamage) {
-      applyDamage(target, { rawDamage: p.bonusMagicDamage, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+      applyDamage(target, { rawDamage: p.bonusMagicDamage, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
     }
     if (p.msBuffPercent && typeof applyStatus === 'function') {
       applyStatus(ctrl, { id: 'itemChargeMsBuff', type: 'MS_BUFF', duration: p.msBuffDurationSec, value: p.msBuffPercent });
@@ -25760,7 +25784,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical) {
     ctrl._itemTempArmorPenFlatExpiresAt = now + p.durationSec * 1000;
     let raw = (isMelee ? p.meleeCurrentHpPercent : p.rangedCurrentHpPercent) * (target.hp || 0);
     if (!target.isChampion) raw = Math.min(raw, p.nonChampionCap);
-    if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
   }
 
   // 요새파괴자(파괴 공작) - 처치 관여 후 90초 안에, 포탑 대상 다음 기본
@@ -25826,7 +25850,7 @@ function _itemMuramanaShockOnHit(ctrl, target, isBasicAttack) {
   if (isBasicAttack) {
     if (!target.isChampion) return; // 원문: "챔피언에게 기본 공격 시"
     const raw = p.onHitManaPercent * (ctrl.maxMp || 0);
-    if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl });
+    if (raw > 0) applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
   } else {
     if (!target.isChampion) return; // 원문: "챔피언에게"
     const isMelee = _itemIsMelee(ctrl);
@@ -25836,7 +25860,7 @@ function _itemMuramanaShockOnHit(ctrl, target, isBasicAttack) {
     // itemOnDamageDealt() 내부(스킬 피해 경로)에서 호출되므로 applyDamage()를
     // 다시 부르면 무한 재귀 - calculateDamage()로 수치만 뽑아 직접 차감한다
     // (마법의 영약 "고정 피해" 훅과 동일한 안전 패턴).
-    const finalDmg = calculateDamage({ rawDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, target, source: ctrl });
+    const finalDmg = calculateDamage({ rawDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, target, source: ctrl, isItemEffect: true });
     const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
     target.hp = Math.max(minHp, (target.hp || 0) - finalDmg);
   }

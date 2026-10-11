@@ -410,16 +410,28 @@ function getRecoveryDuration(stats) { return Math.max(0, getAttackInterval(stats
 
 const DAMAGE_TYPE = { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' };
 
+// 피해 공격자 결정 - `source`를 넘기지 않은 호출(대부분의 챔피언 스킬)은
+// 이 데모의 유일한 챔피언 피해원인 플레이어(전역 controller)로 대체한다.
+// 단, 대상이 플레이어 자신이면 절대 대체하지 않는다: 미니언/포탑/우물이
+// 플레이어를 때릴 때 source가 없으면 플레이어가 "자기 자신을 공격한
+// 것"으로 처리돼, 자신의 흡혈·관통력·치명타 피해·피해 증폭이 자기가
+// "받는" 피해에 적용되는 버그가 있었다.
+function resolveDamageSource(source, target) {
+  if (source) return source;
+  if (typeof controller === 'undefined' || !controller || target === controller) return null;
+  return controller;
+}
+
 // 요청 16: 방어력/마법저항 공식 100/(100+armor). TRUE 데미지는 저항 무시.
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
 // 넘어온다 - 여기서 다시 굴리지 않는다(같은 공격 인스턴스의 결과가 명중
 // 시점에 바뀌면 안 되므로).
-function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0 }) {
+function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false }) {
   // 무한의 대검(치명타 피해량 +30%) - 각 챔피언 스킬이 저마다 다른
   // critMultiplier를 넘기므로(공용 필드가 아님), 공격자의 아이템 보너스를
   // 여기서 한 곳에서 더해 넣는다 - 치명타가 아니면 critMultiplier 자체가
   // 안 쓰이므로 영향이 없다.
-  const critAtk = source || (typeof controller !== 'undefined' ? controller : null);
+  const critAtk = resolveDamageSource(source, target);
   const critBonus = (critAtk && critAtk.itemBonusCritDamagePercent) || 0;
   let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critMultiplier + critBonus) : 1);
   if (damageType === DAMAGE_TYPE.PHYSICAL) {
@@ -429,7 +441,7 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     if (typeof getArmorShredPercent === 'function') armor *= (1 - getArmorShredPercent(target));
     // 아이템 패시브(톱날 단검 - 고정 물리 관통력 10) - 마법사의 신발(고정
     // 마법 관통력)과 동일한 원칙으로 퍼센트 관통보다 먼저 적용한다.
-    const atkP = source || (typeof controller !== 'undefined' ? controller : null);
+    const atkP = resolveDamageSource(source, target);
     // 벼락폭풍검(창공)의 "4초간 물리 관통력 획득"은 영구 스탯(itemBonusArmorPenFlat,
     // 구매/판매 시에만 재계산)과 별개로 지속시간이 있는 임시 버프라 자체
     // 필드(itemTempArmorPenFlat)에 더해서 같은 자리에서 합산한다.
@@ -457,7 +469,7 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     // 퍼센트 관통보다 먼저 적용한다(실제 LoL 공식과 동일 순서). `source`가
     // 없는 호출(대부분의 스킬 피해 호출)은 흡혈/영광 처치 훅과 동일한
     // 이유로 전역 `controller`(이 데모의 유일한 챔피언 피해원)로 대체한다.
-    const atk = source || (typeof controller !== 'undefined' ? controller : null);
+    const atk = resolveDamageSource(source, target);
     const flatMagicPen = (atk && atk.itemBonusMagicPenFlat) || 0;
     mr = Math.max(0, mr - flatMagicPen);
     // 경계(빛과 어둠 - 어둠)의 임시 마법 관통력(최대 30%) - PHYSICAL 분기의
@@ -474,13 +486,10 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   dmg = Math.max(0, dmg);
   // 아이템 패시브(쇼진의창 "집중된 의지" - 스택당 피해량 증폭) - 실제
   // LoL처럼 모든 피해 계산이 끝난 뒤 최종 피해에 곱하는 증폭으로 적용한다.
-  // 원문은 "챔피언 스킬과 기본 지속 효과 피해량"만 증폭한다고 돼 있지만,
-  // 이 프로젝트는 "이번 피해가 스킬인지 평타인지" 구분하는 공용 플래그가
-  // 없다(여신의 눈물/운명의 재/억겁의 카탈리스트 때와 동일한 한계) - 그
-  // 아이템들과 같은 원칙으로 공격자가 입히는 피해 전체(평타+스킬)에
-  // 근사 적용한다(명시적 근사 - README 참고).
-  const ampSource = source || (typeof controller !== 'undefined' ? controller : null);
-  if (ampSource && ampSource.itemSpellDamageAmpPercent > 0) dmg *= (1 + ampSource.itemSpellDamageAmpPercent);
+  // 원문대로 "챔피언 스킬과 기본 지속 효과 피해량"만 증폭한다 - 기본
+  // 공격(isBasicAttack)은 제외한다.
+  const ampSource = resolveDamageSource(source, target);
+  if (!isBasicAttack && ampSource && ampSource.itemSpellDamageAmpPercent > 0) dmg *= (1 + ampSource.itemSpellDamageAmpPercent);
   // 아이템 패시브(피의 노래 "약점 노출" - 대상이 받는 피해량 증가) - 공격자
   // 기준 증폭(itemSpellDamageAmpPercent, 위)과 반대로 "대상"이 받는 모든
   // 피해(물리/마법/고정 전부)에 적용되는 VULNERABLE 상태이상이다.
@@ -502,7 +511,7 @@ function applyDamage(target, result) {
   // 스킬 코드를 하나도 건드릴 필요가 없다(요청 20-C와 동일한 원칙).
   if (target.isMinion) return applyDamageToMinion(target, result, true); // applyDamage()는 항상 챔피언(플레이어) 스킬/공격 경로에서만 호출됨
   if (target.isTurret) {
-    const turretDmgSource = result.source || (typeof controller !== 'undefined' ? controller : null);
+    const turretDmgSource = resolveDamageSource(result.source, target);
     const turretFinalDmg = applyDamageToTurret(target, result, { source: turretDmgSource });
     // 마법의 영약("챔피언이나 포탑에 피해를 입히면 25의 추가 고정 피해") -
     // 포탑 전용 좁은 훅(itemOnDamageDealtToTurret)만 호출한다. 기존
@@ -537,14 +546,14 @@ function applyDamage(target, result) {
   // `result.source`가 없으면 전역 `controller`(플레이어 자신)로 안전하게
   // 대체한다(미니언 경로의 `applyDamageToMinion()`이 이미 쓰던 것과 동일한
   // 원칙 - killMinion()의 전역 controller 참조 참고).
-  const dmgSource = result.source || (typeof controller !== 'undefined' ? controller : null);
+  const dmgSource = resolveDamageSource(result.source, target);
   if (dmgSource && typeof dmgSource.championId === 'string') {
     if (typeof applyItemVamp === 'function') applyItemVamp(dmgSource, finalDmg);
     const dealtDamageType = result.damageType || DAMAGE_TYPE.PHYSICAL; // calculateDamage()의 기본값과 동일하게 맞춘다
     if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(dmgSource, finalDmg, dealtDamageType);
     if (target.isChampion) dmgSource._itemLastDealtChampionDamageAt = performance.now();
     if (typeof target._itemLastTookChampionDamageAt !== 'undefined') target._itemLastTookChampionDamageAt = performance.now();
-    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, finalDmg, dealtDamageType);
+    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, finalDmg, dealtDamageType, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
   }
   // 요청(처형 시스템): 이 피해로 대상이 실제로 죽는지를 데미지 적용 "전"에
   // 먼저 판정한다 - 학습용 더미는 damageEnemy()에서 2% 바닥에 멈추도록
@@ -568,7 +577,9 @@ function applyDamage(target, result) {
     // 동일한 이유로 이 처형 판정 지점을 "챔피언 처치"로 재사용한다.
     if (dmgSource && typeof itemOnChampionTakedown === 'function') itemOnChampionTakedown(dmgSource);
   }
-  if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL);
+  // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만"
+  // 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 그대로 넘긴다.
+  if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
   else damageEnemy(target, finalDmg);
   return finalDmg;
 }

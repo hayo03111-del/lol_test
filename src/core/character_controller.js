@@ -2389,6 +2389,7 @@ class CharacterController {
           armorPenPercent: this.armorPenPercent || 0,
           bonusArmorIgnorePercent: (this.championId === 'yasuo' && this._yasuo.rArmorBuffUntil > performance.now()) ? this._champData().R.armorIgnoreBonusPercent : 0,
           yoneAzakana,
+          isBasicAttack: true,
         };
         vfx.spawn('basicAttack', originPos, dirToTarget);
         // 버그 수정: 지금까지 모든 챔피언의 평타가 예외 없이 물리 투사체를
@@ -4286,7 +4287,7 @@ class CharacterController {
   }
 
   /* ---------------- health / death / respawn ---------------- */
-  takeDamage(dmg, source = null, damageType = DAMAGE_TYPE.PHYSICAL) {
+  takeDamage(dmg, source = null, damageType = DAMAGE_TYPE.PHYSICAL, damageMeta = null) {
     if (this.state === STATE.DEAD) return;
     // Alpha Strike 비대상 상태 - 섹션 6: "모든 피격 판정에서 확인해야 한다".
     if (this.isUntargetable) return;
@@ -4310,7 +4311,7 @@ class CharacterController {
     // 적용되기 직전에 발동). 죽음의무도(고통 무시)는 받는 피해 자체를
     // 바꾸므로(일부를 지연 피해로 돌림) 반환값을 그대로 remaining에
     // 반영한다 - `?? remaining`으로 다른 효과들의 기존 void 반환과도 안전하게 호환.
-    if (typeof itemOnTakeDamage === 'function') remaining = itemOnTakeDamage(this, remaining, damageType, source) ?? remaining;
+    if (typeof itemOnTakeDamage === 'function') remaining = itemOnTakeDamage(this, remaining, damageType, source, damageMeta) ?? remaining;
     // 버그 수정(세트 패시브 문서 4절 "실제로 HP에 적용된 피해를 기준으로
     // 한다"): 예전에는 Shield로 흡수되기 전의 remaining을 그대로 투지
     // 계산에 넘겨서, Shield가 300 있는 상태에서 500 피해를 받아 실제로는

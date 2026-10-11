@@ -281,8 +281,8 @@ const ITEM_DATA = {
   embersOfFate: {
     id: 'embersOfFate', nameKo: '운명의 재', cost: 900, recipe: ['amplifyingTome'],
     stats: { abilityPower: 30 },
-    // 발화 - 챔피언/더미 대상 피해를 입히면(스킬 한정이 원문이지만, 여신의
-    // 눈물과 동일한 이유로 평타+스킬 전체 피해를 트리거로 근사했다) 3초간
+    // 발화 - 스킬로 피해를 입히면(원문 그대로 스킬 한정 - item_system.js의
+    // _itemIsAbilityDamage로 평타/도트 틱/아이템 효과 피해는 제외) 3초간
     // 불태워 매초 5의 마법 고정 피해(이미 있는 DOT 상태이상 타입 - 다리우스
     // 출혈이 쓰던 것과 동일한 범용 틱 시스템을 재사용). 몬스터(미니언) 대상은
     // 매초 15(5+10)의 추가 피해(원문 "몬스터에게는 매초 15의 추가 피해")를
@@ -310,8 +310,9 @@ const ITEM_DATA = {
   // [전설급 아이템] 2차분 - 삼위일체~지배자의 피갑옷(사용자가 올려준 원본
   // 텍스트 625~758줄). 복잡한 적중 시 효과가 많아 하나씩 신중하게 구현한다.
   // 공용 엔지니어링 메모(item_system.js 상단 참고):
-  // - "스킬로 피해를 입히면" 계열은 전부 기존 여신의 눈물/운명의 재와 동일한
-  //   이유(스킬/평타 구분 플래그가 없음)로 "평타+스킬 피해 전체"에 근사한다.
+  // - "스킬로 피해를 입히면" 계열은 applyDamage()가 넘기는 피해 메타
+  //   (isBasicAttack/isStatusTick/isItemEffect)로 스킬 피해만 골라 발동한다
+  //   (item_system.js의 _itemIsAbilityDamage 참고).
   // - 기본 공격 전용 효과(안개의 검/쪼기/충격/선장/라이트쉴드 타격 등)는
   //   itemOnBasicAttackHit()(광휘의 검/티아맷이 이미 쓰던 공용 훅)에서
   //   처리한다 - 이 훅은 applyDamage()"안"이 아니라 메인 평타의 applyDamage()가
@@ -833,8 +834,7 @@ const ITEM_DATA = {
   // 90초간 "파괴 공작" 보유 - 그 상태로 에픽 몬스터/포탑 공격 시 3초에
   // 걸친 거대한 고정 피해. 이 프로젝트엔 정글 몬스터가 없어 포탑 분기만
   // 구현한다(명시적 한계 - 선체파괴자 등과 동일한 성격). "스킬로" 피해를
-  // 입히는 트리거는 이 프로젝트의 공용 한계(스킬/평타 구분 불가)로 평타+
-  // 스킬 전체에 근사한다(여신의 눈물 등과 동일 - README 참고).
+  // 입히는 트리거는 원문 그대로 스킬 피해에만 발동한다.
   fortressBreaker: {
     id: 'fortressBreaker', nameKo: '요새파괴자', cost: 3000, recipe: ['feralization', 'serratedDirk'],
     stats: { attackDamage: 55, abilityHaste: 15 }, armorPenFlat: 22,
