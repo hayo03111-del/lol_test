@@ -676,15 +676,3 @@ CharacterController.prototype._settEndR = function(seq, aborted) {
   
 };
 
-// Extracted from CharacterController: _settROnHit
-CharacterController.prototype._settROnHit = function(target) { 
-    const cd = this._champData(); if (!cd) return;
-    const r = cd.R;
-    const lvl = Math.max(1, this.skillLevels.R || 1);
-    const bonusHp = Math.max(0, target.bonusHealth || 0);
-    const dmg = skillVal(r.maxDamageByLevel, lvl) + r.bonusAdRatio * this._getBonusAD() + bonusHp * (skillVal(r.bonusHpPercentByLevel, lvl) / 100);
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
-    applyStatus(target, { id: 'settR_slow', type: 'SLOW', duration: r.slowDuration, value: r.slowPercent / 100 });
-  
-};
-

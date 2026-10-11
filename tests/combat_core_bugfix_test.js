@@ -36,6 +36,9 @@ const stubs = {
   // 적 목록을 이 전역 배열들에서 읽는다 - 세트 W처럼 "주변 적 전체"를
   // 스캔하는 로직을 테스트하려면 실제로 여기 채워 넣어야 한다.
   placedDummies: [],
+  clearInterval: () => {},
+  clearTimeout: () => {},
+  updateExpUI: () => {},
   THREE: {
     Vector3: class Vector3 {
       constructor(x=0,y=0,z=0){this.x=x;this.y=y;this.z=z;}
@@ -388,6 +391,28 @@ function skillValLocal(byLevel, lvl) {
   ctrl._settWApplyShield();
   assert(Math.abs(ctrl.shield - 375) < 1e-6, `세트 W: 보호막 효과 +25%가 적용된다(got ${ctrl.shield})`);
   assert(ctrl._sett.wPendingSpent === 300, '세트 W: 피해 계산용 소모 투지는 보호막 증가와 무관하게 300');
+}
+
+// 구조 정리 - 챔피언 전용 상태 초기화를 _freshChampionStates() 하나로 합쳤다.
+// 챔피언을 바꾸면 모데카이저/벡스 상태도 초기화된다(예전엔 생성자에서만 만들고
+// 교체 시엔 남아 있었다).
+{
+  const ctrl = makeMinimalChamp('mordekaiser', { _actionTimers: [], cooldowns: { Q: 3, W: 0, E: 0, R: 0 }, recomputeStats() {}, playFirstAvailable() {} });
+  ctrl._freshChampionStates();
+  const names = ['_vex','_ezreal','_ahri','_varus','_ashe','_nautilus','_darius','_sett','_morde','_masteryi','_yasuo','_yone','_chogath','_leesin','_nilah','_renekton'];
+  assert(names.every((n) => ctrl[n] && typeof ctrl[n] === 'object'), '_freshChampionStates(): 16개 챔피언 상태 객체를 모두 만든다');
+  ctrl._morde.dealtBank = 500;
+  ctrl._vex.recastTarget = {};
+  let cleared = null;
+  const realClear = context.clearInterval;
+  context.clearInterval = (id) => { cleared = id; };
+  ctrl._morde.shieldDecayTimer = 777;
+  context.updateExpUI = () => {};
+  ctrl.applyChampionData('garen');
+  context.clearInterval = realClear;
+  assert(ctrl._morde.dealtBank === 0 && ctrl._vex.recastTarget === null, '챔피언 교체 시 모데카이저 W 축적량/벡스 재시전 대상도 초기화된다');
+  assert(cleared === 777, '챔피언 교체 시 모데카이저 W 보호막 감쇠 인터벌을 멈춘다');
+  assert(ctrl.cooldowns.Q === 0 && ctrl.championId === 'garen', '챔피언 교체 기본 동작(쿨다운 초기화) 유지');
 }
 
 console.log(process.exitCode ? '\nSOME CHECKS FAILED' : '\nALL CHECKS PASSED');

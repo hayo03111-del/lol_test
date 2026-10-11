@@ -255,12 +255,9 @@ const championAbilityDatabase = {
   // 독립 모션 없이 "다음 2회 평타"를 강화 + 평타 타이머 리셋)이라
   // attackOverrideSequence로 Spell1_A → Spell1_B를 순서대로 내보낸다.
   // 강펀치(W)는 "Sett_spell2.anm" 하나(충전판은 Spell2_Strong). 대미
-  // 장식(R)은 MULTI_PHASE_FORCED_ACTION - 실제 대상을 붙잡고 600유닛
-  // 운반 후 충돌, 250유닛 슬라이드하는 물리 이동까지는 이 데모 범위
-  // 밖이지만, multiPhaseClips로 Dash→Grab→Spin→PowerBomb을 강제
-  // 순서 재생하고 마지막 단계에서 피해가 터지는 구조는 재현한다
-  // (CharacterController._castR의 multiPhaseClips 분기 참고 - 실제
-  // 캐릭터 위치 이동/슬라이드는 없음, 시각적 단계 재생만 구현).
+  // 장식(R)은 MULTI_PHASE_FORCED_ACTION - sett.js의 _settCastR/_settUpdateR가
+  // multiPhaseClips(Dash→Grab→Spin→PowerBomb)를 순서대로 재생하면서 제압,
+  // 대상을 붙잡아 600유닛 운반, 착지 지점 범위 피해까지 처리한다.
   // 안면 강타(E)는 resultDirectionalClips로 등록: 가렌 E와 달리 실시간
   // 방향이 아니라 "캐스트 시점에 붙잡은 대상이 정면/후면 중 어디 있었는가"
   // 라는 1회성 결과 판정이고(문서 6-3절 노틸러스 Q와 같은 유형), Cast

@@ -4315,12 +4315,9 @@ const championAbilityDatabase = {
   // 독립 모션 없이 "다음 2회 평타"를 강화 + 평타 타이머 리셋)이라
   // attackOverrideSequence로 Spell1_A → Spell1_B를 순서대로 내보낸다.
   // 강펀치(W)는 "Sett_spell2.anm" 하나(충전판은 Spell2_Strong). 대미
-  // 장식(R)은 MULTI_PHASE_FORCED_ACTION - 실제 대상을 붙잡고 600유닛
-  // 운반 후 충돌, 250유닛 슬라이드하는 물리 이동까지는 이 데모 범위
-  // 밖이지만, multiPhaseClips로 Dash→Grab→Spin→PowerBomb을 강제
-  // 순서 재생하고 마지막 단계에서 피해가 터지는 구조는 재현한다
-  // (CharacterController._castR의 multiPhaseClips 분기 참고 - 실제
-  // 캐릭터 위치 이동/슬라이드는 없음, 시각적 단계 재생만 구현).
+  // 장식(R)은 MULTI_PHASE_FORCED_ACTION - sett.js의 _settCastR/_settUpdateR가
+  // multiPhaseClips(Dash→Grab→Spin→PowerBomb)를 순서대로 재생하면서 제압,
+  // 대상을 붙잡아 600유닛 운반, 착지 지점 범위 피해까지 처리한다.
   // 안면 강타(E)는 resultDirectionalClips로 등록: 가렌 E와 달리 실시간
   // 방향이 아니라 "캐스트 시점에 붙잡은 대상이 정면/후면 중 어디 있었는가"
   // 라는 1회성 결과 판정이고(문서 6-3절 노틸러스 Q와 같은 유형), Cast
@@ -8721,46 +8718,8 @@ class CharacterController {
 
     // ---- 기획안 기반 챔피언 데이터/레벨 시스템 (섹션 3/13) ----
     this.championId = null; // bootstrapChampion()에서 applyChampionData()로 설정됨
-    // 벡스 R(그림자 파동) 전용 상태: 1차 적중 후 대상에게 재시전할 수 있는 창과 실제 돌진 상태를 분리한다.
-    this._vex = { recastTarget: null, recastReadyUntil: 0, dashActive: false, dashStart: null, dashEnd: null, dashT: 0, dashDuration: 0.28 };
-    // 이즈리얼 전용 상태: markTarget/markExpiresAt은 W(정기 방출) 표식,
-    // rTravel은 R(정조준 사격)이 매 프레임 진행하는 관통 광선 상태(요네 R/
-    // 야스오 Q3 회오리와 동일한 패턴 - _ezrealTickRTravel 참고).
-    this._ezreal = { markTarget: null, markExpiresAt: 0, rTravel: null };
-    // 아리 전용 상태: qTravel은 Q(현혹의 구슬)가 매 프레임 진행하는
-    // 왕복 판정(요네 R/이즈리얼 R 광선과 동일한 패턴), foxfires는 W로
-    // 소환된 여우불 3개(메시+타게팅 상태), rCharges/rReadyUntil은
-    // R(혼령 질주)의 남은 돌진 횟수/재시전 창(_ahriCastR 참고).
-    this._ahri = {
-      passiveStacks: 0, qTravel: null, eTravel: null, foxfires: [],
-      rCharges: 0, rReadyUntil: 0, rDash: null,
-    };
-    // 바루스 전용 상태: qCharge는 Q(꿰뚫는 화살)가 홀드-충전 중일 때만
-    // 존재하는 상태(방향/시작 시각) - 릴리즈(재입력 또는 최대 충전시간
-    // 도달) 즉시 null로 정리된다(_varusReleaseQ 참고). lv는 패시브(살아있는
-    // 복수)의 대상별 공격 속도 램프업 진행 상태(_varusLvTick 참고).
-    this._varus = { qCharge: null, lv: { target: null, rampStartAt: 0, lastHitAt: 0 } };
-    // 애쉬 전용 상태: focusStacks/focusExpiresAt은 패시브 안에 포함된
-    // "집중"(Q 궁사의 집중) 자원 - 기본 공격마다 쌓이고(최대 4), 일정
-    // 시간(stackWindowSec) 안에 다시 공격하지 않으면 만료된다(_asheUpdate
-    // 참고). qActiveUntil은 Q를 발동해 얻은 공격 속도 버프가 유효한 동안의
-    // 만료 시각, flurryPending은 "다음 기본 공격 한 번이 다발 공격(화살
-    // 6발)으로 바뀌어야 하는가"를 나타낸다(_beginAttackSwing이 확인).
-    // wPending/ePending/rPending/rTravel은 각각 W(부채꼴 판정 지연)/E(정찰
-    // 착탄 지연)/R(발사 지연)/R(전 맵 사거리 관통 광선 - 이즈리얼 R의
-    // rTravel과 동일한 패턴)이 매 프레임 dt로 진행하는 상태다(실제 시계
-    // setTimeout을 쓰지 않는다 - 일시정지 중에도 흘러가는 문제 예방).
-    this._ashe = {
-      focusStacks: 0, focusExpiresAt: 0,
-      qActiveUntil: 0, flurryPending: false,
-      wPending: null, ePending: null, rPending: null, rTravel: null,
-    };
-    this._nautilus = {
-      passiveReadyAt: new Map(),
-      qPending: null, qTravel: null, qPull: null,
-      wUntil: 0, wShieldRemaining: 0, wShieldSeen: 0,
-      eSeq: null, rPending: null, rTravel: null,
-    };
+    // 챔피언 전용 전투 상태 - applyChampionData()와 같은 초기값을 한 곳(_freshChampionStates)에서 만든다.
+    this._freshChampionStates();
     this.champLevel = 1;
     // 요청("LoL 경험치 및 레벨 시스템 구현") - currentExp는 챔피언 레벨
     // 시스템(champion.currentExp)에서 쓰는 "현재 레벨 내 누적치"다(전체
@@ -8788,28 +8747,8 @@ class CharacterController {
     this.magicPenPercent = 0; // 모데카이저 E 패시브
     // 패시브 내부 상태(가렌 인내심/다리우스 과다출혈 등은 이 오브젝트에 챔피언별로 필드를 추가해 사용)
     this.passiveState = { lastDamageTakenAt: 0, lastEnemySkillHitAt: 0, lastPassiveHealAt: 0 };
-    this._darius = { stacksOnTarget: new Map() }; // target -> {stacks, empoweredUntil}
     this._rRecastReadyUntil = 0; // 다리우스 R 처치 후 무료 재시전 창
     this._eHitCountThisCast = 0; // 가렌 E 회전 중 누적 타격 수
-    this._sett = { punchSide: 'left', lastPunchAt: 0, qUsesRemaining: 0, grit: 0, gritEntries: [], rSeq: null, wShieldDecayPerSec: 0, wPendingSpent: 0 };
-    this._morde = { hitStacks: 0, auraExpiresAt: 0, dealtBank: 0, wShieldActiveUntil: 0,
-      // R(죽음의 세계) 전용 상태 - 명세 28절 "R 종료 시 반드시 초기화해야 할
-      // 상태 목록"에 대응. isInDeathRealm이 이 전투가 "R 내부"인지 아닌지를
-      // 나타내는 단일 진실 공급원(single source of truth)이고, 나머지는 그
-      // 상태에 딸린 부가 데이터다.
-      isInDeathRealm: false, rTarget: null, rEndsAt: 0, rStolenArmor: 0, rStolenMr: 0,
-    }; // dealtBank: W가 아직 보호막으로 전환되지 않은 축적된 피해량
-    this._masteryi = { attackCount: 0, rActiveUntil: 0, alpha: null, wPause: null, pendingWAfterHit: false, wStartedAt: 0 };
-    this._yasuo = { flow: 0, flowDistance: 0, qStacks: 0, qStackExpiresAt: 0, eStacks: 0, eStacksExpiresAt: 0, eTargetCooldowns: new Map(), windwall: null, rArmorBuffUntil: 0, rTarget: null, lastMovePosition: null, qMoveEntryPending: false, eDashStart: null, eDashEnd: null, eDashElapsed: 0, eDashDuration: 0, eDashTarget: null, eDashTargetKey: null, eDashDamageApplied: false, eDashStacksAtStart: 0, qTornadoTravel: null };
-    // 요네 상태(_yone): qStacks(폭풍 구름 중첩), azakanaNext(다음 평타가
-    // 아자카나의 검(마법 혼합) 차례인지 - 사냥꾼의 길 패시브), eActive(영혼해방
-    // 정신체 상태 진행 정보), markedTargets(정신체 상태에서 쌓은 표식 Map).
-    this._yone = {
-      qStacks: 0, qStackExpiresAt: 0,
-      azakanaNext: false,
-      eSpirit: null, // { startedAt, duration, bodyPos, bodyQuat, dir, marks: Map }
-      rTravel: null,
-    };
     this._masteryiWHealTimer = null;
     // 칼바람 포탑 시스템(destroyTurret 참고) - 팀/골드 시스템이 따로
     // 없어 "아군 전원에게 지급"을 지금은 플레이어 자신의 누적치로 대신한다.
@@ -8903,10 +8842,80 @@ class CharacterController {
     // AI가 Yi를 절대 타겟팅하지 않지만, 이후 AI가 플레이어를 공격하는
     // 기능이 추가돼도 자동으로 안전하도록 플래그 자체는 항상 정확히 유지한다.
     this.isUntargetable = false;
-    this._chogath = { predationStacks: 0, eChargesRemaining: 0 };
     this._dariusWArmed = false;
-    this._leesin = { qMarkTarget: null, qMarkExpiresAt: 0, wMarkReadyUntil: 0, eMarkHits: [], eMarkExpiresAt: 0, passiveHitsLeft: 0 };
     this._leesinAnimTimer = null;
+  }
+
+  /** 기획안 CHAMPION_DATA를 이 컨트롤러에 연결하고 레벨 기준 스탯을 재계산한다.
+   *  championId가 CHAMPION_DATA에 없는 챔피언은 기존 기본 스탯을 그대로 유지한다
+   *  (기존 기능을 망가뜨리지 않는다 - 섹션 16). */
+  // 챔피언 전용 전투 상태 초기값 - 생성자와 applyChampionData()(챔피언 교체)가
+  // 같은 함수를 쓴다. 예전엔 같은 객체 리터럴을 두 곳에 복사해 두어서, 새 챔피언을
+  // 추가할 때 한쪽을 빠뜨리기 쉬웠다(실제로 _morde/_vex는 교체 시 초기화가
+  // 빠져 있었다).
+  _freshChampionStates() {
+    // 벡스 R(그림자 파동) 전용 상태: 1차 적중 후 대상에게 재시전할 수 있는 창과 실제 돌진 상태를 분리한다.
+    this._vex = { recastTarget: null, recastReadyUntil: 0, dashActive: false, dashStart: null, dashEnd: null, dashT: 0, dashDuration: 0.28 };
+    // 이즈리얼 전용 상태: markTarget/markExpiresAt은 W(정기 방출) 표식,
+    // rTravel은 R(정조준 사격)이 매 프레임 진행하는 관통 광선 상태(요네 R/
+    // 야스오 Q3 회오리와 동일한 패턴 - _ezrealTickRTravel 참고).
+    this._ezreal = { markTarget: null, markExpiresAt: 0, rTravel: null };
+    // 아리 전용 상태: qTravel은 Q(현혹의 구슬)가 매 프레임 진행하는
+    // 왕복 판정(요네 R/이즈리얼 R 광선과 동일한 패턴), foxfires는 W로
+    // 소환된 여우불 3개(메시+타게팅 상태), rCharges/rReadyUntil은
+    // R(혼령 질주)의 남은 돌진 횟수/재시전 창(_ahriCastR 참고).
+    this._ahri = {
+      passiveStacks: 0, qTravel: null, eTravel: null, foxfires: [],
+      rCharges: 0, rReadyUntil: 0, rDash: null,
+    };
+    // 바루스 전용 상태: qCharge는 Q(꿰뚫는 화살)가 홀드-충전 중일 때만
+    // 존재하는 상태(방향/시작 시각) - 릴리즈(재입력 또는 최대 충전시간
+    // 도달) 즉시 null로 정리된다(_varusReleaseQ 참고). lv는 패시브(살아있는
+    // 복수)의 대상별 공격 속도 램프업 진행 상태(_varusLvTick 참고).
+    this._varus = { qCharge: null, lv: { target: null, rampStartAt: 0, lastHitAt: 0 } };
+    // 애쉬 전용 상태: focusStacks/focusExpiresAt은 패시브 안에 포함된
+    // "집중"(Q 궁사의 집중) 자원 - 기본 공격마다 쌓이고(최대 4), 일정
+    // 시간(stackWindowSec) 안에 다시 공격하지 않으면 만료된다(_asheUpdate
+    // 참고). qActiveUntil은 Q를 발동해 얻은 공격 속도 버프가 유효한 동안의
+    // 만료 시각, flurryPending은 "다음 기본 공격 한 번이 다발 공격(화살
+    // 6발)으로 바뀌어야 하는가"를 나타낸다(_beginAttackSwing이 확인).
+    // wPending/ePending/rPending/rTravel은 각각 W(부채꼴 판정 지연)/E(정찰
+    // 착탄 지연)/R(발사 지연)/R(전 맵 사거리 관통 광선 - 이즈리얼 R의
+    // rTravel과 동일한 패턴)이 매 프레임 dt로 진행하는 상태다(실제 시계
+    // setTimeout을 쓰지 않는다 - 일시정지 중에도 흘러가는 문제 예방).
+    this._ashe = {
+      focusStacks: 0, focusExpiresAt: 0,
+      qActiveUntil: 0, flurryPending: false,
+      wPending: null, ePending: null, rPending: null, rTravel: null,
+    };
+    this._nautilus = {
+      passiveReadyAt: new Map(),
+      qPending: null, qTravel: null, qPull: null,
+      wUntil: 0, wShieldRemaining: 0, wShieldSeen: 0,
+      eSeq: null, rPending: null, rTravel: null,
+    };
+    this._darius = { stacksOnTarget: new Map() }; // target -> {stacks, empoweredUntil}
+    this._sett = { punchSide: 'left', lastPunchAt: 0, qUsesRemaining: 0, grit: 0, gritEntries: [], rSeq: null, wShieldDecayPerSec: 0, wPendingSpent: 0 };
+    this._morde = { hitStacks: 0, auraExpiresAt: 0, dealtBank: 0, wShieldActiveUntil: 0,
+      // R(죽음의 세계) 전용 상태 - 명세 28절 "R 종료 시 반드시 초기화해야 할
+      // 상태 목록"에 대응. isInDeathRealm이 이 전투가 "R 내부"인지 아닌지를
+      // 나타내는 단일 진실 공급원(single source of truth)이고, 나머지는 그
+      // 상태에 딸린 부가 데이터다.
+      isInDeathRealm: false, rTarget: null, rEndsAt: 0, rStolenArmor: 0, rStolenMr: 0,
+    }; // dealtBank: W가 아직 보호막으로 전환되지 않은 축적된 피해량
+    this._masteryi = { attackCount: 0, rActiveUntil: 0, alpha: null, wPause: null, pendingWAfterHit: false, wStartedAt: 0 };
+    this._yasuo = { flow: 0, flowDistance: 0, qStacks: 0, qStackExpiresAt: 0, eStacks: 0, eStacksExpiresAt: 0, eTargetCooldowns: new Map(), windwall: null, rArmorBuffUntil: 0, rTarget: null, lastMovePosition: null, qMoveEntryPending: false, eDashStart: null, eDashEnd: null, eDashElapsed: 0, eDashDuration: 0, eDashTarget: null, eDashTargetKey: null, eDashDamageApplied: false, eDashStacksAtStart: 0, qTornadoTravel: null };
+    // 요네 상태(_yone): qStacks(폭풍 구름 중첩), azakanaNext(다음 평타가
+    // 아자카나의 검(마법 혼합) 차례인지 - 사냥꾼의 길 패시브), eActive(영혼해방
+    // 정신체 상태 진행 정보), markedTargets(정신체 상태에서 쌓은 표식 Map).
+    this._yone = {
+      qStacks: 0, qStackExpiresAt: 0,
+      azakanaNext: false,
+      eSpirit: null, // { startedAt, duration, bodyPos, bodyQuat, dir, marks: Map }
+      rTravel: null,
+    };
+    this._chogath = { predationStacks: 0, eChargesRemaining: 0 };
+    this._leesin = { qMarkTarget: null, qMarkExpiresAt: 0, wMarkReadyUntil: 0, eMarkHits: [], eMarkExpiresAt: 0, passiveHitsLeft: 0 };
     this._nilah = {
       qEmpoweredUntil: 0, qWaveLockUntil: 0,
       qArmorPen: 0, qLifeSteal: 0,
@@ -8925,9 +8934,6 @@ class CharacterController {
     };
   }
 
-  /** 기획안 CHAMPION_DATA를 이 컨트롤러에 연결하고 레벨 기준 스탯을 재계산한다.
-   *  championId가 CHAMPION_DATA에 없는 챔피언은 기존 기본 스탯을 그대로 유지한다
-   *  (기존 기능을 망가뜨리지 않는다 - 섹션 16). */
   applyChampionData(championId) {
     // 챔피언 교체/재선택 중 이전 레넥톤의 지속 R 오라가 남지 않도록 정리한다.
     if (this._renekton?.rAuraVfx && typeof vfx !== 'undefined') {
@@ -8964,22 +8970,9 @@ class CharacterController {
     this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
     if (typeof targetRing !== 'undefined') targetRing.clear();
     for (const k of Object.keys(this.cooldowns || {})) this.cooldowns[k] = 0; // 요청 5절 "쿨다운 음수 방지"와 같은 취지 - 이전 챔피언 쿨다운이 새 챔피언에 유출되지 않게 한다
-    // 챔피언 전용 전투 상태도 교체 순간 완전히 초기화한다.
-    // 이전에는 Darius 출혈 Map, Lee Sin Q 표식, Sett Q/W/R 상태, Nilah E/R 상태,
-    // Yasuo/마스터 이/레넥톤의 임시 상태가 남아 다음 챔피언에 새어 나올 수 있었다.
-    this._darius = { stacksOnTarget: new Map() };
-    this._dariusWArmed = false;
-    this._leesin = { qMarkTarget: null, qMarkExpiresAt: 0, wMarkReadyUntil: 0, eMarkHits: [], eMarkExpiresAt: 0, passiveHitsLeft: 0 };
+    // 이전 챔피언 상태가 참조하는 시각 효과/타이머부터 정리하고, 그다음 전부 새로 만든다.
     if (this._leesinAnimTimer) { clearTimeout(this._leesinAnimTimer); this._leesinAnimTimer = null; }
-    this._sett = { punchSide: 'left', lastPunchAt: 0, qUsesRemaining: 0, grit: 0, gritEntries: [], rSeq: null, wShieldDecayPerSec: 0, wPendingSpent: 0 };
-    this._nilah = { qEmpoweredUntil: 0, qWaveLockUntil: 0, qArmorPen: 0, qLifeSteal: 0, eCharges: 2, eRechargeAt: [], eDash: null, rSeq: null, qDuringEDashFired: false, pendingEWave: null, shieldUntil: 0, shieldKind: null, wCastAt: 0, attackVariantIndex: { attack1: 0, attack2: 0 }, qVariantIndex: 0, allyStates: new Map() };
-    this._renekton = { rage: 0, lastCombatAt: performance.now(), nextRageDecayAt: 0, wArmed: false, wEmpowered: false, wTarget: null, wSeq: null, eSecondReadyUntil: 0, eFirstHit: false, rActiveUntil: 0, rAuraAccum: 0, rRageAccum: 0, rBonusMaxHp: 0, rActive: false, rCastStartedAt: 0, rAuraVfx: null, qRageGenerated: 0 };
-    this._masteryi = { attackCount: 0, rActiveUntil: 0, alpha: null, wPause: null, pendingWAfterHit: false, wStartedAt: 0 };
-    this._chogath = { predationStacks: 0, eChargesRemaining: 0 };
-    this._yasuo = { flow: 0, flowDistance: 0, qStacks: 0, qStackExpiresAt: 0, eStacks: 0, eStacksExpiresAt: 0, eTargetCooldowns: new Map(), windwall: null, rArmorBuffUntil: 0, rTarget: null, lastMovePosition: null, qMoveEntryPending: false, eDashStart: null, eDashEnd: null, eDashElapsed: 0, eDashDuration: 0, eDashTarget: null, eDashTargetKey: null, eDashDamageApplied: false, eDashStacksAtStart: 0, qTornadoTravel: null };
     if (this._yone && this._yone.eSpirit && typeof this._yoneCleanupSpiritVisuals === 'function') this._yoneCleanupSpiritVisuals();
-    this._yone = { qStacks: 0, qStackExpiresAt: 0, azakanaNext: false, eSpirit: null, rTravel: null };
-    this._ezreal = { markTarget: null, markExpiresAt: 0, rTravel: null };
     // 챔피언 교체 시 이전 아리의 여우불/Q 구슬/E 투사체 메시가 씬에 남지
     // 않게 먼저 정리한다.
     // 버그 수정(리소스 누수): 예전엔 Q 오브를 scene.remove()만 하고
@@ -8992,21 +8985,11 @@ class CharacterController {
       if (this._ahri.qTravel && typeof this._ahriEndQTravel === 'function') this._ahriEndQTravel();
       if (this._ahri.eTravel && typeof this._ahriEndETravel === 'function') this._ahriEndETravel();
     }
-    this._ahri = { passiveStacks: 0, qTravel: null, eTravel: null, foxfires: [], rCharges: 0, rReadyUntil: 0, rDash: null };
-    // 바루스도 교체 순간 완전히 초기화한다(위 _clearActionTimers()가 이미
-    // qCharge 자동 발사 타이머/R 확산 interval을 정리했으므로 여기서는
-    // 데이터 객체만 새로 만들면 된다).
-    this._varus = { qCharge: null, lv: { target: null, rampStartAt: 0, lastHitAt: 0 } };
-    // 애쉬도 교체 순간 완전히 초기화한다 - 다른 챔피언으로 바뀌었는데
-    // 집중 스택/궁사의 집중 버프/진행 중이던 W·E·R 지연 상태가 남아있으면
-    // 안 된다(바루스/아리와 동일한 원칙).
-    this._ashe = {
-      focusStacks: 0, focusExpiresAt: 0,
-      qActiveUntil: 0, flurryPending: false,
-      wPending: null, ePending: null, rPending: null, rTravel: null,
-    };
-    // 노틸러스 - 교체 시 W 보호막 잔량까지 걷어내고 상태를 초기화한다.
-    if (typeof this._nautilusReset === 'function') this._nautilusReset(); else this._nautilus = null;
+    if (this._morde && this._morde.shieldDecayTimer) clearInterval(this._morde.shieldDecayTimer);
+    this._dariusWArmed = false;
+    // 챔피언 전용 전투 상태 - Darius 출혈 Map, Lee Sin Q 표식, Sett Q/W/R, Nilah E/R,
+    // Yasuo/마스터 이/레넥톤 임시 상태 등이 다음 챔피언에 새어 나오지 않게 새로 만든다.
+    this._freshChampionStates();
     this._dashState = null;
     this._rRecastReadyUntil = 0;
     this.bonusAD = 0;
@@ -9024,23 +9007,17 @@ class CharacterController {
     }
     this.recomputeStats();
     if (this.championId === 'renekton') {
-      this._renekton.rage = 0; this._renekton.lastCombatAt = performance.now(); this._renekton.nextRageDecayAt = 0;
-      this._renekton.wArmed = false; this._renekton.wEmpowered = false; this._renekton.wTarget = null; this._renekton.wSeq = null;
-      this._renekton.eSecondReadyUntil = 0; this._renekton.eFirstHit = false; this._renekton.rActiveUntil = 0; this._renekton.rAuraAccum = 0; this._renekton.rRageAccum = 0; this._renekton.rBonusMaxHp = 0; this._renekton.rActive = false; this._renekton.rAuraVfx = null; this._renekton.qRageGenerated = 0;
       this.bonusMaxHp = 0;
       this.mp = 0;
       this.playFirstAvailable(['Idle1'], { loop: THREE.LoopRepeat, fade: 0 });
     }
-    if (this.championId === 'yasuo') { this.stats.critChance = 1; this.stats.critMultiplier = this._champData().passive.critDamage; this._yasuo.flow = 0; this._yasuo.flowDistance = 0; this._yasuo.qStacks = 0; this._yasuo.qStackExpiresAt = 0; this._yasuo.eStacks = 0; this._yasuo.eStacksExpiresAt = 0; this._yasuo.eTargetCooldowns.clear(); this._yasuo.windwall = null; this._yasuo.rArmorBuffUntil = 0; this._yasuo.rTarget = null; this._yasuo.lastMovePosition = this.root.position.clone(); this._yasuo.qMoveEntryPending = false; this._yasuo.eDashStart = null; this._yasuo.eDashEnd = null; this._yasuo.eDashElapsed = 0; this._yasuo.eDashDuration = 0; this._yasuo.eDashTarget = null; this._yasuo.eDashTargetKey = null; this._yasuo.eDashDamageApplied = false; this._yasuo.qTornadoTravel = null; this.mp = 0; }
+    if (this.championId === 'yasuo') { this.stats.critChance = 1; this.stats.critMultiplier = this._champData().passive.critDamage; this._yasuo.lastMovePosition = this.root.position.clone(); this.mp = 0; }
     // 요네: 사냥꾼의 길(치명타 확률 2배 + 초과분 AD 환산 + 치명타 피해 감소)은
     // 야스오와 달리 이동 누적형 Flow 보호막이 없으므로 그 부분만 제외하고
     // 크리티컬 관련 스탯만 매 tick(_yoneTick)에서 계속 갱신한다. 여기서는
     // 챔피언 교체 시 상태 초기화만 담당.
-    if (this.championId === 'yone') { this.stats.critChance = 1; this.stats.critMultiplier = this._champData().passive.critDamage; this._yone.qStacks = 0; this._yone.qStackExpiresAt = 0; this._yone.azakanaNext = false; this._yone.eSpirit = null; this._yone.rTravel = null; this.mp = 0; }
+    if (this.championId === 'yone') { this.stats.critChance = 1; this.stats.critMultiplier = this._champData().passive.critDamage; this.mp = 0; }
     if (this.championId === 'nilah') {
-      this._nilah.qEmpoweredUntil = 0; this._nilah.qWaveLockUntil = 0; this._nilah.qDuringEDashFired = false; this._nilah.pendingEWave = null; this._nilah.wCastAt = 0;
-      this._nilah.eCharges = 2; this._nilah.eRechargeAt = []; this._nilah.eDash = null; this._nilah.rSeq = null;
-      this._nilah.shieldUntil = 0; this._nilah.shieldKind = null; this._nilah.allyStates = new Map();
       this.armorPenPercent = 0;
       // 데이터 수정(실제 bin 확인): 충돌 반경은 원래 "챔피언별 실제 수치가
       // 없어서" 전 챔피언에 균일값(BASE_UNIT*0.24, 약 24 LoL 단위 상당)을
@@ -11754,7 +11731,7 @@ class CharacterController {
     const db = this._championAbilityDbEntry();
     // 업데이트(다리우스 Q 문서 1~11절): Q가 방향별 단일 클립이 아니라
     // "웜업 클립 → 실제 공격 클립"을 강제로 연속 재생해야 하는 챔피언을 위한
-    // 분기. R의 multiPhaseClips와 동일한 패턴(AnimationSequencePlayer로
+    // 분기. 세트 R(sett.js의 multiPhaseClips 재생)과 동일한 패턴(AnimationSequencePlayer로
     // 각 클립을 처음부터 끝까지 순서대로 강제 재생)을 재사용한다. 방향별
     // 캐스트 클립이 따로 없는 스킬이라 qLeft/qRight 같은 방향 분기 없이
     // 이 체인 하나만 재생한다(문서에도 방향별 진입 클립이 없다고 명시).
@@ -12673,62 +12650,6 @@ class CharacterController {
     } else if (!this._payCost('R', free)) return;
     this._clearActionTimers();
     const cast = this.actionData.rCast;
-
-    // 요청(세트 R 한계 해결 - MULTI_PHASE_FORCED_ACTION): 실제로는 대상을
-    // Suppress → 대상 위치로 Dash → 붙잡아 600유닛 운반 → 충돌 → 250유닛
-    // 슬라이드까지 이어지는 강제 다단계 이동 스킬이지만, 그 정도의 실제
-    // 위치 이동/슬라이드 물리는 이 데모의 캐릭터 컨트롤러 범위를 넘어선다.
-    // 대신 windup->channel->cast와 동일한 AnimationSequencePlayer로 여러
-    // GLB 클립(Dash→Grab→Spin→PowerBomb)을 순서대로 강제 재생하고, 마지막
-    // 충돌 단계(multiPhaseImpactIndex)에서 피해가 터지는 구조는 그대로
-    // 재현한다 - 시각적 단계 재생만 구현, 실제 캐릭터 이동/슬라이드는 없음.
-    //
-    // 참고(점검 완료 - 이 분기는 세트에 대해서는 실행되지 않는 죽은 코드다):
-    // 위쪽 함수 맨 앞(this.championId === 'sett' 분기)에서 이미
-    // _settCastR(free)로 위임하고 return하므로, 실제 세트 R 로직은 전부
-    // sett.js의 _settCastR/_settUpdateR/_settEndR/_settRImpact에 있다 - 거기서
-    // Suppress 적용(캐스트 시점 임시 값 → 실제 클립 합산 duration으로 재설정),
-    // Grab/Carry 위치 추적, 착지 지점 범위 피해(findEnemiesInRadius 기반
-    // falloff)까지 이미 전부 구현되어 있고 _settEndR에서 성공/중단 양쪽
-    // 경로 모두 clearStatus로 Suppress를 해제한다 - 과거에 "미구현"으로
-    // 문서화됐던 것은 착오였다(아래 multiPhaseClips 분기는 세트 없이 다른
-    // 챔피언이 multiPhaseClips 데이터를 쓰게 될 경우를 위한 범용 폴백으로만
-    // 남겨둔다 - 현재는 이 데이터를 쓰는 챔피언이 세트뿐이라 호출되지 않는다).
-    const db = this._championAbilityDbEntry();
-    const multi = db && db.R && db.R.multiPhaseClips;
-    if (multi && multi.length) {
-      const clips = multi.map((n) => this.resolveClip([n])).filter(Boolean);
-      if (clips.length) {
-        this.setState(STATE.R_CAST);
-        this.currentActionKey = 'rCast'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
-        let damageApplied = false;
-        const impactIndex = Math.min(db.R.multiPhaseImpactIndex ?? (clips.length - 1), clips.length - 1);
-        const fireImpact = () => {
-          if (damageApplied) return;
-          damageApplied = true;
-          this.currentPhase = 'ACTIVE';
-          vfx.spawn('r', this.root.position.clone());
-          if (this.currentTarget && this.currentTarget.hp > 0) {
-            if (this.championId === 'sett') { this._settROnHit(this.currentTarget); debugSkillHit('Sett R', this.currentTarget); }
-            else applyDamage(this.currentTarget, { rawDamage: cast.dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
-          } else if (this.championId === 'sett') {
-            debugSkillMiss('Sett R', 'no currentTarget selected');
-          }
-          this.currentPhase = 'RECOVERY'; this.phaseCancelable = false;
-        };
-        this.sequencePlayer.play({
-          steps: clips.map((c) => ({ animation: c.name, clipStart: 0, clipEnd: c.duration })),
-          onStepStart: (index) => { if (index === impactIndex) fireImpact(); },
-          onComplete: () => {
-            fireImpact(); // 혹시 impactIndex 단계가 스킵됐다면 마지막에 보정 발동
-            const recTimer = setTimeout(() => { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }, ENGINE_BUFFER * 1000);
-            this._actionTimers.push(recTimer);
-          },
-          onCancel: () => { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); },
-        });
-        return;
-      }
-    }
 
     // R 궁극기 windup -> channel -> cast 3단계는 서로 다른 GLB AnimationClip을
     // 순서대로, 각각 정해진 구간(clipStart~clipEnd)까지만 강제 재생하고 끊어야
@@ -14202,18 +14123,6 @@ CharacterController.prototype._settEndR = function(seq, aborted) {
     this._resumeAfterAction(); // 요청 9/19: 대기 중이던 이동 명령/재교전을 자연스럽게 이어간다
     console.log(`[SETT R] R_STATE_END${aborted ? ' (대상 무효화로 안전 종료)' : ''}`);
     console.log('[SETT R] R COMPLETE');
-  
-};
-
-// Extracted from CharacterController: _settROnHit
-CharacterController.prototype._settROnHit = function(target) { 
-    const cd = this._champData(); if (!cd) return;
-    const r = cd.R;
-    const lvl = Math.max(1, this.skillLevels.R || 1);
-    const bonusHp = Math.max(0, target.bonusHealth || 0);
-    const dmg = skillVal(r.maxDamageByLevel, lvl) + r.bonusAdRatio * this._getBonusAD() + bonusHp * (skillVal(r.bonusHpPercentByLevel, lvl) / 100);
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
-    applyStatus(target, { id: 'settR_slow', type: 'SLOW', duration: r.slowDuration, value: r.slowPercent / 100 });
   
 };
 
@@ -18305,12 +18214,14 @@ CharacterController.prototype._mordeWOnCast = function() {
     // 계속 실행되며 새 챔피언의 shield 값을 계속 덮어써버릴 수 있었다.
     // 매 틱마다 championId를 확인해 모데카이저가 아니면 즉시 인터벌
     // 자체를 멈추도록 최소 범위로 수정.
-    this._morde.shieldDecayTimer = setInterval(() => {
-      if (this.championId !== 'mordekaiser') { clearInterval(this._morde.shieldDecayTimer); return; }
+    // 인터벌은 자기 id로 멈춘다 - 챔피언 교체로 this._morde가 새 객체로 바뀌어도 확실히 정리된다.
+    const decayTimer = setInterval(() => {
+      if (this.championId !== 'mordekaiser' || this._morde.shieldDecayTimer !== decayTimer) { clearInterval(decayTimer); return; }
       step++;
       this.shield = Math.max(0, shieldAmt * (1 - step / decaySteps));
-      if (step >= decaySteps) clearInterval(this._morde.shieldDecayTimer);
+      if (step >= decaySteps) clearInterval(decayTimer);
     }, (w.shieldDecayDuration * 1000) / decaySteps);
+    this._morde.shieldDecayTimer = decayTimer;
   
 };
 

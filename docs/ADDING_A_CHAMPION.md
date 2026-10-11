@@ -103,10 +103,12 @@ myChamp: {
 가장 최근에 추가된 챔피언(현재는 `ashe`)의 분기를 `grep -n "championId === 'ashe'"`로
 찾아서 그 바로 옆에 같은 패턴으로 추가하면 된다.
 
-### 4-1. 생성자 - 챔피언 전용 상태 초기화
+### 4-1. `_freshChampionStates()` - 챔피언 전용 상태 초기화(한 곳)
 
-`constructor()` 안, 다른 챔피언들의 `this._x = {...}` 초기화 블록
-옆에 추가:
+생성자와 `applyChampionData()`(챔피언 교체) 둘 다 `_freshChampionStates()`를
+호출한다. 다른 챔피언들의 `this._x = {...}` 옆에 **한 번만** 추가하면 된다
+(예전엔 같은 블록을 두 곳에 복사해야 했고, 실제로 모데카이저/벡스는 교체 시
+초기화가 빠져 있었다):
 
 ```js
 this._myChamp = {
@@ -114,11 +116,12 @@ this._myChamp = {
 };
 ```
 
-### 4-2. `applyChampionData()` - 챔피언 교체 시 리셋
+### 4-2. `applyChampionData()` - 이전 상태가 잡고 있는 자원 정리(필요할 때만)
 
-같은 모양의 블록을 **한 번 더** 추가한다(챔피언을 바꿔도 이전 챔피언의
-묵은 상태가 안 남게). 생성자 블록과 내용은 거의 동일하되, 복사-붙여넣기만
-하면 된다.
+상태 객체가 씬 메시/타이머/인터벌을 들고 있으면, `_freshChampionStates()`가
+새 객체로 바꾸기 **전에** 정리하는 줄을 `applyChampionData()`의 정리 구간
+(아리 여우불/모데카이저 인터벌 정리 옆)에 추가한다. 단순 데이터만 들고 있으면
+이 단계는 필요 없다.
 
 ### 4-3. `_onBasicAttackHit(target, overrideId, wouldKill, attackHand, isCritical)` 맨 앞
 
@@ -295,7 +298,7 @@ this._myChampUpdate(dt);
 - [ ] `champion_data.js`에 `CHAMPION_DATA.<id>` 추가
 - [ ] `champion_ability_database.js`에 `championAbilityDatabase.<id>` 추가
 - [ ] `src/champions/<id>.js` 작성(`_TEMPLATE.js` 복사)
-- [ ] `character_controller.js` 7곳: 생성자 / `applyChampionData()` /
+- [ ] `character_controller.js` 6~7곳: `_freshChampionStates()` / (필요 시) `applyChampionData()` 정리 /
       `_onBasicAttackHit()` / (선택) `castAbility()` 우회 / `_dispatchCast()` /
       `_die()` / `update()`
 - [ ] `build_manifest.json`에 파일 추가

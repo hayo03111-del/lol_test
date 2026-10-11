@@ -107,12 +107,14 @@ CharacterController.prototype._mordeWOnCast = function() {
     // 계속 실행되며 새 챔피언의 shield 값을 계속 덮어써버릴 수 있었다.
     // 매 틱마다 championId를 확인해 모데카이저가 아니면 즉시 인터벌
     // 자체를 멈추도록 최소 범위로 수정.
-    this._morde.shieldDecayTimer = setInterval(() => {
-      if (this.championId !== 'mordekaiser') { clearInterval(this._morde.shieldDecayTimer); return; }
+    // 인터벌은 자기 id로 멈춘다 - 챔피언 교체로 this._morde가 새 객체로 바뀌어도 확실히 정리된다.
+    const decayTimer = setInterval(() => {
+      if (this.championId !== 'mordekaiser' || this._morde.shieldDecayTimer !== decayTimer) { clearInterval(decayTimer); return; }
       step++;
       this.shield = Math.max(0, shieldAmt * (1 - step / decaySteps));
-      if (step >= decaySteps) clearInterval(this._morde.shieldDecayTimer);
+      if (step >= decaySteps) clearInterval(decayTimer);
     }, (w.shieldDecayDuration * 1000) / decaySteps);
+    this._morde.shieldDecayTimer = decayTimer;
   
 };
 
