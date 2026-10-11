@@ -5040,8 +5040,11 @@ const championAbilityDatabase = {
   // -- 나중에 추가할 때는 registerAttackOverride({id:'passive', priority:20, ...})
   // 처럼 W(priority:10)보다 높은 priority로 등록하면 문서가 요구하는
   // "패시브가 W보다 우선" 규칙이 그대로 성립한다.
+  // 실제 노틸러스.glb(28클립) 확인: 평타 Attack1~3, W 강화 평타 Attack4,
+  // Q는 Spell1(던지기) → Spell1_Idle(닻이 날아가는 동안) → Spell1_Dash(끌려감).
   nautilus: {
-    Q: { animationNames: ['Spell1'], animationPatterns: [/spell1/i, /dredge/i] },
+    attackAnimationNames: ['Attack1', 'Attack2', 'Attack3'],
+    Q: { animationNames: ['Spell1'], animationPatterns: [/spell1/i, /dredge/i], travelClip: 'Spell1_Idle', pullClip: 'Spell1_Dash' },
     W: { animationNames: [], animationPatterns: [], attackOverrideAnimationNames: ['Attack4'], attackOverrideMode: 'duration' },
     E: { animationNames: ['Spell3'], animationPatterns: [/spell3/i, /riptide/i] },
     R: { animationNames: ['Spell4'], animationPatterns: [/spell4/i, /depth[_ ]?charge/i] },
@@ -5645,6 +5648,13 @@ function buildActionData(resolver, abilityResolver) {
     (ndb.attackAnimationNames || []).forEach((name, i) => { const key = `attack${i+1}`; if (resolver.clipByName(name) && data[key]) data[key].clips=[name]; });
     if (resolver.clipByName(ndb.idleAnimationNames?.[0])) data.idle={clips:[ndb.idleAnimationNames[0]]};
     if (resolver.clipByName(ndb.moveAnimationNames?.[0])) data.move={clips:[ndb.moveAnimationNames[0]]};
+  }
+  // 노틸러스(실제 노틸러스.glb 확인): 평타 클립은 Attack1~3이고 Attack4는 W(타이탄의
+  // 분노) 전용 오버라이드 클립이다. 자동 채점은 GLB 순서대로 Attack4를 1번 평타로
+  // 골랐다 - DB에 적힌 평타 3종만 쓴다.
+  if (abilityResolver.championId === 'nautilus') {
+    const names = (championAbilityDatabase.nautilus.attackAnimationNames || []).filter((n) => resolver.clipByName(n));
+    if (names.length) attackVariants = names;
   }
   if (abilityResolver.championId === 'leesin') {
     const leeAttackNames = championAbilityDatabase.leesin.attackAnimationNames || [];
@@ -8878,6 +8888,7 @@ const ATTACK_SEQUENCE_OVERRIDES = {
   // 않으면 존재하지 않는 "3번째 평타" 자리에 중복 클립이 들어가는, 다른
   // 챔피언들과 동일한 유형의 버그가 생긴다.
   ashe: ['attack1', 'attack2'],
+  nautilus: ['attack1', 'attack2', 'attack3'],
 };
 // 시퀀스 배열에서의 위치를 챔피언 고유의 "손/방향" 의미로 변환한다.
 // 새 챔피언이 추가되면 이 매핑만 확장하면 된다 - 애니메이션 선택 로직
@@ -13016,6 +13027,10 @@ CharacterController.prototype._castW = function(mouseWorldPoint, free = false) {
       // 않는다.
       this._activateAttackOverrideFromDb('W', 6.0);
       vfx.spawn('w', this.root.position.clone());
+      // 버그 수정(실제 다리우스.glb로 확인): 평타를 끊은 뒤 아무도 다시 교전을
+      // 시작하지 않아, 대상이 선택된 채 IDLE로 멈춰 강화 평타가 나가지 않았다.
+      // W는 평타 초기화 스킬이라 곧바로 다시 대상을 공격한다.
+      if ((isBasicAttack || !this.currentActionKey) && this.currentTarget && this.currentTarget.hp > 0) this._resumeAfterAction();
       return;
     }
 
@@ -21219,6 +21234,7 @@ CharacterController.prototype._nautilusCastQ = function(mouseWorldPoint, free = 
 CharacterController.prototype._nautilusFireQ = function(p) {
   const q = this._champData().Q;
   this.currentPhase = 'ACTIVE';
+  this._nautilusPlayQClip('travelClip', true);
   this._nautilus.qTravel = {
     dir: p.dir.clone(), pos: this.root.position.clone(),
     maxDist: lolRangeToWorld(q.range), halfWidth: lolRangeToWorld(q.width) * 0.5,
@@ -21309,7 +21325,17 @@ CharacterController.prototype._nautilusStartPull = function(to, unit) {
   const faceDir = new THREE.Vector3().subVectors(to, from).setY(0);
   this._dashState = { from, to: to.clone(), duration, elapsed: 0, faceDir: faceDir.lengthSq() > 1e-8 ? faceDir.normalize() : null };
   this._nautilus.qPull = { remainingSec: duration, unit };
+  this._nautilusPlayQClip('pullClip', false);
   return duration;
+};
+
+// Q 단계별 모션(champion_ability_database.js의 nautilus.Q.travelClip/pullClip) -
+// 모델에 그 클립이 없으면 아무것도 바꾸지 않는다.
+CharacterController.prototype._nautilusPlayQClip = function(field, loop) {
+  const db = this._championAbilityDbEntry();
+  const name = db && db.Q && db.Q[field];
+  if (!name || typeof this.findAnimation !== 'function' || !this.findAnimation(name)) return;
+  this.playFirstAvailable([name], { loop: loop ? THREE.LoopRepeat : THREE.LoopOnce, fade: 0.08, clampWhenFinished: !loop });
 };
 
 /* ---------------------------------------------------------------

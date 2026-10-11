@@ -1058,6 +1058,10 @@ CharacterController.prototype._castW = function(mouseWorldPoint, free = false) {
       // 않는다.
       this._activateAttackOverrideFromDb('W', 6.0);
       vfx.spawn('w', this.root.position.clone());
+      // 버그 수정(실제 다리우스.glb로 확인): 평타를 끊은 뒤 아무도 다시 교전을
+      // 시작하지 않아, 대상이 선택된 채 IDLE로 멈춰 강화 평타가 나가지 않았다.
+      // W는 평타 초기화 스킬이라 곧바로 다시 대상을 공격한다.
+      if ((isBasicAttack || !this.currentActionKey) && this.currentTarget && this.currentTarget.hp > 0) this._resumeAfterAction();
       return;
     }
 

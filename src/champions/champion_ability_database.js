@@ -244,8 +244,11 @@ const championAbilityDatabase = {
   // -- 나중에 추가할 때는 registerAttackOverride({id:'passive', priority:20, ...})
   // 처럼 W(priority:10)보다 높은 priority로 등록하면 문서가 요구하는
   // "패시브가 W보다 우선" 규칙이 그대로 성립한다.
+  // 실제 노틸러스.glb(28클립) 확인: 평타 Attack1~3, W 강화 평타 Attack4,
+  // Q는 Spell1(던지기) → Spell1_Idle(닻이 날아가는 동안) → Spell1_Dash(끌려감).
   nautilus: {
-    Q: { animationNames: ['Spell1'], animationPatterns: [/spell1/i, /dredge/i] },
+    attackAnimationNames: ['Attack1', 'Attack2', 'Attack3'],
+    Q: { animationNames: ['Spell1'], animationPatterns: [/spell1/i, /dredge/i], travelClip: 'Spell1_Idle', pullClip: 'Spell1_Dash' },
     W: { animationNames: [], animationPatterns: [], attackOverrideAnimationNames: ['Attack4'], attackOverrideMode: 'duration' },
     E: { animationNames: ['Spell3'], animationPatterns: [/spell3/i, /riptide/i] },
     R: { animationNames: ['Spell4'], animationPatterns: [/spell4/i, /depth[_ ]?charge/i] },

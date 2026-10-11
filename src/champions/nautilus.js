@@ -92,6 +92,7 @@ CharacterController.prototype._nautilusCastQ = function(mouseWorldPoint, free = 
 CharacterController.prototype._nautilusFireQ = function(p) {
   const q = this._champData().Q;
   this.currentPhase = 'ACTIVE';
+  this._nautilusPlayQClip('travelClip', true);
   this._nautilus.qTravel = {
     dir: p.dir.clone(), pos: this.root.position.clone(),
     maxDist: lolRangeToWorld(q.range), halfWidth: lolRangeToWorld(q.width) * 0.5,
@@ -182,7 +183,17 @@ CharacterController.prototype._nautilusStartPull = function(to, unit) {
   const faceDir = new THREE.Vector3().subVectors(to, from).setY(0);
   this._dashState = { from, to: to.clone(), duration, elapsed: 0, faceDir: faceDir.lengthSq() > 1e-8 ? faceDir.normalize() : null };
   this._nautilus.qPull = { remainingSec: duration, unit };
+  this._nautilusPlayQClip('pullClip', false);
   return duration;
+};
+
+// Q 단계별 모션(champion_ability_database.js의 nautilus.Q.travelClip/pullClip) -
+// 모델에 그 클립이 없으면 아무것도 바꾸지 않는다.
+CharacterController.prototype._nautilusPlayQClip = function(field, loop) {
+  const db = this._championAbilityDbEntry();
+  const name = db && db.Q && db.Q[field];
+  if (!name || typeof this.findAnimation !== 'function' || !this.findAnimation(name)) return;
+  this.playFirstAvailable([name], { loop: loop ? THREE.LoopRepeat : THREE.LoopOnce, fade: 0.08, clampWhenFinished: !loop });
 };
 
 /* ---------------------------------------------------------------

@@ -118,3 +118,22 @@ devDependency로 추가하고 CI에 Chromium 설치 단계를 넣는 작업이 �
    으로 스텁 처리한다 - 로직 자체를 테스트 안에서 다시 구현하지 않는다.
 4. `node tests/<새 파일>.js`로 단독 실행해 통과를 확인한 뒤,
    `node tests/run_all.js`로 전체 회귀가 깨지지 않았는지 확인한다.
+
+## 실제 챔피언 GLB로 브라우저 E2E 확인(`tools/e2e_glb/`)
+
+챔피언 모델(.glb)은 저장소에 없다(사용자가 직접 올리는 파일). 모델이 있을 때는
+헤드리스 Chromium에서 실제 UI로 불러와 평타/Q/W/E/R을 실행해 볼 수 있다:
+
+```bash
+# three.js를 CDN 대신 npm에서 받는다(이 환경은 cdn.jsdelivr.net이 막혀 있음)
+cd tools/e2e_glb && npm pack three@0.160.0 && mkdir -p three && tar xzf three-0.160.0.tgz -C three
+GLB_DIR=/모델/폴더 node run.js            # 폴더 안의 <챔피언이름>.glb 전부
+GLB_DIR=/모델/폴더 node run.js 노틸러스    # 일부만
+```
+
+파일명(예: `노틸러스.glb`)이 챔피언 자동 식별에 쓰인다. 결과 JSON에는 챔피언 ID,
+idle/move/평타/스킬에 실제로 연결된 클립, 각 동작 중 재생된 클립 순서, 더미 피해,
+쿨다운, 콘솔 오류가 나온다. 소프트웨어 렌더링이라 게임 시간이 실제 시간보다
+느리게 흐를 수 있다(긴 스킬은 대기 시간을 넉넉히). Playwright 경로가 다르면
+`PLAYWRIGHT_PATH`/`CHROMIUM_PATH`로 지정한다.
+

@@ -40,6 +40,13 @@ function buildActionData(resolver, abilityResolver) {
     if (resolver.clipByName(ndb.idleAnimationNames?.[0])) data.idle={clips:[ndb.idleAnimationNames[0]]};
     if (resolver.clipByName(ndb.moveAnimationNames?.[0])) data.move={clips:[ndb.moveAnimationNames[0]]};
   }
+  // 노틸러스(실제 노틸러스.glb 확인): 평타 클립은 Attack1~3이고 Attack4는 W(타이탄의
+  // 분노) 전용 오버라이드 클립이다. 자동 채점은 GLB 순서대로 Attack4를 1번 평타로
+  // 골랐다 - DB에 적힌 평타 3종만 쓴다.
+  if (abilityResolver.championId === 'nautilus') {
+    const names = (championAbilityDatabase.nautilus.attackAnimationNames || []).filter((n) => resolver.clipByName(n));
+    if (names.length) attackVariants = names;
+  }
   if (abilityResolver.championId === 'leesin') {
     const leeAttackNames = championAbilityDatabase.leesin.attackAnimationNames || [];
     const existing = leeAttackNames.filter((n) => resolver.clipByName(n));

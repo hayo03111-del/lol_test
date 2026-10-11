@@ -93,7 +93,8 @@ function makeNaut(overrides = {}) {
     passiveState: { lastDamageTakenAt: 0, lastEnemySkillHitAt: 0 },
     state: 'IDLE', currentActionKey: null, currentPhase: null, currentTarget: null,
     _actionTimers: [],
-    playFirstAvailable() {}, faceDirectionInstant() {}, setState(s) { this.state = s; },
+    clips: ['Spell1', 'Spell1_Idle', 'Spell1_Dash', 'Spell3', 'Spell4', 'Attack1', 'Attack2', 'Attack3', 'Attack4'].map((name) => ({ name, duration: 1 })), played: [],
+    playFirstAvailable(names) { this.played.push(names[0]); }, faceDirectionInstant() {}, setState(s) { this.state = s; },
     _clearActionTimers() {}, _resumeAfterAction() { this.resumed = (this.resumed || 0) + 1; },
   }, overrides);
   c._nautilusReset();
@@ -162,6 +163,7 @@ const mag = (lvl, arr, ratio, ap) => arr[lvl - 1] + ratio * ap;
   assert(c.root.position.z > dist * 0.3 && e.mesh.position.z < dist * 0.7, `Q: 서로 끌려가 중간에서 만난다(노틸러스 z=${c.root.position.z.toFixed(2)}, 대상 z=${e.mesh.position.z.toFixed(2)})`);
   assert(gap < 2.0, 'Q: 만난 뒤 거리가 충돌 반경 수준');
   assert(c.currentActionKey === null && c.resumed > 0, 'Q: 끌려간 뒤 행동 잠금 해제');
+  assert(c.played.join(',') === 'Spell1,Spell1_Idle,Spell1_Dash', `Q: 실제 노틸러스.glb 클립 순서 - 던지기→닻 비행→끌려감(${c.played.join(',')})`);
 }
 {
   const c = makeNaut();
