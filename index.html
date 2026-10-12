@@ -2142,6 +2142,7 @@ const CHAMPION_DATA = {
     W: {
       name: '바람 장막', cooldown: [25,23,21,19,17], range: 400,
       width: [320,390,460,530,600], duration: 4, damageType: 'NONE',
+      castTimeSec: 0.013, // PC 위키(야스오 문서): 시전 시간 0.013초, 시전 중 이동 가능
     },
     E: {
       // 대상을 "관통해" 고정 거리(475)만큼 돌진, 돌진 속도 750 + 이동 속도의 60%.
@@ -2251,6 +2252,7 @@ const CHAMPION_DATA = {
       name: '영혼해방',
       cooldown: [22,19,16,13,10], range: 300, dashSpeed: 1200,
       spiritFormDuration: 5, recastMinDelay: 0.5,
+      recastCastTimeSec: 0.225, // PC 위키: 재시전 시전 시간 0.225초(최초 돌진은 시전 시간 없음)
       moveSpeedBonusMin: 0.10, moveSpeedBonusMax: 0.30, // bin StartingMS=0.10, MovementSpeed=0.30로 재확인
       markPercentByLevel: [25,27.5,30,32.5,35], // bin DeathmarkPercent(레벨1~5)로 재확인 - 명칭은 내부적으로 공유되는 스크립트 잔재(탈론류)이지만 수치 자체는 위키와 정확히 일치
       damageType: 'TRUE',
@@ -2292,7 +2294,8 @@ const CHAMPION_DATA = {
       name: '무자비한 포식자', cooldown: [16,14,12,10,8], mana: 0, range: 175,
       damageByLevel: [10,40,70,100,130], totalAdRatio: 1.5, hits: 2, stunDuration: 0.75,
       empoweredDamageByLevel: [15,60,105,150,195], empoweredTotalAdRatio: 2.25, empoweredHits: 3, empoweredStunDuration: 1.5,
-      bonusChampionRage: 10, empowerWindowSec: 7, damageType: 'PHYSICAL' // PC 위키: 7초 안의 다음 평타 강화
+      bonusChampionRage: 10, empowerWindowSec: 7, damageType: 'PHYSICAL', // PC 위키: 7초 안의 다음 평타 강화
+      castTimeSec: 0.2, postHitLockSec: 0.528, // PC 위키: 강화 평타 시전 0.2초, 이후 0.528초 이동·Q·E 불가(R로 해제)
     },
     E: {
       name: '자르고 토막내기', cooldown: [16,14.5,13,11.5,10], mana: 0, range: 450, // Data Dragon: 돌진 450(예전 550)
@@ -2629,6 +2632,7 @@ const CHAMPION_DATA = {
       dealtDamageBankPercent: 45, takenDamageBankPercent: 7.5, nonChampionBankPercent: 25, // 챔피언 아닌 유닛 피해는 75% 감소 흡수 = 25%만 반영
       minShieldMaxHpPercent: 5, maxShieldMaxHpPercent: 30, shieldDecayDuration: 4, // PC 위키: 보호막 4초(감소) - 예전 6초
       recastHealPercentByLevel: [35, 37.5, 40, 42.5, 45],
+      recastMinDelaySec: 0.5, // PC 위키(Indestructible 템플릿): 첫 시전 0.5초 뒤 재시전 가능
     },
     E: {
       // PC 위키: 시전 사거리 700, 판정 직사각형 길이 800·폭 200, 0.5초 뒤 250 유닛 끌어당김.
@@ -2680,6 +2684,8 @@ const CHAMPION_DATA = {
       // PC 위키: 폭발 3회(의도된 간격 0.25초), 두 번째 이후 폭발은 50% 피해, 둔화는 1.5초에 걸쳐 감쇠(2→1.5초 패치).
       explosionCount: 3, subsequentDamagePercent: 50,
       explosionIntervalSec: 0.25,
+      // PC 위키(노틸러스 문서): 시전 시간 0.25초. 폭발은 시전이 끝난 뒤 0 / 0.297 / 0.561초(의도는 0.25 간격, 위키 실측 유효 시각).
+      castTimeSec: 0.25, explosionOffsetsSec: [0, 0.297, 0.561],
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDecaySec: 1.5,
     },
     R: {
@@ -2895,8 +2901,8 @@ const CHAMPION_DATA = {
      E: {
       name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: [70, 80, 90, 100, 110], // Data Dragon
       // PC 위키: 시전 0.25초, 지정 지점까지 날아가 폭발 - 반경 200~300(시전 거리 비례). 피해 수치는 최신 PC 출처가
-      // 엇갈려 기존 값 유지(미확인). 투사체 속도는 위키 확인 못 해 1300으로 추정(missileSpeedGuessed).
-      range: 800, castTimeSec: 0.25, radiusMin: 200, radiusMax: 300, missileSpeed: 1300, missileSpeedGuessed: true, damageByLevel: [60, 105, 150, 195, 240],
+      // 엇갈려 기존 값 유지(미확인). 투사체 속도 1300은 PC 위키(Template:Data_Vex/Looming_Darkness)로 확인.
+      range: 800, castTimeSec: 0.25, radiusMin: 200, radiusMax: 300, missileSpeed: 1300, damageByLevel: [60, 105, 150, 195, 240],
       apRatio: 0.4, slowPercentByLevel: [30, 35, 40, 45, 50],
       slowDuration: 2, damageType: 'MAGICAL',
       piercesUnits: true,
@@ -15713,14 +15719,14 @@ CharacterController.prototype._renektonTick = function(dt) {
     // W는 레넥톤이 죽거나 CC에 걸려도 이미 시작한 공격 시퀀스를 끝까지 진행한다.
     if(r.wSeq){
       r.wSeq.elapsed+=dt;
-      const clip=this.findAnimation(r.wSeq.empowered?'Spell2U':'Spell2');
-      const stepDur=Math.max(0.06,(clip?.duration||0.5)/r.wSeq.hits);
-      while(r.wSeq && r.wSeq.elapsed>=stepDur && r.wSeq.hitIndex<r.wSeq.hits){
-        r.wSeq.elapsed-=stepDur;this._renektonResolveWHit(r.wSeq);r.wSeq.hitIndex++;
-      }
-      if(r.wSeq && r.wSeq.hitIndex>=r.wSeq.hits){
-        r.wSeq=null; this.currentPhase='RECOVERY'; this.phaseCancelable=true;
-        const recoveryTimer=setTimeout(()=>{ if(this.currentActionKey==='renektonW'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},120);
+      // PC 위키: 강화 평타 시전 시간 0.2초 뒤 타격, 이후 0.528초 동안 이동·Q·E 불가(R 시전 시 즉시 해제 - controller_casting 참고).
+      // 예전엔 타격을 클립 길이에 나눠 넣어(첫 타 약 0.55초) 판정이 늦고 잠금도 클립 끝까지(약 1.2초) 이어졌다.
+      // 타격 사이 간격은 위키에 없어서 시전 시간이 끝나는 시점에 모든 타격을 차례로 판정한다.
+      const wd=this._renektonData().W;
+      if(r.wSeq.elapsed>=(wd.castTimeSec??0.2)){
+        while(r.wSeq.hitIndex<r.wSeq.hits){this._renektonResolveWHit(r.wSeq);r.wSeq.hitIndex++;}
+        r.wSeq=null; this.currentPhase='RECOVERY'; this.phaseCancelable=false;
+        const recoveryTimer=setTimeout(()=>{ if(this.currentActionKey==='renektonW'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},(wd.postHitLockSec??0.528)*1000);
         this._actionTimers.push(recoveryTimer);
       }
     }
@@ -15994,7 +16000,11 @@ CharacterController.prototype._yasuoCastW = function(mouseWorldPoint, free=false
     if (!this.findAnimation(anim)) anim = 'Spell2_BASE';
     const clip=this.findAnimation(anim); const dur=clip?clip.duration:0.35;
     this.currentActionKey='yasuoW'; this.currentPhase='ACTIVE'; this.setState(STATE.W_CAST);
-    this.runAction('yasuoW',STATE.W_CAST,{startupOverride:Math.min(0.25,dur),recoveryOverride:Math.max(0.05,dur-Math.min(0.25,dur)),dataOverride:{clips:[anim],startup:Math.min(0.25,dur),recovery:Math.max(0.05,dur-Math.min(0.25,dur)),cancelToMove:false,cancelToSpell:false,cancelable:false,dmg:0},onFire:()=>{ this._yasuoCreateWindwall(dir,width); }});
+    // PC 위키: 시전 시간 0.013초, 시전 중 이동 가능. 예전엔 min(0.25, 클립 길이) 뒤에 장막을 세우고 클립 전체(약 0.7초) 동안
+    // 이동·스킬을 막았다. 장막은 액션 취소와 무관한 타이머로 0.013초 뒤에 세우고, 모션은 이동·스킬로 언제든 끊기게 한다.
+    const castSec = w.castTimeSec ?? 0.013;
+    setTimeout(()=>{ if (this.hp > 0) this._yasuoCreateWindwall(dir,width); }, castSec*1000);
+    this.runAction('yasuoW',STATE.W_CAST,{startupOverride:castSec,recoveryOverride:Math.max(0.05,dur-castSec),dataOverride:{clips:[anim],startup:castSec,recovery:Math.max(0.05,dur-castSec),cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{}});
     if(!free) this.cooldowns.W=abilityHasteCooldown(this, this._yasuoLevelValue(w.cooldown,lvl));
 
 };
@@ -17150,63 +17160,62 @@ CharacterController.prototype._yoneCastE = function(mouseWorldPoint, free = fals
     if (this.currentActionKey === spiritInKey) { this.currentActionKey = null; this.currentPhase = null; }
     this._resumeAfterAction();
   };
+  // 버그 수정(9차 원작 대조): 예전엔 돌진 + 진입 포즈 + Spell3_SpiritIn_ToIdle(3.33초)이 끝날 때까지 잠가서
+  // 정신체 5초 중 대부분을 이동·스킬(재시전 포함) 없이 보냈다. PC 위키: 최초 돌진은 시전 시간 없음 -
+  // 조작 불가 구간은 돌진(300 / 1200 = 0.25초)뿐이다. 돌진이 끝나면 일반 대기/이동 모션이 이어받는다
+  // (진입 포즈 뒤의 SpiritIn_ToIdle 전환은 이미 대기 모션으로 넘어간 뒤 다시 튀어 보여서 쓰지 않는다).
   const spiritInClips = ['Spell3_Dash', 'Yone_Spell3_spiritIn.anm'].filter((n) => this.findAnimation(n));
   if (spiritInClips.length) {
     this.sequencePlayer.play({
       steps: spiritInClips.map((n) => ({ animation: n, clipStart: 0, clipEnd: this.findAnimation(n).duration })),
-      onComplete: () => {
-        if (this._yone.eSpirit) this._yonePlayExitTransition(['Spell3_SpiritIn_ToIdle'], [], finishSpiritIn);
-        else finishSpiritIn();
-      },
+      onComplete: () => {},
     });
   } else {
     this.playFirstAvailable(['Spell3_Dash'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
-    const t = setTimeout(finishSpiritIn, Math.max(0.05, dashDur) * 1000);
-    this._actionTimers.push(t);
   }
+  const t = setTimeout(finishSpiritIn, Math.max(0.05, dashDur) * 1000);
+  this._actionTimers.push(t);
   vfx.spawn('e', this.root.position.clone(), dir);
   if (!free) this.cooldowns.E = abilityHasteCooldown(this, this._yoneLevelValue(e.cooldown, eLevel));
 };
 
 CharacterController.prototype._yoneRecastE = function() {
   const spirit = this._yone.eSpirit;
-  if (!spirit) return;
+  if (!spirit || spirit.recasting) return;
   if (performance.now() < spirit.recastLockedUntil) return; // 위키: 최초 시전 후 최소 0.5초 지나야 재시전 가능
-  this.root.position.copy(spirit.bodyPos);
-  this.root.quaternion.copy(spirit.bodyQuat);
-  // 복귀(Spell3_Out) -> 마무리 동작(Spell3_End1) 순서로 이어 재생하고,
-  // 정지 상태면 Spell3_Out_toIdle로 자연스럽게 Idle과 이어붙인다(요네에게는
-  // 이동 중 복귀용 전용 전환 클립이 따로 없어 그 경우는 즉시 폴백). Q/W/R,
-  // 그리고 위 정신체 진입 체인과 동일하게 currentActionKey를 잡았다가 끝나면
-  // 반드시 비우고 _resumeAfterAction()으로 넘겨서 평범한 이동 애니메이션이
-  // 이어받도록 한다(안 그러면 육체로 돌아온 뒤에도 Idle/Run 전환이 깨진다).
+  // PC 위키: 재시전 시전 시간 0.225초(그동안 이동 불가 효과 면역), 시전이 끝나면 육체로 돌아오며 표식이 터진다.
+  // 예전엔 재시전 즉시 순간이동·표식 피해가 나고, 복귀 모션 전체(약 1.6초) 동안 행동을 막았다.
+  spirit.recasting = true;
+  const castSec = this._champData().E.recastCastTimeSec ?? 0.225;
   const eOutKey = 'yoneEOut';
+  this._clearActionTimers();
   this.setState(STATE.E_CAST);
   this.currentActionKey = eOutKey; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
-  const finishEOut = () => {
-    if (this.currentActionKey === eOutKey) { this.currentActionKey = null; this.currentPhase = null; }
-    this._resumeAfterAction();
-  };
+  // 복귀(Spell3_Out) -> 마무리(Spell3_End1) -> 정지 상태면 Spell3_Out_toIdle. 잠금은 시전 시간까지만이고 남은 모션은 다음 행동이 덮어쓴다.
   const outClips = ['Spell3_Out', 'Spell3_End1'].filter((n) => this.findAnimation(n));
   if (outClips.length) {
     this.sequencePlayer.play({
       steps: outClips.map((n) => ({ animation: n, clipStart: 0, clipEnd: this.findAnimation(n).duration })),
-      onComplete: () => { this._yonePlayExitTransition(['Spell3_Out_toIdle'], [], finishEOut); },
+      onComplete: () => { if (!this.currentActionKey && !this.targetPos && !this.pendingMove) this._yonePlayExitTransition(['Spell3_Out_toIdle'], [], () => {}); },
     });
   } else {
     this.playFirstAvailable(['Spell3_Out'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
-    const t = setTimeout(finishEOut, 400);
-    this._actionTimers.push(t);
   }
-  vfx.spawn('e', this.root.position.clone());
-  for (const [key, amount] of spirit.marks) {
-    const target = spirit.markTargets.get(key);
-    if (target && target.hp > 0 && amount > 0) {
-      applyDamage(target, { rawDamage: amount, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: this });
+  setTimeout(() => {
+    if (this._yone.eSpirit !== spirit) return;
+    this.root.position.copy(spirit.bodyPos);
+    this.root.quaternion.copy(spirit.bodyQuat);
+    vfx.spawn('e', this.root.position.clone());
+    for (const [key, amount] of spirit.marks) {
+      const target = spirit.markTargets.get(key);
+      if (target && target.hp > 0 && amount > 0) {
+        applyDamage(target, { rawDamage: amount, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: this });
+      }
     }
-  }
-  this._yoneCleanupSpiritVisuals();
-  this._yone.eSpirit = null;
+    this._yoneCleanupSpiritVisuals();
+    this._yone.eSpirit = null;
+    if (this.currentActionKey === eOutKey) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+  }, castSec * 1000);
 };
 
 // _yoneTick(dt)에서 매 프레임 호출된다: 돌진 이동 보간, 정신체 이동속도
@@ -17993,7 +18002,8 @@ CharacterController.prototype._nilahCastR = function(free=false) {
     if(!free)this.cooldowns.R=abilityHasteCooldown(this, skillVal(r.cooldown,lvl));
     if(this._nilah.rSeq) return;
     this._clearActionTimers(); this.currentActionKey='nilahR'; this.currentPhase='STARTUP'; this.setState(STATE.R_CAST); this.phaseCancelable=false;
-    const startup=0.16;
+    // PC 위키: 시전 시간 없음(예전엔 근거 없는 선딜 0.16초 동안 이동까지 막았다). 첫 틱은 다음 프레임에 시작한다.
+    const startup=0;
     this._nilah.rSeq={elapsed:0,tickAccum:0,ticksDone:0,finalDone:false,precast:true,precastUntil:now+startup*1000,championDamage:0,nonChampionDamage:0,channelEnded:false};
     // 데이터 추가(실제 bin 확인 - ShieldCalc): R 시전 시 확정 보호막을
     // 즉시 부여한다. 지금까지 있던 "초과 회복량 → 보호막 전환"과는 완전히
@@ -18093,7 +18103,6 @@ CharacterController.prototype._nilahRFinish = function(seq) {
       this._nilahHealUnit(ally,totalHeal,r.shieldDuration,'nilahP_R');
     }
     if(this.findAnimation('Spell4_ToIdle')) this.playFirstAvailable(['Spell4_ToIdle'],{loop:THREE.LoopOnce,fade:0.1,clampWhenFinished:true});
-    const clipDur=this.findAnimation('Spell4_ToIdle')?.duration||0.2;
     // 버그 수정(핵심): 이 GLB의 'Spell4_ToIdle' 클립은 실제 길이가 약 7.6초다
     // (전환 애니메이션치고 비정상적으로 길다 - 아마 뒤에 유휴 프레임이 그대로
     // 붙어있는 클립으로 보인다). 예전엔 이 조작권 복구 타이머가 그 전체
@@ -18102,7 +18111,9 @@ CharacterController.prototype._nilahRFinish = function(seq) {
     // 80~120ms)와 동일한 수준으로 상한을 둬서, 클립 자체는 그대로 재생하되
     // (크로스페이드가 자연스럽게 다음 동작으로 넘어가며 덮어쓴다) 조작권은
     // 정상적인 짧은 후딜 시간 안에 돌려준다.
-    const controlLockMs=Math.max(120, Math.min(320, clipDur*1000));
+    // PC 위키: 평타·스킬 금지는 환희(1초) 동안만이다. 종료 후 추가 잠금(예전 0.12~0.32초)은 원작 근거가 없어 없앴다.
+    // 종료 모션은 그대로 재생되고 다음 행동이 들어오면 자연스럽게 덮어쓴다.
+    const controlLockMs=0;
     const timer=setTimeout(()=>{if(this.currentActionKey==='nilahR'){this.currentActionKey=null;this.currentPhase=null;this._nilah.rSeq=null;this._resumeAfterAction();}},controlLockMs);
     this._actionTimers.push(timer);
   
@@ -19781,6 +19792,8 @@ CharacterController.prototype._mordeCastW = function(free) {
     const cd = this._champData(); const w = cd.W;
     const now = performance.now();
     if (now < (this._morde.wShieldActiveUntil || 0)) {
+      // PC 위키(Template:Data_Mordekaiser/Indestructible): 첫 시전 0.5초 뒤부터 재시전 가능(예전엔 즉시 재시전 가능했다).
+      if (now < (this._morde.wRecastReadyAt || 0)) return;
       // 재시전(2타): 남은 보호막을 즉시 회복으로 전환.
       this._mordeWOnRecast();
       this._morde.wShieldActiveUntil = 0;
@@ -19793,6 +19806,7 @@ CharacterController.prototype._mordeCastW = function(free) {
     if (!this._payCost('W', free)) return;
     this._mordeWOnCast();
     this._morde.wShieldActiveUntil = now + w.shieldDecayDuration * 1000;
+    this._morde.wRecastReadyAt = now + (w.recastMinDelaySec ?? 0.5) * 1000;
     vfx.spawn('w', this.root.position.clone());
     // 요청: 모데카이저 W는 모션 없이 효과만 발동한다 - 캐릭터 애니메이션을
     // 재생하지 않는다(보호막 전환 등 게임로직은 그대로 유지).
@@ -20930,9 +20944,9 @@ CharacterController.prototype._ahriCastW = function(mouseWorldPoint, free = fals
   if (isSilenced(this)) return;
   const w = this._champData().W;
   if (!this._payCost('W', free)) return;
-  this._clearActionTimers();
-  this.currentActionKey = 'ahriW'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
-  this.setState(STATE.W_CAST);
+  // PC 위키: 시전 시간 없음. 예전엔 W 클립 길이(약 1.33초) 동안 'ahriW' 액션으로 이동·평타·스킬을 모두 막고,
+  // 진행 중이던 평타도 끊었다. 이제 행동을 막지 않고, 모션은 다른 행동이 없을 때만 보여 준다.
+  const showClip = !this.currentActionKey && this.state !== STATE.MOVE;
 
   // 버그 수정(공식 설명 "이동 속도가 40% 증가했다가 2초에 걸쳐 원래대로
   // 돌아옵니다") - 기존에는 지속시간 내내 40%를 고정 유지하다 만료 순간
@@ -20958,13 +20972,14 @@ CharacterController.prototype._ahriCastW = function(mouseWorldPoint, free = fals
   for (let i = 0; i < 3; i++) this._ahri.foxfires.push(this._ahriSpawnFoxfire(i, orbitRadius, lvl, now, w, hitTargetsThisCast));
   debugSkillHit('Ahri W (여우불 소환)', this);
 
-  const clip = this.findAnimation('Spell2');
-  this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
-  const dur = clip ? clip.duration : 0.3;
-  const recTimer = setTimeout(() => {
-    if (this.currentActionKey === 'ahriW') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
-  }, dur * 1000);
-  this._actionTimers.push(recTimer);
+  if (showClip) {
+    const clip = this.findAnimation('Spell2');
+    this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
+    const dur = clip ? clip.duration : 0.3;
+    setTimeout(() => {
+      if (!this.currentActionKey && this.state !== STATE.MOVE && this.currentClipKey === 'Spell2') this._returnToLocomotion();
+    }, dur * 1000);
+  }
 };
 CharacterController.prototype._ahriSpawnFoxfire = function(index, orbitRadius, lvl, startTime, w, hitTargetsThisCast) {
   // 버그 수정(레퍼런스 영상 ability_0103_W1.webm 픽셀 대조): 기존 핑크
@@ -22467,8 +22482,12 @@ CharacterController.prototype._nautilusCastE = function(free = false) {
   if (isSilenced(this) || isCrowdControlled(this)) return;
   const e = this._champData().E;
   if (!this._payCost('E', free)) return;
+  // PC 위키: 시전 시간 0.25초(시전이 끝나는 시점의 위치에서 폭발). 예전엔 시전 즉시 첫 폭발이 나갔다.
+  this._clearActionTimers();
+  this.currentActionKey = 'nautilusE'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
+  this.setState(STATE.E_CAST);
   this.playFirstAvailable(['Spell3'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
-  this._nautilus.eSeq = { remaining: e.explosionCount, nextInSec: 0, hitCounts: new Map(), lvl: Math.max(1, this.skillLevels.E || 1) };
+  this._nautilus.eSeq = { remaining: e.explosionCount, elapsed: 0, fired: 0, castSec: e.castTimeSec || 0, hitCounts: new Map(), lvl: Math.max(1, this.skillLevels.E || 1) };
   this._nautilusTickE(0);
 };
 
@@ -22491,11 +22510,13 @@ CharacterController.prototype._nautilusExplodeE = function(seq) {
 CharacterController.prototype._nautilusTickE = function(dt) {
   const seq = this._nautilus.eSeq;
   if (!seq) return;
-  seq.nextInSec -= dt;
-  while (seq && seq.remaining > 0 && seq.nextInSec <= 0) {
+  const e = this._champData().E;
+  seq.elapsed += dt;
+  const offsetAt = (i) => seq.castSec + (e.explosionOffsetsSec ? e.explosionOffsetsSec[i] : i * e.explosionIntervalSec);
+  while (seq.remaining > 0 && seq.elapsed + 1e-9 >= offsetAt(seq.fired)) {
+    if (seq.fired === 0) this._nautilusFinishAction('nautilusE'); // 시전 시간 종료 = 행동 잠금 해제
     this._nautilusExplodeE(seq);
-    seq.remaining -= 1;
-    seq.nextInSec += this._champData().E.explosionIntervalSec;
+    seq.remaining -= 1; seq.fired += 1;
   }
   if (seq.remaining <= 0) this._nautilus.eSeq = null;
 };

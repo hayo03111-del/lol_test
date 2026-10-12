@@ -193,6 +193,16 @@ function clearPlaced() { stubs.placedDummies.length = 0; }
   const lb = CHAMPION_DATA.mordekaiser.Q.levelBonusDamage;
   assert(Math.min(lb.maxLevel - lb.startLevel + 1, 18 - lb.startLevel + 1) * lb.perLevel === 63, '모데카이저 Q: 18레벨 추가 피해 63(V26.20)');
   assert(CHAMPION_DATA.mordekaiser.W.shieldDecayDuration === 4, '모데카이저 W: 보호막 4초');
+  {
+    let recasts = 0; c._mordeWOnCast = () => {}; c._mordeWOnRecast = () => { recasts++; };
+    c._morde.wShieldActiveUntil = 0; c.cooldowns.W = 0; c.mp = 1000;
+    c._mordeCastW(true);
+    c._mordeCastW(true);
+    assert(recasts === 0 && c._morde.wShieldActiveUntil > now, '모데카이저 W: 첫 시전 직후(0.5초 전)에는 재시전 안 됨');
+    advance(510);
+    c._mordeCastW(true);
+    assert(recasts === 1 && c._morde.wShieldActiveUntil === 0, '모데카이저 W: 0.5초 뒤 재시전으로 회복 전환');
+  }
 }
 // --- 레넥톤 ---
 {
@@ -208,6 +218,19 @@ function clearPlaced() { stubs.placedDummies.length = 0; }
   c._renekton.rage = 0; c.cooldowns.W = 0; c._renektonCastW(null, false);
   advance(7100); c._renektonTick(0);
   assert(!c._renekton.wArmed, '레넥톤 W: 7초 안에 평타가 없으면 강화 해제');
+  {
+    const t2 = makeEnemy(0, 1); const hp0 = t2.hp;
+    c._renekton.wSeq = { target: t2, empowered: false, hits: 2, hitIndex: 0, elapsed: 0, raw: 100, stun: 0.75 };
+    c.currentActionKey = 'renektonW'; c.currentPhase = 'ACTIVE';
+    c._renektonTick(0.19);
+    assert(t2.hp === hp0, '레넥톤 W: 시전 시간 0.2초 전에는 타격 없음');
+    c._renektonTick(0.02);
+    assert(t2.hp < hp0 && !c._renekton.wSeq && c.currentActionKey === 'renektonW', '레넥톤 W: 0.2초에 2회 타격 판정, 이후 잠금 유지');
+    advance(500);
+    assert(c.currentActionKey === 'renektonW', '레넥톤 W: 타격 뒤 0.528초 동안 잠금(0.5초 시점 유지)');
+    advance(40);
+    assert(c.currentActionKey == null, '레넥톤 W: 0.528초 뒤 잠금 해제');
+  }
   assert(CHAMPION_DATA.renekton.Q.empoweredDamageByLevel[4] === 270 && CHAMPION_DATA.renekton.E.range === 450, '레넥톤: 강화 Q 5레벨 270, E 돌진 450');
 }
 // --- 닐라 ---

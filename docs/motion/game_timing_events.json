@@ -225,16 +225,16 @@
  },
  "nautilus": {
   "Q": {
-   "dmgMs": 393,
+   "dmgMs": 383,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:hit",
-     "ms": 230
+     "ms": 232
     },
     {
      "k": "vfx:hit",
-     "ms": 234
+     "ms": 239
     }
    ]
   },
@@ -249,34 +249,34 @@
    ]
   },
   "E": {
-   "dmgMs": 34,
+   "dmgMs": 285,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:e",
-     "ms": 1
+     "ms": 223
     },
     {
      "k": "vfx:e",
-     "ms": 234
+     "ms": 531
     },
     {
      "k": "vfx:e",
-     "ms": 482
+     "ms": 781
     }
    ]
   },
   "R": {
-   "dmgMs": 538,
+   "dmgMs": 591,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:hit",
-     "ms": 438
+     "ms": 455
     },
     {
      "k": "vfx:r",
-     "ms": 439
+     "ms": 456
     }
    ]
   },
@@ -285,7 +285,7 @@
  },
  "yasuo": {
   "Q": {
-   "dmgMs": 433,
+   "dmgMs": 402,
    "projectileMs": null,
    "events": []
   },
@@ -295,7 +295,7 @@
    "events": []
   },
   "E": {
-   "dmgMs": 530,
+   "dmgMs": 507,
    "projectileMs": null,
    "events": []
   },
@@ -309,22 +309,22 @@
  },
  "yone": {
   "Q": {
-   "dmgMs": 486,
+   "dmgMs": 559,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:q",
-     "ms": 391
+     "ms": 419
     }
    ]
   },
   "W": {
-   "dmgMs": 697,
+   "dmgMs": 720,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:w",
-     "ms": 538
+     "ms": 562
     }
    ]
   },
@@ -334,21 +334,21 @@
    "events": [
     {
      "k": "vfx:e",
-     "ms": 11
+     "ms": 12
     }
    ]
   },
   "R": {
-   "dmgMs": 960,
+   "dmgMs": 927,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:r",
-     "ms": 781
+     "ms": 788
     },
     {
      "k": "vfx:e",
-     "ms": 1875
+     "ms": 2154
     }
    ]
   },
@@ -448,22 +448,22 @@
  },
  "renekton": {
   "Q": {
-   "dmgMs": 73,
+   "dmgMs": 41,
    "projectileMs": null,
    "events": []
   },
   "W": {
-   "dmgMs": 576,
+   "dmgMs": 258,
    "projectileMs": null,
    "events": []
   },
   "E": {
-   "dmgMs": 345,
+   "dmgMs": 388,
    "projectileMs": null,
    "events": []
   },
   "R": {
-   "dmgMs": 560,
+   "dmgMs": 569,
    "projectileMs": null,
    "events": []
   },
@@ -472,12 +472,12 @@
  },
  "nilah": {
   "Q": {
-   "dmgMs": 564,
+   "dmgMs": 613,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:nilahQ",
-     "ms": 3
+     "ms": 4
     }
    ]
   },
@@ -487,12 +487,12 @@
    "events": [
     {
      "k": "vfx:nilahW",
-     "ms": 2
+     "ms": 1
     }
    ]
   },
   "E": {
-   "dmgMs": 345,
+   "dmgMs": 371,
    "projectileMs": null,
    "events": [
     {
@@ -502,32 +502,32 @@
    ]
   },
   "R": {
-   "dmgMs": 437,
+   "dmgMs": 237,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:nilahRtick",
-     "ms": 310
+     "ms": 142
     },
     {
      "k": "vfx:nilahRtick",
-     "ms": 718
+     "ms": 449
     },
     {
      "k": "vfx:nilahRtick",
-     "ms": 1059
+     "ms": 786
     },
     {
      "k": "vfx:nilahRtick",
-     "ms": 1454
+     "ms": 1173
     },
     {
      "k": "vfx:nilahRfinal",
-     "ms": 1799
+     "ms": 1486
     },
     {
      "k": "vfx:nilahShield",
-     "ms": 1799
+     "ms": 1487
     }
    ]
   },
@@ -832,25 +832,25 @@
  },
  "ahri": {
   "Q": {
-   "dmgMs": 413,
+   "dmgMs": 463,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:ahriOrbHit",
-     "ms": 266
+     "ms": 338
     },
     {
      "k": "vfx:ahriOrbHit",
-     "ms": 269
+     "ms": 341
     },
     {
      "k": "vfx:ahriOrbHit",
-     "ms": 1634
+     "ms": 1736
     }
    ]
   },
   "W": {
-   "dmgMs": 306,
+   "dmgMs": 300,
    "projectileMs": null,
    "events": [
     {
@@ -859,30 +859,30 @@
     },
     {
      "k": "vfx:hit",
-     "ms": 264
+     "ms": 255
     },
     {
      "k": "vfx:hit",
-     "ms": 265
+     "ms": 256
     },
     {
      "k": "vfx:hit",
-     "ms": 265
+     "ms": 257
     }
    ]
   },
   "E": {
-   "dmgMs": 455,
+   "dmgMs": 419,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:ahriOrbHit",
-     "ms": 407
+     "ms": 378
     }
    ]
   },
   "R": {
-   "dmgMs": 177,
+   "dmgMs": 196,
    "projectileMs": null,
    "events": [
     {

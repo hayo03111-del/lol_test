@@ -60,6 +60,7 @@ const CHAMPION_DATA = {
     W: {
       name: '바람 장막', cooldown: [25,23,21,19,17], range: 400,
       width: [320,390,460,530,600], duration: 4, damageType: 'NONE',
+      castTimeSec: 0.013, // PC 위키(야스오 문서): 시전 시간 0.013초, 시전 중 이동 가능
     },
     E: {
       // 대상을 "관통해" 고정 거리(475)만큼 돌진, 돌진 속도 750 + 이동 속도의 60%.
@@ -169,6 +170,7 @@ const CHAMPION_DATA = {
       name: '영혼해방',
       cooldown: [22,19,16,13,10], range: 300, dashSpeed: 1200,
       spiritFormDuration: 5, recastMinDelay: 0.5,
+      recastCastTimeSec: 0.225, // PC 위키: 재시전 시전 시간 0.225초(최초 돌진은 시전 시간 없음)
       moveSpeedBonusMin: 0.10, moveSpeedBonusMax: 0.30, // bin StartingMS=0.10, MovementSpeed=0.30로 재확인
       markPercentByLevel: [25,27.5,30,32.5,35], // bin DeathmarkPercent(레벨1~5)로 재확인 - 명칭은 내부적으로 공유되는 스크립트 잔재(탈론류)이지만 수치 자체는 위키와 정확히 일치
       damageType: 'TRUE',
@@ -210,7 +212,8 @@ const CHAMPION_DATA = {
       name: '무자비한 포식자', cooldown: [16,14,12,10,8], mana: 0, range: 175,
       damageByLevel: [10,40,70,100,130], totalAdRatio: 1.5, hits: 2, stunDuration: 0.75,
       empoweredDamageByLevel: [15,60,105,150,195], empoweredTotalAdRatio: 2.25, empoweredHits: 3, empoweredStunDuration: 1.5,
-      bonusChampionRage: 10, empowerWindowSec: 7, damageType: 'PHYSICAL' // PC 위키: 7초 안의 다음 평타 강화
+      bonusChampionRage: 10, empowerWindowSec: 7, damageType: 'PHYSICAL', // PC 위키: 7초 안의 다음 평타 강화
+      castTimeSec: 0.2, postHitLockSec: 0.528, // PC 위키: 강화 평타 시전 0.2초, 이후 0.528초 이동·Q·E 불가(R로 해제)
     },
     E: {
       name: '자르고 토막내기', cooldown: [16,14.5,13,11.5,10], mana: 0, range: 450, // Data Dragon: 돌진 450(예전 550)
@@ -547,6 +550,7 @@ const CHAMPION_DATA = {
       dealtDamageBankPercent: 45, takenDamageBankPercent: 7.5, nonChampionBankPercent: 25, // 챔피언 아닌 유닛 피해는 75% 감소 흡수 = 25%만 반영
       minShieldMaxHpPercent: 5, maxShieldMaxHpPercent: 30, shieldDecayDuration: 4, // PC 위키: 보호막 4초(감소) - 예전 6초
       recastHealPercentByLevel: [35, 37.5, 40, 42.5, 45],
+      recastMinDelaySec: 0.5, // PC 위키(Indestructible 템플릿): 첫 시전 0.5초 뒤 재시전 가능
     },
     E: {
       // PC 위키: 시전 사거리 700, 판정 직사각형 길이 800·폭 200, 0.5초 뒤 250 유닛 끌어당김.
@@ -598,6 +602,8 @@ const CHAMPION_DATA = {
       // PC 위키: 폭발 3회(의도된 간격 0.25초), 두 번째 이후 폭발은 50% 피해, 둔화는 1.5초에 걸쳐 감쇠(2→1.5초 패치).
       explosionCount: 3, subsequentDamagePercent: 50,
       explosionIntervalSec: 0.25,
+      // PC 위키(노틸러스 문서): 시전 시간 0.25초. 폭발은 시전이 끝난 뒤 0 / 0.297 / 0.561초(의도는 0.25 간격, 위키 실측 유효 시각).
+      castTimeSec: 0.25, explosionOffsetsSec: [0, 0.297, 0.561],
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDecaySec: 1.5,
     },
     R: {
@@ -813,8 +819,8 @@ const CHAMPION_DATA = {
      E: {
       name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: [70, 80, 90, 100, 110], // Data Dragon
       // PC 위키: 시전 0.25초, 지정 지점까지 날아가 폭발 - 반경 200~300(시전 거리 비례). 피해 수치는 최신 PC 출처가
-      // 엇갈려 기존 값 유지(미확인). 투사체 속도는 위키 확인 못 해 1300으로 추정(missileSpeedGuessed).
-      range: 800, castTimeSec: 0.25, radiusMin: 200, radiusMax: 300, missileSpeed: 1300, missileSpeedGuessed: true, damageByLevel: [60, 105, 150, 195, 240],
+      // 엇갈려 기존 값 유지(미확인). 투사체 속도 1300은 PC 위키(Template:Data_Vex/Looming_Darkness)로 확인.
+      range: 800, castTimeSec: 0.25, radiusMin: 200, radiusMax: 300, missileSpeed: 1300, damageByLevel: [60, 105, 150, 195, 240],
       apRatio: 0.4, slowPercentByLevel: [30, 35, 40, 45, 50],
       slowDuration: 2, damageType: 'MAGICAL',
       piercesUnits: true,

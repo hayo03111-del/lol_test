@@ -245,9 +245,9 @@ CharacterController.prototype._ahriCastW = function(mouseWorldPoint, free = fals
   if (isSilenced(this)) return;
   const w = this._champData().W;
   if (!this._payCost('W', free)) return;
-  this._clearActionTimers();
-  this.currentActionKey = 'ahriW'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
-  this.setState(STATE.W_CAST);
+  // PC 위키: 시전 시간 없음. 예전엔 W 클립 길이(약 1.33초) 동안 'ahriW' 액션으로 이동·평타·스킬을 모두 막고,
+  // 진행 중이던 평타도 끊었다. 이제 행동을 막지 않고, 모션은 다른 행동이 없을 때만 보여 준다.
+  const showClip = !this.currentActionKey && this.state !== STATE.MOVE;
 
   // 버그 수정(공식 설명 "이동 속도가 40% 증가했다가 2초에 걸쳐 원래대로
   // 돌아옵니다") - 기존에는 지속시간 내내 40%를 고정 유지하다 만료 순간
@@ -273,13 +273,14 @@ CharacterController.prototype._ahriCastW = function(mouseWorldPoint, free = fals
   for (let i = 0; i < 3; i++) this._ahri.foxfires.push(this._ahriSpawnFoxfire(i, orbitRadius, lvl, now, w, hitTargetsThisCast));
   debugSkillHit('Ahri W (여우불 소환)', this);
 
-  const clip = this.findAnimation('Spell2');
-  this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
-  const dur = clip ? clip.duration : 0.3;
-  const recTimer = setTimeout(() => {
-    if (this.currentActionKey === 'ahriW') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
-  }, dur * 1000);
-  this._actionTimers.push(recTimer);
+  if (showClip) {
+    const clip = this.findAnimation('Spell2');
+    this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
+    const dur = clip ? clip.duration : 0.3;
+    setTimeout(() => {
+      if (!this.currentActionKey && this.state !== STATE.MOVE && this.currentClipKey === 'Spell2') this._returnToLocomotion();
+    }, dur * 1000);
+  }
 };
 CharacterController.prototype._ahriSpawnFoxfire = function(index, orbitRadius, lvl, startTime, w, hitTargetsThisCast) {
   // 버그 수정(레퍼런스 영상 ability_0103_W1.webm 픽셀 대조): 기존 핑크

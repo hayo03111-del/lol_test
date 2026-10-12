@@ -268,8 +268,8 @@
     1,
     15.2
    ],
-   "dmgMs": 314,
-   "unlockMs": 372
+   "dmgMs": 322,
+   "unlockMs": 352
   },
   "W": {
    "clip": "Idle1",
@@ -280,18 +280,20 @@
     15.2
    ],
    "dmgMs": null,
-   "unlockMs": 176
+   "unlockMs": 134
   },
   "E": {
    "clip": "Spell3",
    "clips": [
-    "Spell3"
+    "Spell3",
+    "Idle1"
    ],
    "durs": [
-    1
+    1,
+    15.2
    ],
-   "dmgMs": 29,
-   "unlockMs": 82
+   "dmgMs": 298,
+   "unlockMs": 298
   },
   "R": {
    "clip": "Spell4",
@@ -303,14 +305,14 @@
     1.9,
     15.2
    ],
-   "dmgMs": 551,
-   "unlockMs": 551
+   "dmgMs": 599,
+   "unlockMs": 599
   },
   "AA": {
    "clip": "Passive",
    "clipDur": 2.03,
-   "windupMs": 429,
-   "intervalMs": 1491,
+   "windupMs": 480,
+   "intervalMs": 1475,
    "windupPct": 0.30637,
    "as": 0
   },
@@ -328,8 +330,8 @@
     0.97,
     13.33
    ],
-   "dmgMs": 386,
-   "unlockMs": 522
+   "dmgMs": 431,
+   "unlockMs": 561
   },
   "W": {
    "clip": "Spell2_0",
@@ -342,7 +344,7 @@
     13.33
    ],
    "dmgMs": null,
-   "unlockMs": 803
+   "unlockMs": 826
   },
   "E": {
    "clip": "Spell3",
@@ -354,8 +356,8 @@
     1.07,
     13.33
    ],
-   "dmgMs": 527,
-   "unlockMs": 527
+   "dmgMs": 523,
+   "unlockMs": 523
   },
   "R": {
    "clip": "Idle1_Raw",
@@ -366,13 +368,13 @@
     13.33
    ],
    "dmgMs": null,
-   "unlockMs": 54
+   "unlockMs": 46
   },
   "AA": {
    "clip": "Attack1",
    "clipDur": 1.67,
-   "windupMs": 293,
-   "intervalMs": 1495,
+   "windupMs": 428,
+   "intervalMs": 1575,
    "windupPct": 0.22,
    "as": 0
   },
@@ -390,8 +392,8 @@
     0.7,
     2.97
    ],
-   "dmgMs": 530,
-   "unlockMs": 530
+   "dmgMs": 410,
+   "unlockMs": 410
   },
   "W": {
    "clip": "Spell2",
@@ -405,21 +407,21 @@
     1.47,
     2.97
    ],
-   "dmgMs": 550,
-   "unlockMs": 550
+   "dmgMs": 694,
+   "unlockMs": 694
   },
   "E": {
    "clip": "Spell3_Dash",
    "clips": [
-    "Yone_Spell3_spiritIn.anm",
-    "Spell3_SpiritIn_ToIdle"
+    "Spell3_Dash",
+    "Yone_Spell3_spiritIn.anm"
    ],
    "durs": [
-    0.17,
-    3.33
+    0.07,
+    0.17
    ],
    "dmgMs": null,
-   "unlockMs": null
+   "unlockMs": 460
   },
   "R": {
    "clip": "Spell4",
@@ -435,14 +437,14 @@
     0.17,
     0.07
    ],
-   "dmgMs": 1012,
-   "unlockMs": 1342
+   "dmgMs": 938,
+   "unlockMs": 1403
   },
   "AA": {
    "clip": "Attack1",
    "clipDur": 0.33,
-   "windupMs": 376,
-   "intervalMs": 1633,
+   "windupMs": 360,
+   "intervalMs": 1683,
    "windupPct": 0.22,
    "as": 0
   },
@@ -592,8 +594,8 @@
     0.84,
     3.17
    ],
-   "dmgMs": 56,
-   "unlockMs": 369
+   "dmgMs": 45,
+   "unlockMs": 383
   },
   "W": {
    "clip": "Spell2",
@@ -605,8 +607,8 @@
     1.1,
     3.17
    ],
-   "dmgMs": 560,
-   "unlockMs": 1273
+   "dmgMs": 250,
+   "unlockMs": 787
   },
   "E": {
    "clip": "Spell3",
@@ -618,8 +620,8 @@
     0.74,
     3.17
    ],
-   "dmgMs": 342,
-   "unlockMs": 342
+   "dmgMs": 320,
+   "unlockMs": 320
   },
   "R": {
    "clip": "Spell4",
@@ -631,14 +633,14 @@
     0.97,
     3.17
    ],
-   "dmgMs": 602,
-   "unlockMs": 209
+   "dmgMs": 552,
+   "unlockMs": 195
   },
   "AA": {
    "clip": "Attack1",
    "clipDur": 1.1,
-   "windupMs": 291,
-   "intervalMs": 386,
+   "windupMs": 300,
+   "intervalMs": 436,
    "windupPct": 0.1773,
    "as": 0
   },
@@ -660,8 +662,8 @@
     0.27,
     5.33
    ],
-   "dmgMs": 498,
-   "unlockMs": 955
+   "dmgMs": 589,
+   "unlockMs": 961
   },
   "W": {
    "clip": "Spell2",
@@ -674,7 +676,7 @@
     5.33
    ],
    "dmgMs": null,
-   "unlockMs": 376
+   "unlockMs": 412
   },
   "E": {
    "clip": "Spell3A",
@@ -686,29 +688,27 @@
     0.7,
     5.33
    ],
-   "dmgMs": 343,
-   "unlockMs": 464
+   "dmgMs": 384,
+   "unlockMs": 432
   },
   "R": {
    "clip": "Spell4_Idle",
    "clips": [
     "Spell4_Idle",
-    "Spell4_ToIdle",
     "Idle1.anm"
    ],
    "durs": [
     1.6,
-    7.63,
     5.33
    ],
-   "dmgMs": 475,
-   "unlockMs": 2223
+   "dmgMs": 287,
+   "unlockMs": 1649
   },
   "AA": {
    "clip": "Attack1a",
    "clipDur": 0.27,
-   "windupMs": 381,
-   "intervalMs": 1570,
+   "windupMs": 394,
+   "intervalMs": 1492,
    "windupPct": 0.22,
    "as": 0
   },
@@ -978,8 +978,8 @@
     0.43,
     3.97
    ],
-   "dmgMs": 441,
-   "unlockMs": 482
+   "dmgMs": 395,
+   "unlockMs": 488
   },
   "W": {
    "clip": "Spell2",
@@ -991,8 +991,8 @@
     1.33,
     3.97
    ],
-   "dmgMs": 317,
-   "unlockMs": 1501
+   "dmgMs": 345,
+   "unlockMs": 204
   },
   "E": {
    "clip": "Spell3_south",
@@ -1004,8 +1004,8 @@
     2.77,
     3.97
    ],
-   "dmgMs": 398,
-   "unlockMs": 497
+   "dmgMs": 423,
+   "unlockMs": 505
   },
   "R": {
    "clip": "Spell4",
@@ -1017,14 +1017,14 @@
     0.4,
     1.8
    ],
-   "dmgMs": 144,
+   "dmgMs": 157,
    "unlockMs": null
   },
   "AA": {
    "clip": "Attack1",
    "clipDur": 0.37,
-   "windupMs": 305,
-   "intervalMs": 1585,
+   "windupMs": 347,
+   "intervalMs": 1607,
    "windupPct": 0.2,
    "as": 0
   },

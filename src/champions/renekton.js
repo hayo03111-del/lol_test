@@ -305,14 +305,14 @@ CharacterController.prototype._renektonTick = function(dt) {
     // W는 레넥톤이 죽거나 CC에 걸려도 이미 시작한 공격 시퀀스를 끝까지 진행한다.
     if(r.wSeq){
       r.wSeq.elapsed+=dt;
-      const clip=this.findAnimation(r.wSeq.empowered?'Spell2U':'Spell2');
-      const stepDur=Math.max(0.06,(clip?.duration||0.5)/r.wSeq.hits);
-      while(r.wSeq && r.wSeq.elapsed>=stepDur && r.wSeq.hitIndex<r.wSeq.hits){
-        r.wSeq.elapsed-=stepDur;this._renektonResolveWHit(r.wSeq);r.wSeq.hitIndex++;
-      }
-      if(r.wSeq && r.wSeq.hitIndex>=r.wSeq.hits){
-        r.wSeq=null; this.currentPhase='RECOVERY'; this.phaseCancelable=true;
-        const recoveryTimer=setTimeout(()=>{ if(this.currentActionKey==='renektonW'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},120);
+      // PC 위키: 강화 평타 시전 시간 0.2초 뒤 타격, 이후 0.528초 동안 이동·Q·E 불가(R 시전 시 즉시 해제 - controller_casting 참고).
+      // 예전엔 타격을 클립 길이에 나눠 넣어(첫 타 약 0.55초) 판정이 늦고 잠금도 클립 끝까지(약 1.2초) 이어졌다.
+      // 타격 사이 간격은 위키에 없어서 시전 시간이 끝나는 시점에 모든 타격을 차례로 판정한다.
+      const wd=this._renektonData().W;
+      if(r.wSeq.elapsed>=(wd.castTimeSec??0.2)){
+        while(r.wSeq.hitIndex<r.wSeq.hits){this._renektonResolveWHit(r.wSeq);r.wSeq.hitIndex++;}
+        r.wSeq=null; this.currentPhase='RECOVERY'; this.phaseCancelable=false;
+        const recoveryTimer=setTimeout(()=>{ if(this.currentActionKey==='renektonW'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},(wd.postHitLockSec??0.528)*1000);
         this._actionTimers.push(recoveryTimer);
       }
     }

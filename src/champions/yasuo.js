@@ -233,7 +233,11 @@ CharacterController.prototype._yasuoCastW = function(mouseWorldPoint, free=false
     if (!this.findAnimation(anim)) anim = 'Spell2_BASE';
     const clip=this.findAnimation(anim); const dur=clip?clip.duration:0.35;
     this.currentActionKey='yasuoW'; this.currentPhase='ACTIVE'; this.setState(STATE.W_CAST);
-    this.runAction('yasuoW',STATE.W_CAST,{startupOverride:Math.min(0.25,dur),recoveryOverride:Math.max(0.05,dur-Math.min(0.25,dur)),dataOverride:{clips:[anim],startup:Math.min(0.25,dur),recovery:Math.max(0.05,dur-Math.min(0.25,dur)),cancelToMove:false,cancelToSpell:false,cancelable:false,dmg:0},onFire:()=>{ this._yasuoCreateWindwall(dir,width); }});
+    // PC 위키: 시전 시간 0.013초, 시전 중 이동 가능. 예전엔 min(0.25, 클립 길이) 뒤에 장막을 세우고 클립 전체(약 0.7초) 동안
+    // 이동·스킬을 막았다. 장막은 액션 취소와 무관한 타이머로 0.013초 뒤에 세우고, 모션은 이동·스킬로 언제든 끊기게 한다.
+    const castSec = w.castTimeSec ?? 0.013;
+    setTimeout(()=>{ if (this.hp > 0) this._yasuoCreateWindwall(dir,width); }, castSec*1000);
+    this.runAction('yasuoW',STATE.W_CAST,{startupOverride:castSec,recoveryOverride:Math.max(0.05,dur-castSec),dataOverride:{clips:[anim],startup:castSec,recovery:Math.max(0.05,dur-castSec),cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{}});
     if(!free) this.cooldowns.W=abilityHasteCooldown(this, this._yasuoLevelValue(w.cooldown,lvl));
 
 };

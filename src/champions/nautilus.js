@@ -267,8 +267,12 @@ CharacterController.prototype._nautilusCastE = function(free = false) {
   if (isSilenced(this) || isCrowdControlled(this)) return;
   const e = this._champData().E;
   if (!this._payCost('E', free)) return;
+  // PC 위키: 시전 시간 0.25초(시전이 끝나는 시점의 위치에서 폭발). 예전엔 시전 즉시 첫 폭발이 나갔다.
+  this._clearActionTimers();
+  this.currentActionKey = 'nautilusE'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
+  this.setState(STATE.E_CAST);
   this.playFirstAvailable(['Spell3'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
-  this._nautilus.eSeq = { remaining: e.explosionCount, nextInSec: 0, hitCounts: new Map(), lvl: Math.max(1, this.skillLevels.E || 1) };
+  this._nautilus.eSeq = { remaining: e.explosionCount, elapsed: 0, fired: 0, castSec: e.castTimeSec || 0, hitCounts: new Map(), lvl: Math.max(1, this.skillLevels.E || 1) };
   this._nautilusTickE(0);
 };
 
@@ -291,11 +295,13 @@ CharacterController.prototype._nautilusExplodeE = function(seq) {
 CharacterController.prototype._nautilusTickE = function(dt) {
   const seq = this._nautilus.eSeq;
   if (!seq) return;
-  seq.nextInSec -= dt;
-  while (seq && seq.remaining > 0 && seq.nextInSec <= 0) {
+  const e = this._champData().E;
+  seq.elapsed += dt;
+  const offsetAt = (i) => seq.castSec + (e.explosionOffsetsSec ? e.explosionOffsetsSec[i] : i * e.explosionIntervalSec);
+  while (seq.remaining > 0 && seq.elapsed + 1e-9 >= offsetAt(seq.fired)) {
+    if (seq.fired === 0) this._nautilusFinishAction('nautilusE'); // 시전 시간 종료 = 행동 잠금 해제
     this._nautilusExplodeE(seq);
-    seq.remaining -= 1;
-    seq.nextInSec += this._champData().E.explosionIntervalSec;
+    seq.remaining -= 1; seq.fired += 1;
   }
   if (seq.remaining <= 0) this._nautilus.eSeq = null;
 };

@@ -1,16 +1,16 @@
 {
  "garen": {
   "Q": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Garen",
-   "note": "강화 평타형 - 시전 시간 항목 미확인"
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Garen/Decisive_Strike",
+   "note": "cast time none(9차 확인). 강화 평타는 평타 판정을 따름"
   },
   "W": {
    "castTimeSec": 0,
-   "status": "confirmed-db",
-   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
-   "note": "즉시"
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Garen/Courage",
+   "note": "즉시 / cast time none, 9차 위키 대조 일치"
   },
   "E": {
    "castTimeSec": 0,
@@ -20,9 +20,9 @@
   },
   "R": {
    "castTimeSec": 0.435,
-   "status": "confirmed-db",
-   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
-   "note": ""
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Garen/Demacian_Justice",
+   "note": "9차 위키 대조 일치"
   }
  },
  "darius": {
@@ -34,21 +34,21 @@
   },
   "W": {
    "castTimeSec": 0,
-   "status": "confirmed-db",
-   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
-   "note": "강화 평타"
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Darius/Crippling_Strike",
+   "note": "강화 평타 / cast time none, 9차 위키 대조 일치"
   },
   "E": {
    "castTimeSec": 0.25,
-   "status": "confirmed-db",
-   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
-   "note": ""
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Darius/Apprehend",
+   "note": "9차 위키 대조 일치"
   },
   "R": {
    "castTimeSec": 0.3667,
-   "status": "confirmed-db",
-   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
-   "note": ""
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Darius/Noxian_Guillotine",
+   "note": "9차 위키 대조 일치. 시전 후 0.25초 Q/E 불가 - 게임은 엔진 여유 0.15초 전체 잠금(작은 차이, 미수정)"
   }
  },
  "masteryi": {
@@ -59,22 +59,22 @@
    "note": "cast time none, 4회 튕김 시 시작 후 1.087초에 재등장"
   },
   "W": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Master_Yi",
-   "note": "채널"
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Master_Yi/Meditate",
+   "note": "cast time none(채널 최대 4초, 9차 확인)"
   },
   "E": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Master_Yi",
-   "note": ""
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Master_Yi/Wuju_Style",
+   "note": "cast time none(9차 확인)"
   },
   "R": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Master_Yi",
-   "note": ""
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Master_Yi/Highlander",
+   "note": "cast time none(9차 확인)"
   }
  },
  "leesin": {
@@ -111,16 +111,16 @@
    "note": ""
   },
   "W": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Nautilus",
-   "note": ""
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Nautilus/Titan's_Wrath",
+   "note": "cast time none(9차 확인)"
   },
   "E": {
-   "castTimeSec": null,
-   "status": "unverified",
+   "castTimeSec": 0.25,
+   "status": "confirmed",
    "source": "https://wiki.leagueoflegends.com/en-us/Nautilus",
-   "note": "폭발 3회 0.25초 간격"
+   "note": "시전 0.25초, 폭발은 시전 종료 후 0 / 0.297 / 0.561초(위키 실측 유효 시각, 9차 확인)"
   },
   "R": {
    "castTimeSec": 0.46,
@@ -137,22 +137,22 @@
    "note": "0.35~0.175초(추가 공속 비례), 회오리 0.35~0.28초"
   },
   "W": {
-   "castTimeSec": null,
-   "status": "unverified",
+   "castTimeSec": 0.013,
+   "status": "confirmed",
    "source": "https://wiki.leagueoflegends.com/en-us/Yasuo",
-   "note": ""
+   "note": "시전 중 이동 가능(9차 확인)"
   },
   "E": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Yasuo",
-   "note": ""
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Yasuo/Sweeping_Blade",
+   "note": "cast time none(9차 확인)"
   },
   "R": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Yasuo",
-   "note": ""
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Yasuo/Last_Breath",
+   "note": "cast time none(9차 확인)"
   }
  },
  "yone": {
@@ -169,24 +169,24 @@
    "note": "0.5~0.19초(추가 공속 비례)"
   },
   "E": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Yone",
-   "note": ""
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Yone/Soul_Unbound",
+   "note": "최초 돌진 none, 재시전 0.225초(그동안 이동 불가 효과 면역, 9차 확인)"
   },
   "R": {
    "castTimeSec": 0.75,
-   "status": "confirmed-db",
-   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
-   "note": ""
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Yone/Fate_Sealed",
+   "note": "9차 위키 대조 일치. 시전 종료 0.05초 뒤 순간이동"
   }
  },
  "sett": {
   "Q": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Sett",
-   "note": ""
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Sett/Knuckle_Down",
+   "note": "cast time none(9차 확인)"
   },
   "W": {
    "castTimeSec": 0.75,
@@ -196,9 +196,9 @@
   },
   "E": {
    "castTimeSec": 0.25,
-   "status": "conflict",
+   "status": "confirmed",
    "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Sett/Facebreaker",
-   "note": "템플릿 0.25, 챔피언 문서 표기 0.75 - 템플릿 채택"
+   "note": "시전 0.25초 + 이후 0.25초 이동·공격 불가. 챔피언 문서의 0.75초는 다른 스킬(W) 블록 값으로 보여 충돌 해소(9차)"
   },
   "R": {
    "castTimeSec": 0,
@@ -210,21 +210,21 @@
  "mordekaiser": {
   "Q": {
    "castTimeSec": 0.5,
-   "status": "confirmed-db",
-   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
-   "note": ""
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Mordekaiser/Obliterate",
+   "note": "9차 위키 대조 일치"
   },
   "W": {
    "castTimeSec": 0,
-   "status": "confirmed-db",
-   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
-   "note": ""
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Mordekaiser/Indestructible",
+   "note": "cast time none, 9차 위키 대조 일치"
   },
   "E": {
    "castTimeSec": 0.25,
-   "status": "confirmed-db",
-   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
-   "note": "시전 0.25 + 효과 0.5초 지연"
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Mordekaiser/Death's_Grasp",
+   "note": "시전 0.25 + 효과 0.5초 지연 / 시전 0.25 위키 대조 일치(9차). 효과 0.5초 지연은 위키 요약에서 확인 못 함"
   },
   "R": {
    "castTimeSec": 0.5,
@@ -241,16 +241,16 @@
    "note": "cast time none(시전 후 0.25초 평타/E/R 불가)"
   },
   "W": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Renekton",
-   "note": "강화 평타"
+   "castTimeSec": 0.2,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Renekton/Ruthless_Predator",
+   "note": "스킬 자체는 none, 강화 평타 시전 0.2초 + 이후 0.528초 이동·Q·E 불가(R로 해제), 9차 확인"
   },
   "E": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Renekton",
-   "note": "돌진"
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Renekton/Slice_and_Dice",
+   "note": "cast time none(9차 확인)"
   },
   "R": {
    "castTimeSec": 0.25,
@@ -267,10 +267,10 @@
    "note": "0.35~0.28초(추가 공속 비례)"
   },
   "W": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Nilah",
-   "note": ""
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Nilah/Jubilant_Veil",
+   "note": "cast time none(9차 확인)"
   },
   "E": {
    "castTimeSec": 0,
@@ -299,10 +299,10 @@
    "note": ""
   },
   "E": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Cho%27Gath",
-   "note": "평타 강화"
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Cho'Gath/Vorpal_Spikes",
+   "note": "cast time none(9차 확인)"
   },
   "R": {
    "castTimeSec": 0.25,
@@ -339,10 +339,10 @@
  },
  "ashe": {
   "Q": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Ashe",
-   "note": "자기 강화"
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Ashe/Ranger's_Focus",
+   "note": "cast time none(9차 확인)"
   },
   "W": {
    "castTimeSec": 0.25,
@@ -371,10 +371,10 @@
    "note": "cast time none(충전 채널)"
   },
   "W": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Varus",
-   "note": ""
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Varus/Blighted_Quiver",
+   "note": "cast time none(9차 확인)"
   },
   "E": {
    "castTimeSec": 0.2419,
@@ -384,9 +384,9 @@
   },
   "R": {
    "castTimeSec": 0.242,
-   "status": "confirmed-db",
-   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
-   "note": ""
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Varus/Chain_of_Corruption",
+   "note": "위키 0.2419(게임 0.242), 9차 대조 일치"
   }
  },
  "ahri": {
@@ -397,10 +397,10 @@
    "note": ""
   },
   "W": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Ahri",
-   "note": ""
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Ahri/Fox-Fire",
+   "note": "cast time none(9차 확인). 여우불은 시전 0.25초 후 대상 지정"
   },
   "E": {
    "castTimeSec": 0.25,
@@ -409,10 +409,10 @@
    "note": ""
   },
   "R": {
-   "castTimeSec": null,
-   "status": "unverified",
-   "source": "https://wiki.leagueoflegends.com/en-us/Ahri",
-   "note": "돌진"
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Ahri/Spirit_Rush",
+   "note": "cast time none(9차 확인)"
   }
  },
  "vex": {

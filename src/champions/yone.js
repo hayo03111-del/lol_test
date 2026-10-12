@@ -751,63 +751,62 @@ CharacterController.prototype._yoneCastE = function(mouseWorldPoint, free = fals
     if (this.currentActionKey === spiritInKey) { this.currentActionKey = null; this.currentPhase = null; }
     this._resumeAfterAction();
   };
+  // 버그 수정(9차 원작 대조): 예전엔 돌진 + 진입 포즈 + Spell3_SpiritIn_ToIdle(3.33초)이 끝날 때까지 잠가서
+  // 정신체 5초 중 대부분을 이동·스킬(재시전 포함) 없이 보냈다. PC 위키: 최초 돌진은 시전 시간 없음 -
+  // 조작 불가 구간은 돌진(300 / 1200 = 0.25초)뿐이다. 돌진이 끝나면 일반 대기/이동 모션이 이어받는다
+  // (진입 포즈 뒤의 SpiritIn_ToIdle 전환은 이미 대기 모션으로 넘어간 뒤 다시 튀어 보여서 쓰지 않는다).
   const spiritInClips = ['Spell3_Dash', 'Yone_Spell3_spiritIn.anm'].filter((n) => this.findAnimation(n));
   if (spiritInClips.length) {
     this.sequencePlayer.play({
       steps: spiritInClips.map((n) => ({ animation: n, clipStart: 0, clipEnd: this.findAnimation(n).duration })),
-      onComplete: () => {
-        if (this._yone.eSpirit) this._yonePlayExitTransition(['Spell3_SpiritIn_ToIdle'], [], finishSpiritIn);
-        else finishSpiritIn();
-      },
+      onComplete: () => {},
     });
   } else {
     this.playFirstAvailable(['Spell3_Dash'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
-    const t = setTimeout(finishSpiritIn, Math.max(0.05, dashDur) * 1000);
-    this._actionTimers.push(t);
   }
+  const t = setTimeout(finishSpiritIn, Math.max(0.05, dashDur) * 1000);
+  this._actionTimers.push(t);
   vfx.spawn('e', this.root.position.clone(), dir);
   if (!free) this.cooldowns.E = abilityHasteCooldown(this, this._yoneLevelValue(e.cooldown, eLevel));
 };
 
 CharacterController.prototype._yoneRecastE = function() {
   const spirit = this._yone.eSpirit;
-  if (!spirit) return;
+  if (!spirit || spirit.recasting) return;
   if (performance.now() < spirit.recastLockedUntil) return; // 위키: 최초 시전 후 최소 0.5초 지나야 재시전 가능
-  this.root.position.copy(spirit.bodyPos);
-  this.root.quaternion.copy(spirit.bodyQuat);
-  // 복귀(Spell3_Out) -> 마무리 동작(Spell3_End1) 순서로 이어 재생하고,
-  // 정지 상태면 Spell3_Out_toIdle로 자연스럽게 Idle과 이어붙인다(요네에게는
-  // 이동 중 복귀용 전용 전환 클립이 따로 없어 그 경우는 즉시 폴백). Q/W/R,
-  // 그리고 위 정신체 진입 체인과 동일하게 currentActionKey를 잡았다가 끝나면
-  // 반드시 비우고 _resumeAfterAction()으로 넘겨서 평범한 이동 애니메이션이
-  // 이어받도록 한다(안 그러면 육체로 돌아온 뒤에도 Idle/Run 전환이 깨진다).
+  // PC 위키: 재시전 시전 시간 0.225초(그동안 이동 불가 효과 면역), 시전이 끝나면 육체로 돌아오며 표식이 터진다.
+  // 예전엔 재시전 즉시 순간이동·표식 피해가 나고, 복귀 모션 전체(약 1.6초) 동안 행동을 막았다.
+  spirit.recasting = true;
+  const castSec = this._champData().E.recastCastTimeSec ?? 0.225;
   const eOutKey = 'yoneEOut';
+  this._clearActionTimers();
   this.setState(STATE.E_CAST);
   this.currentActionKey = eOutKey; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
-  const finishEOut = () => {
-    if (this.currentActionKey === eOutKey) { this.currentActionKey = null; this.currentPhase = null; }
-    this._resumeAfterAction();
-  };
+  // 복귀(Spell3_Out) -> 마무리(Spell3_End1) -> 정지 상태면 Spell3_Out_toIdle. 잠금은 시전 시간까지만이고 남은 모션은 다음 행동이 덮어쓴다.
   const outClips = ['Spell3_Out', 'Spell3_End1'].filter((n) => this.findAnimation(n));
   if (outClips.length) {
     this.sequencePlayer.play({
       steps: outClips.map((n) => ({ animation: n, clipStart: 0, clipEnd: this.findAnimation(n).duration })),
-      onComplete: () => { this._yonePlayExitTransition(['Spell3_Out_toIdle'], [], finishEOut); },
+      onComplete: () => { if (!this.currentActionKey && !this.targetPos && !this.pendingMove) this._yonePlayExitTransition(['Spell3_Out_toIdle'], [], () => {}); },
     });
   } else {
     this.playFirstAvailable(['Spell3_Out'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
-    const t = setTimeout(finishEOut, 400);
-    this._actionTimers.push(t);
   }
-  vfx.spawn('e', this.root.position.clone());
-  for (const [key, amount] of spirit.marks) {
-    const target = spirit.markTargets.get(key);
-    if (target && target.hp > 0 && amount > 0) {
-      applyDamage(target, { rawDamage: amount, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: this });
+  setTimeout(() => {
+    if (this._yone.eSpirit !== spirit) return;
+    this.root.position.copy(spirit.bodyPos);
+    this.root.quaternion.copy(spirit.bodyQuat);
+    vfx.spawn('e', this.root.position.clone());
+    for (const [key, amount] of spirit.marks) {
+      const target = spirit.markTargets.get(key);
+      if (target && target.hp > 0 && amount > 0) {
+        applyDamage(target, { rawDamage: amount, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: this });
+      }
     }
-  }
-  this._yoneCleanupSpiritVisuals();
-  this._yone.eSpirit = null;
+    this._yoneCleanupSpiritVisuals();
+    this._yone.eSpirit = null;
+    if (this.currentActionKey === eOutKey) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+  }, castSec * 1000);
 };
 
 // _yoneTick(dt)에서 매 프레임 호출된다: 돌진 이동 보간, 정신체 이동속도

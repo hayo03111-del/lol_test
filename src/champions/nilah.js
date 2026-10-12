@@ -631,7 +631,8 @@ CharacterController.prototype._nilahCastR = function(free=false) {
     if(!free)this.cooldowns.R=abilityHasteCooldown(this, skillVal(r.cooldown,lvl));
     if(this._nilah.rSeq) return;
     this._clearActionTimers(); this.currentActionKey='nilahR'; this.currentPhase='STARTUP'; this.setState(STATE.R_CAST); this.phaseCancelable=false;
-    const startup=0.16;
+    // PC 위키: 시전 시간 없음(예전엔 근거 없는 선딜 0.16초 동안 이동까지 막았다). 첫 틱은 다음 프레임에 시작한다.
+    const startup=0;
     this._nilah.rSeq={elapsed:0,tickAccum:0,ticksDone:0,finalDone:false,precast:true,precastUntil:now+startup*1000,championDamage:0,nonChampionDamage:0,channelEnded:false};
     // 데이터 추가(실제 bin 확인 - ShieldCalc): R 시전 시 확정 보호막을
     // 즉시 부여한다. 지금까지 있던 "초과 회복량 → 보호막 전환"과는 완전히
@@ -731,7 +732,6 @@ CharacterController.prototype._nilahRFinish = function(seq) {
       this._nilahHealUnit(ally,totalHeal,r.shieldDuration,'nilahP_R');
     }
     if(this.findAnimation('Spell4_ToIdle')) this.playFirstAvailable(['Spell4_ToIdle'],{loop:THREE.LoopOnce,fade:0.1,clampWhenFinished:true});
-    const clipDur=this.findAnimation('Spell4_ToIdle')?.duration||0.2;
     // 버그 수정(핵심): 이 GLB의 'Spell4_ToIdle' 클립은 실제 길이가 약 7.6초다
     // (전환 애니메이션치고 비정상적으로 길다 - 아마 뒤에 유휴 프레임이 그대로
     // 붙어있는 클립으로 보인다). 예전엔 이 조작권 복구 타이머가 그 전체
@@ -740,7 +740,9 @@ CharacterController.prototype._nilahRFinish = function(seq) {
     // 80~120ms)와 동일한 수준으로 상한을 둬서, 클립 자체는 그대로 재생하되
     // (크로스페이드가 자연스럽게 다음 동작으로 넘어가며 덮어쓴다) 조작권은
     // 정상적인 짧은 후딜 시간 안에 돌려준다.
-    const controlLockMs=Math.max(120, Math.min(320, clipDur*1000));
+    // PC 위키: 평타·스킬 금지는 환희(1초) 동안만이다. 종료 후 추가 잠금(예전 0.12~0.32초)은 원작 근거가 없어 없앴다.
+    // 종료 모션은 그대로 재생되고 다음 행동이 들어오면 자연스럽게 덮어쓴다.
+    const controlLockMs=0;
     const timer=setTimeout(()=>{if(this.currentActionKey==='nilahR'){this.currentActionKey=null;this.currentPhase=null;this._nilah.rSeq=null;this._resumeAfterAction();}},controlLockMs);
     this._actionTimers.push(timer);
   

@@ -82,6 +82,8 @@ CharacterController.prototype._mordeCastW = function(free) {
     const cd = this._champData(); const w = cd.W;
     const now = performance.now();
     if (now < (this._morde.wShieldActiveUntil || 0)) {
+      // PC 위키(Template:Data_Mordekaiser/Indestructible): 첫 시전 0.5초 뒤부터 재시전 가능(예전엔 즉시 재시전 가능했다).
+      if (now < (this._morde.wRecastReadyAt || 0)) return;
       // 재시전(2타): 남은 보호막을 즉시 회복으로 전환.
       this._mordeWOnRecast();
       this._morde.wShieldActiveUntil = 0;
@@ -94,6 +96,7 @@ CharacterController.prototype._mordeCastW = function(free) {
     if (!this._payCost('W', free)) return;
     this._mordeWOnCast();
     this._morde.wShieldActiveUntil = now + w.shieldDecayDuration * 1000;
+    this._morde.wRecastReadyAt = now + (w.recastMinDelaySec ?? 0.5) * 1000;
     vfx.spawn('w', this.root.position.clone());
     // 요청: 모데카이저 W는 모션 없이 효과만 발동한다 - 캐릭터 애니메이션을
     // 재생하지 않는다(보호막 전환 등 게임로직은 그대로 유지).
