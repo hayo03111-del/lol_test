@@ -30,7 +30,7 @@ const stubs = {
 };
 
 const context = vm.createContext(stubs);
-const statusSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8');
+const statusSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8');
 const hitSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_hit_detection.js'), 'utf8');
 vm.runInContext(statusSrc + '\n' + hitSrc + `
 this.applyStatus = applyStatus;

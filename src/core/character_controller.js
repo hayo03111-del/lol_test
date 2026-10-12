@@ -1238,6 +1238,7 @@ class CharacterController {
     // 그 결과를 반영한다(getFinalMoveSpeed는 항상 stats만 읽으므로 여기서
     // 동기화해줘야 실제로 이동속도에 반영된다).
     tickStatusEffects(this, dt);
+    tickShields(this, dt); // 보호막 만료·감소(인스턴스별)
     this._nilahUpdate(dt);
     if (this.championId === 'nilah' && this._nilahWeaponRig) {
       this._nilahWeaponRig.active = !!(this.currentActionKey && /nilah(Q|E|R)/.test(String(this.currentActionKey)));
@@ -1301,3 +1302,14 @@ class CharacterController {
     if (typeof itemSystemTick === 'function') itemSystemTick(this, dt);
   }
 }
+// 보호막 합계 접근자(01_status_effect_system.js의 보호막 인스턴스 모델). 읽기는 모든 인스턴스의 합,
+// 직접 대입은 "출처 미상 보호막 하나"로 바꾼다(0 대입 = 전부 제거) - 예전 코드·테스트와의 호환용.
+Object.defineProperty(CharacterController.prototype, 'shield', {
+  configurable: true,
+  get() { return (this.shieldEntries || []).reduce((s, e) => s + Math.max(0, e.amount), 0); },
+  set(v) {
+    if (!Array.isArray(this.shieldEntries)) Object.defineProperty(this, 'shieldEntries', { value: [], writable: true, configurable: true, enumerable: false });
+    this.shieldEntries.length = 0;
+    if (v > 0) this.shieldEntries.push({ id: 'legacy', amount: v, initial: v, expiresAt: Infinity, decayStartAt: Infinity, decayPerSec: 0 });
+  },
+});

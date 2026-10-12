@@ -110,37 +110,11 @@ CharacterController.prototype._mordeWOnCast = function() {
     const w = cd.W;
     const banked = this._morde.dealtBank || 0;
     const shieldAmt = THREE.MathUtils.clamp(banked, this.maxHp * (w.minShieldMaxHpPercent / 100), this.maxHp * (w.maxShieldMaxHpPercent / 100)) * getShieldReceivedMultiplier(this);
-    // 버그 수정(실제 게임 기제 점검): 예전엔 다른 보호막을 덮어썼고(this.shield = W 보호막), 감소 틱마다
-    // this.shield를 "감소 곡선 값"으로 다시 써서 피해로 깎인 보호막이 다음 틱에 되살아났다.
-    // 이제 W 몫(wShieldLeft)만 따로 추적해 더하고, 감소는 그 몫을 줄이기만 한다.
-    this.shield = Math.max(0, (this.shield || 0) - (this._morde.wShieldLeft || 0)) + shieldAmt;
-    this._morde.wShieldLeft = shieldAmt;
+    // 보호막 인스턴스: 4초에 걸쳐 0까지 선형 감소, 다른 보호막과 합산, W 몫은 인스턴스가 정확히 추적.
+    // (예전엔 감소 틱이 this.shield를 덮어써 피해로 깎인 보호막이 되살아나고 다른 보호막을 지웠다.)
+    addShield(this, 'mordeW', shieldAmt, w.shieldDecayDuration, { decay: true });
     this._morde.dealtBank = 0;
     this._morde.shieldStartAmount = shieldAmt;
-    clearTimeout(this._morde.shieldDecayTimer);
-    const decaySteps = 20;
-    let step = 0;
-    // 버그 수정(전체 시스템 감사 - 다리우스 empower/가렌 W 보호막 타이머와
-    // 동일한 유형이지만 이쪽은 setInterval이라 더 심각하다): 이 인터벌은
-    // 20틱에 걸쳐 반복 실행되며 매번 this.shield를 직접 덮어쓰는데,
-    // championId 확인이 없고 applyChampionData()도 이 인터벌 자체를
-    // 정리하지 않는다. 모데카이저 W 보호막이 감쇠하는 도중 다른 챔피언으로
-    // 바꾸면, 이 인터벌이 새 챔피언으로 바뀐 뒤에도 여러 번(최대 20회)
-    // 계속 실행되며 새 챔피언의 shield 값을 계속 덮어써버릴 수 있었다.
-    // 매 틱마다 championId를 확인해 모데카이저가 아니면 즉시 인터벌
-    // 자체를 멈추도록 최소 범위로 수정.
-    // 인터벌은 자기 id로 멈춘다 - 챔피언 교체로 this._morde가 새 객체로 바뀌어도 확실히 정리된다.
-    const decayTimer = setInterval(() => {
-      if (this.championId !== 'mordekaiser' || this._morde.shieldDecayTimer !== decayTimer) { clearInterval(decayTimer); return; }
-      step++;
-      const portion = Math.min(this._morde.wShieldLeft || 0, this.shield || 0); // 피해로 이미 깎인 만큼은 반영된 W 몫
-      const target = Math.min(portion, Math.max(0, shieldAmt * (1 - step / decaySteps)));
-      this.shield = Math.max(0, (this.shield || 0) - (portion - target));
-      this._morde.wShieldLeft = target;
-      updateBars(this);
-      if (step >= decaySteps) clearInterval(decayTimer);
-    }, (w.shieldDecayDuration * 1000) / decaySteps);
-    this._morde.shieldDecayTimer = decayTimer;
   
 };
 
@@ -149,15 +123,12 @@ CharacterController.prototype._mordeWOnRecast = function() {
     const cd = this._champData(); if (!cd) return;
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
-    const wPortion = Math.min(this._morde.wShieldLeft || 0, this.shield || 0); // W 보호막 남은 몫만 회복으로 전환
+    const wPortion = removeShield(this, 'mordeW'); // W 보호막 남은 몫만 회복으로 전환(제거)
     const heal = wPortion * (skillVal(w.recastHealPercentByLevel, lvl) / 100);
     // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소) - 보호막을 체력으로
     // "전환"하는 것도 결과적으로는 체력 회복이라 적용 대상이다(보호막
     // 자체의 생성/소멸은 영향받지 않는다 - 전환된 "이후"의 체력 회복량만 달라진다).
     this.hp = Math.min(this.maxHp, this.hp + heal * getHealReceivedMultiplier(this));
-    this.shield = Math.max(0, (this.shield || 0) - wPortion);
-    this._morde.wShieldLeft = 0;
-    clearTimeout(this._morde.shieldDecayTimer);
     updateBars(this);
   
 };

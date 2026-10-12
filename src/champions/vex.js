@@ -203,7 +203,7 @@ CharacterController.prototype._vexCastW = function(mouseWorldPoint, free = false
   const t = setTimeout(() => {
     if (this.championId !== 'vex' || this.hp <= 0) return;
     const shield = (skillVal(w.shieldByLevel, lvl) + (w.shieldApRatio || 0) * (this.stats.abilityPower || 0)) * getShieldReceivedMultiplier(this);
-    this.shield = (this.shield || 0) + shield;
+    addShield(this, 'vexW', shield, w.shieldDuration || 2.5); // 보호막 인스턴스(만료 자동)
     this._vex.wShield = { amount: shield, expiresAt: performance.now() + (w.shieldDuration || 2.5) * 1000 };
     vfx.spawn('w', this.root.position.clone());
     const raw = skillVal(w.damageByLevel, lvl) + (w.apRatio || 0) * (this.stats.abilityPower || 0);
@@ -220,7 +220,7 @@ CharacterController.prototype._vexCastW = function(mouseWorldPoint, free = false
 CharacterController.prototype._vexTickWShield = function() {
   const s = this._vex && this._vex.wShield;
   if (!s || performance.now() < s.expiresAt) return;
-  this.shield = Math.max(0, (this.shield || 0) - Math.min(this.shield || 0, s.amount)); // 남은 W 몫만 제거
+  removeShield(this, 'vexW'); // 만료 시점에 남은 W 몫만 제거
   this._vex.wShield = null;
   updateBars(this);
 };

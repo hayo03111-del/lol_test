@@ -497,15 +497,9 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
       let mult = 1;
       if (championHits >= 1) mult += 1.0;
       if (championHits >= 2) mult += 0.5 * (championHits - 1);
-      // 버그 수정: 예전엔 max(기존, W)로 덮고, 만료 시 보호막을 통째로 0으로 만들어 다른
-      // 보호막(아이템 등)까지 지웠다. 이제 W 몫만 더하고 만료 때 남은 W 몫만 걷어낸다.
-      if (this._yone.wShieldApplied > 0 && this._yone.wShieldUntil > performance.now()) {
-        this.shield = Math.max(0, (this.shield || 0) - Math.min(this._yone.wShieldApplied, this.shield || 0));
-      }
+      // 보호막 인스턴스(1.5초, 재시전은 교체, 다른 보호막과 합산).
       const wAmt = base * mult * getShieldReceivedMultiplier(this);
-      this.shield = Math.max(0, this.shield || 0) + wAmt;
-      this._yone.wShieldApplied = wAmt;
-      this._yone.wShieldUntil = performance.now() + (w.shieldDuration || 1.5) * 1000;
+      addShield(this, 'yoneW', wAmt, w.shieldDuration || 1.5);
       updateBars(this);
       vfx.spawn('w', this.root.position.clone());
       debugSkillHit('Yone W', targets[0]);
@@ -951,9 +945,7 @@ CharacterController.prototype._yoneTick = function(dt) {
   this._yoneTickEmpoweredQ(dt);
   this._yoneUpdateESpirit(dt);
   // W 보호막 지속시간 만료 처리(다른 챔피언이 보호막을 다시 걸지 않았다면).
-  if (this._yone.wShieldUntil && performance.now() >= this._yone.wShieldUntil) {
-    this.shield = Math.max(0, (this.shield || 0) - Math.min(this._yone.wShieldApplied || 0, this.shield || 0));
-    this._yone.wShieldUntil = 0; this._yone.wShieldApplied = 0; updateBars(this);
+  if (false) { // 요네 W 보호막 만료는 보호막 인스턴스 모델(tickShields)이 처리한다.
   }
   // 치명타 확률/초과분 추가 공격력은 recomputeStats()의 공용 "의지" 처리로 옮겼다
   // (예전엔 매 프레임 치명타 확률 100% 강제 + 매 프레임 recomputeStats 호출).

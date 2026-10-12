@@ -74,7 +74,7 @@ const stubs = {
 const context = vm.createContext(stubs);
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 vm.runInContext([
-  'src/core/00_global_constants.js', 'src/core/01_status_effect_system.js', 'src/core/01_hit_detection.js',
+  'src/core/00_global_constants.js', 'src/core/01_status_effect_system.js', 'src/core/shield_system.js', 'src/core/01_hit_detection.js',
   'src/core/skill_timing_database.js',
   'src/champions/champion_data.js', 'src/champions/champion_ability_database.js',
   'src/core/character_controller.js', 'src/core/controller_movement.js', 'src/core/controller_combat.js',
@@ -251,7 +251,7 @@ function recompute(c) {
   c._yasuoOnTakeDamage({ isChampion: true });
   assert(near(c.shield, Y.passive.shieldBase) && c._yasuo.flow === 0, '야스오 결의: 챔피언 피해 → 보호막 125(1레벨), 기류 0');
   now += 1100;
-  c._yasuoTick(0.016);
+  c._yasuoTick(0.016); context.tickShields(c, 0.016); // 만료는 공용 보호막 틱이 처리
   assert(c.shield === 0, '야스오 결의: 보호막은 1초 뒤 사라짐(예전엔 영구)');
 }
 

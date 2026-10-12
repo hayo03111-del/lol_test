@@ -77,7 +77,8 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     // 200만 HP가 깎였어도 투지는 500 기준으로 쌓였다. Shield 소모를 먼저
     // 끝내고, 실제로 HP를 깎은 양(actualHpLoss)만 넘긴다. 모데카이저 W의
     // "받은 피해 축적"도 동일한 성격의 값이라 같이 바로잡는다.
-    if (this.shield > 0) { const absorb = Math.min(this.shield, remaining); this.shield -= absorb; remaining -= absorb; }
+    // 보호막 인스턴스 모델: 먼저 만료되는 보호막부터 흡수(01_status_effect_system.js absorbShieldDamage).
+    remaining = absorbShieldDamage(this, remaining);
     const actualHpLoss = Math.min(remaining, this.hp);
     // 가렌 인내심(PC 위키): 챔피언·포탑·에픽 몬스터에게 "실제로" 피해를 입었을 때만 8초 멈춘다.
     // 보호막에 전부 막혔거나 0으로 줄어든 피해, 미니언·우물(지속 피해) 피해는 멈추지 않는다.

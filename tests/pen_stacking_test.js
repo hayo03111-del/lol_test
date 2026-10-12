@@ -46,7 +46,7 @@ const context = vm.createContext(stubs);
 // calculateDamage()) 전체를 실제 코드로 검증하기 위함.
 const globalConstSrc = fs.readFileSync(path.join(ROOT, 'src/core/00_global_constants.js'), 'utf8');
 const itemDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/item_data.js'), 'utf8');
-const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8');
+const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8'); // 보호막 인스턴스 모델 포함
 vm.runInContext(globalConstSrc + '\n' + itemDataSrc + '\n' + itemSystemSrc + `
 this.calculateDamage = calculateDamage;
 this.ITEM_DATA = ITEM_DATA;

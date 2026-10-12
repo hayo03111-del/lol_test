@@ -35,7 +35,7 @@ function assert(cond, msg) {
   };
   const context = vm.createContext(stubs);
   const itemDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/item_data.js'), 'utf8');
-  const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8');
+  const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8'); // 보호막 인스턴스 모델 포함
   vm.runInContext(itemDataSrc + '\n' + itemSystemSrc + `
     this.ITEM_DATA = ITEM_DATA; this.ITEM_CATEGORIES = ITEM_CATEGORIES;
     this.recomputeItemStats = recomputeItemStats; this.buyItem = buyItem; this.sellBoots = sellBoots;
@@ -174,7 +174,7 @@ function assert(cond, msg) {
     refreshUnitCcTags: () => {},
   };
   const context = vm.createContext(stubs);
-  const src = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8');
+  const src = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8');
   vm.runInContext(src + '\nthis.applyStatus = applyStatus; this.getStatus = getStatus;', context);
   const { applyStatus, getStatus } = context;
 

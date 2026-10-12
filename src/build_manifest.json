@@ -3,6 +3,7 @@
   "parts": [
     "src/core/00_global_constants.js",
     "src/core/01_status_effect_system.js",
+    "src/core/shield_system.js",
     "src/core/01_hit_detection.js",
     "src/core/ally_system.js",
     "src/champions/champion_data.js",

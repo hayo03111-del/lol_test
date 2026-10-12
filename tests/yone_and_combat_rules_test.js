@@ -74,7 +74,7 @@ const stubs = {
 const context = vm.createContext(stubs);
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 vm.runInContext([
-  'src/core/00_global_constants.js', 'src/core/01_status_effect_system.js', 'src/core/01_hit_detection.js',
+  'src/core/00_global_constants.js', 'src/core/01_status_effect_system.js', 'src/core/shield_system.js', 'src/core/01_hit_detection.js',
   'src/core/skill_timing_database.js',
   'src/champions/champion_data.js', 'src/champions/champion_ability_database.js',
   'src/core/character_controller.js', 'src/core/controller_movement.js', 'src/core/controller_combat.js',
@@ -189,8 +189,8 @@ function makeYone(overrides = {}) {
   advance(600);
   const expectW = YD.W.totalMixedDamageByLevel[0] + 3000 * 0.08;
   assert(near(3000 - champ.hp, expectW), '요네 W: 10 + 최대 체력 8%(1레벨, 예전 7% - 한 칸 밀림)');
-  assert(c.shield > 50 && c._yone.wShieldApplied > 0, '요네 W: 보호막을 기존 보호막 위에 더함');
-  now += 2000; c._yoneTick(0.016);
+  assert(c.shield > 50 && context.getShieldById(c, 'yoneW') > 0, '요네 W: 보호막을 기존 보호막 위에 더함');
+  now += 2000; c._yoneTick(0.016); context.tickShields(c, 0.016);
   assert(near(c.shield, 50), '요네 W: 만료 시 W 몫만 걷어내고 다른 보호막(50)은 유지(예전엔 0으로 지움)');
 }
 // --- 요네 E: 정신체는 대상 지정 가능, 표식은 챔피언·실제 피해 기준, 일반 평타도 표식 ---

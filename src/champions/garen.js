@@ -58,32 +58,8 @@ CharacterController.prototype._garenWOnCast = function() {
     const shieldAmt = (skillVal(w.shieldBaseByLevel, lvl) + this._garenBonusHp() * (w.shieldBonusHpPercent / 100)) * getShieldReceivedMultiplier(this);
     // 같은 0.75초 동안 강인함 60%(공용 TENACITY 상태 - applyStatus가 CC 지속시간 계산에 반영).
     if (w.tenacityPercent) applyStatus(this, { id: 'garenW_tenacity', type: 'TENACITY', duration: w.tenacityDuration, value: w.tenacityPercent / 100 });
-    // 버그 수정(원작 규칙): 보호막끼리는 "합산"된다. 예전엔 max(기존, W)로 덮어써서 다른
-    // 보호막이 있으면 W 보호막이 일부/전부 사라졌다. 이제 W 몫을 더하고, 종료 시 W 몫만
-    // 걷어낸다(재시전 시 이전 W 몫은 먼저 제거 - 중첩 금지).
-    if (this._garenWShieldApplied > 0 && this._garenWShieldTimer) {
-      this.shield = Math.max(0, (this.shield || 0) - Math.min(this._garenWShieldApplied, this.shield || 0));
-    }
-    const appliedShield = shieldAmt;
-    this.shield = Math.max(0, this.shield || 0) + appliedShield;
-    this._garenWShieldApplied = appliedShield;
-    const dur = w.shieldDuration;
-    this._garenWShieldToken = (this._garenWShieldToken || 0) + 1;
-    const token = this._garenWShieldToken;
-    clearTimeout(this._garenWShieldTimer);
-    // 버그 수정(전체 시스템 감사): 기존 토큰(_garenWShieldToken) 검사는
-    // "가렌이 W를 다시 썼는지"만 확인하고 챔피언이 아예 바뀌었는지는
-    // 확인하지 않았다. applyChampionData()가 이 타이머를 정리하지 않으므로,
-    // 가렌 W 보호막이 떠 있는 도중 다른 챔피언으로 바꾸면 이 타이머가
-    // 그대로 실행돼 새 챔피언의 현재 shield 값에서 가렌의 보호막 양만큼
-    // 임의로 빼버릴 수 있었다(예: 가렌->세트 교체 후 세트 W 보호막이 떠
-    // 있는 도중). championId 확인을 추가해 가렌이 아니면 아무것도 하지
-    // 않도록 최소 범위로 수정.
-    this._garenWShieldTimer = setTimeout(() => {
-      if (this._garenWShieldToken !== token || this.championId !== 'garen') return;
-      if (appliedShield > 0) this.shield = Math.max(0, this.shield - Math.min(appliedShield, this.shield));
-      this._garenWShieldTimer = null; this._garenWShieldApplied = 0;
-    }, dur * 1000);
+    // 보호막 인스턴스(0.75초): 다른 보호막과 합산, 같은 W 재시전은 교체.
+    addShield(this, 'garenW', shieldAmt, w.shieldDuration);
   
 };
 

@@ -22,7 +22,7 @@ const stubs = {
 
 const context = vm.createContext(stubs);
 const itemDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/item_data.js'), 'utf8');
-const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8');
+const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8'); // 보호막 인스턴스 모델 포함
 vm.runInContext(itemDataSrc + '\n' + itemSystemSrc + '\nthis.ITEM_DATA = ITEM_DATA; this.recomputeItemStats = recomputeItemStats; this.buyItem = buyItem; this.sellItem = sellItem; this.itemSystemTick = itemSystemTick; this.applyItemVamp = applyItemVamp;', context);
 const { ITEM_DATA, recomputeItemStats, buyItem, sellItem, itemSystemTick, applyItemVamp } = context;
 

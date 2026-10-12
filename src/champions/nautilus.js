@@ -226,11 +226,9 @@ CharacterController.prototype._nautilusCastW = function(free = false) {
   if (!this._payCost('W', free)) return;
   const lvl = Math.max(1, this.skillLevels.W || 1);
   const amount = (skillVal(w.shieldByLevel, lvl) + this.maxHp * skillVal(w.shieldMaxHpPercentByLevel, lvl) / 100) * getShieldReceivedMultiplier(this);
-  // 재시전으로 갱신될 때는 이전 W 보호막 잔량을 먼저 걷어낸다(중첩 금지).
-  if (this._nautilus.wShieldRemaining > 0) this.shield = Math.max(0, this.shield - this._nautilus.wShieldRemaining);
-  this.shield = (this.shield || 0) + amount;
+  // 보호막 인스턴스(재시전은 교체). W 강화 평타는 이 보호막이 남아 있는 동안만 유지된다.
+  addShield(this, 'nautilusW', amount, w.durationSec);
   this._nautilus.wShieldRemaining = amount;
-  this._nautilus.wShieldSeen = this.shield;
   this._nautilus.wUntil = performance.now() + w.durationSec * 1000;
   this._activateAttackOverrideFromDb('W', w.durationSec);
   vfx.spawn('w', this.root.position.clone());
@@ -239,7 +237,7 @@ CharacterController.prototype._nautilusCastW = function(free = false) {
 };
 
 CharacterController.prototype._nautilusEndW = function(expired) {
-  if (expired && this._nautilus.wShieldRemaining > 0) this.shield = Math.max(0, this.shield - this._nautilus.wShieldRemaining);
+  removeShield(this, 'nautilusW');
   this._nautilus.wShieldRemaining = 0;
   this._nautilus.wUntil = 0;
   this.clearAttackOverride('W');
@@ -251,9 +249,7 @@ CharacterController.prototype._nautilusEndW = function(expired) {
 CharacterController.prototype._nautilusTickW = function() {
   const n = this._nautilus;
   if (!n.wUntil) return;
-  const lost = Math.max(0, (n.wShieldSeen || 0) - (this.shield || 0));
-  if (lost > 0) n.wShieldRemaining = Math.max(0, n.wShieldRemaining - lost);
-  n.wShieldSeen = this.shield || 0;
+  n.wShieldRemaining = getShieldById(this, 'nautilusW'); // 피해로 깎인 W 몫(인스턴스 모델이 정확히 추적)
   if (n.wShieldRemaining <= 0) { this._nautilusEndW(false); return; }
   if (performance.now() >= n.wUntil) this._nautilusEndW(true);
 };

@@ -612,9 +612,9 @@ function _useDevotionActive(ctrl, item) {
   const p = item.devotionActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const selfAmt = _itemScaleByLevel(ctrl, p.shieldMin, p.shieldMax, p.levelMin, p.levelMax) * (typeof getShieldReceivedMultiplier === 'function' ? getShieldReceivedMultiplier(ctrl) : 1);
-  if (ctrl._itemDevotionShield && ctrl._itemDevotionShield.remaining > 0) ctrl.shield = Math.max(0, (ctrl.shield || 0) - ctrl._itemDevotionShield.remaining);
-  ctrl.shield = (ctrl.shield || 0) + selfAmt;
-  ctrl._itemDevotionShield = { remaining: selfAmt, decayPerSec: selfAmt / p.decaySec, seen: ctrl.shield };
+  // 보호막 인스턴스(2.5초에 걸쳐 감소, 다른 보호막과 합산, 재사용 시 교체).
+  addShield(ctrl, 'itemDevotion', selfAmt, p.decaySec, { decay: true });
+  ctrl._itemDevotionShield = { maxAmount: selfAmt, startedAt: now, decaySec: p.decaySec };
   if (typeof findAlliesInRadius === 'function' && typeof shieldAlly === 'function' && ctrl.root) {
     for (const { unit } of findAlliesInRadius(ctrl.root.position, p.radius, { exclude: [ctrl] })) {
       shieldAlly(ctrl, unit, _itemScaleByLevel(unit, p.shieldMin, p.shieldMax, p.levelMin, p.levelMax), p.decaySec, { decay: true, id: 'itemDevotion' });
@@ -819,8 +819,10 @@ function itemSystemTick(ctrl, dt) {
   // 아이템을 팔아도(인벤토리에서 이미 사라짐) 이미 걸린 보호막/흡혈
   // 버프는 실제 LoL처럼 원래 지속시간만큼 유지되므로, 인벤토리 유무와
   // 무관하게 매 프레임 만료만 확인한다(월식/멜모셔스의 아귀가 공용으로 씀).
+  // 아이템 보호막 만료: 이제 보호막마다 자기 지속시간을 가진 인스턴스라(tickShields) 다른 보호막을 지우지 않는다.
+  // 여기서는 아이템 틱만 도는 경우를 위해 아이템 보호막 인스턴스만 정리한다(예전엔 ctrl.shield = 0으로 전부 지웠다).
   if (ctrl._itemShieldExpiresAt && now >= ctrl._itemShieldExpiresAt) {
-    ctrl.shield = 0;
+    for (const id of ['itemMaw', 'itemShieldbow', 'itemSeraph', 'itemEclipse', 'itemBloodthirster']) removeShield(ctrl, id);
     ctrl._itemShieldExpiresAt = 0;
   }
   // 마법광학 장치 C44(비전 조준)/고속연사포(저격수)가 공용으로 쓰는 임시
@@ -884,8 +886,8 @@ function itemSystemTick(ctrl, dt) {
     const st = ctrl._itemSterakShieldState;
     const remainFrac = Math.max(0, 1 - (now - st.startedAt) / 1000 / st.decaySec);
     const cap = st.maxAmount * remainFrac;
-    if (cap <= 0.01) { ctrl._itemSterakShieldState = null; ctrl.shield = Math.min(ctrl.shield || 0, 0); }
-    else if ((ctrl.shield || 0) > cap) { ctrl.shield = cap; }
+    if (cap <= 0.01) { ctrl._itemSterakShieldState = null; removeShield(ctrl, 'itemSterak'); }
+    else capShield(ctrl, 'itemSterak', cap); // 스테락 보호막 몫만 줄어드는 상한(다른 보호막은 그대로)
   }
   // 죽음의무도(고통 무시) - 지연 피해 묶음 진행.
   _itemTickDeathsDanceDot(ctrl, dt);
@@ -1009,17 +1011,13 @@ function itemSystemTick(ctrl, dt) {
     if (!ctrl._itemDreamNextAt) ctrl._itemDreamNextAt = now + ITEM_DATA[dreamSlotT.id].dreamBubblePassive.intervalSec * 1000;
     if (now >= ctrl._itemDreamNextAt) ctrl._itemDreamBubblesReady = true;
   }
-  // 강철의 솔라리 팬던트(헌신) - 자신 몫 보호막 감소. 피해로 줄어든 만큼은
-  // 헌신 몫에서 먼저 빠졌다고 보고, 남은 헌신 몫만 시간에 따라 깎는다.
-  const dev = ctrl._itemDevotionShield;
-  if (dev && dev.remaining > 0) {
-    const lost = Math.max(0, (dev.seen || 0) - (ctrl.shield || 0));
-    dev.remaining = Math.max(0, dev.remaining - lost);
-    const decay = Math.min(dev.remaining, dev.decayPerSec * dt);
-    dev.remaining -= decay;
-    ctrl.shield = Math.max(0, (ctrl.shield || 0) - decay);
-    dev.seen = ctrl.shield;
-    if (dev.remaining <= 1e-6) ctrl._itemDevotionShield = null;
+  // 강철의 솔라리 팬던트(헌신) 자신 몫: 보호막 인스턴스가 스스로 감소하고(tickShields), 아이템 틱만 도는 경우에도
+  // 같은 감소 곡선을 상한으로 걸어 둔다(스테락과 같은 방식 - 이 인스턴스 몫만 줄어든다).
+  if (ctrl._itemDevotionShield) {
+    const st = ctrl._itemDevotionShield;
+    const cap = st.maxAmount * Math.max(0, 1 - (now - st.startedAt) / 1000 / st.decaySec);
+    if (cap <= 0.01) { ctrl._itemDevotionShield = null; removeShield(ctrl, 'itemDevotion'); }
+    else capShield(ctrl, 'itemDevotion', cap);
   }
   // 신록의 장벽/벤시의장막(무효화) - 재사용대기시간이 끝나면 방어막이
   // "생성"된다(실제로 막는 건 itemOnTakeDamage()). 벤시의장막은 챔피언에게
@@ -1309,7 +1307,8 @@ function applyItemPhysicalVamp(source, finalDmg, damageType, isBasicAttack = fal
     if (overflow > 0) {
       const p = ITEM_DATA.bloodthirster.overhealShieldPassive;
       const cap = _itemScaleByLevel(source, p.minShield, p.maxShield, p.levelMin, p.levelMax);
-      source.shield = Math.min(cap, (source.shield || 0) + overflow);
+      // 피바라기 보호막 인스턴스: 초과 회복분이 쌓이되 상한까지(다른 보호막과는 별개로 합산).
+      addShield(source, 'itemBloodthirster', Math.min(cap, getShieldById(source, 'itemBloodthirster') + overflow), 8.0);
       // 보호막 소스가 뒤섞여 있어도(생명선류와 동일한 한계) 지속시간은
       // 기존 공용 만료 필드를 그대로 쓴다 - 명시적 지속시간이 원문에
       // 없어, 흡혈로 계속 전환되는 한 유지되다가 8초 동안 흡혈이 없으면
@@ -1395,7 +1394,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
       // 정령의형상(무한한 활력)/월석재생기(별빛 은총) - 생명선 보호막도
       // "받는 보호막"에 해당한다(보호막 전용 증폭률 사용).
       const shieldAmt = (shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent) * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
-      ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
+      addShield(ctrl, 'itemMaw', shieldAmt, p.shieldDurationSec); // 보호막 인스턴스(다른 보호막과 합산)
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       ctrl._itemMawOmnivampUntil = now + p.omnivampDurationSec * 1000;
       console.log('[ITEM] 멜모셔스의 아귀 - 생명선 발동');
@@ -1414,7 +1413,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
       ctrl._itemSterakIcdUntil = now + p.icdSec * 1000;
       const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
       const shieldAmt = bonusHp * p.bonusHpShieldPercent * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
-      ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
+      addShield(ctrl, 'itemSterak', shieldAmt, p.shieldDecaySec, { decay: true }); // 4.5초에 걸쳐 감소하는 인스턴스
       ctrl._itemSterakShieldState = { maxAmount: shieldAmt, startedAt: now, decaySec: p.shieldDecaySec };
       console.log('[ITEM] 스테락의도전 - 생명선 발동');
     }
@@ -1433,7 +1432,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
       const shieldAmt = (isMelee
         ? _itemScaleByLevel(ctrl, p.meleeShieldMin, p.meleeShieldMax, p.levelMin, p.levelMax)
         : _itemScaleByLevel(ctrl, p.rangedShieldMin, p.rangedShieldMax, p.levelMin, p.levelMax)) * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
-      ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
+      addShield(ctrl, 'itemShieldbow', shieldAmt, p.shieldDurationSec);
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       console.log('[ITEM] 불멸의 철갑궁 - 생명선 발동');
     }
@@ -1449,7 +1448,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
     if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
       ctrl._itemSeraphIcdUntil = now + p.icdSec * 1000;
       const shieldAmt = (ctrl.maxMp || 0) * p.shieldManaPercent * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
-      ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
+      addShield(ctrl, 'itemSeraph', shieldAmt, p.shieldDurationSec);
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       console.log('[ITEM] 대천사의포옹 - 생명선 발동');
     }
@@ -3031,7 +3030,7 @@ function _itemEclipseOnHit(ctrl, target) {
   const shieldBase = isMelee ? p.meleeShieldBase : p.rangedShieldBase;
   const shieldBonusPercent = isMelee ? p.meleeShieldBonusAdPercent : p.rangedShieldBonusAdPercent;
   const shieldAmt = shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent;
-  ctrl.shield = Math.max(ctrl.shield || 0, shieldAmt);
+  addShield(ctrl, 'itemEclipse', shieldAmt, p.shieldDurationSec);
   ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
 }
 

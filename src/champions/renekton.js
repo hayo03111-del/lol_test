@@ -215,7 +215,7 @@ CharacterController.prototype._renektonResolveWHit = function(seq) {
     const raw=seq.raw;
     if (seq.empowered) {
       // 강화 W는 분노를 전혀 생성하지 않는다. 대상의 보호막을 먼저 파괴한다.
-      if (target.shield>0) target.shield=0;
+      if (target.shield>0 || (target.shieldEntries && target.shieldEntries.length)) { clearShields(target); target.shield=0; }
       applyDamage(target,{rawDamage:raw/seq.hits,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1});
     } else {
       applyDamage(target,{rawDamage:raw/seq.hits,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1});

@@ -334,17 +334,8 @@ CharacterController.prototype._leesinPickWAlly = function(mouseWorldPoint) {
 // 늘린 몫만 걷어낸다).
 CharacterController.prototype._leesinApplySelfWShield = function(amount, durationSec) {
   const amt = amount * getShieldReceivedMultiplier(this);
-  const before = Math.max(0, this.shield || 0);
-  this.shield = before + amt;
+  addShield(this, 'leesinW', amt, durationSec); // 보호막 인스턴스(만료 시 자동 제거)
   updateBars(this);
-  this._leesinWShieldToken = (this._leesinWShieldToken || 0) + 1;
-  const token = this._leesinWShieldToken;
-  clearTimeout(this._leesinWShieldTimer);
-  this._leesinWShieldTimer = setTimeout(() => {
-    if (this._leesinWShieldToken !== token || this.championId !== 'leesin') return;
-    this.shield = Math.max(0, this.shield - Math.min(amt, this.shield));
-    updateBars(this);
-  }, durationSec * 1000);
 };
 
 // Extracted from CharacterController: _leesinCastE

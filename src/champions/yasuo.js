@@ -601,11 +601,7 @@ CharacterController.prototype._yasuoTick = function(dt) {
     this._yasuoTickQ3Tornado(dt);
     this._yasuoQStackTick(); this._yasuoEStackTick(); this._yasuoGainFlowFromMovement(dt);
     if(this._yasuo.windwall && performance.now()>=this._yasuo.windwall.expiresAt)this._yasuo.windwall=null;
-    // 결의 보호막은 1초 뒤 남은 만큼 사라진다(예전엔 영구 보호막이었다).
-    if (this._yasuo.shieldExpiresAt && performance.now() >= this._yasuo.shieldExpiresAt) {
-      this.shield = Math.max(0, (this.shield || 0) - Math.min(this._yasuo.shieldApplied || 0, this.shield || 0));
-      this._yasuo.shieldExpiresAt = 0; this._yasuo.shieldApplied = 0; updateBars(this);
-    }
+    // 결의 보호막(1초) 만료는 보호막 인스턴스 모델(tickShields)이 처리한다.
 
 };
 
@@ -616,9 +612,7 @@ CharacterController.prototype._yasuoOnTakeDamage = function(source) {
     if (this._yasuo.flow < 100) return;
     if (source && !(source.isChampion || source.isMonster || source.championId)) return;
     const amt = this._yasuoShieldAmount() * getShieldReceivedMultiplier(this);
-    this.shield = Math.max(0, this.shield || 0) + amt;
-    this._yasuo.shieldApplied = amt;
-    this._yasuo.shieldExpiresAt = performance.now() + (this._champData().passive.shieldDurationSec || 1) * 1000;
+    addShield(this, 'yasuoPassive', amt, this._champData().passive.shieldDurationSec || 1);
     this._yasuo.flow = 0;
     updateBars(this);
 };

@@ -37,7 +37,7 @@ const context = vm.createContext(stubs);
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 vm.runInContext([
   read('src/core/00_global_constants.js'),
-  read('src/core/01_status_effect_system.js'),
+  read('src/core/01_status_effect_system.js'), read('src/core/shield_system.js'),
   read('src/champions/item_data.js'),
   read('src/core/item_system.js'),
 ].join('\n') + `

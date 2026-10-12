@@ -74,7 +74,7 @@ const stubs = {
 const context = vm.createContext(stubs);
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 vm.runInContext([
-  'src/core/00_global_constants.js', 'src/core/01_status_effect_system.js', 'src/core/01_hit_detection.js',
+  'src/core/00_global_constants.js', 'src/core/01_status_effect_system.js', 'src/core/shield_system.js', 'src/core/01_hit_detection.js',
   'src/core/skill_timing_database.js',
   'src/champions/champion_data.js', 'src/champions/champion_ability_database.js',
   'src/core/character_controller.js', 'src/core/controller_movement.js', 'src/core/controller_combat.js',

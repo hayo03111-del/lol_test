@@ -43,9 +43,9 @@ const stubs = {
   visionSystem: { grantVision(){} },
 };
 const context = vm.createContext(stubs);
-const statusSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8');
+const statusSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8');
 const itemDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/item_data.js'), 'utf8');
-const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8');
+const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8'); // 보호막 인스턴스 모델 포함
 const allySrc = fs.readFileSync(path.join(ROOT, 'src/core/ally_system.js'), 'utf8');
 vm.runInContext(statusSrc + '\n' + allySrc + '\n' + itemDataSrc + '\n' + itemSystemSrc + `
 this.placedAllies = placedAllies;

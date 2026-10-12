@@ -124,17 +124,8 @@ CharacterController.prototype._settGritTick = function(dt) {
 };
 
 // Extracted from CharacterController: _settShieldDecayTick
-CharacterController.prototype._settShieldDecayTick = function(dt) { 
-    if (this.championId !== 'sett' || !this._sett.wShieldDecayPerSec || this.shield <= 0) return;
-    if (this._sett.wShieldDecayStartAt && performance.now() < this._sett.wShieldDecayStartAt) return;
-    // W 몫만 감소한다(다른 보호막까지 같이 깎던 것 수정). 피해로 먼저 깎였으면 남은 몫 기준.
-    const portion = Math.min(this._sett.wShieldLeft || 0, this.shield);
-    const dec = Math.min(portion, this._sett.wShieldDecayPerSec * dt);
-    this.shield = Math.max(0, this.shield - dec);
-    this._sett.wShieldLeft = portion - dec;
-    if (this._sett.wShieldLeft <= 0) this._sett.wShieldDecayPerSec = 0;
-    updateBars(this);
-  
+CharacterController.prototype._settShieldDecayTick = function(dt) {
+    // W 보호막 감소(0.75초 뒤부터 0까지)는 보호막 인스턴스 모델(addShield decay)이 처리한다.
 };
 
 // 버그 수정(QA - "세트 W 보호막 적용 타이밍"): 예전엔 투지 소모+보호막
@@ -176,12 +167,9 @@ CharacterController.prototype._settWApplyShield = function() {
     const shieldAmt = spent * getShieldReceivedMultiplier(this); // 소모한 투지의 100% = 보호막(보호막 효과 증가 적용)
     // 버그 수정(기제 점검): 원작은 서로 다른 보호막이 더해진다 - 예전엔 max(기존, W)라 다른 보호막과 합쳐지지 않았다.
     // 이전 W 보호막이 남아 있으면 그 몫은 새 W로 교체한다.
-    this.shield = Math.max(0, (this.shield || 0) - Math.min(this._sett.wShieldLeft || 0, this.shield || 0)) + shieldAmt;
-    this._sett.wShieldLeft = shieldAmt;
-    // PC 위키: 보호막은 3초 지속, 0.75초 뒤부터 남은 2.25초에 걸쳐 0까지 감소한다.
-    const decayDelay = w.shieldDecayDelaySec || 0;
-    this._sett.wShieldDecayStartAt = performance.now() + decayDelay * 1000;
-    this._sett.wShieldDecayPerSec = w.shieldDuration > decayDelay ? shieldAmt / (w.shieldDuration - decayDelay) : 0;
+    const decayDelayW = w.shieldDecayDelaySec || 0;
+    // PC 위키: 보호막은 3초 지속, 0.75초 뒤부터 남은 2.25초에 걸쳐 0까지 감소한다(보호막 인스턴스가 처리).
+    addShield(this, 'settW', shieldAmt, w.shieldDuration, { decay: true, decayDelaySec: decayDelayW });
     updateBars(this);
 
 };

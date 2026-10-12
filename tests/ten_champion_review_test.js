@@ -79,7 +79,7 @@ const stubs = {
 const context = vm.createContext(stubs);
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 vm.runInContext([
-  'src/core/00_global_constants.js', 'src/core/01_status_effect_system.js', 'src/core/01_hit_detection.js',
+  'src/core/00_global_constants.js', 'src/core/01_status_effect_system.js', 'src/core/shield_system.js', 'src/core/01_hit_detection.js',
   'src/core/skill_timing_database.js',
   'src/champions/champion_data.js', 'src/champions/champion_ability_database.js',
   'src/core/character_controller.js', 'src/core/controller_movement.js', 'src/core/controller_combat.js',
@@ -173,8 +173,8 @@ function clearPlaced() { stubs.placedDummies.length = 0; }
   assert(near(b2 - t2.hp, 80 + 300 * (0.25 + 0.25)), 'Sett W: 80 + spent Grit x (25% + 25% per 100 bonus AD)');
   c.bonusAD = 0; c._sett.gritEntries = [{ amount: 400, gainedAt: now }]; c.shield = 0;
   c._settWApplyShield();
-  c._settShieldDecayTick(0.5); const s1 = c.shield;
-  advance(800); c._settShieldDecayTick(0.5);
+  context.tickShields(c, 0.5); const s1 = c.shield; // 보호막 인스턴스 모델의 공용 틱
+  advance(800); context.tickShields(c, 0.5);
   assert(near(s1, 400) && c.shield < 400, '세트 W 보호막: 0.75초 동안 그대로, 이후 감소');
   c.champLevel = 18; c._sett.qUsesRemaining = 0; clearPlaced(); const t3 = makeEnemy(0, 1); const b3 = t3.hp;
   c._settOnBasicAttackHit(t3, 'RIGHT');
@@ -375,12 +375,12 @@ function clearPlaced() { stubs.placedDummies.length = 0; }
   c._mordeWOnCast();
   const w = 2000 * 0.05; // 최소 5%
   assert(Math.abs(c.shield - (100 + w)) < 1e-6, '모데카이저 W: 기존 보호막에 더해진다(덮어쓰지 않음)');
-  c.shield -= 80; // 피해로 80 흡수
+  context.absorbShieldDamage(c, 80); // 피해로 80 흡수(먼저 끝나는 W 보호막부터)
   const before = c.shield;
-  lastIntervalFn(); // 감소 1틱
+  now += 200; context.tickShields(c, 0.2); // 감소 틱(공용 보호막 틱)
   assert(c.shield <= before + 1e-9, '모데카이저 W: 감소 틱이 피해로 깎인 보호막을 되살리지 않는다');
   const healBefore = c.hp; c._mordeWOnRecast();
-  assert(c.hp > healBefore && c._morde.wShieldLeft === 0, '모데카이저 W: 재시전 시 W 몫만 회복으로 전환');
+  assert(c.hp > healBefore && context.getShieldById(c, 'mordeW') === 0 && near(c.shield, 100), '모데카이저 W: 재시전 시 W 몫만 회복으로 전환(다른 보호막 100은 유지, 피해는 먼저 끝나는 W부터 흡수)');
 }
 {
   // 다리우스 R: 시전 후 0.25초 Q/E 불가(PC 위키 Noxian Guillotine)

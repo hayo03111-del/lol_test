@@ -58,10 +58,10 @@ const stubs = {
   visionSystem: { grantVision(){} },
 };
 const context = vm.createContext(stubs);
-const statusSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8');
+const statusSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8');
 const constSrc = fs.readFileSync(path.join(ROOT, 'src/core/00_global_constants.js'), 'utf8');
 const itemDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/item_data.js'), 'utf8');
-const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8');
+const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8'); // 보호막 인스턴스 모델 포함
 vm.runInContext(constSrc + '\n' + statusSrc + '\n' + itemDataSrc + '\n' + itemSystemSrc + `
 this.ITEM_DATA = ITEM_DATA; this.ITEM_ORDER = ITEM_ORDER;
 this.buyItem = buyItem; this.buildOrBuyItem = buildOrBuyItem; this.sellItem = sellItem;

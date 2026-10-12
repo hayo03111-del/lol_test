@@ -95,7 +95,9 @@ CharacterController.prototype._nilahUpdateBladeGlow = function(dt) {
 CharacterController.prototype._nilahApplyShield = function(amount, duration, kind='nilahP') { 
     if (!(amount > 0)) return 0;
     amount *= getShieldReceivedMultiplier(this);
-    this.shield = Math.max(this.shield || 0, amount);
+    // 보호막 인스턴스: 같은 종류(초과 회복 전환)끼리는 큰 값으로 갱신, 다른 보호막과는 합산.
+    // 예전엔 max(전체, 이번 양)이었고, 만료 때 보호막 전체를 0으로 지웠다(다른 보호막까지 삭제).
+    addShield(this, kind, Math.max(getShieldById(this, kind), amount), duration);
     this._nilah.shieldUntil = Math.max(this._nilah.shieldUntil || 0, performance.now() + duration * 1000);
     this._nilah.shieldKind = kind;
     updateBars(this);
@@ -202,7 +204,8 @@ CharacterController.prototype._nilahHealUnit = function(target, amount, shieldDu
     if (overheal > 0) {
       const shieldValue = overheal;
       const duration = kind === 'nilahP_R' ? shieldDuration : Math.min(shieldDuration, p.sharedShieldMaxDuration);
-      target.shield = Math.max(target.shield || 0, shieldValue);
+      // 보호막 인스턴스(같은 공유 보호막끼리는 큰 값으로 갱신, 다른 보호막과 합산, 지속시간 만료 자동).
+      addShield(target, 'nilahShared', Math.max(getShieldById(target, 'nilahShared'), shieldValue), duration);
       target._nilahSharedShieldUntil = Math.max(target._nilahSharedShieldUntil || 0, performance.now() + duration * 1000);
       target._nilahSharedShieldKind = kind;
     }
@@ -773,7 +776,7 @@ CharacterController.prototype._nilahUpdate = function(dt) {
     n.eCharges=Math.max(0,Math.min(d.E.maxCharges,n.eCharges));
     this._nilahRestoreECharges(now);
     this._nilahSyncStats();
-    if(n.shieldUntil && now>=n.shieldUntil && n.shieldKind){if(this.shield>0)this.shield=0;n.shieldUntil=0;n.shieldKind=null;updateBars(this);}
+    if(n.shieldUntil && now>=n.shieldUntil && n.shieldKind){removeShield(this,n.shieldKind);n.shieldUntil=0;n.shieldKind=null;updateBars(this);}
     // 버그 수정("W 안개가 이동을 안 따라간다"): W 지속시간 내내 자유
     // 이동이 허용되므로, 이펙트 인스턴스가 살아있는 동안 매 프레임 캐릭터
     // 위치로 다시 옮긴다 - 죽은 인스턴스면 참조를 정리한다.
@@ -781,7 +784,7 @@ CharacterController.prototype._nilahUpdate = function(dt) {
       if(n.wVfxInstance.dead) n.wVfxInstance=null;
       else n.wVfxInstance.root.position.copy(this.root.position);
     }
-    for(const ally of this._nilahAllyCandidates()) if(ally._nilahSharedShieldUntil && now>=ally._nilahSharedShieldUntil){ally.shield=0;ally._nilahSharedShieldUntil=0;ally._nilahSharedShieldKind=null;}
+    for(const ally of this._nilahAllyCandidates()) if(ally._nilahSharedShieldUntil && now>=ally._nilahSharedShieldUntil){removeShield(ally,'nilahShared');ally._nilahSharedShieldUntil=0;ally._nilahSharedShieldKind=null;} // 예전엔 아군 보호막 전체를 0으로 지웠다
     if(hasStatus(this,'NILAH_W_DODGE')){
       const w=d.W, lvl=Math.max(1,this.skillLevels.W||1);
       // 데이터 추가(실제 bin 확인): 지금까지 공유 판정 범위가 "몸이 거의

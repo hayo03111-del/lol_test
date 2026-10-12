@@ -61,7 +61,7 @@ const stubs = {
 const context = vm.createContext(stubs);
 
 const constSrc = fs.readFileSync(path.join(ROOT, 'src/core/00_global_constants.js'), 'utf8');
-const statusSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8');
+const statusSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_status_effect_system.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8');
 const hitSrc = fs.readFileSync(path.join(ROOT, 'src/core/01_hit_detection.js'), 'utf8');
 const champDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/champion_data.js'), 'utf8');
 // character_controller.js + 분리된 메서드 파일들(controller_*.js)을 함께 로드한다.
@@ -188,7 +188,7 @@ function skillValLocal(byLevel, lvl) {
   ctrl._settWApplyShield();
   assert(ctrl.shield === 50, '세트 W 반복 시전 2회차: 같은 W 보호막은 새 값으로 교체된다(중첩하지 않음)');
   // 다른 출처 보호막과는 더해진다(원작 - 서로 다른 보호막은 합산).
-  ctrl.shield += 30;
+  context.addShield(ctrl, 'other', 30, null); // 다른 출처 보호막
   ctrl._sett.gritEntries = [{ amount: 40, gainedAt: now }]; ctrl._sett.grit = 40;
   ctrl._settWApplyShield();
   assert(ctrl.shield === 30 + 40, '세트 W: 다른 보호막(30)은 남고 새 W 보호막(40)이 더해진다');
