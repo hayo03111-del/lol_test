@@ -27,6 +27,7 @@
     "src/core/target_ring.js",
     "src/core/range_indicator.js",
     "src/core/vision_system.js",
+    "src/rendering/skill_telegraph_system.js",
     "src/animation/attack_sequence.js",
     "src/animation/animation_sequence_player.js",
     "src/core/character_controller.js",

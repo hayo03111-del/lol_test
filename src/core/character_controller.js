@@ -401,6 +401,7 @@ class CharacterController {
     if (this._morde && this._morde.shieldDecayTimer) clearInterval(this._morde.shieldDecayTimer);
     if (this._masteryi?.alpha && typeof this._masteryiCancelAlphaStrike === 'function') this._masteryiCancelAlphaStrike();
     if (this._vex && typeof this._vexClearRRecast === 'function') this._vexClearRRecast();
+    if (typeof skillTelegraphs !== 'undefined' && skillTelegraphs.clearOwner) skillTelegraphs.clearOwner(this); // 취소된 효과의 예고·지대 표시도 지운다
   }
 
   applyChampionData(championId) {

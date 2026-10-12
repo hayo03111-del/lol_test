@@ -709,6 +709,9 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
         this.setState(startedMoving ? STATE.MOVE : STATE.Q_CAST);
         this.currentActionKey = 'qChain'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
         if (startedMoving) chainClips.forEach((c) => this._beginTransientMoveClip(c.name));
+        // 학살 예고(원작 패치 기록: 0.75초 지연 동안 유효 반경을 표시): 손잡이(205)~날(425) 고리, 다리우스를 따라간다.
+        { const dq = this._champData() && this._champData().Q;
+          if (dq && typeof skillTelegraphs !== 'undefined') skillTelegraphs.spawn({ shape: 'ring', center: this.root.position, radius: dq.range, innerRadius: dq.handleRange, duration: dq.prepDuration || 0.75, color: 0xff3020, team: this.team, owner: this, follow: this, opacity: 0.55, pulse: true }); }
         let damageApplied = false;
         const impactIndex = Math.min(castChain.impactStepIndex ?? (chainClips.length - 1), chainClips.length - 1);
         const fireImpact = () => {
@@ -1452,6 +1455,13 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
           // 예전엔 판정 시점(0.5초)까지 행동을 잠갔고, 판정 위치도 그 시점의 현재 위치였다.
           // 0.5초는 위키 서술 관례대로 시전 종료 기준으로 해석(시작 기준이면 총 0.5초 - 미확인).
           const origin = mordeEOrigin || this.root.position.clone();
+          // 손아귀 예고: 판정 직사각형(지정 지점에서 모데카이저 쪽으로 길이 800·폭 200)을 판정까지 표시한다.
+          // PC 위키: 손아귀는 적 시야 안으로 300 이상 들어와야 적에게 보인다(visibility insetLol 300).
+          if (typeof skillTelegraphs !== 'undefined') {
+            const lenW = lolRangeToWorld(cd.E.areaLength || 800);
+            const start = origin.clone().addScaledVector(dir, dist - lenW);
+            skillTelegraphs.spawn({ shape: 'rect', center: start, dir: dir.clone(), length: cd.E.areaLength || 800, width: cd.E.areaWidth || 200, duration: cd.E.effectDelaySec ?? 0.5, color: 0x5dff7a, team: this.team, owner: this, visibility: { insetLol: 300 }, opacity: 0.55, pulse: true });
+          }
           this._champTimeout(() => {
             const hits = this._mordeEAreaHits(origin, dir, dist);
             if (hits.length) hits.forEach((u) => this._mordeEOnCast(u));
@@ -1700,6 +1710,8 @@ CharacterController.prototype._castR = function(free = false) {
       // 시전이 실제로 시작되는 이 시점에 대상을 한 번만 캡처해서 onFire가
       // 항상 그 스냅샷만 참조하게 한다.
       const lockedRTarget = this.currentTarget;
+      // 가렌 R(PC 위키 Template:Data Garen/Demacian Justice): 시전 시작 시 대상을 1초 동안 드러낸다(True Sight).
+      if (this.championId === 'garen' && lockedRTarget && typeof visionSystem !== 'undefined' && visionSystem.revealUnit) visionSystem.revealUnit(lockedRTarget, 1, this.team);
       // 다리우스 R(녹서스의 단두대)은 원작에서 대상에게 "도약"해 내리찍는다 - 예전엔
       // 제자리에서 Spell4만 재생했다. 판정 시점(eventTime)까지 대상 바로 앞으로
       // 공용 돌진 트윈(_dashState - 리 신 Q2/노틸러스 Q와 같은 경로)으로 이동한다.

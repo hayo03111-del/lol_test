@@ -17,6 +17,11 @@ if (rangeIndicatorCheckboxEl) rangeIndicatorCheckboxEl.addEventListener('change'
 const visionSystem = new VisionSystem(scene);
 const visionSystemCheckboxEl = document.getElementById('visionSystemCheckbox');
 if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', () => visionSystem.setEnabled(visionSystemCheckboxEl.checked));
+// 스킬 예고 표시(아군·적군 모두에게 보이는 지면 연출 - skill_telegraph_system.js).
+const skillTelegraphs = new SkillTelegraphSystem(scene);
+// "적 팀 시야로 보기": 화면을 빨강 팀이 보는 그대로 그린다(판정은 그대로 플레이어 팀 시야).
+const enemyViewCheckboxEl = document.getElementById('enemyVisionViewCheckbox');
+if (enemyViewCheckboxEl) enemyViewCheckboxEl.addEventListener('change', () => visionSystem.setViewTeam(enemyViewCheckboxEl.checked ? ENEMY_TEAM : PLAYER_TEAM));
 // 상점(요청 "상점 시스템 싹다 구현해줘") - 아이템이 계속 늘어나면서
 // 한 줄짜리 목록으로는 더 이상 관리가 안 돼서, item_data.js의
 // ITEM_CATEGORIES를 기준으로 탭(시작 아이템/소모품/기본 아이템/신발)을

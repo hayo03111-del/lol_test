@@ -59,6 +59,11 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
       } else debugSkillMiss("Cho'Gath Q", 'no target in impact area');
       if (this.currentActionKey === 'chogathQ') { this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false; this._resumeAfterAction(); }
     }, (q.castTime + q.impactDelay) * 1000);
+    // 파열 예고(원작): 시전이 끝나면 착탄 지점(반경 250)에 균열이 보였다가 0.627초 뒤 터진다. PC 위키: 이 연출은
+    // 덤불·전장의 안개 안에서도 보인다 → 시야와 무관하게 모두에게 보인다(visibility 'always').
+    this._champTimeout(() => {
+      if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.spawn({ shape: 'circle', center: impactPoint, radius: q.radius || 250, duration: q.impactDelay, color: 0xb04dff, team: this.team, owner: this, visibility: 'always', texture: 'base_cracks_gradient.png', opacity: 0.75, pulse: true });
+    }, q.castTime * 1000);
     void t; // 폭발은 시전자가 움직여도 일어난다 - 행동 타이머(_actionTimers)에 넣지 않아 이동으로 취소되지 않게 한다
     // 원작: 시전 시간(0.5초)이 끝나면 움직일 수 있고, 파열은 그 뒤 0.627초에 터진다. 버그 수정: 예전엔 폭발 시점(약 1.13초)
     // 까지 행동이 묶였다. 시전 시간이 끝나면 이동으로 끊을 수 있는 후딜로 바꾼다(기다리던 이동은 곧바로 이어진다).

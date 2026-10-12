@@ -8289,63 +8289,43 @@ class TargetRing {
 
 /* ===== src/core/vision_system.js ===== */
 /* ============================================================
-   VISION SYSTEM (시야 시스템 / 전장의 안개)
+   VISION SYSTEM (팀 시야 / 전장의 안개)
    ------------------------------------------------------------
-   실제 LoL의 핵심 규칙 "시야 밖의 적은 보이지 않는다"를 재현하는
-   범용 시스템이다. 플레이어 챔피언이 지속적인 시야 공급원이고, 스킬이
-   (애쉬 E/R처럼) 임시 시야 공급원을 추가로 등록할 수 있다. 매 프레임
-   모든 적 유닛(더미/미니언/포탑/억제기/넥서스 - getAllEnemyUnits()가
-   반환하는 전부)이 "어떤 공급원이든 범위 안에 있는가"만 판정해서
-   보이거나(mesh/라벨 표시) 안개에 가려진다(숨김).
+   원작 규칙(PC 위키 Sight)을 팀 단위로 옮긴다. 파랑(플레이어 팀)·빨강(적 팀)이 각자 시야 공급원을 갖고,
+   상대 팀 유닛은 그 팀의 공급원 반경 안에 있을 때만 보인다.
+   - 시야 반경(LoL 단위, PC 위키 Sight): 챔피언·펫·슈퍼 미니언·포탑 1350, 근거리·원거리·공성 미니언 1200, 와드 900.
+   - 파랑 공급원: 플레이어 챔피언, 아군 더미(챔피언), 파랑 미니언, 파랑 포탑, 와드·스킬 임시 시야(grantVision).
+   - 빨강 공급원: 적 허수아비(챔피언), 빨강 미니언, 빨강 포탑, 빨강 임시 시야.
+   - 구조물(포탑·억제기·넥서스)은 원작처럼 항상 보인다(전장의 안개에 가려지지 않음).
+   - 드러내기(True Sight, revealUnit): 가렌 R처럼 대상을 시야와 무관하게 잠시 드러낸다.
+   - "적 팀 시야로 보기"(setViewTeam): 화면을 빨강 팀이 보는 그대로(안개·보이는 유닛) 바꿔 확인할 수 있다.
+     타게팅·스킬 판정(isVisible)은 화면 전환과 무관하게 항상 플레이어 팀 시야를 쓴다.
+   - 스킬 예고 표시(skill_telegraph_system.js)는 isPointVisibleTo()로 "그 지점이 상대 팀 시야 안인가"를 묻는다.
 
-   튜닝 포인트: 아래 VISION_CONFIG 객체 하나에 모든 수치가 모여있다.
-   실제 인게임 수치에 더 가깝게 맞추고 싶으면 이 객체 값만 바꾸면
-   되고, 다른 코드(VisionSystem 클래스 자체나 각 챔피언 파일)는 전혀
-   건드릴 필요가 없다 - 이 프로젝트 전반의 "데이터와 로직을 분리한다"
-   원칙을 그대로 따른다.
-
-   범위상 생략한 부분(수치/기능을 지어내지 않고 명시적으로 생략 - 이
-   프로젝트의 기존 원칙 그대로):
-   - 덤불(Brush)에 의한 근접 은신은 구현하지 않는다(이 맵에 덤불
-     오브젝트/판정 자체가 없음).
-   - 벽에 의한 시야 차단(라인오브사이트)은 구현하지 않는다 - 순수
-     원형(반경) 판정만 사용한다. 실제 LoL도 평지에서는 대부분 원형에
-     가깝게 동작하므로, 이 데모(단일 라인/사거리 연습용)에는 충분한
-     근사다.
-   - 와드(제어/일반 와드) 설치 기능은 없다 - 이 데모는 아이템/소환사
-     주문 시스템 자체가 없어 와드를 살 방법이 없다(다른 챔피언들의
-     아이템 생략과 동일한 원칙). grantVision()은 챔피언 스킬(애쉬 E/R
-     등)이 임시 시야를 등록하는 범용 진입점이라, 나중에 와드 같은
-     개념을 추가하고 싶다면 이 함수를 그대로 재사용하면 된다.
-   - 팀 단위 공유 시야는 없다 - 이 데모는 플레이어 챔피언 하나만 조작
-     하는 싱글플레이 구조라(다른 시스템들과 동일한 전제) "내 시야"가
-     곧 "우리 팀 시야"다.
+   범위상 생략(지어내지 않고 명시적으로 생략):
+   - 덤불: 이 맵에 덤불 오브젝트가 없다(덤불은 바깥→안쪽 시야만 막는다 - PC 위키).
+   - 지형에 의한 시야 차단: 칼바람 단일 통로라 원형 판정만 쓴다.
+   - 은신: 은신 스킬·아이템이 아직 없다.
    ============================================================ */
 const VISION_CONFIG = {
-  // 챔피언 기본 시야 반경(LoL 원본 단위). 실제 게임은 챔피언마다 약간
-  // 다르지만(대략 1200 전후가 표준) 이 데모는 조작 중인 챔피언 하나
-  // 기준으로 공용 기본값 하나를 쓴다. 특정 챔피언만 다르게 주고 싶으면
-  // championSightOverride에 championId: 값을 추가하면 된다(다른 코드는
-  // 건드릴 필요 없음).
-  championSightRange: 1200,
-  championSightOverride: {
-    // 예시: ashe: 1200,
-  },
-  // 안개 밖(미시야) 적 표시 방식.
-  //  - 'hide': 완전히 숨김(실제 LoL과 가장 가까움, 기본값)
-  //  - 'dim' : 투명도만 낮춰서 흐리게(위치를 계속 참고하고 싶은
-  //            연습/디버그 용도 - 켜고 싶으면 이 값만 바꾸면 됨)
+  // PC 위키 Sight: 챔피언 1350(예전 1200은 근거 없던 값), 미니언 1200, 슈퍼 미니언·포탑 1350.
+  championSightRange: 1350,
+  championSightOverride: {},
+  minionSightRange: 1200,
+  superMinionSightRange: 1350,
+  turretSightRange: 1350,
+  // 안개 밖(미시야) 적 표시 방식: 'hide'(원작과 같음) / 'dim'(연습용 반투명)
   fogMode: 'hide',
   dimOpacity: 0.12,
-  // 시야 판정과 완전히 별개인 "순수 시각 효과" 설정 - 바닥에 그리는
-  // 안개 오버레이. 끄고 싶으면 enabled:false 하나만 바꾸면 된다.
   fogOverlay: {
     enabled: true,
-    textureSize: 256, // 해상도(낮을수록 가볍고 경계가 부드럽다)
-    darkness: 0.75, // 미시야 지역의 불투명도(0=투명, 1=완전 검정)
-    edgeSoftness: 0.4, // 시야 경계가 부드럽게 퍼지는 비율(0=칼같은 경계, 1=중심부터 서서히)
+    textureSize: 256,
+    darkness: 0.75,
+    edgeSoftness: 0.4,
   },
 };
+const VISION_TEAM_BLUE = (typeof PLAYER_TEAM !== 'undefined') ? PLAYER_TEAM : 'BLUE';
+const VISION_TEAM_RED = (typeof ENEMY_TEAM !== 'undefined') ? ENEMY_TEAM : 'RED';
 
 class VisionSystem {
   constructor(scene) {
@@ -8354,7 +8334,12 @@ class VisionSystem {
     // 임시 시야 공급원 배열 - {position: THREE.Vector3, lolRadius, expiresAt}.
     // grantVision()으로 추가되고, update()가 매 프레임 만료분을 정리한다.
     this.temporarySources = [];
-    this._visibleCache = new Set();
+    this._visibleCache = new Set(); // 플레이어 팀이 보고 있는 상대 유닛(타게팅용)
+    this._visibleTo = { [VISION_TEAM_BLUE]: new Set(), [VISION_TEAM_RED]: new Set() };
+    this._teamSources = { [VISION_TEAM_BLUE]: [], [VISION_TEAM_RED]: [] };
+    this.reveals = []; // {unit, team, expiresAt} - 드러내기(True Sight)
+    this.viewTeam = VISION_TEAM_BLUE; // 화면을 어느 팀 시야로 그릴지
+    this._renderHidden = new Set(); // 화면에서 시야 때문에 숨긴 유닛
     this._fogCanvas = null; this._fogCtx = null; this._fogTexture = null; this._fogMesh = null;
     this._worldHalf = (typeof groundSize !== 'undefined' ? groundSize : 280) / 2;
     if (VISION_CONFIG.fogOverlay.enabled) this._buildFogOverlay();
@@ -8383,12 +8368,45 @@ class VisionSystem {
   // 챔피언 스킬(애쉬 E/R 등)이 임시 시야를 등록하는 범용 진입점.
   // position: THREE.Vector3(world), lolRadius: LoL 원본 단위 반경,
   // durationSec: 지속시간(초).
-  grantVision(position, lolRadius, durationSec) {
+  grantVision(position, lolRadius, durationSec, team = VISION_TEAM_BLUE) {
     if (!position || !lolRadius || !durationSec) return;
     this.temporarySources.push({
-      position: position.clone(), lolRadius,
+      position: position.clone(), lolRadius, team,
       expiresAt: performance.now() + durationSec * 1000,
     });
+  }
+
+  // 드러내기(True Sight): 시야와 무관하게 unit을 team에게 durationSec 동안 보이게 한다(가렌 R 등).
+  revealUnit(unit, durationSec, team = VISION_TEAM_BLUE) {
+    if (!unit || !durationSec) return;
+    this.reveals.push({ unit, team, expiresAt: performance.now() + durationSec * 1000 });
+  }
+
+  // 화면을 그릴 팀(파랑=플레이어 팀 / 빨강=적 팀). 판정(isVisible)에는 영향 없음.
+  setViewTeam(team) {
+    this.viewTeam = team === VISION_TEAM_RED ? VISION_TEAM_RED : VISION_TEAM_BLUE;
+    for (const u of this._renderHidden) this._setUnitVisible(u, true);
+    this._renderHidden.clear();
+  }
+
+  // team의 시야 공급원 반경 안에 pos가 있는가. insetLol만큼 안쪽이어야 참(예: 모데카이저 E - 시야 안 300).
+  isPointVisibleTo(team, pos, insetLol = 0) {
+    if (!this.enabled || !pos) return true;
+    for (const s of this._teamSources[team] || []) {
+      const r = lolRangeToWorld(Math.max(0, s.lolRadius - insetLol));
+      const dx = pos.x - s.position.x, dz = pos.z - s.position.z;
+      if (dx * dx + dz * dz <= r * r) return true;
+    }
+    return false;
+  }
+
+  // unit이 team에게 보이는가(같은 팀·구조물은 항상 보임).
+  isVisibleTo(team, unit) {
+    if (!this.enabled || !unit) return true;
+    if (unit.isStructure) return true;
+    const ut = unit.team || (team === VISION_TEAM_BLUE ? VISION_TEAM_RED : VISION_TEAM_BLUE);
+    if (ut === team) return true;
+    return this._visibleTo[team] ? this._visibleTo[team].has(unit) : true;
   }
 
   // 특정 유닛이 지금 시야 안에 있는지(= 타게팅/클릭/스킬 판정에 노출돼도
@@ -8397,6 +8415,7 @@ class VisionSystem {
   // 매 프레임 갱신해두는 캐시(_visibleCache)를 그대로 읽기만 한다.
   isVisible(unit) {
     if (!this.enabled) return true;
+    if (unit && unit.isStructure) return true; // 구조물은 항상 보인다
     return this._visibleCache.has(unit);
   }
 
@@ -8407,8 +8426,54 @@ class VisionSystem {
   }
 
   _revealAll() {
-    for (const u of getAllEnemyUnits()) this._setUnitVisible(u, true);
-    this._visibleCache = new Set(getAllEnemyUnits());
+    for (const u of getAllEnemyUnits(true)) this._setUnitVisible(u, true);
+    for (const u of this._renderHidden) this._setUnitVisible(u, true);
+    this._renderHidden.clear();
+    this._visibleCache = new Set(getAllEnemyUnits(true));
+  }
+
+  // 플레이어 팀 유닛(빨강 팀 시야로 볼 때 가려질 수 있는 쪽).
+  _blueUnits(controller) {
+    const out = [];
+    if (controller && controller.root) out.push(controller);
+    if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (a && a.hp > 0) out.push(a);
+    if (typeof minions !== 'undefined') for (const m of minions) if (m && !m.isDead && m.team === VISION_TEAM_BLUE) out.push(m);
+    return out;
+  }
+  _redUnits() { return getAllEnemyUnits(true); }
+
+  _collectSources(controller) {
+    const now = performance.now();
+    const blue = [], red = [];
+    const champR = (id) => { const o = VISION_CONFIG.championSightOverride[id]; return o != null ? o : VISION_CONFIG.championSightRange; };
+    if (controller && controller.root && controller.hp > 0 && controller.state !== STATE.DEAD) blue.push({ position: controller.root.position, lolRadius: champR(controller.championId) });
+    if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (a && a.hp > 0) blue.push({ position: getWorldPosition(a), lolRadius: VISION_CONFIG.championSightRange });
+    if (typeof dummy !== 'undefined' && dummy && dummy.hp > 0 && !dummy.destroyed) red.push({ position: getWorldPosition(dummy), lolRadius: VISION_CONFIG.championSightRange });
+    if (typeof placedDummies !== 'undefined') for (const d of placedDummies) if (d && d.hp > 0 && !d.destroyed) red.push({ position: getWorldPosition(d), lolRadius: VISION_CONFIG.championSightRange });
+    if (typeof minions !== 'undefined') for (const m of minions) {
+      if (!m || m.isDead || !m.mesh) continue;
+      const r = (m.type === 'super' || m.minionType === 'super') ? VISION_CONFIG.superMinionSightRange : VISION_CONFIG.minionSightRange;
+      (m.team === VISION_TEAM_BLUE ? blue : red).push({ position: m.mesh.position, lolRadius: r });
+    }
+    if (typeof turrets !== 'undefined') for (const t of turrets) {
+      if (!t || t.destroyed || !t.mesh) continue;
+      (t.team === VISION_TEAM_BLUE ? blue : red).push({ position: t.mesh.position, lolRadius: VISION_CONFIG.turretSightRange });
+    }
+    for (const s of this.temporarySources) if (s.expiresAt > now) ((s.team || VISION_TEAM_BLUE) === VISION_TEAM_RED ? red : blue).push(s);
+    return { [VISION_TEAM_BLUE]: blue, [VISION_TEAM_RED]: red };
+  }
+
+  _computeVisible(team, units, sources) {
+    const now = performance.now();
+    const out = new Set();
+    for (const u of units) {
+      if (u.isStructure) { out.add(u); continue; }
+      let visible = false;
+      for (const s of sources) { if (isInCircle(u, s.position, lolRangeToWorld(s.lolRadius))) { visible = true; break; } }
+      if (!visible) visible = this.reveals.some((r) => r.unit === u && r.team === team && r.expiresAt > now);
+      if (visible) out.add(u);
+    }
+    return out;
   }
 
   _setUnitVisible(unit, visible) {
@@ -8417,10 +8482,15 @@ class VisionSystem {
       this._applyDim(unit, visible);
       return;
     }
-    if (unit.mesh) unit.mesh.visible = visible;
-    else if (unit.model) unit.model.visible = visible;
-    else if (unit.group) unit.group.visible = visible;
+    // 플레이어 챔피언은 모델 가시성(마스터 이 Q 등이 쓰는 model.visible)을 건드리지 않도록 root로 숨긴다.
+    const root = unit.root && unit.root.isObject3D ? unit.root : (unit.mesh || unit.model || unit.group);
+    if (root) {
+      root.visible = visible;
+      // CSS2D 이름표는 부모가 숨겨져도 따로 그려지므로 직접 숨긴다.
+      if (typeof root.traverse === 'function') root.traverse((o) => { if (o.isCSS2DObject) { o.visible = visible; if (o.element) o.element.style.display = visible ? '' : 'none'; } });
+    }
     if (unit.labelDiv) unit.labelDiv.style.display = visible ? '' : 'none';
+    if (unit.healthBarLabelDiv) unit.healthBarLabelDiv.style.display = visible ? '' : 'none';
   }
 
   // dim 모드: mesh를 숨기지 않고 재질 투명도만 낮춘다(위치를 계속 볼 수
@@ -8446,47 +8516,36 @@ class VisionSystem {
   update(controller, dt) {
     if (!this.enabled) return;
     const now = performance.now();
-    if (this.temporarySources.length) {
-      this.temporarySources = this.temporarySources.filter((s) => s.expiresAt > now);
-    }
+    if (this.temporarySources.length) this.temporarySources = this.temporarySources.filter((s) => s.expiresAt > now);
+    if (this.reveals.length) this.reveals = this.reveals.filter((r) => r.expiresAt > now && r.unit && r.unit.hp > 0);
+    this._teamSources = this._collectSources(controller);
+    const blueSources = this._teamSources[VISION_TEAM_BLUE];
 
-    const sources = [];
-    if (controller && controller.root && controller.hp > 0 && controller.state !== STATE.DEAD) {
-      const override = VISION_CONFIG.championSightOverride[controller.championId];
-      const range = override != null ? override : VISION_CONFIG.championSightRange;
-      sources.push({ position: controller.root.position, lolRadius: range });
-    }
-    for (const s of this.temporarySources) sources.push(s);
-
-    // 조작 중인 챔피언이 없거나(초기 로딩 전) 죽어서 시야 공급원이 하나도
-    // 없으면, 맵 전체를 안개로 덮는 대신 전부 보이게 한다 - 전투 연습
-    // 도구로서 "아직 아무도 안 보인다"보다 "일단 다 보인다"가 더 자연스러운
-    // 기본 상태다(실제 LoL 규칙과는 다르지만, 조작할 챔피언이 아예 없는
-    // 상태는 실제 게임에 없는 상황이라 임의로 하나 정한 것일 뿐이다).
-    if (!sources.length) {
+    // 조작 중인 챔피언이 없거나 죽어서 플레이어 팀 공급원이 하나도 없으면(초기 로딩 등) 전부 보이게 한다 -
+    // 연습 도구로서 "일단 다 보인다"가 더 자연스러운 기본 상태다(실제 게임엔 없는 상황).
+    if (!blueSources.length && this.viewTeam === VISION_TEAM_BLUE) {
       this._revealAll();
+      this._visibleTo[VISION_TEAM_BLUE] = new Set(getAllEnemyUnits(true));
       if (this._fogCtx) { this._fogCtx.clearRect(0, 0, this._fogCanvas.width, this._fogCanvas.height); this._fogTexture.needsUpdate = true; }
       return;
     }
 
-    const nowVisible = new Set();
-    for (const u of getAllEnemyUnits()) {
-      let visible = false;
-      for (const s of sources) {
-        if (isInCircle(u, s.position, lolRangeToWorld(s.lolRadius))) { visible = true; break; }
-      }
-      if (visible) nowVisible.add(u);
-    }
-    // 변경된 유닛만 실제로 표시 상태를 건드린다(매 프레임 불필요하게
-    // mesh.visible/DOM style을 다시 쓰지 않도록).
-    for (const u of getAllEnemyUnits()) {
-      const was = this._visibleCache.has(u);
-      const is = nowVisible.has(u);
-      if (was !== is) this._setUnitVisible(u, is);
-    }
-    this._visibleCache = nowVisible;
+    const redUnits = this._redUnits(), blueUnits = this._blueUnits(controller);
+    this._visibleTo[VISION_TEAM_BLUE] = this._computeVisible(VISION_TEAM_BLUE, redUnits, blueSources);
+    this._visibleTo[VISION_TEAM_RED] = this._computeVisible(VISION_TEAM_RED, blueUnits, this._teamSources[VISION_TEAM_RED]);
+    this._visibleCache = this._visibleTo[VISION_TEAM_BLUE];
 
-    if (this._fogCtx) this._renderFogTexture(sources);
+    // 화면 표시: 보는 팀의 상대 유닛 중 그 팀에게 안 보이는 것만 숨긴다(바뀐 유닛만 건드림).
+    const viewer = this.viewTeam;
+    const others = viewer === VISION_TEAM_BLUE ? redUnits : blueUnits;
+    const seen = this._visibleTo[viewer];
+    const nowHidden = new Set();
+    for (const u of others) if (!seen.has(u)) nowHidden.add(u);
+    for (const u of this._renderHidden) if (!nowHidden.has(u)) this._setUnitVisible(u, true);
+    for (const u of nowHidden) if (!this._renderHidden.has(u)) this._setUnitVisible(u, false);
+    this._renderHidden = nowHidden;
+    // 보는 팀 쪽 유닛은 항상 보인다(빨강 시점에서 돌아왔을 때 등).
+    if (this._fogCtx) this._renderFogTexture(this._teamSources[viewer]);
   }
 
   _renderFogTexture(sources) {
@@ -8512,6 +8571,134 @@ class VisionSystem {
     ctx.globalCompositeOperation = 'source-over';
     this._fogTexture.needsUpdate = true;
   }
+}
+
+/* ===== src/rendering/skill_telegraph_system.js ===== */
+/* ============================================================
+   SKILL TELEGRAPH SYSTEM (스킬 예고 표시 - 아군·적군 모두에게 보이는 지면 표시)
+   ------------------------------------------------------------
+   사거리 링(RangeIndicatorSystem, V키)은 시전자 본인만 보는 조준 보조다. 이 시스템은 원작에서 "모든 플레이어가
+   보는" 스킬 지면 연출(예고·지대)을 그린다.
+
+   보이는 규칙(원작):
+   - 시전자와 같은 팀: 항상 보인다.
+   - 상대 팀: 그 지점을 시야에 두고 있을 때만 보인다(PC 위키 - 레오나 쏠라 플레어 "적이 그 지역 시야를 가지고
+     있을 때만 연출이 보인다"). visibility:'always'는 예외(초가스 Q - "덤불·전장의 안개 안에서도 보인다"),
+     visibility:{insetLol:n}은 "시야 안으로 n 이상 들어와야" 보인다(모데카이저 E - 300).
+   지금 화면을 그리는 팀은 visionSystem.viewTeam("적 팀 시야로 보기"로 바꿀 수 있다).
+
+   모양은 원작 수치(반경·길이·폭·지속시간)를 그대로 쓰고, 텍스처는 저장소에 있는 원작 공통 텍스처를 쓴다
+   (assets/nilah: base_cracks_gradient - 균열, glow-soft - 채움). 챔피언별 원본 예고 텍스처는 CommunityDragon이
+   이 환경에서 막혀 있어 받지 못했다 - 받으면 TELEGRAPH_TEXTURES에 경로만 추가하면 된다.
+   ============================================================ */
+const TELEGRAPH_TEXTURE_BASE = 'assets/nilah/';
+const TELEGRAPH_TEXTURES = {};
+function telegraphTexture(file) {
+  if (!TELEGRAPH_TEXTURES[file] && typeof THREE !== 'undefined' && THREE.TextureLoader) {
+    TELEGRAPH_TEXTURES[file] = new THREE.TextureLoader().load(TELEGRAPH_TEXTURE_BASE + file);
+  }
+  return TELEGRAPH_TEXTURES[file] || null;
+}
+
+class SkillTelegraphSystem {
+  constructor(scene) {
+    this.scene = scene;
+    this.active = [];
+  }
+
+  // opts: { shape:'circle'|'ring'|'rect', center(Vector3), radius, innerRadius, dir(Vector3), length, width,
+  //         duration(sec), color, team, visibility:'vision'|'always'|{insetLol}, texture, follow(unit), pulse }
+  spawn(opts) {
+    if (!opts || !opts.center || !(opts.duration > 0) || typeof THREE === 'undefined') return null;
+    const group = new THREE.Group();
+    const color = opts.color ?? 0xff4040;
+    const tex = opts.texture ? telegraphTexture(opts.texture) : telegraphTexture('glow-soft.png');
+    const fillMat = new THREE.MeshBasicMaterial({ color, map: tex, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+    const edgeMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+    let fillGeo, edgeGeo;
+    const edge = lolRangeToWorld(10);
+    if (opts.shape === 'rect') {
+      const L = lolRangeToWorld(opts.length || 0), Wd = lolRangeToWorld(opts.width || 0);
+      fillGeo = new THREE.PlaneGeometry(Wd, L);
+      fillGeo.translate(0, L / 2, 0);
+      const shapeOut = new THREE.Shape();
+      shapeOut.moveTo(-Wd / 2, 0); shapeOut.lineTo(Wd / 2, 0); shapeOut.lineTo(Wd / 2, L); shapeOut.lineTo(-Wd / 2, L); shapeOut.lineTo(-Wd / 2, 0);
+      const hole = new THREE.Path();
+      hole.moveTo(-Wd / 2 + edge, edge); hole.lineTo(-Wd / 2 + edge, L - edge); hole.lineTo(Wd / 2 - edge, L - edge); hole.lineTo(Wd / 2 - edge, edge); hole.lineTo(-Wd / 2 + edge, edge);
+      shapeOut.holes.push(hole);
+      edgeGeo = new THREE.ShapeGeometry(shapeOut);
+    } else if (opts.shape === 'ring') {
+      const R = lolRangeToWorld(opts.radius || 0), r = lolRangeToWorld(opts.innerRadius || 0);
+      fillGeo = new THREE.RingGeometry(r, R, 72);
+      edgeGeo = new THREE.RingGeometry(Math.max(0, R - edge), R, 72);
+    } else {
+      const R = lolRangeToWorld(opts.radius || 0);
+      fillGeo = new THREE.CircleGeometry(R, 72);
+      edgeGeo = new THREE.RingGeometry(Math.max(0, R - edge), R, 72);
+    }
+    const fill = new THREE.Mesh(fillGeo, fillMat);
+    const outline = new THREE.Mesh(edgeGeo, edgeMat);
+    for (const m of [fill, outline]) { m.rotation.x = -Math.PI / 2; m.renderOrder = 2; group.add(m); }
+    outline.position.y = 0.005;
+    group.position.set(opts.center.x, 0.04, opts.center.z);
+    if (opts.shape === 'rect' && opts.dir) group.rotation.y = Math.atan2(opts.dir.x, opts.dir.z) + Math.PI; // 평면 +y(국소) → 진행 방향
+    this.scene.add(group);
+    const t = {
+      group, fill, outline, opts, age: 0, duration: opts.duration,
+      team: opts.team || (typeof PLAYER_TEAM !== 'undefined' ? PLAYER_TEAM : 'BLUE'),
+      visibility: opts.visibility || 'vision',
+      owner: opts.owner || null, // 시전자 - 챔피언 교체/폐기 시 그 시전자의 예고를 함께 지운다
+    };
+    this.active.push(t);
+    return t;
+  }
+
+  // 지금 화면을 그리는 팀에게 이 예고가 보이는가.
+  isVisibleToViewer(t) {
+    const vs = typeof visionSystem !== 'undefined' ? visionSystem : null;
+    if (!vs || !vs.enabled) return true;
+    const viewer = vs.viewTeam;
+    if (viewer === t.team || t.visibility === 'always') return true;
+    const inset = (t.visibility && t.visibility.insetLol) || 0;
+    // 사각형은 중심선 위 몇 점 중 하나라도 시야 안이면 보인다.
+    const pts = [t.group.position];
+    if (t.opts.shape === 'rect' && t.opts.dir) {
+      const L = lolRangeToWorld(t.opts.length || 0);
+      for (const k of [0.25, 0.5, 0.75, 1]) pts.push(new THREE.Vector3(t.opts.center.x + t.opts.dir.x * L * k, 0, t.opts.center.z + t.opts.dir.z * L * k));
+    }
+    return pts.some((p) => vs.isPointVisibleTo(viewer, p, inset));
+  }
+
+  update(dt) {
+    for (let i = this.active.length - 1; i >= 0; i--) {
+      const t = this.active[i];
+      t.age += dt;
+      if (t.opts.follow) {
+        const p = getWorldPosition(t.opts.follow);
+        if (p) t.group.position.set(p.x, 0.04, p.z);
+      }
+      const k = Math.min(1, t.age / t.duration);
+      // 0.1초 페이드 인, 마지막 15% 페이드 아웃. pulse면 끝으로 갈수록 밝아진다(터지기 직전 강조).
+      const fadeIn = Math.min(1, t.age / 0.1), fadeOut = k > 0.85 ? Math.max(0, (1 - k) / 0.15) : 1;
+      const base = (t.opts.opacity ?? 0.5) * fadeIn * fadeOut * (t.opts.pulse ? (0.6 + 0.4 * k) : 1);
+      const show = this.isVisibleToViewer(t);
+      t.group.visible = show;
+      t.fill.material.opacity = base * 0.75;
+      t.outline.material.opacity = Math.min(1, base * 1.6);
+      if (t.age >= t.duration) this._dispose(i);
+    }
+  }
+
+  _dispose(i) {
+    const t = this.active[i];
+    this.scene.remove(t.group);
+    for (const m of [t.fill, t.outline]) { m.geometry.dispose(); m.material.dispose(); }
+    this.active.splice(i, 1);
+  }
+
+  clear() { for (let i = this.active.length - 1; i >= 0; i--) this._dispose(i); }
+  // 시전자가 사라지면(챔피언 교체 등) 효과도 취소되므로 그 시전자의 예고·지대 표시도 지운다.
+  clearOwner(owner) { for (let i = this.active.length - 1; i >= 0; i--) if (this.active[i].owner === owner) this._dispose(i); }
 }
 
 /* ===== src/animation/attack_sequence.js ===== */
@@ -9425,6 +9612,7 @@ class CharacterController {
     if (this._morde && this._morde.shieldDecayTimer) clearInterval(this._morde.shieldDecayTimer);
     if (this._masteryi?.alpha && typeof this._masteryiCancelAlphaStrike === 'function') this._masteryiCancelAlphaStrike();
     if (this._vex && typeof this._vexClearRRecast === 'function') this._vexClearRRecast();
+    if (typeof skillTelegraphs !== 'undefined' && skillTelegraphs.clearOwner) skillTelegraphs.clearOwner(this); // 취소된 효과의 예고·지대 표시도 지운다
   }
 
   applyChampionData(championId) {
@@ -12602,6 +12790,9 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
         this.setState(startedMoving ? STATE.MOVE : STATE.Q_CAST);
         this.currentActionKey = 'qChain'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
         if (startedMoving) chainClips.forEach((c) => this._beginTransientMoveClip(c.name));
+        // 학살 예고(원작 패치 기록: 0.75초 지연 동안 유효 반경을 표시): 손잡이(205)~날(425) 고리, 다리우스를 따라간다.
+        { const dq = this._champData() && this._champData().Q;
+          if (dq && typeof skillTelegraphs !== 'undefined') skillTelegraphs.spawn({ shape: 'ring', center: this.root.position, radius: dq.range, innerRadius: dq.handleRange, duration: dq.prepDuration || 0.75, color: 0xff3020, team: this.team, owner: this, follow: this, opacity: 0.55, pulse: true }); }
         let damageApplied = false;
         const impactIndex = Math.min(castChain.impactStepIndex ?? (chainClips.length - 1), chainClips.length - 1);
         const fireImpact = () => {
@@ -13345,6 +13536,13 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
           // 예전엔 판정 시점(0.5초)까지 행동을 잠갔고, 판정 위치도 그 시점의 현재 위치였다.
           // 0.5초는 위키 서술 관례대로 시전 종료 기준으로 해석(시작 기준이면 총 0.5초 - 미확인).
           const origin = mordeEOrigin || this.root.position.clone();
+          // 손아귀 예고: 판정 직사각형(지정 지점에서 모데카이저 쪽으로 길이 800·폭 200)을 판정까지 표시한다.
+          // PC 위키: 손아귀는 적 시야 안으로 300 이상 들어와야 적에게 보인다(visibility insetLol 300).
+          if (typeof skillTelegraphs !== 'undefined') {
+            const lenW = lolRangeToWorld(cd.E.areaLength || 800);
+            const start = origin.clone().addScaledVector(dir, dist - lenW);
+            skillTelegraphs.spawn({ shape: 'rect', center: start, dir: dir.clone(), length: cd.E.areaLength || 800, width: cd.E.areaWidth || 200, duration: cd.E.effectDelaySec ?? 0.5, color: 0x5dff7a, team: this.team, owner: this, visibility: { insetLol: 300 }, opacity: 0.55, pulse: true });
+          }
           this._champTimeout(() => {
             const hits = this._mordeEAreaHits(origin, dir, dist);
             if (hits.length) hits.forEach((u) => this._mordeEOnCast(u));
@@ -13593,6 +13791,8 @@ CharacterController.prototype._castR = function(free = false) {
       // 시전이 실제로 시작되는 이 시점에 대상을 한 번만 캡처해서 onFire가
       // 항상 그 스냅샷만 참조하게 한다.
       const lockedRTarget = this.currentTarget;
+      // 가렌 R(PC 위키 Template:Data Garen/Demacian Justice): 시전 시작 시 대상을 1초 동안 드러낸다(True Sight).
+      if (this.championId === 'garen' && lockedRTarget && typeof visionSystem !== 'undefined' && visionSystem.revealUnit) visionSystem.revealUnit(lockedRTarget, 1, this.team);
       // 다리우스 R(녹서스의 단두대)은 원작에서 대상에게 "도약"해 내리찍는다 - 예전엔
       // 제자리에서 Spell4만 재생했다. 판정 시점(eventTime)까지 대상 바로 앞으로
       // 공용 돌진 트윈(_dashState - 리 신 Q2/노틸러스 Q와 같은 경로)으로 이동한다.
@@ -18725,6 +18925,11 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
       } else debugSkillMiss("Cho'Gath Q", 'no target in impact area');
       if (this.currentActionKey === 'chogathQ') { this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false; this._resumeAfterAction(); }
     }, (q.castTime + q.impactDelay) * 1000);
+    // 파열 예고(원작): 시전이 끝나면 착탄 지점(반경 250)에 균열이 보였다가 0.627초 뒤 터진다. PC 위키: 이 연출은
+    // 덤불·전장의 안개 안에서도 보인다 → 시야와 무관하게 모두에게 보인다(visibility 'always').
+    this._champTimeout(() => {
+      if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.spawn({ shape: 'circle', center: impactPoint, radius: q.radius || 250, duration: q.impactDelay, color: 0xb04dff, team: this.team, owner: this, visibility: 'always', texture: 'base_cracks_gradient.png', opacity: 0.75, pulse: true });
+    }, q.castTime * 1000);
     void t; // 폭발은 시전자가 움직여도 일어난다 - 행동 타이머(_actionTimers)에 넣지 않아 이동으로 취소되지 않게 한다
     // 원작: 시전 시간(0.5초)이 끝나면 움직일 수 있고, 파열은 그 뒤 0.627초에 터진다. 버그 수정: 예전엔 폭발 시점(약 1.13초)
     // 까지 행동이 묶였다. 시전 시간이 끝나면 이동으로 끊을 수 있는 후딜로 바꾼다(기다리던 이동은 곧바로 이어진다).
@@ -21401,13 +21606,28 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
       if (!isInCircle(u, targetPoint, worldRadius)) continue;
       hitAny = true;
       applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
-      applyStatus(u, { id: 'varusE_slow', type: 'SLOW', duration: e.zoneDuration || 4, value: slowPct, source: this });
-      applyStatus(u, { id: 'varusE_grievous', type: 'GRIEVOUS', duration: e.grievousDuration || 0.5, value: (e.grievousPercent || 0) / 100, source: this });
       this._varusDetonateBlight(u, { viaQ: false, chargeFraction: 0 });
       vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0xff9a4a });
       debugSkillHit('Varus E', u);
     }
     if (!hitAny) debugSkillMiss('Varus E', 'no target in area');
+    // 더럽혀진 땅(PC 위키): 착탄 자리가 4초 동안 지대가 되어, 안에 있는 적을 계속 둔화시키고 치유 감소를 건다.
+    // 버그 수정: 예전엔 착탄 순간 맞은 적에게만 4초 둔화를 한 번 걸었다(지대에 나중에 들어온 적·나간 적 구분 없음).
+    // 지대 안에 있는 동안 0.25초마다 0.5초짜리 둔화·치유 감소를 다시 건다(나가면 0.5초 안에 풀림).
+    const zoneMs = (e.zoneDuration || 4) * 1000, zoneStart = performance.now();
+    const applyZone = () => {
+      for (const u of getAllEnemyUnits()) {
+        if (!isInCircle(u, targetPoint, worldRadius)) continue;
+        applyStatus(u, { id: 'varusE_slow', type: 'SLOW', duration: 0.5, value: slowPct, source: this });
+        applyStatus(u, { id: 'varusE_grievous', type: 'GRIEVOUS', duration: e.grievousDuration || 0.5, value: (e.grievousPercent || 0) / 100, source: this });
+      }
+    };
+    applyZone();
+    const zoneTimer = this._champInterval(() => {
+      if (performance.now() - zoneStart >= zoneMs) { clearInterval(zoneTimer); return; }
+      applyZone();
+    }, 250);
+    if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.spawn({ shape: 'circle', center: targetPoint, radius: e.radius || 300, duration: e.zoneDuration || 4, color: 0x9a3dff, team: this.team, owner: this, opacity: 0.45 });
   }, castTime * 1000);
   this._actionTimers.push(fireTimer);
 
@@ -28329,6 +28549,11 @@ if (rangeIndicatorCheckboxEl) rangeIndicatorCheckboxEl.addEventListener('change'
 const visionSystem = new VisionSystem(scene);
 const visionSystemCheckboxEl = document.getElementById('visionSystemCheckbox');
 if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', () => visionSystem.setEnabled(visionSystemCheckboxEl.checked));
+// 스킬 예고 표시(아군·적군 모두에게 보이는 지면 연출 - skill_telegraph_system.js).
+const skillTelegraphs = new SkillTelegraphSystem(scene);
+// "적 팀 시야로 보기": 화면을 빨강 팀이 보는 그대로 그린다(판정은 그대로 플레이어 팀 시야).
+const enemyViewCheckboxEl = document.getElementById('enemyVisionViewCheckbox');
+if (enemyViewCheckboxEl) enemyViewCheckboxEl.addEventListener('change', () => visionSystem.setViewTeam(enemyViewCheckboxEl.checked ? ENEMY_TEAM : PLAYER_TEAM));
 // 상점(요청 "상점 시스템 싹다 구현해줘") - 아이템이 계속 늘어나면서
 // 한 줄짜리 목록으로는 더 이상 관리가 안 돼서, item_data.js의
 // ITEM_CATEGORIES를 기준으로 탭(시작 아이템/소모품/기본 아이템/신발)을
@@ -30570,6 +30795,7 @@ function animate() {
     if (typeof tickAllyUnits === 'function') tickAllyUnits(dt);
     vfx.update(dt);
     nilahVfx2.update(dt);
+    if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.update(dt);
     projectiles.update(dt);
     targetRing.update(dt);
     rangeIndicators.update(controller);

@@ -650,3 +650,19 @@ stubs.targetRing = { clear() {} };
   const q = CHAMPION_DATA.varus.Q;
   assert(q.rangeChargeDuration === 1.5 && q.chargeDuration === 1.25 && q.maxHoldSec === 4 && q.chargeSelfSlowPercent === 20, '바루스 Q 데이터: 사거리 1.5초·효과 1.25초·최대 4초·둔화 20%');
 }
+{
+  // 바루스 E 더럽혀진 땅(17차): 4초 지대 - 나중에 들어온 적도 둔화, 지대가 끝나면 더 걸지 않는다
+  timers = []; clearPlaced();
+  stubs.skillTelegraphs = { spawned: [], spawn(o) { this.spawned.push(o); return o; } };
+  const inZone = place(makeEnemy(0, 3)), late = place(makeEnemy(20, 20));
+  const c = makeChamp('varus', ['Spell3']);
+  c._varusCastE(new Vector3(0, 0, 3), false);
+  advance(300);
+  assert(getSlowPercent(inZone) > 0 && getSlowPercent(late) === 0, '바루스 E: 착탄 지대 안의 적만 둔화');
+  assert(stubs.skillTelegraphs.spawned.some((o) => o.shape === 'circle' && o.duration === 4 && o.radius === 300), '바루스 E: 반경 300·4초 지대 표시(모두에게 보이는 예고)');
+  late.mesh.position.set(0, 0, 3);
+  lastIntervalFn();
+  assert(getSlowPercent(late) > 0, '바루스 E: 지대에 나중에 들어온 적도 둔화(예전엔 착탄 순간만)');
+  now += 4100; late.statusEffects = []; lastIntervalFn();
+  assert(getSlowPercent(late) === 0, '바루스 E: 4초 뒤 지대가 사라지면 더 이상 둔화하지 않는다');
+}

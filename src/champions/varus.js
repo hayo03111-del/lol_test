@@ -303,13 +303,28 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
       if (!isInCircle(u, targetPoint, worldRadius)) continue;
       hitAny = true;
       applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
-      applyStatus(u, { id: 'varusE_slow', type: 'SLOW', duration: e.zoneDuration || 4, value: slowPct, source: this });
-      applyStatus(u, { id: 'varusE_grievous', type: 'GRIEVOUS', duration: e.grievousDuration || 0.5, value: (e.grievousPercent || 0) / 100, source: this });
       this._varusDetonateBlight(u, { viaQ: false, chargeFraction: 0 });
       vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0xff9a4a });
       debugSkillHit('Varus E', u);
     }
     if (!hitAny) debugSkillMiss('Varus E', 'no target in area');
+    // 더럽혀진 땅(PC 위키): 착탄 자리가 4초 동안 지대가 되어, 안에 있는 적을 계속 둔화시키고 치유 감소를 건다.
+    // 버그 수정: 예전엔 착탄 순간 맞은 적에게만 4초 둔화를 한 번 걸었다(지대에 나중에 들어온 적·나간 적 구분 없음).
+    // 지대 안에 있는 동안 0.25초마다 0.5초짜리 둔화·치유 감소를 다시 건다(나가면 0.5초 안에 풀림).
+    const zoneMs = (e.zoneDuration || 4) * 1000, zoneStart = performance.now();
+    const applyZone = () => {
+      for (const u of getAllEnemyUnits()) {
+        if (!isInCircle(u, targetPoint, worldRadius)) continue;
+        applyStatus(u, { id: 'varusE_slow', type: 'SLOW', duration: 0.5, value: slowPct, source: this });
+        applyStatus(u, { id: 'varusE_grievous', type: 'GRIEVOUS', duration: e.grievousDuration || 0.5, value: (e.grievousPercent || 0) / 100, source: this });
+      }
+    };
+    applyZone();
+    const zoneTimer = this._champInterval(() => {
+      if (performance.now() - zoneStart >= zoneMs) { clearInterval(zoneTimer); return; }
+      applyZone();
+    }, 250);
+    if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.spawn({ shape: 'circle', center: targetPoint, radius: e.radius || 300, duration: e.zoneDuration || 4, color: 0x9a3dff, team: this.team, owner: this, opacity: 0.45 });
   }, castTime * 1000);
   this._actionTimers.push(fireTimer);
 

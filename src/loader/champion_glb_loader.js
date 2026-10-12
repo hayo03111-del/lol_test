@@ -1492,6 +1492,7 @@ function animate() {
     if (typeof tickAllyUnits === 'function') tickAllyUnits(dt);
     vfx.update(dt);
     nilahVfx2.update(dt);
+    if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.update(dt);
     projectiles.update(dt);
     targetRing.update(dt);
     rangeIndicators.update(controller);
