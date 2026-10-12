@@ -1,0 +1,965 @@
+{
+ "garen": {
+  "Q": {
+   "dmgMs": 421,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:basicAttack",
+     "ms": 332
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:w",
+     "ms": 2
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": 459,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:e",
+     "ms": 1
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 564,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:r",
+     "ms": 469
+    }
+   ]
+  },
+  "champ": "garen",
+  "errors": []
+ },
+ "darius": {
+  "Q": {
+   "dmgMs": 886,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:q",
+     "ms": 773
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": 357,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:w",
+     "ms": 1
+    },
+    {
+     "k": "vfx:basicAttack",
+     "ms": 327
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:e",
+     "ms": 270
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 531,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:r",
+     "ms": 405
+    }
+   ]
+  },
+  "champ": "darius",
+  "errors": []
+ },
+ "masteryi": {
+  "Q": {
+   "dmgMs": 1000,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:q",
+     "ms": 2
+    },
+    {
+     "k": "vfx:q",
+     "ms": 112
+    },
+    {
+     "k": "vfx:basicAttack",
+     "ms": 112
+    },
+    {
+     "k": "vfx:q",
+     "ms": 319
+    },
+    {
+     "k": "vfx:basicAttack",
+     "ms": 319
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 528
+    },
+    {
+     "k": "vfx:q",
+     "ms": 529
+    },
+    {
+     "k": "vfx:basicAttack",
+     "ms": 529
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 741
+    },
+    {
+     "k": "vfx:q",
+     "ms": 741
+    },
+    {
+     "k": "vfx:basicAttack",
+     "ms": 741
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 953
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:w",
+     "ms": 2
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:e",
+     "ms": 1
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:r",
+     "ms": 1
+    }
+   ]
+  },
+  "champ": "masteryi",
+  "errors": []
+ },
+ "leesin": {
+  "Q": {
+   "dmgMs": 164,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:q",
+     "ms": 3
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:w",
+     "ms": 1
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": 35,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:e",
+     "ms": 1
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 436,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:r",
+     "ms": 295
+    }
+   ]
+  },
+  "champ": "leesin",
+  "errors": []
+ },
+ "nautilus": {
+  "Q": {
+   "dmgMs": 389,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:hit",
+     "ms": 238
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 242
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:w",
+     "ms": 1
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": 27,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:e",
+     "ms": 1
+    },
+    {
+     "k": "vfx:e",
+     "ms": 238
+    },
+    {
+     "k": "vfx:e",
+     "ms": 485
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 588,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:hit",
+     "ms": 449
+    },
+    {
+     "k": "vfx:r",
+     "ms": 450
+    }
+   ]
+  },
+  "champ": "nautilus",
+  "errors": []
+ },
+ "yasuo": {
+  "Q": {
+   "dmgMs": 456,
+   "projectileMs": null,
+   "events": []
+  },
+  "W": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": []
+  },
+  "E": {
+   "dmgMs": 539,
+   "projectileMs": null,
+   "events": []
+  },
+  "R": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": []
+  },
+  "champ": "yasuo",
+  "errors": []
+ },
+ "yone": {
+  "Q": {
+   "dmgMs": 582,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:q",
+     "ms": 410
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": 639,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:w",
+     "ms": 515
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:e",
+     "ms": 12
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 991,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:r",
+     "ms": 811
+    },
+    {
+     "k": "vfx:e",
+     "ms": 1908
+    }
+   ]
+  },
+  "champ": "yone",
+  "errors": []
+ },
+ "sett": {
+  "Q": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": []
+  },
+  "W": {
+   "dmgMs": 827,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:w",
+     "ms": 1
+    },
+    {
+     "k": "vfx:w",
+     "ms": 799
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": 368,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:e",
+     "ms": 259
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 2736,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:r",
+     "ms": 6
+    },
+    {
+     "k": "vfx:r",
+     "ms": 2667
+    }
+   ]
+  },
+  "champ": "sett",
+  "errors": []
+ },
+ "mordekaiser": {
+  "Q": {
+   "dmgMs": 612,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:q",
+     "ms": 511
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:w",
+     "ms": 1
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": 561,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:e",
+     "ms": 532
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:r",
+     "ms": 533
+    }
+   ]
+  },
+  "champ": "mordekaiser",
+  "errors": []
+ },
+ "renekton": {
+  "Q": {
+   "dmgMs": 595,
+   "projectileMs": null,
+   "events": []
+  },
+  "W": {
+   "dmgMs": 544,
+   "projectileMs": null,
+   "events": []
+  },
+  "E": {
+   "dmgMs": 326,
+   "projectileMs": null,
+   "events": []
+  },
+  "R": {
+   "dmgMs": 596,
+   "projectileMs": null,
+   "events": []
+  },
+  "champ": "renekton",
+  "errors": []
+ },
+ "nilah": {
+  "Q": {
+   "dmgMs": 1140,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:nilahQ",
+     "ms": 4
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:nilahW",
+     "ms": 2
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": 340,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:nilahE",
+     "ms": 1
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 377,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:nilahRtick",
+     "ms": 259
+    },
+    {
+     "k": "vfx:nilahRtick",
+     "ms": 653
+    },
+    {
+     "k": "vfx:nilahRtick",
+     "ms": 1016
+    },
+    {
+     "k": "vfx:nilahRtick",
+     "ms": 1393
+    },
+    {
+     "k": "vfx:nilahRfinal",
+     "ms": 1712
+    },
+    {
+     "k": "vfx:nilahShield",
+     "ms": 1713
+    }
+   ]
+  },
+  "champ": "nilah",
+  "errors": []
+ },
+ "chogath": {
+  "Q": {
+   "dmgMs": 933,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:q",
+     "ms": 2
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:w",
+     "ms": 2
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:e",
+     "ms": 1
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 111,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:r",
+     "ms": 1
+    }
+   ]
+  },
+  "champ": "chogath",
+  "errors": []
+ },
+ "ezreal": {
+  "Q": {
+   "dmgMs": 131,
+   "projectileMs": 3,
+   "events": [
+    {
+     "k": "vfx:ezrealQ",
+     "ms": 2
+    },
+    {
+     "k": "projectile",
+     "ms": 3
+    },
+    {
+     "k": "vfx:ezrealQHit",
+     "ms": 104
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 105
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": null,
+   "projectileMs": 2,
+   "events": [
+    {
+     "k": "vfx:w",
+     "ms": 2
+    },
+    {
+     "k": "projectile",
+     "ms": 2
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 131
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 132
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": 31,
+   "projectileMs": 2,
+   "events": [
+    {
+     "k": "vfx:e",
+     "ms": 1
+    },
+    {
+     "k": "projectile",
+     "ms": 2
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 4
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 4
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 5
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 1047,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:ezrealRBow",
+     "ms": 1
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1026
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1027
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1067
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1130
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1196
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1259
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1328
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1379
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1449
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1510
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1584
+    }
+   ]
+  },
+  "champ": "ezreal",
+  "errors": []
+ },
+ "ashe": {
+  "Q": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:hit",
+     "ms": 2
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": 256,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:hit",
+     "ms": 231
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 231
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:hit",
+     "ms": 84
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 534,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:hit",
+     "ms": 487
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 488
+    }
+   ]
+  },
+  "champ": "ashe",
+  "errors": []
+ },
+ "varus": {
+  "Q": {
+   "dmgMs": 1514,
+   "projectileMs": 1299,
+   "events": [
+    {
+     "k": "projectile",
+     "ms": 1299
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1368
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 1370
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:hit",
+     "ms": 2
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": 321,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:hit",
+     "ms": 285
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 288
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 418,
+   "projectileMs": 269,
+   "events": [
+    {
+     "k": "projectile",
+     "ms": 269
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 383
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 384
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 898
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 898
+    }
+   ]
+  },
+  "champ": "varus",
+  "errors": []
+ },
+ "ahri": {
+  "Q": {
+   "dmgMs": 160,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:ahriOrbHit",
+     "ms": 2
+    },
+    {
+     "k": "vfx:ahriOrbHit",
+     "ms": 9
+    },
+    {
+     "k": "vfx:ahriOrbHit",
+     "ms": 1429
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": 328,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:ahriFoxfireCast",
+     "ms": 1
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 290
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 291
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 291
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": 151,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:ahriOrbHit",
+     "ms": 107
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 123,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:r",
+     "ms": 1
+    },
+    {
+     "k": "vfx:ahriOrbHit",
+     "ms": 2
+    },
+    {
+     "k": "vfx:ahriOrbHit",
+     "ms": 3
+    },
+    {
+     "k": "vfx:ahriOrbHit",
+     "ms": 4
+    }
+   ]
+  },
+  "champ": "ahri",
+  "errors": []
+ },
+ "vex": {
+  "Q": {
+   "dmgMs": 309,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:q",
+     "ms": 306
+    }
+   ]
+  },
+  "W": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:w",
+     "ms": 1
+    },
+    {
+     "k": "vfx:w",
+     "ms": 134
+    }
+   ]
+  },
+  "E": {
+   "dmgMs": null,
+   "projectileMs": null,
+   "events": [
+    {
+     "k": "vfx:e",
+     "ms": 1037
+    }
+   ]
+  },
+  "R": {
+   "dmgMs": 141,
+   "projectileMs": 1,
+   "events": [
+    {
+     "k": "projectile",
+     "ms": 1
+    },
+    {
+     "k": "vfx:r",
+     "ms": 33
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 34
+    }
+   ]
+  },
+  "champ": "vex",
+  "errors": []
+ }
+}

@@ -1386,9 +1386,9 @@ const CHAMPION_DATA = {
       critChanceMultiplier: 2.0, overcapCritToAd: 0.5,
       // 결의(Resolve): 이동한 거리 59/52.5/46(레벨 구간) 유닛마다 기류 1, 100에서
       // 챔피언/몬스터에게 피해를 받으면 1초 동안 보호막 125~600(레벨 비례).
-      // 레벨 구간(1/7/13)은 확인하지 못한 임시값(flowBreakpointsGuessed).
+      // 레벨 구간 1/7/13 확인(PC 위키 + 공략 "based on level 1 / 7 / 13").
       flowMax: 100, shieldBase: 125, shieldPerLevel: 27.941, shieldDurationSec: 1,
-      flowUnitsPerStack: { breakpoints: [1, 7, 13], values: [59, 52.5, 46] }, flowBreakpointsGuessed: true,
+      flowUnitsPerStack: { breakpoints: [1, 7, 13], values: [59, 52.5, 46] },
     },
     Q: {
       // 쿨다운 4초·시전 시간 0.35초는 스킬 레벨과 무관한 고정 기준값이다(요네와 동일 -
@@ -1499,6 +1499,7 @@ const CHAMPION_DATA = {
       // WShield 공식(bin GameCalculation): ByCharLevelInterpolation(40 -> 90,
       // 챔피언 레벨 1~18) + 보너스AD*0.65. 이전에 위키 문서의 "95.88"은
       // 오독이었다(bin 원본은 90.0으로 명시) - bin 수치로 교체.
+      // 계수 65% 확정(PC 위키 - 75%는 아레나 전용 값이었다).
       shieldBase: 40, shieldGrowth: (90 - 40) / 17, shieldBonusAdRatio: 0.65,
       shieldDuration: 1.5, shieldFirstChampionBonusPercent: 100, shieldPerExtraChampionPercent: 50,
       // MinimumDamageMinions(bin ByCharLevelBreakpoints): 1레벨 30, 이후
@@ -1639,7 +1640,8 @@ const CHAMPION_DATA = {
       oneStackBase: 13, oneStackGrowth: 1, oneStackBonusAdRatio: 0.3,
       maxStackBase: 65, maxStackGrowth: 5, maxStackBonusAdRatio: 1.5,
       empoweredDuration: 5, monsterMultiplier: 2.5,
-      // 공격력증가량(최대 중첩 시 5초 AD버프): 30~280, 10렙까지 +5, 13렙까지 +10, 이후 +25
+      // 공격력증가량(최대 중첩 시 5초 AD버프): 30~230(PC 위키·패치 기록), 10렙까지 +5, 13렙까지 +10, 이후 +25.
+      // (예전 주석의 "280"은 오래된 템플릿 값 - 아래 계산 결과는 원래부터 230이었다.)
       empoweredAdByLevel: (() => {
         const arr = [30];
         for (let lvl = 2; lvl <= 18; lvl++) {
@@ -1869,8 +1871,9 @@ const CHAMPION_DATA = {
       // 1→18 선형 보간(auraHpCurveGuessed). 예전엔 1% 고정이었다.
       auraDamagePerSec: 5, auraApRatio: 0.3, auraTargetMaxHpPercentAtLevel1: 1, auraTargetMaxHpPercentAtLevel18: 5, auraHpCurveGuessed: true,
       auraTickSec: 0.25, // 피해는 짧은 틱으로 나눠 들어감(원작 0.125초 단위 - 여기선 0.25초)
-      // 이동 속도 3/6/9%(레벨 비례)라는 기록과 "전 레벨 3%로 하향" 기록이 엇갈려 3% 유지(미확인).
-      auraMoveSpeedPercent: 3, auraRange: 375,
+      // 이동 속도 3/6/9%(레벨 비례): V10.1에 3% 고정으로 내려갔다가 V12.8에 3/6/9%로 복구(PC 위키).
+      // 레벨 구간(1/6/11)은 위키에 없어 추정(auraMsBreakpointsGuessed).
+      auraMoveSpeedByLevel: { breakpoints: [1, 6, 11], values: [3, 6, 9] }, auraMsBreakpointsGuessed: true, auraRange: 375,
       stackDuration: 4, // 중첩은 챔피언/대형 몬스터 적중마다 1, 4초 지속(적중 시 갱신), 최대 3
     },
     Q: {
@@ -1917,9 +1920,8 @@ const CHAMPION_DATA = {
     // 못한 값은 옆에 "미확인"으로 표시했다 - 원문을 받으면 그 값만 바꾸면 된다.
     passive: {
       name: '강력한 일격', desc: '첫 공격이 추가 물리 피해 + 속박(동일 대상 6초 1회).',
-      // PC 위키 노틸러스 문서: 14~128(레벨 비례). 같은 문서의 패치 기록엔 14~116도 보여 18레벨
-      // 끝값은 미확인(bonusDamageGuessed) - 1레벨 14는 두 기록 모두 일치. 예전 8~110은 옛 값.
-      bonusDamageAtLevel1: 14, bonusDamageAtLevel18: 128, bonusDamageGuessed: true,
+      // PC 위키 V13.3: 8~110 → 14~116(레벨 비례). 128이라는 값은 어떤 패치 기록에도 없어 116으로 확정.
+      bonusDamageAtLevel1: 14, bonusDamageAtLevel18: 116,
       rootByLevel: { breakpoints: [1, 6, 11, 16], values: [0.75, 1.0, 1.25, 1.5] }, // PC 위키: 0.75~1.5초(V9.12). 구간 1/6/11/16은 미확인
       sameTargetCooldownSec: 6, // 원본 설명 "동일 대상 6초 1회"
     },
@@ -2104,9 +2106,8 @@ const CHAMPION_DATA = {
     R: {
       name: '용의 분노', cooldown: [110, 85, 60], mana: 0, range: 375,
       damageByLevel: [175, 400, 625], bonusAdRatio: 2.0,
-      // PC 위키: 800 밀어냄(0.8초 동안), 대상 공중에 뜸 1초. 충돌한 적의 공중에 뜸 시간은 PC 문서에
-      // "짧게"로만 나와 미확인(collisionAirborneGuessed). 예전 1200은 출처 불명.
-      knockbackDistance: 800, knockbackSec: 0.8, airborneDuration: 1, castTimeSec: 0.25, collisionAirborneSec: 1, collisionAirborneGuessed: true,
+      // PC 위키: 800 밀어냄(0.8초 동안), 대상 공중에 뜸 1초, 충돌한 적도 공중에 뜸 1초(확인). 예전 1200은 출처 불명.
+      knockbackDistance: 800, knockbackSec: 0.8, airborneDuration: 1, castTimeSec: 0.25, collisionAirborneSec: 1,
       collisionBonusHpRatioByLevel: [12, 15, 18], damageType: 'PHYSICAL',
     },
   },
@@ -2136,8 +2137,9 @@ const CHAMPION_DATA = {
      cooldown: [8, 7, 6, 5, 4], mana: [45, 50, 55, 60, 65], // Data Dragon
      range: 1200,speed1: 600, speed2: 3200,
      accelerationDistance: 500, width: 180,
-     damageByLevel: [75, 115, 155, 195, 235],
-     apRatio: 0.6, piercesUnits: true,
+     // V26.13: 기본 피해 70/115/160/205/250(+주문력 70%) - PC 위키.
+     damageByLevel: [70, 115, 160, 205, 250],
+     apRatio: 0.7, piercesUnits: true,
       damageType: 'MAGICAL',
      //적중한 적에게 우울 소모
      //폭이 넓다가 일정시간 후 폭이 좁아짐
@@ -2383,7 +2385,7 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '매혹',
-      desc: '입맞춤을 날려 적중한 적에게 마법 피해를 입히고 매혹시킨다. 매혹된 적은 이동기가 즉시 중단되며, 지속시간 동안 아리 쪽으로 이동한다. 매혹된 적은 3초간 아리의 스킬 피해를 20% 더 받는다.',
+      desc: '입맞춤을 날려 적중한 적에게 마법 피해를 입히고 매혹시킨다. 매혹된 적은 이동기가 즉시 중단되며, 지속시간 동안 아리 쪽으로 이동한다.',
       // 2026-08-27 리그 오브 레전드 위키(V26.06 기준)로 재검증 - 기존 구현은
       // 여러 패치 이전의 낡은 수치였다(피해량 80~300/AP90%, 지속시간
       // 1.05~1.65는 현재 값보다 한 단계 낮은 예전 값). 실제 최신 값:
@@ -2396,7 +2398,8 @@ const CHAMPION_DATA = {
       cooldown: [12, 12, 12, 12, 12], mana: 60, range: 1000, width: 120, speed: 1550,
       damageByLevel: [80, 120, 160, 200, 240], apRatio: 0.85, damageType: 'MAGICAL',
       charmDurationByLevel: [1.2, 1.35, 1.5, 1.65, 1.8],
-      charmSkillDamageAmpPercent: 20, charmSkillDamageAmpDuration: 3,
+      // 매혹 대상이 아리 스킬 피해 20%를 더 받던 효과는 리워크로 삭제됨(PC 위키 패치 기록) - 0으로 끔.
+      charmSkillDamageAmpPercent: 0, charmSkillDamageAmpDuration: 0,
     },
     R: {
       name: '혼령 질주',
@@ -18945,7 +18948,7 @@ CharacterController.prototype._mordePassiveAuraTick = function(dt) {
       }
     }
     // % 이동 속도 증가는 서로 더해진다(공용 규칙) - 예전 Math.max는 다른 버프와 겹치면 오라가 무시됐다.
-    this.stats.percentMoveSpeedBonus += p.auraMoveSpeedPercent / 100;
+    this.stats.percentMoveSpeedBonus += valueByBreakpoints(p.auraMoveSpeedByLevel, this.champLevel) / 100;
   
 };
 
@@ -20217,10 +20220,10 @@ CharacterController.prototype._ahriTickETravel = function(dt) {
     // 디버프가 존재하기 전에 이미 피해 계산이 끝났기 때문에(원인->결과
     // 순서상 자연스러운 동작이며, 실제 게임에서도 매혹 자체의 피해가
     // 매혹으로 인한 증폭을 받는다는 근거는 없다).
-    applyStatus(hitUnit, {
+    if ((e.charmSkillDamageAmpPercent || 0) > 0) applyStatus(hitUnit, {
       id: 'ahriCharmVuln', type: 'AHRI_CHARM_VULN',
-      duration: e.charmSkillDamageAmpDuration || 3,
-      value: (e.charmSkillDamageAmpPercent || 20) / 100, source: this,
+      duration: e.charmSkillDamageAmpDuration,
+      value: e.charmSkillDamageAmpPercent / 100, source: this,
     });
     // 이동기를 즉시 중단시킨다(Trait_Ranged_StopsFirstHit + 매혹 CC) - 이
     // 뷰어의 적(더미/미니언)은 대시/블링크가 없어 사실상 항상 no-op이지만,

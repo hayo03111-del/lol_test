@@ -1,0 +1,722 @@
+{
+ "garen": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Garen_QVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "Ogg Theora 11s 640x360, 2016-06-12 업로드",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Garen_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Garen_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Garen_EVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Garen_RVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "darius": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Darius_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Darius_QVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Darius_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Darius_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Darius_EVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "6.7s 640x360",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Darius_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Darius_RVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "masteryi": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Master_Yi_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Master_Yi_QVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Master_Yi_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Master_Yi_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Master_Yi_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Master_Yi_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Master_Yi_RVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "13s 1056x720, 2018-11-09",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "leesin": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Lee_Sin_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Lee_Sin_QVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Lee_Sin_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Lee_Sin_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Lee_Sin_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Lee_Sin_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Lee_Sin_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Lee_Sin_RVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "nautilus": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Nautilus_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Nautilus_QVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Nautilus_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Nautilus_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Nautilus_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Nautilus_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Nautilus_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Nautilus_RVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "yasuo": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Yasuo_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Yasuo_QVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Yasuo_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Yasuo_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Yasuo_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Yasuo_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Yasuo_RVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "12s 640x360",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "yone": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Yone_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Yone_QVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Yone_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Yone_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Yone_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Yone_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Yone_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Yone_RVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "sett": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Sett_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Sett_QVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Sett_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Sett_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Sett_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Sett_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Sett_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Sett_RVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "mordekaiser": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Mordekaiser_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Mordekaiser_QVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Mordekaiser_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Mordekaiser_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Mordekaiser_EVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "4.2s 1056x720, 2019 갱신",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Mordekaiser_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Mordekaiser_RVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "renekton": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Renekton_QVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "4.4s 1056x720, 2018-11-09",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Renekton_WVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "카테고리 목록에서 확인",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Renekton_EVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "카테고리 목록에서 확인",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Renekton_RVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "9.0s",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "nilah": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Nilah_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Nilah_QVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Nilah_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Nilah_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Nilah_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Nilah_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Nilah_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Nilah_RVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "chogath": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Cho'Gath_QVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "7.0s 640x360 (2016)",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Cho'Gath_WVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "6.5s 640x360 (2016)",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Cho'Gath_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Cho'Gath_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Cho'Gath_RVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "11s 640x360 (2016)",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "ezreal": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Ezreal_QVideo.ogv",
+   "urlStatus": "verified-by-search",
+   "metadata": "6.7s 1056x720, 2018-11",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Ezreal_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Ezreal_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Ezreal_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Ezreal_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Ezreal_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Ezreal_RVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "ashe": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Ashe_Q_Video.webm",
+   "urlStatus": "verified-by-search",
+   "metadata": "VP9/Opus",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Ashe_W_Video.webm",
+   "urlStatus": "verified-by-search",
+   "metadata": "850KB",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Ashe_E_Video.webm",
+   "urlStatus": "verified-by-search",
+   "metadata": "1.27MB",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Ashe_R_Video.webm",
+   "urlStatus": "verified-by-search",
+   "metadata": "2023-09-02",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "varus": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Varus_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Varus_QVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Varus_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Varus_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Varus_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Varus_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Varus_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Varus_RVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "ahri": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/File:Ahri_QVideo.webm",
+   "urlStatus": "verified-by-search",
+   "metadata": "VP8 4.1s 1056x720, 2021-10-04",
+   "source": "League of Legends Wiki (공식 스킬 미리보기 영상)",
+   "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
+   "segment": "전체(스킬 미리보기 단일 클립)",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Ahri_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Ahri_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Ahri_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Ahri_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Ahri_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Ahri_RVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "vex": {
+  "Q": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Vex_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Vex_QVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "W": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Vex_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Vex_WVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "E": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Vex_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Vex_EVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  },
+  "R": {
+   "url": "https://wiki.leagueoflegends.com/en-us/Category:Vex_ability_videos",
+   "urlStatus": "category-only (파일명 미확인, 위키 규칙상 Vex_RVideo.ogv/webm)",
+   "metadata": "",
+   "source": "League of Legends Wiki",
+   "patch": "미확인",
+   "segment": "미확인",
+   "mediaStatus": "not-downloaded",
+   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+  }
+ },
+ "_notes": {
+  "officialChampionSpotlight": "YouTube(League of Legends 공식 채널) - www.youtube.com 연결 불가(000)",
+  "riotAbilityCdn": "d28xe8vt774jo5.cloudfront.net/champion-abilities - 연결 불가(000)",
+  "newerChampions": "Yone/Sett/Nilah/Vex 등 최근 챔피언은 위키 템플릿에 YouTube ID 필드로 임베드되는 경우가 있음(검색 스니펫)",
+  "searchedAt": "2026-10-12"
+ }
+}

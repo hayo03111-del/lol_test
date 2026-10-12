@@ -124,7 +124,7 @@ const mag = (lvl, arr, ratio, ap) => arr[lvl - 1] + ratio * ap;
   stubs.placedDummies = [e];
   const hp0 = e.hp;
   c._nautilusOnBasicAttackHit(e);
-  const expected = D.passive.bonusDamageAtLevel1 + (D.passive.bonusDamageAtLevel18 - D.passive.bonusDamageAtLevel1) * 5 / 17; // 14~128 레벨 비례(PC 위키)
+  const expected = D.passive.bonusDamageAtLevel1 + (D.passive.bonusDamageAtLevel18 - D.passive.bonusDamageAtLevel1) * 5 / 17; // 14~116 레벨 비례(PC 위키 V13.3)
   assert(Math.abs((hp0 - e.hp) - expected) < 1e-6, `패시브: 첫 공격 추가 물리 피해 ${expected}(레벨 6)`);
   const root = getStatus(e, 'nautilusPassive_root');
   assert(root && root.type === 'ROOT' && Math.abs(root.duration - 1.0) < 1e-9, '패시브: 레벨 6 속박 1초');

@@ -1,0 +1,444 @@
+{
+ "garen": {
+  "Q": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Garen",
+   "note": "강화 평타형 - 시전 시간 항목 미확인"
+  },
+  "W": {
+   "castTimeSec": 0,
+   "status": "confirmed-db",
+   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
+   "note": "즉시"
+  },
+  "E": {
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Garen/Judgment",
+   "note": "cast time none(채널 3초)"
+  },
+  "R": {
+   "castTimeSec": 0.435,
+   "status": "confirmed-db",
+   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
+   "note": ""
+  }
+ },
+ "darius": {
+  "Q": {
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Darius",
+   "note": "cast time none(0.75초 회전 후 판정)"
+  },
+  "W": {
+   "castTimeSec": 0,
+   "status": "confirmed-db",
+   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
+   "note": "강화 평타"
+  },
+  "E": {
+   "castTimeSec": 0.25,
+   "status": "confirmed-db",
+   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
+   "note": ""
+  },
+  "R": {
+   "castTimeSec": 0.3667,
+   "status": "confirmed-db",
+   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
+   "note": ""
+  }
+ },
+ "masteryi": {
+  "Q": {
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Master_Yi/Alpha_Strike",
+   "note": "cast time none, 4회 튕김 시 시작 후 1.087초에 재등장"
+  },
+  "W": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Master_Yi",
+   "note": "채널"
+  },
+  "E": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Master_Yi",
+   "note": ""
+  },
+  "R": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Master_Yi",
+   "note": ""
+  }
+ },
+ "leesin": {
+  "Q": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Lee_Sin",
+   "note": ""
+  },
+  "W": {
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Lee_Sin/Safeguard",
+   "note": "cast time none"
+  },
+  "E": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Lee_Sin/Tempest",
+   "note": ""
+  },
+  "R": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Lee_Sin",
+   "note": ""
+  }
+ },
+ "nautilus": {
+  "Q": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Nautilus/Dredge_Line",
+   "note": ""
+  },
+  "W": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Nautilus",
+   "note": ""
+  },
+  "E": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Nautilus",
+   "note": "폭발 3회 0.25초 간격"
+  },
+  "R": {
+   "castTimeSec": 0.46,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Nautilus/Depth_Charge",
+   "note": ""
+  }
+ },
+ "yasuo": {
+  "Q": {
+   "castTimeSec": 0.35,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Yasuo/Steel_Tempest",
+   "note": "0.35~0.175초(추가 공속 비례), 회오리 0.35~0.28초"
+  },
+  "W": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Yasuo",
+   "note": ""
+  },
+  "E": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Yasuo",
+   "note": ""
+  },
+  "R": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Yasuo",
+   "note": ""
+  }
+ },
+ "yone": {
+  "Q": {
+   "castTimeSec": 0.35,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Yone",
+   "note": "0.35~0.175초(추가 공속 비례)"
+  },
+  "W": {
+   "castTimeSec": 0.5,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Yone",
+   "note": "0.5~0.19초(추가 공속 비례)"
+  },
+  "E": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Yone",
+   "note": ""
+  },
+  "R": {
+   "castTimeSec": 0.75,
+   "status": "confirmed-db",
+   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
+   "note": ""
+  }
+ },
+ "sett": {
+  "Q": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Sett",
+   "note": ""
+  },
+  "W": {
+   "castTimeSec": 0.75,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Sett/Haymaker",
+   "note": ""
+  },
+  "E": {
+   "castTimeSec": 0.25,
+   "status": "conflict",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Sett/Facebreaker",
+   "note": "템플릿 0.25, 챔피언 문서 표기 0.75 - 템플릿 채택"
+  },
+  "R": {
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Sett/The_Show_Stopper",
+   "note": "cast time none(돌진·운반 시퀀스)"
+  }
+ },
+ "mordekaiser": {
+  "Q": {
+   "castTimeSec": 0.5,
+   "status": "confirmed-db",
+   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
+   "note": ""
+  },
+  "W": {
+   "castTimeSec": 0,
+   "status": "confirmed-db",
+   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
+   "note": ""
+  },
+  "E": {
+   "castTimeSec": 0.25,
+   "status": "confirmed-db",
+   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
+   "note": "시전 0.25 + 효과 0.5초 지연"
+  },
+  "R": {
+   "castTimeSec": 0.5,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Mordekaiser/Realm_of_Death",
+   "note": ""
+  }
+ },
+ "renekton": {
+  "Q": {
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Renekton/Cull_the_Meek",
+   "note": "cast time none(시전 후 0.25초 평타/E/R 불가)"
+  },
+  "W": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Renekton",
+   "note": "강화 평타"
+  },
+  "E": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Renekton",
+   "note": "돌진"
+  },
+  "R": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Renekton/Dominus",
+   "note": ""
+  }
+ },
+ "nilah": {
+  "Q": {
+   "castTimeSec": 0.35,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Nilah/Formless_Blade",
+   "note": "0.35~0.28초(추가 공속 비례)"
+  },
+  "W": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Nilah",
+   "note": ""
+  },
+  "E": {
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Nilah/Slipstream",
+   "note": "V14.20: 0.01→0"
+  },
+  "R": {
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Nilah/Apotheosis",
+   "note": "cast time none(1초 채널)"
+  }
+ },
+ "chogath": {
+  "Q": {
+   "castTimeSec": 0.5,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Cho%27Gath/Rupture",
+   "note": "시전 0.5 + 폭발 지연 0.627(시전 시간 제외)"
+  },
+  "W": {
+   "castTimeSec": 0.5,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Cho%27Gath/Feral_Scream",
+   "note": ""
+  },
+  "E": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Cho%27Gath",
+   "note": "평타 강화"
+  },
+  "R": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Cho%27Gath/Feast",
+   "note": ""
+  }
+ },
+ "ezreal": {
+  "Q": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Ezreal/Mystic_Shot",
+   "note": ""
+  },
+  "W": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Ezreal/Essence_Flux",
+   "note": ""
+  },
+  "E": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Ezreal/Arcane_Shift",
+   "note": ""
+  },
+  "R": {
+   "castTimeSec": 1.0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Ezreal",
+   "note": ""
+  }
+ },
+ "ashe": {
+  "Q": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Ashe",
+   "note": "자기 강화"
+  },
+  "W": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Ashe/Volley",
+   "note": ""
+  },
+  "E": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Ashe/Hawkshot",
+   "note": ""
+  },
+  "R": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Ashe/Enchanted_Crystal_Arrow",
+   "note": ""
+  }
+ },
+ "varus": {
+  "Q": {
+   "castTimeSec": 0,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Varus/Piercing_Arrow",
+   "note": "cast time none(충전 채널)"
+  },
+  "W": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Varus",
+   "note": ""
+  },
+  "E": {
+   "castTimeSec": 0.2419,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Varus/Hail_of_Arrows",
+   "note": "시전 후 0.5초 뒤 착탄"
+  },
+  "R": {
+   "castTimeSec": 0.242,
+   "status": "confirmed-db",
+   "source": "src/core/skill_timing_database.js (사용자 제공 PC 위키 공개 데이터)",
+   "note": ""
+  }
+ },
+ "ahri": {
+  "Q": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Ahri/Orb_of_Deception",
+   "note": ""
+  },
+  "W": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Ahri",
+   "note": ""
+  },
+  "E": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Ahri",
+   "note": ""
+  },
+  "R": {
+   "castTimeSec": null,
+   "status": "unverified",
+   "source": "https://wiki.leagueoflegends.com/en-us/Ahri",
+   "note": "돌진"
+  }
+ },
+ "vex": {
+  "Q": {
+   "castTimeSec": 0.15,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Vex/Mistral_Bolt",
+   "note": ""
+  },
+  "W": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Vex/Personal_Space",
+   "note": "시전 중 이동 가능"
+  },
+  "E": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Vex/Looming_Darkness",
+   "note": ""
+  },
+  "R": {
+   "castTimeSec": 0.25,
+   "status": "confirmed",
+   "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Vex/Shadow_Surge",
+   "note": "0.25 / None 표기"
+  }
+ }
+}

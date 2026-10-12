@@ -282,3 +282,15 @@ function clearPlaced() { stubs.placedDummies.length = 0; }
   c._varusCastW(null, false);
   assert(c._varus.wEmpowerQ === true, '바루스 W 사용: 다음 Q 강화(오한을 즉시 터뜨리지 않음)');
 }
+// --- 6차: 남은 미확인 항목 재확인 ---
+{
+  assert(CHAMPION_DATA.nautilus.passive.bonusDamageAtLevel18 === 116 && !CHAMPION_DATA.nautilus.passive.bonusDamageGuessed, '노틸러스 패시브: 14~116(V13.3) 확정');
+  assert(CHAMPION_DATA.leesin.R.collisionAirborneSec === 1 && !CHAMPION_DATA.leesin.R.collisionAirborneGuessed, '리 신 R: 충돌 공중에 뜸 1초 확정');
+  assert(!CHAMPION_DATA.yasuo.passive.flowBreakpointsGuessed, '야스오 기류 구간 1/7/13 확정');
+  const dm = CHAMPION_DATA.darius.passive.empoweredAdByLevel;
+  assert(dm[0] === 30 && dm[17] === 230, '다리우스 녹서스의 힘 30~230');
+  const c = makeChamp('mordekaiser'); c.champLevel = 11; c.stats.percentMoveSpeedBonus = 0;
+  c._morde.auraExpiresAt = now + 4000; c._mordePassiveAuraTick(0);
+  assert(near(c.stats.percentMoveSpeedBonus, 0.09), '모데카이저 오라 이동 속도 11레벨 9%(3/6/9%)');
+  assert(CHAMPION_DATA.ahri.E.charmSkillDamageAmpPercent === 0, '아리 E: 리워크로 삭제된 피해 증폭 제거');
+}

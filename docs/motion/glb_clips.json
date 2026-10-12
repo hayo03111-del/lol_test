@@ -1,0 +1,3969 @@
+{
+ "garen": {
+  "file": "가렌.glb",
+  "clipCount": 34,
+  "clips": [
+   {
+    "name": "Attack1",
+    "durationSec": 2.0,
+    "channels": 204
+   },
+   {
+    "name": "Attack2",
+    "durationSec": 2.0,
+    "channels": 204
+   },
+   {
+    "name": "Channel",
+    "durationSec": 1.0,
+    "channels": 204
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 1.0,
+    "channels": 204
+   },
+   {
+    "name": "Crit",
+    "durationSec": 2.0,
+    "channels": 204
+   },
+   {
+    "name": "Dance_Base",
+    "durationSec": 2.7,
+    "channels": 204
+   },
+   {
+    "name": "Death",
+    "durationSec": 4.3,
+    "channels": 204
+   },
+   {
+    "name": "Garen_2013_Idle_LeadIn",
+    "durationSec": 2.7667,
+    "channels": 204
+   },
+   {
+    "name": "Idle1_Base",
+    "durationSec": 2.1667,
+    "channels": 204
+   },
+   {
+    "name": "Idle2_Base",
+    "durationSec": 2.6667,
+    "channels": 204
+   },
+   {
+    "name": "Garen_2013_Idle3",
+    "durationSec": 1.4,
+    "channels": 204
+   },
+   {
+    "name": "Garen_2013_Joke",
+    "durationSec": 1.5333,
+    "channels": 204
+   },
+   {
+    "name": "Garen_2013_Joke_loop",
+    "durationSec": 1.7333,
+    "channels": 204
+   },
+   {
+    "name": "Garen_2013_laugh",
+    "durationSec": 2.7667,
+    "channels": 204
+   },
+   {
+    "name": "Recall_Base",
+    "durationSec": 7.7,
+    "channels": 204
+   },
+   {
+    "name": "Garen_2013_Recall_loop",
+    "durationSec": 5.5,
+    "channels": 204
+   },
+   {
+    "name": "Run_Base",
+    "durationSec": 0.9333,
+    "channels": 204
+   },
+   {
+    "name": "Spell1",
+    "durationSec": 1.0,
+    "channels": 204
+   },
+   {
+    "name": "Spell4_Base",
+    "durationSec": 1.5667,
+    "channels": 204
+   },
+   {
+    "name": "Taunt_Base",
+    "durationSec": 5.0,
+    "channels": 204
+   },
+   {
+    "name": "Dance_Loop_BASE",
+    "durationSec": 4.6667,
+    "channels": 204
+   },
+   {
+    "name": "Recall",
+    "durationSec": 7.7,
+    "channels": 204
+   },
+   {
+    "name": "Recall_Leadout",
+    "durationSec": 1.3667,
+    "channels": 204
+   },
+   {
+    "name": "Respawn_Base",
+    "durationSec": 0.9333,
+    "channels": 204
+   },
+   {
+    "name": "Garen_2013_Respawn",
+    "durationSec": 0.9333,
+    "channels": 204
+   },
+   {
+    "name": "Run_Haste",
+    "durationSec": 1.6,
+    "channels": 204
+   },
+   {
+    "name": "Run_Spell1",
+    "durationSec": 1.3333,
+    "channels": 204
+   },
+   {
+    "name": "Run_Fast",
+    "durationSec": 1.2667,
+    "channels": 204
+   },
+   {
+    "name": "Garen_2013_taunt",
+    "durationSec": 5.0,
+    "channels": 204
+   },
+   {
+    "name": "Spell3_0",
+    "durationSec": 3.0,
+    "channels": 204
+   },
+   {
+    "name": "Spell3_180",
+    "durationSec": 3.0,
+    "channels": 204
+   },
+   {
+    "name": "Spell3_-180",
+    "durationSec": 3.0,
+    "channels": 204
+   },
+   {
+    "name": "Spell3_90",
+    "durationSec": 3.0,
+    "channels": 204
+   },
+   {
+    "name": "Spell3_-90",
+    "durationSec": 3.0,
+    "channels": 204
+   }
+  ]
+ },
+ "darius": {
+  "file": "다리우스.glb",
+  "clipCount": 22,
+  "clips": [
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 2.0,
+    "channels": 264
+   },
+   {
+    "name": "Crit",
+    "durationSec": 1.4333,
+    "channels": 264
+   },
+   {
+    "name": "Death",
+    "durationSec": 0.9355,
+    "channels": 264
+   },
+   {
+    "name": "Idle1",
+    "durationSec": 4.0,
+    "channels": 264
+   },
+   {
+    "name": "Joke",
+    "durationSec": 6.7333,
+    "channels": 264
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 2.1667,
+    "channels": 264
+   },
+   {
+    "name": "Run",
+    "durationSec": 2.2667,
+    "channels": 264
+   },
+   {
+    "name": "Spell1",
+    "durationSec": 0.5161,
+    "channels": 264
+   },
+   {
+    "name": "Spell2",
+    "durationSec": 1.6667,
+    "channels": 264
+   },
+   {
+    "name": "Spell3",
+    "durationSec": 0.7667,
+    "channels": 264
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 1.3333,
+    "channels": 264
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 4.1667,
+    "channels": 264
+   },
+   {
+    "name": "Recall",
+    "durationSec": 10.0,
+    "channels": 264
+   },
+   {
+    "name": "Idle2",
+    "durationSec": 3.2,
+    "channels": 264
+   },
+   {
+    "name": "Spell2_Idle",
+    "durationSec": 4.0,
+    "channels": 264
+   },
+   {
+    "name": "Spell2_Run",
+    "durationSec": 2.2667,
+    "channels": 264
+   },
+   {
+    "name": "Attack1",
+    "durationSec": 1.3333,
+    "channels": 264
+   },
+   {
+    "name": "Attack2",
+    "durationSec": 1.5667,
+    "channels": 264
+   },
+   {
+    "name": "Dance",
+    "durationSec": 7.0,
+    "channels": 264
+   },
+   {
+    "name": "Channel",
+    "durationSec": 4.2667,
+    "channels": 264
+   },
+   {
+    "name": "Darius_Spell1_IN.anm",
+    "durationSec": 0.8,
+    "channels": 267
+   },
+   {
+    "name": "BasePose",
+    "durationSec": 0.3,
+    "channels": 267
+   }
+  ]
+ },
+ "masteryi": {
+  "file": "마스터 이.glb",
+  "clipCount": 28,
+  "clips": [
+   {
+    "name": "Spell1",
+    "durationSec": 1.8333,
+    "channels": 270
+   },
+   {
+    "name": "Spell3",
+    "durationSec": 0.8065,
+    "channels": 48
+   },
+   {
+    "name": "masteryi_2013_attack1.anm",
+    "durationSec": 1.8333,
+    "channels": 270
+   },
+   {
+    "name": "masteryi_2013_attack2.anm",
+    "durationSec": 1.8333,
+    "channels": 270
+   },
+   {
+    "name": "Channel",
+    "durationSec": 0.9667,
+    "channels": 270
+   },
+   {
+    "name": "masteryi_2013_crit.anm",
+    "durationSec": 1.8333,
+    "channels": 270
+   },
+   {
+    "name": "Death",
+    "durationSec": 1.7,
+    "channels": 270
+   },
+   {
+    "name": "masteryi_2013_idle1.anm",
+    "durationSec": 4.0,
+    "channels": 270
+   },
+   {
+    "name": "masteryi_2013_idle2.anm",
+    "durationSec": 8.0,
+    "channels": 270
+   },
+   {
+    "name": "masteryi_2013_joke.anm",
+    "durationSec": 2.6,
+    "channels": 270
+   },
+   {
+    "name": "masteryi_2013_laugh.anm",
+    "durationSec": 2.5,
+    "channels": 270
+   },
+   {
+    "name": "Recall_In",
+    "durationSec": 4.7,
+    "channels": 270
+   },
+   {
+    "name": "Run",
+    "durationSec": 2.0,
+    "channels": 270
+   },
+   {
+    "name": "masteryi_2013_spell2.anm",
+    "durationSec": 0.3,
+    "channels": 270
+   },
+   {
+    "name": "masteryi_2013_taunt.anm",
+    "durationSec": 3.9667,
+    "channels": 270
+   },
+   {
+    "name": "masteryi_2013_idle_enter.anm",
+    "durationSec": 1.3333,
+    "channels": 270
+   },
+   {
+    "name": "Spell2_In",
+    "durationSec": 0.3,
+    "channels": 270
+   },
+   {
+    "name": "Spell2_Loop",
+    "durationSec": 1.6667,
+    "channels": 270
+   },
+   {
+    "name": "Recall_Loop",
+    "durationSec": 2.0,
+    "channels": 270
+   },
+   {
+    "name": "Stunned",
+    "durationSec": 2.1333,
+    "channels": 270
+   },
+   {
+    "name": "masteryi_2013_passive.anm",
+    "durationSec": 1.8333,
+    "channels": 270
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 1.0,
+    "channels": 270
+   },
+   {
+    "name": "Dance",
+    "durationSec": 7.0,
+    "channels": 270
+   },
+   {
+    "name": "Run_Fast",
+    "durationSec": 2.0,
+    "channels": 270
+   },
+   {
+    "name": "Run_Haste",
+    "durationSec": 1.6,
+    "channels": 270
+   },
+   {
+    "name": "2013_Run_Haste",
+    "durationSec": 1.6,
+    "channels": 270
+   },
+   {
+    "name": "Recall_Winddown",
+    "durationSec": 2.6667,
+    "channels": 270
+   },
+   {
+    "name": "Respawn",
+    "durationSec": 2.6667,
+    "channels": 270
+   }
+  ]
+ },
+ "leesin": {
+  "file": "리 신.glb",
+  "clipCount": 51,
+  "clips": [
+   {
+    "name": "Attack1",
+    "durationSec": 0.3333,
+    "channels": 339
+   },
+   {
+    "name": "Attack2",
+    "durationSec": 0.3667,
+    "channels": 339
+   },
+   {
+    "name": "Attack3",
+    "durationSec": 0.3667,
+    "channels": 339
+   },
+   {
+    "name": "Attack4",
+    "durationSec": 0.3667,
+    "channels": 339
+   },
+   {
+    "name": "Channel",
+    "durationSec": 0.7333,
+    "channels": 288
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 2.4,
+    "channels": 288
+   },
+   {
+    "name": "Crit",
+    "durationSec": 0.3667,
+    "channels": 339
+   },
+   {
+    "name": "Death",
+    "durationSec": 5.0,
+    "channels": 336
+   },
+   {
+    "name": "Idle_Active",
+    "durationSec": 3.0,
+    "channels": 339
+   },
+   {
+    "name": "Joke",
+    "durationSec": 5.7333,
+    "channels": 339
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 5.3667,
+    "channels": 339
+   },
+   {
+    "name": "Run_Base.ASU_LeeSin.anm",
+    "durationSec": 1.5333,
+    "channels": 339
+   },
+   {
+    "name": "Spell1",
+    "durationSec": 1.1667,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_B.ASU_LeeSin.anm",
+    "durationSec": 0.6667,
+    "channels": 339
+   },
+   {
+    "name": "Spell2",
+    "durationSec": 1.3333,
+    "channels": 336
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 0.3,
+    "channels": 339
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 5.3667,
+    "channels": 339
+   },
+   {
+    "name": "Recall",
+    "durationSec": 8.5667,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_ToIdle",
+    "durationSec": 0.9667,
+    "channels": 339
+   },
+   {
+    "name": "Idle_PassiveIn.ASU_LeeSin.anm",
+    "durationSec": 3.0333,
+    "channels": 339
+   },
+   {
+    "name": "Idle_ActiveIn.ASU_LeeSin.anm",
+    "durationSec": 3.0333,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_toRun.ASU_LeeSin.anm",
+    "durationSec": 1.2333,
+    "channels": 339
+   },
+   {
+    "name": "Run_In.ASU_LeeSin.anm",
+    "durationSec": 1.0,
+    "channels": 339
+   },
+   {
+    "name": "Spell3_ToIdle",
+    "durationSec": 1.0333,
+    "channels": 339
+   },
+   {
+    "name": "Spell3_b_idle.ASU_LeeSin.anm",
+    "durationSec": 0.7667,
+    "channels": 333
+   },
+   {
+    "name": "Spell3_b_moving.ASU_LeeSin.anm",
+    "durationSec": 1.1667,
+    "channels": 339
+   },
+   {
+    "name": "Spell3",
+    "durationSec": 2.1667,
+    "channels": 339
+   },
+   {
+    "name": "Spell2_ToIdle",
+    "durationSec": 1.2667,
+    "channels": 333
+   },
+   {
+    "name": "Spell2b_Run.ASU_LeeSin.anm",
+    "durationSec": 0.6667,
+    "channels": 339
+   },
+   {
+    "name": "Run_InLeft.ASU_LeeSin.anm",
+    "durationSec": 1.0,
+    "channels": 339
+   },
+   {
+    "name": "Run_inRight.ASU_LeeSin.anm",
+    "durationSec": 1.0,
+    "channels": 339
+   },
+   {
+    "name": "Spell2b_Idle.ASU_LeeSin.anm",
+    "durationSec": 0.8333,
+    "channels": 339
+   },
+   {
+    "name": "Attack1_ToIdle",
+    "durationSec": 1.9,
+    "channels": 339
+   },
+   {
+    "name": "Attack2_ToIdle",
+    "durationSec": 2.1333,
+    "channels": 339
+   },
+   {
+    "name": "Attack3_toIdle.ASU_LeeSin.anm",
+    "durationSec": 2.2667,
+    "channels": 339
+   },
+   {
+    "name": "Attack4_toIdle.ASU_LeeSin.anm",
+    "durationSec": 2.1333,
+    "channels": 339
+   },
+   {
+    "name": "Respawn",
+    "durationSec": 1.7333,
+    "channels": 333
+   },
+   {
+    "name": "Run_Homeguard",
+    "durationSec": 1.5333,
+    "channels": 339
+   },
+   {
+    "name": "Spell3_to_Run.ASU_LeeSin.anm",
+    "durationSec": 1.1667,
+    "channels": 339
+   },
+   {
+    "name": "Spell4_ToIdle",
+    "durationSec": 0.9667,
+    "channels": 339
+   },
+   {
+    "name": "Spell4_toRun.ASU_LeeSin.anm",
+    "durationSec": 1.7,
+    "channels": 339
+   },
+   {
+    "name": "Recall_Winddown",
+    "durationSec": 1.7333,
+    "channels": 333
+   },
+   {
+    "name": "Dance_Loop",
+    "durationSec": 6.9333,
+    "channels": 336
+   },
+   {
+    "name": "Dance_In",
+    "durationSec": 0.6667,
+    "channels": 339
+   },
+   {
+    "name": "Idle_Var1",
+    "durationSec": 5.9,
+    "channels": 339
+   },
+   {
+    "name": "Idle_Passive.ASU_LeeSin.anm",
+    "durationSec": 3.4667,
+    "channels": 339
+   },
+   {
+    "name": "Run_Homeguard_IN",
+    "durationSec": 0.3,
+    "channels": 339
+   },
+   {
+    "name": "Run_combatOut.ASU_LeeSin.anm",
+    "durationSec": 3.7333,
+    "channels": 339
+   },
+   {
+    "name": "Run_Combat.ASU_LeeSin.anm",
+    "durationSec": 0.6667,
+    "channels": 339
+   },
+   {
+    "name": "Homeguard_In.ASU_LeeSin.anm",
+    "durationSec": 0.3,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_B_Loop.ASU_LeeSin.anm",
+    "durationSec": 0.3333,
+    "channels": 339
+   }
+  ]
+ },
+ "nautilus": {
+  "file": "노틸러스.glb",
+  "clipCount": 28,
+  "clips": [
+   {
+    "name": "Attack4",
+    "durationSec": 1.1667,
+    "channels": 243
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 0.8,
+    "channels": 243
+   },
+   {
+    "name": "Death",
+    "durationSec": 3.9333,
+    "channels": 243
+   },
+   {
+    "name": "Idle1",
+    "durationSec": 15.2,
+    "channels": 243
+   },
+   {
+    "name": "Run",
+    "durationSec": 0.9333,
+    "channels": 243
+   },
+   {
+    "name": "Run1",
+    "durationSec": 1.0,
+    "channels": 243
+   },
+   {
+    "name": "Run2",
+    "durationSec": 0.8,
+    "channels": 243
+   },
+   {
+    "name": "Spell1",
+    "durationSec": 0.4667,
+    "channels": 243
+   },
+   {
+    "name": "Spell1_Idle",
+    "durationSec": 0.5667,
+    "channels": 243
+   },
+   {
+    "name": "Spell1_Dash",
+    "durationSec": 1.0,
+    "channels": 243
+   },
+   {
+    "name": "Spell3",
+    "durationSec": 1.0,
+    "channels": 243
+   },
+   {
+    "name": "Attack1",
+    "durationSec": 2.0333,
+    "channels": 243
+   },
+   {
+    "name": "Attack2",
+    "durationSec": 2.6667,
+    "channels": 243
+   },
+   {
+    "name": "Attack3",
+    "durationSec": 2.1333,
+    "channels": 243
+   },
+   {
+    "name": "Attack_Back",
+    "durationSec": 1.5333,
+    "channels": 243
+   },
+   {
+    "name": "Channel",
+    "durationSec": 0.6667,
+    "channels": 243
+   },
+   {
+    "name": "Crit",
+    "durationSec": 2.8667,
+    "channels": 243
+   },
+   {
+    "name": "Passive",
+    "durationSec": 2.0333,
+    "channels": 243
+   },
+   {
+    "name": "Dance",
+    "durationSec": 13.8667,
+    "channels": 243
+   },
+   {
+    "name": "Idle2",
+    "durationSec": 9.3,
+    "channels": 243
+   },
+   {
+    "name": "Idle3",
+    "durationSec": 15.3333,
+    "channels": 243
+   },
+   {
+    "name": "Idle4",
+    "durationSec": 15.0,
+    "channels": 243
+   },
+   {
+    "name": "Joke",
+    "durationSec": 14.3,
+    "channels": 243
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 7.6,
+    "channels": 243
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 1.9,
+    "channels": 243
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 9.7333,
+    "channels": 243
+   },
+   {
+    "name": "Buffbones",
+    "durationSec": 0.0333,
+    "channels": 243
+   },
+   {
+    "name": "Recall",
+    "durationSec": 15.0,
+    "channels": 243
+   }
+  ]
+ },
+ "yasuo": {
+  "file": "야스오.glb",
+  "clipCount": 47,
+  "clips": [
+   {
+    "name": "Idle_IN_Raw",
+    "durationSec": 1.5,
+    "channels": 324
+   },
+   {
+    "name": "Idle1_Raw",
+    "durationSec": 13.3333,
+    "channels": 324
+   },
+   {
+    "name": "Attack2",
+    "durationSec": 1.6333,
+    "channels": 342
+   },
+   {
+    "name": "Run1_IN_Raw",
+    "durationSec": 1.7667,
+    "channels": 324
+   },
+   {
+    "name": "Run1_Raw",
+    "durationSec": 0.9,
+    "channels": 324
+   },
+   {
+    "name": "Attack3",
+    "durationSec": 1.6333,
+    "channels": 324
+   },
+   {
+    "name": "Attack4",
+    "durationSec": 1.6333,
+    "channels": 342
+   },
+   {
+    "name": "Attack_First",
+    "durationSec": 1.6667,
+    "channels": 324
+   },
+   {
+    "name": "Spell1_Dash",
+    "durationSec": 1.0,
+    "channels": 324
+   },
+   {
+    "name": "Spell3",
+    "durationSec": 1.0667,
+    "channels": 324
+   },
+   {
+    "name": "Run2",
+    "durationSec": 0.9667,
+    "channels": 318
+   },
+   {
+    "name": "Spell2_BASE",
+    "durationSec": 0.7,
+    "channels": 324
+   },
+   {
+    "name": "Spell2_180",
+    "durationSec": 1.0,
+    "channels": 324
+   },
+   {
+    "name": "Spell2_-180",
+    "durationSec": 0.9667,
+    "channels": 324
+   },
+   {
+    "name": "Death",
+    "durationSec": 2.9667,
+    "channels": 324
+   },
+   {
+    "name": "Run_Fast_raw",
+    "durationSec": 1.1667,
+    "channels": 342
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 1.3667,
+    "channels": 324
+   },
+   {
+    "name": "Spell1A",
+    "durationSec": 0.9667,
+    "channels": 324
+   },
+   {
+    "name": "Spell1B",
+    "durationSec": 0.9667,
+    "channels": 324
+   },
+   {
+    "name": "Spell1C",
+    "durationSec": 1.0,
+    "channels": 324
+   },
+   {
+    "name": "Spell1_Wind",
+    "durationSec": 1.0333,
+    "channels": 315
+   },
+   {
+    "name": "Channel",
+    "durationSec": 1.3333,
+    "channels": 324
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 1.3333,
+    "channels": 324
+   },
+   {
+    "name": "Spell2_90",
+    "durationSec": 0.9667,
+    "channels": 324
+   },
+   {
+    "name": "Spell2_-90",
+    "durationSec": 1.0,
+    "channels": 324
+   },
+   {
+    "name": "Run_Fast_In",
+    "durationSec": 1.0,
+    "channels": 342
+   },
+   {
+    "name": "Joke",
+    "durationSec": 7.7333,
+    "channels": 324
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 7.3667,
+    "channels": 342
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 4.0333,
+    "channels": 324
+   },
+   {
+    "name": "Spell2_0",
+    "durationSec": 0.7,
+    "channels": 342
+   },
+   {
+    "name": "Run_Fast_Loop",
+    "durationSec": 1.0,
+    "channels": 342
+   },
+   {
+    "name": "Idle_in_Sheathed_Raw",
+    "durationSec": 1.6667,
+    "channels": 324
+   },
+   {
+    "name": "Run_Fast_IN_Sheathed",
+    "durationSec": 0.3667,
+    "channels": 312
+   },
+   {
+    "name": "Recall_loop_Raw",
+    "durationSec": 1.2,
+    "channels": 342
+   },
+   {
+    "name": "Recall_Raw",
+    "durationSec": 6.7,
+    "channels": 342
+   },
+   {
+    "name": "Idle2_Raw",
+    "durationSec": 8.4667,
+    "channels": 324
+   },
+   {
+    "name": "Dance_loop_Raw",
+    "durationSec": 9.0667,
+    "channels": 324
+   },
+   {
+    "name": "Dance_In_Raw",
+    "durationSec": 3.8333,
+    "channels": 324
+   },
+   {
+    "name": "Run_Haste",
+    "durationSec": 1.1667,
+    "channels": 342
+   },
+   {
+    "name": "Sheath_Run",
+    "durationSec": 1.7667,
+    "channels": 324
+   },
+   {
+    "name": "Idle_Out",
+    "durationSec": 4.1,
+    "channels": 324
+   },
+   {
+    "name": "Run_Haste_Out",
+    "durationSec": 2.9,
+    "channels": 342
+   },
+   {
+    "name": "Sheath_Run_Haste",
+    "durationSec": 1.9667,
+    "channels": 342
+   },
+   {
+    "name": "run_out_Raw",
+    "durationSec": 2.7,
+    "channels": 324
+   },
+   {
+    "name": "Run_Out_Loop",
+    "durationSec": 0.9,
+    "channels": 324
+   },
+   {
+    "name": "Attack1",
+    "durationSec": 1.6667,
+    "channels": 324
+   },
+   {
+    "name": "Yasuo_Idle2_2",
+    "durationSec": 8.4667,
+    "channels": 324
+   }
+  ]
+ },
+ "yone": {
+  "file": "요네.glb",
+  "clipCount": 84,
+  "clips": [
+   {
+    "name": "Idle1_Base",
+    "durationSec": 2.9667,
+    "channels": 504
+   },
+   {
+    "name": "Attack2",
+    "durationSec": 0.3333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Walk01_toIdle_var01.anm",
+    "durationSec": 0.8,
+    "channels": 426
+   },
+   {
+    "name": "Run_Base",
+    "durationSec": 1.2667,
+    "channels": 504
+   },
+   {
+    "name": "Attack3",
+    "durationSec": 0.3333,
+    "channels": 504
+   },
+   {
+    "name": "Attack4",
+    "durationSec": 0.3333,
+    "channels": 504
+   },
+   {
+    "name": "Spell1_Dash",
+    "durationSec": 0.0667,
+    "channels": 339
+   },
+   {
+    "name": "Death",
+    "durationSec": 1.5667,
+    "channels": 504
+   },
+   {
+    "name": "Run_Fast",
+    "durationSec": 0.8,
+    "channels": 504
+   },
+   {
+    "name": "Spell2",
+    "durationSec": 0.5,
+    "channels": 504
+   },
+   {
+    "name": "Spell1C_In",
+    "durationSec": 0.4,
+    "channels": 504
+   },
+   {
+    "name": "Channel_Loop",
+    "durationSec": 1.3333,
+    "channels": 504
+   },
+   {
+    "name": "Channel_In",
+    "durationSec": 1.3333,
+    "channels": 504
+   },
+   {
+    "name": "Joke_In",
+    "durationSec": 8.8333,
+    "channels": 504
+   },
+   {
+    "name": "Taunt_In",
+    "durationSec": 2.6333,
+    "channels": 504
+   },
+   {
+    "name": "Laugh_In",
+    "durationSec": 1.7667,
+    "channels": 504
+   },
+   {
+    "name": "Recall",
+    "durationSec": 9.3333,
+    "channels": 504
+   },
+   {
+    "name": "Dance_In",
+    "durationSec": 3.1,
+    "channels": 504
+   },
+   {
+    "name": "Run_Homeguard",
+    "durationSec": 2.0,
+    "channels": 504
+   },
+   {
+    "name": "Attack1",
+    "durationSec": 0.3333,
+    "channels": 504
+   },
+   {
+    "name": "Spell3_Dash",
+    "durationSec": 0.0667,
+    "channels": 339
+   },
+   {
+    "name": "Spell3_Out",
+    "durationSec": 0.1667,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast01.anm",
+    "durationSec": 0.3333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast02.anm",
+    "durationSec": 0.3333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast03.anm",
+    "durationSec": 0.3333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast04.anm",
+    "durationSec": 0.3333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast01_toRun.anm",
+    "durationSec": 1.6333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast01_toIdle.anm",
+    "durationSec": 1.6333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast02_toRun.anm",
+    "durationSec": 1.6333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast02_toIdle.anm",
+    "durationSec": 1.6333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast03_toIdle.anm",
+    "durationSec": 1.6333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast03_toRun.anm",
+    "durationSec": 1.6333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast04_toIdle.anm",
+    "durationSec": 1.6333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast04_toRun.anm",
+    "durationSec": 1.6333,
+    "channels": 504
+   },
+   {
+    "name": "Attack1_ToIdle",
+    "durationSec": 4.6333,
+    "channels": 504
+   },
+   {
+    "name": "Attack1_Torun",
+    "durationSec": 2.6,
+    "channels": 504
+   },
+   {
+    "name": "Attack2_ToIdle",
+    "durationSec": 4.6333,
+    "channels": 504
+   },
+   {
+    "name": "Attack2_Torun",
+    "durationSec": 2.6,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attack03_toIdle01.anm",
+    "durationSec": 4.6333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attack03_toWalk01.anm",
+    "durationSec": 2.6,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attack04_toIdle01.anm",
+    "durationSec": 2.1667,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attack04_toWalk01.anm",
+    "durationSec": 2.6,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Walk01_Turn_0.anm",
+    "durationSec": 0.4333,
+    "channels": 396
+   },
+   {
+    "name": "Yone_Walk01_Turn_90.anm",
+    "durationSec": 0.4333,
+    "channels": 396
+   },
+   {
+    "name": "Yone_Walk01_Turn_-90.anm",
+    "durationSec": 0.4333,
+    "channels": 396
+   },
+   {
+    "name": "Yone_Idle01_toSheath.anm",
+    "durationSec": 6.3333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Idle01_toSheath_loop.anm",
+    "durationSec": 3.3333,
+    "channels": 504
+   },
+   {
+    "name": "Spell2_ToIdle",
+    "durationSec": 1.4667,
+    "channels": 504
+   },
+   {
+    "name": "Spell2_ToRun",
+    "durationSec": 2.5,
+    "channels": 504
+   },
+   {
+    "name": "Spell1C_ToIdle",
+    "durationSec": 2.5667,
+    "channels": 504
+   },
+   {
+    "name": "Spell1C_ToWalk_0",
+    "durationSec": 2.5667,
+    "channels": 426
+   },
+   {
+    "name": "Yone_Spell1A_toWalk01.anm",
+    "durationSec": 1.2667,
+    "channels": 504
+   },
+   {
+    "name": "Spell3_BodyIn",
+    "durationSec": 0.7333,
+    "channels": 426
+   },
+   {
+    "name": "Spell3_BodyLoop",
+    "durationSec": 2.0,
+    "channels": 426
+   },
+   {
+    "name": "Yone_Spell1_A_01.anm",
+    "durationSec": 0.2333,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Spell1_A_02.anm",
+    "durationSec": 0.7,
+    "channels": 504
+   },
+   {
+    "name": "Spell1C_Dash",
+    "durationSec": 0.4667,
+    "channels": 504
+   },
+   {
+    "name": "Spell1C_Out",
+    "durationSec": 0.0667,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Spell3_spiritIn.anm",
+    "durationSec": 0.1667,
+    "channels": 504
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 1.6667,
+    "channels": 504
+   },
+   {
+    "name": "Spell4_Out",
+    "durationSec": 0.2667,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Run01.anm",
+    "durationSec": 0.8,
+    "channels": 504
+   },
+   {
+    "name": "Spell4_ToIdle",
+    "durationSec": 9.1667,
+    "channels": 504
+   },
+   {
+    "name": "Spell4_ToRun",
+    "durationSec": 1.8667,
+    "channels": 504
+   },
+   {
+    "name": "Spell3_End1",
+    "durationSec": 0.0667,
+    "channels": 426
+   },
+   {
+    "name": "Spell3_End2",
+    "durationSec": 1.1667,
+    "channels": 426
+   },
+   {
+    "name": "Spell3_SpiritIn_ToIdle",
+    "durationSec": 3.3333,
+    "channels": 504
+   },
+   {
+    "name": "Spell3_Out_toIdle",
+    "durationSec": 1.4,
+    "channels": 504
+   },
+   {
+    "name": "Spell1C_ToWalk_90",
+    "durationSec": 2.5667,
+    "channels": 426
+   },
+   {
+    "name": "Spell1C_ToWalk_-90",
+    "durationSec": 2.5667,
+    "channels": 426
+   },
+   {
+    "name": "Dance_Loop",
+    "durationSec": 9.0667,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Homeguard01_toIdle01.anm",
+    "durationSec": 2.0667,
+    "channels": 504
+   },
+   {
+    "name": "Run_Homeguard_IN",
+    "durationSec": 1.0,
+    "channels": 429
+   },
+   {
+    "name": "Yone_Homeguard_toWalk01.anm",
+    "durationSec": 1.2667,
+    "channels": 429
+   },
+   {
+    "name": "Yone_Run01_toIdle.anm",
+    "durationSec": 0.8,
+    "channels": 504
+   },
+   {
+    "name": "Spell4_Out_Moving",
+    "durationSec": 0.6667,
+    "channels": 504
+   },
+   {
+    "name": "Laugh_Loop",
+    "durationSec": 3.3333,
+    "channels": 504
+   },
+   {
+    "name": "Respawn",
+    "durationSec": 4.3333,
+    "channels": 504
+   },
+   {
+    "name": "Recall_Winddown",
+    "durationSec": 3.5667,
+    "channels": 504
+   },
+   {
+    "name": "Taunt_loop",
+    "durationSec": 3.3333,
+    "channels": 504
+   },
+   {
+    "name": "Joke_Loop",
+    "durationSec": 7.6667,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Attacks_Fast_toIdle.anm",
+    "durationSec": 0.7667,
+    "channels": 504
+   },
+   {
+    "name": "Yone_Idle01_toRun01.anm",
+    "durationSec": 0.9667,
+    "channels": 504
+   },
+   {
+    "name": "Yone_IdleSheathed_toRun01.anm",
+    "durationSec": 1.0,
+    "channels": 504
+   }
+  ]
+ },
+ "sett": {
+  "file": "세트.glb",
+  "clipCount": 72,
+  "clips": [
+   {
+    "name": "Run_Base",
+    "durationSec": 1.0667,
+    "channels": 411
+   },
+   {
+    "name": "Idle_Base",
+    "durationSec": 3.3333,
+    "channels": 411
+   },
+   {
+    "name": "Attack2_Hit",
+    "durationSec": 2.3333,
+    "channels": 411
+   },
+   {
+    "name": "Attack1_Hit",
+    "durationSec": 2.3667,
+    "channels": 411
+   },
+   {
+    "name": "Spell4_Base",
+    "durationSec": 0.9,
+    "channels": 411
+   },
+   {
+    "name": "IdleReady",
+    "durationSec": 6.2333,
+    "channels": 411
+   },
+   {
+    "name": "Death",
+    "durationSec": 3.2667,
+    "channels": 411
+   },
+   {
+    "name": "Run_Haste",
+    "durationSec": 1.2667,
+    "channels": 411
+   },
+   {
+    "name": "Sett_spell2.anm",
+    "durationSec": 1.5667,
+    "channels": 411
+   },
+   {
+    "name": "Recall",
+    "durationSec": 8.6667,
+    "channels": 411
+   },
+   {
+    "name": "Recall_Winddown",
+    "durationSec": 6.1667,
+    "channels": 411
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 6.4333,
+    "channels": 411
+   },
+   {
+    "name": "Channel",
+    "durationSec": 1.0,
+    "channels": 411
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 1.3333,
+    "channels": 411
+   },
+   {
+    "name": "Run_Slow",
+    "durationSec": 1.0,
+    "channels": 411
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 3.6667,
+    "channels": 411
+   },
+   {
+    "name": "Sett_Joke.anm",
+    "durationSec": 8.6667,
+    "channels": 411
+   },
+   {
+    "name": "Dance_Base",
+    "durationSec": 1.8333,
+    "channels": 411
+   },
+   {
+    "name": "Sett_Spell2_INTO_Run.anm",
+    "durationSec": 1.5667,
+    "channels": 411
+   },
+   {
+    "name": "Crit",
+    "durationSec": 2.6667,
+    "channels": 411
+   },
+   {
+    "name": "Spell3",
+    "durationSec": 0.4,
+    "channels": 411
+   },
+   {
+    "name": "Spell1_B",
+    "durationSec": 1.5,
+    "channels": 411
+   },
+   {
+    "name": "Spell1_A",
+    "durationSec": 2.4667,
+    "channels": 411
+   },
+   {
+    "name": "Sett_RunBoots.anm",
+    "durationSec": 1.0667,
+    "channels": 411
+   },
+   {
+    "name": "Sett_IdleReadyIN.anm",
+    "durationSec": 4.6,
+    "channels": 411
+   },
+   {
+    "name": "Sett_Attack1_Passive.anm",
+    "durationSec": 1.3667,
+    "channels": 411
+   },
+   {
+    "name": "Spell4_Dash",
+    "durationSec": 0.5,
+    "channels": 411
+   },
+   {
+    "name": "Spell4_End",
+    "durationSec": 0.7,
+    "channels": 411
+   },
+   {
+    "name": "Spell3_Back",
+    "durationSec": 0.3,
+    "channels": 411
+   },
+   {
+    "name": "Spell3_Front",
+    "durationSec": 0.4667,
+    "channels": 411
+   },
+   {
+    "name": "Sett_Attack2_Passive.anm",
+    "durationSec": 1.4667,
+    "channels": 411
+   },
+   {
+    "name": "Run_Homeguard",
+    "durationSec": 1.2667,
+    "channels": 411
+   },
+   {
+    "name": "Run_Passive",
+    "durationSec": 1.0667,
+    "channels": 411
+   },
+   {
+    "name": "Sett_Rage.anm",
+    "durationSec": 0.3333,
+    "channels": 411
+   },
+   {
+    "name": "Sett_Rage_ADD.anm",
+    "durationSec": 0.3333,
+    "channels": 411
+   },
+   {
+    "name": "Sett_IdleVar1.anm",
+    "durationSec": 4.1667,
+    "channels": 411
+   },
+   {
+    "name": "Idle_Variant2",
+    "durationSec": 7.6333,
+    "channels": 411
+   },
+   {
+    "name": "Spell3_Both",
+    "durationSec": 0.2667,
+    "channels": 411
+   },
+   {
+    "name": "Respawn",
+    "durationSec": 6.1667,
+    "channels": 411
+   },
+   {
+    "name": "Attack1_Passive_Into_Idle",
+    "durationSec": 1.3333,
+    "channels": 411
+   },
+   {
+    "name": "Spell4_Spin",
+    "durationSec": 0.9667,
+    "channels": 411
+   },
+   {
+    "name": "Spell4_PowerBomb",
+    "durationSec": 0.9333,
+    "channels": 411
+   },
+   {
+    "name": "Spell2_Strong",
+    "durationSec": 1.1667,
+    "channels": 411
+   },
+   {
+    "name": "Attack2_Passive_Into_Idle",
+    "durationSec": 1.3333,
+    "channels": 411
+   },
+   {
+    "name": "Spell2_Into_Idle",
+    "durationSec": 2.2667,
+    "channels": 411
+   },
+   {
+    "name": "Spell2_Into_Run_Left",
+    "durationSec": 1.5667,
+    "channels": 411
+   },
+   {
+    "name": "Spell2_Into_Run_Right",
+    "durationSec": 1.5667,
+    "channels": 411
+   },
+   {
+    "name": "Spell1_B_Into_Idle",
+    "durationSec": 1.2667,
+    "channels": 411
+   },
+   {
+    "name": "Spell3_Miss_Idle",
+    "durationSec": 1.0333,
+    "channels": 411
+   },
+   {
+    "name": "Sett_Passive_INTO_Run.anm",
+    "durationSec": 1.1333,
+    "channels": 411
+   },
+   {
+    "name": "Attack1_Passive_Start",
+    "durationSec": 0.3,
+    "channels": 411
+   },
+   {
+    "name": "Attack2_Passive_Start",
+    "durationSec": 0.3,
+    "channels": 411
+   },
+   {
+    "name": "Attack1_Start",
+    "durationSec": 0.3,
+    "channels": 411
+   },
+   {
+    "name": "Attack2_Start",
+    "durationSec": 0.3333,
+    "channels": 411
+   },
+   {
+    "name": "Spell1_B_Into_Run",
+    "durationSec": 0.6,
+    "channels": 411
+   },
+   {
+    "name": "Spell2_Strong_Into_Idle",
+    "durationSec": 2.5,
+    "channels": 411
+   },
+   {
+    "name": "Spell4_CC_Immune",
+    "durationSec": 0.9333,
+    "channels": 411
+   },
+   {
+    "name": "Crit_Passive_Start",
+    "durationSec": 1.4667,
+    "channels": 411
+   },
+   {
+    "name": "Sett_Run_Variation.anm",
+    "durationSec": 2.1333,
+    "channels": 411
+   },
+   {
+    "name": "Spell3_Miss_Into_Run",
+    "durationSec": 1.0333,
+    "channels": 411
+   },
+   {
+    "name": "Spell4_Grab",
+    "durationSec": 0.2,
+    "channels": 411
+   },
+   {
+    "name": "Spell3_Both_Into_Idle",
+    "durationSec": 0.9,
+    "channels": 411
+   },
+   {
+    "name": "Spell3_Front_Into_Idle",
+    "durationSec": 0.3667,
+    "channels": 411
+   },
+   {
+    "name": "Spell3_Back_Into_Idle",
+    "durationSec": 0.7667,
+    "channels": 411
+   },
+   {
+    "name": "Spell2_Into_Run_Left180",
+    "durationSec": 1.5667,
+    "channels": 411
+   },
+   {
+    "name": "Spell2_Into_Run_Right180",
+    "durationSec": 1.5667,
+    "channels": 411
+   },
+   {
+    "name": "Sett_Run_INTO_Boots.anm",
+    "durationSec": 1.0667,
+    "channels": 411
+   },
+   {
+    "name": "Crit_Passive_Hit",
+    "durationSec": 1.5333,
+    "channels": 411
+   },
+   {
+    "name": "Sett_Dance_Var.anm",
+    "durationSec": 2.9333,
+    "channels": 411
+   },
+   {
+    "name": "Dance_Start",
+    "durationSec": 1.1667,
+    "channels": 411
+   },
+   {
+    "name": "Dance_Spam",
+    "durationSec": 1.4,
+    "channels": 411
+   },
+   {
+    "name": "Sett_Dance.anm",
+    "durationSec": 1.8333,
+    "channels": 411
+   }
+  ]
+ },
+ "mordekaiser": {
+  "file": "모데카이저.glb",
+  "clipCount": 68,
+  "clips": [
+   {
+    "name": "Attack2",
+    "durationSec": 2.9667,
+    "channels": 339
+   },
+   {
+    "name": "Channel_Loop",
+    "durationSec": 3.3333,
+    "channels": 339
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 1.3333,
+    "channels": 339
+   },
+   {
+    "name": "Crit",
+    "durationSec": 3.3333,
+    "channels": 339
+   },
+   {
+    "name": "Death",
+    "durationSec": 3.3333,
+    "channels": 339
+   },
+   {
+    "name": "Idle.anm",
+    "durationSec": 4.2333,
+    "channels": 339
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 4.5,
+    "channels": 339
+   },
+   {
+    "name": "Spell1",
+    "durationSec": 0.8667,
+    "channels": 339
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 0.5,
+    "channels": 339
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 3.5,
+    "channels": 339
+   },
+   {
+    "name": "Spell2_Cast.anm",
+    "durationSec": 1.6667,
+    "channels": 264
+   },
+   {
+    "name": "Turn_L_90",
+    "durationSec": 0.5333,
+    "channels": 339
+   },
+   {
+    "name": "Turn_R_90",
+    "durationSec": 0.5333,
+    "channels": 339
+   },
+   {
+    "name": "Turn_0",
+    "durationSec": 0.5,
+    "channels": 339
+   },
+   {
+    "name": "Idle_In",
+    "durationSec": 1.1333,
+    "channels": 339
+   },
+   {
+    "name": "Homeguard",
+    "durationSec": 1.6,
+    "channels": 339
+   },
+   {
+    "name": "Run_Homeguard",
+    "durationSec": 1.6,
+    "channels": 339
+   },
+   {
+    "name": "Walk",
+    "durationSec": 1.1333,
+    "channels": 339
+   },
+   {
+    "name": "Spell3_Cast.anm",
+    "durationSec": 2.6667,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_To_Idle",
+    "durationSec": 1.7667,
+    "channels": 339
+   },
+   {
+    "name": "Spell_1_torun_0.anm",
+    "durationSec": 1.0333,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_Torun_90",
+    "durationSec": 1.0667,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_Torun_-90",
+    "durationSec": 1.1,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_Torun_180",
+    "durationSec": 1.0333,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_Torun_-180",
+    "durationSec": 1.0333,
+    "channels": 339
+   },
+   {
+    "name": "Spell2_Idle",
+    "durationSec": 4.3333,
+    "channels": 339
+   },
+   {
+    "name": "Spell2_Walk",
+    "durationSec": 1.1333,
+    "channels": 339
+   },
+   {
+    "name": "Spell2_Intro_Upper_Walk.anm",
+    "durationSec": 1.2333,
+    "channels": 339
+   },
+   {
+    "name": "Spell4_Move.anm",
+    "durationSec": 2.0,
+    "channels": 306
+   },
+   {
+    "name": "Spell2_Exit_Full",
+    "durationSec": 1.6333,
+    "channels": 339
+   },
+   {
+    "name": "Spell2_Exit_Upper",
+    "durationSec": 1.3333,
+    "channels": 339
+   },
+   {
+    "name": "Spell2_Intro.anm",
+    "durationSec": 1.6,
+    "channels": 339
+   },
+   {
+    "name": "Spell2_Run_Sheild_Consume_Exit.anm",
+    "durationSec": 2.1,
+    "channels": 339
+   },
+   {
+    "name": "Spell2_Consume_Shield.anm",
+    "durationSec": 2.3667,
+    "channels": 339
+   },
+   {
+    "name": "Spell2_Idle_In",
+    "durationSec": 0.4667,
+    "channels": 339
+   },
+   {
+    "name": "Spell3_Cast_Walk.anm",
+    "durationSec": 2.6667,
+    "channels": 339
+   },
+   {
+    "name": "Battle_Idle_to_Idle.anm",
+    "durationSec": 2.0,
+    "channels": 339
+   },
+   {
+    "name": "Battle_Idle",
+    "durationSec": 4.3333,
+    "channels": 339
+   },
+   {
+    "name": "Passive",
+    "durationSec": 2.0,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_to_Attack.anm",
+    "durationSec": 2.9667,
+    "channels": 339
+   },
+   {
+    "name": "recall.anm",
+    "durationSec": 8.6667,
+    "channels": 339
+   },
+   {
+    "name": "Spell4_To_Idle",
+    "durationSec": 2.2667,
+    "channels": 339
+   },
+   {
+    "name": "Old_Morde_Walk.anm",
+    "durationSec": 4.7,
+    "channels": 339
+   },
+   {
+    "name": "Joke",
+    "durationSec": 7.0,
+    "channels": 381
+   },
+   {
+    "name": "Joke_In",
+    "durationSec": 1.3,
+    "channels": 381
+   },
+   {
+    "name": "Spell3_Cast_to_Idle.anm",
+    "durationSec": 1.3333,
+    "channels": 333
+   },
+   {
+    "name": "Spell4_To_Run",
+    "durationSec": 1.1333,
+    "channels": 339
+   },
+   {
+    "name": "Dance_In",
+    "durationSec": 7.2667,
+    "channels": 339
+   },
+   {
+    "name": "Dance_Loop",
+    "durationSec": 4.2667,
+    "channels": 339
+   },
+   {
+    "name": "Attack1_To_Idle",
+    "durationSec": 1.7667,
+    "channels": 339
+   },
+   {
+    "name": "Attack2_To_Idle",
+    "durationSec": 1.2,
+    "channels": 339
+   },
+   {
+    "name": "Attack1_To_Run",
+    "durationSec": 1.6,
+    "channels": 339
+   },
+   {
+    "name": "Attack2_To_Run",
+    "durationSec": 1.4,
+    "channels": 339
+   },
+   {
+    "name": "Old_Morde_Walk_to_Battle_Idle.anm",
+    "durationSec": 1.3333,
+    "channels": 339
+   },
+   {
+    "name": "Spell2_Idle_to_Spell2_Walk.anm",
+    "durationSec": 0.9333,
+    "channels": 339
+   },
+   {
+    "name": "Attack_Turret",
+    "durationSec": 3.3333,
+    "channels": 339
+   },
+   {
+    "name": "respawn_part1.anm",
+    "durationSec": 0.9333,
+    "channels": 381
+   },
+   {
+    "name": "AutoAttack1.anm",
+    "durationSec": 2.9667,
+    "channels": 339
+   },
+   {
+    "name": "Attack1_Fast",
+    "durationSec": 2.9667,
+    "channels": 339
+   },
+   {
+    "name": "Spell3_Cast_Walk_to_Run.anm",
+    "durationSec": 1.3333,
+    "channels": 333
+   },
+   {
+    "name": "Battle_Idle_to_Walk.anm",
+    "durationSec": 1.0333,
+    "channels": 333
+   },
+   {
+    "name": "Spell3_Cast_from_Spell2.anm",
+    "durationSec": 2.5,
+    "channels": 339
+   },
+   {
+    "name": "Spell3_Cast_Walk_from_Spell2.anm",
+    "durationSec": 2.3333,
+    "channels": 339
+   },
+   {
+    "name": "Spell_4_cast_to_Spell2_Idle.anm",
+    "durationSec": 2.0,
+    "channels": 339
+   },
+   {
+    "name": "Spell_4_cast_to_Spell2_Run.anm",
+    "durationSec": 1.1667,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_to_Spell2_Idle.anm",
+    "durationSec": 1.8,
+    "channels": 339
+   },
+   {
+    "name": "Spell1_to_Spell2_run.anm",
+    "durationSec": 1.0667,
+    "channels": 339
+   },
+   {
+    "name": "respawn_part2.anm",
+    "durationSec": 1.1,
+    "channels": 381
+   }
+  ]
+ },
+ "renekton": {
+  "file": "레넥톤.glb",
+  "clipCount": 19,
+  "clips": [
+   {
+    "name": "Attack1",
+    "durationSec": 1.1,
+    "channels": 142
+   },
+   {
+    "name": "Attack2",
+    "durationSec": 1.1667,
+    "channels": 142
+   },
+   {
+    "name": "Channel",
+    "durationSec": 0.9677,
+    "channels": 142
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 0.9677,
+    "channels": 142
+   },
+   {
+    "name": "Crit",
+    "durationSec": 1.0,
+    "channels": 213
+   },
+   {
+    "name": "Dance",
+    "durationSec": 8.0,
+    "channels": 142
+   },
+   {
+    "name": "Death",
+    "durationSec": 3.0667,
+    "channels": 213
+   },
+   {
+    "name": "Idle1",
+    "durationSec": 3.1667,
+    "channels": 213
+   },
+   {
+    "name": "Idle2",
+    "durationSec": 2.5,
+    "channels": 213
+   },
+   {
+    "name": "Idle3",
+    "durationSec": 5.4333,
+    "channels": 142
+   },
+   {
+    "name": "Joke",
+    "durationSec": 5.3333,
+    "channels": 213
+   },
+   {
+    "name": "Run",
+    "durationSec": 0.7742,
+    "channels": 142
+   },
+   {
+    "name": "Spell1",
+    "durationSec": 0.8387,
+    "channels": 142
+   },
+   {
+    "name": "Spell2",
+    "durationSec": 1.1,
+    "channels": 142
+   },
+   {
+    "name": "Spell2U",
+    "durationSec": 1.3667,
+    "channels": 142
+   },
+   {
+    "name": "Spell3",
+    "durationSec": 0.7419,
+    "channels": 142
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 0.9677,
+    "channels": 142
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 4.1333,
+    "channels": 213
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 7.3333,
+    "channels": 213
+   }
+  ]
+ },
+ "nilah": {
+  "file": "닐라.glb",
+  "clipCount": 77,
+  "clips": [
+   {
+    "name": "Idle1.anm",
+    "durationSec": 5.3333,
+    "channels": 420
+   },
+   {
+    "name": "Run.anm",
+    "durationSec": 1.4,
+    "channels": 420
+   },
+   {
+    "name": "Spell3A",
+    "durationSec": 0.7,
+    "channels": 402
+   },
+   {
+    "name": "Run2.anm",
+    "durationSec": 1.4,
+    "channels": 420
+   },
+   {
+    "name": "Death",
+    "durationSec": 2.6,
+    "channels": 420
+   },
+   {
+    "name": "Spell4_Idle",
+    "durationSec": 1.6,
+    "channels": 405
+   },
+   {
+    "name": "Run_In.anm",
+    "durationSec": 0.8,
+    "channels": 420
+   },
+   {
+    "name": "Spell1A",
+    "durationSec": 0.2,
+    "channels": 405
+   },
+   {
+    "name": "Channel",
+    "durationSec": 1.5667,
+    "channels": 420
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 2.4,
+    "channels": 420
+   },
+   {
+    "name": "Joke",
+    "durationSec": 5.9667,
+    "channels": 420
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 5.1333,
+    "channels": 420
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 4.1333,
+    "channels": 420
+   },
+   {
+    "name": "Recall.anm",
+    "durationSec": 8.6333,
+    "channels": 420
+   },
+   {
+    "name": "DanceLoop.anm",
+    "durationSec": 5.8,
+    "channels": 420
+   },
+   {
+    "name": "Attack1a",
+    "durationSec": 0.2667,
+    "channels": 420
+   },
+   {
+    "name": "Spell1B",
+    "durationSec": 0.2,
+    "channels": 405
+   },
+   {
+    "name": "Spell1_toRun_Right.anm",
+    "durationSec": 0.8,
+    "channels": 405
+   },
+   {
+    "name": "Spell1_toRun_Left.anm",
+    "durationSec": 0.8,
+    "channels": 405
+   },
+   {
+    "name": "Spell1_toRun_Center.anm",
+    "durationSec": 0.8,
+    "channels": 405
+   },
+   {
+    "name": "Attack1b.anm",
+    "durationSec": 0.2667,
+    "channels": 420
+   },
+   {
+    "name": "Attack1_toRun.anm",
+    "durationSec": 0.6667,
+    "channels": 387
+   },
+   {
+    "name": "Attack1_toRunLeft.anm",
+    "durationSec": 2.2,
+    "channels": 402
+   },
+   {
+    "name": "Attack1_toRunRight.anm",
+    "durationSec": 2.2,
+    "channels": 402
+   },
+   {
+    "name": "Attack1b_Short.anm",
+    "durationSec": 0.2667,
+    "channels": 405
+   },
+   {
+    "name": "Attack1c",
+    "durationSec": 0.4,
+    "channels": 420
+   },
+   {
+    "name": "Attack2a",
+    "durationSec": 0.2667,
+    "channels": 420
+   },
+   {
+    "name": "Spell1C",
+    "durationSec": 0.2667,
+    "channels": 405
+   },
+   {
+    "name": "Spell1_toRun2.anm",
+    "durationSec": 0.6,
+    "channels": 375
+   },
+   {
+    "name": "Attack1bshort.anm",
+    "durationSec": 0.2667,
+    "channels": 375
+   },
+   {
+    "name": "Spell3_Cast",
+    "durationSec": 0.4333,
+    "channels": 390
+   },
+   {
+    "name": "Spell2",
+    "durationSec": 0.8,
+    "channels": 390
+   },
+   {
+    "name": "Spell2_Run",
+    "durationSec": 1.4,
+    "channels": 390
+   },
+   {
+    "name": "Idle_In.anm",
+    "durationSec": 7.6333,
+    "channels": 420
+   },
+   {
+    "name": "Run_In2",
+    "durationSec": 1.0667,
+    "channels": 420
+   },
+   {
+    "name": "Run_toRun2.anm",
+    "durationSec": 0.8,
+    "channels": 420
+   },
+   {
+    "name": "Spell1_ToIdle",
+    "durationSec": 1.5667,
+    "channels": 420
+   },
+   {
+    "name": "Attack1_Emp_A",
+    "durationSec": 0.2667,
+    "channels": 405
+   },
+   {
+    "name": "Attack1_Emp_B",
+    "durationSec": 0.2667,
+    "channels": 405
+   },
+   {
+    "name": "Attack1_Emp_C",
+    "durationSec": 0.8,
+    "channels": 405
+   },
+   {
+    "name": "Attack2_Emp_B",
+    "durationSec": 0.2667,
+    "channels": 402
+   },
+   {
+    "name": "Attack1c_toIdle.anm",
+    "durationSec": 3.0333,
+    "channels": 420
+   },
+   {
+    "name": "Attack1_Emp_toRun.anm",
+    "durationSec": 0.6667,
+    "channels": 387
+   },
+   {
+    "name": "Attack2b_Short.anm",
+    "durationSec": 0.2667,
+    "channels": 405
+   },
+   {
+    "name": "Spell3B",
+    "durationSec": 0.6667,
+    "channels": 402
+   },
+   {
+    "name": "Spell3_toRunb.anm",
+    "durationSec": 1.2,
+    "channels": 402
+   },
+   {
+    "name": "Spell3_toRuna.anm",
+    "durationSec": 1.2,
+    "channels": 402
+   },
+   {
+    "name": "Crita",
+    "durationSec": 0.2667,
+    "channels": 420
+   },
+   {
+    "name": "Critb",
+    "durationSec": 0.2667,
+    "channels": 420
+   },
+   {
+    "name": "Critc",
+    "durationSec": 1.7333,
+    "channels": 420
+   },
+   {
+    "name": "Attack2_Emp_A",
+    "durationSec": 0.2667,
+    "channels": 402
+   },
+   {
+    "name": "Attack2_Emp_C",
+    "durationSec": 0.8,
+    "channels": 420
+   },
+   {
+    "name": "KnockUp_Loop",
+    "durationSec": 0.9667,
+    "channels": 387
+   },
+   {
+    "name": "Attack2b.anm",
+    "durationSec": 0.2667,
+    "channels": 420
+   },
+   {
+    "name": "Attack2c",
+    "durationSec": 0.4,
+    "channels": 420
+   },
+   {
+    "name": "Attack2c_toIdle.anm",
+    "durationSec": 3.0333,
+    "channels": 420
+   },
+   {
+    "name": "Stunned",
+    "durationSec": 1.3333,
+    "channels": 387
+   },
+   {
+    "name": "KnockUp_In",
+    "durationSec": 0.1333,
+    "channels": 387
+   },
+   {
+    "name": "Attack1c_toRun.anm",
+    "durationSec": 0.6667,
+    "channels": 387
+   },
+   {
+    "name": "Attack2_toRunRight.anm",
+    "durationSec": 2.2,
+    "channels": 402
+   },
+   {
+    "name": "Attack2_toRunLeft.anm",
+    "durationSec": 2.2,
+    "channels": 402
+   },
+   {
+    "name": "Attack2c_toRun.anm",
+    "durationSec": 0.6667,
+    "channels": 405
+   },
+   {
+    "name": "Attack2_Emp_toIdle.anm",
+    "durationSec": 3.3,
+    "channels": 420
+   },
+   {
+    "name": "Attack2_Emp_toRun.anm",
+    "durationSec": 0.6667,
+    "channels": 402
+   },
+   {
+    "name": "Attack1_Emp_toIdle.anm",
+    "durationSec": 3.3667,
+    "channels": 420
+   },
+   {
+    "name": "Run_Homeguard",
+    "durationSec": 2.1667,
+    "channels": 420
+   },
+   {
+    "name": "Run_Homeguard_IN",
+    "durationSec": 1.4667,
+    "channels": 405
+   },
+   {
+    "name": "Recall_Winddown",
+    "durationSec": 2.6333,
+    "channels": 420
+   },
+   {
+    "name": "Spell1_toRun_Left180.anm",
+    "durationSec": 0.8,
+    "channels": 405
+   },
+   {
+    "name": "Spell1_toRun_Right180.anm",
+    "durationSec": 0.8,
+    "channels": 405
+   },
+   {
+    "name": "Spell4_Run",
+    "durationSec": 1.6,
+    "channels": 405
+   },
+   {
+    "name": "Spell4_ToIdle",
+    "durationSec": 7.6333,
+    "channels": 420
+   },
+   {
+    "name": "Respawn",
+    "durationSec": 3.3,
+    "channels": 420
+   },
+   {
+    "name": "Idle_In_NoWhip.anm",
+    "durationSec": 7.6333,
+    "channels": 420
+   },
+   {
+    "name": "Run_In2.anm",
+    "durationSec": 1.0667,
+    "channels": 420
+   },
+   {
+    "name": "Dance_In",
+    "durationSec": 1.1667,
+    "channels": 420
+   },
+   {
+    "name": "DanceStart_NoWhip.anm",
+    "durationSec": 1.1667,
+    "channels": 420
+   }
+  ]
+ },
+ "chogath": {
+  "file": "초가스.glb",
+  "clipCount": 23,
+  "clips": [
+   {
+    "name": "Attack1",
+    "durationSec": 0.8065,
+    "channels": 112
+   },
+   {
+    "name": "Attack2",
+    "durationSec": 0.8065,
+    "channels": 112
+   },
+   {
+    "name": "Channel",
+    "durationSec": 0.9677,
+    "channels": 112
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 0.9677,
+    "channels": 112
+   },
+   {
+    "name": "Crit",
+    "durationSec": 0.8065,
+    "channels": 112
+   },
+   {
+    "name": "Dance",
+    "durationSec": 5.0,
+    "channels": 112
+   },
+   {
+    "name": "Death",
+    "durationSec": 4.1667,
+    "channels": 112
+   },
+   {
+    "name": "Idle1",
+    "durationSec": 2.0,
+    "channels": 112
+   },
+   {
+    "name": "Idle2",
+    "durationSec": 2.0,
+    "channels": 112
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 2.8333,
+    "channels": 168
+   },
+   {
+    "name": "Run",
+    "durationSec": 0.9677,
+    "channels": 112
+   },
+   {
+    "name": "Run1",
+    "durationSec": 0.9677,
+    "channels": 112
+   },
+   {
+    "name": "Run2",
+    "durationSec": 0.9677,
+    "channels": 112
+   },
+   {
+    "name": "Run3",
+    "durationSec": 0.9677,
+    "channels": 112
+   },
+   {
+    "name": "Run4",
+    "durationSec": 0.9677,
+    "channels": 112
+   },
+   {
+    "name": "Run5",
+    "durationSec": 0.9677,
+    "channels": 112
+   },
+   {
+    "name": "Run6",
+    "durationSec": 0.9677,
+    "channels": 112
+   },
+   {
+    "name": "Spell1",
+    "durationSec": 1.0333,
+    "channels": 112
+   },
+   {
+    "name": "Spell2",
+    "durationSec": 1.3333,
+    "channels": 168
+   },
+   {
+    "name": "Spell3",
+    "durationSec": 0.9355,
+    "channels": 112
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 0.9032,
+    "channels": 112
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 1.8333,
+    "channels": 112
+   },
+   {
+    "name": "chogath_taunt.anm",
+    "durationSec": 1.8333,
+    "channels": 112
+   }
+  ]
+ },
+ "ezreal": {
+  "file": "이즈리얼.glb",
+  "clipCount": 42,
+  "clips": [
+   {
+    "name": "Attack1a",
+    "durationSec": 2.7667,
+    "channels": 450
+   },
+   {
+    "name": "Attack2a",
+    "durationSec": 2.7667,
+    "channels": 450
+   },
+   {
+    "name": "Channel",
+    "durationSec": 2.0333,
+    "channels": 450
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 1.0,
+    "channels": 450
+   },
+   {
+    "name": "Crit",
+    "durationSec": 2.7667,
+    "channels": 450
+   },
+   {
+    "name": "Dance_Loop",
+    "durationSec": 11.1667,
+    "channels": 450
+   },
+   {
+    "name": "Death",
+    "durationSec": 1.3333,
+    "channels": 450
+   },
+   {
+    "name": "Idle_Base",
+    "durationSec": 2.6667,
+    "channels": 450
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 1.7333,
+    "channels": 450
+   },
+   {
+    "name": "Spell1",
+    "durationSec": 0.4,
+    "channels": 450
+   },
+   {
+    "name": "Spell2",
+    "durationSec": 0.3333,
+    "channels": 450
+   },
+   {
+    "name": "Spell3_0",
+    "durationSec": 0.4,
+    "channels": 450
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 1.0,
+    "channels": 450
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 3.1667,
+    "channels": 450
+   },
+   {
+    "name": "Dance_Windup",
+    "durationSec": 1.7,
+    "channels": 450
+   },
+   {
+    "name": "Ezreal_Spell3_Exit.anm",
+    "durationSec": 1.1333,
+    "channels": 450
+   },
+   {
+    "name": "Spell3_Exit_NoTarget_Idle",
+    "durationSec": 1.3667,
+    "channels": 450
+   },
+   {
+    "name": "Run_To_Idle",
+    "durationSec": 3.9333,
+    "channels": 450
+   },
+   {
+    "name": "ezreal_Idle2.anm",
+    "durationSec": 3.1333,
+    "channels": 450
+   },
+   {
+    "name": "Run_Normal",
+    "durationSec": 1.0,
+    "channels": 450
+   },
+   {
+    "name": "Ezreal_Attack4.anm",
+    "durationSec": 2.7667,
+    "channels": 450
+   },
+   {
+    "name": "ezreal_Attack2.anm",
+    "durationSec": 2.7667,
+    "channels": 450
+   },
+   {
+    "name": "Spell2_To_Idle",
+    "durationSec": 1.1333,
+    "channels": 450
+   },
+   {
+    "name": "Spell2_To_Run",
+    "durationSec": 1.1,
+    "channels": 450
+   },
+   {
+    "name": "Spell4_To_Idle",
+    "durationSec": 1.5333,
+    "channels": 450
+   },
+   {
+    "name": "Spell4_To_Run",
+    "durationSec": 1.2,
+    "channels": 450
+   },
+   {
+    "name": "Run_Haste",
+    "durationSec": 0.8,
+    "channels": 450
+   },
+   {
+    "name": "Spell3_-90",
+    "durationSec": 0.4,
+    "channels": 450
+   },
+   {
+    "name": "Spell3_90",
+    "durationSec": 0.4,
+    "channels": 450
+   },
+   {
+    "name": "Spell3_-180",
+    "durationSec": 0.4,
+    "channels": 450
+   },
+   {
+    "name": "Spell3_180",
+    "durationSec": 0.4,
+    "channels": 450
+   },
+   {
+    "name": "Spell3_Exit_NoTarget_Run",
+    "durationSec": 0.8,
+    "channels": 450
+   },
+   {
+    "name": "Spell3_Exit_Run",
+    "durationSec": 0.9,
+    "channels": 450
+   },
+   {
+    "name": "Recall",
+    "durationSec": 8.1667,
+    "channels": 450
+   },
+   {
+    "name": "Recall_Leadout",
+    "durationSec": 0.5333,
+    "channels": 450
+   },
+   {
+    "name": "Recall_Winddown",
+    "durationSec": 3.5,
+    "channels": 450
+   },
+   {
+    "name": "Joke",
+    "durationSec": 5.8333,
+    "channels": 450
+   },
+   {
+    "name": "Spell3_Generic",
+    "durationSec": 0.4,
+    "channels": 450
+   },
+   {
+    "name": "Ezreal_Spell3_Exit_NoTarget.anm",
+    "durationSec": 0.2667,
+    "channels": 450
+   },
+   {
+    "name": "Respawn",
+    "durationSec": 3.5,
+    "channels": 450
+   },
+   {
+    "name": "Spell1_To_Idle",
+    "durationSec": 1.0,
+    "channels": 450
+   },
+   {
+    "name": "Spell1_To_Run",
+    "durationSec": 0.7,
+    "channels": 450
+   }
+  ]
+ },
+ "ashe": {
+  "file": "애쉬.glb",
+  "clipCount": 24,
+  "clips": [
+   {
+    "name": "Attack1",
+    "durationSec": 2.1333,
+    "channels": 255
+   },
+   {
+    "name": "Crit",
+    "durationSec": 2.1333,
+    "channels": 255
+   },
+   {
+    "name": "Death",
+    "durationSec": 1.9333,
+    "channels": 255
+   },
+   {
+    "name": "Idle1",
+    "durationSec": 9.3333,
+    "channels": 255
+   },
+   {
+    "name": "Idle2",
+    "durationSec": 6.6,
+    "channels": 255
+   },
+   {
+    "name": "Idle3",
+    "durationSec": 4.0,
+    "channels": 255
+   },
+   {
+    "name": "Idle4",
+    "durationSec": 6.4,
+    "channels": 255
+   },
+   {
+    "name": "Idle5",
+    "durationSec": 6.0,
+    "channels": 255
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 3.1667,
+    "channels": 255
+   },
+   {
+    "name": "Run",
+    "durationSec": 7.2,
+    "channels": 255
+   },
+   {
+    "name": "Run2",
+    "durationSec": 9.0,
+    "channels": 255
+   },
+   {
+    "name": "Run3",
+    "durationSec": 9.0,
+    "channels": 255
+   },
+   {
+    "name": "Spell1",
+    "durationSec": 1.8333,
+    "channels": 255
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 2.1333,
+    "channels": 255
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 4.4,
+    "channels": 255
+   },
+   {
+    "name": "Channel",
+    "durationSec": 1.0,
+    "channels": 255
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 1.0,
+    "channels": 255
+   },
+   {
+    "name": "Dance",
+    "durationSec": 6.8,
+    "channels": 255
+   },
+   {
+    "name": "Joke",
+    "durationSec": 8.9333,
+    "channels": 255
+   },
+   {
+    "name": "Attack2",
+    "durationSec": 2.1333,
+    "channels": 255
+   },
+   {
+    "name": "Spell3",
+    "durationSec": 1.6667,
+    "channels": 255
+   },
+   {
+    "name": "Spell2",
+    "durationSec": 1.8333,
+    "channels": 255
+   },
+   {
+    "name": "ashe_taunt.anm",
+    "durationSec": 4.4,
+    "channels": 255
+   },
+   {
+    "name": "Spell1_In",
+    "durationSec": 0.3333,
+    "channels": 255
+   }
+  ]
+ },
+ "varus": {
+  "file": "바루스.glb",
+  "clipCount": 23,
+  "clips": [
+   {
+    "name": "Attack1",
+    "durationSec": 2.5,
+    "channels": 231
+   },
+   {
+    "name": "Attack2",
+    "durationSec": 2.5,
+    "channels": 231
+   },
+   {
+    "name": "Crit",
+    "durationSec": 2.5,
+    "channels": 231
+   },
+   {
+    "name": "Death",
+    "durationSec": 6.6667,
+    "channels": 231
+   },
+   {
+    "name": "varus_idle1.anm",
+    "durationSec": 2.1,
+    "channels": 267
+   },
+   {
+    "name": "varus_idle2.anm",
+    "durationSec": 6.3333,
+    "channels": 231
+   },
+   {
+    "name": "varus_idle3.anm",
+    "durationSec": 5.0333,
+    "channels": 231
+   },
+   {
+    "name": "varus_idle4.anm",
+    "durationSec": 4.9667,
+    "channels": 267
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 4.4667,
+    "channels": 231
+   },
+   {
+    "name": "Spell3",
+    "durationSec": 0.9677,
+    "channels": 231
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 0.9677,
+    "channels": 178
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 4.5667,
+    "channels": 231
+   },
+   {
+    "name": "Channel",
+    "durationSec": 0.9677,
+    "channels": 178
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 0.9677,
+    "channels": 178
+   },
+   {
+    "name": "Dance",
+    "durationSec": 8.7333,
+    "channels": 231
+   },
+   {
+    "name": "Spell1",
+    "durationSec": 6.6667,
+    "channels": 231
+   },
+   {
+    "name": "Spell1_Walk",
+    "durationSec": 1.0,
+    "channels": 267
+   },
+   {
+    "name": "Spell1_Idle",
+    "durationSec": 2.3333,
+    "channels": 267
+   },
+   {
+    "name": "Spell1_Fire",
+    "durationSec": 0.5484,
+    "channels": 231
+   },
+   {
+    "name": "Joke",
+    "durationSec": 4.4,
+    "channels": 231
+   },
+   {
+    "name": "Run",
+    "durationSec": 1.0667,
+    "channels": 267
+   },
+   {
+    "name": "Run2",
+    "durationSec": 1.0667,
+    "channels": 267
+   },
+   {
+    "name": "varus_base_weapon.anm",
+    "durationSec": 0.303,
+    "channels": 267
+   }
+  ]
+ },
+ "ahri": {
+  "file": "아리.glb",
+  "clipCount": 55,
+  "clips": [
+   {
+    "name": "Attack1",
+    "durationSec": 0.3667,
+    "channels": 633
+   },
+   {
+    "name": "Attack2",
+    "durationSec": 0.3333,
+    "channels": 633
+   },
+   {
+    "name": "Channel",
+    "durationSec": 0.4667,
+    "channels": 633
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 1.3,
+    "channels": 633
+   },
+   {
+    "name": "Crit",
+    "durationSec": 0.2667,
+    "channels": 633
+   },
+   {
+    "name": "Death",
+    "durationSec": 4.0333,
+    "channels": 633
+   },
+   {
+    "name": "Joke_In",
+    "durationSec": 3.0333,
+    "channels": 633
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 4.6667,
+    "channels": 633
+   },
+   {
+    "name": "Spell1",
+    "durationSec": 0.4333,
+    "channels": 633
+   },
+   {
+    "name": "Spell2",
+    "durationSec": 1.3333,
+    "channels": 633
+   },
+   {
+    "name": "Spell4",
+    "durationSec": 0.4,
+    "channels": 633
+   },
+   {
+    "name": "Taunt",
+    "durationSec": 6.4,
+    "channels": 633
+   },
+   {
+    "name": "Dance_Loop",
+    "durationSec": 8.1333,
+    "channels": 633
+   },
+   {
+    "name": "Recall",
+    "durationSec": 8.6667,
+    "channels": 633
+   },
+   {
+    "name": "Attack1_ToIdle",
+    "durationSec": 2.6667,
+    "channels": 633
+   },
+   {
+    "name": "Attack2_ToIdle",
+    "durationSec": 2.8667,
+    "channels": 633
+   },
+   {
+    "name": "Idle_In",
+    "durationSec": 7.4667,
+    "channels": 633
+   },
+   {
+    "name": "Run_Fast",
+    "durationSec": 1.0,
+    "channels": 633
+   },
+   {
+    "name": "Run_Haste",
+    "durationSec": 1.0,
+    "channels": 633
+   },
+   {
+    "name": "Run_In",
+    "durationSec": 1.0,
+    "channels": 633
+   },
+   {
+    "name": "Spell1_ToIdle",
+    "durationSec": 2.5333,
+    "channels": 633
+   },
+   {
+    "name": "Spell3_east",
+    "durationSec": 2.7667,
+    "channels": 633
+   },
+   {
+    "name": "Spell3_North",
+    "durationSec": 2.7667,
+    "channels": 633
+   },
+   {
+    "name": "Spell3_south",
+    "durationSec": 2.7667,
+    "channels": 633
+   },
+   {
+    "name": "Spell3_west",
+    "durationSec": 2.7667,
+    "channels": 633
+   },
+   {
+    "name": "Attack1_Torun",
+    "durationSec": 1.4667,
+    "channels": 633
+   },
+   {
+    "name": "Attack2_Torun",
+    "durationSec": 0.9667,
+    "channels": 633
+   },
+   {
+    "name": "Spell2_ToRun",
+    "durationSec": 2.9,
+    "channels": 633
+   },
+   {
+    "name": "Spell2_ToIdle",
+    "durationSec": 1.5333,
+    "channels": 633
+   },
+   {
+    "name": "Spell1_ToRun",
+    "durationSec": 0.9,
+    "channels": 633
+   },
+   {
+    "name": "Spell3_ToRun",
+    "durationSec": 1.0,
+    "channels": 633
+   },
+   {
+    "name": "Run_Spell4",
+    "durationSec": 0.9667,
+    "channels": 633
+   },
+   {
+    "name": "Spell4_toIdle",
+    "durationSec": 6.1667,
+    "channels": 633
+   },
+   {
+    "name": "Spell4_Idle",
+    "durationSec": 1.8,
+    "channels": 633
+   },
+   {
+    "name": "Spell4_toIdle_2",
+    "durationSec": 6.1667,
+    "channels": 633
+   },
+   {
+    "name": "Crit_ToIdle",
+    "durationSec": 2.1333,
+    "channels": 633
+   },
+   {
+    "name": "Run_Homeguard",
+    "durationSec": 0.9333,
+    "channels": 633
+   },
+   {
+    "name": "Idle_to_Run_Haste",
+    "durationSec": 0.9,
+    "channels": 633
+   },
+   {
+    "name": "Run_Haste_toIdle",
+    "durationSec": 2.3333,
+    "channels": 633
+   },
+   {
+    "name": "Respawn",
+    "durationSec": 6.2333,
+    "channels": 633
+   },
+   {
+    "name": "Dance_In",
+    "durationSec": 8.8,
+    "channels": 633
+   },
+   {
+    "name": "Joke_Loop",
+    "durationSec": 6.6333,
+    "channels": 630
+   },
+   {
+    "name": "Recall_Winddown",
+    "durationSec": 6.2333,
+    "channels": 633
+   },
+   {
+    "name": "Spell4_toRun",
+    "durationSec": 1.4667,
+    "channels": 633
+   },
+   {
+    "name": "Ult_toRun",
+    "durationSec": 1.6667,
+    "channels": 633
+   },
+   {
+    "name": "Run_Var1",
+    "durationSec": 2.0,
+    "channels": 633
+   },
+   {
+    "name": "Run_Var2",
+    "durationSec": 2.3667,
+    "channels": 633
+   },
+   {
+    "name": "Run",
+    "durationSec": 1.0,
+    "channels": 633
+   },
+   {
+    "name": "Spell4_toIdle_3",
+    "durationSec": 6.1667,
+    "channels": 633
+   },
+   {
+    "name": "Idle_Var2",
+    "durationSec": 5.7333,
+    "channels": 633
+   },
+   {
+    "name": "Idle_var3",
+    "durationSec": 5.0333,
+    "channels": 633
+   },
+   {
+    "name": "Idle1",
+    "durationSec": 3.9667,
+    "channels": 633
+   },
+   {
+    "name": "Stunned",
+    "durationSec": 1.3,
+    "channels": 633
+   },
+   {
+    "name": "KnockUp",
+    "durationSec": 0.9667,
+    "channels": 633
+   },
+   {
+    "name": "Ult_End",
+    "durationSec": 2.0333,
+    "channels": 633
+   }
+  ]
+ },
+ "vex": {
+  "file": "벡스.glb",
+  "clipCount": 76,
+  "clips": [
+   {
+    "name": "Attack1_Start",
+    "durationSec": 0.3,
+    "channels": 591
+   },
+   {
+    "name": "Idle_Loop",
+    "durationSec": 12.0,
+    "channels": 591
+   },
+   {
+    "name": "Run_Base",
+    "durationSec": 8.0,
+    "channels": 591
+   },
+   {
+    "name": "Spell1_Base",
+    "durationSec": 1.0333,
+    "channels": 591
+   },
+   {
+    "name": "Spell2_BASE",
+    "durationSec": 0.8333,
+    "channels": 591
+   },
+   {
+    "name": "Spell3_0",
+    "durationSec": 0.7667,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Cast",
+    "durationSec": 0.7667,
+    "channels": 591
+   },
+   {
+    "name": "Death",
+    "durationSec": 2.3333,
+    "channels": 591
+   },
+   {
+    "name": "Attack2_Start",
+    "durationSec": 0.3,
+    "channels": 591
+   },
+   {
+    "name": "Homeguard",
+    "durationSec": 1.0,
+    "channels": 591
+   },
+   {
+    "name": "Run_Start",
+    "durationSec": 1.3333,
+    "channels": 591
+   },
+   {
+    "name": "Idle_In",
+    "durationSec": 2.3333,
+    "channels": 591
+   },
+   {
+    "name": "Dance_Base",
+    "durationSec": 5.4333,
+    "channels": 591
+   },
+   {
+    "name": "Idle_Hold",
+    "durationSec": 8.0,
+    "channels": 591
+   },
+   {
+    "name": "Spell2_Moving",
+    "durationSec": 0.8333,
+    "channels": 591
+   },
+   {
+    "name": "Spell1_Into_Run",
+    "durationSec": 0.6333,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Dash",
+    "durationSec": 0.6667,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Attack",
+    "durationSec": 0.8,
+    "channels": 591
+   },
+   {
+    "name": "Crit_Start",
+    "durationSec": 0.3,
+    "channels": 591
+   },
+   {
+    "name": "Turn_L",
+    "durationSec": 0.6667,
+    "channels": 591
+   },
+   {
+    "name": "Turn_R",
+    "durationSec": 0.6667,
+    "channels": 591
+   },
+   {
+    "name": "Turn_0",
+    "durationSec": 0.6667,
+    "channels": 591
+   },
+   {
+    "name": "Run_Haste",
+    "durationSec": 8.0,
+    "channels": 591
+   },
+   {
+    "name": "Spell3_Into_IDLE",
+    "durationSec": 0.7667,
+    "channels": 591
+   },
+   {
+    "name": "Spawn",
+    "durationSec": 5.0,
+    "channels": 591
+   },
+   {
+    "name": "Spell1_Into_Idle",
+    "durationSec": 0.9667,
+    "channels": 591
+   },
+   {
+    "name": "Spell3_INTO_Run",
+    "durationSec": 0.9333,
+    "channels": 591
+   },
+   {
+    "name": "Recall",
+    "durationSec": 8.6667,
+    "channels": 591
+   },
+   {
+    "name": "Homeguard_Start",
+    "durationSec": 1.2333,
+    "channels": 591
+   },
+   {
+    "name": "Respawn",
+    "durationSec": 5.0,
+    "channels": 591
+   },
+   {
+    "name": "Recall_Winddown",
+    "durationSec": 2.6667,
+    "channels": 591
+   },
+   {
+    "name": "Stunned",
+    "durationSec": 1.0,
+    "channels": 591
+   },
+   {
+    "name": "KnockUp_Loop",
+    "durationSec": 1.0,
+    "channels": 579
+   },
+   {
+    "name": "Attack1_Into_Idle",
+    "durationSec": 1.1667,
+    "channels": 591
+   },
+   {
+    "name": "Attack2_Into_Idle",
+    "durationSec": 1.1667,
+    "channels": 591
+   },
+   {
+    "name": "Crit_INTO_Idle",
+    "durationSec": 1.1333,
+    "channels": 591
+   },
+   {
+    "name": "Attack1_Hit",
+    "durationSec": 1.3667,
+    "channels": 591
+   },
+   {
+    "name": "Attack2_Hit",
+    "durationSec": 1.3667,
+    "channels": 591
+   },
+   {
+    "name": "Crit_Hit",
+    "durationSec": 1.2333,
+    "channels": 591
+   },
+   {
+    "name": "Joke",
+    "durationSec": 8.1667,
+    "channels": 591
+   },
+   {
+    "name": "KnockUp_Start",
+    "durationSec": 0.5667,
+    "channels": 579
+   },
+   {
+    "name": "Channel",
+    "durationSec": 1.0,
+    "channels": 591
+   },
+   {
+    "name": "Channel_Wndup",
+    "durationSec": 1.3333,
+    "channels": 591
+   },
+   {
+    "name": "Spell2_Into_Idle",
+    "durationSec": 1.0,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Attack_INTO_Idle",
+    "durationSec": 0.8667,
+    "channels": 591
+   },
+   {
+    "name": "Attack1_INTO_Run",
+    "durationSec": 1.3333,
+    "channels": 591
+   },
+   {
+    "name": "Attack2_INTO_Run",
+    "durationSec": 1.3333,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Dash_Start",
+    "durationSec": 0.3333,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Cast_INTO_Idle",
+    "durationSec": 1.1,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Cast_INTO_Run",
+    "durationSec": 0.9667,
+    "channels": 591
+   },
+   {
+    "name": "Spell1_Run",
+    "durationSec": 1.0333,
+    "channels": 591
+   },
+   {
+    "name": "Spell3_Left",
+    "durationSec": 0.7667,
+    "channels": 591
+   },
+   {
+    "name": "Spell3_Left180",
+    "durationSec": 0.7667,
+    "channels": 591
+   },
+   {
+    "name": "Spell3_Right",
+    "durationSec": 0.7667,
+    "channels": 591
+   },
+   {
+    "name": "Spell3_Right180",
+    "durationSec": 0.7667,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Cast_Left",
+    "durationSec": 0.7667,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Cast_Right",
+    "durationSec": 0.7667,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Cast_Right180",
+    "durationSec": 0.7667,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Cast_Left180",
+    "durationSec": 0.7667,
+    "channels": 591
+   },
+   {
+    "name": "Attack_Passive",
+    "durationSec": 0.3333,
+    "channels": 591
+   },
+   {
+    "name": "Attack_Passive_Hit",
+    "durationSec": 0.7,
+    "channels": 591
+   },
+   {
+    "name": "Attack_Passive_INTO_Idle",
+    "durationSec": 1.1333,
+    "channels": 591
+   },
+   {
+    "name": "Attack_Passive_INTO_Run",
+    "durationSec": 1.3333,
+    "channels": 591
+   },
+   {
+    "name": "Spell2_Into_Run",
+    "durationSec": 1.0,
+    "channels": 591
+   },
+   {
+    "name": "Laugh",
+    "durationSec": 3.0,
+    "channels": 591
+   },
+   {
+    "name": "Attack_Passive_Near",
+    "durationSec": 0.3333,
+    "channels": 591
+   },
+   {
+    "name": "Attack_Passive_ExtraFar",
+    "durationSec": 0.3333,
+    "channels": 591
+   },
+   {
+    "name": "Spell4_Attack_INTO_Run",
+    "durationSec": 0.9,
+    "channels": 591
+   },
+   {
+    "name": "Crit_INTO_Run",
+    "durationSec": 1.3333,
+    "channels": 591
+   },
+   {
+    "name": "Idle_Variation",
+    "durationSec": 12.0,
+    "channels": 591
+   },
+   {
+    "name": "Idle_In_INTO_Run",
+    "durationSec": 1.3333,
+    "channels": 591
+   },
+   {
+    "name": "Run_Haste_Start",
+    "durationSec": 1.6667,
+    "channels": 591
+   },
+   {
+    "name": "Taunt_Start",
+    "durationSec": 4.0,
+    "channels": 591
+   },
+   {
+    "name": "Taunt_loop",
+    "durationSec": 1.6667,
+    "channels": 591
+   },
+   {
+    "name": "Run_Slow",
+    "durationSec": 1.3333,
+    "channels": 591
+   },
+   {
+    "name": "Idle_Variation2",
+    "durationSec": 6.0,
+    "channels": 591
+   }
+  ]
+ }
+}

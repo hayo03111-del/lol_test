@@ -1,0 +1,85 @@
+{
+ "video": "3713a57de1dbc13f322ee6e7049edd2a.webm",
+ "frames": 295,
+ "nominalFps": 25.0,
+ "measuredFps": 25.0,
+ "durationSec": 11.76,
+ "frameTimeErrorSec": 0.04,
+ "thresholds": {
+  "motion": 0.0001668936092955701,
+  "brightDelta": 0.0002
+ },
+ "events": {
+  "sync_flash": [
+   {
+    "frame": 0,
+    "t": 0.0
+   },
+   {
+    "frame": 203,
+    "t": 8.12
+   }
+  ],
+  "reference": {
+   "frame": 203,
+   "t": 8.12
+  },
+  "motion_onset": {
+   "frame": 234,
+   "t": 9.36
+  },
+  "motion_peaks": [
+   {
+    "frame": 234,
+    "t": 9.36,
+    "energy": 0.00283
+   },
+   {
+    "frame": 246,
+    "t": 9.84,
+    "energy": 0.00132
+   },
+   {
+    "frame": 250,
+    "t": 10.0,
+    "energy": 0.00228
+   },
+   {
+    "frame": 252,
+    "t": 10.08,
+    "energy": 0.00229
+   },
+   {
+    "frame": 254,
+    "t": 10.16,
+    "energy": 0.00271
+   },
+   {
+    "frame": 256,
+    "t": 10.24,
+    "energy": 0.00328
+   },
+   {
+    "frame": 263,
+    "t": 10.52,
+    "energy": 0.00133
+   },
+   {
+    "frame": 269,
+    "t": 10.76,
+    "energy": 0.00094
+   }
+  ],
+  "effect_onsets": [
+   {
+    "frame": 250,
+    "t": 10.0,
+    "brightAreaDelta": 0.0012
+   }
+  ]
+ },
+ "baselineWindowSec": [
+  0.3,
+  0.8
+ ]
+}

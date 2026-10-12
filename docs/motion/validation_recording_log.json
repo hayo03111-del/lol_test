@@ -1,0 +1,90 @@
+{
+ "ezreal_Q": {
+  "castAfterSyncMs": 1005,
+  "damageAfterSyncMs": 1169,
+  "events": [
+   {
+    "k": "vfx:ezrealQ",
+    "afterSyncMs": 1007
+   },
+   {
+    "k": "vfx:ezrealQHit",
+    "afterSyncMs": 1135
+   },
+   {
+    "k": "vfx:hit",
+    "afterSyncMs": 1136
+   }
+  ],
+  "errors": [],
+  "video": "347f87807f631322f4b73eda5af8f851.webm"
+ },
+ "garen_R": {
+  "castAfterSyncMs": 1060,
+  "damageAfterSyncMs": 1689,
+  "events": [
+   {
+    "k": "vfx:r",
+    "afterSyncMs": 1517
+   }
+  ],
+  "errors": [],
+  "video": "6e5e6e5e6c536142650c01029bc01001.webm"
+ },
+ "darius_R": {
+  "castAfterSyncMs": 1017,
+  "damageAfterSyncMs": 1601,
+  "events": [
+   {
+    "k": "vfx:r",
+    "afterSyncMs": 1436
+   }
+  ],
+  "errors": [],
+  "video": "f415df87ee7a6c7a51925a2a8881ade1.webm"
+ },
+ "ashe_W": {
+  "castAfterSyncMs": 1018,
+  "damageAfterSyncMs": 1370,
+  "events": [
+   {
+    "k": "vfx:hit",
+    "afterSyncMs": 1256
+   },
+   {
+    "k": "vfx:hit",
+    "afterSyncMs": 1256
+   }
+  ],
+  "errors": [],
+  "video": "11614d16d4804a3af1e02ba4bf7504cf.webm"
+ },
+ "chogath_Q": {
+  "castAfterSyncMs": 1052,
+  "damageAfterSyncMs": 1997,
+  "events": [
+   {
+    "k": "vfx:q",
+    "afterSyncMs": 1056
+   }
+  ],
+  "errors": [],
+  "video": "73349ec70ae2664251c17100b8c8ba73.webm"
+ },
+ "sett_W": {
+  "castAfterSyncMs": 1035,
+  "damageAfterSyncMs": 1839,
+  "events": [
+   {
+    "k": "vfx:w",
+    "afterSyncMs": 1036
+   },
+   {
+    "k": "vfx:w",
+    "afterSyncMs": 1793
+   }
+  ],
+  "errors": [],
+  "video": "3713a57de1dbc13f322ee6e7049edd2a.webm"
+ }
+}

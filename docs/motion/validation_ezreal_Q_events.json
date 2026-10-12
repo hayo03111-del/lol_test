@@ -1,0 +1,60 @@
+{
+ "video": "347f87807f631322f4b73eda5af8f851.webm",
+ "frames": 258,
+ "nominalFps": 25.0,
+ "measuredFps": 25.0,
+ "durationSec": 10.28,
+ "frameTimeErrorSec": 0.04,
+ "thresholds": {
+  "motion": 0.0003416394335511982,
+  "brightDelta": 0.0002
+ },
+ "events": {
+  "sync_flash": [
+   {
+    "frame": 0,
+    "t": 0.0
+   },
+   {
+    "frame": 165,
+    "t": 6.6
+   }
+  ],
+  "reference": {
+   "frame": 165,
+   "t": 6.6
+  },
+  "motion_onset": {
+   "frame": 194,
+   "t": 7.76
+  },
+  "motion_peaks": [
+   {
+    "frame": 194,
+    "t": 7.76,
+    "energy": 0.00085
+   },
+   {
+    "frame": 199,
+    "t": 7.96,
+    "energy": 0.00081
+   },
+   {
+    "frame": 256,
+    "t": 10.24,
+    "energy": 0.00149
+   }
+  ],
+  "effect_onsets": [
+   {
+    "frame": 194,
+    "t": 7.76,
+    "brightAreaDelta": 0.00201
+   }
+  ]
+ },
+ "baselineWindowSec": [
+  0.3,
+  0.8
+ ]
+}

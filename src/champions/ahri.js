@@ -492,10 +492,10 @@ CharacterController.prototype._ahriTickETravel = function(dt) {
     // 디버프가 존재하기 전에 이미 피해 계산이 끝났기 때문에(원인->결과
     // 순서상 자연스러운 동작이며, 실제 게임에서도 매혹 자체의 피해가
     // 매혹으로 인한 증폭을 받는다는 근거는 없다).
-    applyStatus(hitUnit, {
+    if ((e.charmSkillDamageAmpPercent || 0) > 0) applyStatus(hitUnit, {
       id: 'ahriCharmVuln', type: 'AHRI_CHARM_VULN',
-      duration: e.charmSkillDamageAmpDuration || 3,
-      value: (e.charmSkillDamageAmpPercent || 20) / 100, source: this,
+      duration: e.charmSkillDamageAmpDuration,
+      value: e.charmSkillDamageAmpPercent / 100, source: this,
     });
     // 이동기를 즉시 중단시킨다(Trait_Ranged_StopsFirstHit + 매혹 CC) - 이
     // 뷰어의 적(더미/미니언)은 대시/블링크가 없어 사실상 항상 no-op이지만,

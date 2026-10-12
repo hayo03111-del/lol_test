@@ -44,7 +44,7 @@ CharacterController.prototype._mordePassiveAuraTick = function(dt) {
       }
     }
     // % 이동 속도 증가는 서로 더해진다(공용 규칙) - 예전 Math.max는 다른 버프와 겹치면 오라가 무시됐다.
-    this.stats.percentMoveSpeedBonus += p.auraMoveSpeedPercent / 100;
+    this.stats.percentMoveSpeedBonus += valueByBreakpoints(p.auraMoveSpeedByLevel, this.champLevel) / 100;
   
 };
 

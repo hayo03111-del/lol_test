@@ -1,0 +1,1092 @@
+{
+ "garen": {
+  "Q": {
+   "clip": "Spell1",
+   "clips": [
+    "Spell1",
+    "Idle1_Base"
+   ],
+   "durs": [
+    1,
+    2.17
+   ],
+   "dmgMs": 421,
+   "unlockMs": 1699
+  },
+  "W": {
+   "clip": "Idle1_Base",
+   "clips": [
+    "Idle1_Base"
+   ],
+   "durs": [
+    2.17
+   ],
+   "dmgMs": null,
+   "unlockMs": 134
+  },
+  "E": {
+   "clip": "Spell3_0",
+   "clips": [
+    "Spell3_0",
+    "Idle1_Base"
+   ],
+   "durs": [
+    3,
+    2.17
+   ],
+   "dmgMs": 468,
+   "unlockMs": 3001
+  },
+  "R": {
+   "clip": "Spell4_Base",
+   "clips": [
+    "Spell4_Base",
+    "Idle1_Base"
+   ],
+   "durs": [
+    1.57,
+    2.17
+   ],
+   "dmgMs": 556,
+   "unlockMs": 640
+  },
+  "AA": {
+   "clip": "Attack1",
+   "clipDur": 2,
+   "windupMs": 327,
+   "intervalMs": 1673,
+   "windupPct": 0.18,
+   "as": 0
+  },
+  "champ": "garen",
+  "errors": []
+ },
+ "darius": {
+  "Q": {
+   "clip": "Darius_Spell1_IN.anm",
+   "clips": [
+    "Darius_Spell1_IN.anm",
+    "Spell1",
+    "Idle1"
+   ],
+   "durs": [
+    0.8,
+    0.52,
+    4
+   ],
+   "dmgMs": 910,
+   "unlockMs": 1401
+  },
+  "W": {
+   "clip": "Spell2",
+   "clips": [
+    "Spell2",
+    "Idle1"
+   ],
+   "durs": [
+    1.67,
+    4
+   ],
+   "dmgMs": 392,
+   "unlockMs": 1667
+  },
+  "E": {
+   "clip": "Spell3",
+   "clips": [
+    "Spell3",
+    "Idle1"
+   ],
+   "durs": [
+    0.77,
+    4
+   ],
+   "dmgMs": null,
+   "unlockMs": 470
+  },
+  "R": {
+   "clip": "Spell4",
+   "clips": [
+    "Spell4",
+    "Idle1"
+   ],
+   "durs": [
+    1.33,
+    4
+   ],
+   "dmgMs": 504,
+   "unlockMs": 619
+  },
+  "AA": {
+   "clip": "Attack1",
+   "clipDur": 1.33,
+   "windupMs": 309,
+   "intervalMs": 701,
+   "windupPct": 0.2,
+   "as": 0
+  },
+  "champ": "darius",
+  "errors": []
+ },
+ "masteryi": {
+  "Q": {
+   "clip": "Spell1",
+   "clips": [
+    "Spell1",
+    "masteryi_2013_idle1.anm"
+   ],
+   "durs": [
+    1.83,
+    4
+   ],
+   "dmgMs": 1001,
+   "unlockMs": 1001
+  },
+  "W": {
+   "clip": "Spell2_Loop",
+   "clips": [
+    "Spell2_Loop"
+   ],
+   "durs": [
+    1.67
+   ],
+   "dmgMs": null,
+   "unlockMs": null
+  },
+  "E": {
+   "clip": "masteryi_2013_idle1.anm",
+   "clips": [
+    "masteryi_2013_idle1.anm"
+   ],
+   "durs": [
+    4
+   ],
+   "dmgMs": null,
+   "unlockMs": 73
+  },
+  "R": {
+   "clip": "masteryi_2013_idle1.anm",
+   "clips": [
+    "masteryi_2013_idle1.anm"
+   ],
+   "durs": [
+    4
+   ],
+   "dmgMs": null,
+   "unlockMs": 100
+  },
+  "AA": {
+   "clip": "masteryi_2013_attack1.anm",
+   "clipDur": 1.83,
+   "windupMs": 300,
+   "intervalMs": 1242,
+   "windupPct": 0.24375,
+   "as": 0
+  },
+  "champ": "masteryi",
+  "errors": []
+ },
+ "leesin": {
+  "Q": {
+   "clip": "Spell1",
+   "clips": [
+    "Spell1",
+    "Spell1_ToIdle",
+    "Idle_Active"
+   ],
+   "durs": [
+    1.17,
+    0.97,
+    3
+   ],
+   "dmgMs": 183,
+   "unlockMs": 370
+  },
+  "W": {
+   "clip": "Spell2",
+   "clips": [
+    "Spell2",
+    "Spell2_ToIdle",
+    "Idle_Active"
+   ],
+   "durs": [
+    1.33,
+    1.27,
+    3
+   ],
+   "dmgMs": null,
+   "unlockMs": 134
+  },
+  "E": {
+   "clip": "Spell3",
+   "clips": [
+    "Spell3",
+    "Spell3_ToIdle"
+   ],
+   "durs": [
+    2.17,
+    1.03
+   ],
+   "dmgMs": 44,
+   "unlockMs": 346
+  },
+  "R": {
+   "clip": "Spell4",
+   "clips": [
+    "Spell4",
+    "Spell4_ToIdle",
+    "Idle_Active"
+   ],
+   "durs": [
+    0.3,
+    0.97,
+    3
+   ],
+   "dmgMs": 411,
+   "unlockMs": 411
+  },
+  "AA": {
+   "clip": "Attack1",
+   "clipDur": 0.33,
+   "windupMs": 323,
+   "intervalMs": null,
+   "windupPct": 0.19531,
+   "as": 0
+  },
+  "champ": "leesin",
+  "errors": []
+ },
+ "nautilus": {
+  "Q": {
+   "clip": "Spell1",
+   "clips": [
+    "Spell1",
+    "Idle1"
+   ],
+   "durs": [
+    0.47,
+    15.2
+   ],
+   "dmgMs": 336,
+   "unlockMs": 336
+  },
+  "W": {
+   "clip": "Idle1",
+   "clips": [
+    "Idle1"
+   ],
+   "durs": [
+    15.2
+   ],
+   "dmgMs": null,
+   "unlockMs": 138
+  },
+  "E": {
+   "clip": "Spell3",
+   "clips": [
+    "Spell3"
+   ],
+   "durs": [
+    1
+   ],
+   "dmgMs": 36,
+   "unlockMs": 36
+  },
+  "R": {
+   "clip": "Spell4",
+   "clips": [
+    "Spell4",
+    "Idle1"
+   ],
+   "durs": [
+    1.9,
+    15.2
+   ],
+   "dmgMs": 545,
+   "unlockMs": 545
+  },
+  "AA": {
+   "clip": "Passive",
+   "clipDur": 2.03,
+   "windupMs": 473,
+   "intervalMs": 1476,
+   "windupPct": 0.30637,
+   "as": 0
+  },
+  "champ": "nautilus",
+  "errors": []
+ },
+ "yasuo": {
+  "Q": {
+   "clip": "Spell1A",
+   "clips": [
+    "Spell1A",
+    "Idle1_Raw"
+   ],
+   "durs": [
+    0.97,
+    13.33
+   ],
+   "dmgMs": 447,
+   "unlockMs": 535
+  },
+  "W": {
+   "clip": "Spell2_0",
+   "clips": [
+    "Spell2_0",
+    "Idle1_Raw"
+   ],
+   "durs": [
+    0.7,
+    13.33
+   ],
+   "dmgMs": null,
+   "unlockMs": 803
+  },
+  "E": {
+   "clip": "Spell3",
+   "clips": [
+    "Spell3",
+    "Idle1_Raw"
+   ],
+   "durs": [
+    1.07,
+    13.33
+   ],
+   "dmgMs": 508,
+   "unlockMs": 508
+  },
+  "R": {
+   "clip": "Idle1_Raw",
+   "clips": [
+    "Idle1_Raw"
+   ],
+   "durs": [
+    13.33
+   ],
+   "dmgMs": null,
+   "unlockMs": 60
+  },
+  "AA": {
+   "clip": "Attack1",
+   "clipDur": 1.67,
+   "windupMs": 389,
+   "intervalMs": 1505,
+   "windupPct": 0.22,
+   "as": 0
+  },
+  "champ": "yasuo",
+  "errors": []
+ },
+ "yone": {
+  "Q": {
+   "clip": "Yone_Spell1_A_02.anm",
+   "clips": [
+    "Yone_Spell1_A_02.anm",
+    "Idle1_Base"
+   ],
+   "durs": [
+    0.7,
+    2.97
+   ],
+   "dmgMs": 507,
+   "unlockMs": 507
+  },
+  "W": {
+   "clip": "Spell2",
+   "clips": [
+    "Spell2",
+    "Spell2_ToIdle",
+    "Idle1_Base"
+   ],
+   "durs": [
+    0.5,
+    1.47,
+    2.97
+   ],
+   "dmgMs": 731,
+   "unlockMs": 2052
+  },
+  "E": {
+   "clip": "Spell3_Dash",
+   "clips": [
+    "Yone_Spell3_spiritIn.anm",
+    "Spell3_SpiritIn_ToIdle"
+   ],
+   "durs": [
+    0.17,
+    3.33
+   ],
+   "dmgMs": null,
+   "unlockMs": null
+  },
+  "R": {
+   "clip": "Spell4",
+   "clips": [
+    "Spell4",
+    "Idle1_Base",
+    "Spell3_Out",
+    "Spell3_End1"
+   ],
+   "durs": [
+    1.67,
+    2.97,
+    0.17,
+    0.07
+   ],
+   "dmgMs": 945,
+   "unlockMs": 1375
+  },
+  "AA": {
+   "clip": "Attack1",
+   "clipDur": 0.33,
+   "windupMs": 468,
+   "intervalMs": 1706,
+   "windupPct": 0.22,
+   "as": 0
+  },
+  "champ": "yone",
+  "errors": []
+ },
+ "sett": {
+  "Q": {
+   "clip": "Idle_Base",
+   "clips": [
+    "Idle_Base"
+   ],
+   "durs": [
+    3.33
+   ],
+   "dmgMs": null,
+   "unlockMs": 82
+  },
+  "W": {
+   "clip": "Sett_spell2.anm",
+   "clips": [
+    "Sett_spell2.anm",
+    "Idle_Base"
+   ],
+   "durs": [
+    1.57,
+    3.33
+   ],
+   "dmgMs": 813,
+   "unlockMs": 977
+  },
+  "E": {
+   "clip": "Spell3",
+   "clips": [
+    "Spell3",
+    "Idle_Base"
+   ],
+   "durs": [
+    0.4,
+    3.33
+   ],
+   "dmgMs": 350,
+   "unlockMs": 573
+  },
+  "R": {
+   "clip": "Spell4_Dash",
+   "clips": [
+    "Spell4_Dash",
+    "Spell4_Grab",
+    "Spell4_Spin",
+    "Spell4_PowerBomb"
+   ],
+   "durs": [
+    0.5,
+    0.2,
+    0.97,
+    0.93
+   ],
+   "dmgMs": 2828,
+   "unlockMs": 2828
+  },
+  "AA": {
+   "clip": "Spell1_A",
+   "clipDur": 2.47,
+   "windupMs": 411,
+   "intervalMs": 1706,
+   "windupPct": 0.21429,
+   "as": 0
+  },
+  "champ": "sett",
+  "errors": []
+ },
+ "mordekaiser": {
+  "Q": {
+   "clip": "Spell1",
+   "clips": [
+    "Spell1",
+    "Spell1_To_Idle",
+    "Idle.anm"
+   ],
+   "durs": [
+    0.87,
+    1.77,
+    4.23
+   ],
+   "dmgMs": 594,
+   "unlockMs": 709
+  },
+  "W": {
+   "clip": "Idle.anm",
+   "clips": [
+    "Idle.anm"
+   ],
+   "durs": [
+    4.23
+   ],
+   "dmgMs": null,
+   "unlockMs": 108
+  },
+  "E": {
+   "clip": "Spell3_Cast.anm",
+   "clips": [
+    "Spell3_Cast.anm",
+    "Spell3_Cast_to_Idle.anm",
+    "Idle.anm"
+   ],
+   "durs": [
+    2.67,
+    1.33,
+    4.23
+   ],
+   "dmgMs": 588,
+   "unlockMs": 802
+  },
+  "R": {
+   "clip": "Spell4",
+   "clips": [
+    "Spell4",
+    "Spell4_To_Idle"
+   ],
+   "durs": [
+    0.5,
+    2.27
+   ],
+   "dmgMs": null,
+   "unlockMs": 936
+  },
+  "AA": {
+   "clip": "AutoAttack1.anm",
+   "clipDur": 2.97,
+   "windupMs": 408,
+   "intervalMs": null,
+   "windupPct": 0.21133,
+   "as": 0
+  },
+  "champ": "mordekaiser",
+  "errors": []
+ },
+ "renekton": {
+  "Q": {
+   "clip": "Spell1",
+   "clips": [
+    "Spell1",
+    "Idle1"
+   ],
+   "durs": [
+    0.84,
+    3.17
+   ],
+   "dmgMs": 560,
+   "unlockMs": 673
+  },
+  "W": {
+   "clip": "Spell2",
+   "clips": [
+    "Spell2",
+    "Idle1"
+   ],
+   "durs": [
+    1.1,
+    3.17
+   ],
+   "dmgMs": 574,
+   "unlockMs": 1281
+  },
+  "E": {
+   "clip": "Spell3",
+   "clips": [
+    "Spell3",
+    "Idle1"
+   ],
+   "durs": [
+    0.74,
+    3.17
+   ],
+   "dmgMs": 345,
+   "unlockMs": 345
+  },
+  "R": {
+   "clip": "Spell4",
+   "clips": [
+    "Spell4",
+    "Idle1"
+   ],
+   "durs": [
+    0.97,
+    3.17
+   ],
+   "dmgMs": 568,
+   "unlockMs": 191
+  },
+  "AA": {
+   "clip": "Attack1",
+   "clipDur": 1.1,
+   "windupMs": 304,
+   "intervalMs": 439,
+   "windupPct": 0.1773,
+   "as": 0
+  },
+  "champ": "renekton",
+  "errors": []
+ },
+ "nilah": {
+  "Q": {
+   "clip": "Spell1A",
+   "clips": [
+    "Spell1A",
+    "Spell1B",
+    "Spell1C",
+    "Idle1.anm"
+   ],
+   "durs": [
+    0.2,
+    0.2,
+    0.27,
+    5.33
+   ],
+   "dmgMs": 1109,
+   "unlockMs": 1109
+  },
+  "W": {
+   "clip": "Spell2",
+   "clips": [
+    "Spell2",
+    "Idle1.anm"
+   ],
+   "durs": [
+    0.8,
+    5.33
+   ],
+   "dmgMs": null,
+   "unlockMs": 354
+  },
+  "E": {
+   "clip": "Spell3A",
+   "clips": [
+    "Spell3A",
+    "Idle1.anm"
+   ],
+   "durs": [
+    0.7,
+    5.33
+   ],
+   "dmgMs": 330,
+   "unlockMs": 450
+  },
+  "R": {
+   "clip": "Spell4_Idle",
+   "clips": [
+    "Spell4_Idle",
+    "Spell4_ToIdle",
+    "Idle1.anm"
+   ],
+   "durs": [
+    1.6,
+    7.63,
+    5.33
+   ],
+   "dmgMs": 392,
+   "unlockMs": 2181
+  },
+  "AA": {
+   "clip": "Attack1a",
+   "clipDur": 0.27,
+   "windupMs": 373,
+   "intervalMs": 1526,
+   "windupPct": 0.22,
+   "as": 0
+  },
+  "champ": "nilah",
+  "errors": []
+ },
+ "chogath": {
+  "Q": {
+   "clip": "Spell1",
+   "clips": [
+    "Spell1",
+    "Idle1"
+   ],
+   "durs": [
+    1.03,
+    2
+   ],
+   "dmgMs": 936,
+   "unlockMs": 936
+  },
+  "W": {
+   "clip": "Spell2",
+   "clips": [
+    "Spell2",
+    "Idle1"
+   ],
+   "durs": [
+    1.33,
+    2
+   ],
+   "dmgMs": null,
+   "unlockMs": 286
+  },
+  "E": {
+   "clip": "Idle1",
+   "clips": [
+    "Idle1"
+   ],
+   "durs": [
+    2
+   ],
+   "dmgMs": null,
+   "unlockMs": 34
+  },
+  "R": {
+   "clip": "Idle1",
+   "clips": [
+    "Idle1"
+   ],
+   "durs": [
+    2
+   ],
+   "dmgMs": 82,
+   "unlockMs": 82
+  },
+  "AA": {
+   "clip": "Attack1",
+   "clipDur": 0.81,
+   "windupMs": 343,
+   "intervalMs": 1550,
+   "windupPct": 0.219,
+   "as": 0
+  },
+  "champ": "chogath",
+  "errors": []
+ },
+ "ezreal": {
+  "Q": {
+   "clip": "Spell1",
+   "clips": [
+    "Spell1",
+    "Idle_Base"
+   ],
+   "durs": [
+    0.4,
+    2.67
+   ],
+   "dmgMs": 138,
+   "unlockMs": 439
+  },
+  "W": {
+   "clip": "Spell2",
+   "clips": [
+    "Spell2",
+    "Idle_Base"
+   ],
+   "durs": [
+    0.33,
+    2.67
+   ],
+   "dmgMs": null,
+   "unlockMs": 383
+  },
+  "E": {
+   "clip": "Spell3_0",
+   "clips": [
+    "Spell3_0",
+    "Idle_Base"
+   ],
+   "durs": [
+    0.4,
+    2.67
+   ],
+   "dmgMs": 28,
+   "unlockMs": 463
+  },
+  "R": {
+   "clip": "Spell4",
+   "clips": [
+    "Spell4",
+    "Idle_Base"
+   ],
+   "durs": [
+    1,
+    2.67
+   ],
+   "dmgMs": 1076,
+   "unlockMs": 1221
+  },
+  "AA": {
+   "clip": "Attack1a",
+   "clipDur": 2.77,
+   "windupMs": 265,
+   "intervalMs": 1167,
+   "windupPct": 0.18839,
+   "as": 0
+  },
+  "champ": "ezreal",
+  "errors": []
+ },
+ "ashe": {
+  "Q": {
+   "clip": "Idle1",
+   "clips": [
+    "Idle1"
+   ],
+   "durs": [
+    9.33
+   ],
+   "dmgMs": null,
+   "unlockMs": 115
+  },
+  "W": {
+   "clip": "Spell2",
+   "clips": [
+    "Spell2",
+    "Idle1"
+   ],
+   "durs": [
+    1.83,
+    9.33
+   ],
+   "dmgMs": 266,
+   "unlockMs": 427
+  },
+  "E": {
+   "clip": "Spell3",
+   "clips": [
+    "Spell3",
+    "Idle1"
+   ],
+   "durs": [
+    1.67,
+    9.33
+   ],
+   "dmgMs": null,
+   "unlockMs": 418
+  },
+  "R": {
+   "clip": "Spell4",
+   "clips": [
+    "Spell4",
+    "Idle1"
+   ],
+   "durs": [
+    2.13,
+    9.33
+   ],
+   "dmgMs": 527,
+   "unlockMs": 735
+  },
+  "AA": {
+   "clip": "Attack1",
+   "clipDur": 2.13,
+   "windupMs": 319,
+   "intervalMs": 1586,
+   "windupPct": 0.2193,
+   "as": 0
+  },
+  "champ": "ashe",
+  "errors": []
+ },
+ "varus": {
+  "Q": {
+   "clip": "Spell1_Idle",
+   "clips": [
+    "Spell1_Idle",
+    "Spell1_Fire",
+    "varus_idle1.anm"
+   ],
+   "durs": [
+    2.33,
+    0.55,
+    2.1
+   ],
+   "dmgMs": 1519,
+   "unlockMs": 1948
+  },
+  "W": {
+   "clip": "varus_idle1.anm",
+   "clips": [
+    "varus_idle1.anm"
+   ],
+   "durs": [
+    2.1
+   ],
+   "dmgMs": null,
+   "unlockMs": 73
+  },
+  "E": {
+   "clip": "Spell3",
+   "clips": [
+    "Spell3",
+    "varus_idle1.anm"
+   ],
+   "durs": [
+    0.97,
+    2.1
+   ],
+   "dmgMs": 304,
+   "unlockMs": 469
+  },
+  "R": {
+   "clip": "Spell4",
+   "clips": [
+    "Spell4",
+    "varus_idle1.anm"
+   ],
+   "durs": [
+    0.97,
+    2.1
+   ],
+   "dmgMs": 456,
+   "unlockMs": 490
+  },
+  "AA": {
+   "clip": "Attack1",
+   "clipDur": 2.5,
+   "windupMs": 260,
+   "intervalMs": 1596,
+   "windupPct": 0.17544,
+   "as": 0
+  },
+  "champ": "varus",
+  "errors": []
+ },
+ "ahri": {
+  "Q": {
+   "clip": "Spell1",
+   "clips": [
+    "Spell1",
+    "Idle1"
+   ],
+   "durs": [
+    0.43,
+    3.97
+   ],
+   "dmgMs": 181,
+   "unlockMs": 553
+  },
+  "W": {
+   "clip": "Spell2",
+   "clips": [
+    "Spell2",
+    "Idle1"
+   ],
+   "durs": [
+    1.33,
+    3.97
+   ],
+   "dmgMs": 367,
+   "unlockMs": 1445
+  },
+  "E": {
+   "clip": "Spell3_south",
+   "clips": [
+    "Spell3_south",
+    "Idle1"
+   ],
+   "durs": [
+    2.77,
+    3.97
+   ],
+   "dmgMs": 189,
+   "unlockMs": 2910
+  },
+  "R": {
+   "clip": "Spell4",
+   "clips": [
+    "Spell4",
+    "Spell4_Idle"
+   ],
+   "durs": [
+    0.4,
+    1.8
+   ],
+   "dmgMs": 118,
+   "unlockMs": null
+  },
+  "AA": {
+   "clip": "Attack1",
+   "clipDur": 0.37,
+   "windupMs": 414,
+   "intervalMs": 1608,
+   "windupPct": 0.2,
+   "as": 0
+  },
+  "champ": "ahri",
+  "errors": []
+ },
+ "vex": {
+  "Q": {
+   "clip": "Spell1_Base",
+   "clips": [
+    "Spell1_Base",
+    "Idle_Loop"
+   ],
+   "durs": [
+    1.03,
+    12
+   ],
+   "dmgMs": 389,
+   "unlockMs": 545
+  },
+  "W": {
+   "clip": "Spell2_BASE",
+   "clips": [
+    "Spell2_BASE",
+    "Idle_Loop"
+   ],
+   "durs": [
+    0.83,
+    12
+   ],
+   "dmgMs": null,
+   "unlockMs": 378
+  },
+  "E": {
+   "clip": "Spell3_0",
+   "clips": [
+    "Spell3_0",
+    "Idle_Loop"
+   ],
+   "durs": [
+    0.77,
+    12
+   ],
+   "dmgMs": null,
+   "unlockMs": 1260
+  },
+  "R": {
+   "clip": "Idle_Loop",
+   "clips": [
+    "Idle_Loop"
+   ],
+   "durs": [
+    12
+   ],
+   "dmgMs": 173,
+   "unlockMs": 356
+  },
+  "AA": {
+   "clip": "Attack1_Hit",
+   "clipDur": 1.37,
+   "windupMs": 260,
+   "intervalMs": 1555,
+   "windupPct": 0.15625,
+   "as": 0
+  },
+  "champ": "vex",
+  "errors": []
+ }
+}

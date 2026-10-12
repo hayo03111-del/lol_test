@@ -1,0 +1,35 @@
+{
+ "video": "6e5e6e5e6c536142650c01029bc01001.webm",
+ "frames": 208,
+ "nominalFps": 25.0,
+ "measuredFps": 25.0,
+ "durationSec": 8.28,
+ "frameTimeErrorSec": 0.04,
+ "thresholds": {
+  "motion": 0.001139130972641589,
+  "brightDelta": 0.0002
+ },
+ "events": {
+  "sync_flash": [
+   {
+    "frame": 0,
+    "t": 0.0
+   },
+   {
+    "frame": 109,
+    "t": 4.36
+   }
+  ],
+  "reference": {
+   "frame": 109,
+   "t": 4.36
+  },
+  "motion_onset": null,
+  "motion_peaks": [],
+  "effect_onsets": []
+ },
+ "baselineWindowSec": [
+  0.3,
+  0.8
+ ]
+}
