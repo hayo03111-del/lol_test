@@ -18,6 +18,9 @@ const COMBOS = [
   { id: 'ashe', kr: '애쉬', name: 'W 부채꼴 여러 대상', dist: 500, steps: [[0, 'cast', 'W']], ms: 1500, tag: 'W' },
   { id: 'renekton', kr: '레넥톤', name: 'R 주변 지속 피해', dist: 150, steps: [[0, 'cast', 'R']], ms: 3500, tag: 'R' },
   { id: 'nilah', kr: '닐라', name: 'Q 후 강화 평타(원뿔)', dist: 150, steps: [[0, 'cast', 'Q'], [500, 'attack']], ms: 3000, tag: 'Q+AA' },
+  { id: 'garen', kr: '가렌', name: 'E 회전 중 R → 회전 끊고 R', dist: 150, steps: [[0, 'cast', 'E'], [1000, 'cast', 'R']], ms: 2200, tag: 'E>R', check: 'out.eEnded = c.currentActionKey !== "eChannel";' },
+  { id: 'nautilus', kr: '노틸러스', name: 'R 경로 폭발(주변 허수아비)', dist: 700, steps: [[0, 'cast', 'R']], ms: 3500, tag: 'R' },
+  { id: 'vex', kr: '벡스', name: 'E 피해(50+AP 40%)', dist: 400, steps: [[0, 'cast', 'E']], ms: 1500, tag: 'E' },
   { id: 'yone', kr: '요네', name: 'E 정신체 → 평타 → E 복귀 표식 폭발', dist: 250, steps: [[0, 'cast', 'E'], [500, 'attack'], [2000, 'stop'], [2100, 'cast', 'E']], ms: 3200 },
 ];
 (async () => {

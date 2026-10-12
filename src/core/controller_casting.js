@@ -281,7 +281,12 @@ CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
     if (this.championId === 'yasuo' && slot === 'R' && this.currentActionKey === 'yasuoE' && this.currentPhase === 'ACTIVE') { this._dispatchCast(slot, mouseWorldPoint, false); return; }
     // PC 패치 기록(V1.0.0.97 이후): 가렌은 E(심판) 회전 중에도 모든 스킬을 쓸 수 있고 회전은 계속된다.
     // Q/W는 원래 허용돼 있었고, R도 회전을 끊지 않는 전용 경로로 처리한다(예전엔 막혀 있었다).
-    if (this.championId === 'garen' && slot === 'R' && this.currentActionKey === 'eChannel') { this._garenCastRDuringE(); return; }
+    // PC 위키(Judgment): 회전 중 Q/W는 쓸 수 있고, R(데마시아의 정의)은 회전을 끊는다. 예전엔 회전을 유지한 채 R 피해만
+    // 따로 넣었다(_garenCastRDuringE). 이제 회전을 끝내고 일반 R 경로(시전 시간·모션 포함)로 진행한다.
+    if (this.championId === 'garen' && slot === 'R' && this.currentActionKey === 'eChannel') {
+      const t = this.currentTarget, rd = this._champData() && this._champData().R;
+      if (t && t.hp > 0 && rd && isInRange(this, t, rd.range) && !isSilenced(this) && this._canAffordAbility('R')) this._endEChannel();
+    }
     // 닐라 E 돌진 중 Q는 같은 돌진 경로에 Q를 겹쳐서 사용할 수 있다. E의
     // 돌진 액션을 끊지 않고 Q만 별도로 실행한다.
     if (this.championId === 'nilah' && slot === 'Q' && this.currentActionKey === 'nilahE' && this.currentPhase === 'ACTIVE') {

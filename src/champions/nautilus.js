@@ -347,9 +347,13 @@ CharacterController.prototype._nautilusTickRTravel = function(dt) {
   vfx.spawn('hit', t.pos.clone(), undefined, { color: 0x3f7fa8 });
 
   const pathRaw = skillVal(r.pathDamageByLevel, t.lvl) + r.pathApRatio * (this.stats.abilityPower || 0);
-  for (const u of getAllEnemyUnits()) {
+  // 경로 폭발(PC 위키): 0.264초마다 그 순간 충격파 위치에서 반경 225. 한 대상은 한 번만 맞는다.
+  t.eruptAccum = (t.eruptAccum == null ? r.pathEruptionIntervalSec : t.eruptAccum) + dt;
+  const erupt = t.eruptAccum >= (r.pathEruptionIntervalSec || 0.264);
+  if (erupt) t.eruptAccum -= (r.pathEruptionIntervalSec || 0.264);
+  for (const u of (erupt ? getAllEnemyUnits() : [])) {
     if (!u || u === target || u.hp <= 0 || u.isStructure || t.pathHit.has(u)) continue;
-    if (!isInCircle(u, t.pos, lolRangeToWorld(r.pathWidth) * 0.5)) continue;
+    if (!isInCircle(u, t.pos, lolRangeToWorld(r.pathEruptionRadius || 225))) continue;
     t.pathHit.add(u);
     applyDamage(u, { rawDamage: pathRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     applyStatus(u, { id: 'nautilusR_pathKnockup', type: 'KNOCKUP', duration: r.pathKnockupSec, value: 1, source: this });

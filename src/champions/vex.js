@@ -263,7 +263,7 @@ CharacterController.prototype._vexTickE = function(dt) {
   t.traveled = Math.min(t.total, t.traveled + lolRangeToWorld(e.missileSpeed || 1300) * dt);
   if (t.traveled < t.total - 1e-6) return;
   this._vex.eTravel = null;
-  const raw = skillVal(e.damageByLevel, t.lvl) + (e.apRatio || 0) * (this.stats.abilityPower || 0);
+  const raw = skillVal(e.damageByLevel, t.lvl) + (e.apRatioByLevel ? skillVal(e.apRatioByLevel, t.lvl) : (e.apRatio || 0)) * (this.stats.abilityPower || 0);
   const slow = skillVal(e.slowPercentByLevel, t.lvl) / 100;
   vfx.spawn('hit', t.to.clone(), undefined, { color: 0x8b5cf6 });
   for (const h of findEnemiesInRadius(t.to, t.radius)) {

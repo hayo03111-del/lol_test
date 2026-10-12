@@ -28,7 +28,8 @@ CharacterController.prototype._yasuoQCastTime = function() {
 // 공용 처리(applyIntentPassive)가 맡는다.
 CharacterController.prototype._yasuoCritMultiplier = function() { return this.stats.critMultiplier || 1.75; };
 
-CharacterController.prototype._yasuoShieldAmount = function() {  const p = this._champData().passive; return p.shieldBase + Math.max(0, this.champLevel - 1) * p.shieldPerLevel;
+// PC 위키(V13.15): 보호막 125~600은 "레벨 성장 공식"(능력치와 같은 곡선)을 쓴다 - 예전엔 레벨당 같은 양씩 선형 증가였다(양끝 값은 같음).
+CharacterController.prototype._yasuoShieldAmount = function() {  const p = this._champData().passive; return growStat(p.shieldBase, p.shieldPerLevel, this.champLevel || 1);
 };
 
 // 결의: 이동한 거리(LoL 단위)만큼 기류를 얻는다. 버그 수정: 예전엔 "월드 거리"에

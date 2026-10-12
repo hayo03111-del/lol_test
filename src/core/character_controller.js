@@ -1239,6 +1239,19 @@ class CharacterController {
     // 동기화해줘야 실제로 이동속도에 반영된다).
     tickStatusEffects(this, dt);
     tickShields(this, dt); // 보호막 만료·감소(인스턴스별)
+    // 플레이어 군중 제어 모션(원작: 기절·에어본 중 전용 모션). GLB에 Stunned/KnockUp 클립이 있는 챔피언만 재생하고,
+    // CC가 풀리면 일반 이동/대기 모션으로 돌아간다. (예전엔 엔진에 플레이어 CC 모션 단계가 없었다.)
+    {
+      const air = hasStatus(this, 'KNOCKUP') || hasStatus(this, 'SUPPRESSION');
+      const cc = air || isCrowdControlled(this);
+      if (cc && !this._ccAnimActive) {
+        const clips = air ? ['KnockUp_Loop', 'KnockUp', 'KnockUp_In', 'Stunned'] : ['Stunned'];
+        if (clips.some((n) => this.findAnimation(n))) { this.playFirstAvailable(clips, { loop: THREE.LoopRepeat, fade: 0.1 }); this._ccAnimActive = true; }
+      } else if (!cc && this._ccAnimActive) {
+        this._ccAnimActive = false;
+        if (!this.currentActionKey) this._returnToLocomotion();
+      }
+    }
     this._nilahUpdate(dt);
     if (this.championId === 'nilah' && this._nilahWeaponRig) {
       this._nilahWeaponRig.active = !!(this.currentActionKey && /nilah(Q|E|R)/.test(String(this.currentActionKey)));

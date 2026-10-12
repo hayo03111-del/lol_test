@@ -581,7 +581,7 @@ const CHAMPION_DATA = {
       // PC 위키 V13.3: 8~110 → 14~116(레벨 비례). 128이라는 값은 어떤 패치 기록에도 없어 116으로 확정.
       bonusDamageAtLevel1: 14, bonusDamageAtLevel18: 116,
       rootByLevel: { breakpoints: [1, 6, 11, 16], values: [0.75, 1.0, 1.25, 1.5] }, // PC 위키: 0.75~1.5초(V9.12). 구간 1/6/11/16은 미확인
-      sameTargetCooldownSec: 6, // 원본 설명 "동일 대상 6초 1회"
+      sameTargetCooldownSec: 5, // PC 위키 패치 기록 V13.24: 같은 대상 재발동 6초 → 5초(이후 되돌린 기록 없음)
     },
     Q: {
       name: '닻줄 견인', cooldown: [14, 13, 12, 11, 10], mana: 60, range: 1150,
@@ -612,7 +612,8 @@ const CHAMPION_DATA = {
       pathDamageByLevel: [125, 175, 225], pathApRatio: 0.4,
       stunByLevel: [1, 1.5, 2], // 주 대상 에어본+기절 총합
       pathKnockupSec: 1, // PC 위키: 경로 폭발에 맞은 적은 1초 공중에 뜸(0.5초 → 1초 패치). 예전 0.75는 근거 없던 값
-      pathWidth: 300, // 미확인 - 경로 충격파 판정 폭
+      // PC 위키(노틸러스 문서·Depth Charge 템플릿): 경로는 0.264초마다 충격파 위치에서 반경 225 폭발(예전엔 미확인 폭 300의 연속 판정).
+      pathEruptionRadius: 225, pathEruptionIntervalSec: 0.264,
       // PC 위키 Template:Data Nautilus/Depth Charge: 시전 0.46초, 충격파 속도 275에서 초당 +466.67 가속.
       shockwaveSpeed: 275, shockwaveAccelPerSec: 466.67,
       castTimeSec: 0.46,
@@ -833,8 +834,9 @@ const CHAMPION_DATA = {
       name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: [70, 80, 90, 100, 110], // Data Dragon
       // PC 위키: 시전 0.25초, 지정 지점까지 날아가 폭발 - 반경 200~300(시전 거리 비례). 피해 수치는 최신 PC 출처가
       // 엇갈려 기존 값 유지(미확인). 투사체 속도 1300은 PC 위키(Template:Data_Vex/Looming_Darkness)로 확인.
-      range: 800, castTimeSec: 0.25, radiusMin: 200, radiusMax: 300, missileSpeed: 1300, damageByLevel: [60, 105, 150, 195, 240],
-      apRatio: 0.4, slowPercentByLevel: [30, 35, 40, 45, 50],
+      // PC 위키 Template:Data_Vex/Looming_Darkness·패치 기록: 50/70/90/110/130(+주문력 40~60%). 예전 60~240(+40%)은 옛 값.
+      range: 800, castTimeSec: 0.25, radiusMin: 200, radiusMax: 300, missileSpeed: 1300, damageByLevel: [50, 70, 90, 110, 130],
+      apRatioByLevel: [0.4, 0.45, 0.5, 0.55, 0.6], slowPercentByLevel: [30, 35, 40, 45, 50],
       slowDuration: 2, damageType: 'MAGICAL',
       piercesUnits: true,
       //챔피언을 처치하면 파멸과 우울 재사용 대기시간의 25%를 돌려받음
@@ -1271,8 +1273,10 @@ const CHAMPION_DATA = {
       // PC 위키/Data Dragon: 충전 2회, 재충전 90/80/70/60/50초, 사용 간격 5초, 마나 없음
       // (예전엔 충전 시스템이 없다며 20~12초 단일 쿨다운·마나 40으로 근사했었다).
       cooldown: 5, mana: 0, maxCharges: 2, rechargeTime: [90, 80, 70, 60, 50],
-      range: 4000, missileSpeed: 1700,
-      visionRadius: 900, visionDurationSec: 5.0,
+      // PC 위키 Template:Data_Ashe/Hawkshot: 속도 1400, 시야 반경 1000. 경로 시야는 100 유닛마다 0.5초씩 갱신,
+      // 도착 지점 5초. (예전 1700/900, 경로 시야 미구현)
+      range: 4000, missileSpeed: 1400,
+      visionRadius: 1000, visionDurationSec: 5.0, pathVisionStepLol: 100, pathVisionSec: 0.5,
       castTimeSec: 0.25,
     },
     R: {
@@ -1280,10 +1284,13 @@ const CHAMPION_DATA = {
       desc: '전 맵 사거리로 거대한 얼음 화살을 발사한다. 처음 맞힌 적 챔피언에게 마법 피해를 입히고 기절시키며(비행 거리가 길수록 기절 시간 증가), 주변의 다른 적에게도 같은 피해를 입히지만 기절은 걸지 않는다.',
       cooldown: [100, 80, 60] /* Data Dragon 16.20.1 */, mana: 100, // Data Dragon: 100(예전 150~200)
       range: 20000, // "글로벌" 사거리 - ezreal.js의 R(정조준 사격)과 동일한 관례(20000) 재사용
-      missileSpeed: 1500, missileMaxSpeed: 2100, missileAccelPerSec: 600, width: 260, // PC 위키: 속도 1500→2100(가속률은 미공개라 초당 600 추정), 폭 260
+      missileSpeed: 1500, missileMaxSpeed: 2100, width: 260, // PC 위키: 폭 260
+      missileSpeedBySecond: [1500, 1700, 1900, 2100], // PC 위키: 비행 시간(초)에 따라 1500/1700/1900/2100
       damageByLevel: [200, 400, 600], apRatio: 1.2,
-      splashDamagePercent: 100, splashRadius: 400, // 주변 적도 같은 피해 + 서리 화살(PC 위키). 반경 400은 미확인
-      minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 20000,
+      splashDamagePercent: 100, splashRadius: 400, // 주변 적도 같은 피해 + 서리 화살(PC 위키). 반경 400은 6차에 PC 위키로 확인
+      // 기절 1~3.5초(비행 거리 비례). 최대가 되는 거리는 위키·패치 기록에 숫자가 없어 1500으로 추정(예전 20000은 사실상
+      // 항상 최소 1초라 거리 비례가 작동하지 않았다). ashe.bin.json을 받으면 확정값으로 바꾼다.
+      minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 1500, maxStunDistanceGuessed: true,
       castTimeSec: 0.25, // PC 위키 Template:Data Ashe/Enchanted Crystal Arrow(예전 0.5)
       visionRadius: 900, visionDurationSec: 3.0, // 비행 경로/명중 지점에도 짧은 시야(공식 설명: "1초간 경로의 시야를 밝힌다" - 근사)
       damageType: 'MAGICAL',

@@ -249,7 +249,7 @@ CharacterController.prototype._asheCastE = function(mouseWorldPoint, free = fals
   const castTime = e.castTimeSec != null ? e.castTimeSec : 0.25; // SKILL_TIMING_DATABASE.ashe.E와 동일
   const flightSec = e.missileSpeed ? dist / lolRangeToWorld(e.missileSpeed) : 1.0;
   this._ashe.ePending = {
-    targetPoint: targetPoint.clone(),
+    targetPoint: targetPoint.clone(), origin: this.root.position.clone(), dir: dir.clone(), totalDist: dist, nextPathLol: 0, flightSec,
     remainingArriveSec: flightSec, remainingRecoverySec: castTime + 0.15,
     arriveDone: false, recoveryDone: false,
   };
@@ -313,7 +313,7 @@ CharacterController.prototype._asheResolveRFire = function(p) {
     halfWidth: lolRangeToWorld(r.width || 130) * 0.5,
     speed: lolRangeToWorld(r.missileSpeed || 1500),
     maxSpeed: lolRangeToWorld(r.missileMaxSpeed || r.missileSpeed || 1500),
-    accel: lolRangeToWorld(r.missileAccelPerSec || 0),
+    speedSteps: (r.missileSpeedBySecond || []).map((v) => lolRangeToWorld(v)), flightSec: 0,
     traveled: 0, vfxAccum: 0,
   };
   vfx.spawn('hit', origin.clone(), undefined, { color: 0x9fd7ff });
@@ -324,7 +324,9 @@ CharacterController.prototype._asheResolveRFire = function(p) {
 CharacterController.prototype._asheTickRTravel = function(dt) {
   const travel = this._ashe && this._ashe.rTravel;
   if (!travel) return;
-  if (travel.accel > 0) travel.speed = Math.min(travel.maxSpeed, travel.speed + travel.accel * dt); // 1500→2100 가속
+  // PC 위키: 비행 시간에 따라 1500 / 1700 / 1900 / 2100(초 단위 계단). 예전엔 초당 600 연속 가속(추정)이었다.
+  travel.flightSec += dt;
+  if (travel.speedSteps.length) travel.speed = travel.speedSteps[Math.min(travel.speedSteps.length - 1, Math.floor(travel.flightSec))];
   const remaining = Math.max(0, travel.maxDist - travel.traveled);
   const step = Math.min(remaining, Math.max(0, travel.speed * dt));
   travel.pos.addScaledVector(travel.dir, step);
@@ -426,9 +428,20 @@ CharacterController.prototype._asheUpdate = function(dt) {
     const p = this._ashe.ePending;
     if (!p.arriveDone) {
       p.remainingArriveSec -= dt;
+      // 경로 시야(PC 위키): 매가 100 유닛 날 때마다 그 위치에 0.5초 시야.
+      const e = this._champData().E;
+      const flown = p.flightSec > 0 ? Math.min(1, 1 - Math.max(0, p.remainingArriveSec) / p.flightSec) * p.totalDist : p.totalDist;
+      const flownLol = worldDistanceToLol(flown);
+      while (p.nextPathLol <= flownLol && typeof visionSystem !== 'undefined' && visionSystem) {
+        const at = p.origin.clone().addScaledVector(p.dir, lolRangeToWorld(p.nextPathLol));
+        visionSystem.grantVision(at, e.visionRadius || 1000, e.pathVisionSec || 0.5);
+        p.nextPathLol += e.pathVisionStepLol || 100;
+      }
       if (p.remainingArriveSec <= 0) {
         p.arriveDone = true;
-        if (this.currentActionKey === 'asheE') this._asheResolveEArrival(p);
+        // 버그 수정: 예전엔 도착 시점에 애쉬가 아직 E 시전 중일 때만 도착 시야를 줬다. 행동 잠금(약 0.4초)이
+        // 비행 시간(최대 약 2.9초)보다 짧아 먼 곳에 보내면 도착 시야가 아예 안 생겼다. 매는 애쉬 행동과 무관하게 난다.
+        this._asheResolveEArrival(p);
       }
     }
     if (!p.recoveryDone) {

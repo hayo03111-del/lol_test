@@ -2021,7 +2021,7 @@ const CHAMPION_DATA = {
       // PC 위키 V13.3: 8~110 → 14~116(레벨 비례). 128이라는 값은 어떤 패치 기록에도 없어 116으로 확정.
       bonusDamageAtLevel1: 14, bonusDamageAtLevel18: 116,
       rootByLevel: { breakpoints: [1, 6, 11, 16], values: [0.75, 1.0, 1.25, 1.5] }, // PC 위키: 0.75~1.5초(V9.12). 구간 1/6/11/16은 미확인
-      sameTargetCooldownSec: 6, // 원본 설명 "동일 대상 6초 1회"
+      sameTargetCooldownSec: 5, // PC 위키 패치 기록 V13.24: 같은 대상 재발동 6초 → 5초(이후 되돌린 기록 없음)
     },
     Q: {
       name: '닻줄 견인', cooldown: [14, 13, 12, 11, 10], mana: 60, range: 1150,
@@ -2052,7 +2052,8 @@ const CHAMPION_DATA = {
       pathDamageByLevel: [125, 175, 225], pathApRatio: 0.4,
       stunByLevel: [1, 1.5, 2], // 주 대상 에어본+기절 총합
       pathKnockupSec: 1, // PC 위키: 경로 폭발에 맞은 적은 1초 공중에 뜸(0.5초 → 1초 패치). 예전 0.75는 근거 없던 값
-      pathWidth: 300, // 미확인 - 경로 충격파 판정 폭
+      // PC 위키(노틸러스 문서·Depth Charge 템플릿): 경로는 0.264초마다 충격파 위치에서 반경 225 폭발(예전엔 미확인 폭 300의 연속 판정).
+      pathEruptionRadius: 225, pathEruptionIntervalSec: 0.264,
       // PC 위키 Template:Data Nautilus/Depth Charge: 시전 0.46초, 충격파 속도 275에서 초당 +466.67 가속.
       shockwaveSpeed: 275, shockwaveAccelPerSec: 466.67,
       castTimeSec: 0.46,
@@ -2273,8 +2274,9 @@ const CHAMPION_DATA = {
       name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: [70, 80, 90, 100, 110], // Data Dragon
       // PC 위키: 시전 0.25초, 지정 지점까지 날아가 폭발 - 반경 200~300(시전 거리 비례). 피해 수치는 최신 PC 출처가
       // 엇갈려 기존 값 유지(미확인). 투사체 속도 1300은 PC 위키(Template:Data_Vex/Looming_Darkness)로 확인.
-      range: 800, castTimeSec: 0.25, radiusMin: 200, radiusMax: 300, missileSpeed: 1300, damageByLevel: [60, 105, 150, 195, 240],
-      apRatio: 0.4, slowPercentByLevel: [30, 35, 40, 45, 50],
+      // PC 위키 Template:Data_Vex/Looming_Darkness·패치 기록: 50/70/90/110/130(+주문력 40~60%). 예전 60~240(+40%)은 옛 값.
+      range: 800, castTimeSec: 0.25, radiusMin: 200, radiusMax: 300, missileSpeed: 1300, damageByLevel: [50, 70, 90, 110, 130],
+      apRatioByLevel: [0.4, 0.45, 0.5, 0.55, 0.6], slowPercentByLevel: [30, 35, 40, 45, 50],
       slowDuration: 2, damageType: 'MAGICAL',
       piercesUnits: true,
       //챔피언을 처치하면 파멸과 우울 재사용 대기시간의 25%를 돌려받음
@@ -2711,8 +2713,10 @@ const CHAMPION_DATA = {
       // PC 위키/Data Dragon: 충전 2회, 재충전 90/80/70/60/50초, 사용 간격 5초, 마나 없음
       // (예전엔 충전 시스템이 없다며 20~12초 단일 쿨다운·마나 40으로 근사했었다).
       cooldown: 5, mana: 0, maxCharges: 2, rechargeTime: [90, 80, 70, 60, 50],
-      range: 4000, missileSpeed: 1700,
-      visionRadius: 900, visionDurationSec: 5.0,
+      // PC 위키 Template:Data_Ashe/Hawkshot: 속도 1400, 시야 반경 1000. 경로 시야는 100 유닛마다 0.5초씩 갱신,
+      // 도착 지점 5초. (예전 1700/900, 경로 시야 미구현)
+      range: 4000, missileSpeed: 1400,
+      visionRadius: 1000, visionDurationSec: 5.0, pathVisionStepLol: 100, pathVisionSec: 0.5,
       castTimeSec: 0.25,
     },
     R: {
@@ -2720,10 +2724,13 @@ const CHAMPION_DATA = {
       desc: '전 맵 사거리로 거대한 얼음 화살을 발사한다. 처음 맞힌 적 챔피언에게 마법 피해를 입히고 기절시키며(비행 거리가 길수록 기절 시간 증가), 주변의 다른 적에게도 같은 피해를 입히지만 기절은 걸지 않는다.',
       cooldown: [100, 80, 60] /* Data Dragon 16.20.1 */, mana: 100, // Data Dragon: 100(예전 150~200)
       range: 20000, // "글로벌" 사거리 - ezreal.js의 R(정조준 사격)과 동일한 관례(20000) 재사용
-      missileSpeed: 1500, missileMaxSpeed: 2100, missileAccelPerSec: 600, width: 260, // PC 위키: 속도 1500→2100(가속률은 미공개라 초당 600 추정), 폭 260
+      missileSpeed: 1500, missileMaxSpeed: 2100, width: 260, // PC 위키: 폭 260
+      missileSpeedBySecond: [1500, 1700, 1900, 2100], // PC 위키: 비행 시간(초)에 따라 1500/1700/1900/2100
       damageByLevel: [200, 400, 600], apRatio: 1.2,
-      splashDamagePercent: 100, splashRadius: 400, // 주변 적도 같은 피해 + 서리 화살(PC 위키). 반경 400은 미확인
-      minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 20000,
+      splashDamagePercent: 100, splashRadius: 400, // 주변 적도 같은 피해 + 서리 화살(PC 위키). 반경 400은 6차에 PC 위키로 확인
+      // 기절 1~3.5초(비행 거리 비례). 최대가 되는 거리는 위키·패치 기록에 숫자가 없어 1500으로 추정(예전 20000은 사실상
+      // 항상 최소 1초라 거리 비례가 작동하지 않았다). ashe.bin.json을 받으면 확정값으로 바꾼다.
+      minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 1500, maxStunDistanceGuessed: true,
       castTimeSec: 0.25, // PC 위키 Template:Data Ashe/Enchanted Crystal Arrow(예전 0.5)
       visionRadius: 900, visionDurationSec: 3.0, // 비행 경로/명중 지점에도 짧은 시야(공식 설명: "1초간 경로의 시야를 밝힌다" - 근사)
       damageType: 'MAGICAL',
@@ -3987,9 +3994,7 @@ const ITEM_DATA = {
     stats: { maxHp: 900, hpRegenPercent: 1.0 },
     // 거인의 흡수(대상별 재사용대기 30초) - "700 사거리 내 챔피언을 상대로
     // 3초간 충전, 충전된 공격은 70+체력6% 추가 물리 피해 + 그 피해의 10%만큼
-    // 영구 최대 체력 획득." 이 엔진엔 "주변 적 전체"를 매 프레임 추적하는
-    // 범용 근접 감지가 없어, 다른 아이템들과 동일하게 ctrl.currentTarget
-    // 기준으로 근사한다(현재 선택한 대상이 700 사거리 내 챔피언일 때만 충전).
+    // 영구 최대 체력 획득." 12차: 사거리 안 적 챔피언마다 따로 충전(원작 방식, item_system.js).
     giantAbsorbPassive: { rangeLol: 700, chargeSec: 3.0, icdSec: 30, flatDmg: 70, bonusHpPercent: 0.06, maxHpGainPercent: 0.10 },
     // 거인 - "최대 체력 1000당 크기가 3% 증가(최대 30%)". 전투에 영향을 주는
     // 수치가 아니라 모델 크기(시각 효과)라 ctrl.root.scale에 직접 반영한다.
@@ -10241,6 +10246,19 @@ class CharacterController {
     // 동기화해줘야 실제로 이동속도에 반영된다).
     tickStatusEffects(this, dt);
     tickShields(this, dt); // 보호막 만료·감소(인스턴스별)
+    // 플레이어 군중 제어 모션(원작: 기절·에어본 중 전용 모션). GLB에 Stunned/KnockUp 클립이 있는 챔피언만 재생하고,
+    // CC가 풀리면 일반 이동/대기 모션으로 돌아간다. (예전엔 엔진에 플레이어 CC 모션 단계가 없었다.)
+    {
+      const air = hasStatus(this, 'KNOCKUP') || hasStatus(this, 'SUPPRESSION');
+      const cc = air || isCrowdControlled(this);
+      if (cc && !this._ccAnimActive) {
+        const clips = air ? ['KnockUp_Loop', 'KnockUp', 'KnockUp_In', 'Stunned'] : ['Stunned'];
+        if (clips.some((n) => this.findAnimation(n))) { this.playFirstAvailable(clips, { loop: THREE.LoopRepeat, fade: 0.1 }); this._ccAnimActive = true; }
+      } else if (!cc && this._ccAnimActive) {
+        this._ccAnimActive = false;
+        if (!this.currentActionKey) this._returnToLocomotion();
+      }
+    }
     this._nilahUpdate(dt);
     if (this.championId === 'nilah' && this._nilahWeaponRig) {
       this._nilahWeaponRig.active = !!(this.currentActionKey && /nilah(Q|E|R)/.test(String(this.currentActionKey)));
@@ -12009,7 +12027,12 @@ CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
     if (this.championId === 'yasuo' && slot === 'R' && this.currentActionKey === 'yasuoE' && this.currentPhase === 'ACTIVE') { this._dispatchCast(slot, mouseWorldPoint, false); return; }
     // PC 패치 기록(V1.0.0.97 이후): 가렌은 E(심판) 회전 중에도 모든 스킬을 쓸 수 있고 회전은 계속된다.
     // Q/W는 원래 허용돼 있었고, R도 회전을 끊지 않는 전용 경로로 처리한다(예전엔 막혀 있었다).
-    if (this.championId === 'garen' && slot === 'R' && this.currentActionKey === 'eChannel') { this._garenCastRDuringE(); return; }
+    // PC 위키(Judgment): 회전 중 Q/W는 쓸 수 있고, R(데마시아의 정의)은 회전을 끊는다. 예전엔 회전을 유지한 채 R 피해만
+    // 따로 넣었다(_garenCastRDuringE). 이제 회전을 끝내고 일반 R 경로(시전 시간·모션 포함)로 진행한다.
+    if (this.championId === 'garen' && slot === 'R' && this.currentActionKey === 'eChannel') {
+      const t = this.currentTarget, rd = this._champData() && this._champData().R;
+      if (t && t.hp > 0 && rd && isInRange(this, t, rd.range) && !isSilenced(this) && this._canAffordAbility('R')) this._endEChannel();
+    }
     // 닐라 E 돌진 중 Q는 같은 돌진 경로에 Q를 겹쳐서 사용할 수 있다. E의
     // 돌진 액션을 끊지 않고 Q만 별도로 실행한다.
     if (this.championId === 'nilah' && slot === 'Q' && this.currentActionKey === 'nilahE' && this.currentPhase === 'ACTIVE') {
@@ -15171,7 +15194,8 @@ CharacterController.prototype._yasuoQCastTime = function() {
 // 공용 처리(applyIntentPassive)가 맡는다.
 CharacterController.prototype._yasuoCritMultiplier = function() { return this.stats.critMultiplier || 1.75; };
 
-CharacterController.prototype._yasuoShieldAmount = function() {  const p = this._champData().passive; return p.shieldBase + Math.max(0, this.champLevel - 1) * p.shieldPerLevel;
+// PC 위키(V13.15): 보호막 125~600은 "레벨 성장 공식"(능력치와 같은 곡선)을 쓴다 - 예전엔 레벨당 같은 양씩 선형 증가였다(양끝 값은 같음).
+CharacterController.prototype._yasuoShieldAmount = function() {  const p = this._champData().passive; return growStat(p.shieldBase, p.shieldPerLevel, this.champLevel || 1);
 };
 
 // 결의: 이동한 거리(LoL 단위)만큼 기류를 얻는다. 버그 수정: 예전엔 "월드 거리"에
@@ -19640,7 +19664,7 @@ CharacterController.prototype._vexTickE = function(dt) {
   t.traveled = Math.min(t.total, t.traveled + lolRangeToWorld(e.missileSpeed || 1300) * dt);
   if (t.traveled < t.total - 1e-6) return;
   this._vex.eTravel = null;
-  const raw = skillVal(e.damageByLevel, t.lvl) + (e.apRatio || 0) * (this.stats.abilityPower || 0);
+  const raw = skillVal(e.damageByLevel, t.lvl) + (e.apRatioByLevel ? skillVal(e.apRatioByLevel, t.lvl) : (e.apRatio || 0)) * (this.stats.abilityPower || 0);
   const slow = skillVal(e.slowPercentByLevel, t.lvl) / 100;
   vfx.spawn('hit', t.to.clone(), undefined, { color: 0x8b5cf6 });
   for (const h of findEnemiesInRadius(t.to, t.radius)) {
@@ -21445,7 +21469,7 @@ CharacterController.prototype._asheCastE = function(mouseWorldPoint, free = fals
   const castTime = e.castTimeSec != null ? e.castTimeSec : 0.25; // SKILL_TIMING_DATABASE.ashe.E와 동일
   const flightSec = e.missileSpeed ? dist / lolRangeToWorld(e.missileSpeed) : 1.0;
   this._ashe.ePending = {
-    targetPoint: targetPoint.clone(),
+    targetPoint: targetPoint.clone(), origin: this.root.position.clone(), dir: dir.clone(), totalDist: dist, nextPathLol: 0, flightSec,
     remainingArriveSec: flightSec, remainingRecoverySec: castTime + 0.15,
     arriveDone: false, recoveryDone: false,
   };
@@ -21509,7 +21533,7 @@ CharacterController.prototype._asheResolveRFire = function(p) {
     halfWidth: lolRangeToWorld(r.width || 130) * 0.5,
     speed: lolRangeToWorld(r.missileSpeed || 1500),
     maxSpeed: lolRangeToWorld(r.missileMaxSpeed || r.missileSpeed || 1500),
-    accel: lolRangeToWorld(r.missileAccelPerSec || 0),
+    speedSteps: (r.missileSpeedBySecond || []).map((v) => lolRangeToWorld(v)), flightSec: 0,
     traveled: 0, vfxAccum: 0,
   };
   vfx.spawn('hit', origin.clone(), undefined, { color: 0x9fd7ff });
@@ -21520,7 +21544,9 @@ CharacterController.prototype._asheResolveRFire = function(p) {
 CharacterController.prototype._asheTickRTravel = function(dt) {
   const travel = this._ashe && this._ashe.rTravel;
   if (!travel) return;
-  if (travel.accel > 0) travel.speed = Math.min(travel.maxSpeed, travel.speed + travel.accel * dt); // 1500→2100 가속
+  // PC 위키: 비행 시간에 따라 1500 / 1700 / 1900 / 2100(초 단위 계단). 예전엔 초당 600 연속 가속(추정)이었다.
+  travel.flightSec += dt;
+  if (travel.speedSteps.length) travel.speed = travel.speedSteps[Math.min(travel.speedSteps.length - 1, Math.floor(travel.flightSec))];
   const remaining = Math.max(0, travel.maxDist - travel.traveled);
   const step = Math.min(remaining, Math.max(0, travel.speed * dt));
   travel.pos.addScaledVector(travel.dir, step);
@@ -21622,9 +21648,20 @@ CharacterController.prototype._asheUpdate = function(dt) {
     const p = this._ashe.ePending;
     if (!p.arriveDone) {
       p.remainingArriveSec -= dt;
+      // 경로 시야(PC 위키): 매가 100 유닛 날 때마다 그 위치에 0.5초 시야.
+      const e = this._champData().E;
+      const flown = p.flightSec > 0 ? Math.min(1, 1 - Math.max(0, p.remainingArriveSec) / p.flightSec) * p.totalDist : p.totalDist;
+      const flownLol = worldDistanceToLol(flown);
+      while (p.nextPathLol <= flownLol && typeof visionSystem !== 'undefined' && visionSystem) {
+        const at = p.origin.clone().addScaledVector(p.dir, lolRangeToWorld(p.nextPathLol));
+        visionSystem.grantVision(at, e.visionRadius || 1000, e.pathVisionSec || 0.5);
+        p.nextPathLol += e.pathVisionStepLol || 100;
+      }
       if (p.remainingArriveSec <= 0) {
         p.arriveDone = true;
-        if (this.currentActionKey === 'asheE') this._asheResolveEArrival(p);
+        // 버그 수정: 예전엔 도착 시점에 애쉬가 아직 E 시전 중일 때만 도착 시야를 줬다. 행동 잠금(약 0.4초)이
+        // 비행 시간(최대 약 2.9초)보다 짧아 먼 곳에 보내면 도착 시야가 아예 안 생겼다. 매는 애쉬 행동과 무관하게 난다.
+        this._asheResolveEArrival(p);
       }
     }
     if (!p.recoveryDone) {
@@ -22009,9 +22046,13 @@ CharacterController.prototype._nautilusTickRTravel = function(dt) {
   vfx.spawn('hit', t.pos.clone(), undefined, { color: 0x3f7fa8 });
 
   const pathRaw = skillVal(r.pathDamageByLevel, t.lvl) + r.pathApRatio * (this.stats.abilityPower || 0);
-  for (const u of getAllEnemyUnits()) {
+  // 경로 폭발(PC 위키): 0.264초마다 그 순간 충격파 위치에서 반경 225. 한 대상은 한 번만 맞는다.
+  t.eruptAccum = (t.eruptAccum == null ? r.pathEruptionIntervalSec : t.eruptAccum) + dt;
+  const erupt = t.eruptAccum >= (r.pathEruptionIntervalSec || 0.264);
+  if (erupt) t.eruptAccum -= (r.pathEruptionIntervalSec || 0.264);
+  for (const u of (erupt ? getAllEnemyUnits() : [])) {
     if (!u || u === target || u.hp <= 0 || u.isStructure || t.pathHit.has(u)) continue;
-    if (!isInCircle(u, t.pos, lolRangeToWorld(r.pathWidth) * 0.5)) continue;
+    if (!isInCircle(u, t.pos, lolRangeToWorld(r.pathEruptionRadius || 225))) continue;
     t.pathHit.add(u);
     applyDamage(u, { rawDamage: pathRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     applyStatus(u, { id: 'nautilusR_pathKnockup', type: 'KNOCKUP', duration: r.pathKnockupSec, value: 1, source: this });
@@ -25903,26 +25944,36 @@ function itemSystemTick(ctrl, dt) {
     ctrl.isUntargetable = false;
     console.log('[ITEM] 시간 정지 종료');
   }
-  // 강철심장(거인의 흡수) - "700 사거리 내 챔피언을 상대로 3초간 충전."
-  // 현재 선택한 대상(ctrl.currentTarget)이 사거리 내 챔피언인 동안에만
-  // 진행되고, 벗어나거나 다른 대상으로 바뀌면 처음부터 다시 쌓인다.
+  // 강철심장(거인의 흡수) - 원작: 700 사거리 안의 "각" 적 챔피언마다 따로 3초간 충전(대상별 재사용 대기시간 30초).
+  // 예전엔 현재 선택한 대상 하나만 충전했다(엔진에 주변 감지가 없다는 근사). 이제 주변 적 챔피언 전부를
+  // 대상별로 충전하고, 사거리를 벗어난 대상의 충전은 처음부터 다시 쌓인다. 충전된 대상을 평타로 맞히면 발동.
   const heartsteelSlot = (ctrl.items || []).find((s) => s.id === 'heartsteel');
   if (!heartsteelSlot) {
+    ctrl._itemHeartsteelCharge = null; ctrl._itemHeartsteelReadySet = null; ctrl._itemHeartsteelReady = false;
     ctrl._itemHeartsteelProgress = 0; ctrl._itemHeartsteelChargeTarget = null;
-  } else if (!ctrl._itemHeartsteelReady) {
+  } else {
     const p = ITEM_DATA.heartsteel.giantAbsorbPassive;
-    const target = ctrl.currentTarget;
-    const inRange = target && target.hp > 0 && target.isChampion && typeof getHorizontalDistance === 'function' && typeof worldDistanceToLol === 'function'
-      && worldDistanceToLol(getHorizontalDistance(ctrl.root.position, target.mesh ? target.mesh.position : target.root.position)) <= p.rangeLol;
-    const targetKey = inRange ? _itemTargetKey(target) : null;
-    const icdOk = !targetKey || (now >= ((ctrl._itemHeartsteelIcdUntil || {})[targetKey] || 0));
-    if (inRange && icdOk) {
-      if (ctrl._itemHeartsteelChargeTarget !== targetKey) { ctrl._itemHeartsteelChargeTarget = targetKey; ctrl._itemHeartsteelProgress = 0; }
-      ctrl._itemHeartsteelProgress = (ctrl._itemHeartsteelProgress || 0) + dt;
-      if (ctrl._itemHeartsteelProgress >= p.chargeSec) { ctrl._itemHeartsteelReady = true; ctrl._itemHeartsteelReadyTargetKey = targetKey; }
-    } else {
-      ctrl._itemHeartsteelProgress = 0; ctrl._itemHeartsteelChargeTarget = null;
+    const charge = ctrl._itemHeartsteelCharge || (ctrl._itemHeartsteelCharge = new Map());
+    const ready = ctrl._itemHeartsteelReadySet || (ctrl._itemHeartsteelReadySet = new Set());
+    const cands = new Set(typeof getAllEnemyUnits === 'function' ? getAllEnemyUnits() : []);
+    if (ctrl.currentTarget) cands.add(ctrl.currentTarget);
+    const seen = new Set();
+    for (const u of cands) {
+      if (!u || u.hp <= 0 || !u.isChampion || typeof getHorizontalDistance !== 'function' || typeof worldDistanceToLol !== 'function') continue;
+      const up = u.mesh ? u.mesh.position : (u.root && u.root.position);
+      if (!up || worldDistanceToLol(getHorizontalDistance(ctrl.root.position, up)) > p.rangeLol) continue;
+      const key = _itemTargetKey(u);
+      if (now < ((ctrl._itemHeartsteelIcdUntil || {})[key] || 0)) continue;
+      seen.add(key);
+      if (ready.has(key)) continue;
+      const prog = (charge.get(key) || 0) + dt;
+      charge.set(key, prog);
+      if (prog >= p.chargeSec) { ready.add(key); charge.delete(key); }
     }
+    for (const key of [...charge.keys()]) if (!seen.has(key)) charge.delete(key); // 사거리를 벗어나면 충전 초기화
+    ctrl._itemHeartsteelReady = ready.size > 0; // 호환용 요약 필드
+    ctrl._itemHeartsteelReadyTargetKey = ready.size ? [...ready][0] : null;
+    ctrl._itemHeartsteelProgress = charge.size ? Math.max(...charge.values()) : 0;
   }
   // 강철심장(거인) - 최대 체력 1000당 모델 크기 3% 증가(최대 30%, 시각
   // 효과 - 전투 수치에는 영향 없음).
@@ -27448,8 +27499,11 @@ function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
   // 강철심장(거인의 흡수) - 충전이 끝난 상태에서, 충전을 시작했던 바로 그
   // 대상을 기본 공격으로 맞히면 70+체력6% 추가 물리 피해 + 그 피해의 10%만큼
   // 영구 최대 체력 획득(대상별 재사용대기시간 30초).
-  if (ctrl._itemHeartsteelReady && _itemTargetKey(target) === ctrl._itemHeartsteelReadyTargetKey) {
-    ctrl._itemHeartsteelReady = false; ctrl._itemHeartsteelProgress = 0; ctrl._itemHeartsteelChargeTarget = null;
+  const hsKey = _itemTargetKey(target);
+  if (ctrl._itemHeartsteelReadySet && ctrl._itemHeartsteelReadySet.has(hsKey)) {
+    ctrl._itemHeartsteelReadySet.delete(hsKey);
+    ctrl._itemHeartsteelReady = ctrl._itemHeartsteelReadySet.size > 0;
+    ctrl._itemHeartsteelReadyTargetKey = hsKey;
     const p = ITEM_DATA.heartsteel.giantAbsorbPassive;
     const bonusDmg = p.flatDmg + (ctrl.maxHp || 0) * p.bonusHpPercent;
     applyDamage(target, { rawDamage: bonusDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
@@ -27461,7 +27515,8 @@ function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
     ctrl._itemHeartsteelPermanentHpGain = (ctrl._itemHeartsteelPermanentHpGain || 0) + bonusDmg * p.maxHpGainPercent;
     recomputeItemStats(ctrl);
     ctrl._itemHeartsteelIcdUntil = ctrl._itemHeartsteelIcdUntil || {};
-    ctrl._itemHeartsteelIcdUntil[ctrl._itemHeartsteelReadyTargetKey] = performance.now() + p.icdSec * 1000;
+    ctrl._itemHeartsteelIcdUntil[hsKey] = performance.now() + p.icdSec * 1000;
+    ctrl._itemHeartsteelReadyTargetKey = ctrl._itemHeartsteelReadySet.size ? [...ctrl._itemHeartsteelReadySet][0] : null;
     console.log('[ITEM] 강철심장 - 거인의 흡수 발동');
   }
   if (ctrl._itemSheenArmed && !opts.fromAbility) {

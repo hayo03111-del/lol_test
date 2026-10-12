@@ -1206,9 +1206,7 @@ const ITEM_DATA = {
     stats: { maxHp: 900, hpRegenPercent: 1.0 },
     // 거인의 흡수(대상별 재사용대기 30초) - "700 사거리 내 챔피언을 상대로
     // 3초간 충전, 충전된 공격은 70+체력6% 추가 물리 피해 + 그 피해의 10%만큼
-    // 영구 최대 체력 획득." 이 엔진엔 "주변 적 전체"를 매 프레임 추적하는
-    // 범용 근접 감지가 없어, 다른 아이템들과 동일하게 ctrl.currentTarget
-    // 기준으로 근사한다(현재 선택한 대상이 700 사거리 내 챔피언일 때만 충전).
+    // 영구 최대 체력 획득." 12차: 사거리 안 적 챔피언마다 따로 충전(원작 방식, item_system.js).
     giantAbsorbPassive: { rangeLol: 700, chargeSec: 3.0, icdSec: 30, flatDmg: 70, bonusHpPercent: 0.06, maxHpGainPercent: 0.10 },
     // 거인 - "최대 체력 1000당 크기가 3% 증가(최대 30%)". 전투에 영향을 주는
     // 수치가 아니라 모델 크기(시각 효과)라 ctrl.root.scale에 직접 반영한다.

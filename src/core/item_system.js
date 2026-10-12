@@ -1038,26 +1038,36 @@ function itemSystemTick(ctrl, dt) {
     ctrl.isUntargetable = false;
     console.log('[ITEM] 시간 정지 종료');
   }
-  // 강철심장(거인의 흡수) - "700 사거리 내 챔피언을 상대로 3초간 충전."
-  // 현재 선택한 대상(ctrl.currentTarget)이 사거리 내 챔피언인 동안에만
-  // 진행되고, 벗어나거나 다른 대상으로 바뀌면 처음부터 다시 쌓인다.
+  // 강철심장(거인의 흡수) - 원작: 700 사거리 안의 "각" 적 챔피언마다 따로 3초간 충전(대상별 재사용 대기시간 30초).
+  // 예전엔 현재 선택한 대상 하나만 충전했다(엔진에 주변 감지가 없다는 근사). 이제 주변 적 챔피언 전부를
+  // 대상별로 충전하고, 사거리를 벗어난 대상의 충전은 처음부터 다시 쌓인다. 충전된 대상을 평타로 맞히면 발동.
   const heartsteelSlot = (ctrl.items || []).find((s) => s.id === 'heartsteel');
   if (!heartsteelSlot) {
+    ctrl._itemHeartsteelCharge = null; ctrl._itemHeartsteelReadySet = null; ctrl._itemHeartsteelReady = false;
     ctrl._itemHeartsteelProgress = 0; ctrl._itemHeartsteelChargeTarget = null;
-  } else if (!ctrl._itemHeartsteelReady) {
+  } else {
     const p = ITEM_DATA.heartsteel.giantAbsorbPassive;
-    const target = ctrl.currentTarget;
-    const inRange = target && target.hp > 0 && target.isChampion && typeof getHorizontalDistance === 'function' && typeof worldDistanceToLol === 'function'
-      && worldDistanceToLol(getHorizontalDistance(ctrl.root.position, target.mesh ? target.mesh.position : target.root.position)) <= p.rangeLol;
-    const targetKey = inRange ? _itemTargetKey(target) : null;
-    const icdOk = !targetKey || (now >= ((ctrl._itemHeartsteelIcdUntil || {})[targetKey] || 0));
-    if (inRange && icdOk) {
-      if (ctrl._itemHeartsteelChargeTarget !== targetKey) { ctrl._itemHeartsteelChargeTarget = targetKey; ctrl._itemHeartsteelProgress = 0; }
-      ctrl._itemHeartsteelProgress = (ctrl._itemHeartsteelProgress || 0) + dt;
-      if (ctrl._itemHeartsteelProgress >= p.chargeSec) { ctrl._itemHeartsteelReady = true; ctrl._itemHeartsteelReadyTargetKey = targetKey; }
-    } else {
-      ctrl._itemHeartsteelProgress = 0; ctrl._itemHeartsteelChargeTarget = null;
+    const charge = ctrl._itemHeartsteelCharge || (ctrl._itemHeartsteelCharge = new Map());
+    const ready = ctrl._itemHeartsteelReadySet || (ctrl._itemHeartsteelReadySet = new Set());
+    const cands = new Set(typeof getAllEnemyUnits === 'function' ? getAllEnemyUnits() : []);
+    if (ctrl.currentTarget) cands.add(ctrl.currentTarget);
+    const seen = new Set();
+    for (const u of cands) {
+      if (!u || u.hp <= 0 || !u.isChampion || typeof getHorizontalDistance !== 'function' || typeof worldDistanceToLol !== 'function') continue;
+      const up = u.mesh ? u.mesh.position : (u.root && u.root.position);
+      if (!up || worldDistanceToLol(getHorizontalDistance(ctrl.root.position, up)) > p.rangeLol) continue;
+      const key = _itemTargetKey(u);
+      if (now < ((ctrl._itemHeartsteelIcdUntil || {})[key] || 0)) continue;
+      seen.add(key);
+      if (ready.has(key)) continue;
+      const prog = (charge.get(key) || 0) + dt;
+      charge.set(key, prog);
+      if (prog >= p.chargeSec) { ready.add(key); charge.delete(key); }
     }
+    for (const key of [...charge.keys()]) if (!seen.has(key)) charge.delete(key); // 사거리를 벗어나면 충전 초기화
+    ctrl._itemHeartsteelReady = ready.size > 0; // 호환용 요약 필드
+    ctrl._itemHeartsteelReadyTargetKey = ready.size ? [...ready][0] : null;
+    ctrl._itemHeartsteelProgress = charge.size ? Math.max(...charge.values()) : 0;
   }
   // 강철심장(거인) - 최대 체력 1000당 모델 크기 3% 증가(최대 30%, 시각
   // 효과 - 전투 수치에는 영향 없음).
@@ -2583,8 +2593,11 @@ function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
   // 강철심장(거인의 흡수) - 충전이 끝난 상태에서, 충전을 시작했던 바로 그
   // 대상을 기본 공격으로 맞히면 70+체력6% 추가 물리 피해 + 그 피해의 10%만큼
   // 영구 최대 체력 획득(대상별 재사용대기시간 30초).
-  if (ctrl._itemHeartsteelReady && _itemTargetKey(target) === ctrl._itemHeartsteelReadyTargetKey) {
-    ctrl._itemHeartsteelReady = false; ctrl._itemHeartsteelProgress = 0; ctrl._itemHeartsteelChargeTarget = null;
+  const hsKey = _itemTargetKey(target);
+  if (ctrl._itemHeartsteelReadySet && ctrl._itemHeartsteelReadySet.has(hsKey)) {
+    ctrl._itemHeartsteelReadySet.delete(hsKey);
+    ctrl._itemHeartsteelReady = ctrl._itemHeartsteelReadySet.size > 0;
+    ctrl._itemHeartsteelReadyTargetKey = hsKey;
     const p = ITEM_DATA.heartsteel.giantAbsorbPassive;
     const bonusDmg = p.flatDmg + (ctrl.maxHp || 0) * p.bonusHpPercent;
     applyDamage(target, { rawDamage: bonusDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
@@ -2596,7 +2609,8 @@ function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
     ctrl._itemHeartsteelPermanentHpGain = (ctrl._itemHeartsteelPermanentHpGain || 0) + bonusDmg * p.maxHpGainPercent;
     recomputeItemStats(ctrl);
     ctrl._itemHeartsteelIcdUntil = ctrl._itemHeartsteelIcdUntil || {};
-    ctrl._itemHeartsteelIcdUntil[ctrl._itemHeartsteelReadyTargetKey] = performance.now() + p.icdSec * 1000;
+    ctrl._itemHeartsteelIcdUntil[hsKey] = performance.now() + p.icdSec * 1000;
+    ctrl._itemHeartsteelReadyTargetKey = ctrl._itemHeartsteelReadySet.size ? [...ctrl._itemHeartsteelReadySet][0] : null;
     console.log('[ITEM] 강철심장 - 거인의 흡수 발동');
   }
   if (ctrl._itemSheenArmed && !opts.fromAbility) {
