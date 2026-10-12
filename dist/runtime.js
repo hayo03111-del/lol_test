@@ -2037,14 +2037,14 @@ const CHAMPION_DATA = {
     },
     Q: {
       // V25.23: 80/140/200/260/320 → 80/135/190/245/300. 마나 50(Data Dragon), 폭발 반경 250, 지연 0.627초(PC 위키).
-      name: '파열', cooldown: 6 /* Data Dragon 16.20.1 */, mana: 50, range: 950, castTime: 0.25, impactDelay: 0.627, radius: 250,
+      name: '파열', cooldown: 6 /* Data Dragon 16.20.1 */, mana: 50, range: 950, castTime: 0.5 /* PC 위키(예전 0.25) */, impactDelay: 0.627, radius: 250,
       damageByLevel: [80, 135, 190, 245, 300], apRatio: 1.0,
       knockupDuration: 1, slowPercent: 60, slowDuration: 1.5, damageType: 'MAGICAL',
     },
     W: {
       // V25.23: 80/135/190/245/300 → 80/130/180/230/280. 마나 70~90(Data Dragon).
       name: '흉포한 울부짖음', cooldown: [11, 10.5, 10, 9.5, 9] /* Data Dragon 16.20.1 */, mana: [70, 75, 80, 85, 90],
-      range: 650, coneAngleDeg: 60,
+      range: 650, coneAngleDeg: 60, castTime: 0.5, // PC 위키 시전 0.5초(예전 0.25초 고정 타이머)
       damageByLevel: [80, 130, 180, 230, 280], apRatio: 0.7,
       silenceDurationByLevel: [1.6, 1.7, 1.8, 1.9, 2.0], damageType: 'MAGICAL',
     },
@@ -2055,7 +2055,7 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDuration: 1.5, damageType: 'MAGICAL',
     },
     R: {
-      name: '포식', cooldown: [80, 70, 60], mana: 100, rangeBase: 175, rangePerStack: 2.5, // 버그 수정: 175가 맞음(Leaguepedia 패치 기록 "RANGE: 150 ⇒ 175" 확인) - 200은 잘못된 값이었음
+      name: '포식', cooldown: [80, 70, 60], mana: 100, castTime: 0.25 /* PC 위키(예전 즉시) */, rangeBase: 175, rangePerStack: 2.5, // 버그 수정: 175가 맞음(Leaguepedia 패치 기록 "RANGE: 150 ⇒ 175" 확인) - 200은 잘못된 값이었음
       championDamageByLevel: [300, 475, 650], championApRatio: 0.5, championBonusHpRatio: 0.1,
       nonChampionDamage: 1200, nonChampionApRatio: 0.5, nonChampionBonusHpRatio: 0.1,
       hpGrowthByLevel: [80, 120, 160], nonEpicStackCap: 6, damageType: 'TRUE',
@@ -2135,8 +2135,10 @@ const CHAMPION_DATA = {
      Q: {
       name: '오싹한 미사일',
      cooldown: [8, 7, 6, 5, 4], mana: [45, 50, 55, 60, 65], // Data Dragon
-     range: 1200,speed1: 600, speed2: 3200,
-     accelerationDistance: 500, width: 180,
+     // PC 위키 Template:Data Vex/Mistral Bolt: 시전 0.15초, 속도 600 → 500 유닛 이동 후 3200으로 가속하며
+     // 폭이 360 → 160으로 좁아진다(가장자리 기준 전체 폭). 관통.
+     range: 1200,speed1: 600, speed2: 3200, castTimeSec: 0.15,
+     accelerationDistance: 500, width: 360, widthAfterAccel: 160,
      // V26.13: 기본 피해 70/115/160/205/250(+주문력 70%) - PC 위키.
      damageByLevel: [70, 115, 160, 205, 250],
      apRatio: 0.7, piercesUnits: true,
@@ -2147,7 +2149,7 @@ const CHAMPION_DATA = {
 
      W: {
       name: '거리 두기', cooldown: [16, 15, 14, 13, 12] /* Data Dragon 16.20.1 */, mana: 75,
-      range: 475, damageByLevel: [80, 120, 160, 200, 240],
+      range: 475, castTimeSec: 0.25, damageByLevel: [80, 120, 160, 200, 240], // PC 위키: 시전 0.25초(이동 가능), 반경 475
       // PC 위키: 보호막 50/75/100/125/150(+주문력 75%), 2.5초. 예전 50~170은 주문력 80% 시절 기본값.
       apRatio: 0.3, shieldByLevel: [50, 75, 100, 125, 150], shieldApRatio: 0.75, shieldDuration: 2.5,
       damageType: 'MAGICAL',
@@ -2156,7 +2158,9 @@ const CHAMPION_DATA = {
 
      E: {
       name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: [70, 80, 90, 100, 110], // Data Dragon
-      range: 800, damageByLevel: [60, 105, 150, 195, 240],
+      // PC 위키: 시전 0.25초, 지정 지점까지 날아가 폭발 - 반경 200~300(시전 거리 비례). 피해 수치는 최신 PC 출처가
+      // 엇갈려 기존 값 유지(미확인). 투사체 속도는 위키 확인 못 해 1300으로 추정(missileSpeedGuessed).
+      range: 800, castTimeSec: 0.25, radiusMin: 200, radiusMax: 300, missileSpeed: 1300, missileSpeedGuessed: true, damageByLevel: [60, 105, 150, 195, 240],
       apRatio: 0.4, slowPercentByLevel: [30, 35, 40, 45, 50],
       slowDuration: 2, damageType: 'MAGICAL',
       piercesUnits: true,
@@ -2607,7 +2611,7 @@ const CHAMPION_DATA = {
       damageByLevel: [200, 400, 600], apRatio: 1.2,
       splashDamagePercent: 100, splashRadius: 400, // 주변 적도 같은 피해 + 서리 화살(PC 위키). 반경 400은 미확인
       minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 20000,
-      castTimeSec: 0.5,
+      castTimeSec: 0.25, // PC 위키 Template:Data Ashe/Enchanted Crystal Arrow(예전 0.5)
       visionRadius: 900, visionDurationSec: 3.0, // 비행 경로/명중 지점에도 짧은 시야(공식 설명: "1초간 경로의 시야를 밝힌다" - 근사)
       damageType: 'MAGICAL',
     },
@@ -4825,9 +4829,10 @@ const SKILL_TIMING_DATABASE = {
     R: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
   },
   vex: { 
-    Q: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
-    W: { eventTime: 0, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
-    E: { eventTime: 1, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+    // 참고: 벡스 Q/W/E/R은 이제 vex.js 전용 구현이 시전 시간을 직접 처리한다(아래 값은 공용 경로용 기록).
+    Q: { eventTime: 0.15, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true }, // PC 위키 0.15(예전 0.25)
+    W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: false, lockAbility: true }, // PC 위키 0.25, 시전 중 이동 가능
+    E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true }, // PC 위키 0.25(예전 1)
   },
   // 요네 R(운명봉인): 공식 Cast Time 0.75초 - 시전이 끝나는 시점에 넉다운/기절
   // 판정이 발생하고, 그 직후(0.05초) 블링크 -> 추가 0.3초 후 돌풍(당김+
@@ -4857,7 +4862,7 @@ const SKILL_TIMING_DATABASE = {
   ashe: {
     W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
-    R: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+    R: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true }, // PC 위키 0.25(예전 0.5)
   },
 };
 
@@ -9147,7 +9152,7 @@ class CharacterController {
   // 빠져 있었다).
   _freshChampionStates() {
     // 벡스 R(그림자 파동) 전용 상태: 1차 적중 후 대상에게 재시전할 수 있는 창과 실제 돌진 상태를 분리한다.
-    this._vex = { recastTarget: null, recastReadyUntil: 0, dashActive: false, dashStart: null, dashEnd: null, dashT: 0, dashDuration: 0.28 };
+    this._vex = { recastTarget: null, recastReadyUntil: 0, dashActive: false, dashStart: null, dashEnd: null, dashT: 0, dashDuration: 0.28, qTravel: null, eTravel: null, wShield: null };
     // 이즈리얼 전용 상태: markTarget/markExpiresAt은 W(정기 방출) 표식,
     // rTravel은 R(정조준 사격)이 매 프레임 진행하는 관통 광선 상태(요네 R/
     // 야스오 Q3 회오리와 동일한 패턴 - _ezrealTickRTravel 참고).
@@ -9869,6 +9874,10 @@ class CharacterController {
     // 캔슬을 막고, 채널 중(ACTIVE)에는 canMove:true로 둬서 이동 명령이
     // 최소한 대기(pendingMove)되었다가 채널이 끝나는 즉시 자연스럽게
     // 이어지게 한다.
+    // 닐라 Q 후딜(판정 이후 남은 모션): 이동/평타/스킬로 언제든 끊을 수 있다.
+    if (this.championId === 'nilah' && this.currentActionKey === 'nilahQTail') {
+      return { canMove: true, canAttack: true, canCast: true, canTurn: true };
+    }
     if (this.championId === 'nilah' && this.currentActionKey === 'nilahR') {
       return { canMove: this.currentPhase !== 'STARTUP', canAttack: false, canCast: false, canTurn: true };
     }
@@ -11611,7 +11620,7 @@ const CHAMPION_DIRECT_CASTS = {
     Q: (c, m, f) => c._nilahCastQ(m, f), W: (c, m, f) => c._nilahCastW(m, f),
     E: (c, m, f) => c._nilahCastE(m, f), R: (c, m, f) => c._nilahCastR(f),
   },
-  vex: { R: (c, m, f) => c._vexCastR(f) },
+  vex: { Q: (c, m, f) => c._vexCastQ(m, f), W: (c, m, f) => c._vexCastW(m, f), E: (c, m, f) => c._vexCastE(m, f), R: (c, m, f) => c._vexCastR(f) },
   renekton: {
     Q: (c, m, f) => c._renektonCastQ(m, f), W: (c, m, f) => c._renektonCastW(m, f),
     E: (c, m, f) => c._renektonCastE(m, f), R: (c, m, f) => c._renektonCastR(f),
@@ -11639,7 +11648,7 @@ const CHAMPION_SLOT_CASTS = {
   },
   W: {
     ahri: (c, m, f) => c._ahriCastW(m, f), yasuo: (c, m, f) => c._yasuoCastW(m, f), yone: (c, m, f) => c._yoneCastW(m, f),
-    chogath: (c, m, f) => c._chogathCastW(f), leesin: (c, m, f) => c._leesinCastW(f, m), mordekaiser: (c, m, f) => c._mordeCastW(f),
+    chogath: (c, m, f) => c._chogathCastW(f, m), leesin: (c, m, f) => c._leesinCastW(f, m), mordekaiser: (c, m, f) => c._mordeCastW(f),
     ezreal: (c, m, f) => c._ezrealCastW(m, f), varus: (c, m, f) => c._varusCastW(m, f),
   },
   E: {
@@ -14793,9 +14802,10 @@ CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=fa
       for(const h of hits) this._renektonApplyQHit(h.unit,empowered,tracker);
       updateBars(this);
       this.currentPhase='RECOVERY'; this.phaseCancelable=true;
-      const end=setTimeout(()=>{ if(this.currentActionKey==='renektonQ'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},80);
+      // PC 위키: 시전 후 0.25초 동안 평타·E·R 사용 불가(그 뒤 해제).
+      const end=setTimeout(()=>{ if(this.currentActionKey==='renektonQ'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},250);
       this._actionTimers.push(end);
-    },Math.max(30,dur*1000*0.62));
+    },0); // 버그 수정(타이밍 측정으로 발견): 예전엔 클립 길이×0.62(약 0.5초) 뒤 판정 - PC 위키는 시전 시간 없음(즉시)
     this._actionTimers.push(timer);
     updateBars(this);
   
@@ -16163,10 +16173,20 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
     } else {
       debugSkillMiss('W', '사거리 내 대상 없음');
     }
-    this.currentPhase = 'RECOVERY';
-    // 영혼 가르기 종료 전환: 이동 중이면 Spell2_ToRun, 정지 중이면 Spell2_ToIdle.
-    const doneW = () => { if (this.currentActionKey === key) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } };
-    this._yonePlayExitTransition(['Spell2_ToIdle'], ['Spell2_ToRun'], doneW);
+    // 버그 수정(타이밍 측정으로 발견): 예전엔 판정 뒤 1.47초짜리 복귀 모션(Spell2_ToIdle)이 끝날 때까지 행동이
+    // 잠겨 있었다(시전 후 총 약 2초). 원작은 시전 시간이 끝나면 바로 움직일 수 있다 - 잠금은 즉시 풀고,
+    // 이동/공격/시전 입력이 없을 때만 복귀 모션을 끝까지 보여준다(이동 중이면 Spell2_ToRun 대신 바로 이동).
+    this.currentActionKey = null; this.currentPhase = null;
+    if (this.targetPos || this.pendingMove || this.pendingCast || (this.currentTarget && this.currentTarget.hp > 0 && this.attackOrderActive)) {
+      this._resumeAfterAction();
+    } else {
+      const tail = this.resolveClip(['Spell2_ToIdle']);
+      if (tail) {
+        this.playFirstAvailable(['Spell2_ToIdle'], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
+        const t2 = setTimeout(() => { if (!this.currentActionKey && this.currentClipKey === tail.name) this._resumeAfterAction(); }, Math.max(0, tail.duration - 0.03) * 1000);
+        this._actionTimers.push(t2);
+      } else this._resumeAfterAction();
+    }
   }, Math.max(0, castTime) * 1000);
   this._actionTimers.push(timer);
   if (!free) this.cooldowns.W = abilityHasteCooldown(this, this._yoneWCooldown());
@@ -17009,6 +17029,8 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
             timeScale: 1.0,
           })),
           onComplete: () => {
+            // 판정은 아래 시전 시간 타이머가 이미 처리했다 - 여기서는 남은 모션(후딜)만 정리한다.
+            if (this.currentActionKey === 'nilahQTail') { this.currentActionKey=null; this.currentPhase=null; this.phaseCancelable=false; this._resumeAfterAction(); return; }
             if (this.currentActionKey !== 'nilahQ') return;
             this.currentPhase='ACTIVE';
             // 버그 수정(핵심 - "Q 쓰면 캐릭터가 정지한다", 재발 방지): 이
@@ -17029,11 +17051,22 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
             }
           },
           onCancel: () => {
-            if (this.currentActionKey !== 'nilahQ') return;
+            if (this.currentActionKey !== 'nilahQ' && this.currentActionKey !== 'nilahQTail') return;
             this.currentActionKey=null; this.currentPhase=null; this.phaseCancelable=false;
             this._resumeAfterAction();
           }
         });
+        // 버그 수정(타이밍 측정으로 발견): 예전엔 클립 3개(약 0.7초+전환)가 다 끝나야 판정해 피해가 1.1초 뒤에
+        // 들어갔다. PC 위키 시전 시간 0.35~0.28초(추가 공속 비례 - 0.35/(1+추가 공속), 최소 0.28로 근사)에
+        // 판정하고, 남은 모션은 언제든 끊을 수 있는 후딜(nilahQTail)로 둔다.
+        const bonusAs = Math.max(0, (this.stats.levelBonusAttackSpeed || 0) + (this.stats.bonusAttackSpeedPercent || 0));
+        const castSec = Math.max(0.28, 0.35 / (1 + bonusAs));
+        const hitTimer = setTimeout(() => {
+          if (this.currentActionKey !== 'nilahQ') return;
+          try { this._nilahQHit(impact); } catch (err) { console.error('[Nilah Q] 판정 오류(무시하고 계속):', err); }
+          this.currentActionKey = 'nilahQTail'; this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
+        }, castSec * 1000);
+        this._actionTimers.push(hitTimer);
       } else {
         console.warn('[Nilah Q] Spell1A → Spell1B → Spell1C 중 없는 클립이 있어 Q 모션을 재생할 수 없습니다.', qSequence);
         this.currentActionKey=null; this.currentPhase=null; this.phaseCancelable=false;
@@ -18337,7 +18370,7 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
 };
 
 // Extracted from CharacterController: _chogathCastW
-CharacterController.prototype._chogathCastW = function(free) { 
+CharacterController.prototype._chogathCastW = function(free, mouseWorldPoint = null) { 
     if (isSilenced(this)) return;
     if (isCrowdControlled(this)) return;
     if (!this.canStartNewAction()) return;
@@ -18350,7 +18383,13 @@ CharacterController.prototype._chogathCastW = function(free) {
     this.playFirstAvailable((this.actionData?.w?.clips) || ['Spell2'], { loop: THREE.LoopOnce, fade: 0.08 });
     // _castW는 mouseWorldPoint를 받지 않는 슬롯이라(다른 챔피언 W는 방향이
     // 필요 없음) 초가스는 현재 바라보는 방향(정면)을 부채꼴 중심으로 쓴다.
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+    // 버그 수정(타이밍 측정으로 발견): 부채꼴 방향이 조준(마우스) 방향이 아니라 캐릭터가 마침 바라보던
+    // 방향이라, 겨눈 곳과 어긋나면 빗나갔다. 조준 방향으로 돌아서서 그 방향으로 판정한다.
+    let forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+    if (mouseWorldPoint) {
+      const aim = new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0);
+      if (aim.lengthSq() > 1e-6) { forward = aim.normalize(); this.faceDirectionInstant(forward); }
+    }
     vfx.spawn('w', this.root.position.clone());
     const t = setTimeout(() => {
       const hits = findEnemiesInRadius(this.root.position, w.range, { forward, maxAngleDeg: w.coneAngleDeg / 2 });
@@ -18367,7 +18406,7 @@ CharacterController.prototype._chogathCastW = function(free) {
       } else debugSkillMiss("Cho'Gath W", 'no target in cone');
       this.currentActionKey = null; this.currentPhase = null;
       this._resumeAfterAction();
-    }, 250); // 정확한 Cast Time이 기획안에 명시되어 있지 않아 짧은 판정 지연만 둔다
+    }, (w.castTime || 0.5) * 1000); // PC 위키 시전 시간 0.5초
     this._actionTimers.push(t);
   
 };
@@ -18442,8 +18481,19 @@ CharacterController.prototype._chogathCastR = function(free) {
     const range = r.rangeBase + r.rangePerStack * (this._chogath.predationStacks || 0);
     if (!isInRange(this, this.currentTarget, range)) { debugSkillMiss("Cho'Gath R", 'out of range'); return; }
     if (!this._payCost('R', free)) return;
-    vfx.spawn('r', this.root.position.clone());
-    this._chogathROnHit(this.currentTarget);
+    // PC 위키: 시전 0.25초 뒤 판정(예전엔 즉시). 그 사이 끊기면 취소.
+    const target = this.currentTarget;
+    this._clearActionTimers();
+    this.setState(STATE.R_CAST);
+    this.currentActionKey = 'chogathR'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
+    this.playFirstAvailable((this.actionData?.rCast?.clips) || ['Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
+    const t = setTimeout(() => {
+      if (this.currentActionKey !== 'chogathR') return;
+      this.currentActionKey = null; this.currentPhase = null;
+      if (target && target.hp > 0) { vfx.spawn('r', this.root.position.clone()); this._chogathROnHit(target); }
+      this._resumeAfterAction();
+    }, (r.castTime || 0.25) * 1000);
+    this._actionTimers.push(t);
   
 };
 
@@ -18661,7 +18711,10 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
     this.faceDirectionInstant(dir);
     // 시전 시간 0.25초(원작) 동안만 행동을 잡는다 - 음파 투사체는 바로 아래에서 발사.
     this._clearActionTimers();
-    this._leesinPlayCast({ actionKey: 'leesinQ', clips: ['Spell1'], lockSec: q.castTimeSec || 0.25, state: STATE.Q_CAST, exitIdle: ['Spell1_ToIdle'] });
+    // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 0.25초 잠금과 별개로 음파가 시전 즉시 발사됐다.
+    // 시전 시간이 끝나는 시점(onRelease)에 발사한다 - 그 전에 끊기면 원작처럼 취소.
+    this._leesinPlayCast({ actionKey: 'leesinQ', clips: ['Spell1'], lockSec: q.castTimeSec || 0.25, state: STATE.Q_CAST, exitIdle: ['Spell1_ToIdle'], onRelease: () => {
+      const origin = this.root.position.clone();
     // Q 음파는 마우스 커서가 가리키는 방향으로 실제 투사체가 날아간다.
     // 먼저 직선상 첫 적중 대상을 찾고, 대상이 있으면 그 대상까지의 거리만
     // 투사체가 이동하도록 해서 관통하지 않고 적중 순간 사라지게 한다.
@@ -18701,6 +18754,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
       // 자체가 취소돼 피해/표식이 사라졌다. 이미 발사된 투사체는 독립적으로 맞아야 한다.
       void impactTimer;
     } else debugSkillMiss('Lee Sin Q (음파)', 'no target in line');
+    } });
   
 };
 
@@ -18820,7 +18874,9 @@ CharacterController.prototype._leesinCastE = function(free) {
     if (!free && this.mp < e.energy1) { debugSkillMiss('Lee Sin E', '기력 부족'); return; }
     if (!free) { this.mp -= e.energy1; this.cooldowns.E = abilityHasteCooldown(this, e.cooldown); updateBars(this); }
     this._clearActionTimers();
-    this._leesinPlayCast({ actionKey: 'leesinE', clips: ['Spell3'], lockSec: e.castTimeSec || 0.25, state: STATE.E_CAST, exitIdle: ['Spell3_ToIdle'] });
+    // 버그 수정: 폭풍 판정도 시전 시간(0.25초)이 끝날 때 발생(예전엔 즉시).
+    this._leesinPlayCast({ actionKey: 'leesinE', clips: ['Spell3'], lockSec: e.castTimeSec || 0.25, state: STATE.E_CAST, exitIdle: ['Spell3_ToIdle'], onRelease: () => {
+      const now = performance.now();
     vfx.spawn('e', this.root.position.clone());
     const hits = findEnemiesInRadius(this.root.position, e.range);
     if (hits.length) {
@@ -18834,6 +18890,7 @@ CharacterController.prototype._leesinCastE = function(free) {
       this._leesinOnSkillUsed();
       debugSkillHit('Lee Sin E (폭풍)', hits[0].unit, { count: hits.length });
     } else debugSkillMiss('Lee Sin E (폭풍)', 'no target in range');
+    } });
   
 };
 
@@ -19251,8 +19308,7 @@ CharacterController.prototype._vexCastR = function(free = false) {
       this.currentActionKey = 'vexRRecast';
       this.currentPhase = 'ACTIVE';
       this.setState(STATE.R_CAST);
-      const clip = this.resolveClip(['Spell4']);
-      if (clip) this.playFirstAvailable(['Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
+      this.playFirstAvailable(['Spell4_Dash', 'Spell4_Attack', 'Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
       const hitTimer = setTimeout(() => {
         if (!this._vex.dashActive) return;
         const t = this._vex.recastTarget;
@@ -19285,6 +19341,9 @@ CharacterController.prototype._vexCastR = function(free = false) {
     this.setState(STATE.R_CAST);
     const target = this.currentTarget;
     const raw = skillVal(rd.damageByLevel, lvl) + (rd.apRatio || 0) * (this.stats.abilityPower || 0);
+    // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사 - PC 위키 시전 0.25초 뒤 발사.
+    const fireTimer = setTimeout(() => {
+    if (this.currentActionKey !== 'vexRCast' || !target || target.hp <= 0) return;
     const from = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));
     projectiles.spawn({
       from,
@@ -19307,17 +19366,20 @@ CharacterController.prototype._vexCastR = function(free = false) {
         }
       }
     });
-    const clip = this.resolveClip(['Spell4']);
-    if (clip) this.playFirstAvailable(['Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
+    }, (rd.castTimeSec || 0.25) * 1000);
+    this._actionTimers.push(fireTimer);
+    // 버그 수정: GLB에 'Spell4' 클립이 없어 R 모션이 재생되지 않았다(실제 클립은 Spell4_Cast/Spell4_Dash/Spell4_Attack).
+    this.playFirstAvailable(['Spell4_Cast', 'Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
     const recTimer = setTimeout(() => {
       if (this.currentActionKey === 'vexRCast') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
-    }, 250);
+    }, ((rd.castTimeSec || 0.25) + 0.05) * 1000);
     this._actionTimers.push(recTimer);
   
 };
 
 // Extracted from CharacterController: _vexUpdateR
 CharacterController.prototype._vexUpdateR = function(dt) { 
+    if (this.championId === 'vex') { this._vexTickQ(dt); this._vexTickE(dt); this._vexTickWShield(); }
     if (!this._vex || !this._vex.dashActive) {
       if (this._vex && this._vex.recastReadyUntil && performance.now() >= this._vex.recastReadyUntil) this._vexClearRRecast();
       return;
@@ -19329,6 +19391,144 @@ CharacterController.prototype._vexUpdateR = function(dt) {
   
 };
 
+
+
+// ---------------- 벡스 Q/W/E (예전엔 전용 구현 없이 공용 대체 경로가 선택 대상에게 고정 피해만 줬다) ----------------
+CharacterController.prototype._vexAimDir = function(mouseWorldPoint) {
+  const dir = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
+    : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+  if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
+  return dir.normalize();
+};
+
+// Q(오싹한 미사일): 시전 0.15초 뒤 파동 발사. 속도 600으로 500 유닛 → 3200으로 가속, 폭 360 → 160, 관통.
+CharacterController.prototype._vexCastQ = function(mouseWorldPoint, free = false) {
+  if (isSilenced(this) || isCrowdControlled(this)) return;
+  if (!this.canStartNewAction()) return;
+  const q = this._champData().Q;
+  const dir = this._vexAimDir(mouseWorldPoint);
+  if (!this._payCost('Q', free)) return;
+  this.faceDirectionInstant(dir);
+  this._clearActionTimers();
+  this.currentActionKey = 'vexQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
+  this.setState(STATE.Q_CAST);
+  this.playFirstAvailable(['Spell1_Base'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
+  const lvl = Math.max(1, this.skillLevels.Q || 1);
+  const castMs = (q.castTimeSec != null ? q.castTimeSec : 0.15) * 1000;
+  const fire = setTimeout(() => {
+    if (this.currentActionKey !== 'vexQ') return;
+    this._vex.qTravel = { origin: this.root.position.clone(), dir: dir.clone(), traveled: 0, hitSet: new Set(), lvl };
+    vfx.spawn('q', this.root.position.clone(), dir);
+    this.currentActionKey = null; this.currentPhase = null;
+    this._resumeAfterAction();
+  }, castMs);
+  this._actionTimers.push(fire);
+};
+
+CharacterController.prototype._vexTickQ = function(dt) {
+  const t = this._vex && this._vex.qTravel;
+  if (!t) return;
+  const q = this._champData().Q;
+  const accelAt = lolRangeToWorld(q.accelerationDistance || 500);
+  const speed = lolRangeToWorld(t.traveled < accelAt ? (q.speed1 || 600) : (q.speed2 || 3200));
+  const maxDist = lolRangeToWorld(q.range || 1200);
+  t.traveled = Math.min(maxDist, t.traveled + speed * dt);
+  const width = t.traveled < accelAt ? (q.width || 360) : (q.widthAfterAccel || q.width || 160);
+  const half = lolRangeToWorld(width) * 0.5;
+  for (const u of getAllEnemyUnits()) {
+    if (!u || u.hp <= 0 || t.hitSet.has(u)) continue;
+    const p = getWorldPosition(u); if (!p) continue;
+    const v = new THREE.Vector3(p.x - t.origin.x, 0, p.z - t.origin.z);
+    const along = v.dot(t.dir); const r = getCollisionRadius(u);
+    if (along < -r || along > t.traveled + r) continue;
+    const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
+    if (lateral > half + r) continue;
+    t.hitSet.add(u);
+    const raw = skillVal(q.damageByLevel, t.lvl) + (q.apRatio || 0) * (this.stats.abilityPower || 0);
+    applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    vfx.spawn('hit', p.clone(), undefined, { color: 0x8b5cf6 });
+    debugSkillHit('Vex Q', u);
+  }
+  if (t.traveled >= maxDist - 1e-6) this._vex.qTravel = null;
+};
+
+// W(거리 두기): 시전 0.25초(이동 가능) 뒤 보호막 50~150(+주문력 75%, 2.5초) + 반경 475 마법 피해.
+CharacterController.prototype._vexCastW = function(mouseWorldPoint, free = false) {
+  if (isSilenced(this) || isCrowdControlled(this)) return;
+  const w = this._champData().W;
+  if (!this._payCost('W', free)) return;
+  this.playFirstAvailable([this.targetPos ? 'Spell2_Moving' : 'Spell2_BASE', 'Spell2_BASE'], { loop: THREE.LoopOnce, fade: 0.06 });
+  const lvl = Math.max(1, this.skillLevels.W || 1);
+  const t = setTimeout(() => {
+    if (this.championId !== 'vex' || this.hp <= 0) return;
+    const shield = (skillVal(w.shieldByLevel, lvl) + (w.shieldApRatio || 0) * (this.stats.abilityPower || 0)) * getShieldReceivedMultiplier(this);
+    this.shield = (this.shield || 0) + shield;
+    this._vex.wShield = { amount: shield, expiresAt: performance.now() + (w.shieldDuration || 2.5) * 1000 };
+    vfx.spawn('w', this.root.position.clone());
+    const raw = skillVal(w.damageByLevel, lvl) + (w.apRatio || 0) * (this.stats.abilityPower || 0);
+    for (const h of findEnemiesInRadius(this.root.position, w.range || 475)) {
+      applyDamage(h.unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+      debugSkillHit('Vex W', h.unit);
+    }
+    updateBars(this);
+  }, (w.castTimeSec != null ? w.castTimeSec : 0.25) * 1000);
+  void t; // 시전 중 이동 가능 - 행동 잠금/타이머 취소 대상이 아니다
+};
+
+CharacterController.prototype._vexTickWShield = function() {
+  const s = this._vex && this._vex.wShield;
+  if (!s || performance.now() < s.expiresAt) return;
+  this.shield = Math.max(0, (this.shield || 0) - Math.min(this.shield || 0, s.amount)); // 남은 W 몫만 제거
+  this._vex.wShield = null;
+  updateBars(this);
+};
+
+// E(커지는 안개): 시전 0.25초 뒤 지정 지점(최대 800)으로 발사, 착탄 시 반경 200~300(거리 비례) 마법 피해 + 2초 둔화.
+CharacterController.prototype._vexCastE = function(mouseWorldPoint, free = false) {
+  if (isSilenced(this) || isCrowdControlled(this)) return;
+  if (!this.canStartNewAction()) return;
+  const e = this._champData().E;
+  const dir = this._vexAimDir(mouseWorldPoint);
+  const maxWorld = lolRangeToWorld(e.range || 800);
+  const rawDist = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0).length() : maxWorld;
+  const dist = Math.min(rawDist, maxWorld);
+  if (!this._payCost('E', free)) return;
+  this.faceDirectionInstant(dir);
+  this._clearActionTimers();
+  this.currentActionKey = 'vexE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
+  this.setState(STATE.E_CAST);
+  this.playFirstAvailable(['Spell3_0'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
+  const lvl = Math.max(1, this.skillLevels.E || 1);
+  const fire = setTimeout(() => {
+    if (this.currentActionKey !== 'vexE') return;
+    const from = this.root.position.clone();
+    const to = from.clone().addScaledVector(dir, dist);
+    const frac = maxWorld > 0 ? dist / maxWorld : 1;
+    const radius = (e.radiusMin || 200) + ((e.radiusMax || 300) - (e.radiusMin || 200)) * frac;
+    this._vex.eTravel = { from, to, total: dist, traveled: 0, radius, lvl };
+    vfx.spawn('e', from.clone(), dir);
+    this.currentActionKey = null; this.currentPhase = null;
+    this._resumeAfterAction();
+  }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
+  this._actionTimers.push(fire);
+};
+
+CharacterController.prototype._vexTickE = function(dt) {
+  const t = this._vex && this._vex.eTravel;
+  if (!t) return;
+  const e = this._champData().E;
+  t.traveled = Math.min(t.total, t.traveled + lolRangeToWorld(e.missileSpeed || 1300) * dt);
+  if (t.traveled < t.total - 1e-6) return;
+  this._vex.eTravel = null;
+  const raw = skillVal(e.damageByLevel, t.lvl) + (e.apRatio || 0) * (this.stats.abilityPower || 0);
+  const slow = skillVal(e.slowPercentByLevel, t.lvl) / 100;
+  vfx.spawn('hit', t.to.clone(), undefined, { color: 0x8b5cf6 });
+  for (const h of findEnemiesInRadius(t.to, t.radius)) {
+    applyDamage(h.unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    applyStatus(h.unit, { id: 'vexE_slow', type: 'SLOW', duration: e.slowDuration || 2, value: slow, source: this });
+    debugSkillHit('Vex E', h.unit);
+  }
+};
 
 /* ===== src/champions/ezreal.js ===== */
 /* ============================================================
@@ -19378,6 +19578,8 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
   this.currentActionKey = 'ezrealQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.Q_CAST);
 
+  // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사하고, 그 전에 다른 행동으로 끊기면 원작처럼 취소된다.
+  const __fire = () => {
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(q.width || 60) * 0.5;
   const hitUnit = findFirstInLine(this.root.position, dir, q.range, halfWidth);
@@ -19391,13 +19593,13 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
     const hitPos = getWorldPosition(hitUnit);
     if (hitPos) impactDistance = getHorizontalDistance(hitPos, this.root.position);
   }
-  vfx.spawn('ezrealQ', this.root.position.clone(), dir, { range: worldRange, impactDistance, speed: lolRangeToWorld(2200) });
+  vfx.spawn('ezrealQ', this.root.position.clone(), dir, { range: worldRange, impactDistance, speed: lolRangeToWorld(q.missileSpeed || 2000) });
 
   const lvl = Math.max(1, this.skillLevels.Q || 1);
   const raw = skillVal(q.damageByLevel, lvl) + (q.totalAdRatio || 0) * this.stats.attackDamage + (q.apRatio || 0) * (this.stats.abilityPower || 0);
   const targetPoint = origin.clone().addScaledVector(dir, lolRangeToWorld(q.range));
   projectiles.spawn({
-    from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(2200), damage: 0,
+    from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(q.missileSpeed || 2000), damage: 0,
     color: 0x8fe3ff, realmId: this.realmId,
     onHit: (t) => {
       applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
@@ -19418,6 +19620,10 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
     },
   });
   if (!hitUnit) debugSkillMiss('Ezreal Q', 'no target in line');
+
+  };
+  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
+  this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell1');
   this.playFirstAvailable(['Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
@@ -19450,6 +19656,8 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   this.currentActionKey = 'ezrealW'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.W_CAST);
 
+  // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사하고, 그 전에 다른 행동으로 끊기면 원작처럼 취소된다.
+  const __fire = () => {
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(w.width || 60) * 0.5;
   const hitUnit = this._ezrealFindWTarget(this.root.position, dir, w.range, halfWidth);
@@ -19476,6 +19684,10 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
     },
   });
   if (!hitUnit) debugSkillMiss('Ezreal W', 'no valid target in line (챔피언/포탑/억제기/넥서스만 반응)');
+
+  };
+  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealW') __fire(); }, (w.castTimeSec != null ? w.castTimeSec : 0.25) * 1000);
+  this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell2');
   this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
@@ -19555,17 +19767,20 @@ CharacterController.prototype._ezrealCastE = function(mouseWorldPoint, free = fa
 
   const worldRange = lolRangeToWorld(e.range);
   const dist = Math.min(rawDist || worldRange, worldRange);
-  const blinkPos = this.root.position.clone().addScaledVector(dir, dist);
+  const blinkOffset = dir.clone().multiplyScalar(dist); // 시전 중 밀려나도 시전 끝 위치 기준으로 순간이동(PC 위키)
 
   this._clearActionTimers();
   this.currentActionKey = 'ezrealE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.E_CAST);
   this.targetPos = null; this.isChasing = false;
 
-  this.root.position.copy(blinkPos);
   this.faceDirectionInstant(dir);
-  vfx.spawn('e', blinkPos.clone());
   this.playFirstAvailable([clipName, 'Spell3_0'], { loop: THREE.LoopOnce, fade: 0.04, clampWhenFinished: true });
+  // 버그 수정: 예전엔 즉시 순간이동했다 - PC 위키 시전 시간 0.25초 뒤 순간이동 + 유도탄.
+  const __fire = () => {
+  const blinkPos = this.root.position.clone().add(blinkOffset);
+  this.root.position.copy(blinkPos);
+  vfx.spawn('e', blinkPos.clone());
 
   const boltRange = lolRangeToWorld(e.boltRange || (e.range * 2));
   let best = null; let bestScore = Infinity;
@@ -19599,6 +19814,10 @@ CharacterController.prototype._ezrealCastE = function(mouseWorldPoint, free = fa
   } else {
     debugSkillMiss('Ezreal E', 'no target in bolt range');
   }
+
+  };
+  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
+  this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation(clipName) || this.findAnimation('Spell3_0');
   const dur = clip ? clip.duration : 0.5;
@@ -19654,7 +19873,7 @@ CharacterController.prototype._ezrealCastR = function(mouseWorldPoint, free = fa
       dir: dir.clone(), pos: origin.clone(),
       maxDist: lolRangeToWorld(r.range || 20000),
       halfWidth: lolRangeToWorld(r.width || 160) * 0.5,
-      speed: lolRangeToWorld(5000),
+      speed: lolRangeToWorld(r.missileSpeed || 2000), // PC 위키: 속도 2000(예전 5000)
       traveled: 0, hitSet: new Set(), hitCount: 0, vfxAccum: 0,
     };
   }, castTime * 1000);
@@ -19837,6 +20056,8 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
   // 중이었다면(예: 헤이스트 등으로 쿨다운이 왕복 시간보다 짧아지는 경우)
   // 반드시 먼저 정리한다 - 그냥 this._ahri.qTravel을 덮어쓰면 이전
   // orbMesh의 참조를 잃어버려 scene에 영구히 남는다.
+  // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사, 그 전에 끊기면 취소.
+  const __fire = () => {
   if (this._ahri.qTravel) this._ahriEndQTravel();
 
   const worldRange = lolRangeToWorld(q.range);
@@ -19870,6 +20091,10 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
     level: Math.max(1, this.skillLevels.Q || 1), orbMesh, elapsed: 0,
   };
   vfx.spawn('ahriOrbHit', origin.clone(), undefined, { color: 0x7ff5ff });
+
+  };
+  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ahriQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
+  this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell1');
   this.playFirstAvailable(['Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
@@ -20132,6 +20357,8 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   let clipName = dir.z > 0 ? 'Spell3_North' : 'Spell3_south';
   if (Math.abs(dir.x) > Math.abs(dir.z)) clipName = dir.x > 0 ? 'Spell3_east' : 'Spell3_west';
 
+  // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사, 그 전에 끊기면 취소.
+  const __fire = () => {
   const worldRange = lolRangeToWorld(e.range);
   const halfWidth = lolRangeToWorld(e.width || 60) * 0.5;
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));
@@ -20168,9 +20395,15 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
     lvl: Math.max(1, this.skillLevels.E || 1),
   };
 
+  };
+  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ahriE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
+  this._actionTimers.push(__castTimer);
+
   const clip = this.findAnimation(clipName) || this.findAnimation('Spell3_south');
   this.playFirstAvailable([clipName, 'Spell3_south'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
-  const dur = clip ? clip.duration : 0.35;
+  // 버그 수정: 예전엔 2.77초짜리 클립이 끝날 때까지 행동이 잠겼다. 원작은 시전 시간(0.25초)이 끝나면
+  // 바로 이동/공격할 수 있다 - 잠금은 시전 시간 + 0.1초(클립이 그보다 짧으면 클립 길이)만.
+  const dur = Math.min(clip ? clip.duration : 0.35, (e.castTimeSec != null ? e.castTimeSec : 0.25) + 0.1);
   const recTimer = setTimeout(() => {
     if (this.currentActionKey === 'ahriE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);

@@ -65,7 +65,7 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
 };
 
 // Extracted from CharacterController: _chogathCastW
-CharacterController.prototype._chogathCastW = function(free) { 
+CharacterController.prototype._chogathCastW = function(free, mouseWorldPoint = null) { 
     if (isSilenced(this)) return;
     if (isCrowdControlled(this)) return;
     if (!this.canStartNewAction()) return;
@@ -78,7 +78,13 @@ CharacterController.prototype._chogathCastW = function(free) {
     this.playFirstAvailable((this.actionData?.w?.clips) || ['Spell2'], { loop: THREE.LoopOnce, fade: 0.08 });
     // _castW는 mouseWorldPoint를 받지 않는 슬롯이라(다른 챔피언 W는 방향이
     // 필요 없음) 초가스는 현재 바라보는 방향(정면)을 부채꼴 중심으로 쓴다.
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+    // 버그 수정(타이밍 측정으로 발견): 부채꼴 방향이 조준(마우스) 방향이 아니라 캐릭터가 마침 바라보던
+    // 방향이라, 겨눈 곳과 어긋나면 빗나갔다. 조준 방향으로 돌아서서 그 방향으로 판정한다.
+    let forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+    if (mouseWorldPoint) {
+      const aim = new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0);
+      if (aim.lengthSq() > 1e-6) { forward = aim.normalize(); this.faceDirectionInstant(forward); }
+    }
     vfx.spawn('w', this.root.position.clone());
     const t = setTimeout(() => {
       const hits = findEnemiesInRadius(this.root.position, w.range, { forward, maxAngleDeg: w.coneAngleDeg / 2 });
@@ -95,7 +101,7 @@ CharacterController.prototype._chogathCastW = function(free) {
       } else debugSkillMiss("Cho'Gath W", 'no target in cone');
       this.currentActionKey = null; this.currentPhase = null;
       this._resumeAfterAction();
-    }, 250); // 정확한 Cast Time이 기획안에 명시되어 있지 않아 짧은 판정 지연만 둔다
+    }, (w.castTime || 0.5) * 1000); // PC 위키 시전 시간 0.5초
     this._actionTimers.push(t);
   
 };
@@ -170,8 +176,19 @@ CharacterController.prototype._chogathCastR = function(free) {
     const range = r.rangeBase + r.rangePerStack * (this._chogath.predationStacks || 0);
     if (!isInRange(this, this.currentTarget, range)) { debugSkillMiss("Cho'Gath R", 'out of range'); return; }
     if (!this._payCost('R', free)) return;
-    vfx.spawn('r', this.root.position.clone());
-    this._chogathROnHit(this.currentTarget);
+    // PC 위키: 시전 0.25초 뒤 판정(예전엔 즉시). 그 사이 끊기면 취소.
+    const target = this.currentTarget;
+    this._clearActionTimers();
+    this.setState(STATE.R_CAST);
+    this.currentActionKey = 'chogathR'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
+    this.playFirstAvailable((this.actionData?.rCast?.clips) || ['Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
+    const t = setTimeout(() => {
+      if (this.currentActionKey !== 'chogathR') return;
+      this.currentActionKey = null; this.currentPhase = null;
+      if (target && target.hp > 0) { vfx.spawn('r', this.root.position.clone()); this._chogathROnHit(target); }
+      this._resumeAfterAction();
+    }, (r.castTime || 0.25) * 1000);
+    this._actionTimers.push(t);
   
 };
 

@@ -45,6 +45,8 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
   this.currentActionKey = 'ezrealQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.Q_CAST);
 
+  // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사하고, 그 전에 다른 행동으로 끊기면 원작처럼 취소된다.
+  const __fire = () => {
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(q.width || 60) * 0.5;
   const hitUnit = findFirstInLine(this.root.position, dir, q.range, halfWidth);
@@ -58,13 +60,13 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
     const hitPos = getWorldPosition(hitUnit);
     if (hitPos) impactDistance = getHorizontalDistance(hitPos, this.root.position);
   }
-  vfx.spawn('ezrealQ', this.root.position.clone(), dir, { range: worldRange, impactDistance, speed: lolRangeToWorld(2200) });
+  vfx.spawn('ezrealQ', this.root.position.clone(), dir, { range: worldRange, impactDistance, speed: lolRangeToWorld(q.missileSpeed || 2000) });
 
   const lvl = Math.max(1, this.skillLevels.Q || 1);
   const raw = skillVal(q.damageByLevel, lvl) + (q.totalAdRatio || 0) * this.stats.attackDamage + (q.apRatio || 0) * (this.stats.abilityPower || 0);
   const targetPoint = origin.clone().addScaledVector(dir, lolRangeToWorld(q.range));
   projectiles.spawn({
-    from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(2200), damage: 0,
+    from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(q.missileSpeed || 2000), damage: 0,
     color: 0x8fe3ff, realmId: this.realmId,
     onHit: (t) => {
       applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
@@ -85,6 +87,10 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
     },
   });
   if (!hitUnit) debugSkillMiss('Ezreal Q', 'no target in line');
+
+  };
+  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
+  this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell1');
   this.playFirstAvailable(['Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
@@ -117,6 +123,8 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   this.currentActionKey = 'ezrealW'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.W_CAST);
 
+  // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사하고, 그 전에 다른 행동으로 끊기면 원작처럼 취소된다.
+  const __fire = () => {
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(w.width || 60) * 0.5;
   const hitUnit = this._ezrealFindWTarget(this.root.position, dir, w.range, halfWidth);
@@ -143,6 +151,10 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
     },
   });
   if (!hitUnit) debugSkillMiss('Ezreal W', 'no valid target in line (챔피언/포탑/억제기/넥서스만 반응)');
+
+  };
+  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealW') __fire(); }, (w.castTimeSec != null ? w.castTimeSec : 0.25) * 1000);
+  this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell2');
   this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
@@ -222,17 +234,20 @@ CharacterController.prototype._ezrealCastE = function(mouseWorldPoint, free = fa
 
   const worldRange = lolRangeToWorld(e.range);
   const dist = Math.min(rawDist || worldRange, worldRange);
-  const blinkPos = this.root.position.clone().addScaledVector(dir, dist);
+  const blinkOffset = dir.clone().multiplyScalar(dist); // 시전 중 밀려나도 시전 끝 위치 기준으로 순간이동(PC 위키)
 
   this._clearActionTimers();
   this.currentActionKey = 'ezrealE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.E_CAST);
   this.targetPos = null; this.isChasing = false;
 
-  this.root.position.copy(blinkPos);
   this.faceDirectionInstant(dir);
-  vfx.spawn('e', blinkPos.clone());
   this.playFirstAvailable([clipName, 'Spell3_0'], { loop: THREE.LoopOnce, fade: 0.04, clampWhenFinished: true });
+  // 버그 수정: 예전엔 즉시 순간이동했다 - PC 위키 시전 시간 0.25초 뒤 순간이동 + 유도탄.
+  const __fire = () => {
+  const blinkPos = this.root.position.clone().add(blinkOffset);
+  this.root.position.copy(blinkPos);
+  vfx.spawn('e', blinkPos.clone());
 
   const boltRange = lolRangeToWorld(e.boltRange || (e.range * 2));
   let best = null; let bestScore = Infinity;
@@ -266,6 +281,10 @@ CharacterController.prototype._ezrealCastE = function(mouseWorldPoint, free = fa
   } else {
     debugSkillMiss('Ezreal E', 'no target in bolt range');
   }
+
+  };
+  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
+  this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation(clipName) || this.findAnimation('Spell3_0');
   const dur = clip ? clip.duration : 0.5;
@@ -321,7 +340,7 @@ CharacterController.prototype._ezrealCastR = function(mouseWorldPoint, free = fa
       dir: dir.clone(), pos: origin.clone(),
       maxDist: lolRangeToWorld(r.range || 20000),
       halfWidth: lolRangeToWorld(r.width || 160) * 0.5,
-      speed: lolRangeToWorld(5000),
+      speed: lolRangeToWorld(r.missileSpeed || 2000), // PC 위키: 속도 2000(예전 5000)
       traveled: 0, hitSet: new Set(), hitCount: 0, vfxAccum: 0,
     };
   }, castTime * 1000);

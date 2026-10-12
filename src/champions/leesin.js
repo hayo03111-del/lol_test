@@ -210,7 +210,10 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
     this.faceDirectionInstant(dir);
     // 시전 시간 0.25초(원작) 동안만 행동을 잡는다 - 음파 투사체는 바로 아래에서 발사.
     this._clearActionTimers();
-    this._leesinPlayCast({ actionKey: 'leesinQ', clips: ['Spell1'], lockSec: q.castTimeSec || 0.25, state: STATE.Q_CAST, exitIdle: ['Spell1_ToIdle'] });
+    // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 0.25초 잠금과 별개로 음파가 시전 즉시 발사됐다.
+    // 시전 시간이 끝나는 시점(onRelease)에 발사한다 - 그 전에 끊기면 원작처럼 취소.
+    this._leesinPlayCast({ actionKey: 'leesinQ', clips: ['Spell1'], lockSec: q.castTimeSec || 0.25, state: STATE.Q_CAST, exitIdle: ['Spell1_ToIdle'], onRelease: () => {
+      const origin = this.root.position.clone();
     // Q 음파는 마우스 커서가 가리키는 방향으로 실제 투사체가 날아간다.
     // 먼저 직선상 첫 적중 대상을 찾고, 대상이 있으면 그 대상까지의 거리만
     // 투사체가 이동하도록 해서 관통하지 않고 적중 순간 사라지게 한다.
@@ -250,6 +253,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
       // 자체가 취소돼 피해/표식이 사라졌다. 이미 발사된 투사체는 독립적으로 맞아야 한다.
       void impactTimer;
     } else debugSkillMiss('Lee Sin Q (음파)', 'no target in line');
+    } });
   
 };
 
@@ -369,7 +373,9 @@ CharacterController.prototype._leesinCastE = function(free) {
     if (!free && this.mp < e.energy1) { debugSkillMiss('Lee Sin E', '기력 부족'); return; }
     if (!free) { this.mp -= e.energy1; this.cooldowns.E = abilityHasteCooldown(this, e.cooldown); updateBars(this); }
     this._clearActionTimers();
-    this._leesinPlayCast({ actionKey: 'leesinE', clips: ['Spell3'], lockSec: e.castTimeSec || 0.25, state: STATE.E_CAST, exitIdle: ['Spell3_ToIdle'] });
+    // 버그 수정: 폭풍 판정도 시전 시간(0.25초)이 끝날 때 발생(예전엔 즉시).
+    this._leesinPlayCast({ actionKey: 'leesinE', clips: ['Spell3'], lockSec: e.castTimeSec || 0.25, state: STATE.E_CAST, exitIdle: ['Spell3_ToIdle'], onRelease: () => {
+      const now = performance.now();
     vfx.spawn('e', this.root.position.clone());
     const hits = findEnemiesInRadius(this.root.position, e.range);
     if (hits.length) {
@@ -383,6 +389,7 @@ CharacterController.prototype._leesinCastE = function(free) {
       this._leesinOnSkillUsed();
       debugSkillHit('Lee Sin E (폭풍)', hits[0].unit, { count: hits.length });
     } else debugSkillMiss('Lee Sin E (폭풍)', 'no target in range');
+    } });
   
 };
 

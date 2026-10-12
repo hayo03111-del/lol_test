@@ -316,9 +316,10 @@ const LEE_CLIPS = [
   c.canStartNewAction = () => true;
   c._leesinCastE(true);
   assert(c.currentActionKey === 'leesinE' && c._isLeeSinCastLock(), '리 신 E: 시전 직후 행동 잠금');
-  assert(near(getStatus(c, 'leesinPassive_as').duration, 3), '리 신 패시브: 공격 속도 버프 3초');
   advance(260);
   assert(c.currentActionKey === null, '리 신 E: 원작 시전 시간 0.25초 뒤 잠금 해제(예전엔 Spell3 길이 2.17초)');
+  // 판정(폭풍 피해)은 이제 시전 시간이 끝나는 0.25초에 발생하므로 패시브도 그때 걸린다.
+  assert(near(getStatus(c, 'leesinPassive_as').duration, 3), '리 신 패시브: 공격 속도 버프 3초(E 판정 시점)');
   advance(3500); // Spell3 나머지(1.87초) + Spell3_ToIdle(1.03초)
   assert(c.played.includes('Spell3_ToIdle') && c.played[c.played.length - 1] === 'LOCOMOTION', '리 신 E: 입력이 없으면 Spell3 → Spell3_ToIdle → Idle');
 

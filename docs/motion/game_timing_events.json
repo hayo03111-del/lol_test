@@ -1,12 +1,12 @@
 {
  "garen": {
   "Q": {
-   "dmgMs": 421,
+   "dmgMs": 406,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:basicAttack",
-     "ms": 332
+     "ms": 303
     }
    ]
   },
@@ -21,7 +21,7 @@
    ]
   },
   "E": {
-   "dmgMs": 459,
+   "dmgMs": 443,
    "projectileMs": null,
    "events": [
     {
@@ -31,12 +31,12 @@
    ]
   },
   "R": {
-   "dmgMs": 564,
+   "dmgMs": 592,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:r",
-     "ms": 469
+     "ms": 475
     }
    ]
   },
@@ -45,17 +45,17 @@
  },
  "darius": {
   "Q": {
-   "dmgMs": 886,
+   "dmgMs": 905,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:q",
-     "ms": 773
+     "ms": 804
     }
    ]
   },
   "W": {
-   "dmgMs": 357,
+   "dmgMs": 404,
    "projectileMs": null,
    "events": [
     {
@@ -64,7 +64,7 @@
     },
     {
      "k": "vfx:basicAttack",
-     "ms": 327
+     "ms": 370
     }
    ]
   },
@@ -74,17 +74,17 @@
    "events": [
     {
      "k": "vfx:e",
-     "ms": 270
+     "ms": 295
     }
    ]
   },
   "R": {
-   "dmgMs": 531,
+   "dmgMs": 541,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:r",
-     "ms": 405
+     "ms": 414
     }
    ]
   },
@@ -93,56 +93,56 @@
  },
  "masteryi": {
   "Q": {
-   "dmgMs": 1000,
+   "dmgMs": 1013,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:q",
-     "ms": 2
+     "ms": 4
     },
     {
      "k": "vfx:q",
-     "ms": 112
+     "ms": 120
     },
     {
      "k": "vfx:basicAttack",
-     "ms": 112
+     "ms": 121
     },
     {
      "k": "vfx:q",
-     "ms": 319
+     "ms": 322
     },
     {
      "k": "vfx:basicAttack",
-     "ms": 319
+     "ms": 322
     },
     {
      "k": "vfx:hit",
-     "ms": 528
+     "ms": 534
     },
     {
      "k": "vfx:q",
-     "ms": 529
+     "ms": 536
     },
     {
      "k": "vfx:basicAttack",
-     "ms": 529
+     "ms": 536
     },
     {
      "k": "vfx:hit",
-     "ms": 741
+     "ms": 736
     },
     {
      "k": "vfx:q",
-     "ms": 741
+     "ms": 736
     },
     {
      "k": "vfx:basicAttack",
-     "ms": 741
+     "ms": 736
     },
     {
      "k": "vfx:hit",
-     "ms": 953
+     "ms": 948
     }
    ]
   },
@@ -181,12 +181,12 @@
  },
  "leesin": {
   "Q": {
-   "dmgMs": 164,
+   "dmgMs": 524,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:q",
-     "ms": 3
+     "ms": 297
     }
    ]
   },
@@ -201,22 +201,22 @@
    ]
   },
   "E": {
-   "dmgMs": 35,
+   "dmgMs": 346,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:e",
-     "ms": 1
+     "ms": 281
     }
    ]
   },
   "R": {
-   "dmgMs": 436,
+   "dmgMs": 371,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:r",
-     "ms": 295
+     "ms": 255
     }
    ]
   },
@@ -225,16 +225,16 @@
  },
  "nautilus": {
   "Q": {
-   "dmgMs": 389,
+   "dmgMs": 393,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:hit",
-     "ms": 238
+     "ms": 230
     },
     {
      "k": "vfx:hit",
-     "ms": 242
+     "ms": 234
     }
    ]
   },
@@ -249,7 +249,7 @@
    ]
   },
   "E": {
-   "dmgMs": 27,
+   "dmgMs": 34,
    "projectileMs": null,
    "events": [
     {
@@ -258,25 +258,25 @@
     },
     {
      "k": "vfx:e",
-     "ms": 238
+     "ms": 234
     },
     {
      "k": "vfx:e",
-     "ms": 485
+     "ms": 482
     }
    ]
   },
   "R": {
-   "dmgMs": 588,
+   "dmgMs": 538,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:hit",
-     "ms": 449
+     "ms": 438
     },
     {
      "k": "vfx:r",
-     "ms": 450
+     "ms": 439
     }
    ]
   },
@@ -285,7 +285,7 @@
  },
  "yasuo": {
   "Q": {
-   "dmgMs": 456,
+   "dmgMs": 433,
    "projectileMs": null,
    "events": []
   },
@@ -295,7 +295,7 @@
    "events": []
   },
   "E": {
-   "dmgMs": 539,
+   "dmgMs": 530,
    "projectileMs": null,
    "events": []
   },
@@ -309,22 +309,22 @@
  },
  "yone": {
   "Q": {
-   "dmgMs": 582,
+   "dmgMs": 486,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:q",
-     "ms": 410
+     "ms": 391
     }
    ]
   },
   "W": {
-   "dmgMs": 639,
+   "dmgMs": 697,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:w",
-     "ms": 515
+     "ms": 538
     }
    ]
   },
@@ -334,21 +334,21 @@
    "events": [
     {
      "k": "vfx:e",
-     "ms": 12
+     "ms": 11
     }
    ]
   },
   "R": {
-   "dmgMs": 991,
+   "dmgMs": 960,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:r",
-     "ms": 811
+     "ms": 781
     },
     {
      "k": "vfx:e",
-     "ms": 1908
+     "ms": 1875
     }
    ]
   },
@@ -362,7 +362,7 @@
    "events": []
   },
   "W": {
-   "dmgMs": 827,
+   "dmgMs": 808,
    "projectileMs": null,
    "events": [
     {
@@ -371,31 +371,31 @@
     },
     {
      "k": "vfx:w",
-     "ms": 799
+     "ms": 764
     }
    ]
   },
   "E": {
-   "dmgMs": 368,
+   "dmgMs": 420,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:e",
-     "ms": 259
+     "ms": 286
     }
    ]
   },
   "R": {
-   "dmgMs": 2736,
+   "dmgMs": 2774,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:r",
-     "ms": 6
+     "ms": 4
     },
     {
      "k": "vfx:r",
-     "ms": 2667
+     "ms": 2692
     }
    ]
   },
@@ -404,12 +404,12 @@
  },
  "mordekaiser": {
   "Q": {
-   "dmgMs": 612,
+   "dmgMs": 681,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:q",
-     "ms": 511
+     "ms": 531
     }
    ]
   },
@@ -424,12 +424,12 @@
    ]
   },
   "E": {
-   "dmgMs": 561,
+   "dmgMs": 592,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:e",
-     "ms": 532
+     "ms": 558
     }
    ]
   },
@@ -439,7 +439,7 @@
    "events": [
     {
      "k": "vfx:r",
-     "ms": 533
+     "ms": 541
     }
    ]
   },
@@ -448,22 +448,22 @@
  },
  "renekton": {
   "Q": {
-   "dmgMs": 595,
+   "dmgMs": 73,
    "projectileMs": null,
    "events": []
   },
   "W": {
-   "dmgMs": 544,
+   "dmgMs": 576,
    "projectileMs": null,
    "events": []
   },
   "E": {
-   "dmgMs": 326,
+   "dmgMs": 345,
    "projectileMs": null,
    "events": []
   },
   "R": {
-   "dmgMs": 596,
+   "dmgMs": 560,
    "projectileMs": null,
    "events": []
   },
@@ -472,12 +472,12 @@
  },
  "nilah": {
   "Q": {
-   "dmgMs": 1140,
+   "dmgMs": 564,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:nilahQ",
-     "ms": 4
+     "ms": 3
     }
    ]
   },
@@ -492,7 +492,7 @@
    ]
   },
   "E": {
-   "dmgMs": 340,
+   "dmgMs": 345,
    "projectileMs": null,
    "events": [
     {
@@ -502,32 +502,32 @@
    ]
   },
   "R": {
-   "dmgMs": 377,
+   "dmgMs": 437,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:nilahRtick",
-     "ms": 259
+     "ms": 310
     },
     {
      "k": "vfx:nilahRtick",
-     "ms": 653
+     "ms": 718
     },
     {
      "k": "vfx:nilahRtick",
-     "ms": 1016
+     "ms": 1059
     },
     {
      "k": "vfx:nilahRtick",
-     "ms": 1393
+     "ms": 1454
     },
     {
      "k": "vfx:nilahRfinal",
-     "ms": 1712
+     "ms": 1799
     },
     {
      "k": "vfx:nilahShield",
-     "ms": 1713
+     "ms": 1799
     }
    ]
   },
@@ -536,22 +536,22 @@
  },
  "chogath": {
   "Q": {
-   "dmgMs": 933,
+   "dmgMs": 1183,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:q",
-     "ms": 2
+     "ms": 4
     }
    ]
   },
   "W": {
-   "dmgMs": null,
+   "dmgMs": 569,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:w",
-     "ms": 2
+     "ms": 3
     }
    ]
   },
@@ -566,12 +566,12 @@
    ]
   },
   "R": {
-   "dmgMs": 111,
+   "dmgMs": 447,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:r",
-     "ms": 1
+     "ms": 298
     }
    ]
   },
@@ -580,126 +580,126 @@
  },
  "ezreal": {
   "Q": {
-   "dmgMs": 131,
-   "projectileMs": 3,
+   "dmgMs": 456,
+   "projectileMs": 301,
    "events": [
     {
      "k": "vfx:ezrealQ",
-     "ms": 2
+     "ms": 300
     },
     {
      "k": "projectile",
-     "ms": 3
+     "ms": 301
     },
     {
      "k": "vfx:ezrealQHit",
-     "ms": 104
+     "ms": 412
     },
     {
      "k": "vfx:hit",
-     "ms": 105
+     "ms": 413
     }
    ]
   },
   "W": {
    "dmgMs": null,
-   "projectileMs": 2,
+   "projectileMs": 263,
    "events": [
     {
      "k": "vfx:w",
-     "ms": 2
+     "ms": 263
     },
     {
      "k": "projectile",
-     "ms": 2
+     "ms": 263
     },
     {
      "k": "vfx:hit",
-     "ms": 131
+     "ms": 394
     },
     {
      "k": "vfx:hit",
-     "ms": 132
+     "ms": 395
     }
    ]
   },
   "E": {
-   "dmgMs": 31,
-   "projectileMs": 2,
+   "dmgMs": 340,
+   "projectileMs": 309,
    "events": [
     {
      "k": "vfx:e",
-     "ms": 1
+     "ms": 308
     },
     {
      "k": "projectile",
-     "ms": 2
+     "ms": 309
     },
     {
      "k": "vfx:hit",
-     "ms": 4
+     "ms": 311
     },
     {
      "k": "vfx:hit",
-     "ms": 4
+     "ms": 311
     },
     {
      "k": "vfx:hit",
-     "ms": 5
+     "ms": 312
     }
    ]
   },
   "R": {
-   "dmgMs": 1047,
+   "dmgMs": 1088,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:ezrealRBow",
-     "ms": 1
+     "ms": 2
     },
     {
      "k": "vfx:hit",
-     "ms": 1026
+     "ms": 1031
     },
     {
      "k": "vfx:hit",
-     "ms": 1027
+     "ms": 1032
     },
     {
      "k": "vfx:hit",
-     "ms": 1067
+     "ms": 1063
     },
     {
      "k": "vfx:hit",
-     "ms": 1130
+     "ms": 1114
     },
     {
      "k": "vfx:hit",
-     "ms": 1196
+     "ms": 1168
     },
     {
      "k": "vfx:hit",
-     "ms": 1259
+     "ms": 1250
     },
     {
      "k": "vfx:hit",
-     "ms": 1328
+     "ms": 1308
     },
     {
      "k": "vfx:hit",
-     "ms": 1379
+     "ms": 1366
     },
     {
      "k": "vfx:hit",
-     "ms": 1449
+     "ms": 1434
     },
     {
      "k": "vfx:hit",
-     "ms": 1510
+     "ms": 1504
     },
     {
      "k": "vfx:hit",
-     "ms": 1584
+     "ms": 1570
     }
    ]
   },
@@ -713,21 +713,21 @@
    "events": [
     {
      "k": "vfx:hit",
-     "ms": 2
+     "ms": 1
     }
    ]
   },
   "W": {
-   "dmgMs": 256,
+   "dmgMs": 269,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:hit",
-     "ms": 231
+     "ms": 243
     },
     {
      "k": "vfx:hit",
-     "ms": 231
+     "ms": 243
     }
    ]
   },
@@ -737,21 +737,21 @@
    "events": [
     {
      "k": "vfx:hit",
-     "ms": 84
+     "ms": 73
     }
    ]
   },
   "R": {
-   "dmgMs": 534,
+   "dmgMs": 260,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:hit",
-     "ms": 487
+     "ms": 238
     },
     {
      "k": "vfx:hit",
-     "ms": 488
+     "ms": 240
     }
    ]
   },
@@ -760,20 +760,20 @@
  },
  "varus": {
   "Q": {
-   "dmgMs": 1514,
-   "projectileMs": 1299,
+   "dmgMs": 1538,
+   "projectileMs": 1298,
    "events": [
     {
      "k": "projectile",
-     "ms": 1299
+     "ms": 1298
     },
     {
      "k": "vfx:hit",
-     "ms": 1368
+     "ms": 1401
     },
     {
      "k": "vfx:hit",
-     "ms": 1370
+     "ms": 1403
     }
    ]
   },
@@ -783,39 +783,39 @@
    "events": [
     {
      "k": "vfx:hit",
-     "ms": 2
+     "ms": 1
     }
    ]
   },
   "E": {
-   "dmgMs": 321,
+   "dmgMs": 280,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:hit",
-     "ms": 285
+     "ms": 249
     },
     {
      "k": "vfx:hit",
-     "ms": 288
+     "ms": 250
     }
    ]
   },
   "R": {
-   "dmgMs": 418,
-   "projectileMs": 269,
+   "dmgMs": 399,
+   "projectileMs": 274,
    "events": [
     {
      "k": "projectile",
-     "ms": 269
+     "ms": 274
     },
     {
      "k": "vfx:hit",
-     "ms": 383
+     "ms": 374
     },
     {
      "k": "vfx:hit",
-     "ms": 384
+     "ms": 374
     },
     {
      "k": "vfx:hit",
@@ -832,25 +832,25 @@
  },
  "ahri": {
   "Q": {
-   "dmgMs": 160,
+   "dmgMs": 413,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:ahriOrbHit",
-     "ms": 2
+     "ms": 266
     },
     {
      "k": "vfx:ahriOrbHit",
-     "ms": 9
+     "ms": 269
     },
     {
      "k": "vfx:ahriOrbHit",
-     "ms": 1429
+     "ms": 1634
     }
    ]
   },
   "W": {
-   "dmgMs": 328,
+   "dmgMs": 306,
    "projectileMs": null,
    "events": [
     {
@@ -859,38 +859,34 @@
     },
     {
      "k": "vfx:hit",
-     "ms": 290
+     "ms": 264
     },
     {
      "k": "vfx:hit",
-     "ms": 291
+     "ms": 265
     },
     {
      "k": "vfx:hit",
-     "ms": 291
+     "ms": 265
     }
    ]
   },
   "E": {
-   "dmgMs": 151,
+   "dmgMs": 455,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:ahriOrbHit",
-     "ms": 107
+     "ms": 407
     }
    ]
   },
   "R": {
-   "dmgMs": 123,
+   "dmgMs": 177,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:r",
-     "ms": 1
-    },
-    {
-     "k": "vfx:ahriOrbHit",
      "ms": 2
     },
     {
@@ -900,6 +896,10 @@
     {
      "k": "vfx:ahriOrbHit",
      "ms": 4
+    },
+    {
+     "k": "vfx:ahriOrbHit",
+     "ms": 5
     }
    ]
   },
@@ -908,54 +908,58 @@
  },
  "vex": {
   "Q": {
-   "dmgMs": 309,
+   "dmgMs": 439,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:q",
-     "ms": 306
+     "ms": 173
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 401
     }
    ]
   },
   "W": {
-   "dmgMs": null,
+   "dmgMs": 439,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:w",
-     "ms": 1
-    },
-    {
-     "k": "vfx:w",
-     "ms": 134
+     "ms": 270
     }
    ]
   },
   "E": {
-   "dmgMs": null,
+   "dmgMs": 435,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:e",
-     "ms": 1037
+     "ms": 322
+    },
+    {
+     "k": "vfx:hit",
+     "ms": 403
     }
    ]
   },
   "R": {
-   "dmgMs": 141,
-   "projectileMs": 1,
+   "dmgMs": 472,
+   "projectileMs": 305,
    "events": [
     {
      "k": "projectile",
-     "ms": 1
+     "ms": 305
     },
     {
      "k": "vfx:r",
-     "ms": 33
+     "ms": 356
     },
     {
      "k": "vfx:hit",
-     "ms": 34
+     "ms": 358
     }
    ]
   },

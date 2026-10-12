@@ -405,6 +405,8 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
             timeScale: 1.0,
           })),
           onComplete: () => {
+            // 판정은 아래 시전 시간 타이머가 이미 처리했다 - 여기서는 남은 모션(후딜)만 정리한다.
+            if (this.currentActionKey === 'nilahQTail') { this.currentActionKey=null; this.currentPhase=null; this.phaseCancelable=false; this._resumeAfterAction(); return; }
             if (this.currentActionKey !== 'nilahQ') return;
             this.currentPhase='ACTIVE';
             // 버그 수정(핵심 - "Q 쓰면 캐릭터가 정지한다", 재발 방지): 이
@@ -425,11 +427,22 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
             }
           },
           onCancel: () => {
-            if (this.currentActionKey !== 'nilahQ') return;
+            if (this.currentActionKey !== 'nilahQ' && this.currentActionKey !== 'nilahQTail') return;
             this.currentActionKey=null; this.currentPhase=null; this.phaseCancelable=false;
             this._resumeAfterAction();
           }
         });
+        // 버그 수정(타이밍 측정으로 발견): 예전엔 클립 3개(약 0.7초+전환)가 다 끝나야 판정해 피해가 1.1초 뒤에
+        // 들어갔다. PC 위키 시전 시간 0.35~0.28초(추가 공속 비례 - 0.35/(1+추가 공속), 최소 0.28로 근사)에
+        // 판정하고, 남은 모션은 언제든 끊을 수 있는 후딜(nilahQTail)로 둔다.
+        const bonusAs = Math.max(0, (this.stats.levelBonusAttackSpeed || 0) + (this.stats.bonusAttackSpeedPercent || 0));
+        const castSec = Math.max(0.28, 0.35 / (1 + bonusAs));
+        const hitTimer = setTimeout(() => {
+          if (this.currentActionKey !== 'nilahQ') return;
+          try { this._nilahQHit(impact); } catch (err) { console.error('[Nilah Q] 판정 오류(무시하고 계속):', err); }
+          this.currentActionKey = 'nilahQTail'; this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
+        }, castSec * 1000);
+        this._actionTimers.push(hitTimer);
       } else {
         console.warn('[Nilah Q] Spell1A → Spell1B → Spell1C 중 없는 클립이 있어 Q 모션을 재생할 수 없습니다.', qSequence);
         this.currentActionKey=null; this.currentPhase=null; this.phaseCancelable=false;

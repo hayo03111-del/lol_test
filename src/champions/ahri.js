@@ -109,6 +109,8 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
   // 중이었다면(예: 헤이스트 등으로 쿨다운이 왕복 시간보다 짧아지는 경우)
   // 반드시 먼저 정리한다 - 그냥 this._ahri.qTravel을 덮어쓰면 이전
   // orbMesh의 참조를 잃어버려 scene에 영구히 남는다.
+  // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사, 그 전에 끊기면 취소.
+  const __fire = () => {
   if (this._ahri.qTravel) this._ahriEndQTravel();
 
   const worldRange = lolRangeToWorld(q.range);
@@ -142,6 +144,10 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
     level: Math.max(1, this.skillLevels.Q || 1), orbMesh, elapsed: 0,
   };
   vfx.spawn('ahriOrbHit', origin.clone(), undefined, { color: 0x7ff5ff });
+
+  };
+  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ahriQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
+  this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell1');
   this.playFirstAvailable(['Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
@@ -404,6 +410,8 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   let clipName = dir.z > 0 ? 'Spell3_North' : 'Spell3_south';
   if (Math.abs(dir.x) > Math.abs(dir.z)) clipName = dir.x > 0 ? 'Spell3_east' : 'Spell3_west';
 
+  // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사, 그 전에 끊기면 취소.
+  const __fire = () => {
   const worldRange = lolRangeToWorld(e.range);
   const halfWidth = lolRangeToWorld(e.width || 60) * 0.5;
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));
@@ -440,9 +448,15 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
     lvl: Math.max(1, this.skillLevels.E || 1),
   };
 
+  };
+  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ahriE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
+  this._actionTimers.push(__castTimer);
+
   const clip = this.findAnimation(clipName) || this.findAnimation('Spell3_south');
   this.playFirstAvailable([clipName, 'Spell3_south'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
-  const dur = clip ? clip.duration : 0.35;
+  // 버그 수정: 예전엔 2.77초짜리 클립이 끝날 때까지 행동이 잠겼다. 원작은 시전 시간(0.25초)이 끝나면
+  // 바로 이동/공격할 수 있다 - 잠금은 시전 시간 + 0.1초(클립이 그보다 짧으면 클립 길이)만.
+  const dur = Math.min(clip ? clip.duration : 0.35, (e.castTimeSec != null ? e.castTimeSec : 0.25) + 0.1);
   const recTimer = setTimeout(() => {
     if (this.currentActionKey === 'ahriE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);

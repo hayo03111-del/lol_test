@@ -691,14 +691,14 @@ const CHAMPION_DATA = {
     },
     Q: {
       // V25.23: 80/140/200/260/320 → 80/135/190/245/300. 마나 50(Data Dragon), 폭발 반경 250, 지연 0.627초(PC 위키).
-      name: '파열', cooldown: 6 /* Data Dragon 16.20.1 */, mana: 50, range: 950, castTime: 0.25, impactDelay: 0.627, radius: 250,
+      name: '파열', cooldown: 6 /* Data Dragon 16.20.1 */, mana: 50, range: 950, castTime: 0.5 /* PC 위키(예전 0.25) */, impactDelay: 0.627, radius: 250,
       damageByLevel: [80, 135, 190, 245, 300], apRatio: 1.0,
       knockupDuration: 1, slowPercent: 60, slowDuration: 1.5, damageType: 'MAGICAL',
     },
     W: {
       // V25.23: 80/135/190/245/300 → 80/130/180/230/280. 마나 70~90(Data Dragon).
       name: '흉포한 울부짖음', cooldown: [11, 10.5, 10, 9.5, 9] /* Data Dragon 16.20.1 */, mana: [70, 75, 80, 85, 90],
-      range: 650, coneAngleDeg: 60,
+      range: 650, coneAngleDeg: 60, castTime: 0.5, // PC 위키 시전 0.5초(예전 0.25초 고정 타이머)
       damageByLevel: [80, 130, 180, 230, 280], apRatio: 0.7,
       silenceDurationByLevel: [1.6, 1.7, 1.8, 1.9, 2.0], damageType: 'MAGICAL',
     },
@@ -709,7 +709,7 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDuration: 1.5, damageType: 'MAGICAL',
     },
     R: {
-      name: '포식', cooldown: [80, 70, 60], mana: 100, rangeBase: 175, rangePerStack: 2.5, // 버그 수정: 175가 맞음(Leaguepedia 패치 기록 "RANGE: 150 ⇒ 175" 확인) - 200은 잘못된 값이었음
+      name: '포식', cooldown: [80, 70, 60], mana: 100, castTime: 0.25 /* PC 위키(예전 즉시) */, rangeBase: 175, rangePerStack: 2.5, // 버그 수정: 175가 맞음(Leaguepedia 패치 기록 "RANGE: 150 ⇒ 175" 확인) - 200은 잘못된 값이었음
       championDamageByLevel: [300, 475, 650], championApRatio: 0.5, championBonusHpRatio: 0.1,
       nonChampionDamage: 1200, nonChampionApRatio: 0.5, nonChampionBonusHpRatio: 0.1,
       hpGrowthByLevel: [80, 120, 160], nonEpicStackCap: 6, damageType: 'TRUE',
@@ -789,8 +789,10 @@ const CHAMPION_DATA = {
      Q: {
       name: '오싹한 미사일',
      cooldown: [8, 7, 6, 5, 4], mana: [45, 50, 55, 60, 65], // Data Dragon
-     range: 1200,speed1: 600, speed2: 3200,
-     accelerationDistance: 500, width: 180,
+     // PC 위키 Template:Data Vex/Mistral Bolt: 시전 0.15초, 속도 600 → 500 유닛 이동 후 3200으로 가속하며
+     // 폭이 360 → 160으로 좁아진다(가장자리 기준 전체 폭). 관통.
+     range: 1200,speed1: 600, speed2: 3200, castTimeSec: 0.15,
+     accelerationDistance: 500, width: 360, widthAfterAccel: 160,
      // V26.13: 기본 피해 70/115/160/205/250(+주문력 70%) - PC 위키.
      damageByLevel: [70, 115, 160, 205, 250],
      apRatio: 0.7, piercesUnits: true,
@@ -801,7 +803,7 @@ const CHAMPION_DATA = {
 
      W: {
       name: '거리 두기', cooldown: [16, 15, 14, 13, 12] /* Data Dragon 16.20.1 */, mana: 75,
-      range: 475, damageByLevel: [80, 120, 160, 200, 240],
+      range: 475, castTimeSec: 0.25, damageByLevel: [80, 120, 160, 200, 240], // PC 위키: 시전 0.25초(이동 가능), 반경 475
       // PC 위키: 보호막 50/75/100/125/150(+주문력 75%), 2.5초. 예전 50~170은 주문력 80% 시절 기본값.
       apRatio: 0.3, shieldByLevel: [50, 75, 100, 125, 150], shieldApRatio: 0.75, shieldDuration: 2.5,
       damageType: 'MAGICAL',
@@ -810,7 +812,9 @@ const CHAMPION_DATA = {
 
      E: {
       name: '커지는 안개', cooldown: 12 /* Data Dragon 16.20.1 */, mana: [70, 80, 90, 100, 110], // Data Dragon
-      range: 800, damageByLevel: [60, 105, 150, 195, 240],
+      // PC 위키: 시전 0.25초, 지정 지점까지 날아가 폭발 - 반경 200~300(시전 거리 비례). 피해 수치는 최신 PC 출처가
+      // 엇갈려 기존 값 유지(미확인). 투사체 속도는 위키 확인 못 해 1300으로 추정(missileSpeedGuessed).
+      range: 800, castTimeSec: 0.25, radiusMin: 200, radiusMax: 300, missileSpeed: 1300, missileSpeedGuessed: true, damageByLevel: [60, 105, 150, 195, 240],
       apRatio: 0.4, slowPercentByLevel: [30, 35, 40, 45, 50],
       slowDuration: 2, damageType: 'MAGICAL',
       piercesUnits: true,
@@ -1261,7 +1265,7 @@ const CHAMPION_DATA = {
       damageByLevel: [200, 400, 600], apRatio: 1.2,
       splashDamagePercent: 100, splashRadius: 400, // 주변 적도 같은 피해 + 서리 화살(PC 위키). 반경 400은 미확인
       minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 20000,
-      castTimeSec: 0.5,
+      castTimeSec: 0.25, // PC 위키 Template:Data Ashe/Enchanted Crystal Arrow(예전 0.5)
       visionRadius: 900, visionDurationSec: 3.0, // 비행 경로/명중 지점에도 짧은 시야(공식 설명: "1초간 경로의 시야를 밝힌다" - 근사)
       damageType: 'MAGICAL',
     },

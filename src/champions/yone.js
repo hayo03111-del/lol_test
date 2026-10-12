@@ -512,10 +512,20 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
     } else {
       debugSkillMiss('W', '사거리 내 대상 없음');
     }
-    this.currentPhase = 'RECOVERY';
-    // 영혼 가르기 종료 전환: 이동 중이면 Spell2_ToRun, 정지 중이면 Spell2_ToIdle.
-    const doneW = () => { if (this.currentActionKey === key) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } };
-    this._yonePlayExitTransition(['Spell2_ToIdle'], ['Spell2_ToRun'], doneW);
+    // 버그 수정(타이밍 측정으로 발견): 예전엔 판정 뒤 1.47초짜리 복귀 모션(Spell2_ToIdle)이 끝날 때까지 행동이
+    // 잠겨 있었다(시전 후 총 약 2초). 원작은 시전 시간이 끝나면 바로 움직일 수 있다 - 잠금은 즉시 풀고,
+    // 이동/공격/시전 입력이 없을 때만 복귀 모션을 끝까지 보여준다(이동 중이면 Spell2_ToRun 대신 바로 이동).
+    this.currentActionKey = null; this.currentPhase = null;
+    if (this.targetPos || this.pendingMove || this.pendingCast || (this.currentTarget && this.currentTarget.hp > 0 && this.attackOrderActive)) {
+      this._resumeAfterAction();
+    } else {
+      const tail = this.resolveClip(['Spell2_ToIdle']);
+      if (tail) {
+        this.playFirstAvailable(['Spell2_ToIdle'], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
+        const t2 = setTimeout(() => { if (!this.currentActionKey && this.currentClipKey === tail.name) this._resumeAfterAction(); }, Math.max(0, tail.duration - 0.03) * 1000);
+        this._actionTimers.push(t2);
+      } else this._resumeAfterAction();
+    }
   }, Math.max(0, castTime) * 1000);
   this._actionTimers.push(timer);
   if (!free) this.cooldowns.W = abilityHasteCooldown(this, this._yoneWCooldown());

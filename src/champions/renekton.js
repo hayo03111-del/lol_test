@@ -132,9 +132,10 @@ CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=fa
       for(const h of hits) this._renektonApplyQHit(h.unit,empowered,tracker);
       updateBars(this);
       this.currentPhase='RECOVERY'; this.phaseCancelable=true;
-      const end=setTimeout(()=>{ if(this.currentActionKey==='renektonQ'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},80);
+      // PC 위키: 시전 후 0.25초 동안 평타·E·R 사용 불가(그 뒤 해제).
+      const end=setTimeout(()=>{ if(this.currentActionKey==='renektonQ'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},250);
       this._actionTimers.push(end);
-    },Math.max(30,dur*1000*0.62));
+    },0); // 버그 수정(타이밍 측정으로 발견): 예전엔 클립 길이×0.62(약 0.5초) 뒤 판정 - PC 위키는 시전 시간 없음(즉시)
     this._actionTimers.push(timer);
     updateBars(this);
   

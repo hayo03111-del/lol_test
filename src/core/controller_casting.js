@@ -21,7 +21,7 @@ const CHAMPION_DIRECT_CASTS = {
     Q: (c, m, f) => c._nilahCastQ(m, f), W: (c, m, f) => c._nilahCastW(m, f),
     E: (c, m, f) => c._nilahCastE(m, f), R: (c, m, f) => c._nilahCastR(f),
   },
-  vex: { R: (c, m, f) => c._vexCastR(f) },
+  vex: { Q: (c, m, f) => c._vexCastQ(m, f), W: (c, m, f) => c._vexCastW(m, f), E: (c, m, f) => c._vexCastE(m, f), R: (c, m, f) => c._vexCastR(f) },
   renekton: {
     Q: (c, m, f) => c._renektonCastQ(m, f), W: (c, m, f) => c._renektonCastW(m, f),
     E: (c, m, f) => c._renektonCastE(m, f), R: (c, m, f) => c._renektonCastR(f),
@@ -49,7 +49,7 @@ const CHAMPION_SLOT_CASTS = {
   },
   W: {
     ahri: (c, m, f) => c._ahriCastW(m, f), yasuo: (c, m, f) => c._yasuoCastW(m, f), yone: (c, m, f) => c._yoneCastW(m, f),
-    chogath: (c, m, f) => c._chogathCastW(f), leesin: (c, m, f) => c._leesinCastW(f, m), mordekaiser: (c, m, f) => c._mordeCastW(f),
+    chogath: (c, m, f) => c._chogathCastW(f, m), leesin: (c, m, f) => c._leesinCastW(f, m), mordekaiser: (c, m, f) => c._mordeCastW(f),
     ezreal: (c, m, f) => c._ezrealCastW(m, f), varus: (c, m, f) => c._varusCastW(m, f),
   },
   E: {

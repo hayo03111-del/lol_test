@@ -263,7 +263,7 @@ class CharacterController {
   // 빠져 있었다).
   _freshChampionStates() {
     // 벡스 R(그림자 파동) 전용 상태: 1차 적중 후 대상에게 재시전할 수 있는 창과 실제 돌진 상태를 분리한다.
-    this._vex = { recastTarget: null, recastReadyUntil: 0, dashActive: false, dashStart: null, dashEnd: null, dashT: 0, dashDuration: 0.28 };
+    this._vex = { recastTarget: null, recastReadyUntil: 0, dashActive: false, dashStart: null, dashEnd: null, dashT: 0, dashDuration: 0.28, qTravel: null, eTravel: null, wShield: null };
     // 이즈리얼 전용 상태: markTarget/markExpiresAt은 W(정기 방출) 표식,
     // rTravel은 R(정조준 사격)이 매 프레임 진행하는 관통 광선 상태(요네 R/
     // 야스오 Q3 회오리와 동일한 패턴 - _ezrealTickRTravel 참고).
@@ -985,6 +985,10 @@ class CharacterController {
     // 캔슬을 막고, 채널 중(ACTIVE)에는 canMove:true로 둬서 이동 명령이
     // 최소한 대기(pendingMove)되었다가 채널이 끝나는 즉시 자연스럽게
     // 이어지게 한다.
+    // 닐라 Q 후딜(판정 이후 남은 모션): 이동/평타/스킬로 언제든 끊을 수 있다.
+    if (this.championId === 'nilah' && this.currentActionKey === 'nilahQTail') {
+      return { canMove: true, canAttack: true, canCast: true, canTurn: true };
+    }
     if (this.championId === 'nilah' && this.currentActionKey === 'nilahR') {
       return { canMove: this.currentPhase !== 'STARTUP', canAttack: false, canCast: false, canTurn: true };
     }

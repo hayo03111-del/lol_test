@@ -86,6 +86,7 @@ vm.runInContext([
   'src/champions/leesin.js', 'src/champions/nautilus.js', 'src/champions/yasuo.js', 'src/champions/yone.js',
   'src/champions/sett.js', 'src/champions/mordekaiser.js', 'src/champions/renekton.js', 'src/champions/nilah.js',
   'src/champions/chogath.js', 'src/champions/ezreal.js', 'src/champions/ashe.js', 'src/champions/varus.js',
+  'src/champions/vex.js',
 ].map(read).join('\n') + `
 this.CharacterController = CharacterController;
 this.CHAMPION_DATA = CHAMPION_DATA;
@@ -293,4 +294,52 @@ function clearPlaced() { stubs.placedDummies.length = 0; }
   c._morde.auraExpiresAt = now + 4000; c._mordePassiveAuraTick(0);
   assert(near(c.stats.percentMoveSpeedBonus, 0.09), '모데카이저 오라 이동 속도 11레벨 9%(3/6/9%)');
   assert(CHAMPION_DATA.ahri.E.charmSkillDamageAmpPercent === 0, '아리 E: 리워크로 삭제된 피해 증폭 제거');
+}
+
+// --- 7차: 타이밍 측정으로 드러난 문제 수정 ---
+{
+  // 벡스 W: 0.25초 뒤 보호막 + 반경 피해(예전엔 공용 대체 경로 - 선택 대상 고정 피해만)
+  clearPlaced();
+  const c = makeChamp('vex', [], { stats: { attackDamage: 50, abilityPower: 100, armor: 30, magicResist: 30, critChance: 0, critMultiplier: 1.75, bonusAttackSpeedPercent: 0 } });
+  const e = place(makeEnemy(0, 1));
+  c._vexCastW(null, false);
+  assert(c.shield === 0 && e.hp === 3000, '벡스 W: 시전 시간(0.25초) 전에는 효과 없음');
+  advance(260);
+  assert(near(c.shield, 50 + 0.75 * 100) && near(3000 - e.hp, 80 + 0.3 * 100), '벡스 W: 보호막 50+AP 75%, 반경 피해 80+AP 30%');
+  advance(2600); c._vexTickWShield();
+  assert(near(c.shield, 0), '벡스 W: 보호막 2.5초 후 제거');
+  // 벡스 Q: 0.15초 뒤 발사, 관통 파동
+  c.canStartNewAction = () => true;
+  const hp0 = e.hp;
+  c._vexCastQ(new Vector3(0, 0, 5), false);
+  advance(160);
+  assert(!!c._vex.qTravel, '벡스 Q: 시전 0.15초 뒤 파동 발사');
+  c._vexTickQ(1.0);
+  assert(near(hp0 - e.hp, 70 + 0.7 * 100), '벡스 Q: 70 + AP 70%');
+  // 벡스 E: 0.25초 뒤 발사, 착탄 시 피해 + 둔화
+  c._vexCastE(new Vector3(0, 0, 1), false);
+  advance(260);
+  c._vexTickE(5.0);
+  assert(getSlowPercent(e) > 0, '벡스 E: 착탄 범위 둔화');
+}
+{
+  // 이즈리얼 Q: 시전 0.25초 뒤 발사(예전엔 즉시)
+  clearPlaced(); place(makeEnemy(0, 1));
+  const c = makeChamp('ezreal');
+  stubs.projectiles.spawned.length = 0;
+  c._ezrealCastQ(new Vector3(0, 0, 5), false);
+  const before = stubs.projectiles.spawned.length;
+  advance(260);
+  assert(before === 0 && stubs.projectiles.spawned.length === 1, '이즈리얼 Q: 시전 0.25초 뒤 투사체 생성');
+}
+{
+  // 초가스 W: 조준 방향으로 판정(캐릭터가 반대쪽을 보고 있어도)
+  clearPlaced();
+  const behind = place(makeEnemy(0, -1));
+  const c = makeChamp('chogath');
+  c.canStartNewAction = () => true;
+  c.root.quaternion = {}; // 기본 정면 +Z(적은 -Z 쪽)
+  c._chogathCastW(false, new Vector3(0, 0, -1));
+  advance(510);
+  assert(behind.hp < 3000, '초가스 W: 마우스로 겨눈 방향의 적에게 적중(시전 0.5초)');
 }

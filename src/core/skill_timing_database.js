@@ -45,9 +45,10 @@ const SKILL_TIMING_DATABASE = {
     R: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
   },
   vex: { 
-    Q: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
-    W: { eventTime: 0, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
-    E: { eventTime: 1, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+    // 참고: 벡스 Q/W/E/R은 이제 vex.js 전용 구현이 시전 시간을 직접 처리한다(아래 값은 공용 경로용 기록).
+    Q: { eventTime: 0.15, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true }, // PC 위키 0.15(예전 0.25)
+    W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: false, lockAbility: true }, // PC 위키 0.25, 시전 중 이동 가능
+    E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true }, // PC 위키 0.25(예전 1)
   },
   // 요네 R(운명봉인): 공식 Cast Time 0.75초 - 시전이 끝나는 시점에 넉다운/기절
   // 판정이 발생하고, 그 직후(0.05초) 블링크 -> 추가 0.3초 후 돌풍(당김+
@@ -77,7 +78,7 @@ const SKILL_TIMING_DATABASE = {
   ashe: {
     W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
-    R: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+    R: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true }, // PC 위키 0.25(예전 0.5)
   },
 };
 
