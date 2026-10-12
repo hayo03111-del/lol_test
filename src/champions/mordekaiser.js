@@ -192,7 +192,7 @@ CharacterController.prototype._mordeROnHit = function(target) {
     this.bonusArmor = (this.bonusArmor || 0) + stolenArmor;
     this.bonusMr = (this.bonusMr || 0) + stolenMr;
     this.recomputeStats();
-    // 버그 수정(명세 15/16/21절): 예전엔 여기서 setTimeout(r.duration)
+    // 버그 수정(명세 15/16/21절): 예전엔 여기서 this._champTimeout(r.duration)
     // 하나로만 스탯을 되돌렸다 - 그 타이머는 대상/자신이 먼저 죽어도 멈추지
     // 않고 그대로 살아있어서, 이미 _mordeEndDeathRealm() 등으로 다른 경로가
     // 먼저 정리한 뒤에도 나중에 또 한 번 실행되며 음수 방어력처럼 잘못된

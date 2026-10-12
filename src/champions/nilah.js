@@ -246,7 +246,7 @@ CharacterController.prototype._nilahOnBasicAttackHit = function(target, dealtDam
             vfx.spawn('nilahBA', hitPos.clone(), hitDir, { scale: empowered ? 1.3 : 1.0 });
           }
           if (empowered) {
-            setTimeout(() => { try { if (typeof nilahVfx2Ring === 'function') nilahVfx2Ring(nilahVfx2.scene, p2.clone(), 1.0, 0xfff6d8, 0.24); } catch (err) { console.error('[Nilah AA] 지연 VFX 오류(무시):', err); } }, 35);
+            this._champTimeout(() => { try { if (typeof nilahVfx2Ring === 'function') nilahVfx2Ring(nilahVfx2.scene, p2.clone(), 1.0, 0xfff6d8, 0.24); } catch (err) { console.error('[Nilah AA] 지연 VFX 오류(무시):', err); } }, 35);
             if (typeof NilahVfx2ParticleField === 'function') {
               const burst = new NilahVfx2ParticleField(18, 0.4, 0xffe8a8, 0.06);
               burst.position.copy(p2);
@@ -347,7 +347,7 @@ CharacterController.prototype._nilahQHit = function(impactPoint, free=false, ePa
       hitAt.y += BASE_UNIT * 0.5;
       nilahVfx2Ring(nilahVfx2.scene, hitAt, 0.85, 0xffffff, 0.14);
       nilahVfx2Ring(nilahVfx2.scene, hitAt, 0.55, 0xfff1c8, 0.22);
-      setTimeout(() => { if (typeof nilahVfx2Ring === 'function') nilahVfx2Ring(nilahVfx2.scene, hitAt.clone(), 1.3, 0x9fe9ff, 0.26); }, 40);
+      this._champTimeout(() => { if (typeof nilahVfx2Ring === 'function') nilahVfx2Ring(nilahVfx2.scene, hitAt.clone(), 1.3, 0x9fe9ff, 0.26); }, 40);
       if (typeof NilahVfx2ParticleField === 'function' && typeof nilahVfx2 !== 'undefined') {
         const burst = new NilahVfx2ParticleField(26, 0.55, 0xfff1c8, 0.07);
         burst.position.copy(hitAt);
@@ -440,7 +440,7 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
         // 판정하고, 남은 모션은 언제든 끊을 수 있는 후딜(nilahQTail)로 둔다.
         const bonusAs = Math.max(0, (this.stats.levelBonusAttackSpeed || 0) + (this.stats.bonusAttackSpeedPercent || 0));
         const castSec = Math.max(0.28, 0.35 / (1 + bonusAs));
-        const hitTimer = setTimeout(() => {
+        const hitTimer = this._champTimeout(() => {
           if (this.currentActionKey !== 'nilahQ') return;
           try { this._nilahQHit(impact); } catch (err) { console.error('[Nilah Q] 판정 오류(무시하고 계속):', err); }
           this.currentActionKey = 'nilahQTail'; this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
@@ -512,7 +512,7 @@ CharacterController.prototype._nilahCastW = function(mouseWorldPoint, free=false
     // 재생 시간만큼만 짧게 잠그고, 버프 자체는 위 applyStatus로 이미
     // dur만큼 별도로 유지되므로 전혀 영향받지 않는다.
     const castLock=Math.max(0.08, Math.min(0.3, wClip?.duration || 0.2));
-    const t=setTimeout(()=>{if(this.currentActionKey==='nilahW'){this.currentActionKey=null;this.currentPhase=null;this.phaseCancelable=false;this._resumeAfterAction();}},castLock*1000); this._actionTimers.push(t);
+    const t=this._champTimeout(()=>{if(this.currentActionKey==='nilahW'){this.currentActionKey=null;this.currentPhase=null;this.phaseCancelable=false;this._resumeAfterAction();}},castLock*1000); this._actionTimers.push(t);
     updateBars(this);
   
 };
@@ -554,7 +554,7 @@ CharacterController.prototype._nilahResolveEDashEnd = function(dash) {
     if(this.currentActionKey==='nilahE'){
       this.currentPhase='RECOVERY';
       // E의 돌진이 끝나면 공격 타이머/후딜에 남아있던 상태가 다음 평타를 막지 않도록 즉시 정리한다.
-      const t=setTimeout(()=>{
+      const t=this._champTimeout(()=>{
         if(this.currentActionKey==='nilahE'){
           this.currentActionKey=null;
           this.currentPhase=null;
@@ -746,7 +746,7 @@ CharacterController.prototype._nilahRFinish = function(seq) {
     // PC 위키: 평타·스킬 금지는 환희(1초) 동안만이다. 종료 후 추가 잠금(예전 0.12~0.32초)은 원작 근거가 없어 없앴다.
     // 종료 모션은 그대로 재생되고 다음 행동이 들어오면 자연스럽게 덮어쓴다.
     const controlLockMs=0;
-    const timer=setTimeout(()=>{if(this.currentActionKey==='nilahR'){this.currentActionKey=null;this.currentPhase=null;this._nilah.rSeq=null;this._resumeAfterAction();}},controlLockMs);
+    const timer=this._champTimeout(()=>{if(this.currentActionKey==='nilahR'){this.currentActionKey=null;this.currentPhase=null;this._nilah.rSeq=null;this._resumeAfterAction();}},controlLockMs);
     this._actionTimers.push(timer);
   
 };

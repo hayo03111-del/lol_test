@@ -61,7 +61,7 @@ CharacterController.prototype._dariusEmpower = function() {
     // 수 있었다(예: 다리우스->레넥톤 교체 후 레넥톤 강화 상태 도중).
     // championId를 확인해 다리우스가 아니면 아무것도 하지 않도록 최소
     // 범위로 수정.
-    this._dariusEmpowerTimer = setTimeout(() => {
+    this._dariusEmpowerTimer = this._champTimeout(() => {
       if (this.championId !== 'darius') return;
       this.bonusAD = 0; this._darius.empoweredUntil = 0; this.recomputeStats();
     }, p.empoweredDuration * 1000);

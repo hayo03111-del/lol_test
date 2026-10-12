@@ -71,6 +71,9 @@ CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
     // 다음, 평소와 동일한 캐스트 가능 여부 판정(canStartNewAction)을 거친다.
     if (this.state === STATE.RECALL) { this.cancelRecall(); this.setState(STATE.IDLE); }
     if (isCrowdControlled(this)) { const m = `${slot} - 기절/속박 상태`; console.log(`[SKILL BLOCKED] ${m}`); showSkillToast(m); return; } // 기획안 8절: 기절/속박 중에는 스킬을 쓸 수 없다
+    // PC 위키(Crowd control - Root): 속박 중에는 이동 스킬(모든 돌진·점멸, 귀환)을 쓸 수 없다. 다른 스킬은 쓸 수 있다.
+    // 예전엔 속박이 걷기만 막아 돌진 스킬로 그대로 빠져나갈 수 있었다.
+    if (isRooted(this) && this._isMovementAbility(slot)) { const m = `${slot} - 속박 중에는 이동 스킬 불가`; console.log(`[SKILL BLOCKED] ${m}`); showSkillToast(m); return; }
     // 벡스 R 재시전은 1차 R 적중 후 쿨다운 중에도 허용된다. 일반적인 cooldown 게이트보다 먼저 처리한다.
     if (this.championId === 'vex' && slot === 'R' && !this._vex.dashActive && this._vex.recastTarget && performance.now() < this._vex.recastReadyUntil) {
       this._dispatchCast(slot, mouseWorldPoint, false);
@@ -1436,7 +1439,7 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
           // 예전엔 판정 시점(0.5초)까지 행동을 잠갔고, 판정 위치도 그 시점의 현재 위치였다.
           // 0.5초는 위키 서술 관례대로 시전 종료 기준으로 해석(시작 기준이면 총 0.5초 - 미확인).
           const origin = mordeEOrigin || this.root.position.clone();
-          setTimeout(() => {
+          this._champTimeout(() => {
             const hits = this._mordeEAreaHits(origin, dir, dist);
             if (hits.length) hits.forEach((u) => this._mordeEOnCast(u));
             else debugSkillMiss('Mordekaiser E', 'no target in impact area');
@@ -1719,4 +1722,26 @@ CharacterController.prototype._castR = function(free = false) {
         },
       });
     }
+};
+
+// 지금 이 슬롯을 누르면 시전자가 돌진·점멸하는가(속박 판정용). 재시전 단계에 따라 달라지는 스킬은 현재 상태로 판단한다.
+CharacterController.prototype._isMovementAbility = function(slot) {
+  const id = this.championId, now = performance.now();
+  switch (id) {
+    case 'yasuo': return slot === 'E';
+    case 'renekton': case 'nilah': case 'ezreal': return slot === 'E';
+    case 'ahri': return slot === 'R';
+    case 'darius': case 'sett': return slot === 'R';
+    case 'leesin':
+      if (slot === 'Q') return !!(this._leesin && this._leesin.qMarkTarget && now < this._leesin.qMarkExpiresAt); // Q2 돌진만
+      if (slot === 'R') return false;
+      return false;
+    case 'yone':
+      if (slot === 'Q') return !!(this._yone && this._yone.qStacks >= ((this._champData().Q || {}).maxStacks || 2)); // Q3 돌진
+      if (slot === 'E') return !!(this._yone && !this._yone.eSpirit); // 첫 돌진(복귀는 이동 스킬 아님)
+      if (slot === 'R') return true;
+      return false;
+    case 'vex': return slot === 'R' && !!(this._vex && this._vex.recastTarget && now < this._vex.recastReadyUntil); // 재시전 돌진
+    default: return false;
+  }
 };

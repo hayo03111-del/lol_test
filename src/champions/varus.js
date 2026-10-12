@@ -150,7 +150,7 @@ CharacterController.prototype._varusCastQ = function(mouseWorldPoint, free = fal
   this.playFirstAvailable(['Spell1_Idle', 'Spell1'], { loop: THREE.LoopRepeat, fade: 0.05 });
 
   const maxDurMs = (q.chargeDuration || 1.25) * 1000;
-  const autoFireTimer = setTimeout(() => {
+  const autoFireTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'varusQCharge') this._varusReleaseQ();
   }, maxDurMs);
   this._actionTimers.push(autoFireTimer);
@@ -213,7 +213,7 @@ CharacterController.prototype._varusReleaseQ = function() {
   };
   const speedWorld = lolRangeToWorld(q.missileSpeed || 1500);
   lineHits.slice(1).forEach((h, k) => {
-    const t = setTimeout(() => resolveHit(h.u, k + 1), (h.d / Math.max(1e-6, speedWorld)) * 1000);
+    const t = this._champTimeout(() => resolveHit(h.u, k + 1), (h.d / Math.max(1e-6, speedWorld)) * 1000);
     void t; // 발사된 화살은 바루스가 다른 행동을 해도 계속 날아가므로 _actionTimers에 넣지 않는다
   });
 
@@ -229,7 +229,7 @@ CharacterController.prototype._varusReleaseQ = function() {
   this.playFirstAvailable(['Spell1_Fire', 'Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const clip = this.findAnimation('Spell1_Fire') || this.findAnimation('Spell1');
   const dur = clip ? clip.duration : 0.35;
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'varusQ') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);
@@ -276,7 +276,7 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
 
   this.playFirstAvailable(['Spell3'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const castTime = 0.242; // bin mCastTime(≈0.2419) - SKILL_TIMING_DATABASE.varus.E와 동일한 수치
-  const fireTimer = setTimeout(() => {
+  const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'varusE') return;
     this.currentPhase = 'ACTIVE';
     vfx.spawn('hit', targetPoint.clone(), undefined, { color: 0xff9a4a });
@@ -299,7 +299,7 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
   }, castTime * 1000);
   this._actionTimers.push(fireTimer);
 
-  const doneTimer = setTimeout(() => {
+  const doneTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'varusE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, (castTime + 0.15) * 1000);
   this._actionTimers.push(doneTimer);
@@ -325,7 +325,7 @@ CharacterController.prototype._varusCastR = function(mouseWorldPoint, free = fal
   this.playFirstAvailable(['Spell4'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
 
   const castTime = 0.242; // bin mCastTime(≈0.2419) - SKILL_TIMING_DATABASE.varus.R와 동일한 수치
-  const fireTimer = setTimeout(() => {
+  const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'varusR') return;
     this.currentPhase = 'ACTIVE';
     const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
@@ -341,7 +341,7 @@ CharacterController.prototype._varusCastR = function(mouseWorldPoint, free = fal
   }, castTime * 1000);
   this._actionTimers.push(fireTimer);
 
-  const doneTimer = setTimeout(() => {
+  const doneTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'varusR') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, (castTime + 0.2) * 1000);
   this._actionTimers.push(doneTimer);
@@ -371,7 +371,7 @@ CharacterController.prototype._varusRHit = function(firstUnit, dir) {
   const tickMs = Math.max(50, (r.spreadTickInterval || 0.5) * 1000);
   const maxTicks = Math.max(1, Math.round((r.spreadTimeWindow || 1.75) / (r.spreadTickInterval || 0.5)));
   let ticks = 0;
-  const spreadTimer = setInterval(() => {
+  const spreadTimer = this._champInterval(() => {
     ticks++;
     let spreadHappened = false;
     for (const src of Array.from(infected)) {
@@ -385,7 +385,9 @@ CharacterController.prototype._varusRHit = function(firstUnit, dir) {
     }
     if (ticks >= maxTicks || !spreadHappened) clearInterval(spreadTimer);
   }, tickMs);
-  this._actionTimers.push(spreadTimer); // setInterval id도 clearTimeout()으로 정리 가능(HTML Timers 명세)
+  // 확산은 다른 스킬을 써도 끊기지 않는다(원작). 예전엔 _actionTimers에 넣어 다음 시전의 _clearActionTimers()가 확산을 끊었다.
+  // 챔피언 교체 때만 _champInterval이 정리한다.
+  void spreadTimer;
 };
 
 // 챔피언 전용 매 프레임 훅 - character_controller.js update() 맨 끝에서

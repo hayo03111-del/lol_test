@@ -343,7 +343,11 @@ class CharacterController {
     };
   }
 
-  applyChampionData(championId) {
+  /** 챔피언 교체/폐기 공통 정리: 이전 챔피언이 걸어둔 지연 실행·투사체·시각 효과와
+   *  다른 유닛에 건 진행 중 상태(세트 R 잡기, 모데카이저 죽음의 세계)를 끝낸다.
+   *  applyChampionData()(같은 모델에서 챔피언 id만 교체)와 disposeCurrentChampion()
+   *  (GLB를 새로 불러와 컨트롤러 자체를 버림) 양쪽에서 부른다. */
+  _teardownChampionRuntime() {
     // 챔피언 교체/재선택 중 이전 레넥톤의 지속 R 오라가 남지 않도록 정리한다.
     if (this._renekton?.rAuraVfx && typeof vfx !== 'undefined') {
       vfx.stopRenektonRAura(this._renekton.rAuraVfx);
@@ -361,8 +365,10 @@ class CharacterController {
     // 정확한 원인) - 기존에 이미 있는 정상 종료 함수(_settEndR/
     // _mordeEndDeathRealm)를 그대로 호출해서 그 정리 로직을 재사용한다.
     if (this._sett?.rSeq) {
+      // 시퀀스 취소(onCancel)가 먼저 _settEndR을 불러 rSeq를 비울 수 있다 - 그때는 다시 부르지 않는다
+      // (예전엔 null을 넘겨 오류가 났고, GLB 재로드 교체가 통째로 실패했다).
       if (this.sequencePlayer?.isPlaying) this.sequencePlayer.cancel();
-      this._settEndR(this._sett.rSeq, true);
+      if (this._sett.rSeq) this._settEndR(this._sett.rSeq, true);
     }
     if (this._morde?.isInDeathRealm) this._mordeEndDeathRealm('champion-switch');
     // 버그 수정(위와 동일 - "챔피언 교체 후 이전 챔피언 투사체" 문제):
@@ -372,13 +378,7 @@ class CharacterController {
     // (포탑 투사체는 clear() 내부에서 자동으로 보존됨).
     if (typeof projectiles !== 'undefined' && typeof projectiles.clear === 'function') projectiles.clear();
     this._clearActionTimers();
-    this.statusEffects = [];
-    this.shield = 0;
-    this.currentTarget = null;
-    this.pendingMove = null; this.pendingCast = null;
-    this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
-    if (typeof targetRing !== 'undefined') targetRing.clear();
-    for (const k of Object.keys(this.cooldowns || {})) this.cooldowns[k] = 0; // 요청 5절 "쿨다운 음수 방지"와 같은 취지 - 이전 챔피언 쿨다운이 새 챔피언에 유출되지 않게 한다
+    this._cancelChampionTimers(); // 이전 챔피언의 지연 실행(판정·복귀·연출)을 모두 무효화
     // 이전 챔피언 상태가 참조하는 시각 효과/타이머부터 정리하고, 그다음 전부 새로 만든다.
     if (this._leesinAnimTimer) { clearTimeout(this._leesinAnimTimer); this._leesinAnimTimer = null; }
     if (this._yone && this._yone.eSpirit && typeof this._yoneCleanupSpiritVisuals === 'function') this._yoneCleanupSpiritVisuals();
@@ -395,6 +395,34 @@ class CharacterController {
       if (this._ahri.eTravel && typeof this._ahriEndETravel === 'function') this._ahriEndETravel();
     }
     if (this._morde && this._morde.shieldDecayTimer) clearInterval(this._morde.shieldDecayTimer);
+    if (this._masteryi?.alpha && typeof this._masteryiCancelAlphaStrike === 'function') this._masteryiCancelAlphaStrike();
+    if (this._vex && typeof this._vexClearRRecast === 'function') this._vexClearRRecast();
+  }
+
+  applyChampionData(championId) {
+    this._teardownChampionRuntime();
+    this.statusEffects = [];
+    this.shield = 0;
+    this.currentTarget = null;
+    this.pendingMove = null; this.pendingCast = null;
+    this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
+    if (typeof targetRing !== 'undefined') targetRing.clear();
+    for (const k of Object.keys(this.cooldowns || {})) this.cooldowns[k] = 0; // 요청 5절 "쿨다운 음수 방지"와 같은 취지 - 이전 챔피언 쿨다운이 새 챔피언에 유출되지 않게 한다
+    // 마스터 이 Q 도중 교체: 모델 비가시화/비대상 상태가 남지 않게 되돌린다.
+    this.isUntargetable = false;
+    if (this.model) this.model.visible = true;
+    // 이전 챔피언이 건 평타 강화/서브 상태/임시 이동 모션/전용 잠금이 새 챔피언에 새지 않게 한다.
+    this.attackOverrides = [];
+    this.subStates = {};
+    this._transientMoveClipNames = new Set();
+    this._dariusRQeLockUntil = 0;
+    this._ccAnimActive = false;
+    this._eHitCountThisCast = 0;
+    this.magicPenPercent = 0; // 모데카이저 E 패시브 - 매 tick 다시 계산되지만 다른 챔피언에선 계산 자체를 안 한다
+    this.passiveState = { lastDamageTakenAt: 0, lastEnemySkillHitAt: 0, lastPassiveHealAt: 0 };
+    // 닐라만 실제 충돌/선택 반경을 쓴다 - 다른 챔피언은 생성자의 균일값으로 되돌린다.
+    this.collisionRadius = BASE_UNIT * 0.24;
+    this.selectionRadius = this.collisionRadius * 1.3;
     this._dariusWArmed = false;
     // 챔피언 전용 전투 상태 - Darius 출혈 Map, Lee Sin Q 표식, Sett Q/W/R, Nilah E/R,
     // Yasuo/마스터 이/레넥톤 임시 상태 등이 다음 챔피언에 새어 나오지 않게 새로 만든다.
@@ -1326,3 +1354,32 @@ Object.defineProperty(CharacterController.prototype, 'shield', {
     if (v > 0) this.shieldEntries.push({ id: 'legacy', amount: v, initial: v, expiresAt: Infinity, decayStartAt: Infinity, decayPerSec: 0 });
   },
 });
+
+// 챔피언 타이머(챔피언 간 상태 격리): 챔피언 코드의 지연 실행은 이 함수로 건다. 챔피언을 바꾸면(applyChampionData)
+// "챔피언 세대(epoch)"가 바뀌고 남은 타이머가 전부 취소되며, 혹시 남은 콜백도 세대가 다르면 실행되지 않는다.
+// 예전엔 _actionTimers에 넣지 않은 지연 판정(모데카이저 E, 야스오 W 장막 등)이 교체 뒤 새 챔피언으로 실행될 수 있었다.
+CharacterController.prototype._champTimeout = function(fn, ms) {
+  if (!this._championTimers) this._championTimers = new Set();
+  const epoch = this._championEpoch || 0;
+  const id = setTimeout(() => {
+    this._championTimers.delete(id);
+    if ((this._championEpoch || 0) !== epoch) return;
+    fn();
+  }, ms);
+  this._championTimers.add(id);
+  return id;
+};
+CharacterController.prototype._champInterval = function(fn, ms) {
+  if (!this._championTimers) this._championTimers = new Set();
+  const epoch = this._championEpoch || 0;
+  const id = setInterval(() => {
+    if ((this._championEpoch || 0) !== epoch) { clearInterval(id); this._championTimers.delete(id); return; }
+    fn();
+  }, ms);
+  this._championTimers.add(id);
+  return id;
+};
+CharacterController.prototype._cancelChampionTimers = function() {
+  this._championEpoch = (this._championEpoch || 0) + 1;
+  if (this._championTimers) { for (const id of this._championTimers) { clearTimeout(id); clearInterval(id); } this._championTimers.clear(); }
+};

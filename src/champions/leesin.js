@@ -62,7 +62,7 @@ CharacterController.prototype._leesinPlayCast = function(opts) {
       this._leesinQueueTail(clip, lockSec, opts.exitIdle);
     };
     if (lockSec > 0) {
-      const t = setTimeout(release, lockSec * 1000);
+      const t = this._champTimeout(release, lockSec * 1000);
       this._actionTimers.push(t);
     } else {
       release();
@@ -77,13 +77,13 @@ CharacterController.prototype._leesinQueueTail = function(castClip, elapsedSec, 
     const stillIdleOn = (name) => this.championId === 'leesin' && !this.currentActionKey && !this.targetPos
       && this.state === STATE.IDLE && this.currentClipKey === name;
     const remain = Math.max(0.05, castClip.duration - elapsedSec - 0.05);
-    this._leesinAnimTimer = setTimeout(() => {
+    this._leesinAnimTimer = this._champTimeout(() => {
       this._leesinAnimTimer = null;
       if (!stillIdleOn(castClip.name)) return;
       const exitClip = this._leesinFirstClip(exitIdleNames);
       if (!exitClip) { this._returnToLocomotion(); return; }
       this.playFirstAvailable([exitClip.name], { loop: THREE.LoopOnce, clampWhenFinished: true, fade: 0.12 });
-      this._leesinAnimTimer = setTimeout(() => {
+      this._leesinAnimTimer = this._champTimeout(() => {
         this._leesinAnimTimer = null;
         if (stillIdleOn(exitClip.name)) this._returnToLocomotion();
       }, Math.max(0.05, exitClip.duration - 0.05) * 1000);
@@ -101,7 +101,7 @@ CharacterController.prototype._leesinPlayInstantRecastClip = function(idleNames,
     if (moving) {
       this._beginTransientMoveClip(clip.name);
       this.playFirstAvailable([clip.name], { loop: THREE.LoopOnce, clampWhenFinished: false, fade: 0.1 });
-      this._leesinAnimTimer = setTimeout(() => {
+      this._leesinAnimTimer = this._champTimeout(() => {
         this._leesinAnimTimer = null;
         this._endTransientMoveClip(clip.name);
         if (this.championId === 'leesin' && !this.currentActionKey && this.currentClipKey === clip.name) this._returnToLocomotion();
@@ -238,7 +238,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
       // '아직 음파가 도착하지 않았는데 이미 피해를 받은' 판정 불일치가 있었다.
       const travelDistance = Math.max(0.05, impactDistance ?? rangeWorld);
       const travelTimeMs = (travelDistance / speedWorld) * 1000;
-      const impactTimer = setTimeout(() => {
+      const impactTimer = this._champTimeout(() => {
         if (this.championId !== 'leesin' || !hitUnit || hitUnit.hp <= 0 || hitUnit.destroyed || hitUnit.isDead) return;
         applyDamage(hitUnit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
         if (hitUnit.hp > 0) {
@@ -433,7 +433,7 @@ CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
       const lateral = Math.sqrt(Math.max(0, rel.lengthSq() - along * along));
       if (lateral > kickedRadius + getCollisionRadius(u)) continue;
       // 차인 대상이 그 지점에 도달하는 시각에 맞춰 판정.
-      const t = setTimeout(() => {
+      const t = this._champTimeout(() => {
         if (u.hp <= 0) return;
         applyDamage(u, { rawDamage: collideDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
         applyStatus(u, { id: 'leesinR_collide_air', type: 'KNOCKUP', duration: r.collisionAirborneSec || 1, value: 1 });

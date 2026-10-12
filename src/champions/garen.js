@@ -114,7 +114,7 @@ CharacterController.prototype._garenCastRDuringE = function() {
     if (!this._payCost('R', false)) return;
     const timing = (typeof SKILL_TIMING_DATABASE !== 'undefined' && SKILL_TIMING_DATABASE.garen && SKILL_TIMING_DATABASE.garen.R) || null;
     const delay = (timing && timing.eventTime) || cd.R.castTime || 0.435;
-    const t = setTimeout(() => {
+    const t = this._champTimeout(() => {
       if (this.championId !== 'garen' || !target || target.hp <= 0) return;
       vfx.spawn('r', this.root.position.clone());
       this._garenROnHit(target);

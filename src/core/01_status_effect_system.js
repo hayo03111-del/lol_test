@@ -73,7 +73,9 @@ function applyStatus(target, effect) {
   // 강인함은 아이템(itemTenacityPercent)과 스킬 버프(TENACITY 상태 - 가렌 W 등)를
   // 원작과 같이 곱연산으로 합친다: 최종 = 1 - (1-a)(1-b).
   const tenacity = getTenacity(target);
-  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR'].includes(effect.type)) {
+  // PC 위키(Tenacity): 에어본·수면·근시·경직(정지)·제압을 뺀 모든 군중 제어 지속시간을 줄인다 - 둔화 포함.
+  // 예전엔 둔화가 빠져 있었다.
+  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR', 'SLOW'].includes(effect.type)) {
     effDuration = effDuration * (1 - tenacity);
   }
   if (target && target.itemSlowResistPercent > 0 && effect.type === 'SLOW') {
@@ -160,7 +162,11 @@ function getArmorShredPercent(target) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();
   let v = 0;
-  for (const e of target.statusEffects) if (e.type === 'ARMOR_SHRED' && e.expiresAt > now) v = Math.max(v, e.value);
+  // PC 위키(Stacking/Armor penetration): 서로 다른 출처의 % 방어력 감소는 곱연산(20% + 30% = 44%). 같은 출처는
+  // applyStatus가 같은 id로 갱신하므로 한 번만 들어간다. 예전엔 가장 큰 값 하나만 적용했다.
+  let keep = 1;
+  for (const e of target.statusEffects) if (e.type === 'ARMOR_SHRED' && e.expiresAt > now) keep *= 1 - Math.max(0, Math.min(1, e.value));
+  v = 1 - keep;
   return v;
 }
 // ARMOR_SHRED(getArmorShredPercent)와 달리 이건 퍼센트가 아니라 고정
@@ -170,7 +176,8 @@ function getMrShredFlat(target) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();
   let v = 0;
-  for (const e of target.statusEffects) if (e.type === 'MR_SHRED' && e.expiresAt > now) v = Math.max(v, e.value);
+  // PC 위키: 고정 저항 감소는 서로 다른 출처끼리 더해진다(예전엔 가장 큰 값만).
+  for (const e of target.statusEffects) if (e.type === 'MR_SHRED' && e.expiresAt > now) v += e.value;
   return v;
 }
 // 피의 노래(약점 노출) - "받는 피해량 증가"는 기존 DAMAGE_REDUCTION(감소)과

@@ -237,7 +237,7 @@ CharacterController.prototype._yasuoCastW = function(mouseWorldPoint, free=false
     // PC 위키: 시전 시간 0.013초, 시전 중 이동 가능. 예전엔 min(0.25, 클립 길이) 뒤에 장막을 세우고 클립 전체(약 0.7초) 동안
     // 이동·스킬을 막았다. 장막은 액션 취소와 무관한 타이머로 0.013초 뒤에 세우고, 모션은 이동·스킬로 언제든 끊기게 한다.
     const castSec = w.castTimeSec ?? 0.013;
-    setTimeout(()=>{ if (this.hp > 0) this._yasuoCreateWindwall(dir,width); }, castSec*1000);
+    this._champTimeout(()=>{ if (this.hp > 0) this._yasuoCreateWindwall(dir,width); }, castSec*1000);
     this.runAction('yasuoW',STATE.W_CAST,{startupOverride:castSec,recoveryOverride:Math.max(0.05,dur-castSec),dataOverride:{clips:[anim],startup:castSec,recovery:Math.max(0.05,dur-castSec),cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{}});
     if(!free) this.cooldowns.W=abilityHasteCooldown(this, this._yasuoLevelValue(w.cooldown,lvl));
 
@@ -390,7 +390,7 @@ CharacterController.prototype._yasuoCastE = function(mouseWorldPoint, free=false
 
     // Independent completion timer: only finishes the dash state after the actual
     // dash duration. Q can overlay its animation without canceling this timer.
-    const finishTimer = setTimeout(() => { this._yasuoFinishEDash(); }, (this._yasuo.eDashDuration + 0.08) * 1000);
+    const finishTimer = this._champTimeout(() => { this._yasuoFinishEDash(); }, (this._yasuo.eDashDuration + 0.08) * 1000);
     this._actionTimers.push(finishTimer);
 
     if (!free) this.cooldowns.E = abilityHasteCooldown(this, this._yasuoLevelValue(e.cooldown, lvl));
@@ -643,7 +643,7 @@ CharacterController.prototype._yasuoPlayPostQMoveEntry = function() {
     this._yasuo.qMoveEntryPending = false;
     this._beginTransientMoveClip('Run1_IN_Raw');
     this.crossFadeTo(['Run1_IN_Raw'], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
-    const t = setTimeout(() => {
+    const t = this._champTimeout(() => {
       this._endTransientMoveClip('Run1_IN_Raw');
       if (this.state === STATE.MOVE && this.targetPos) this.playFirstAvailable(['Run1_Raw'], { loop: THREE.LoopRepeat, fade: 0.08 });
     }, Math.max(0, clip.duration - 0.02) * 1000);

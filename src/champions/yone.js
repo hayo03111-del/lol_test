@@ -352,7 +352,7 @@ CharacterController.prototype._yonePlayExitTransition = function(idleClipNames, 
   const clip = this.resolveClip(candidates);
   if (clip) {
     this.playFirstAvailable(candidates, { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
-    const t = setTimeout(() => onDone(), Math.max(0, clip.duration - 0.03) * 1000);
+    const t = this._champTimeout(() => onDone(), Math.max(0, clip.duration - 0.03) * 1000);
     this._actionTimers.push(t);
   } else {
     onDone();
@@ -396,7 +396,7 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
     } else {
       this.playFirstAvailable(['Spell1_Dash', 'Yone_Spell1_A_01.anm'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true, timeScale: q3TimeScale });
     }
-    const timer = setTimeout(() => {
+    const timer = this._champTimeout(() => {
       if (this.currentActionKey !== key) return;
       this.currentPhase = 'ACTIVE';
       this._yoneStartEmpoweredQ(dir);
@@ -422,7 +422,7 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
   const qMainClip = this.findAnimation(animName) || this.findAnimation('Yone_Spell1_A_01.anm');
   const qMainTimeScale = (qMainClip && qMainClip.duration > 0 && castTime > 0) ? THREE.MathUtils.clamp(qMainClip.duration / castTime, 0.3, 4.0) : 1.0;
   this.playFirstAvailable([animName, 'Yone_Spell1_A_01.anm'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true, timeScale: qMainTimeScale });
-  const timer = setTimeout(() => {
+  const timer = this._champTimeout(() => {
     if (this.currentActionKey !== key) return;
     this.currentPhase = 'ACTIVE';
     const targets = this._yoneFindQTargets(dir, q.range);
@@ -469,7 +469,7 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
   this.setState(STATE.W_CAST);
   this.currentActionKey = key; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
   this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true, timeScale: (() => { const c = this.findAnimation('Spell2'); return (c && c.duration > 0 && castTime > 0) ? THREE.MathUtils.clamp(c.duration / castTime, 0.3, 4.0) : 1.0; })() });
-  const timer = setTimeout(() => {
+  const timer = this._champTimeout(() => {
     if (this.currentActionKey !== key) return;
     this.currentPhase = 'ACTIVE';
     const targets = findEnemiesInRadius(this.root.position, w.range, { forward: dir, maxAngleDeg: (w.angleDeg || 80) / 2 })
@@ -516,7 +516,7 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
       const tail = this.resolveClip(['Spell2_ToIdle']);
       if (tail) {
         this.playFirstAvailable(['Spell2_ToIdle'], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
-        const t2 = setTimeout(() => { if (!this.currentActionKey && this.currentClipKey === tail.name) this._resumeAfterAction(); }, Math.max(0, tail.duration - 0.03) * 1000);
+        const t2 = this._champTimeout(() => { if (!this.currentActionKey && this.currentClipKey === tail.name) this._resumeAfterAction(); }, Math.max(0, tail.duration - 0.03) * 1000);
         this._actionTimers.push(t2);
       } else this._resumeAfterAction();
     }
@@ -758,7 +758,7 @@ CharacterController.prototype._yoneCastE = function(mouseWorldPoint, free = fals
   } else {
     this.playFirstAvailable(['Spell3_Dash'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   }
-  const t = setTimeout(finishSpiritIn, Math.max(0.05, dashDur) * 1000);
+  const t = this._champTimeout(finishSpiritIn, Math.max(0.05, dashDur) * 1000);
   this._actionTimers.push(t);
   vfx.spawn('e', this.root.position.clone(), dir);
   if (!free) this.cooldowns.E = abilityHasteCooldown(this, this._yoneLevelValue(e.cooldown, eLevel));
@@ -786,7 +786,7 @@ CharacterController.prototype._yoneRecastE = function() {
   } else {
     this.playFirstAvailable(['Spell3_Out'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   }
-  setTimeout(() => {
+  this._champTimeout(() => {
     if (this._yone.eSpirit !== spirit) return;
     this.root.position.copy(spirit.bodyPos);
     this.root.quaternion.copy(spirit.bodyQuat);
@@ -865,7 +865,7 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
   }
   const origin = this.root.position.clone();
   const castTime = r.castTime || 0.75;
-  const timer = setTimeout(() => {
+  const timer = this._champTimeout(() => {
     if (this.currentActionKey !== key) return;
     this.currentPhase = 'ACTIVE';
     // 1단계: 직선 범위(사거리/폭) 내 모든 적 넉다운+기절(위키: 1초).
@@ -923,14 +923,14 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
       const pullSec = Math.max(0.05, dist / lolRangeToWorld(r.pullSpeed || 3000));
       if (typeof clearStatus === 'function') clearStatus(t, 'yoneRStun');
       t._pullState = { from: t.mesh.position.clone(), to: pullTarget, duration: pullSec, elapsed: 0 };
-      const kt = setTimeout(() => {
+      const kt = this._champTimeout(() => {
         if (t.hp > 0) applyStatus(t, { id: 'yoneRKnockup', type: 'KNOCKUP', duration: (r.knockupDuration || 0.75), value: 1 });
       }, pullSec * 1000);
       void kt; // 요네가 다른 행동을 시작해도 이미 끌려가는 대상의 공중에 뜸은 취소되면 안 된다
     });
     if (hits.length) debugSkillHit('Yone R', hits[0].unit); else debugSkillMiss('R', '사거리 내 대상 없음');
     this.currentPhase = 'RECOVERY';
-    const rec = setTimeout(() => { if (this.currentActionKey === key) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } }, 450); // 위키: 시전 후 0.45초 행동 잠금(Lockout)
+    const rec = this._champTimeout(() => { if (this.currentActionKey === key) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } }, 450); // 위키: 시전 후 0.45초 행동 잠금(Lockout)
     this._actionTimers.push(rec);
   }, Math.max(0, castTime) * 1000);
   this._actionTimers.push(timer);

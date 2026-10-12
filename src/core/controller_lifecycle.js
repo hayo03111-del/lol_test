@@ -14,6 +14,8 @@
 /* ---------------- recall ---------------- */
 CharacterController.prototype.startRecall = function() {
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN || this.state === STATE.RECALL) return;
+    // PC 위키: 귀환은 이동 스킬로 취급되어 속박 중엔 쓸 수 없고, 기절류(행동 불가) 중에도 쓸 수 없다.
+    if ((typeof isRooted === 'function' && isRooted(this)) || (typeof isCrowdControlled === 'function' && isCrowdControlled(this))) { if (typeof showSkillToast === 'function') showSkillToast('귀환 - 군중 제어 중 사용 불가'); return; }
     this._clearActionTimers();
     this.currentActionKey = null; this.currentPhase = null;
     this.targetPos = null; this.currentTarget = null;
@@ -170,6 +172,9 @@ CharacterController.prototype._die = function() {
       clearStatus(this, 'asheRangersFocus');
     }
     if (this.championId === 'nautilus' && typeof this._nautilusReset === 'function') this._nautilusReset();
+    // 세트 R 도중 사망: 위 _clearActionTimers()가 시퀀스를 끊으면 잡힌 대상의 제압(isGrabbedBySett)이
+    // 풀리지 않고 영구히 남았다 - 정상 종료 함수로 대상을 먼저 풀어준다.
+    if (this._sett?.rSeq) { this.pendingMove = null; this.pendingCast = null; this.currentTarget = null; this._settEndR(this._sett.rSeq, true); }
     this.currentActionKey = null; this.currentPhase = null;
     this.targetPos = null; this.currentTarget = null; this.pendingMove = null; this.pendingCast = null;
     targetRing.clear();

@@ -124,7 +124,7 @@ CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=fa
     const clip=this.findAnimation('Spell1');
     const dur=clip?.duration||0.45;
     this._renektonPlay('Spell1',{loop:THREE.LoopOnce,fade:0.05,clampWhenFinished:true});
-    const timer=setTimeout(()=>{
+    const timer=this._champTimeout(()=>{
       if (this.championId!=='renekton') return;
       const radius=q.range + (this._renekton.rActive ? 50 : 0);
       const hits=findEnemiesInRadius(this.root.position,radius);
@@ -133,7 +133,7 @@ CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=fa
       updateBars(this);
       this.currentPhase='RECOVERY'; this.phaseCancelable=true;
       // PC 위키: 시전 후 0.25초 동안 평타·E·R 사용 불가(그 뒤 해제).
-      const end=setTimeout(()=>{ if(this.currentActionKey==='renektonQ'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},250);
+      const end=this._champTimeout(()=>{ if(this.currentActionKey==='renektonQ'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},250);
       this._actionTimers.push(end);
     },0); // 버그 수정(타이밍 측정으로 발견): 예전엔 클립 길이×0.62(약 0.5초) 뒤 판정 - PC 위키는 시전 시간 없음(즉시)
     this._actionTimers.push(timer);
@@ -249,7 +249,7 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
     const hits=this._renektonFindLineHits(origin,dest,this._renekton.rActive?50:0);
     const empowered=isSecond&&!free&&this._renekton.rage>=50;
     if(empowered)this._renekton.rage-=50;
-    const timer=setTimeout(()=>{
+    const timer=this._champTimeout(()=>{
       const lvl=this.skillLevels.E||1, extra=this._renektonExtraAD();
       for(const h of hits){
         const target=h.unit;
@@ -284,7 +284,7 @@ CharacterController.prototype._renektonCastR = function(free=false) {
     }
     this._clearActionTimers();this.currentActionKey='renektonR';this.currentPhase='STARTUP';this.setState(STATE.R_CAST);this.phaseCancelable=false;
     this._renektonPlay('Spell4',{loop:THREE.LoopOnce,fade:0.03,clampWhenFinished:true});
-    const finish=setTimeout(()=>{if(this.currentActionKey==='renektonR'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},Math.max(130,r.castTime*1000));this._actionTimers.push(finish);
+    const finish=this._champTimeout(()=>{if(this.currentActionKey==='renektonR'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},Math.max(130,r.castTime*1000));this._actionTimers.push(finish);
     updateBars(this);
   
 };
@@ -312,7 +312,7 @@ CharacterController.prototype._renektonTick = function(dt) {
       if(r.wSeq.elapsed>=(wd.castTimeSec??0.2)){
         while(r.wSeq.hitIndex<r.wSeq.hits){this._renektonResolveWHit(r.wSeq);r.wSeq.hitIndex++;}
         r.wSeq=null; this.currentPhase='RECOVERY'; this.phaseCancelable=false;
-        const recoveryTimer=setTimeout(()=>{ if(this.currentActionKey==='renektonW'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},(wd.postHitLockSec??0.528)*1000);
+        const recoveryTimer=this._champTimeout(()=>{ if(this.currentActionKey==='renektonW'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},(wd.postHitLockSec??0.528)*1000);
         this._actionTimers.push(recoveryTimer);
       }
     }

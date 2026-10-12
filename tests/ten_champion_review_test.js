@@ -117,6 +117,11 @@ this.prdConstant = prdConstant;
 this.isGhosted = isGhosted;
 this.setController = (c) => { controller = c; };
 this.vexNotifyEnemyDash = vexNotifyEnemyDash;
+this.getArmorShredPercent = getArmorShredPercent;
+this.getMrShredFlat = getMrShredFlat;
+this.addShield = addShield;
+this.getShieldById = getShieldById;
+this.BASE_UNIT = BASE_UNIT;
 `, context);
 const { CharacterController, CHAMPION_DATA, STATE, applyStatus, applyDamage, getStatus, getSlowPercent,
   getAttackSpeedBuffPercent, getTenacity, computeChampionStats, lolRangeToWorld, setController, worldDistanceToLol, calculateDamage, isStunned, isRooted, tickStatusEffects, getMoveSpeedBuffPercent, getFinalAttackSpeed, getWindupDuration, getDamageReductionPercent, applyMoveSpeedSoftCap, resistDamageMultiplier, prdConstant, isGhosted, vexNotifyEnemyDash } = context;
@@ -349,6 +354,29 @@ function clearPlaced() { stubs.placedDummies.length = 0; }
   assert(getSlowPercent(e) > 0, '벡스 E: 착탄 범위 둔화');
 }
 {
+  // 공용 전투 규칙(PC 위키 Stacking/Armor penetration/Tenacity/Crowd control)
+  const t = makeEnemy(0, 1);
+  applyStatus(t, { id: 'a', type: 'ARMOR_SHRED', duration: 5, value: 0.2 });
+  applyStatus(t, { id: 'b', type: 'ARMOR_SHRED', duration: 5, value: 0.3 });
+  assert(near(context.getArmorShredPercent(t), 0.44), '% 방어력 감소는 서로 곱연산(20% + 30% = 44%)');
+  applyStatus(t, { id: 'm1', type: 'MR_SHRED', duration: 5, value: 10 });
+  applyStatus(t, { id: 'm2', type: 'MR_SHRED', duration: 5, value: 5 });
+  assert(near(context.getMrShredFlat(t), 15), '고정 마법 저항 감소는 서로 더해짐');
+  const c = makeChamp('yasuo');
+  applyStatus(c, { id: 'ten', type: 'TENACITY', duration: 5, value: 0.5 });
+  applyStatus(c, { id: 'sl', type: 'SLOW', duration: 2, value: 0.3 });
+  assert(near(getStatus(c, 'sl').duration, 1), '강인함은 둔화 지속시간도 줄인다');
+  applyStatus(c, { id: 'up', type: 'KNOCKUP', duration: 1, value: 1 });
+  assert(near(getStatus(c, 'up').duration, 1), '강인함은 에어본에는 적용되지 않는다');
+  c.statusEffects = [];
+  applyStatus(c, { id: 'rt', type: 'ROOT', duration: 2, value: 1 });
+  assert(c._isMovementAbility('E') === true && c._isMovementAbility('W') === false, '야스오 E는 이동 스킬, W는 아님');
+  const mp0 = c.mp; c.castAbility('E', null);
+  assert(c.mp === mp0 && c.currentActionKey == null, '속박 중에는 이동 스킬(야스오 E)을 쓸 수 없다');
+  c.startRecall();
+  assert(c.state !== 'RECALL', '속박 중에는 귀환할 수 없다');
+}
+{
   // 가렌 인내심: 챔피언·포탑·에픽 몬스터에게 "실제로" 피해를 입었을 때만 멈춘다(PC 위키)
   const c = makeChamp('garen', [], { hp: 1000, maxHp: 2000 });
   c.passiveState.lastDamageTakenAt = 0;
@@ -447,4 +475,71 @@ function clearPlaced() { stubs.placedDummies.length = 0; }
   c._chogathCastW(false, new Vector3(0, 0, -1));
   advance(510);
   assert(behind.hp < 3000, '초가스 W: 마우스로 겨눈 방향의 적에게 적중(시전 0.5초)');
+}
+
+// --- 챔피언 간 상태 격리(13차): 교체 후 이전 챔피언의 지연 판정·잠금·보호막·비대상이 남지 않는다 ---
+stubs.targetRing = { clear() {} };
+{
+  clearPlaced();
+  const behind = place(makeEnemy(0, -1));
+  const c = makeChamp('chogath');
+  c.canStartNewAction = () => true;
+  c._chogathCastW(false, new Vector3(0, 0, -1));
+  c.applyChampionData('garen');
+  advance(600);
+  assert(behind.hp === 3000, '교체 격리: 초가스 W 시전 직후 가렌으로 바꾸면 0.5초 뒤 판정이 나가지 않는다');
+  let fired = 0;
+  c._champTimeout(() => { fired++; }, 100);
+  c._champInterval(() => { fired++; }, 100);
+  c.applyChampionData('darius');
+  advance(500);
+  assert(fired === 0, '교체 격리: _champTimeout/_champInterval로 건 지연 실행은 교체 시 모두 취소');
+  c._champTimeout(() => { fired++; }, 100);
+  advance(150);
+  assert(fired === 1, '교체 격리: 교체 이후 새로 건 챔피언 타이머는 정상 실행');
+}
+{
+  const c = makeChamp('masteryi');
+  c.model = { visible: false };
+  c.isUntargetable = true;
+  c._masteryi.alpha = { pausedBuffs: [] };
+  c.currentActionKey = 'masteryiQ';
+  c.applyChampionData('garen');
+  assert(c.isUntargetable === false && c.model.visible === true, '교체 격리: 마스터 이 Q 도중 교체해도 비대상/모델 숨김이 남지 않는다');
+}
+{
+  const c = makeChamp('nilah');
+  c.applyChampionData('nilah');
+  const nilahRadius = c.collisionRadius;
+  c.attackOverrides = [{ id: 'garenQ' }]; c.subStates = { yasuoQ3: now + 5000 };
+  c._dariusRQeLockUntil = now + 250; c.magicPenPercent = 0.2; c._eHitCountThisCast = 7;
+  c.passiveState.lastDamageTakenAt = now;
+  context.addShield(c, 'settW', 300, 3);
+  c.applyChampionData('garen');
+  assert(c.collisionRadius !== nilahRadius && near(c.collisionRadius, context.BASE_UNIT * 0.24), '교체 격리: 닐라 전용 충돌 반경이 다른 챔피언에 남지 않는다');
+  assert(c.attackOverrides.length === 0 && Object.keys(c.subStates).length === 0, '교체 격리: 평타 강화/서브 상태 초기화');
+  assert(c._dariusRQeLockUntil === 0 && c.magicPenPercent === 0 && c._eHitCountThisCast === 0, '교체 격리: 다리우스 R 잠금/모데 E 마법 관통/가렌 E 타격 수 초기화');
+  assert(c.passiveState.lastDamageTakenAt === 0, '교체 격리: 패시브 비전투 시각 초기화(가렌 패시브가 이전 피격 시각을 물려받지 않음)');
+  assert(c.shield === 0 && !context.getShieldById(c, 'settW'), '교체 격리: 이전 챔피언의 보호막 인스턴스 제거');
+}
+{
+  // 세트 R 도중 사망: 잡힌 대상의 제압이 풀린다
+  const c = makeChamp('sett', [], { actionData: { death: { clips: ['Death'] } }, _pendingTimeouts: [], _clearPending() {} });
+  const t = makeEnemy(0, 1);
+  t.isGrabbedBySett = true;
+  applyStatus(t, { id: 'settR_suppress', type: 'SUPPRESSION', duration: 2 });
+  c._sett.rSeq = { target: t };
+  c._die();
+  assert(t.isGrabbedBySett === false && !getStatus(t, 'settR_suppress') && c._sett.rSeq === null, '세트 R 도중 사망: 대상의 제압/잡힘 상태가 풀린다');
+}
+{
+  // 세트 R 시퀀스 도중 교체: 시퀀스 취소(onCancel)가 먼저 R을 끝내도 정리 함수가 null을 넘겨 오류가 나지 않는다
+  const c = makeChamp('sett');
+  const t = makeEnemy(0, 1);
+  t.isGrabbedBySett = true;
+  c._sett.rSeq = { target: t };
+  c.sequencePlayer = { isPlaying: true, cancel() { this.isPlaying = false; if (c._sett.rSeq) c._settEndR(c._sett.rSeq, true); } };
+  let threw = null;
+  try { c.applyChampionData('garen'); } catch (e) { threw = e; }
+  assert(!threw && t.isGrabbedBySett === false && c.championId === 'garen', `교체 격리: 세트 R 도중 교체해도 오류 없이 대상이 풀린다${threw ? ' (' + threw.message + ')' : ''}`);
 }

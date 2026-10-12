@@ -12,17 +12,19 @@ const glbErrMsgEl = document.getElementById('glbErrMsg');
 
 function disposeCurrentChampion() {
   if (controller) {
-    controller._clearActionTimers();
+    // GLB를 새로 불러오면 컨트롤러 자체를 버리고 새로 만든다 - 버려지는 컨트롤러의 지연 판정이
+    // 나중에 더미를 때리거나, 잡힌/격리된 대상이 복귀하지 못하는 일이 없게 먼저 정리한다.
+    controller._teardownChampionRuntime();
     controller._clearPending();
-    if (controller._vex) controller._vexClearRRecast();
     clearTimeout(controller._previewTimer);
     if (controller.mixer) controller.mixer.stopAllAction();
     // 요청("채찍에 직접 연결된 상시 발광"): 이 발광 메시는 championRoot의
     // 자식이 아니라 scene에 직접 추가했으므로, championRoot.traverse()
     // 청소만으로는 안 지워진다 - 여기서 따로 정리한다.
     const glow = controller._nilahWeaponRig?.glow;
-    if (glow) {
-      for (const mesh of [glow.meshA, glow.meshB]) {
+    const trail = controller._nilahWeaponRig?.trailRibbon; // 무기 궤적 리본도 scene 직속 - 예전엔 닐라를 불러올 때마다 하나씩 남았다
+    if (glow || trail) {
+      for (const mesh of [glow?.meshA, glow?.meshB, trail]) {
         if (!mesh) continue;
         mesh.geometry?.dispose?.();
         mesh.material?.dispose?.();

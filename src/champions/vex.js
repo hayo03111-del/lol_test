@@ -43,7 +43,7 @@ CharacterController.prototype._vexCastR = function(free = false) {
       this.currentPhase = 'ACTIVE';
       this.setState(STATE.R_CAST);
       this.playFirstAvailable(['Spell4_Dash', 'Spell4_Attack', 'Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
-      const hitTimer = setTimeout(() => {
+      const hitTimer = this._champTimeout(() => {
         // 버그 수정(실제 게임 기제 점검): 예전엔 "아직 돌진 중인가(dashActive)"를 확인했는데, 매 프레임 갱신이 같은
         // 0.28초 시점에 먼저 dashActive를 끄면 이 타이머가 그냥 끝나 재시전 피해가 안 들어가고 행동 키도 남았다.
         if (this.currentActionKey !== 'vexRRecast') return;
@@ -80,7 +80,7 @@ CharacterController.prototype._vexCastR = function(free = false) {
     const target = this.currentTarget;
     const raw = skillVal(rd.damageByLevel, lvl) + (rd.apRatio || 0) * (this.stats.abilityPower || 0);
     // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사 - PC 위키 시전 0.25초 뒤 발사.
-    const fireTimer = setTimeout(() => {
+    const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'vexRCast' || !target || target.hp <= 0) return;
     const from = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));
     projectiles.spawn({
@@ -108,7 +108,7 @@ CharacterController.prototype._vexCastR = function(free = false) {
     this._actionTimers.push(fireTimer);
     // 버그 수정: GLB에 'Spell4' 클립이 없어 R 모션이 재생되지 않았다(실제 클립은 Spell4_Cast/Spell4_Dash/Spell4_Attack).
     this.playFirstAvailable(['Spell4_Cast', 'Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
-    const recTimer = setTimeout(() => {
+    const recTimer = this._champTimeout(() => {
       if (this.currentActionKey === 'vexRCast') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
     }, ((rd.castTimeSec || 0.25) + 0.05) * 1000);
     this._actionTimers.push(recTimer);
@@ -154,7 +154,7 @@ CharacterController.prototype._vexCastQ = function(mouseWorldPoint, free = false
   this.playFirstAvailable(['Spell1_Base'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
   const lvl = Math.max(1, this.skillLevels.Q || 1);
   const castMs = (q.castTimeSec != null ? q.castTimeSec : 0.15) * 1000;
-  const fire = setTimeout(() => {
+  const fire = this._champTimeout(() => {
     if (this.currentActionKey !== 'vexQ') return;
     this._vex.qTravel = { origin: this.root.position.clone(), dir: dir.clone(), traveled: 0, hitSet: new Set(), lvl, doom };
     vfx.spawn('q', this.root.position.clone(), dir);
@@ -200,7 +200,7 @@ CharacterController.prototype._vexCastW = function(mouseWorldPoint, free = false
   const doom = this._vexConsumeDoom();
   this.playFirstAvailable([this.targetPos ? 'Spell2_Moving' : 'Spell2_BASE', 'Spell2_BASE'], { loop: THREE.LoopOnce, fade: 0.06 });
   const lvl = Math.max(1, this.skillLevels.W || 1);
-  const t = setTimeout(() => {
+  const t = this._champTimeout(() => {
     if (this.championId !== 'vex' || this.hp <= 0) return;
     const shield = (skillVal(w.shieldByLevel, lvl) + (w.shieldApRatio || 0) * (this.stats.abilityPower || 0)) * getShieldReceivedMultiplier(this);
     addShield(this, 'vexW', shield, w.shieldDuration || 2.5); // 보호막 인스턴스(만료 자동)
@@ -242,7 +242,7 @@ CharacterController.prototype._vexCastE = function(mouseWorldPoint, free = false
   this.setState(STATE.E_CAST);
   this.playFirstAvailable(['Spell3_0'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
   const lvl = Math.max(1, this.skillLevels.E || 1);
-  const fire = setTimeout(() => {
+  const fire = this._champTimeout(() => {
     if (this.currentActionKey !== 'vexE') return;
     const from = this.root.position.clone();
     const to = from.clone().addScaledVector(dir, dist);

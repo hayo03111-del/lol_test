@@ -759,7 +759,9 @@ function applyStatus(target, effect) {
   // 강인함은 아이템(itemTenacityPercent)과 스킬 버프(TENACITY 상태 - 가렌 W 등)를
   // 원작과 같이 곱연산으로 합친다: 최종 = 1 - (1-a)(1-b).
   const tenacity = getTenacity(target);
-  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR'].includes(effect.type)) {
+  // PC 위키(Tenacity): 에어본·수면·근시·경직(정지)·제압을 뺀 모든 군중 제어 지속시간을 줄인다 - 둔화 포함.
+  // 예전엔 둔화가 빠져 있었다.
+  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR', 'SLOW'].includes(effect.type)) {
     effDuration = effDuration * (1 - tenacity);
   }
   if (target && target.itemSlowResistPercent > 0 && effect.type === 'SLOW') {
@@ -846,7 +848,11 @@ function getArmorShredPercent(target) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();
   let v = 0;
-  for (const e of target.statusEffects) if (e.type === 'ARMOR_SHRED' && e.expiresAt > now) v = Math.max(v, e.value);
+  // PC 위키(Stacking/Armor penetration): 서로 다른 출처의 % 방어력 감소는 곱연산(20% + 30% = 44%). 같은 출처는
+  // applyStatus가 같은 id로 갱신하므로 한 번만 들어간다. 예전엔 가장 큰 값 하나만 적용했다.
+  let keep = 1;
+  for (const e of target.statusEffects) if (e.type === 'ARMOR_SHRED' && e.expiresAt > now) keep *= 1 - Math.max(0, Math.min(1, e.value));
+  v = 1 - keep;
   return v;
 }
 // ARMOR_SHRED(getArmorShredPercent)와 달리 이건 퍼센트가 아니라 고정
@@ -856,7 +862,8 @@ function getMrShredFlat(target) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();
   let v = 0;
-  for (const e of target.statusEffects) if (e.type === 'MR_SHRED' && e.expiresAt > now) v = Math.max(v, e.value);
+  // PC 위키: 고정 저항 감소는 서로 다른 출처끼리 더해진다(예전엔 가장 큰 값만).
+  for (const e of target.statusEffects) if (e.type === 'MR_SHRED' && e.expiresAt > now) v += e.value;
   return v;
 }
 // 피의 노래(약점 노출) - "받는 피해량 증가"는 기존 DAMAGE_REDUCTION(감소)과
@@ -9350,7 +9357,11 @@ class CharacterController {
     };
   }
 
-  applyChampionData(championId) {
+  /** 챔피언 교체/폐기 공통 정리: 이전 챔피언이 걸어둔 지연 실행·투사체·시각 효과와
+   *  다른 유닛에 건 진행 중 상태(세트 R 잡기, 모데카이저 죽음의 세계)를 끝낸다.
+   *  applyChampionData()(같은 모델에서 챔피언 id만 교체)와 disposeCurrentChampion()
+   *  (GLB를 새로 불러와 컨트롤러 자체를 버림) 양쪽에서 부른다. */
+  _teardownChampionRuntime() {
     // 챔피언 교체/재선택 중 이전 레넥톤의 지속 R 오라가 남지 않도록 정리한다.
     if (this._renekton?.rAuraVfx && typeof vfx !== 'undefined') {
       vfx.stopRenektonRAura(this._renekton.rAuraVfx);
@@ -9368,8 +9379,10 @@ class CharacterController {
     // 정확한 원인) - 기존에 이미 있는 정상 종료 함수(_settEndR/
     // _mordeEndDeathRealm)를 그대로 호출해서 그 정리 로직을 재사용한다.
     if (this._sett?.rSeq) {
+      // 시퀀스 취소(onCancel)가 먼저 _settEndR을 불러 rSeq를 비울 수 있다 - 그때는 다시 부르지 않는다
+      // (예전엔 null을 넘겨 오류가 났고, GLB 재로드 교체가 통째로 실패했다).
       if (this.sequencePlayer?.isPlaying) this.sequencePlayer.cancel();
-      this._settEndR(this._sett.rSeq, true);
+      if (this._sett.rSeq) this._settEndR(this._sett.rSeq, true);
     }
     if (this._morde?.isInDeathRealm) this._mordeEndDeathRealm('champion-switch');
     // 버그 수정(위와 동일 - "챔피언 교체 후 이전 챔피언 투사체" 문제):
@@ -9379,13 +9392,7 @@ class CharacterController {
     // (포탑 투사체는 clear() 내부에서 자동으로 보존됨).
     if (typeof projectiles !== 'undefined' && typeof projectiles.clear === 'function') projectiles.clear();
     this._clearActionTimers();
-    this.statusEffects = [];
-    this.shield = 0;
-    this.currentTarget = null;
-    this.pendingMove = null; this.pendingCast = null;
-    this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
-    if (typeof targetRing !== 'undefined') targetRing.clear();
-    for (const k of Object.keys(this.cooldowns || {})) this.cooldowns[k] = 0; // 요청 5절 "쿨다운 음수 방지"와 같은 취지 - 이전 챔피언 쿨다운이 새 챔피언에 유출되지 않게 한다
+    this._cancelChampionTimers(); // 이전 챔피언의 지연 실행(판정·복귀·연출)을 모두 무효화
     // 이전 챔피언 상태가 참조하는 시각 효과/타이머부터 정리하고, 그다음 전부 새로 만든다.
     if (this._leesinAnimTimer) { clearTimeout(this._leesinAnimTimer); this._leesinAnimTimer = null; }
     if (this._yone && this._yone.eSpirit && typeof this._yoneCleanupSpiritVisuals === 'function') this._yoneCleanupSpiritVisuals();
@@ -9402,6 +9409,34 @@ class CharacterController {
       if (this._ahri.eTravel && typeof this._ahriEndETravel === 'function') this._ahriEndETravel();
     }
     if (this._morde && this._morde.shieldDecayTimer) clearInterval(this._morde.shieldDecayTimer);
+    if (this._masteryi?.alpha && typeof this._masteryiCancelAlphaStrike === 'function') this._masteryiCancelAlphaStrike();
+    if (this._vex && typeof this._vexClearRRecast === 'function') this._vexClearRRecast();
+  }
+
+  applyChampionData(championId) {
+    this._teardownChampionRuntime();
+    this.statusEffects = [];
+    this.shield = 0;
+    this.currentTarget = null;
+    this.pendingMove = null; this.pendingCast = null;
+    this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
+    if (typeof targetRing !== 'undefined') targetRing.clear();
+    for (const k of Object.keys(this.cooldowns || {})) this.cooldowns[k] = 0; // 요청 5절 "쿨다운 음수 방지"와 같은 취지 - 이전 챔피언 쿨다운이 새 챔피언에 유출되지 않게 한다
+    // 마스터 이 Q 도중 교체: 모델 비가시화/비대상 상태가 남지 않게 되돌린다.
+    this.isUntargetable = false;
+    if (this.model) this.model.visible = true;
+    // 이전 챔피언이 건 평타 강화/서브 상태/임시 이동 모션/전용 잠금이 새 챔피언에 새지 않게 한다.
+    this.attackOverrides = [];
+    this.subStates = {};
+    this._transientMoveClipNames = new Set();
+    this._dariusRQeLockUntil = 0;
+    this._ccAnimActive = false;
+    this._eHitCountThisCast = 0;
+    this.magicPenPercent = 0; // 모데카이저 E 패시브 - 매 tick 다시 계산되지만 다른 챔피언에선 계산 자체를 안 한다
+    this.passiveState = { lastDamageTakenAt: 0, lastEnemySkillHitAt: 0, lastPassiveHealAt: 0 };
+    // 닐라만 실제 충돌/선택 반경을 쓴다 - 다른 챔피언은 생성자의 균일값으로 되돌린다.
+    this.collisionRadius = BASE_UNIT * 0.24;
+    this.selectionRadius = this.collisionRadius * 1.3;
     this._dariusWArmed = false;
     // 챔피언 전용 전투 상태 - Darius 출혈 Map, Lee Sin Q 표식, Sett Q/W/R, Nilah E/R,
     // Yasuo/마스터 이/레넥톤 임시 상태 등이 다음 챔피언에 새어 나오지 않게 새로 만든다.
@@ -10333,6 +10368,35 @@ Object.defineProperty(CharacterController.prototype, 'shield', {
     if (v > 0) this.shieldEntries.push({ id: 'legacy', amount: v, initial: v, expiresAt: Infinity, decayStartAt: Infinity, decayPerSec: 0 });
   },
 });
+
+// 챔피언 타이머(챔피언 간 상태 격리): 챔피언 코드의 지연 실행은 이 함수로 건다. 챔피언을 바꾸면(applyChampionData)
+// "챔피언 세대(epoch)"가 바뀌고 남은 타이머가 전부 취소되며, 혹시 남은 콜백도 세대가 다르면 실행되지 않는다.
+// 예전엔 _actionTimers에 넣지 않은 지연 판정(모데카이저 E, 야스오 W 장막 등)이 교체 뒤 새 챔피언으로 실행될 수 있었다.
+CharacterController.prototype._champTimeout = function(fn, ms) {
+  if (!this._championTimers) this._championTimers = new Set();
+  const epoch = this._championEpoch || 0;
+  const id = setTimeout(() => {
+    this._championTimers.delete(id);
+    if ((this._championEpoch || 0) !== epoch) return;
+    fn();
+  }, ms);
+  this._championTimers.add(id);
+  return id;
+};
+CharacterController.prototype._champInterval = function(fn, ms) {
+  if (!this._championTimers) this._championTimers = new Set();
+  const epoch = this._championEpoch || 0;
+  const id = setInterval(() => {
+    if ((this._championEpoch || 0) !== epoch) { clearInterval(id); this._championTimers.delete(id); return; }
+    fn();
+  }, ms);
+  this._championTimers.add(id);
+  return id;
+};
+CharacterController.prototype._cancelChampionTimers = function() {
+  this._championEpoch = (this._championEpoch || 0) + 1;
+  if (this._championTimers) { for (const id of this._championTimers) { clearTimeout(id); clearInterval(id); } this._championTimers.clear(); }
+};
 
 /* ===== src/core/controller_movement.js ===== */
 /* ============================================================
@@ -11817,6 +11881,9 @@ CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
     // 다음, 평소와 동일한 캐스트 가능 여부 판정(canStartNewAction)을 거친다.
     if (this.state === STATE.RECALL) { this.cancelRecall(); this.setState(STATE.IDLE); }
     if (isCrowdControlled(this)) { const m = `${slot} - 기절/속박 상태`; console.log(`[SKILL BLOCKED] ${m}`); showSkillToast(m); return; } // 기획안 8절: 기절/속박 중에는 스킬을 쓸 수 없다
+    // PC 위키(Crowd control - Root): 속박 중에는 이동 스킬(모든 돌진·점멸, 귀환)을 쓸 수 없다. 다른 스킬은 쓸 수 있다.
+    // 예전엔 속박이 걷기만 막아 돌진 스킬로 그대로 빠져나갈 수 있었다.
+    if (isRooted(this) && this._isMovementAbility(slot)) { const m = `${slot} - 속박 중에는 이동 스킬 불가`; console.log(`[SKILL BLOCKED] ${m}`); showSkillToast(m); return; }
     // 벡스 R 재시전은 1차 R 적중 후 쿨다운 중에도 허용된다. 일반적인 cooldown 게이트보다 먼저 처리한다.
     if (this.championId === 'vex' && slot === 'R' && !this._vex.dashActive && this._vex.recastTarget && performance.now() < this._vex.recastReadyUntil) {
       this._dispatchCast(slot, mouseWorldPoint, false);
@@ -13182,7 +13249,7 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
           // 예전엔 판정 시점(0.5초)까지 행동을 잠갔고, 판정 위치도 그 시점의 현재 위치였다.
           // 0.5초는 위키 서술 관례대로 시전 종료 기준으로 해석(시작 기준이면 총 0.5초 - 미확인).
           const origin = mordeEOrigin || this.root.position.clone();
-          setTimeout(() => {
+          this._champTimeout(() => {
             const hits = this._mordeEAreaHits(origin, dir, dist);
             if (hits.length) hits.forEach((u) => this._mordeEOnCast(u));
             else debugSkillMiss('Mordekaiser E', 'no target in impact area');
@@ -13467,6 +13534,28 @@ CharacterController.prototype._castR = function(free = false) {
     }
 };
 
+// 지금 이 슬롯을 누르면 시전자가 돌진·점멸하는가(속박 판정용). 재시전 단계에 따라 달라지는 스킬은 현재 상태로 판단한다.
+CharacterController.prototype._isMovementAbility = function(slot) {
+  const id = this.championId, now = performance.now();
+  switch (id) {
+    case 'yasuo': return slot === 'E';
+    case 'renekton': case 'nilah': case 'ezreal': return slot === 'E';
+    case 'ahri': return slot === 'R';
+    case 'darius': case 'sett': return slot === 'R';
+    case 'leesin':
+      if (slot === 'Q') return !!(this._leesin && this._leesin.qMarkTarget && now < this._leesin.qMarkExpiresAt); // Q2 돌진만
+      if (slot === 'R') return false;
+      return false;
+    case 'yone':
+      if (slot === 'Q') return !!(this._yone && this._yone.qStacks >= ((this._champData().Q || {}).maxStacks || 2)); // Q3 돌진
+      if (slot === 'E') return !!(this._yone && !this._yone.eSpirit); // 첫 돌진(복귀는 이동 스킬 아님)
+      if (slot === 'R') return true;
+      return false;
+    case 'vex': return slot === 'R' && !!(this._vex && this._vex.recastTarget && now < this._vex.recastReadyUntil); // 재시전 돌진
+    default: return false;
+  }
+};
+
 /* ===== src/core/controller_lifecycle.js ===== */
 /* ============================================================
    CharacterController - 귀환/피격/사망/부활과 이동·W 서브 상태 복귀 애니메이션
@@ -13484,6 +13573,8 @@ CharacterController.prototype._castR = function(free = false) {
 /* ---------------- recall ---------------- */
 CharacterController.prototype.startRecall = function() {
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN || this.state === STATE.RECALL) return;
+    // PC 위키: 귀환은 이동 스킬로 취급되어 속박 중엔 쓸 수 없고, 기절류(행동 불가) 중에도 쓸 수 없다.
+    if ((typeof isRooted === 'function' && isRooted(this)) || (typeof isCrowdControlled === 'function' && isCrowdControlled(this))) { if (typeof showSkillToast === 'function') showSkillToast('귀환 - 군중 제어 중 사용 불가'); return; }
     this._clearActionTimers();
     this.currentActionKey = null; this.currentPhase = null;
     this.targetPos = null; this.currentTarget = null;
@@ -13640,6 +13731,9 @@ CharacterController.prototype._die = function() {
       clearStatus(this, 'asheRangersFocus');
     }
     if (this.championId === 'nautilus' && typeof this._nautilusReset === 'function') this._nautilusReset();
+    // 세트 R 도중 사망: 위 _clearActionTimers()가 시퀀스를 끊으면 잡힌 대상의 제압(isGrabbedBySett)이
+    // 풀리지 않고 영구히 남았다 - 정상 종료 함수로 대상을 먼저 풀어준다.
+    if (this._sett?.rSeq) { this.pendingMove = null; this.pendingCast = null; this.currentTarget = null; this._settEndR(this._sett.rSeq, true); }
     this.currentActionKey = null; this.currentPhase = null;
     this.targetPos = null; this.currentTarget = null; this.pendingMove = null; this.pendingCast = null;
     targetRing.clear();
@@ -13859,7 +13953,7 @@ CharacterController.prototype._dariusEmpower = function() {
     // 수 있었다(예: 다리우스->레넥톤 교체 후 레넥톤 강화 상태 도중).
     // championId를 확인해 다리우스가 아니면 아무것도 하지 않도록 최소
     // 범위로 수정.
-    this._dariusEmpowerTimer = setTimeout(() => {
+    this._dariusEmpowerTimer = this._champTimeout(() => {
       if (this.championId !== 'darius') return;
       this.bonusAD = 0; this._darius.empoweredUntil = 0; this.recomputeStats();
     }, p.empoweredDuration * 1000);
@@ -14114,7 +14208,7 @@ CharacterController.prototype._garenCastRDuringE = function() {
     if (!this._payCost('R', false)) return;
     const timing = (typeof SKILL_TIMING_DATABASE !== 'undefined' && SKILL_TIMING_DATABASE.garen && SKILL_TIMING_DATABASE.garen.R) || null;
     const delay = (timing && timing.eventTime) || cd.R.castTime || 0.435;
-    const t = setTimeout(() => {
+    const t = this._champTimeout(() => {
       if (this.championId !== 'garen' || !target || target.hp <= 0) return;
       vfx.spawn('r', this.root.position.clone());
       this._garenROnHit(target);
@@ -14937,7 +15031,7 @@ CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=fa
     const clip=this.findAnimation('Spell1');
     const dur=clip?.duration||0.45;
     this._renektonPlay('Spell1',{loop:THREE.LoopOnce,fade:0.05,clampWhenFinished:true});
-    const timer=setTimeout(()=>{
+    const timer=this._champTimeout(()=>{
       if (this.championId!=='renekton') return;
       const radius=q.range + (this._renekton.rActive ? 50 : 0);
       const hits=findEnemiesInRadius(this.root.position,radius);
@@ -14946,7 +15040,7 @@ CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=fa
       updateBars(this);
       this.currentPhase='RECOVERY'; this.phaseCancelable=true;
       // PC 위키: 시전 후 0.25초 동안 평타·E·R 사용 불가(그 뒤 해제).
-      const end=setTimeout(()=>{ if(this.currentActionKey==='renektonQ'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},250);
+      const end=this._champTimeout(()=>{ if(this.currentActionKey==='renektonQ'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},250);
       this._actionTimers.push(end);
     },0); // 버그 수정(타이밍 측정으로 발견): 예전엔 클립 길이×0.62(약 0.5초) 뒤 판정 - PC 위키는 시전 시간 없음(즉시)
     this._actionTimers.push(timer);
@@ -15062,7 +15156,7 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
     const hits=this._renektonFindLineHits(origin,dest,this._renekton.rActive?50:0);
     const empowered=isSecond&&!free&&this._renekton.rage>=50;
     if(empowered)this._renekton.rage-=50;
-    const timer=setTimeout(()=>{
+    const timer=this._champTimeout(()=>{
       const lvl=this.skillLevels.E||1, extra=this._renektonExtraAD();
       for(const h of hits){
         const target=h.unit;
@@ -15097,7 +15191,7 @@ CharacterController.prototype._renektonCastR = function(free=false) {
     }
     this._clearActionTimers();this.currentActionKey='renektonR';this.currentPhase='STARTUP';this.setState(STATE.R_CAST);this.phaseCancelable=false;
     this._renektonPlay('Spell4',{loop:THREE.LoopOnce,fade:0.03,clampWhenFinished:true});
-    const finish=setTimeout(()=>{if(this.currentActionKey==='renektonR'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},Math.max(130,r.castTime*1000));this._actionTimers.push(finish);
+    const finish=this._champTimeout(()=>{if(this.currentActionKey==='renektonR'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},Math.max(130,r.castTime*1000));this._actionTimers.push(finish);
     updateBars(this);
   
 };
@@ -15125,7 +15219,7 @@ CharacterController.prototype._renektonTick = function(dt) {
       if(r.wSeq.elapsed>=(wd.castTimeSec??0.2)){
         while(r.wSeq.hitIndex<r.wSeq.hits){this._renektonResolveWHit(r.wSeq);r.wSeq.hitIndex++;}
         r.wSeq=null; this.currentPhase='RECOVERY'; this.phaseCancelable=false;
-        const recoveryTimer=setTimeout(()=>{ if(this.currentActionKey==='renektonW'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},(wd.postHitLockSec??0.528)*1000);
+        const recoveryTimer=this._champTimeout(()=>{ if(this.currentActionKey==='renektonW'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},(wd.postHitLockSec??0.528)*1000);
         this._actionTimers.push(recoveryTimer);
       }
     }
@@ -15403,7 +15497,7 @@ CharacterController.prototype._yasuoCastW = function(mouseWorldPoint, free=false
     // PC 위키: 시전 시간 0.013초, 시전 중 이동 가능. 예전엔 min(0.25, 클립 길이) 뒤에 장막을 세우고 클립 전체(약 0.7초) 동안
     // 이동·스킬을 막았다. 장막은 액션 취소와 무관한 타이머로 0.013초 뒤에 세우고, 모션은 이동·스킬로 언제든 끊기게 한다.
     const castSec = w.castTimeSec ?? 0.013;
-    setTimeout(()=>{ if (this.hp > 0) this._yasuoCreateWindwall(dir,width); }, castSec*1000);
+    this._champTimeout(()=>{ if (this.hp > 0) this._yasuoCreateWindwall(dir,width); }, castSec*1000);
     this.runAction('yasuoW',STATE.W_CAST,{startupOverride:castSec,recoveryOverride:Math.max(0.05,dur-castSec),dataOverride:{clips:[anim],startup:castSec,recovery:Math.max(0.05,dur-castSec),cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{}});
     if(!free) this.cooldowns.W=abilityHasteCooldown(this, this._yasuoLevelValue(w.cooldown,lvl));
 
@@ -15556,7 +15650,7 @@ CharacterController.prototype._yasuoCastE = function(mouseWorldPoint, free=false
 
     // Independent completion timer: only finishes the dash state after the actual
     // dash duration. Q can overlay its animation without canceling this timer.
-    const finishTimer = setTimeout(() => { this._yasuoFinishEDash(); }, (this._yasuo.eDashDuration + 0.08) * 1000);
+    const finishTimer = this._champTimeout(() => { this._yasuoFinishEDash(); }, (this._yasuo.eDashDuration + 0.08) * 1000);
     this._actionTimers.push(finishTimer);
 
     if (!free) this.cooldowns.E = abilityHasteCooldown(this, this._yasuoLevelValue(e.cooldown, lvl));
@@ -15809,7 +15903,7 @@ CharacterController.prototype._yasuoPlayPostQMoveEntry = function() {
     this._yasuo.qMoveEntryPending = false;
     this._beginTransientMoveClip('Run1_IN_Raw');
     this.crossFadeTo(['Run1_IN_Raw'], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
-    const t = setTimeout(() => {
+    const t = this._champTimeout(() => {
       this._endTransientMoveClip('Run1_IN_Raw');
       if (this.state === STATE.MOVE && this.targetPos) this.playFirstAvailable(['Run1_Raw'], { loop: THREE.LoopRepeat, fade: 0.08 });
     }, Math.max(0, clip.duration - 0.02) * 1000);
@@ -16174,7 +16268,7 @@ CharacterController.prototype._yonePlayExitTransition = function(idleClipNames, 
   const clip = this.resolveClip(candidates);
   if (clip) {
     this.playFirstAvailable(candidates, { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
-    const t = setTimeout(() => onDone(), Math.max(0, clip.duration - 0.03) * 1000);
+    const t = this._champTimeout(() => onDone(), Math.max(0, clip.duration - 0.03) * 1000);
     this._actionTimers.push(t);
   } else {
     onDone();
@@ -16218,7 +16312,7 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
     } else {
       this.playFirstAvailable(['Spell1_Dash', 'Yone_Spell1_A_01.anm'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true, timeScale: q3TimeScale });
     }
-    const timer = setTimeout(() => {
+    const timer = this._champTimeout(() => {
       if (this.currentActionKey !== key) return;
       this.currentPhase = 'ACTIVE';
       this._yoneStartEmpoweredQ(dir);
@@ -16244,7 +16338,7 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
   const qMainClip = this.findAnimation(animName) || this.findAnimation('Yone_Spell1_A_01.anm');
   const qMainTimeScale = (qMainClip && qMainClip.duration > 0 && castTime > 0) ? THREE.MathUtils.clamp(qMainClip.duration / castTime, 0.3, 4.0) : 1.0;
   this.playFirstAvailable([animName, 'Yone_Spell1_A_01.anm'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true, timeScale: qMainTimeScale });
-  const timer = setTimeout(() => {
+  const timer = this._champTimeout(() => {
     if (this.currentActionKey !== key) return;
     this.currentPhase = 'ACTIVE';
     const targets = this._yoneFindQTargets(dir, q.range);
@@ -16291,7 +16385,7 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
   this.setState(STATE.W_CAST);
   this.currentActionKey = key; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
   this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true, timeScale: (() => { const c = this.findAnimation('Spell2'); return (c && c.duration > 0 && castTime > 0) ? THREE.MathUtils.clamp(c.duration / castTime, 0.3, 4.0) : 1.0; })() });
-  const timer = setTimeout(() => {
+  const timer = this._champTimeout(() => {
     if (this.currentActionKey !== key) return;
     this.currentPhase = 'ACTIVE';
     const targets = findEnemiesInRadius(this.root.position, w.range, { forward: dir, maxAngleDeg: (w.angleDeg || 80) / 2 })
@@ -16338,7 +16432,7 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
       const tail = this.resolveClip(['Spell2_ToIdle']);
       if (tail) {
         this.playFirstAvailable(['Spell2_ToIdle'], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
-        const t2 = setTimeout(() => { if (!this.currentActionKey && this.currentClipKey === tail.name) this._resumeAfterAction(); }, Math.max(0, tail.duration - 0.03) * 1000);
+        const t2 = this._champTimeout(() => { if (!this.currentActionKey && this.currentClipKey === tail.name) this._resumeAfterAction(); }, Math.max(0, tail.duration - 0.03) * 1000);
         this._actionTimers.push(t2);
       } else this._resumeAfterAction();
     }
@@ -16580,7 +16674,7 @@ CharacterController.prototype._yoneCastE = function(mouseWorldPoint, free = fals
   } else {
     this.playFirstAvailable(['Spell3_Dash'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   }
-  const t = setTimeout(finishSpiritIn, Math.max(0.05, dashDur) * 1000);
+  const t = this._champTimeout(finishSpiritIn, Math.max(0.05, dashDur) * 1000);
   this._actionTimers.push(t);
   vfx.spawn('e', this.root.position.clone(), dir);
   if (!free) this.cooldowns.E = abilityHasteCooldown(this, this._yoneLevelValue(e.cooldown, eLevel));
@@ -16608,7 +16702,7 @@ CharacterController.prototype._yoneRecastE = function() {
   } else {
     this.playFirstAvailable(['Spell3_Out'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   }
-  setTimeout(() => {
+  this._champTimeout(() => {
     if (this._yone.eSpirit !== spirit) return;
     this.root.position.copy(spirit.bodyPos);
     this.root.quaternion.copy(spirit.bodyQuat);
@@ -16687,7 +16781,7 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
   }
   const origin = this.root.position.clone();
   const castTime = r.castTime || 0.75;
-  const timer = setTimeout(() => {
+  const timer = this._champTimeout(() => {
     if (this.currentActionKey !== key) return;
     this.currentPhase = 'ACTIVE';
     // 1단계: 직선 범위(사거리/폭) 내 모든 적 넉다운+기절(위키: 1초).
@@ -16745,14 +16839,14 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
       const pullSec = Math.max(0.05, dist / lolRangeToWorld(r.pullSpeed || 3000));
       if (typeof clearStatus === 'function') clearStatus(t, 'yoneRStun');
       t._pullState = { from: t.mesh.position.clone(), to: pullTarget, duration: pullSec, elapsed: 0 };
-      const kt = setTimeout(() => {
+      const kt = this._champTimeout(() => {
         if (t.hp > 0) applyStatus(t, { id: 'yoneRKnockup', type: 'KNOCKUP', duration: (r.knockupDuration || 0.75), value: 1 });
       }, pullSec * 1000);
       void kt; // 요네가 다른 행동을 시작해도 이미 끌려가는 대상의 공중에 뜸은 취소되면 안 된다
     });
     if (hits.length) debugSkillHit('Yone R', hits[0].unit); else debugSkillMiss('R', '사거리 내 대상 없음');
     this.currentPhase = 'RECOVERY';
-    const rec = setTimeout(() => { if (this.currentActionKey === key) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } }, 450); // 위키: 시전 후 0.45초 행동 잠금(Lockout)
+    const rec = this._champTimeout(() => { if (this.currentActionKey === key) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } }, 450); // 위키: 시전 후 0.45초 행동 잠금(Lockout)
     this._actionTimers.push(rec);
   }, Math.max(0, castTime) * 1000);
   this._actionTimers.push(timer);
@@ -17022,7 +17116,7 @@ CharacterController.prototype._nilahOnBasicAttackHit = function(target, dealtDam
             vfx.spawn('nilahBA', hitPos.clone(), hitDir, { scale: empowered ? 1.3 : 1.0 });
           }
           if (empowered) {
-            setTimeout(() => { try { if (typeof nilahVfx2Ring === 'function') nilahVfx2Ring(nilahVfx2.scene, p2.clone(), 1.0, 0xfff6d8, 0.24); } catch (err) { console.error('[Nilah AA] 지연 VFX 오류(무시):', err); } }, 35);
+            this._champTimeout(() => { try { if (typeof nilahVfx2Ring === 'function') nilahVfx2Ring(nilahVfx2.scene, p2.clone(), 1.0, 0xfff6d8, 0.24); } catch (err) { console.error('[Nilah AA] 지연 VFX 오류(무시):', err); } }, 35);
             if (typeof NilahVfx2ParticleField === 'function') {
               const burst = new NilahVfx2ParticleField(18, 0.4, 0xffe8a8, 0.06);
               burst.position.copy(p2);
@@ -17123,7 +17217,7 @@ CharacterController.prototype._nilahQHit = function(impactPoint, free=false, ePa
       hitAt.y += BASE_UNIT * 0.5;
       nilahVfx2Ring(nilahVfx2.scene, hitAt, 0.85, 0xffffff, 0.14);
       nilahVfx2Ring(nilahVfx2.scene, hitAt, 0.55, 0xfff1c8, 0.22);
-      setTimeout(() => { if (typeof nilahVfx2Ring === 'function') nilahVfx2Ring(nilahVfx2.scene, hitAt.clone(), 1.3, 0x9fe9ff, 0.26); }, 40);
+      this._champTimeout(() => { if (typeof nilahVfx2Ring === 'function') nilahVfx2Ring(nilahVfx2.scene, hitAt.clone(), 1.3, 0x9fe9ff, 0.26); }, 40);
       if (typeof NilahVfx2ParticleField === 'function' && typeof nilahVfx2 !== 'undefined') {
         const burst = new NilahVfx2ParticleField(26, 0.55, 0xfff1c8, 0.07);
         burst.position.copy(hitAt);
@@ -17216,7 +17310,7 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
         // 판정하고, 남은 모션은 언제든 끊을 수 있는 후딜(nilahQTail)로 둔다.
         const bonusAs = Math.max(0, (this.stats.levelBonusAttackSpeed || 0) + (this.stats.bonusAttackSpeedPercent || 0));
         const castSec = Math.max(0.28, 0.35 / (1 + bonusAs));
-        const hitTimer = setTimeout(() => {
+        const hitTimer = this._champTimeout(() => {
           if (this.currentActionKey !== 'nilahQ') return;
           try { this._nilahQHit(impact); } catch (err) { console.error('[Nilah Q] 판정 오류(무시하고 계속):', err); }
           this.currentActionKey = 'nilahQTail'; this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
@@ -17288,7 +17382,7 @@ CharacterController.prototype._nilahCastW = function(mouseWorldPoint, free=false
     // 재생 시간만큼만 짧게 잠그고, 버프 자체는 위 applyStatus로 이미
     // dur만큼 별도로 유지되므로 전혀 영향받지 않는다.
     const castLock=Math.max(0.08, Math.min(0.3, wClip?.duration || 0.2));
-    const t=setTimeout(()=>{if(this.currentActionKey==='nilahW'){this.currentActionKey=null;this.currentPhase=null;this.phaseCancelable=false;this._resumeAfterAction();}},castLock*1000); this._actionTimers.push(t);
+    const t=this._champTimeout(()=>{if(this.currentActionKey==='nilahW'){this.currentActionKey=null;this.currentPhase=null;this.phaseCancelable=false;this._resumeAfterAction();}},castLock*1000); this._actionTimers.push(t);
     updateBars(this);
   
 };
@@ -17330,7 +17424,7 @@ CharacterController.prototype._nilahResolveEDashEnd = function(dash) {
     if(this.currentActionKey==='nilahE'){
       this.currentPhase='RECOVERY';
       // E의 돌진이 끝나면 공격 타이머/후딜에 남아있던 상태가 다음 평타를 막지 않도록 즉시 정리한다.
-      const t=setTimeout(()=>{
+      const t=this._champTimeout(()=>{
         if(this.currentActionKey==='nilahE'){
           this.currentActionKey=null;
           this.currentPhase=null;
@@ -17522,7 +17616,7 @@ CharacterController.prototype._nilahRFinish = function(seq) {
     // PC 위키: 평타·스킬 금지는 환희(1초) 동안만이다. 종료 후 추가 잠금(예전 0.12~0.32초)은 원작 근거가 없어 없앴다.
     // 종료 모션은 그대로 재생되고 다음 행동이 들어오면 자연스럽게 덮어쓴다.
     const controlLockMs=0;
-    const timer=setTimeout(()=>{if(this.currentActionKey==='nilahR'){this.currentActionKey=null;this.currentPhase=null;this._nilah.rSeq=null;this._resumeAfterAction();}},controlLockMs);
+    const timer=this._champTimeout(()=>{if(this.currentActionKey==='nilahR'){this.currentActionKey=null;this.currentPhase=null;this._nilah.rSeq=null;this._resumeAfterAction();}},controlLockMs);
     this._actionTimers.push(timer);
   
 };
@@ -18492,7 +18586,7 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
     if (rawDist > 1e-4) dir.normalize(); else dir.set(0, 0, 1);
     const impactPoint = origin.clone().addScaledVector(dir, Math.min(rawDist, lolRangeToWorld(q.range)));
     vfx.spawn('q', origin);
-    const actionSafety = setTimeout(() => {
+    const actionSafety = this._champTimeout(() => {
       if (this.championId !== 'chogath' || this.currentActionKey !== 'chogathQ') return;
       console.warn('[ACTION SAFETY] chogath Q stale lock cleared');
       this.currentActionKey = null;
@@ -18501,7 +18595,7 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
       this._resumeAfterAction();
     }, (q.castTime + q.impactDelay + 0.75) * 1000);
     this._actionTimers.push(actionSafety);
-    const t = setTimeout(() => {
+    const t = this._champTimeout(() => {
       // 정확한 파열 폭발 반경이 기획안에 없어(사거리 950은 "시전 가능
       // 거리") 근접 판정 반경(200)으로 근사한다 - 섹션 18 원칙에 따라
       // 새 피해 수치를 만들지는 않았고, 오직 판정 반경만 근사치다.
@@ -18514,7 +18608,7 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
           const wouldKill = !flB && hpB > 0 && hpB <= dealt; // 실제 입힌 피해(마법 저항 적용 후) 기준
           applyStatus(h.unit, { id: 'chogathQ_knockup', type: 'KNOCKUP', duration: q.knockupDuration, value: 1 }); // 공중에 뜸(예전엔 기절로 처리)
           const unit = h.unit;
-          setTimeout(() => { if (unit.hp > 0) applyStatus(unit, { id: 'chogathQ_slow', type: 'SLOW', duration: q.slowDuration, value: q.slowPercent / 100 }); }, q.knockupDuration * 1000);
+          this._champTimeout(() => { if (unit.hp > 0) applyStatus(unit, { id: 'chogathQ_slow', type: 'SLOW', duration: q.slowDuration, value: q.slowPercent / 100 }); }, q.knockupDuration * 1000);
           if (wouldKill) this._chogathOnKill(h.unit);
         }
         debugSkillHit("Cho'Gath Q", hits[0].unit, { count: hits.length });
@@ -18548,7 +18642,7 @@ CharacterController.prototype._chogathCastW = function(free, mouseWorldPoint = n
       if (aim.lengthSq() > 1e-6) { forward = aim.normalize(); this.faceDirectionInstant(forward); }
     }
     vfx.spawn('w', this.root.position.clone());
-    const t = setTimeout(() => {
+    const t = this._champTimeout(() => {
       const hits = findEnemiesInRadius(this.root.position, w.range, { forward, maxAngleDeg: w.coneAngleDeg / 2 });
       if (hits.length) {
         for (const h of hits) {
@@ -18644,7 +18738,7 @@ CharacterController.prototype._chogathCastR = function(free) {
     this.setState(STATE.R_CAST);
     this.currentActionKey = 'chogathR'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
     this.playFirstAvailable((this.actionData?.rCast?.clips) || ['Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
-    const t = setTimeout(() => {
+    const t = this._champTimeout(() => {
       if (this.currentActionKey !== 'chogathR') return;
       this.currentActionKey = null; this.currentPhase = null;
       if (target && target.hp > 0) { vfx.spawn('r', this.root.position.clone()); this._chogathROnHit(target); }
@@ -18720,7 +18814,7 @@ CharacterController.prototype._leesinPlayCast = function(opts) {
       this._leesinQueueTail(clip, lockSec, opts.exitIdle);
     };
     if (lockSec > 0) {
-      const t = setTimeout(release, lockSec * 1000);
+      const t = this._champTimeout(release, lockSec * 1000);
       this._actionTimers.push(t);
     } else {
       release();
@@ -18735,13 +18829,13 @@ CharacterController.prototype._leesinQueueTail = function(castClip, elapsedSec, 
     const stillIdleOn = (name) => this.championId === 'leesin' && !this.currentActionKey && !this.targetPos
       && this.state === STATE.IDLE && this.currentClipKey === name;
     const remain = Math.max(0.05, castClip.duration - elapsedSec - 0.05);
-    this._leesinAnimTimer = setTimeout(() => {
+    this._leesinAnimTimer = this._champTimeout(() => {
       this._leesinAnimTimer = null;
       if (!stillIdleOn(castClip.name)) return;
       const exitClip = this._leesinFirstClip(exitIdleNames);
       if (!exitClip) { this._returnToLocomotion(); return; }
       this.playFirstAvailable([exitClip.name], { loop: THREE.LoopOnce, clampWhenFinished: true, fade: 0.12 });
-      this._leesinAnimTimer = setTimeout(() => {
+      this._leesinAnimTimer = this._champTimeout(() => {
         this._leesinAnimTimer = null;
         if (stillIdleOn(exitClip.name)) this._returnToLocomotion();
       }, Math.max(0.05, exitClip.duration - 0.05) * 1000);
@@ -18759,7 +18853,7 @@ CharacterController.prototype._leesinPlayInstantRecastClip = function(idleNames,
     if (moving) {
       this._beginTransientMoveClip(clip.name);
       this.playFirstAvailable([clip.name], { loop: THREE.LoopOnce, clampWhenFinished: false, fade: 0.1 });
-      this._leesinAnimTimer = setTimeout(() => {
+      this._leesinAnimTimer = this._champTimeout(() => {
         this._leesinAnimTimer = null;
         this._endTransientMoveClip(clip.name);
         if (this.championId === 'leesin' && !this.currentActionKey && this.currentClipKey === clip.name) this._returnToLocomotion();
@@ -18896,7 +18990,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
       // '아직 음파가 도착하지 않았는데 이미 피해를 받은' 판정 불일치가 있었다.
       const travelDistance = Math.max(0.05, impactDistance ?? rangeWorld);
       const travelTimeMs = (travelDistance / speedWorld) * 1000;
-      const impactTimer = setTimeout(() => {
+      const impactTimer = this._champTimeout(() => {
         if (this.championId !== 'leesin' || !hitUnit || hitUnit.hp <= 0 || hitUnit.destroyed || hitUnit.isDead) return;
         applyDamage(hitUnit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
         if (hitUnit.hp > 0) {
@@ -19091,7 +19185,7 @@ CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
       const lateral = Math.sqrt(Math.max(0, rel.lengthSq() - along * along));
       if (lateral > kickedRadius + getCollisionRadius(u)) continue;
       // 차인 대상이 그 지점에 도달하는 시각에 맞춰 판정.
-      const t = setTimeout(() => {
+      const t = this._champTimeout(() => {
         if (u.hp <= 0) return;
         applyDamage(u, { rawDamage: collideDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
         applyStatus(u, { id: 'leesinR_collide_air', type: 'KNOCKUP', duration: r.collisionAirborneSec || 1, value: 1 });
@@ -19301,7 +19395,7 @@ CharacterController.prototype._mordeROnHit = function(target) {
     this.bonusArmor = (this.bonusArmor || 0) + stolenArmor;
     this.bonusMr = (this.bonusMr || 0) + stolenMr;
     this.recomputeStats();
-    // 버그 수정(명세 15/16/21절): 예전엔 여기서 setTimeout(r.duration)
+    // 버그 수정(명세 15/16/21절): 예전엔 여기서 this._champTimeout(r.duration)
     // 하나로만 스탯을 되돌렸다 - 그 타이머는 대상/자신이 먼저 죽어도 멈추지
     // 않고 그대로 살아있어서, 이미 _mordeEndDeathRealm() 등으로 다른 경로가
     // 먼저 정리한 뒤에도 나중에 또 한 번 실행되며 음수 방어력처럼 잘못된
@@ -19444,7 +19538,7 @@ CharacterController.prototype._vexCastR = function(free = false) {
       this.currentPhase = 'ACTIVE';
       this.setState(STATE.R_CAST);
       this.playFirstAvailable(['Spell4_Dash', 'Spell4_Attack', 'Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
-      const hitTimer = setTimeout(() => {
+      const hitTimer = this._champTimeout(() => {
         // 버그 수정(실제 게임 기제 점검): 예전엔 "아직 돌진 중인가(dashActive)"를 확인했는데, 매 프레임 갱신이 같은
         // 0.28초 시점에 먼저 dashActive를 끄면 이 타이머가 그냥 끝나 재시전 피해가 안 들어가고 행동 키도 남았다.
         if (this.currentActionKey !== 'vexRRecast') return;
@@ -19481,7 +19575,7 @@ CharacterController.prototype._vexCastR = function(free = false) {
     const target = this.currentTarget;
     const raw = skillVal(rd.damageByLevel, lvl) + (rd.apRatio || 0) * (this.stats.abilityPower || 0);
     // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사 - PC 위키 시전 0.25초 뒤 발사.
-    const fireTimer = setTimeout(() => {
+    const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'vexRCast' || !target || target.hp <= 0) return;
     const from = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));
     projectiles.spawn({
@@ -19509,7 +19603,7 @@ CharacterController.prototype._vexCastR = function(free = false) {
     this._actionTimers.push(fireTimer);
     // 버그 수정: GLB에 'Spell4' 클립이 없어 R 모션이 재생되지 않았다(실제 클립은 Spell4_Cast/Spell4_Dash/Spell4_Attack).
     this.playFirstAvailable(['Spell4_Cast', 'Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
-    const recTimer = setTimeout(() => {
+    const recTimer = this._champTimeout(() => {
       if (this.currentActionKey === 'vexRCast') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
     }, ((rd.castTimeSec || 0.25) + 0.05) * 1000);
     this._actionTimers.push(recTimer);
@@ -19555,7 +19649,7 @@ CharacterController.prototype._vexCastQ = function(mouseWorldPoint, free = false
   this.playFirstAvailable(['Spell1_Base'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
   const lvl = Math.max(1, this.skillLevels.Q || 1);
   const castMs = (q.castTimeSec != null ? q.castTimeSec : 0.15) * 1000;
-  const fire = setTimeout(() => {
+  const fire = this._champTimeout(() => {
     if (this.currentActionKey !== 'vexQ') return;
     this._vex.qTravel = { origin: this.root.position.clone(), dir: dir.clone(), traveled: 0, hitSet: new Set(), lvl, doom };
     vfx.spawn('q', this.root.position.clone(), dir);
@@ -19601,7 +19695,7 @@ CharacterController.prototype._vexCastW = function(mouseWorldPoint, free = false
   const doom = this._vexConsumeDoom();
   this.playFirstAvailable([this.targetPos ? 'Spell2_Moving' : 'Spell2_BASE', 'Spell2_BASE'], { loop: THREE.LoopOnce, fade: 0.06 });
   const lvl = Math.max(1, this.skillLevels.W || 1);
-  const t = setTimeout(() => {
+  const t = this._champTimeout(() => {
     if (this.championId !== 'vex' || this.hp <= 0) return;
     const shield = (skillVal(w.shieldByLevel, lvl) + (w.shieldApRatio || 0) * (this.stats.abilityPower || 0)) * getShieldReceivedMultiplier(this);
     addShield(this, 'vexW', shield, w.shieldDuration || 2.5); // 보호막 인스턴스(만료 자동)
@@ -19643,7 +19737,7 @@ CharacterController.prototype._vexCastE = function(mouseWorldPoint, free = false
   this.setState(STATE.E_CAST);
   this.playFirstAvailable(['Spell3_0'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
   const lvl = Math.max(1, this.skillLevels.E || 1);
-  const fire = setTimeout(() => {
+  const fire = this._champTimeout(() => {
     if (this.currentActionKey !== 'vexE') return;
     const from = this.root.position.clone();
     const to = from.clone().addScaledVector(dir, dist);
@@ -19845,13 +19939,13 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
   if (!hitUnit) debugSkillMiss('Ezreal Q', 'no target in line');
 
   };
-  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell1');
   this.playFirstAvailable(['Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const dur = clip ? clip.duration : 0.35;
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ezrealQ') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);
@@ -19909,13 +20003,13 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   if (!hitUnit) debugSkillMiss('Ezreal W', 'no valid target in line (챔피언/포탑/억제기/넥서스만 반응)');
 
   };
-  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealW') __fire(); }, (w.castTimeSec != null ? w.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealW') __fire(); }, (w.castTimeSec != null ? w.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell2');
   this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const dur = clip ? clip.duration : 0.4;
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ezrealW') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);
@@ -20039,12 +20133,12 @@ CharacterController.prototype._ezrealCastE = function(mouseWorldPoint, free = fa
   }
 
   };
-  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation(clipName) || this.findAnimation('Spell3_0');
   const dur = clip ? clip.duration : 0.5;
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ezrealE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);
@@ -20078,7 +20172,7 @@ CharacterController.prototype._ezrealCastR = function(mouseWorldPoint, free = fa
   // 지오메트리로 재현한다 - _ezrealRBow, nilah_vfx_assets_and_runtime.js.
   vfx.spawn('ezrealRBow', this.root.position.clone(), dir, { duration: castTime });
 
-  const fireTimer = setTimeout(() => {
+  const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'ezrealR') return;
     this.currentPhase = 'ACTIVE';
     const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
@@ -20102,7 +20196,7 @@ CharacterController.prototype._ezrealCastR = function(mouseWorldPoint, free = fa
   }, castTime * 1000);
   this._actionTimers.push(fireTimer);
 
-  const doneTimer = setTimeout(() => {
+  const doneTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ezrealR') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, (castTime + 0.15) * 1000);
   this._actionTimers.push(doneTimer);
@@ -20316,13 +20410,13 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
   vfx.spawn('ahriOrbHit', origin.clone(), undefined, { color: 0x7ff5ff });
 
   };
-  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ahriQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ahriQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell1');
   this.playFirstAvailable(['Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const dur = clip ? clip.duration : 0.3;
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ahriQ') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);
@@ -20447,7 +20541,7 @@ CharacterController.prototype._ahriCastW = function(mouseWorldPoint, free = fals
     const clip = this.findAnimation('Spell2');
     this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
     const dur = clip ? clip.duration : 0.3;
-    setTimeout(() => {
+    this._champTimeout(() => {
       if (!this.currentActionKey && this.state !== STATE.MOVE && this.currentClipKey === 'Spell2') this._returnToLocomotion();
     }, dur * 1000);
   }
@@ -20620,7 +20714,7 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   };
 
   };
-  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ahriE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ahriE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation(clipName) || this.findAnimation('Spell3_south');
@@ -20628,7 +20722,7 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   // 버그 수정: 예전엔 2.77초짜리 클립이 끝날 때까지 행동이 잠겼다. 원작은 시전 시간(0.25초)이 끝나면
   // 바로 이동/공격할 수 있다 - 잠금은 시전 시간 + 0.1초(클립이 그보다 짧으면 클립 길이)만.
   const dur = Math.min(clip ? clip.duration : 0.35, (e.castTimeSec != null ? e.castTimeSec : 0.25) + 0.1);
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ahriE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);
@@ -20968,7 +21062,7 @@ CharacterController.prototype._varusCastQ = function(mouseWorldPoint, free = fal
   this.playFirstAvailable(['Spell1_Idle', 'Spell1'], { loop: THREE.LoopRepeat, fade: 0.05 });
 
   const maxDurMs = (q.chargeDuration || 1.25) * 1000;
-  const autoFireTimer = setTimeout(() => {
+  const autoFireTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'varusQCharge') this._varusReleaseQ();
   }, maxDurMs);
   this._actionTimers.push(autoFireTimer);
@@ -21031,7 +21125,7 @@ CharacterController.prototype._varusReleaseQ = function() {
   };
   const speedWorld = lolRangeToWorld(q.missileSpeed || 1500);
   lineHits.slice(1).forEach((h, k) => {
-    const t = setTimeout(() => resolveHit(h.u, k + 1), (h.d / Math.max(1e-6, speedWorld)) * 1000);
+    const t = this._champTimeout(() => resolveHit(h.u, k + 1), (h.d / Math.max(1e-6, speedWorld)) * 1000);
     void t; // 발사된 화살은 바루스가 다른 행동을 해도 계속 날아가므로 _actionTimers에 넣지 않는다
   });
 
@@ -21047,7 +21141,7 @@ CharacterController.prototype._varusReleaseQ = function() {
   this.playFirstAvailable(['Spell1_Fire', 'Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const clip = this.findAnimation('Spell1_Fire') || this.findAnimation('Spell1');
   const dur = clip ? clip.duration : 0.35;
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'varusQ') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);
@@ -21094,7 +21188,7 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
 
   this.playFirstAvailable(['Spell3'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const castTime = 0.242; // bin mCastTime(≈0.2419) - SKILL_TIMING_DATABASE.varus.E와 동일한 수치
-  const fireTimer = setTimeout(() => {
+  const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'varusE') return;
     this.currentPhase = 'ACTIVE';
     vfx.spawn('hit', targetPoint.clone(), undefined, { color: 0xff9a4a });
@@ -21117,7 +21211,7 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
   }, castTime * 1000);
   this._actionTimers.push(fireTimer);
 
-  const doneTimer = setTimeout(() => {
+  const doneTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'varusE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, (castTime + 0.15) * 1000);
   this._actionTimers.push(doneTimer);
@@ -21143,7 +21237,7 @@ CharacterController.prototype._varusCastR = function(mouseWorldPoint, free = fal
   this.playFirstAvailable(['Spell4'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
 
   const castTime = 0.242; // bin mCastTime(≈0.2419) - SKILL_TIMING_DATABASE.varus.R와 동일한 수치
-  const fireTimer = setTimeout(() => {
+  const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'varusR') return;
     this.currentPhase = 'ACTIVE';
     const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
@@ -21159,7 +21253,7 @@ CharacterController.prototype._varusCastR = function(mouseWorldPoint, free = fal
   }, castTime * 1000);
   this._actionTimers.push(fireTimer);
 
-  const doneTimer = setTimeout(() => {
+  const doneTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'varusR') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, (castTime + 0.2) * 1000);
   this._actionTimers.push(doneTimer);
@@ -21189,7 +21283,7 @@ CharacterController.prototype._varusRHit = function(firstUnit, dir) {
   const tickMs = Math.max(50, (r.spreadTickInterval || 0.5) * 1000);
   const maxTicks = Math.max(1, Math.round((r.spreadTimeWindow || 1.75) / (r.spreadTickInterval || 0.5)));
   let ticks = 0;
-  const spreadTimer = setInterval(() => {
+  const spreadTimer = this._champInterval(() => {
     ticks++;
     let spreadHappened = false;
     for (const src of Array.from(infected)) {
@@ -21203,7 +21297,9 @@ CharacterController.prototype._varusRHit = function(firstUnit, dir) {
     }
     if (ticks >= maxTicks || !spreadHappened) clearInterval(spreadTimer);
   }, tickMs);
-  this._actionTimers.push(spreadTimer); // setInterval id도 clearTimeout()으로 정리 가능(HTML Timers 명세)
+  // 확산은 다른 스킬을 써도 끊기지 않는다(원작). 예전엔 _actionTimers에 넣어 다음 시전의 _clearActionTimers()가 확산을 끊었다.
+  // 챔피언 교체 때만 _champInterval이 정리한다.
+  void spreadTimer;
 };
 
 // 챔피언 전용 매 프레임 훅 - character_controller.js update() 맨 끝에서
@@ -28762,17 +28858,19 @@ const glbErrMsgEl = document.getElementById('glbErrMsg');
 
 function disposeCurrentChampion() {
   if (controller) {
-    controller._clearActionTimers();
+    // GLB를 새로 불러오면 컨트롤러 자체를 버리고 새로 만든다 - 버려지는 컨트롤러의 지연 판정이
+    // 나중에 더미를 때리거나, 잡힌/격리된 대상이 복귀하지 못하는 일이 없게 먼저 정리한다.
+    controller._teardownChampionRuntime();
     controller._clearPending();
-    if (controller._vex) controller._vexClearRRecast();
     clearTimeout(controller._previewTimer);
     if (controller.mixer) controller.mixer.stopAllAction();
     // 요청("채찍에 직접 연결된 상시 발광"): 이 발광 메시는 championRoot의
     // 자식이 아니라 scene에 직접 추가했으므로, championRoot.traverse()
     // 청소만으로는 안 지워진다 - 여기서 따로 정리한다.
     const glow = controller._nilahWeaponRig?.glow;
-    if (glow) {
-      for (const mesh of [glow.meshA, glow.meshB]) {
+    const trail = controller._nilahWeaponRig?.trailRibbon; // 무기 궤적 리본도 scene 직속 - 예전엔 닐라를 불러올 때마다 하나씩 남았다
+    if (glow || trail) {
+      for (const mesh of [glow?.meshA, glow?.meshB, trail]) {
         if (!mesh) continue;
         mesh.geometry?.dispose?.();
         mesh.material?.dispose?.();

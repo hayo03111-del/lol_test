@@ -89,13 +89,13 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
   if (!hitUnit) debugSkillMiss('Ezreal Q', 'no target in line');
 
   };
-  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell1');
   this.playFirstAvailable(['Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const dur = clip ? clip.duration : 0.35;
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ezrealQ') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);
@@ -153,13 +153,13 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   if (!hitUnit) debugSkillMiss('Ezreal W', 'no valid target in line (챔피언/포탑/억제기/넥서스만 반응)');
 
   };
-  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealW') __fire(); }, (w.castTimeSec != null ? w.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealW') __fire(); }, (w.castTimeSec != null ? w.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell2');
   this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const dur = clip ? clip.duration : 0.4;
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ezrealW') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);
@@ -283,12 +283,12 @@ CharacterController.prototype._ezrealCastE = function(mouseWorldPoint, free = fa
   }
 
   };
-  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ezrealE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation(clipName) || this.findAnimation('Spell3_0');
   const dur = clip ? clip.duration : 0.5;
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ezrealE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);
@@ -322,7 +322,7 @@ CharacterController.prototype._ezrealCastR = function(mouseWorldPoint, free = fa
   // 지오메트리로 재현한다 - _ezrealRBow, nilah_vfx_assets_and_runtime.js.
   vfx.spawn('ezrealRBow', this.root.position.clone(), dir, { duration: castTime });
 
-  const fireTimer = setTimeout(() => {
+  const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'ezrealR') return;
     this.currentPhase = 'ACTIVE';
     const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
@@ -346,7 +346,7 @@ CharacterController.prototype._ezrealCastR = function(mouseWorldPoint, free = fa
   }, castTime * 1000);
   this._actionTimers.push(fireTimer);
 
-  const doneTimer = setTimeout(() => {
+  const doneTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ezrealR') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, (castTime + 0.15) * 1000);
   this._actionTimers.push(doneTimer);

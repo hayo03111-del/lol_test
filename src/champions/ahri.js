@@ -146,13 +146,13 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
   vfx.spawn('ahriOrbHit', origin.clone(), undefined, { color: 0x7ff5ff });
 
   };
-  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ahriQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ahriQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell1');
   this.playFirstAvailable(['Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const dur = clip ? clip.duration : 0.3;
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ahriQ') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);
@@ -277,7 +277,7 @@ CharacterController.prototype._ahriCastW = function(mouseWorldPoint, free = fals
     const clip = this.findAnimation('Spell2');
     this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
     const dur = clip ? clip.duration : 0.3;
-    setTimeout(() => {
+    this._champTimeout(() => {
       if (!this.currentActionKey && this.state !== STATE.MOVE && this.currentClipKey === 'Spell2') this._returnToLocomotion();
     }, dur * 1000);
   }
@@ -450,7 +450,7 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   };
 
   };
-  const __castTimer = setTimeout(() => { if (this.currentActionKey === 'ahriE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ahriE') __fire(); }, (e.castTimeSec != null ? e.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation(clipName) || this.findAnimation('Spell3_south');
@@ -458,7 +458,7 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   // 버그 수정: 예전엔 2.77초짜리 클립이 끝날 때까지 행동이 잠겼다. 원작은 시전 시간(0.25초)이 끝나면
   // 바로 이동/공격할 수 있다 - 잠금은 시전 시간 + 0.1초(클립이 그보다 짧으면 클립 길이)만.
   const dur = Math.min(clip ? clip.duration : 0.35, (e.castTimeSec != null ? e.castTimeSec : 0.25) + 0.1);
-  const recTimer = setTimeout(() => {
+  const recTimer = this._champTimeout(() => {
     if (this.currentActionKey === 'ahriE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
   }, dur * 1000);
   this._actionTimers.push(recTimer);

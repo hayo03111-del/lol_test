@@ -30,7 +30,7 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
     if (rawDist > 1e-4) dir.normalize(); else dir.set(0, 0, 1);
     const impactPoint = origin.clone().addScaledVector(dir, Math.min(rawDist, lolRangeToWorld(q.range)));
     vfx.spawn('q', origin);
-    const actionSafety = setTimeout(() => {
+    const actionSafety = this._champTimeout(() => {
       if (this.championId !== 'chogath' || this.currentActionKey !== 'chogathQ') return;
       console.warn('[ACTION SAFETY] chogath Q stale lock cleared');
       this.currentActionKey = null;
@@ -39,7 +39,7 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
       this._resumeAfterAction();
     }, (q.castTime + q.impactDelay + 0.75) * 1000);
     this._actionTimers.push(actionSafety);
-    const t = setTimeout(() => {
+    const t = this._champTimeout(() => {
       // 정확한 파열 폭발 반경이 기획안에 없어(사거리 950은 "시전 가능
       // 거리") 근접 판정 반경(200)으로 근사한다 - 섹션 18 원칙에 따라
       // 새 피해 수치를 만들지는 않았고, 오직 판정 반경만 근사치다.
@@ -52,7 +52,7 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
           const wouldKill = !flB && hpB > 0 && hpB <= dealt; // 실제 입힌 피해(마법 저항 적용 후) 기준
           applyStatus(h.unit, { id: 'chogathQ_knockup', type: 'KNOCKUP', duration: q.knockupDuration, value: 1 }); // 공중에 뜸(예전엔 기절로 처리)
           const unit = h.unit;
-          setTimeout(() => { if (unit.hp > 0) applyStatus(unit, { id: 'chogathQ_slow', type: 'SLOW', duration: q.slowDuration, value: q.slowPercent / 100 }); }, q.knockupDuration * 1000);
+          this._champTimeout(() => { if (unit.hp > 0) applyStatus(unit, { id: 'chogathQ_slow', type: 'SLOW', duration: q.slowDuration, value: q.slowPercent / 100 }); }, q.knockupDuration * 1000);
           if (wouldKill) this._chogathOnKill(h.unit);
         }
         debugSkillHit("Cho'Gath Q", hits[0].unit, { count: hits.length });
@@ -86,7 +86,7 @@ CharacterController.prototype._chogathCastW = function(free, mouseWorldPoint = n
       if (aim.lengthSq() > 1e-6) { forward = aim.normalize(); this.faceDirectionInstant(forward); }
     }
     vfx.spawn('w', this.root.position.clone());
-    const t = setTimeout(() => {
+    const t = this._champTimeout(() => {
       const hits = findEnemiesInRadius(this.root.position, w.range, { forward, maxAngleDeg: w.coneAngleDeg / 2 });
       if (hits.length) {
         for (const h of hits) {
@@ -182,7 +182,7 @@ CharacterController.prototype._chogathCastR = function(free) {
     this.setState(STATE.R_CAST);
     this.currentActionKey = 'chogathR'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
     this.playFirstAvailable((this.actionData?.rCast?.clips) || ['Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
-    const t = setTimeout(() => {
+    const t = this._champTimeout(() => {
       if (this.currentActionKey !== 'chogathR') return;
       this.currentActionKey = null; this.currentPhase = null;
       if (target && target.hp > 0) { vfx.spawn('r', this.root.position.clone()); this._chogathROnHit(target); }
