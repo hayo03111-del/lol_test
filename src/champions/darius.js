@@ -164,6 +164,8 @@ CharacterController.prototype._dariusROnHit = function(target) {
     const hpBefore = target.hp, floored = isFlooredTrainingDummy(target);
     const dealtR = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isAbility: true }) || 0;
     const killed = hpBefore > 0 && hpBefore <= dealtR && !floored;
+    // PC 위키(Hemorrhage): 단두대는 피해를 준 뒤 출혈 중첩을 1 건다(예전엔 누락). 피해 계산에는 시전 전 중첩만 쓴다.
+    if (!killed && target.hp > 0) this._dariusApplyBleed(target);
     // 버그 수정(요청 5-⑥ "재사용 가능 상태 UI 반영"): _rRecastReadyUntil은
     // _castR()의 마나/쿨다운 게이트를 우회시켜 실제로는 즉시 재사용이
     // 가능했지만, this.cooldowns.R 자체는 처치 전에 걸어둔 원래 쿨다운

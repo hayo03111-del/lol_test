@@ -127,8 +127,12 @@ CharacterController.prototype._settGritTick = function(dt) {
 CharacterController.prototype._settShieldDecayTick = function(dt) { 
     if (this.championId !== 'sett' || !this._sett.wShieldDecayPerSec || this.shield <= 0) return;
     if (this._sett.wShieldDecayStartAt && performance.now() < this._sett.wShieldDecayStartAt) return;
-    this.shield = Math.max(0, this.shield - this._sett.wShieldDecayPerSec * dt);
-    if (this.shield <= 0) this._sett.wShieldDecayPerSec = 0;
+    // W 몫만 감소한다(다른 보호막까지 같이 깎던 것 수정). 피해로 먼저 깎였으면 남은 몫 기준.
+    const portion = Math.min(this._sett.wShieldLeft || 0, this.shield);
+    const dec = Math.min(portion, this._sett.wShieldDecayPerSec * dt);
+    this.shield = Math.max(0, this.shield - dec);
+    this._sett.wShieldLeft = portion - dec;
+    if (this._sett.wShieldLeft <= 0) this._sett.wShieldDecayPerSec = 0;
     updateBars(this);
   
 };
@@ -170,7 +174,10 @@ CharacterController.prototype._settWApplyShield = function() {
     // 감쇠는 "그 시점의 실제 남은 값"에서 계속 이어지고, 공식으로 다시
     // 큰 값을 덮어씌우지 않는다.
     const shieldAmt = spent * getShieldReceivedMultiplier(this); // 소모한 투지의 100% = 보호막(보호막 효과 증가 적용)
-    this.shield = Math.max(this.shield, shieldAmt);
+    // 버그 수정(기제 점검): 원작은 서로 다른 보호막이 더해진다 - 예전엔 max(기존, W)라 다른 보호막과 합쳐지지 않았다.
+    // 이전 W 보호막이 남아 있으면 그 몫은 새 W로 교체한다.
+    this.shield = Math.max(0, (this.shield || 0) - Math.min(this._sett.wShieldLeft || 0, this.shield || 0)) + shieldAmt;
+    this._sett.wShieldLeft = shieldAmt;
     // PC 위키: 보호막은 3초 지속, 0.75초 뒤부터 남은 2.25초에 걸쳐 0까지 감소한다.
     const decayDelay = w.shieldDecayDelaySec || 0;
     this._sett.wShieldDecayStartAt = performance.now() + decayDelay * 1000;

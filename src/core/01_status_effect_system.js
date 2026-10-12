@@ -111,7 +111,8 @@ function applyStatus(target, effect) {
     // 분류만 재사용). target.passiveState가 있는 경우(=실제 CharacterController,
     // 더미 등 단순 유닛 객체는 passiveState가 없으므로 자동으로 제외됨)에만
     // 갱신한다.
-    if (target.passiveState) target.passiveState.lastEnemySkillHitAt = now;
+    // PC 위키: "적 챔피언 스킬·소환사 주문에 맞으면" - 걸어온 쪽이 챔피언(또는 출처 미상)일 때만.
+    if (target.passiveState && (!effect.source || effect.source.isChampion) && effect.source !== target) target.passiveState.lastEnemySkillHitAt = now;
   }
   // 태양의 썰매(썰매 질주)/밴들파이프(팡파르)/제국의명령(명령) - "적
   // 챔피언을 둔화 또는 이동 불가 상태로 만들면" 발동하는 공용 훅. 모든

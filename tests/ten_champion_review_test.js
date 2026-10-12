@@ -15,6 +15,7 @@ const near = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
 
 let now = 1000000;
 let timers = [];
+let lastIntervalFn = null; // setInterval은 마지막 콜백만 잡아 두고 테스트에서 직접 호출한다
 let timerSeq = 0;
 function fakeSetTimeout(fn, ms) { const id = ++timerSeq; timers.push({ id, fn, at: now + Math.max(0, ms || 0) }); return id; }
 function fakeClearTimeout(id) { timers = timers.filter((t) => t.id !== id); }
@@ -56,6 +57,7 @@ const stubs = {
   performance: { now: () => now },
   console: { log() {}, warn() {}, error: console.error },
   setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout, clearInterval: () => {},
+  setInterval: (fn) => { lastIntervalFn = fn; return 4242; },
   controller: null,
   PLAYER_TEAM: 'BLUE', ENEMY_TEAM: 'RED',
   getArmorShredPercent: () => 0, getMagicDamageReductionPercent: () => 0, getMrShredFlat: () => 0,
@@ -345,6 +347,40 @@ function clearPlaced() { stubs.placedDummies.length = 0; }
   advance(260);
   c._vexTickE(5.0);
   assert(getSlowPercent(e) > 0, '벡스 E: 착탄 범위 둔화');
+}
+{
+  // 가렌 인내심: 챔피언·포탑·에픽 몬스터에게 "실제로" 피해를 입었을 때만 멈춘다(PC 위키)
+  const c = makeChamp('garen', [], { hp: 1000, maxHp: 2000 });
+  c.passiveState.lastDamageTakenAt = 0;
+  c.takeDamage(50, { isMinion: true }, 'PHYSICAL');
+  assert(c.passiveState.lastDamageTakenAt === 0, '가렌 인내심: 미니언 피해로는 멈추지 않는다');
+  c.shield = 100; c.takeDamage(50, { isChampion: true }, 'PHYSICAL');
+  assert(c.passiveState.lastDamageTakenAt === 0, '가렌 인내심: 보호막에 전부 막힌 피해로는 멈추지 않는다');
+  c.shield = 0; c.takeDamage(50, { isChampion: true }, 'PHYSICAL');
+  assert(c.passiveState.lastDamageTakenAt === now, '가렌 인내심: 챔피언에게 실제 피해를 입으면 멈춘다');
+  c.passiveState.lastDamageTakenAt = 0; c.takeDamage(50, { isTurret: true }, 'PHYSICAL');
+  assert(c.passiveState.lastDamageTakenAt === now, '가렌 인내심: 포탑 피해로도 멈춘다');
+}
+{
+  // 다리우스 R: 피해를 준 뒤 출혈 1중첩(PC 위키 Hemorrhage)
+  const c = makeChamp('darius');
+  const t = makeEnemy(0, 1);
+  c._dariusROnHit(t);
+  assert(c._dariusLiveStacks(t) === 1, '다리우스 R: 단두대 적중 후 출혈 1중첩');
+}
+{
+  // 모데카이저 W 보호막: 피해로 깎인 보호막이 감소 틱에 되살아나지 않고, 다른 보호막을 덮어쓰지 않는다
+  const c = makeChamp('mordekaiser', [], { maxHp: 2000 });
+  c.shield = 100; c._morde.dealtBank = 0;
+  c._mordeWOnCast();
+  const w = 2000 * 0.05; // 최소 5%
+  assert(Math.abs(c.shield - (100 + w)) < 1e-6, '모데카이저 W: 기존 보호막에 더해진다(덮어쓰지 않음)');
+  c.shield -= 80; // 피해로 80 흡수
+  const before = c.shield;
+  lastIntervalFn(); // 감소 1틱
+  assert(c.shield <= before + 1e-9, '모데카이저 W: 감소 틱이 피해로 깎인 보호막을 되살리지 않는다');
+  const healBefore = c.hp; c._mordeWOnRecast();
+  assert(c.hp > healBefore && c._morde.wShieldLeft === 0, '모데카이저 W: 재시전 시 W 몫만 회복으로 전환');
 }
 {
   // 다리우스 R: 시전 후 0.25초 Q/E 불가(PC 위키 Noxian Guillotine)

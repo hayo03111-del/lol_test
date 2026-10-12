@@ -54,7 +54,7 @@ node tests/some_test.js
 찍은 뒤 `process.exitCode = 1`만 설정하고 계속 진행한다 - 한 파일 안의
 여러 문제를 한 번에 다 보기 위해서다.
 
-## 테스트 범위(2026-10 기준, 36개 파일 / 약 2,210개 assert)
+## 테스트 범위(2026-10 기준, 36개 파일 / 약 2,230개 assert)
 
 | 파일 | 다루는 영역 |
 |---|---|
@@ -125,6 +125,9 @@ devDependency로 추가하고 CI에 Chromium 설치 단계를 넣는 작업이 �
    `node tests/run_all.js`로 전체 회귀가 깨지지 않았는지 확인한다.
 
 ## 실제 챔피언 GLB로 브라우저 E2E 확인(`tools/e2e_glb/`)
+
+기제 점검(11차 추가): `GLB_DIR=<glb 폴더> THREE_DIR=<three package> node tools/e2e_glb/mechanics_check.js [챔피언...]`(스킬별 피해·상태이상·이동·보호막 기록)와
+`node tools/e2e_glb/combo_check.js [챔피언...]`(연계 기제 시간표 실행)를 쓴다. 결과는 JSON으로 출력되고, GLB는 저장소에 넣지 않는다.
 
 챔피언 모델(.glb)은 저장소에 없다(사용자가 직접 올리는 파일). 모델이 있을 때는
 헤드리스 Chromium에서 실제 UI로 불러와 평타/Q/W/E/R을 실행해 볼 수 있다:

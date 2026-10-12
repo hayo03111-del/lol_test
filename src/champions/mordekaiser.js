@@ -110,7 +110,11 @@ CharacterController.prototype._mordeWOnCast = function() {
     const w = cd.W;
     const banked = this._morde.dealtBank || 0;
     const shieldAmt = THREE.MathUtils.clamp(banked, this.maxHp * (w.minShieldMaxHpPercent / 100), this.maxHp * (w.maxShieldMaxHpPercent / 100)) * getShieldReceivedMultiplier(this);
-    this.shield = shieldAmt;
+    // 버그 수정(실제 게임 기제 점검): 예전엔 다른 보호막을 덮어썼고(this.shield = W 보호막), 감소 틱마다
+    // this.shield를 "감소 곡선 값"으로 다시 써서 피해로 깎인 보호막이 다음 틱에 되살아났다.
+    // 이제 W 몫(wShieldLeft)만 따로 추적해 더하고, 감소는 그 몫을 줄이기만 한다.
+    this.shield = Math.max(0, (this.shield || 0) - (this._morde.wShieldLeft || 0)) + shieldAmt;
+    this._morde.wShieldLeft = shieldAmt;
     this._morde.dealtBank = 0;
     this._morde.shieldStartAmount = shieldAmt;
     clearTimeout(this._morde.shieldDecayTimer);
@@ -129,7 +133,11 @@ CharacterController.prototype._mordeWOnCast = function() {
     const decayTimer = setInterval(() => {
       if (this.championId !== 'mordekaiser' || this._morde.shieldDecayTimer !== decayTimer) { clearInterval(decayTimer); return; }
       step++;
-      this.shield = Math.max(0, shieldAmt * (1 - step / decaySteps));
+      const portion = Math.min(this._morde.wShieldLeft || 0, this.shield || 0); // 피해로 이미 깎인 만큼은 반영된 W 몫
+      const target = Math.min(portion, Math.max(0, shieldAmt * (1 - step / decaySteps)));
+      this.shield = Math.max(0, (this.shield || 0) - (portion - target));
+      this._morde.wShieldLeft = target;
+      updateBars(this);
       if (step >= decaySteps) clearInterval(decayTimer);
     }, (w.shieldDecayDuration * 1000) / decaySteps);
     this._morde.shieldDecayTimer = decayTimer;
@@ -141,12 +149,14 @@ CharacterController.prototype._mordeWOnRecast = function() {
     const cd = this._champData(); if (!cd) return;
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
-    const heal = this.shield * (skillVal(w.recastHealPercentByLevel, lvl) / 100);
+    const wPortion = Math.min(this._morde.wShieldLeft || 0, this.shield || 0); // W 보호막 남은 몫만 회복으로 전환
+    const heal = wPortion * (skillVal(w.recastHealPercentByLevel, lvl) / 100);
     // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소) - 보호막을 체력으로
     // "전환"하는 것도 결과적으로는 체력 회복이라 적용 대상이다(보호막
     // 자체의 생성/소멸은 영향받지 않는다 - 전환된 "이후"의 체력 회복량만 달라진다).
     this.hp = Math.min(this.maxHp, this.hp + heal * getHealReceivedMultiplier(this));
-    this.shield = 0;
+    this.shield = Math.max(0, (this.shield || 0) - wPortion);
+    this._morde.wShieldLeft = 0;
     clearTimeout(this._morde.shieldDecayTimer);
     updateBars(this);
   

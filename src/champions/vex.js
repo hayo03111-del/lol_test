@@ -28,9 +28,12 @@ CharacterController.prototype._vexCastR = function(free = false) {
       }
       this._clearActionTimers();
       const start = this.root.position.clone();
-      const end = getWorldPosition(target)?.clone() || target.mesh.position.clone();
-      const dir = new THREE.Vector3().subVectors(end, start); dir.y = 0;
+      const tp = getWorldPosition(target)?.clone() || target.mesh.position.clone();
+      const dir = new THREE.Vector3().subVectors(tp, start); dir.y = 0;
       if (dir.lengthSq() > 1e-6) this.faceDirectionInstant(dir.normalize());
+      // 대상 중심이 아니라 두 유닛 충돌 반경만큼 앞에서 멈춘다(예전엔 대상과 겹쳤다).
+      const end = tp.clone().addScaledVector(dir, -(getCollisionRadius(target) + (this.collisionRadius || 0)));
+      end.y = start.y;
       this._vex.dashActive = true;
       this._vex.dashStart = start;
       this._vex.dashEnd = end;
@@ -41,7 +44,11 @@ CharacterController.prototype._vexCastR = function(free = false) {
       this.setState(STATE.R_CAST);
       this.playFirstAvailable(['Spell4_Dash', 'Spell4_Attack', 'Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
       const hitTimer = setTimeout(() => {
-        if (!this._vex.dashActive) return;
+        // 버그 수정(실제 게임 기제 점검): 예전엔 "아직 돌진 중인가(dashActive)"를 확인했는데, 매 프레임 갱신이 같은
+        // 0.28초 시점에 먼저 dashActive를 끄면 이 타이머가 그냥 끝나 재시전 피해가 안 들어가고 행동 키도 남았다.
+        if (this.currentActionKey !== 'vexRRecast') return;
+        this._vex.dashActive = false;
+        if (this._vex.dashEnd) this.root.position.copy(this._vex.dashEnd);
         const t = this._vex.recastTarget;
         if (t && t.hp > 0 && !t.isDead && !t.destroyed) {
           const raw = skillVal(rd.recastDamageByLevel, lvl) + (rd.recastApRatio || 0) * (this.stats.abilityPower || 0);

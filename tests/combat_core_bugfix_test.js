@@ -186,8 +186,13 @@ function skillValLocal(byLevel, lvl) {
   ctrl._sett.gritEntries = [{ amount: 50, gainedAt: now }];
   ctrl._sett.grit = 50;
   ctrl._settWApplyShield();
-  assert(ctrl.shield === 100, '세트 W 반복 시전 2회차: 새 투지(50)가 기존 보호막(100)보다 작으면 보호막은 줄어들지 않는다(Math.max 유지)');
-  assert(ctrl._sett.wPendingSpent === 50, '세트 W 반복 시전 2회차: 두 번째 시전의 피해 계산용 수치는 이번에 소모한 양(50)으로 갱신된다');
+  assert(ctrl.shield === 50, '세트 W 반복 시전 2회차: 같은 W 보호막은 새 값으로 교체된다(중첩하지 않음)');
+  // 다른 출처 보호막과는 더해진다(원작 - 서로 다른 보호막은 합산).
+  ctrl.shield += 30;
+  ctrl._sett.gritEntries = [{ amount: 40, gainedAt: now }]; ctrl._sett.grit = 40;
+  ctrl._settWApplyShield();
+  assert(ctrl.shield === 30 + 40, '세트 W: 다른 보호막(30)은 남고 새 W 보호막(40)이 더해진다');
+  assert(ctrl._sett.wPendingSpent === 40, '세트 W 반복 시전: 피해 계산용 수치는 이번에 소모한 양으로 갱신된다');
 }
 
 // ========================================================================

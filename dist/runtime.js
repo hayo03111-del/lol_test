@@ -797,7 +797,8 @@ function applyStatus(target, effect) {
     // 분류만 재사용). target.passiveState가 있는 경우(=실제 CharacterController,
     // 더미 등 단순 유닛 객체는 passiveState가 없으므로 자동으로 제외됨)에만
     // 갱신한다.
-    if (target.passiveState) target.passiveState.lastEnemySkillHitAt = now;
+    // PC 위키: "적 챔피언 스킬·소환사 주문에 맞으면" - 걸어온 쪽이 챔피언(또는 출처 미상)일 때만.
+    if (target.passiveState && (!effect.source || effect.source.isChampion) && effect.source !== target) target.passiveState.lastEnemySkillHitAt = now;
   }
   // 태양의 썰매(썰매 질주)/밴들파이프(팡파르)/제국의명령(명령) - "적
   // 챔피언을 둔화 또는 이동 불가 상태로 만들면" 발동하는 공용 훅. 모든
@@ -1624,7 +1625,7 @@ const CHAMPION_DATA = {
     E: {
       name: '심판', cooldown: [9, 8.25, 7.5, 6.75, 6], mana: 0, range: 325, spinDuration: 3, baseHits: 7,
       perHitDamageByLevel: [4, 7, 10, 13, 16], adRatioByLevel: [0.4, 0.43, 0.46, 0.49, 0.52],
-      nearestBonusPercent: 25, critMultiplier: 1.3,
+      nearestBonusPercent: 25, critMultiplier: 1.3, nonChampionDamagePercent: 75, // PC 위키: 미니언·몬스터 75%
       armorShredPercent: 25, armorShredDuration: 6, armorShredHitsNeeded: 6,
       damageType: 'PHYSICAL',
     },
@@ -13132,6 +13133,8 @@ CharacterController.prototype.updateEChannel = function(dt) {
           for (const h of hits) {
             let dmg = skillVal(eData.perHitDamageByLevel, lvl) + skillVal(eData.adRatioByLevel, lvl) * this.stats.attackDamage;
             if (h.unit === nearest.unit) dmg *= 1 + eData.nearestBonusPercent / 100;
+            // PC 위키: 미니언·몬스터에게는 75% 피해(예전엔 챔피언과 같은 피해).
+            if (!h.unit.isChampion) dmg *= (eData.nonChampionDamagePercent ?? 75) / 100;
             const willCrit = Math.random() < this.stats.critChance;
             // 치명타(PC 위키): 회전당 피해 130%, 무한의 대검 등 추가 치명타 피해는 30% 효율로만
             // 반영. 예전엔 무한의 대검 보너스가 100% 그대로 더해졌다.
@@ -13410,7 +13413,6 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
       this.setState(STATE.IDLE);
       this.playFirstAvailable(this.championId === 'yasuo' ? ['Idle1_Raw'] : this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.12 });
     }
-    this.passiveState.lastDamageTakenAt = performance.now(); // 가렌 인내심: 피해를 입으면 무피해 타이머 리셋
     if (this.championId === 'renekton') this._renektonMarkCombat();
     // 마법 피해는 일반+마법 피해 감소를 함께 곱연산(getMagicDamageReductionPercent가 둘 다 포함).
     let reduction = damageType === DAMAGE_TYPE.MAGICAL ? getMagicDamageReductionPercent(this, source) : getDamageReductionPercent(this, source);
@@ -13430,6 +13432,10 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     // "받은 피해 축적"도 동일한 성격의 값이라 같이 바로잡는다.
     if (this.shield > 0) { const absorb = Math.min(this.shield, remaining); this.shield -= absorb; remaining -= absorb; }
     const actualHpLoss = Math.min(remaining, this.hp);
+    // 가렌 인내심(PC 위키): 챔피언·포탑·에픽 몬스터에게 "실제로" 피해를 입었을 때만 8초 멈춘다.
+    // 보호막에 전부 막혔거나 0으로 줄어든 피해, 미니언·우물(지속 피해) 피해는 멈추지 않는다.
+    // 예전엔 출처와 무관하게, 보호막에 막힌 피해까지 모두 리셋했다. 출처를 모르는 피해(null)는 보수적으로 리셋한다.
+    if (actualHpLoss > 0 && (!source || source.isChampion || source.isTurret || source.isEpicMonster)) this.passiveState.lastDamageTakenAt = performance.now();
     if (this.championId === 'sett') this._settOnTakeDamageForGrit(actualHpLoss); // 패시브(투기장의 투지): 실제 HP 피해량 기준으로 투지 축적
     // 버그 수정(치명적 - 평타 시 멈춤): 이 호출은 원래 _onBasicAttackHit()
     // (자신이 적을 때렸을 때)에 존재하지 않는 actualHpLoss 변수를 참조하는
@@ -13838,6 +13844,8 @@ CharacterController.prototype._dariusROnHit = function(target) {
     const hpBefore = target.hp, floored = isFlooredTrainingDummy(target);
     const dealtR = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isAbility: true }) || 0;
     const killed = hpBefore > 0 && hpBefore <= dealtR && !floored;
+    // PC 위키(Hemorrhage): 단두대는 피해를 준 뒤 출혈 중첩을 1 건다(예전엔 누락). 피해 계산에는 시전 전 중첩만 쓴다.
+    if (!killed && target.hp > 0) this._dariusApplyBleed(target);
     // 버그 수정(요청 5-⑥ "재사용 가능 상태 UI 반영"): _rRecastReadyUntil은
     // _castR()의 마나/쿨다운 게이트를 우회시켜 실제로는 즉시 재사용이
     // 가능했지만, this.cooldowns.R 자체는 처치 전에 걸어둔 원래 쿨다운
@@ -14151,8 +14159,12 @@ CharacterController.prototype._settGritTick = function(dt) {
 CharacterController.prototype._settShieldDecayTick = function(dt) { 
     if (this.championId !== 'sett' || !this._sett.wShieldDecayPerSec || this.shield <= 0) return;
     if (this._sett.wShieldDecayStartAt && performance.now() < this._sett.wShieldDecayStartAt) return;
-    this.shield = Math.max(0, this.shield - this._sett.wShieldDecayPerSec * dt);
-    if (this.shield <= 0) this._sett.wShieldDecayPerSec = 0;
+    // W 몫만 감소한다(다른 보호막까지 같이 깎던 것 수정). 피해로 먼저 깎였으면 남은 몫 기준.
+    const portion = Math.min(this._sett.wShieldLeft || 0, this.shield);
+    const dec = Math.min(portion, this._sett.wShieldDecayPerSec * dt);
+    this.shield = Math.max(0, this.shield - dec);
+    this._sett.wShieldLeft = portion - dec;
+    if (this._sett.wShieldLeft <= 0) this._sett.wShieldDecayPerSec = 0;
     updateBars(this);
   
 };
@@ -14194,7 +14206,10 @@ CharacterController.prototype._settWApplyShield = function() {
     // 감쇠는 "그 시점의 실제 남은 값"에서 계속 이어지고, 공식으로 다시
     // 큰 값을 덮어씌우지 않는다.
     const shieldAmt = spent * getShieldReceivedMultiplier(this); // 소모한 투지의 100% = 보호막(보호막 효과 증가 적용)
-    this.shield = Math.max(this.shield, shieldAmt);
+    // 버그 수정(기제 점검): 원작은 서로 다른 보호막이 더해진다 - 예전엔 max(기존, W)라 다른 보호막과 합쳐지지 않았다.
+    // 이전 W 보호막이 남아 있으면 그 몫은 새 W로 교체한다.
+    this.shield = Math.max(0, (this.shield || 0) - Math.min(this._sett.wShieldLeft || 0, this.shield || 0)) + shieldAmt;
+    this._sett.wShieldLeft = shieldAmt;
     // PC 위키: 보호막은 3초 지속, 0.75초 뒤부터 남은 2.25초에 걸쳐 0까지 감소한다.
     const decayDelay = w.shieldDecayDelaySec || 0;
     this._sett.wShieldDecayStartAt = performance.now() + decayDelay * 1000;
@@ -19141,7 +19156,11 @@ CharacterController.prototype._mordeWOnCast = function() {
     const w = cd.W;
     const banked = this._morde.dealtBank || 0;
     const shieldAmt = THREE.MathUtils.clamp(banked, this.maxHp * (w.minShieldMaxHpPercent / 100), this.maxHp * (w.maxShieldMaxHpPercent / 100)) * getShieldReceivedMultiplier(this);
-    this.shield = shieldAmt;
+    // 버그 수정(실제 게임 기제 점검): 예전엔 다른 보호막을 덮어썼고(this.shield = W 보호막), 감소 틱마다
+    // this.shield를 "감소 곡선 값"으로 다시 써서 피해로 깎인 보호막이 다음 틱에 되살아났다.
+    // 이제 W 몫(wShieldLeft)만 따로 추적해 더하고, 감소는 그 몫을 줄이기만 한다.
+    this.shield = Math.max(0, (this.shield || 0) - (this._morde.wShieldLeft || 0)) + shieldAmt;
+    this._morde.wShieldLeft = shieldAmt;
     this._morde.dealtBank = 0;
     this._morde.shieldStartAmount = shieldAmt;
     clearTimeout(this._morde.shieldDecayTimer);
@@ -19160,7 +19179,11 @@ CharacterController.prototype._mordeWOnCast = function() {
     const decayTimer = setInterval(() => {
       if (this.championId !== 'mordekaiser' || this._morde.shieldDecayTimer !== decayTimer) { clearInterval(decayTimer); return; }
       step++;
-      this.shield = Math.max(0, shieldAmt * (1 - step / decaySteps));
+      const portion = Math.min(this._morde.wShieldLeft || 0, this.shield || 0); // 피해로 이미 깎인 만큼은 반영된 W 몫
+      const target = Math.min(portion, Math.max(0, shieldAmt * (1 - step / decaySteps)));
+      this.shield = Math.max(0, (this.shield || 0) - (portion - target));
+      this._morde.wShieldLeft = target;
+      updateBars(this);
       if (step >= decaySteps) clearInterval(decayTimer);
     }, (w.shieldDecayDuration * 1000) / decaySteps);
     this._morde.shieldDecayTimer = decayTimer;
@@ -19172,12 +19195,14 @@ CharacterController.prototype._mordeWOnRecast = function() {
     const cd = this._champData(); if (!cd) return;
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
-    const heal = this.shield * (skillVal(w.recastHealPercentByLevel, lvl) / 100);
+    const wPortion = Math.min(this._morde.wShieldLeft || 0, this.shield || 0); // W 보호막 남은 몫만 회복으로 전환
+    const heal = wPortion * (skillVal(w.recastHealPercentByLevel, lvl) / 100);
     // 공용 회복 배율(정령의형상 증폭 + 그리버스 감소) - 보호막을 체력으로
     // "전환"하는 것도 결과적으로는 체력 회복이라 적용 대상이다(보호막
     // 자체의 생성/소멸은 영향받지 않는다 - 전환된 "이후"의 체력 회복량만 달라진다).
     this.hp = Math.min(this.maxHp, this.hp + heal * getHealReceivedMultiplier(this));
-    this.shield = 0;
+    this.shield = Math.max(0, (this.shield || 0) - wPortion);
+    this._morde.wShieldLeft = 0;
     clearTimeout(this._morde.shieldDecayTimer);
     updateBars(this);
   
@@ -19370,9 +19395,12 @@ CharacterController.prototype._vexCastR = function(free = false) {
       }
       this._clearActionTimers();
       const start = this.root.position.clone();
-      const end = getWorldPosition(target)?.clone() || target.mesh.position.clone();
-      const dir = new THREE.Vector3().subVectors(end, start); dir.y = 0;
+      const tp = getWorldPosition(target)?.clone() || target.mesh.position.clone();
+      const dir = new THREE.Vector3().subVectors(tp, start); dir.y = 0;
       if (dir.lengthSq() > 1e-6) this.faceDirectionInstant(dir.normalize());
+      // 대상 중심이 아니라 두 유닛 충돌 반경만큼 앞에서 멈춘다(예전엔 대상과 겹쳤다).
+      const end = tp.clone().addScaledVector(dir, -(getCollisionRadius(target) + (this.collisionRadius || 0)));
+      end.y = start.y;
       this._vex.dashActive = true;
       this._vex.dashStart = start;
       this._vex.dashEnd = end;
@@ -19383,7 +19411,11 @@ CharacterController.prototype._vexCastR = function(free = false) {
       this.setState(STATE.R_CAST);
       this.playFirstAvailable(['Spell4_Dash', 'Spell4_Attack', 'Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
       const hitTimer = setTimeout(() => {
-        if (!this._vex.dashActive) return;
+        // 버그 수정(실제 게임 기제 점검): 예전엔 "아직 돌진 중인가(dashActive)"를 확인했는데, 매 프레임 갱신이 같은
+        // 0.28초 시점에 먼저 dashActive를 끄면 이 타이머가 그냥 끝나 재시전 피해가 안 들어가고 행동 키도 남았다.
+        if (this.currentActionKey !== 'vexRRecast') return;
+        this._vex.dashActive = false;
+        if (this._vex.dashEnd) this.root.position.copy(this._vex.dashEnd);
         const t = this._vex.recastTarget;
         if (t && t.hp > 0 && !t.isDead && !t.destroyed) {
           const raw = skillVal(rd.recastDamageByLevel, lvl) + (rd.recastApRatio || 0) * (this.stats.abilityPower || 0);

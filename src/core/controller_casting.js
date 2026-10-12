@@ -1499,6 +1499,8 @@ CharacterController.prototype.updateEChannel = function(dt) {
           for (const h of hits) {
             let dmg = skillVal(eData.perHitDamageByLevel, lvl) + skillVal(eData.adRatioByLevel, lvl) * this.stats.attackDamage;
             if (h.unit === nearest.unit) dmg *= 1 + eData.nearestBonusPercent / 100;
+            // PC 위키: 미니언·몬스터에게는 75% 피해(예전엔 챔피언과 같은 피해).
+            if (!h.unit.isChampion) dmg *= (eData.nonChampionDamagePercent ?? 75) / 100;
             const willCrit = Math.random() < this.stats.critChance;
             // 치명타(PC 위키): 회전당 피해 130%, 무한의 대검 등 추가 치명타 피해는 30% 효율로만
             // 반영. 예전엔 무한의 대검 보너스가 100% 그대로 더해졌다.

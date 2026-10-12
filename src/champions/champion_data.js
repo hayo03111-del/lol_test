@@ -266,7 +266,7 @@ const CHAMPION_DATA = {
     E: {
       name: '심판', cooldown: [9, 8.25, 7.5, 6.75, 6], mana: 0, range: 325, spinDuration: 3, baseHits: 7,
       perHitDamageByLevel: [4, 7, 10, 13, 16], adRatioByLevel: [0.4, 0.43, 0.46, 0.49, 0.52],
-      nearestBonusPercent: 25, critMultiplier: 1.3,
+      nearestBonusPercent: 25, critMultiplier: 1.3, nonChampionDamagePercent: 75, // PC 위키: 미니언·몬스터 75%
       armorShredPercent: 25, armorShredDuration: 6, armorShredHitsNeeded: 6,
       damageType: 'PHYSICAL',
     },

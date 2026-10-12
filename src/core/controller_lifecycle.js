@@ -60,7 +60,6 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
       this.setState(STATE.IDLE);
       this.playFirstAvailable(this.championId === 'yasuo' ? ['Idle1_Raw'] : this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.12 });
     }
-    this.passiveState.lastDamageTakenAt = performance.now(); // 가렌 인내심: 피해를 입으면 무피해 타이머 리셋
     if (this.championId === 'renekton') this._renektonMarkCombat();
     // 마법 피해는 일반+마법 피해 감소를 함께 곱연산(getMagicDamageReductionPercent가 둘 다 포함).
     let reduction = damageType === DAMAGE_TYPE.MAGICAL ? getMagicDamageReductionPercent(this, source) : getDamageReductionPercent(this, source);
@@ -80,6 +79,10 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     // "받은 피해 축적"도 동일한 성격의 값이라 같이 바로잡는다.
     if (this.shield > 0) { const absorb = Math.min(this.shield, remaining); this.shield -= absorb; remaining -= absorb; }
     const actualHpLoss = Math.min(remaining, this.hp);
+    // 가렌 인내심(PC 위키): 챔피언·포탑·에픽 몬스터에게 "실제로" 피해를 입었을 때만 8초 멈춘다.
+    // 보호막에 전부 막혔거나 0으로 줄어든 피해, 미니언·우물(지속 피해) 피해는 멈추지 않는다.
+    // 예전엔 출처와 무관하게, 보호막에 막힌 피해까지 모두 리셋했다. 출처를 모르는 피해(null)는 보수적으로 리셋한다.
+    if (actualHpLoss > 0 && (!source || source.isChampion || source.isTurret || source.isEpicMonster)) this.passiveState.lastDamageTakenAt = performance.now();
     if (this.championId === 'sett') this._settOnTakeDamageForGrit(actualHpLoss); // 패시브(투기장의 투지): 실제 HP 피해량 기준으로 투지 축적
     // 버그 수정(치명적 - 평타 시 멈춤): 이 호출은 원래 _onBasicAttackHit()
     // (자신이 적을 때렸을 때)에 존재하지 않는 actualHpLoss 변수를 참조하는
