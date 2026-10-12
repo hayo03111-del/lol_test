@@ -19,7 +19,7 @@ globalThis.placedAllies = placedAllies; // 닐라 패시브(_nilahAllyCandidates
 // source(보통 플레이어)를 제외한 살아 있는 아군 챔피언.
 function getAllyChampions(source = null) {
   const out = [];
-  for (const a of placedAllies) if (a && a.hp > 0 && a !== source) out.push(a);
+  for (const a of placedAllies) if (a && a.hp > 0 && a !== source && (!source || typeof canRealmInteract !== 'function' || canRealmInteract(source, a))) out.push(a); // 죽음의 세계 안에서는 바깥 아군과 상호작용 불가
   return out;
 }
 

@@ -47,6 +47,7 @@ class Vector3 {
   length(){return Math.hypot(this.x,this.y,this.z);}
   lengthSq(){return this.x*this.x+this.y*this.y+this.z*this.z;}
   normalize(){const l=this.length()||1;this.x/=l;this.y/=l;this.z/=l;return this;}
+  setLength(n){return this.normalize().multiplyScalar(n);}
   dot(v){return this.x*v.x+this.y*v.y+this.z*v.z;}
   distanceTo(v){return Math.hypot(this.x-v.x,this.y-v.y,this.z-v.z);}
   distanceToSquared(v){const d=this.distanceTo(v);return d*d;}
@@ -74,7 +75,9 @@ const stubs = {
   vfx: { spawn: () => {} },
   document: { getElementById: () => null },
   window: {},
-  THREE: { Vector3, LoopOnce: 2200, LoopRepeat: 2201, MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } },
+  THREE: { Vector3, DoubleSide: 2, RingGeometry: class {}, MeshBasicMaterial: class {}, FogExp2: class {},
+    Mesh: class { constructor() { this.position = new Vector3(); this.rotation = {}; this.userData = {}; this.parent = null; } },
+    LoopOnce: 2200, LoopRepeat: 2201, MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } },
 };
 const context = vm.createContext(stubs);
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -88,7 +91,7 @@ vm.runInContext([
   'src/champions/leesin.js', 'src/champions/nautilus.js', 'src/champions/yasuo.js', 'src/champions/yone.js',
   'src/champions/sett.js', 'src/champions/mordekaiser.js', 'src/champions/renekton.js', 'src/champions/nilah.js',
   'src/champions/chogath.js', 'src/champions/ezreal.js', 'src/champions/ashe.js', 'src/champions/varus.js',
-  'src/champions/vex.js',
+  'src/champions/vex.js', 'src/world/mordekaiser_death_realm.js',
 ].map(read).join('\n') + `
 this.CharacterController = CharacterController;
 this.CHAMPION_DATA = CHAMPION_DATA;
@@ -122,6 +125,9 @@ this.getMrShredFlat = getMrShredFlat;
 this.addShield = addShield;
 this.getShieldById = getShieldById;
 this.BASE_UNIT = BASE_UNIT;
+this.getAllEnemyUnits = getAllEnemyUnits;
+this.getDeathRealm = getDeathRealm;
+this.getFinalAttackSpeed = getFinalAttackSpeed;
 `, context);
 const { CharacterController, CHAMPION_DATA, STATE, applyStatus, applyDamage, getStatus, getSlowPercent,
   getAttackSpeedBuffPercent, getTenacity, computeChampionStats, lolRangeToWorld, setController, worldDistanceToLol, calculateDamage, isStunned, isRooted, tickStatusEffects, getMoveSpeedBuffPercent, getFinalAttackSpeed, getWindupDuration, getDamageReductionPercent, applyMoveSpeedSoftCap, resistDamageMultiplier, prdConstant, isGhosted, vexNotifyEnemyDash } = context;
@@ -542,4 +548,53 @@ stubs.targetRing = { clear() {} };
   let threw = null;
   try { c.applyChampionData('garen'); } catch (e) { threw = e; }
   assert(!threw && t.isGrabbedBySett === false && c.championId === 'garen', `교체 격리: 세트 R 도중 교체해도 오류 없이 대상이 풀린다${threw ? ' (' + threw.message + ')' : ''}`);
+}
+
+// --- 모데카이저 죽음의 세계(원작 이식) ---
+{
+  clearPlaced(); timers = []; // 앞 테스트(세트 사망)의 부활 타이머가 여기서 돌지 않게
+  const realC = CharacterController.prototype.recomputeStats;
+  const c = makeChamp('mordekaiser', [], { recomputeStats: realC, champLevel: 11, bonusMaxHp: 0, itemBonusMaxHp: 0, stats: { attackDamage: 100, abilityPower: 0, armor: 30, magicResist: 30, critChance: 0, critMultiplier: 1.75, bonusAttackSpeedPercent: 0 } });
+  c.recomputeStats(); c.hp = c.maxHp * 0.5;
+  const pos0 = c.root.position.clone();
+  const t = place(makeEnemy(0, lolRangeToWorld(400), { armor: 30, magicResist: 30, attackDamage: 6, attackSpeed: 0.7, abilityPower: 0 }));
+  t.mesh.scale = { v: 1, setScalar(x) { this.v = x; } };
+  c.root.scale = { v: 1, setScalar(x) { this.v = x; } };
+  const outsider = place(makeEnemy(lolRangeToWorld(300), 0));
+  const mat = { opacity: 1, transparent: false, clone() { return { opacity: 1, transparent: false, dispose() {} }; } };
+  const om = { isMesh: true, material: mat };
+  outsider.mesh.userData = {}; outsider.mesh.traverse = (fn) => { fn(outsider.mesh); fn(om); };
+  const maxHp0 = c.maxHp;
+  c._mordeROnHit(t);
+  const realm = context.getDeathRealm(c.realmId);
+  assert(c.root.position.distanceTo(pos0) < 1e-9 && near(t.mesh.position.z, lolRangeToWorld(400)), '모데 R: 순간이동 없이 둘 다 제자리에 남는다(원작 - 일반 맵 위 경기장)');
+  assert(realm && near(realm.radius, lolRangeToWorld(1200)) && near(realm.center.z, lolRangeToWorld(650)) && near(realm.center.x, 0), '모데 R: 반경 1200 경기장, 중심은 대상 방향 650 지점');
+  assert(near(t.armor, 27) && near(t.magicResist, 27) && near(t.maxHp, 2700) && near(t.hp, 2700) && near(t.attackDamage, 5.4) && near(t.attackSpeed, 0.63), '모데 R: 대상 현재 능력치 10% 강탈(방어·마저·최대 체력·공격력·공속)');
+  assert(near(c.bonusArmor, 3) && near(c.bonusMr, 3) && near(c.bonusAD, 0.6) && near(c.maxHp, maxHp0 + 300), '모데 R: 모데카이저가 훔친 만큼 얻는다');
+  assert(near(c.hp / c.maxHp, 0.5), '모데 R: 최대 체력을 얻어도 현재 체력 비율 유지(PC 위키)');
+  assert(near(c._morde.rStolenAsBonus * (c.stats.attackSpeedRatio || c.stats.baseAttackSpeed), 0.07), '모데 R: 대상 공속 10%를 고정 공속으로 얻는다(추가 공속 비율로 환산)');
+  const enemies1 = context.getAllEnemyUnits();
+  assert(enemies1.length === 1 && enemies1[0] === t && context.getAllEnemyUnits(true).includes(outsider), '모데 R: 안에서는 대상만 상호작용, 바깥 목록은 혼령 표시용으로만 조회');
+  assert(om.material !== mat && om.material.opacity < 0.5, '모데 R: 바깥 유닛은 반투명 혼령으로 보인다');
+  advance(300); c._mordeUpdateR();
+  assert(near(c.root.scale.v, 1.1) && near(t.mesh.scale.v, 0.9), '모데 R: 크기 모데카이저 +10%, 대상 -10%(0.25초에 걸쳐)');
+  // 경계: 경기장 밖으로 밀려나면(돌진·이동) 경계 안으로 되돌린다
+  c.root.position.set(0, 0, -lolRangeToWorld(2000));
+  c._mordeUpdateR();
+  assert(c.root.position.distanceTo(realm.center) <= realm.radius + 1e-6, '모데 R: 경계는 통과할 수 없다(경계 안으로 되돌림)');
+  const posBeforeEnd = c.root.position.clone();
+  advance(7000); c._mordeUpdateR();
+  assert(!c._morde.isInDeathRealm && c.realmId === 'main' && t.realmId === 'main', '모데 R: 7초 뒤 종료, 둘 다 일반 세계로');
+  assert(c.root.position.distanceTo(posBeforeEnd) < 1e-9, '모데 R: 끝나도 들어가기 전 위치로 되돌리지 않는다(그 자리에서 복귀)');
+  assert(near(t.armor, 30) && near(t.maxHp, 3000) && near(t.attackDamage, 6) && near(c.bonusArmor, 0) && near(c.maxHp, maxHp0), '모데 R: 종료 시 훔친 능력치 반환');
+  assert(om.material === mat && !context.getDeathRealm('deathRealm_1'), '모데 R: 종료 시 혼령 표시·경기장 정리');
+  // 대상이 안에서 죽으면 부활할 때까지 유지
+  c.cooldowns.R = 0; t.hp = 3000;
+  c._mordeROnHit(t);
+  t.hp = 0; c._mordeUpdateR();
+  assert(!c._morde.isInDeathRealm && c._morde.rKept && c.bonusArmor > 0, '모데 R: 대상이 안에서 죽으면 일찍 끝나고 훔친 능력치는 유지');
+  c._mordeUpdateR();
+  assert(c._morde.rKept && c.bonusArmor > 0, '모데 R: 대상이 죽어 있는 동안 계속 유지');
+  t.hp = 1000; c._mordeUpdateR();
+  assert(!c._morde.rKept && near(c.bonusArmor, 0) && near(c.maxHp, maxHp0), '모데 R: 대상이 부활하면 유지하던 능력치 반환');
 }

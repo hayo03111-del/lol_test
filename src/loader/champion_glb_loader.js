@@ -1386,8 +1386,8 @@ function tickOneDummy(unit, dt) {
   if (isStunned(unit)) return;
   const dist = getHorizontalDistance(unit.mesh.position, controller.root.position);
   if (dist <= unit.attackRange && unit.attackCooldown <= 0) {
-    unit.attackCooldown = 1.4;
-    applyDamage(controller, { rawDamage: 6, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+    unit.attackCooldown = 1 / (unit.attackSpeed || 1 / 1.4);
+    applyDamage(controller, { rawDamage: unit.attackDamage ?? 6, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
   }
 }
 function updateDummyAI(dt) {

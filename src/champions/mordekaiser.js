@@ -172,119 +172,186 @@ CharacterController.prototype._mordeEOnCast = function(target) {
 };
 
 // Extracted from CharacterController: _mordeROnHit
+// 죽음의 세계(PC 위키 Realm of Death, V26.15 기준):
+// - 대상 적 챔피언과 함께 7초 동안 죽음의 세계로 들어간다. 둘 다 제자리에 남고, 일반 맵 위에 반경 1200
+//   경기장이 생긴다(경계 통과 불가). 바깥 유닛과는 서로 보거나 상호작용할 수 없고 위치만 보인다.
+// - 대상의 현재 능력치 10%를 훔친다: 체력(최대 체력), 공격력, 주문력, 공격 속도, 방어력, 마법 저항.
+//   모데카이저는 최대 체력을 얻을 때 현재 체력 비율을 유지한다. 대상 체력이 훔칠 양보다 적으면 1이 된다.
+//   크기는 모데카이저 자신 크기의 +10%, 대상 자신 크기의 -10%로 약 0.25초 동안 바뀐다.
+// - 둘 중 하나가 죽으면 일찍 끝난다. 대상이 안에서 죽으면 훔친 능력치를 대상이 부활할 때까지 유지한다.
 CharacterController.prototype._mordeROnHit = function(target) { 
     const cd = this._champData(); if (!cd) return;
     const r = cd.R;
-    // 요청(명세 27절 "이미 죽음의 세계에 들어가 있는 동안 R 재입력 시
-    // 새로운 R 생성 금지"): _castR()에서도 동일한 조건으로 한 번 더 막지만,
-    // 이 함수 자체도 방어적으로 재진입을 막아 stolenArmor/stolenMr이
-    // 실수로 두 번 누적되는 일을 원천 차단한다(명세 21절 "중복 modifier
-    // 방지").
+    // 재진입 방지(이미 죽음의 세계 안이면 새로 만들지 않는다 - 훔친 능력치가 두 번 쌓이지 않게).
     if (this._morde.isInDeathRealm) return;
-    // 이 데모는 더미의 공격력/공격속도/최대체력이 실제 전투 결과에 별 영향을
-    // 주지 않으므로(더미는 플레이어를 거의 위협하지 못함), "훔친 능력치"
-    // 효과 중 실제로 체감되는 방어력/마법저항력만 상호 반영한다(섹션 18
-    // "기획안에 없는 수치를 임의로 만들지 않는다"는 원칙 아래, 게임에 영향이
-    //없는 나머지 스탯까지 억지로 흉내내지 않기로 함).
-    const stolenArmor = target.armor * (r.statStealPercent / 100);
-    const stolenMr = target.magicResist * (r.statStealPercent / 100);
-    target.armor -= stolenArmor; target.magicResist -= stolenMr;
-    this.bonusArmor = (this.bonusArmor || 0) + stolenArmor;
-    this.bonusMr = (this.bonusMr || 0) + stolenMr;
-    this.recomputeStats();
-    // 버그 수정(명세 15/16/21절): 예전엔 여기서 this._champTimeout(r.duration)
-    // 하나로만 스탯을 되돌렸다 - 그 타이머는 대상/자신이 먼저 죽어도 멈추지
-    // 않고 그대로 살아있어서, 이미 _mordeEndDeathRealm() 등으로 다른 경로가
-    // 먼저 정리한 뒤에도 나중에 또 한 번 실행되며 음수 방어력처럼 잘못된
-    // 결과를 만들 수 있었다. 이제 되돌리는 로직은 _mordeEndDeathRealm()
-    // 하나로 모으고, 여기서는 훔친 양과 종료 시각만 상태로 저장한다 -
-    // 실제 되돌리기는 _mordeUpdateR()의 매 프레임 tick(지속시간 만료/대상
-    // 사망 감지)이나 _die()(자신 사망 감지) 중 먼저 도달하는 쪽이 호출한다.
+    // 이전 R로 대상이 죽어 아직 들고 있던 능력치가 있으면 새 R 전에 정리한다(같은 능력치가 겹치지 않게).
+    if (this._morde.rKept) this._mordeReleaseSteal('recast');
+    const pct = (r.statStealPercent || 10) / 100;
+    const tStats = target.stats || null; // 챔피언 컨트롤러면 stats, 허수아비면 자기 필드
+    const read = (statKey, fieldKey) => (tStats && typeof tStats[statKey] === 'number') ? tStats[statKey] : (typeof target[fieldKey] === 'number' ? target[fieldKey] : 0);
+    const targetAs = tStats ? getFinalAttackSpeed(tStats) : (target.attackSpeed || 0);
+    const steal = {
+      armor: read('armor', 'armor') * pct,
+      mr: read('magicResist', 'magicResist') * pct,
+      maxHp: (target.maxHp || 0) * pct,
+      ad: read('attackDamage', 'attackDamage') * pct,
+      ap: read('abilityPower', 'abilityPower') * pct,
+      asFlat: targetAs * pct,
+    };
+    // 모데카이저가 얻는 공격 속도는 "고정 공속"이라 추가 공속 비율로 바꿔 넣는다(총 공속 = 기본 + 계수 × 추가).
+    const myRatio = this.stats.attackSpeedRatio || this.stats.baseAttackSpeed || 0.625;
+    steal.asBonus = steal.asFlat / myRatio;
+    // 대상에게서 뺀다(허수아비는 자기 필드를 직접 깎는다 - 챔피언 대상이면 그쪽 bonus 필드).
+    this._mordeApplyStealToTarget(target, steal, -1);
+    const prevTargetHp = target.hp;
+    target.maxHp = Math.max(1, (target.maxHp || 0) - steal.maxHp);
+    target.hp = Math.max(1, Math.min(target.maxHp, (prevTargetHp || 0) - steal.maxHp));
+    // 모데카이저에게 더한다(현재 체력 비율 유지).
+    this._mordeApplyStealToSelf(steal, +1);
     this._morde.isInDeathRealm = true;
     this._morde.rTarget = target;
     this._morde.rEndsAt = performance.now() + r.duration * 1000;
-    this._morde.rStolenArmor = stolenArmor;
-    this._morde.rStolenMr = stolenMr;
-    // ---- 죽음의 세계 공간 분리(신규 명세 1~5/13/14/22/23) ----
-    // 원래 좌표는 반드시 별도 필드에 스냅샷한다 - Realm 내부 좌표(아래
-    // this.root.position/target 위치)와 절대 같은 변수를 공유하지 않는다
-    // (명세 14절 "절대로 같은 좌표 변수를 공유하지 마라").
-    ensureDeathRealmScenery();
-    activateDeathRealmAtmosphere();
+    this._morde.rSteal = steal;
+    this._morde.rStolenArmor = steal.armor; // 예전 필드 이름 호환(디버그 표시 등)
+    this._morde.rStolenMr = steal.mr;
+    // ---- 죽음의 세계(제자리 경기장) ----
     const realmId = `deathRealm_${++_mordeRealmCounter}`;
+    const realm = createDeathRealm(realmId, this, target, r.range, r.realmRadius);
     this._morde.realmId = realmId;
-    this._morde.casterOriginalPos = this.root.position.clone();
-    this._morde.targetOriginalPos = getWorldPosition(target).clone();
-    // 명세 22/23/24: 두 참가자에게 같은 realmId를 부여한다 - 이 태그
-    // 하나로 getAllEnemyUnits()(이미 위에서 isInDeathRealm 기준으로
-    // 격리 중)/포탑 타겟팅(findEnemyChampionsNear)/더미 반격(tickOneDummy)/
-    // 우물(updateNexusWell)이 canRealmInteract() 한 번씩만 확인하면
-    // 자동으로 "서로 다른 세계"를 인식한다.
     this.realmId = realmId;
     target.realmId = realmId;
-    // 명세 2/13: 서로 마주 보며 겹치지 않는 위치로 실제 이동시킨다(요청
-    // "단순 텔레포트만 구현하지 마라"는 이동 연출이 아니라 "텔레포트로
-    // 공간 분리를 대체하지 말라"는 뜻이므로, 순간이동 자체는 두 챔피언이
-    // Realm으로 "들어가는" 필수 동작이라 문제 없다 - 공간 분리는 realmId+
-    // 실제 지형으로 이미 별도로 구현돼 있다).
-    const half = DEATH_REALM_SPAWN_OFFSET / 2;
-    this.root.position.set(DEATH_REALM_CENTER.x - half, 0, DEATH_REALM_CENTER.z);
-    this.faceDirectionInstant(new THREE.Vector3(1, 0, 0));
-    const targetPos = target.mesh ? target.mesh.position : target.root.position;
-    targetPos.set(DEATH_REALM_CENTER.x + half, 0, DEATH_REALM_CENTER.z);
-    if (typeof target.faceDirectionInstant === 'function') target.faceDirectionInstant(new THREE.Vector3(-1, 0, 0));
-    console.log('[MORDE R] Death Realm 진입', { target: unitLabel(target), durationSec: r.duration, realmId });
-  
+    showDeathRealmBoundary(realm.center, realm.radius);
+    activateDeathRealmAtmosphere();
+    this._mordeGhostOutsiders();
+    this._mordeStartSizeAnim(target, 1.1, 0.9);
+    console.log('[MORDE R] Death Realm 진입', { target: unitLabel(target), durationSec: r.duration, realmId, steal });
+};
+
+// 대상 쪽 능력치 증감(sign=-1 훔침, +1 돌려줌). 최대 체력은 호출부가 따로 다룬다.
+CharacterController.prototype._mordeApplyStealToTarget = function(target, steal, sign) {
+    if (!target || !steal) return;
+    if (target.stats && typeof target.recomputeStats === 'function') {
+      // 챔피언 대상(이 데모에선 플레이어가 아닌 챔피언 컨트롤러가 없어 대비용)
+      target.bonusArmor = (target.bonusArmor || 0) + sign * steal.armor;
+      target.bonusMr = (target.bonusMr || 0) + sign * steal.mr;
+      target.bonusAD = (target.bonusAD || 0) + sign * steal.ad;
+      target.bonusAP = (target.bonusAP || 0) + sign * steal.ap;
+      target.recomputeStats();
+      return;
+    }
+    if (typeof target.armor === 'number') target.armor += sign * steal.armor;
+    if (typeof target.magicResist === 'number') target.magicResist += sign * steal.mr;
+    if (typeof target.attackDamage === 'number') target.attackDamage += sign * steal.ad;
+    if (typeof target.abilityPower === 'number') target.abilityPower += sign * steal.ap;
+    if (typeof target.attackSpeed === 'number') target.attackSpeed = Math.max(0.01, target.attackSpeed + sign * steal.asFlat);
+};
+
+// 모데카이저 쪽 능력치 증감. 최대 체력이 바뀌어도 현재 체력 비율을 유지한다(PC 위키).
+CharacterController.prototype._mordeApplyStealToSelf = function(steal, sign) {
+    if (!steal) return;
+    const hpPct = this.maxHp > 0 ? this.hp / this.maxHp : 1;
+    this.bonusArmor = Math.max(0, (this.bonusArmor || 0) + sign * steal.armor);
+    this.bonusMr = Math.max(0, (this.bonusMr || 0) + sign * steal.mr);
+    this.bonusAD = Math.max(0, (this.bonusAD || 0) + sign * steal.ad);
+    this.bonusAP = Math.max(0, (this.bonusAP || 0) + sign * steal.ap);
+    this.bonusMaxHp = Math.max(0, (this.bonusMaxHp || 0) + sign * steal.maxHp);
+    this._morde.rStolenAsBonus = Math.max(0, (this._morde.rStolenAsBonus || 0) + sign * steal.asBonus);
+    this.recomputeStats();
+    this.hp = Math.max(this.hp > 0 ? 1 : 0, Math.min(this.maxHp, hpPct * this.maxHp));
+    updateBars(this);
+};
+
+// 바깥 유닛(적 미니언·포탑·다른 허수아비·아군)을 반투명 혼령으로 그린다. 새로 생긴 유닛도 매 프레임 확인한다.
+CharacterController.prototype._mordeGhostOutsiders = function() {
+    const target = this._morde.rTarget;
+    for (const u of getAllEnemyUnits(true)) if (u !== target) ghostUnitForDeathRealm(u);
+    if (typeof getAllyChampions === 'function') for (const a of getAllyChampions()) ghostUnitForDeathRealm(a);
+};
+
+// 크기 변화(약 0.25초에 걸쳐). 모데카이저는 root.scale, 허수아비는 mesh.scale.
+CharacterController.prototype._mordeStartSizeAnim = function(target, selfTo, targetTo) {
+    const cur = this._morde.rSize || { self: 1, target: 1, targetRef: null };
+    this._morde.rSize = { selfFrom: cur.self, selfTo, targetFrom: cur.targetRef === target ? cur.target : 1, targetTo, targetRef: target, start: performance.now(), self: cur.self, target: cur.targetRef === target ? cur.target : 1 };
+};
+CharacterController.prototype._mordeTickSizeAnim = function() {
+    const sz = this._morde.rSize;
+    if (!sz) return;
+    const k = Math.min(1, (performance.now() - sz.start) / 250);
+    sz.self = sz.selfFrom + (sz.selfTo - sz.selfFrom) * k;
+    sz.target = sz.targetFrom + (sz.targetTo - sz.targetFrom) * k;
+    if (this.root && this.root.scale) this.root.scale.setScalar((this._itemHeartsteelScale || 1) * sz.self);
+    const tr = sz.targetRef && (sz.targetRef.mesh || sz.targetRef.root);
+    if (tr && tr.scale) tr.scale.setScalar(sz.target);
+    if (k >= 1 && sz.selfTo === 1 && sz.targetTo === 1) this._morde.rSize = null;
+};
+
+// 들고 있던(대상 사망으로 유지 중이던) 능력치를 내려놓는다.
+CharacterController.prototype._mordeReleaseSteal = function(reason) {
+    const kept = this._morde.rKept;
+    if (!kept) return;
+    this._mordeApplyStealToSelf(kept.steal, -1);
+    this._morde.rKept = null;
+    console.log('[MORDE R] 유지하던 능력치 반환', { reason });
 };
 
 // Extracted from CharacterController: _mordeEndDeathRealm
+// 지속시간 만료/대상 사망/모데카이저 사망/챔피언 교체 중 어느 경로로 들어오든 이 함수 하나가 정리한다.
+// 둘 다 그 자리에서 일반 세계로 돌아온다(원작 - 들어가기 전 위치로 되돌리지 않는다).
 CharacterController.prototype._mordeEndDeathRealm = function(reason) { 
     if (!this._morde.isInDeathRealm) return;
     const target = this._morde.rTarget;
-    if (target && target.hp > 0) {
-      target.armor += this._morde.rStolenArmor;
-      target.magicResist += this._morde.rStolenMr;
+    const steal = this._morde.rSteal;
+    const targetDied = !!(target && target.hp <= 0 && reason === 'target-death');
+    if (targetDied) {
+      // 대상이 안에서 죽음: 훔친 능력치를 대상이 부활할 때까지 유지(PC 위키).
+      this._morde.rKept = { target, steal };
+    } else {
+      this._mordeApplyStealToSelf(steal, -1);
+      if (target) {
+        this._mordeApplyStealToTarget(target, steal, +1);
+        // 최대 체력을 돌려준다. 현재 체력은 그대로 둔다(돌려줄 때 현재 체력도 회복하는지는 미확인).
+        if (steal) target.maxHp = (target.maxHp || 0) + steal.maxHp;
+      }
     }
-    this.bonusArmor = Math.max(0, (this.bonusArmor || 0) - this._morde.rStolenArmor);
-    this.bonusMr = Math.max(0, (this.bonusMr || 0) - this._morde.rStolenMr);
-    this.recomputeStats();
     console.log('[MORDE R] Death Realm 종료', { reason });
-    // ---- 죽음의 세계 정리(신규 명세 15/17~21/33) ----
-    // realmId를 먼저 'main'으로 되돌린다 - 이후의 안전 위치 계산
-    // (findSafeReturnPosition)이 getAllEnemyUnits()를 통해 "메인 월드
-    // 기준"으로 주변 유닛을 올바르게 인식하게 하기 위함이다.
+    const realmId = this._morde.realmId;
     this.realmId = 'main';
     if (target) target.realmId = 'main';
+    removeDeathRealm(realmId);
+    hideDeathRealmBoundary();
     deactivateDeathRealmAtmosphere();
-    // 복귀 위치(명세 15/21) - "RealmPosition을 WorldPosition으로 변환"하지
-    // 않고, R 시작 직전 저장해둔 원래 좌표를 그대로 다시 쓴다. HP/버프 등
-    // 전투 상태는 애초에 realm 전용 사본을 만들지 않고 원본 객체를 그대로
-    // 옮겨 다녔을 뿐이므로(명세 27/28/33 "Realm에서 변한 HP가 메인 월드
-    // 에서도 그대로 유지") 위치만 복원하면 나머지는 자동으로 일치한다.
-    if (this._morde.casterOriginalPos) {
-      this.root.position.copy(findSafeReturnPosition(this._morde.casterOriginalPos, this));
-    }
-    if (target && this._morde.targetOriginalPos) {
-      const targetPos = target.mesh ? target.mesh.position : target.root.position;
-      targetPos.copy(findSafeReturnPosition(this._morde.targetOriginalPos, target));
-    }
+    clearDeathRealmGhosts();
+    this._mordeStartSizeAnim(target, 1, 1);
     this._morde.isInDeathRealm = false;
     this._morde.rTarget = null;
     this._morde.rEndsAt = 0;
+    this._morde.rSteal = null;
     this._morde.rStolenArmor = 0;
     this._morde.rStolenMr = 0;
     this._morde.realmId = null;
-    this._morde.casterOriginalPos = null;
-    this._morde.targetOriginalPos = null;
-  
 };
 
 // Extracted from CharacterController: _mordeUpdateR
+// 매 프레임: 크기 변화, 대상 사망/지속시간 만료 감지, 경계 유지(돌진·끌어당김도 경계에서 멈춤), 혼령 표시 갱신,
+// 대상 사망으로 유지 중인 능력치는 대상이 부활(체력 > 0)하거나 치워지면 반환.
 CharacterController.prototype._mordeUpdateR = function() { 
+    this._mordeTickSizeAnim();
+    if (this._morde.rKept) {
+      const t = this._morde.rKept.target;
+      if (!t || t.destroyed || t.hp > 0) this._mordeReleaseSteal(t && t.hp > 0 ? 'target-respawn' : 'target-removed');
+    }
     if (!this._morde.isInDeathRealm) return;
     const target = this._morde.rTarget;
-    if (!target || target.hp <= 0) { this._mordeEndDeathRealm('target-death'); return; }
+    if (!target || target.hp <= 0 || target.destroyed) { this._mordeEndDeathRealm('target-death'); return; }
     if (performance.now() >= this._morde.rEndsAt) { this._mordeEndDeathRealm('duration-expired'); return; }
-  
+    const realm = getDeathRealm(this._morde.realmId);
+    if (realm) {
+      clampToDeathRealm(this.root.position, realm, this.collisionRadius || 0);
+      const tp = target.mesh ? target.mesh.position : (target.root && target.root.position);
+      if (tp) clampToDeathRealm(tp, realm, getCollisionRadius(target));
+      if (target._pullState && target._pullState.to) clampToDeathRealm(target._pullState.to, realm, getCollisionRadius(target));
+      if (this._dashState && this._dashState.to) clampToDeathRealm(this._dashState.to, realm, this.collisionRadius || 0);
+    }
+    this._mordeGhostOutsiders();
 };
 

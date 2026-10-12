@@ -43,6 +43,7 @@ function createDummyEnemy(position) {
     collisionRadius: bodyRadius, collisionHeight: dummyHeight, selectionRadius: bodyRadius * 1.3,
     armor: 30, magicResist: 30,     // 요청 15/16: applyDamage()가 참조하는 방어 스탯
     attackRange: BASE_UNIT * 1.3 * DUMMY_SCALE, attackCooldown: 0,
+    attackDamage: 6, attackSpeed: 1 / 1.4, // 반격 피해·속도(예전 tickOneDummy의 고정값 6·1.4초) - 모데카이저 R이 10%를 훔칠 수 있게 필드로 둔다
     // 요청(전투 더미는 죽지 않되 CC는 정상 적용): isTrainingDummy만으로
     // Damage/Death를 분리한다. StatusEffect(CC) 시스템은 이 플래그를 전혀
     // 참조하지 않으므로 - 즉 아래 damageEnemy()가 "죽음 처리"만 건너뛰고,

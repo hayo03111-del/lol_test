@@ -564,6 +564,7 @@ function clearPlacedDummies() {
     if (controller && controller._morde && controller._morde.isInDeathRealm && controller._morde.rTarget === d) {
       d.hp = 0;
     }
+    d.destroyed = true; // 치운 허수아비는 "부활하지 않는다" - 모데카이저 R이 훔친 능력치를 부활까지 들고 있지 않게 한다
     if (controller && controller._sett && controller._sett.rSeq && controller._sett.rSeq.target === d) {
       d.hp = 0;
     }

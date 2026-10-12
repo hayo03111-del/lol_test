@@ -6,20 +6,19 @@
    참고)은 그대로 재사용한다 - 이번에 추가하는 건 그 위에 얹는 "실제
    공간 분리" 레이어뿐이다.
 
-   구현 방식: 완전히 별도인 THREE.Scene/렌더 파이프라인을 새로 만들지는
-   않았다(그러려면 이 프로젝트의 렌더러 구조 자체를 다중 씬/다중 카메라로
-   바꿔야 하는 훨씬 큰 작업이라 이번 범위 밖 - 게임로직 TODO). 대신:
-   1) 메인 필드와 지리적으로 멀리 떨어진 실제 지형(둥근 검붉은 단상 +
-      경계 링 + 조명 - 진짜 geometry, "화면 필터"가 아님)을 씬에 만든다.
+   구현 방식(원작 PC 위키 Realm of Death를 그대로 옮김):
+   1) 두 챔피언은 제자리에 남고, 일반 맵 위에 반경 1200 원형 경기장이 생긴다(지형·수풀 그대로).
+      경계는 통과할 수 없고 돌진·끌어당김도 경계에서 멈춘다. 끝나면 그 자리에서 일반 세계로 돌아온다.
    2) 참가자(모데카이저/대상)에게 realmId를 태그하고, canRealmInteract()
       하나로 "서로 다른 세계인가"를 판정한다.
    3) 기존의 모든 상호작용 진입점(적 목록 조회/포탑 타겟팅/더미 반격/
-      이동 명령)이 이 태그 하나만 확인하도록 딱 필요한 지점만 확장한다 -
-      새 전투 시스템을 중복으로 만들지 않는다(명세 21절과 동일한 원칙).
+      이동 명령)이 이 태그 하나만 확인한다. 바깥 유닛은 위치만 보이는 반투명 혼령으로 그린다.
    ============================================================ */
-const DEATH_REALM_CENTER = new THREE.Vector3(BASE_UNIT * 60, 0, BASE_UNIT * 60);
-const DEATH_REALM_BOUNDARY_RADIUS = BASE_UNIT * 11; // 명세 7절 "너무 좁지 않게" - 평타/스킬/추격/회피가 정상적으로 가능한 크기
-const DEATH_REALM_SPAWN_OFFSET = BASE_UNIT * 4;     // 명세 13절 "겹치지 않되 바로 싸울 수 있는 거리"
+// 원작(PC 위키 Realm of Death): 죽음의 세계는 다른 장소로 옮기는 게 아니라 "일반 맵 지형을 그대로 가진"
+// 반경 1200 원형 경기장이다. 두 챔피언은 제자리에 남고, 경계는 통과할 수 없다.
+const DEATH_REALM_RADIUS_LOL = 1200;
+// 진행 중인 죽음의 세계: realmId -> { center(Vector3), radius(월드 단위) }
+const _deathRealms = new Map();
 let _mordeRealmCounter = 0;
 
 // 명세 24절 "attacker.isInDeathRealm / target.isInDeathRealm을 확인 -
@@ -102,30 +101,73 @@ function debugCanTargetResult(label, result) {
   return result;
 }
 
-// 명세 5/30절 "실제 공간처럼 보여야 한다 / 단순 화면 필터 금지" - 실제
-// geometry로 된 단상+경계 링+조명. 매 R 캐스트마다 새로 만들지 않고
-// 씬 로드 시 한 번만 만들어서 재사용한다(요청 21과 동일한 재사용 원칙).
-let deathRealmGroup = null;
-function ensureDeathRealmScenery() {
-  if (deathRealmGroup) return;
-  deathRealmGroup = new THREE.Group();
-  const platformGeo = new THREE.CylinderGeometry(DEATH_REALM_BOUNDARY_RADIUS, DEATH_REALM_BOUNDARY_RADIUS * 1.05, 0.4, 48);
-  const platformMat = new THREE.MeshStandardMaterial({ color: 0x1a0505, roughness: 0.9, emissive: 0x330000, emissiveIntensity: 0.15 });
-  const platform = new THREE.Mesh(platformGeo, platformMat);
-  platform.position.y = -0.2;
-  platform.receiveShadow = true;
-  deathRealmGroup.add(platform);
-  const ringGeo = new THREE.TorusGeometry(DEATH_REALM_BOUNDARY_RADIUS, 0.15, 8, 64);
-  const ringMat = new THREE.MeshStandardMaterial({ color: 0x8a1a1a, emissive: 0xaa2020, emissiveIntensity: 0.8, roughness: 0.4 });
-  const ring = new THREE.Mesh(ringGeo, ringMat);
-  ring.rotation.x = Math.PI / 2;
-  ring.position.y = 0.02;
-  deathRealmGroup.add(ring);
-  const light = new THREE.PointLight(0xff2222, 1.2, DEATH_REALM_BOUNDARY_RADIUS * 3, 2);
-  light.position.set(0, BASE_UNIT * 4, 0);
-  deathRealmGroup.add(light);
-  deathRealmGroup.position.copy(DEATH_REALM_CENTER);
-  scene.add(deathRealmGroup);
+// 경기장 경계 표시: 중심에 반경 1200 붉은 고리 하나(원작의 경계 테두리). 맵 자체가 경기장 바닥이므로
+// 따로 단상을 만들지 않는다. 죽음의 세계가 끝나면 씬에서 빼서 남지 않게 한다.
+let deathRealmRing = null;
+function showDeathRealmBoundary(center, radius) {
+  if (!deathRealmRing) {
+    const geo = new THREE.RingGeometry(radius - BASE_UNIT * 0.06, radius, 96);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xc02a2a, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false, fog: false });
+    deathRealmRing = new THREE.Mesh(geo, mat);
+    deathRealmRing.rotation.x = -Math.PI / 2;
+    deathRealmRing.userData.radius = radius;
+  }
+  deathRealmRing.position.set(center.x, 0.03, center.z);
+  if (!deathRealmRing.parent) scene.add(deathRealmRing);
+}
+function hideDeathRealmBoundary() {
+  if (deathRealmRing && deathRealmRing.parent) deathRealmRing.parent.remove(deathRealmRing);
+}
+// 경기장 등록/조회. 중심: PC 위키에는 중심 서술이 없다 - 나무위키(커뮤니티)의 "대상 방향으로 궁극기
+// 최대 사거리(650) 지점을 중심으로 반경 1200"을 따른다(위키 공략의 "모데카이저 앞쪽에 생겨 뒤로는 공간이
+// 적다"와도 맞는다).
+function createDeathRealm(realmId, caster, target, castRangeLol, radiusLol) {
+  const from = getWorldPosition(caster).clone(); from.y = 0;
+  const to = getWorldPosition(target).clone(); to.y = 0;
+  const dir = new THREE.Vector3().subVectors(to, from);
+  if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1); else dir.normalize();
+  const center = from.clone().addScaledVector(dir, lolRangeToWorld(castRangeLol || 650));
+  const realm = { center, radius: lolRangeToWorld(radiusLol || DEATH_REALM_RADIUS_LOL) };
+  _deathRealms.set(realmId, realm);
+  return realm;
+}
+function getDeathRealm(realmId) { return realmId && realmId !== 'main' ? (_deathRealms.get(realmId) || null) : null; }
+function removeDeathRealm(realmId) { _deathRealms.delete(realmId); }
+// 경계 밖 좌표를 경계 안쪽으로 되돌린다(유닛 충돌 반경만큼 안쪽). 원작: 경계는 지형이 아니지만 통과할
+// 수 없고, 돌진·점멸·에어본 이동도 경계에서 멈춘다.
+function clampToDeathRealm(point, realm, margin = 0) {
+  if (!realm) return point;
+  const rel = new THREE.Vector3(point.x - realm.center.x, 0, point.z - realm.center.z);
+  const max = Math.max(0, realm.radius - margin);
+  if (rel.length() <= max) return point;
+  rel.setLength(max);
+  point.x = realm.center.x + rel.x; point.z = realm.center.z + rel.z;
+  return point;
+}
+// 바깥 유닛은 "위치는 보이지만 서로 보거나 상호작용할 수 없다"(PC 위키) - 반투명 혼령으로 그린다.
+// 재질을 공유하는 유닛이 있을 수 있어 메시마다 재질을 복제해 바꾸고, 끝나면 원래 재질로 되돌린다.
+const _deathRealmGhosted = new Map(); // mesh -> 원래 material
+function ghostUnitForDeathRealm(unit) {
+  const root = unit && (unit.mesh || unit.root);
+  if (!root || root.userData._deathRealmGhost) return;
+  root.userData._deathRealmGhost = true;
+  root.traverse((o) => {
+    if (!o.isMesh || !o.material || _deathRealmGhosted.has(o)) return;
+    const orig = o.material;
+    const mk = (m) => { const c = m.clone(); c.transparent = true; c.opacity = Math.min(c.opacity ?? 1, 0.28); c.depthWrite = false; return c; };
+    _deathRealmGhosted.set(o, orig);
+    o.material = Array.isArray(orig) ? orig.map(mk) : mk(orig);
+  });
+  _deathRealmGhosted.set(root, null); // 루트 표식(복원 시 userData 정리용)
+}
+function clearDeathRealmGhosts() {
+  for (const [o, orig] of _deathRealmGhosted) {
+    if (orig === null) { delete o.userData._deathRealmGhost; continue; }
+    const cur = o.material;
+    (Array.isArray(cur) ? cur : [cur]).forEach((m) => m && m.dispose && m.dispose());
+    o.material = orig;
+  }
+  _deathRealmGhosted.clear();
 }
 // 명세 12/29절 "죽음의 세계 진입 시 어둡고 붉은 안개/단절된 분위기" -
 // 기존 scene.fog를 저장해뒀다가 죽음의 세계가 전부 끝나면 원래 값으로
@@ -136,40 +178,14 @@ function activateDeathRealmAtmosphere() {
   _deathRealmActiveCount++;
   if (_deathRealmActiveCount > 1) return;
   _deathRealmOriginalFog = scene.fog;
-  scene.fog = new THREE.FogExp2(0x1a0505, 0.045);
+  // 제자리 경기장이라 맵과 두 챔피언이 보여야 한다 - 카메라 거리에서 약 30%만 붉게 어두워지는 밀도로 맞춘다
+  // (FogExp2: 1 - exp(-(밀도×거리)²) = 0.3 → 밀도 ≈ 0.6 / 거리). 예전 별도 경기장용 0.045는 화면이 거의 검게 덮였다.
+  const camDist = (typeof camera !== 'undefined' && camera && typeof controller !== 'undefined' && controller) ? camera.position.distanceTo(controller.root.position) : 0;
+  scene.fog = new THREE.FogExp2(0x2a0b0e, camDist > 0 ? 0.6 / camDist : 0.02);
 }
 function deactivateDeathRealmAtmosphere() {
   _deathRealmActiveCount = Math.max(0, _deathRealmActiveCount - 1);
   if (_deathRealmActiveCount > 0) return;
   scene.fog = _deathRealmOriginalFog;
-}
-// 명세 21절 "복귀 위치에 다른 유닛/장애물이 있으면 겹치지 않는 안전한
-// 위치로" - 후보 유닛들과 최소 간격을 확인하고, 겹치면 그 유닛에서
-// 멀어지는 방향으로 살짝 밀어낸다. 유닛 수가 적은 이 데모 규모에 맞춘
-// 간단한 버전이다(반복 8회면 충분히 수렴).
-function findSafeReturnPosition(pos, mover) {
-  let result = pos.clone();
-  const minGap = 0.1;
-  for (let attempt = 0; attempt < 8; attempt++) {
-    let collided = false;
-    const others = [
-      ...(typeof controller !== 'undefined' && controller && controller !== mover ? [controller] : []),
-      ...getAllEnemyUnits().filter((u) => u !== mover),
-    ];
-    for (const other of others) {
-      const otherPos = getWorldPosition(other);
-      if (!otherPos) continue;
-      const gap = getCollisionRadius(mover) + getCollisionRadius(other) + minGap;
-      const dist = getHorizontalDistance(result, otherPos);
-      if (dist < gap) {
-        const dir = new THREE.Vector3().subVectors(result, otherPos); dir.y = 0;
-        if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0); else dir.normalize();
-        result = otherPos.clone().addScaledVector(dir, gap + 0.1);
-        collided = true;
-      }
-    }
-    if (!collided) break;
-  }
-  return result;
 }
 

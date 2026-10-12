@@ -1,7 +1,6 @@
 // 챔피언 교체 격리 점검(헤드리스 Chromium + 실제 GLB): 챔피언 A로 Q/W/E/R을 연달아 시전하고, 스킬이
 // 진행 중인 도중에 챔피언 B(GLB 재로드)로 바꾼 뒤 B 상태와 허수아비 상태에 A의 흔적이 남는지 본다.
 // 사용법: GLB_DIR=<챔피언명.glb 폴더> THREE_DIR=<three package> [SWITCH_R_DELAY=ms] node tools/e2e_glb/switch_check.js [A챔피언id...]
-// 모데카이저 죽음의 세계 무대(Group 3자식)는 한 번 만들어 재사용하는 고정 장식이라 sceneExtra에 남는 것이 정상이다.
 const path = require('path'), fs = require('fs');
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const startServer = require('./server.js');

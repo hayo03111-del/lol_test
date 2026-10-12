@@ -12,7 +12,7 @@
    ============================================================ */
 // 이 데모의 적 목록. 지금은 단일 더미 하나뿐이지만, 이후 다중 대상을
 // 추가할 때 이 배열에만 추가하면 아래 findEnemies*()가 전부 그대로 동작한다.
-function getAllEnemyUnits() {
+function getAllEnemyUnits(ignoreRealm = false) { // ignoreRealm: 죽음의 세계 격리 없이 전체 목록(바깥 유닛 혼령 표시용)
   // 버그 수정(모데카이저 R "죽음의 세계" 명세 9/24절 - "R 대상 이외의 일반
   // 적이 전투에 영향을 주면 안 된다 / 외부 적의 피해가 R 내부 전투에
   // 적용되면 안 된다"): 이 뷰어는 캐릭터를 한 번에 하나만 조작하는
@@ -25,7 +25,7 @@ function getAllEnemyUnits() {
   // 전부에 자동으로 적용되게 한다(요청 21 "같은 기능의 새 시스템을 중복으로
   // 만들지 마라"와 일치). 모데카이저가 아니거나 죽음의 세계 상태가 아니면
   // 기존 동작 그대로다 - 다른 챔피언에는 전혀 영향 없음.
-  if (typeof controller !== 'undefined' && controller && controller.championId === 'mordekaiser'
+  if (!ignoreRealm && typeof controller !== 'undefined' && controller && controller.championId === 'mordekaiser'
       && controller._morde && controller._morde.isInDeathRealm) {
     const t = controller._morde.rTarget;
     return (t && t.hp > 0) ? [t] : [];

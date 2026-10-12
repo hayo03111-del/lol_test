@@ -148,6 +148,7 @@ class CharacterController {
     this.statusEffects = [];
     this.shield = 0;
     this.bonusAD = 0; // 다리우스 과다출혈 만중첩 버프 등
+    this.bonusAP = 0; // 모데카이저 R 강탈 주문력
     this.bonusArmor = 0; this.bonusMr = 0; // 가렌 W 처치 스택
     this._garenCourageStacks = 0;
     this.bonusMaxHp = 0; // 초가스 R 포식 중첩
@@ -311,6 +312,7 @@ class CharacterController {
       // 나타내는 단일 진실 공급원(single source of truth)이고, 나머지는 그
       // 상태에 딸린 부가 데이터다.
       isInDeathRealm: false, rTarget: null, rEndsAt: 0, rStolenArmor: 0, rStolenMr: 0,
+      rSteal: null, rKept: null, rStolenAsBonus: 0, rSize: null, realmId: null, // rKept: 대상이 안에서 죽어 부활까지 들고 있는 능력치
     }; // dealtBank: W가 아직 보호막으로 전환되지 않은 축적된 피해량
     this._masteryi = { attackCount: 0, rActiveUntil: 0, alpha: null, wPause: null, pendingWAfterHit: false, wStartedAt: 0 };
     this._yasuo = { flow: 0, flowDistance: 0, qStacks: 0, qStackExpiresAt: 0, eStacks: 0, eStacksExpiresAt: 0, eTargetCooldowns: new Map(), windwall: null, rArmorBuffUntil: 0, rTarget: null, lastMovePosition: null, qMoveEntryPending: false, eDashStart: null, eDashEnd: null, eDashElapsed: 0, eDashDuration: 0, eDashTarget: null, eDashTargetKey: null, eDashDamageApplied: false, eDashStacksAtStart: 0, qTornadoTravel: null };
@@ -371,6 +373,8 @@ class CharacterController {
       if (this._sett.rSeq) this._settEndR(this._sett.rSeq, true);
     }
     if (this._morde?.isInDeathRealm) this._mordeEndDeathRealm('champion-switch');
+    // 죽음의 세계 크기 변화(0.25초)가 진행 중이면 즉시 원래 크기로 맞춘다.
+    if (this._morde?.rSize && typeof this._mordeTickSizeAnim === 'function') { this._morde.rSize.selfTo = 1; this._morde.rSize.targetTo = 1; this._morde.rSize.start = -1e9; this._mordeTickSizeAnim(); }
     // 버그 수정(위와 동일 - "챔피언 교체 후 이전 챔피언 투사체" 문제):
     // 이즈리얼/벡스 등 공용 ProjectileSystem을 쓰는 챔피언의 투사체가
     // 교체 후에도 계속 날아가 새 챔피언의 championId로 잘못된 훅을
@@ -429,7 +433,7 @@ class CharacterController {
     this._freshChampionStates();
     this._dashState = null;
     this._rRecastReadyUntil = 0;
-    this.bonusAD = 0;
+    this.bonusAD = 0; this.bonusAP = 0;
     this.bonusMaxHp = 0;
     // 버그 수정: 가렌 W 처치 스택(bonusArmor/bonusMr)이 챔피언 교체 후에도 남아
     // 다음 챔피언의 방어력/마저에 그대로 더해졌다.
@@ -497,7 +501,7 @@ class CharacterController {
       this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0) + (this.itemDynamicBonusAD || 0) + (this.itemTempADBonus || 0);
       // 어둠불꽃횃불(어둠불꽃)/(향후) 라바돈의 죽음모자 - "총 주문력 N%
       // 증가" 계열은 itemBonusAP 합연산 전부가 끝난 뒤 곱하는 배율이다.
-      this.stats.abilityPower = (this.itemBonusAP || 0) * (1 + (this.itemTotalApMultiplierBonus || 0));
+      this.stats.abilityPower = ((this.itemBonusAP || 0) + (this.bonusAP || 0)) * (1 + (this.itemTotalApMultiplierBonus || 0)); // bonusAP: 챔피언 임시 주문력(모데카이저 R 강탈)
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
       this.stats.levelBonusAttackSpeed = base.levelBonusAttackSpeed || 0;
       this.stats.windupPercent = base.windupPercent != null ? base.windupPercent : 0.4;
@@ -1306,6 +1310,7 @@ class CharacterController {
     this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0)
       + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
+    if (this.championId === 'mordekaiser' && this._morde) this.stats.bonusAttackSpeedPercent += this._morde.rStolenAsBonus || 0; // R로 훔친 공격 속도
     this._garenPassiveTick(dt);
     this._dariusPassiveTick();
     this._settPassiveTick(dt);

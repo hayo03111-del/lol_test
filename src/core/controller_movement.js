@@ -17,11 +17,9 @@ CharacterController.prototype.moveTo = function(point) {
     // 추격/피벗/애니메이션 전환 등 이후의 모든 이동 처리 로직은 전혀
     // 손대지 않아도 자동으로 경계를 지킨다(새 이동 시스템을 만들지 않음).
     if (this.realmId && this.realmId !== 'main') {
-      const rel = new THREE.Vector3().subVectors(point, DEATH_REALM_CENTER); rel.y = 0;
-      if (rel.length() > DEATH_REALM_BOUNDARY_RADIUS) {
-        rel.normalize().multiplyScalar(DEATH_REALM_BOUNDARY_RADIUS * 0.95);
-        point = DEATH_REALM_CENTER.clone().add(rel);
-      }
+      // 죽음의 세계는 일반 맵 위 반경 1200 경기장이다 - 맵 경계와 경기장 경계를 둘 다 지킨다.
+      if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap) point = howlingAbyssMap.clampPosition(point.clone());
+      point = clampToDeathRealm(point.clone(), getDeathRealm(this.realmId), this.collisionRadius || 0);
     } else if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap) {
       // 요청(칼바람 나락 맵 7절 "플레이어가 맵 밖으로 나가지 못하게") -
       // 죽음의 세계에 있지 않은 일반 상태(realmId==='main')에서만 적용한다 -
@@ -256,7 +254,8 @@ CharacterController.prototype._findNearbyAttackRetarget = function(anchor = null
 // 들어오면 정지 후 WINDUP 시작. 매 프레임 현재 위치 기준으로 재검사한다.
 CharacterController.prototype.updateTargetChase = function() {
     if (this.state !== STATE.MOVE) return;
-    if (!this.currentTarget || this.currentTarget.hp <= 0 || this.currentTarget.isDead || this.currentTarget.destroyed) {
+    if (!this.currentTarget || this.currentTarget.hp <= 0 || this.currentTarget.isDead || this.currentTarget.destroyed
+        || (typeof canRealmInteract === 'function' && !canRealmInteract(this, this.currentTarget))) {
       const previous = this.currentTarget || this.attackOrderAnchor;
       const next = this._findNearbyAttackRetarget(previous);
       if (next) {
@@ -289,6 +288,8 @@ CharacterController.prototype.faceDirectionInstant = function(dir) {
 CharacterController.prototype.selectTarget = function(enemy) {
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
     if (!enemy || enemy.hp <= 0) return;
+    // 죽음의 세계: 다른 세계의 유닛은 공격 대상으로 지정할 수 없다(위치만 보이는 혼령).
+    if (typeof canRealmInteract === 'function' && !canRealmInteract(this, enemy)) return;
     // 요청(귀환 캔슬): 귀환 중 적 타겟 지정(공격 명령) -> 귀환 모션 중단 후
     // Idle을 거쳐 곧바로 교전 판정(_tryEngageTarget)으로 이어간다.
     if (this.state === STATE.RECALL) {
@@ -333,7 +334,7 @@ CharacterController.prototype._dariusWRangeBonusWorld = function() {
 };
 
 CharacterController.prototype._tryEngageTarget = function() {
-    if (!this.currentTarget || this.currentTarget.hp <= 0) { this.currentTarget = null; this.isChasing = false; return; }
+    if (!this.currentTarget || this.currentTarget.hp <= 0 || (typeof canRealmInteract === 'function' && !canRealmInteract(this, this.currentTarget))) { this.currentTarget = null; this.isChasing = false; return; }
     const rangeBonus = this._settLeftHandRangeBonusWorld() + this._dariusWRangeBonusWorld();
     if (rangeBonus > 0) this.stats.attackRange += rangeBonus;
     const inRange = isInAttackRange(this, this.currentTarget);

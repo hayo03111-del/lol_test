@@ -560,7 +560,8 @@ const CHAMPION_DATA = {
     },
     R: {
       name: '죽음의 세계', cooldown: [120, 110, 100] /* Data Dragon 16.20.1 */, mana: 0, range: 650, castTime: 0.5,
-      duration: 7, statStealPercent: 10, // 훔치는 주요 능력치 비율 - 이 데모에선 방어력/마저만 실제 전투에 영향을 주므로 그 둘만 반영
+      duration: 7, statStealPercent: 10, // PC 위키 V26.15(13% → 10%): 대상 현재 체력·공격력·주문력·공속·방어력·마저 10%, 크기 ±10%
+      realmRadius: 1200, // PC 위키: 일반 맵 지형을 그대로 가진 반경 1200 경기장(중심은 커뮤니티 자료 - mordekaiser_death_realm.js)
     },
   },
   nautilus: {
