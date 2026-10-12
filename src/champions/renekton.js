@@ -124,6 +124,8 @@ CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=fa
     const clip=this.findAnimation('Spell1');
     const dur=clip?.duration||0.45;
     this._renektonPlay('Spell1',{loop:THREE.LoopOnce,fade:0.05,clampWhenFinished:true});
+    // 시전 시간이 없는 회전 베기(원작): 이동 중에 쓰면 회전 모션을 끝까지 보여 주며 그대로 움직인다(이동 루프가 덮어쓰지 않게 전환 클립으로 등록).
+    if (clip) { this._beginTransientMoveClip('Spell1'); this._champTimeout(() => this._endTransientMoveClip('Spell1'), dur * 1000); }
     const timer=this._champTimeout(()=>{
       if (this.championId!=='renekton') return;
       const radius=q.range + (this._renekton.rActive ? 50 : 0);

@@ -66,7 +66,20 @@ const CHAMPION_SLOT_CASTS = {
 };
 
 /* ---------------- generic ability entry point (추가 수정사항 17) ---------------- */
+// 이동 중 스킬 시전(원작): 시전 시간 동안만 멈추고, 시전이 끝나면 원래 이동 목적지로 계속 간다. 예전엔 이동 명령이
+// 버려져 스킬마다 애니메이션이 끝날 때까지(최대 1.7초) 서 있거나 아예 멈췄다. 돌진·점멸 같은 이동 스킬은 원래 목적지를
+// 잇지 않는다. 시전 직후 저장한 목적지는 runAction의 판정 시점(시전 시간 끝) 또는 행동 종료 시 _resumeAfterAction이 쓴다.
 CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
+    const priorMove = (this.state === STATE.MOVE && this.targetPos && !this.isChasing && !this.currentTarget && !this.pendingMove)
+      ? this.targetPos.clone() : null;
+    const keyBefore = this.currentActionKey, serialBefore = this._actionSerial;
+    this._castAbilityImpl(slot, mouseWorldPoint);
+    if (!priorMove || this.pendingMove || this.state === STATE.MOVE || this._dashState) return;
+    const startedAction = this.currentActionKey && (this.currentActionKey !== keyBefore || this._actionSerial !== serialBefore);
+    if (!startedAction || this._isMovementAbility(slot)) return;
+    this.pendingMove = priorMove;
+};
+CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint) {
     // 요청(귀환 캔슬): 귀환 중 QWER 입력 -> 귀환 모션부터 중단(Idle로 정리)한
     // 다음, 평소와 동일한 캐스트 가능 여부 판정(canStartNewAction)을 거친다.
     if (this.state === STATE.RECALL) { this.cancelRecall(); this.setState(STATE.IDLE); }

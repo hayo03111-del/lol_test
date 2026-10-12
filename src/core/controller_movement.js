@@ -164,7 +164,9 @@ CharacterController.prototype._commitMove = function(point) {
       // 등록된 서브 상태에서는 그 클립을 먼저 재생하고, 없으면(대부분의
       // 챔피언) 기존처럼 바로 이동 루프로 전환한다.
       if (!this._playLocomotionEntryTransition()) {
-        this.playFirstAvailable(['Run1_Raw'], { loop: THREE.LoopRepeat, fade: 0.12 });
+        // 버그 수정: 예전엔 야스오 전용 클립 이름('Run1_Raw')만 시도해서 다른 챔피언은 이동 시작 프레임에
+        // 아무 클립도 바뀌지 않았다(다음 프레임 자동 보정이 그제야 이동 클립을 틀었다).
+        this.playFirstAvailable(this._moveClips(), { loop: THREE.LoopRepeat, fade: 0.12 });
       }
     }
 };
@@ -206,7 +208,7 @@ CharacterController.prototype.updateMovement = function(dt) {
       if (this.currentActionKey === 'nilahR') { this.setState(STATE.R_CAST); return; }
       // 바루스 Q 충전 중 이동 목적지에 도착해도 충전 자체는 계속 진행 중이다
       // (닐라 R과 동일한 이유 - _varusReleaseQ가 재입력/타이머로 별도 종료됨).
-      if (this.currentActionKey === 'varusQCharge') { this.setState(STATE.Q_CAST); return; }
+      if (this.currentActionKey === 'varusQCharge') { this.setState(STATE.Q_CAST); this.playFirstAvailable(['Spell1_Idle', 'Spell1'], { loop: THREE.LoopRepeat, fade: 0.12 }); return; }
       this.setState(STATE.IDLE);
       this.playFirstAvailable(this.championId === 'yasuo' ? ['Idle1_Raw'] : this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.12 });
       return;
@@ -222,7 +224,8 @@ CharacterController.prototype.updateMovement = function(dt) {
     // 계속 0(정면)에 수렴해버려서 오른쪽/왼쪽/뒤 스핀 클립을 구분하는 문서의
     // 핵심 메커니즘 자체가 무의미해진다 - E 중에는 몸의 정면 방향을 그대로
     // 유지한 채 이동만 한다(전형적인 "스핀하며 이동/스트레이프" 동작).
-    if (this.currentActionKey !== 'eChannel') this.faceDirection(toTarget, dt, 10);
+    if (this.currentActionKey !== 'eChannel') this.faceDirection(toTarget, dt);
+    this._updateLocomotionPlayback(finalSpeed);
     if (this.currentClipKey && !this._moveClips().includes(this.currentClipKey)) {
       this.playFirstAvailable(this._moveClips(), { fade: 0.15 });
     }
@@ -274,10 +277,44 @@ CharacterController.prototype.updateTargetChase = function() {
     else { this.targetPos = getWorldPosition(this.currentTarget).clone(); this.isChasing = true; }
 };
 
-CharacterController.prototype.faceDirection = function(dir, dt, speed = 8) {
+// 이동 방향 회전: 원작은 게임플레이상 회전이 사실상 즉시이고 화면에서만 몇 프레임에 걸쳐 돈다(공식 수치 없음).
+// 예전엔 지수 감쇠(slerp dt×10)라 뒤로 돌 때 약 0.25초 동안 앞을 본 채 뒤로 미끄러졌다(측정: 최대 95~118°).
+// 일정 각속도로 180°를 약 0.1초에 끝낸다(LOCOMOTION_TURN_RATE - 연출값, 추정).
+const LOCOMOTION_TURN_RATE = Math.PI / 0.1;
+CharacterController.prototype.faceDirection = function(dir, dt) {
     if (dir.lengthSq() < 1e-6) return;
     const targetQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), dir.clone().normalize());
-    this.root.quaternion.slerp(targetQuat, Math.min(1, dt * speed));
+    this.root.quaternion.rotateTowards(targetQuat, LOCOMOTION_TURN_RATE * dt);
+};
+// 이동 애니메이션 재생 속도를 실제 이동 속도에 맞춘다(발 미끄러짐 방지). 기준은 버프·둔화 없는 기본 이동 속도
+// (= 1.0배). 이동 속도가 충분히 빨라지면 GLB에 들어 있는 원작 빠른 달리기 클립(Run_Haste 등)으로 바꾼다.
+// 원작의 전환 기준·재생 배율은 공개 자료에 없어 근사값이다: 기본의 1.3배 이상에서 빠른 달리기(1.2배 미만이면 복귀),
+// 재생 배율은 0.6~1.6배로 제한.
+const LOCO_HASTE_ENTER = 1.3, LOCO_HASTE_EXIT = 1.2;
+CharacterController.prototype._hasteMoveClipName = function() {
+    if (this._hasteClipCache === undefined || this._hasteClipCacheFor !== this.championId) {
+      this._hasteClipCacheFor = this.championId;
+      const c = this.resolveClip ? this.resolveClip(['Run_Haste', 'Run_Fast']) : null;
+      this._hasteClipCache = c ? c.name : null;
+    }
+    return this._hasteClipCache;
+};
+CharacterController.prototype._updateLocomotionPlayback = function(finalSpeed) {
+    const base = this.stats && (this.stats.championBaseMoveSpeed || this.stats.baseMoveSpeed);
+    if (!base || !this.currentAction) return;
+    const ratio = finalSpeed / base;
+    // 빠른 달리기는 기본 이동(스킬 전용 이동 클립·채널링·시퀀스가 아닐 때)에서만 쓴다.
+    const plain = !this.currentActionKey && !this._locomotionSubStateClips('moveClips') && !(this._transientMoveClipNames && this._transientMoveClipNames.size);
+    const haste = plain ? this._hasteMoveClipName() : null;
+    const wasHaste = !!this._locoHaste;
+    if (!haste) this._locoHaste = false;
+    else if (!this._locoHaste && ratio >= LOCO_HASTE_ENTER) this._locoHaste = true;
+    else if (this._locoHaste && ratio < LOCO_HASTE_EXIT) this._locoHaste = false;
+    if (wasHaste !== !!this._locoHaste && plain) this.playFirstAvailable(this._moveClips(), { loop: THREE.LoopRepeat, fade: 0.2 });
+    const clip = this.currentClipKey;
+    if (!clip || !this._moveClips().includes(clip) || (this._transientMoveClipNames && this._transientMoveClipNames.has(clip))) return; // 전환·스킬 클립은 건드리지 않는다
+    const ref = (this._locoHaste && clip === haste) ? LOCO_HASTE_ENTER : 1;
+    this.currentAction.timeScale = THREE.MathUtils.clamp(ratio / ref, 0.6, 1.6);
 };
 CharacterController.prototype.faceDirectionInstant = function(dir) {
     if (dir.lengthSq() < 1e-6) return;

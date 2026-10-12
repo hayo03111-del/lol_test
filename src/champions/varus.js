@@ -142,18 +142,29 @@ CharacterController.prototype._varusCastQ = function(mouseWorldPoint, free = fal
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('Q', free)) return;
+  // 원작: 충전 중에도 (20% 느려진 채) 움직인다 - 이동 중에 시작했으면 그 목적지로 계속 간다.
+  const keepMove = (this.state === STATE.MOVE && this.targetPos && !this.isChasing) ? this.targetPos.clone() : null;
   this.faceDirectionInstant(dir);
   this._clearActionTimers();
   this.currentActionKey = 'varusQCharge'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.Q_CAST);
-  this._varus.qCharge = { dir: dir.clone(), startedAt: performance.now(), free };
+  this._varus.qCharge = { dir: dir.clone(), startedAt: performance.now(), free, manaPaid: free ? 0 : skillVal(q.mana, Math.max(1, this.skillLevels.Q || 1)) };
   this.playFirstAvailable(['Spell1_Idle', 'Spell1'], { loop: THREE.LoopRepeat, fade: 0.05 });
+  applyStatus(this, { id: 'varusQ_chargeSlow', type: 'SLOW', duration: q.maxHoldSec || 4, value: (q.chargeSelfSlowPercent || 20) / 100, source: this });
+  if (keepMove) { this.targetPos = keepMove; this.setState(STATE.MOVE); }
 
-  const maxDurMs = (q.chargeDuration || 1.25) * 1000;
-  const autoFireTimer = this._champTimeout(() => {
-    if (this.currentActionKey === 'varusQCharge') this._varusReleaseQ();
-  }, maxDurMs);
-  this._actionTimers.push(autoFireTimer);
+  // PC 위키: 최대 4초까지 충전을 유지할 수 있고, 그 안에 발사하지 않으면 취소되며 마나 50%를 돌려받는다.
+  // 버그 수정: 예전엔 충전 1.25초가 되면 자동 발사했다(원작에 없는 동작).
+  const holdTimer = this._champTimeout(() => {
+    if (this.currentActionKey !== 'varusQCharge' || !this._varus.qCharge) return;
+    const charge = this._varus.qCharge; this._varus.qCharge = null;
+    clearStatus(this, 'varusQ_chargeSlow');
+    this.mp = Math.min(this.maxMp, this.mp + (charge.manaPaid || 0) * (q.holdTimeoutManaRefundPercent || 50) / 100);
+    updateBars(this);
+    this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
+    if (this.state !== STATE.MOVE) this._resumeAfterAction();
+  }, (q.maxHoldSec || 4) * 1000);
+  this._actionTimers.push(holdTimer);
 };
 
 // 실제 발사 - 재입력(수동 릴리즈) 또는 최대 충전시간 도달(자동) 양쪽 모두
@@ -165,14 +176,17 @@ CharacterController.prototype._varusReleaseQ = function() {
   const charge = this._varus.qCharge;
   if (!charge) return;
   this._varus.qCharge = null;
+  clearStatus(this, 'varusQ_chargeSlow');
   const q = this._champData().Q;
   const dir = charge.dir;
-  const chargeFraction = Math.max(0, Math.min(1, (performance.now() - charge.startedAt) / ((q.chargeDuration || 1.25) * 1000)));
+  const heldMs = performance.now() - charge.startedAt;
+  const chargeFraction = Math.max(0, Math.min(1, heldMs / ((q.chargeDuration || 1.25) * 1000))); // 피해·효과: 1.25초
+  const rangeFraction = Math.max(0, Math.min(1, heldMs / ((q.rangeChargeDuration || 1.5) * 1000))); // 사거리: 1.5초(PC 위키)
 
   this._clearActionTimers();
   this.currentActionKey = 'varusQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
 
-  const lolRange = (q.minRange || 925) + ((q.maxRange || 1600) - (q.minRange || 925)) * chargeFraction;
+  const lolRange = (q.minRange || 925) + ((q.maxRange || 1600) - (q.minRange || 925)) * rangeFraction;
   const chargeDamageMult = (q.minChargeDamageRatio || 0.667) + (1 - (q.minChargeDamageRatio || 0.667)) * chargeFraction;
   const halfWidth = lolRangeToWorld(q.width || 75) * 0.5;
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));

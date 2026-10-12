@@ -538,6 +538,7 @@ class CharacterController {
       // base.baseMoveSpeed와 동일하게 여기서 한 번만 lolRangeToWorld()로
       // 변환한다(기본 이동속도 자체가 이미 그 변환을 거친 값이라 단위를 맞춤).
       this.stats.baseMoveSpeed = base.baseMoveSpeed + lolRangeToWorld(this.itemBonusMoveSpeedLol || 0);
+      this.stats.championBaseMoveSpeed = base.baseMoveSpeed; // 아이템 없는 챔피언 기본 이동 속도(이동 애니메이션 재생 배율 기준)
       // 원작: 최대 체력/마나가 늘면(레벨업·체력 아이템 구매·버프) 늘어난 만큼 현재 값도 함께 늘고,
       // 줄면(판매·버프 종료) 현재 값은 새 최대치로만 잘린다. 버그 수정: 예전엔 아이템을 사도 현재
       // 체력이 그대로였고, 레벨업은 "비율 유지"로 처리했다(원작과 다름).
@@ -754,7 +755,7 @@ class CharacterController {
     // _yasuoPlayPostQMoveEntry()가 1회성으로 재생하는 동안만 transient로
     // 등록되므로, 일반 이동 로직이 다시 IN 모션을 반복하지 않는다.
     if (this.championId === 'yasuo') {
-      return ['Run1_Raw'];
+      return (this._locoHaste && typeof this._hasteMoveClipName === 'function' && this._hasteMoveClipName()) ? [this._hasteMoveClipName(), 'Run1_Raw'] : ['Run1_Raw'];
     }
     if (this.currentActionKey === 'eChannel' && this._eChannelCfg) {
       const current = this._eChannelCfg.clips[this._eChannelDir] || this._eChannelCfg.clips.front;
@@ -775,11 +776,15 @@ class CharacterController {
     // 호출됨) 다리가 실제로 움직이는 정상 달리기 클립을 우선 사용한다 -
     // 상반신이 궁 자세와 완벽히 안 맞더라도, 다리가 실제로 걷는 게
     // "부드러운 이동"에 훨씬 중요하다.
+    // 바루스 Q 충전 중 이동: GLB의 충전 걷기 클립(Spell1_Walk)으로 충전 자세를 유지한 채 걷는다.
+    if (this.currentActionKey === 'varusQCharge' && this.findAnimation('Spell1_Walk')) return ['Spell1_Walk'];
     if (this.currentActionKey === 'nilahR') {
       const base = this._locomotionSubStateClips('moveClips') || this.actionData.move.clips;
       return base;
     }
-    const base = this._locomotionSubStateClips('moveClips') || this.actionData.move.clips;
+    let base = this._locomotionSubStateClips('moveClips') || this.actionData.move.clips;
+    // 빠른 달리기 상태(_updateLocomotionPlayback)면 원작 Run_Haste 클립을 맨 앞에 둔다.
+    if (this._locoHaste && typeof this._hasteMoveClipName === 'function' && this._hasteMoveClipName()) base = [this._hasteMoveClipName(), ...base];
     return this._transientMoveClipNames && this._transientMoveClipNames.size
       ? [...this._transientMoveClipNames, ...base]
       : base;
@@ -1260,6 +1265,26 @@ class CharacterController {
       this._resumeAfterAction();
     }
 
+    // 시전이 끝나 "이동으로 끊을 수 있는" 후딜(RECOVERY + phaseCancelable)에 들어갔는데 기다리던 이동 명령이 있으면
+    // 바로 이어간다(원작: 시전 시간이 끝나면 남은 모션은 이동으로 끊긴다). 그 구간에 새로 이동을 누르면 끊기는 것과 같은 규칙.
+    if (this.pendingMove && this.currentPhase === 'RECOVERY' && this.phaseCancelable
+        && (this.getActionAuthority().canMove || !(this.actionData && this.actionData[this.currentActionKey]))
+        && !(this.championId === 'masteryi' && (this.currentActionKey === 'w' || this.currentActionKey === 'masteryiW'))) {
+      const p = this.pendingMove; this.pendingMove = null;
+      this._clearActionTimers();
+      this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
+      // 남은 모션이 짧으면(0.5초 이하) 잘라내지 않고 그 모션을 유지한 채 움직이기 시작한다(예: 레넥톤 Q 회전 -
+      // 원작처럼 돌면서 이동). 끝나면 이동 루프로 넘어간다. 길면 바로 이동 모션으로 크로스페이드.
+      const a = this.currentAction, clipName = this.currentClipKey;
+      if (a && clipName && !this._moveClips().includes(clipName)) {
+        const remain = (a.getClip().duration - a.time) / Math.max(0.05, Math.abs(a.timeScale || 1));
+        if (remain > 0.03 && remain <= 0.5) {
+          this._beginTransientMoveClip(clipName);
+          this._champTimeout(() => this._endTransientMoveClip(clipName), remain * 1000);
+        }
+      }
+      this._commitMove(p);
+    }
     this.updateMovement(dt);
     this.updateTargetChase();
     this.updateEChannel(dt); // 요청(가렌형 한계 해결): 방향 채널링 E의 지속시간/도트 데미지
@@ -1298,9 +1323,12 @@ class CharacterController {
     // 여기서 값만 조건부로 걸러낼 뿐 settQ_ms 상태 자체(및 강화 횟수)는
     // 건드리지 않는다.
     let msBuff = getMoveSpeedBuffPercent(this);
-    if (this.championId === 'sett' && hasStatus(this, 'MS_BUFF')) {
+    // 세트 Q 이속은 적 챔피언에게 다가갈 때만 적용된다 - 버그 수정: 예전엔 세트에게 걸린 "모든" 이속 버프
+    // (아이템·다른 효과)를 0으로 만들었다. Q 버프 몫만 뺀다.
+    const settQms = this.championId === 'sett' ? getStatus(this, 'settQ_ms') : null;
+    if (settQms && settQms.expiresAt > performance.now()) {
       const movingTowardEnemy = this.isChasing && this.currentTarget && this.currentTarget.hp > 0;
-      if (!movingTowardEnemy) msBuff = 0;
+      if (!movingTowardEnemy) msBuff = Math.max(0, msBuff - (settQms.value || 0));
     }
     this.stats.percentMoveSpeedBonus = msBuff + (this.itemBonusMoveSpeedPercent || 0);
     this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? getFlatMoveSpeedBuff(this) : 0;

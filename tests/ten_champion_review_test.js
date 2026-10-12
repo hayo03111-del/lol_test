@@ -629,3 +629,24 @@ stubs.targetRing = { clear() {} };
   const ch = applyStatus(ten, { id: 'c', type: 'CHARM', duration: 1, value: 1, source: { hp: 1, root: { position: new Vector3() } } });
   assert(near(k.duration, 1) && near(ch.duration, 0.5), 'CC: 공중에 뜸은 강인함 무시, 매혹은 강인함 적용');
 }
+
+// --- 움직임·스킬 동작(16차) ---
+{
+  // 바루스 Q: 충전 중 20% 둔화, 1.25초에 자동 발사하지 않음, 4초 넘기면 취소 + 마나 50% 환급(PC 위키)
+  timers = []; clearPlaced();
+  const c = makeChamp('varus', ['Spell1_Idle', 'Spell1_Walk'], { mp: 500, maxMp: 500 });
+  c.updateBars = () => {};
+  c._varusCastQ(new Vector3(0, 0, 5), false);
+  const manaAfter = c.mp;
+  assert(c._varus.qCharge && getSlowPercent(c) > 0.19 && getSlowPercent(c) < 0.21, '바루스 Q: 충전 중 20% 둔화');
+  advance(1300);
+  assert(!!c._varus.qCharge && c.currentActionKey === 'varusQCharge', '바루스 Q: 1.25초가 지나도 자동 발사하지 않는다(최대 4초 유지)');
+  advance(2800);
+  const paid = CHAMPION_DATA.varus.Q.mana[0];
+  assert(!c._varus.qCharge && c.currentActionKey == null && near(c.mp, manaAfter + paid * 0.5) && getSlowPercent(c) === 0, '바루스 Q: 4초 넘기면 취소, 마나 50% 환급, 둔화 해제');
+}
+{
+  // 바루스 Q 사거리는 1.5초, 피해는 1.25초에 걸쳐 증가
+  const q = CHAMPION_DATA.varus.Q;
+  assert(q.rangeChargeDuration === 1.5 && q.chargeDuration === 1.25 && q.maxHoldSec === 4 && q.chargeSelfSlowPercent === 20, '바루스 Q 데이터: 사거리 1.5초·효과 1.25초·최대 4초·둔화 20%');
+}

@@ -57,10 +57,17 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
         }
         debugSkillHit("Cho'Gath Q", hits[0].unit, { count: hits.length });
       } else debugSkillMiss("Cho'Gath Q", 'no target in impact area');
-      this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
-      this._resumeAfterAction();
+      if (this.currentActionKey === 'chogathQ') { this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false; this._resumeAfterAction(); }
     }, (q.castTime + q.impactDelay) * 1000);
-    this._actionTimers.push(t);
+    void t; // 폭발은 시전자가 움직여도 일어난다 - 행동 타이머(_actionTimers)에 넣지 않아 이동으로 취소되지 않게 한다
+    // 원작: 시전 시간(0.5초)이 끝나면 움직일 수 있고, 파열은 그 뒤 0.627초에 터진다. 버그 수정: 예전엔 폭발 시점(약 1.13초)
+    // 까지 행동이 묶였다. 시전 시간이 끝나면 이동으로 끊을 수 있는 후딜로 바꾼다(기다리던 이동은 곧바로 이어진다).
+    const castEnd = this._champTimeout(() => {
+      if (this.currentActionKey !== 'chogathQ') return;
+      this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
+      if (this.pendingMove) { const p = this.pendingMove; this.pendingMove = null; this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false; this._commitMove(p); }
+    }, q.castTime * 1000);
+    this._actionTimers.push(castEnd);
   
 };
 

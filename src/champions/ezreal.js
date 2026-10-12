@@ -45,6 +45,7 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
   this.currentActionKey = 'ezrealQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.Q_CAST);
 
+  // 발사(시전 시간 끝) 뒤 남은 모션은 이동으로 끊을 수 있는 후딜(RECOVERY)이다 - 기다리던 이동이 곧바로 이어진다.
   // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사하고, 그 전에 다른 행동으로 끊기면 원작처럼 취소된다.
   const __fire = () => {
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
@@ -89,7 +90,7 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
   if (!hitUnit) debugSkillMiss('Ezreal Q', 'no target in line');
 
   };
-  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealQ') __fire(); }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealQ') { __fire(); if (this.currentActionKey === 'ezrealQ') { this.currentPhase = 'RECOVERY'; this.phaseCancelable = true; } } }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell1');
@@ -153,7 +154,7 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   if (!hitUnit) debugSkillMiss('Ezreal W', 'no valid target in line (챔피언/포탑/억제기/넥서스만 반응)');
 
   };
-  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealW') __fire(); }, (w.castTimeSec != null ? w.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealW') { __fire(); if (this.currentActionKey === 'ezrealW') { this.currentPhase = 'RECOVERY'; this.phaseCancelable = true; } } }, (w.castTimeSec != null ? w.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell2');

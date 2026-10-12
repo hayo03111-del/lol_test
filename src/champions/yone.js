@@ -350,6 +350,16 @@ CharacterController.prototype._yonePlayExitTransition = function(idleClipNames, 
   const moving = !!(this.targetPos || this.pendingMove);
   const candidates = (moving ? moveClipNames : idleClipNames) || [];
   const clip = this.resolveClip(candidates);
+  if (clip && moving) {
+    // 이동 중이면 전환 클립(…toWalk/…toRun)을 재생하면서 "곧바로" 이동을 잇는다. 버그 수정: 예전엔 이 클립
+    // (최대 약 1.3초)이 끝날 때까지 제자리에 서 있다가 움직였다(측정: Q 후 1.7초 뒤 이동). 클립은 이동 중 전환
+    // 클립으로 등록해 이동 루프가 덮어쓰지 않게 하고, 끝나면 일반 이동 루프로 넘어간다.
+    this.playFirstAvailable(candidates, { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
+    this._beginTransientMoveClip(clip.name);
+    this._champTimeout(() => this._endTransientMoveClip(clip.name), Math.max(0, clip.duration - 0.1) * 1000);
+    onDone();
+    return;
+  }
   if (clip) {
     this.playFirstAvailable(candidates, { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
     const t = this._champTimeout(() => onDone(), Math.max(0, clip.duration - 0.03) * 1000);

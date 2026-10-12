@@ -158,6 +158,7 @@ CharacterController.prototype._die = function() {
     // 보너스 공격력이 남지 않도록).
     if (this.championId === 'varus' && this._varus) {
       this._varus.qCharge = null;
+      clearStatus(this, 'varusQ_chargeSlow');
       this._varus.lv = { target: null, rampStartAt: 0, lastHitAt: 0 };
       this.bonusAD = 0;
     }
