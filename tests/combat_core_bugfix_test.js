@@ -291,7 +291,9 @@ function skillValLocal(byLevel, lvl) {
   // 스윙을 "시작"하는 시점에 해당하는 _consumeAttackOverride()만 호출한다
   // (실제 _beginAttackSwing이 이 함수를 부르는 지점과 동일) - 아직 명중
   // 여부를 모르는 시점이므로 가렌 Q는 여기서 소모되면 안 된다.
-  ctrl._consumeAttackOverride(override, null);
+  const consumed = ctrl._consumeAttackOverride(override, null);
+  assert(consumed.attackData.cancelToMove === true && consumed.attackData.cancelToSpell === true,
+    '강화 평타(가렌 Q 등)도 일반 평타처럼 후딜 중 이동·스킬로 취소된다(cancelToMove/cancelToSpell)');
   override = ctrl.attackOverrides.find((o) => o.id === 'Q');
   assert(!!override && override.usesRemaining === 1, '가렌 Q: 스윙을 "시작"한 것만으로는 소모되지 않는다(명중 전)');
 

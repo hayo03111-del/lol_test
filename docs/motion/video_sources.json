@@ -8,7 +8,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Garen_ability_videos",
@@ -18,7 +18,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Garen_EVideo.ogv",
@@ -28,7 +28,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Garen_RVideo.ogv",
@@ -38,7 +38,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "darius": {
@@ -50,7 +50,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Darius_IVideo.ogv, Darius_EVideo.ogv만 검색됨. 이 스킬 파일은 검색 결과에 없음"
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Darius_ability_videos",
@@ -60,7 +61,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Darius_IVideo.ogv, Darius_EVideo.ogv만 검색됨. 이 스킬 파일은 검색 결과에 없음"
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Darius_EVideo.ogv",
@@ -70,7 +72,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Darius_ability_videos",
@@ -80,7 +82,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Darius_IVideo.ogv, Darius_EVideo.ogv만 검색됨. 이 스킬 파일은 검색 결과에 없음"
   }
  },
  "masteryi": {
@@ -92,7 +95,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Master_Yi_ability_videos",
@@ -102,7 +105,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Master_Yi_ability_videos",
@@ -112,7 +115,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Master_Yi_RVideo.ogv",
@@ -122,7 +125,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "leesin": {
@@ -134,7 +137,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): 리 신 문서의 이 스킬 항목에 \"No video available\" 표시. Category:Lee Sin ability videos는 파일 10개(이름 미확인)"
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Lee_Sin_ability_videos",
@@ -144,7 +148,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Category:Lee Sin ability videos 파일 10개(이름 미확인)"
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Lee_Sin_ability_videos",
@@ -154,7 +159,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): 리 신 문서의 이 스킬 항목에 \"No video available\" 표시. Category:Lee Sin ability videos는 파일 10개(이름 미확인)"
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Lee_Sin_ability_videos",
@@ -164,7 +170,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): 리 신 문서의 이 스킬 항목에 \"No video available\" 표시. Category:Lee Sin ability videos는 파일 10개(이름 미확인)"
   }
  },
  "nautilus": {
@@ -176,7 +183,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Category:Nautilus ability videos 파일 5개(이름 미확인)"
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Nautilus_ability_videos",
@@ -186,7 +194,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Category:Nautilus ability videos 파일 5개(이름 미확인)"
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Nautilus_ability_videos",
@@ -196,7 +205,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Category:Nautilus ability videos 파일 5개(이름 미확인)"
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Nautilus_ability_videos",
@@ -206,7 +216,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Category:Nautilus ability videos 파일 5개(이름 미확인)"
   }
  },
  "yasuo": {
@@ -218,7 +229,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Yasuo_ability_videos",
@@ -228,7 +239,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Yasuo_ability_videos",
@@ -238,7 +249,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Yasuo_RVideo.ogv",
@@ -248,7 +259,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "yone": {
@@ -260,7 +271,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Yone_ability_videos",
@@ -270,7 +281,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Yone_ability_videos",
@@ -280,7 +291,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Yone_ability_videos",
@@ -290,7 +301,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "sett": {
@@ -302,7 +313,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Sett_ability_videos",
@@ -312,7 +323,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Sett_ability_videos",
@@ -322,7 +333,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Sett_ability_videos",
@@ -332,7 +343,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "mordekaiser": {
@@ -344,7 +355,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Mordekaiser_ability_videos",
@@ -354,7 +365,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Mordekaiser_EVideo.ogv",
@@ -364,7 +375,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Mordekaiser_ability_videos",
@@ -374,7 +385,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "renekton": {
@@ -386,7 +397,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Renekton_WVideo.ogv",
@@ -396,7 +407,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Renekton_EVideo.ogv",
@@ -406,7 +417,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Renekton_RVideo.ogv",
@@ -416,7 +427,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "nilah": {
@@ -428,7 +439,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Nilah_ability_videos",
@@ -438,7 +449,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Nilah_ability_videos",
@@ -448,7 +459,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Nilah_ability_videos",
@@ -458,7 +469,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "chogath": {
@@ -470,7 +481,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Cho'Gath_WVideo.ogv",
@@ -480,7 +491,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Cho'Gath_ability_videos",
@@ -490,7 +501,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Cho'Gath_RVideo.ogv",
@@ -500,7 +511,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "ezreal": {
@@ -512,7 +523,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Ezreal_ability_videos",
@@ -522,7 +533,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Ezreal_ability_videos",
@@ -532,7 +543,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Ezreal_ability_videos",
@@ -542,7 +553,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "ashe": {
@@ -554,7 +565,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Ashe_W_Video.webm",
@@ -564,7 +575,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Ashe_E_Video.webm",
@@ -574,7 +585,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/File:Ashe_R_Video.webm",
@@ -584,7 +595,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "varus": {
@@ -596,7 +607,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Varus_ability_videos",
@@ -606,7 +617,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Varus_ability_videos",
@@ -616,7 +627,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Varus_ability_videos",
@@ -626,7 +637,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "ahri": {
@@ -638,7 +649,7 @@
    "patch": "업로드 시점 기준(현재 패치와 다를 수 있음)",
    "segment": "전체(스킬 미리보기 단일 클립)",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Ahri_ability_videos",
@@ -648,7 +659,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Ahri_ability_videos",
@@ -658,7 +669,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Ahri_ability_videos",
@@ -668,7 +679,7 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음."
   }
  },
  "vex": {
@@ -680,7 +691,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Vex 영상 파일은 검색 결과에 없음(파일 페이지 미확인)"
   },
   "W": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Vex_ability_videos",
@@ -690,7 +702,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Vex 영상 파일은 검색 결과에 없음(파일 페이지 미확인)"
   },
   "E": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Vex_ability_videos",
@@ -700,7 +713,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Vex 영상 파일은 검색 결과에 없음(파일 페이지 미확인)"
   },
   "R": {
    "url": "https://wiki.leagueoflegends.com/en-us/Category:Vex_ability_videos",
@@ -710,7 +724,8 @@
    "patch": "미확인",
    "segment": "미확인",
    "mediaStatus": "not-downloaded",
-   "failureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음."
+   "failureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
+   "searchNote": "8차 WebSearch(wiki.leagueoflegends.com 한정, 검색 요약 기준 - 낮은 신뢰도): Vex 영상 파일은 검색 결과에 없음(파일 페이지 미확인)"
   }
  },
  "_notes": {

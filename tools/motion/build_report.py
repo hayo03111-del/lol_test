@@ -40,13 +40,18 @@ NO_DAMAGE_EXPECTED = {('garen', 'W'), ('masteryi', 'W'), ('masteryi', 'E'), ('ma
                       ('nilah', 'W'), ('chogath', 'E'), ('ezreal', 'W'), ('ashe', 'Q'), ('ashe', 'E'), ('varus', 'W'), ('darius', 'E')}
 # 코드 확인으로 원인이 밝혀진 항목(측정값만으로는 알 수 없는 것)
 INVESTIGATED = {
-    ('vex', 'W'): '전용 구현 없음: 공용 대체 경로가 선택 대상에게 고정 피해만 줌(범위·보호막·둔화 없음). 측정 시 대상 미선택이라 피해 0',
-    ('vex', 'E'): '전용 구현 없음: 공용 대체 경로(선택 대상 고정 피해) - 범위·둔화·우울 표식 없음',
-    ('vex', 'Q'): '전용 구현 없음: 공용 직선 판정 대체 경로',
-    ('chogath', 'W'): '부채꼴 판정 방향이 조준(마우스) 방향이 아니라 캐릭터의 현재 바라보는 방향 - 측정 시 빗나감',
-    ('renekton', 'Q'): '피해 시점을 클립 길이×0.62 타이머로 정함 - 위키는 시전 시간 없음(즉시)',
-    ('nilah', 'Q'): '위키 0.35~0.28초인데 측정 1.14초 - 원인 조사 필요',
+    ('vex', 'Q'): '7차에서 전용 구현(가속 파동, 관통). 위 측정값은 7차 수정 후 값',
+    ('vex', 'W'): '7차에서 전용 구현(보호막 + 반경 피해, 시전 중 이동 가능). 잠금 해제가 짧은 것은 이동 허용 때문',
+    ('vex', 'E'): '7차에서 전용 구현(지정 지점 폭발 + 둔화). 투사체 속도 1300은 추정값',
+    ('chogath', 'W'): '7차에서 판정 방향을 조준(마우스) 방향으로 수정',
+    ('renekton', 'Q'): '7차에서 즉시 판정 + 0.25초 평타 금지로 수정(위키: 시전 시간 없음)',
+    ('nilah', 'Q'): '7차에서 판정을 시전 시간(0.35~0.28초)으로 옮김. 남은 모션(nilahQTail)은 이동·평타·스킬로 언제든 끊김 - 잠금 플래그는 실제 행동 제약 아님',
+    ('nilah', 'R'): '8차 확인: 채널 내내 이동 가능(canMove=true), 평타·스킬만 막힘. 코드상 잠금 = 선딜 0.16 + 채널 1.0 + 종료 후 0.12~0.32초. 측정 2.2초는 저프레임(17fps)에서 프레임당 dt 0.05초 제한으로 채널이 실제 약 1.75초 걸린 측정 조건 영향. 종료 후 0.32초 잠금의 원작 근거는 미확인',
+    ('garen', 'Q'): '8차 수정: 강화 평타 오버라이드에 cancelToMove/cancelToSpell이 없어 적중 후 후딜(공격속도 기준 약 1.2초) 동안 이동이 대기열에만 쌓였음 → 일반 평타처럼 취소 허용. 측정의 잠금 해제값은 입력 없이 둔 경우라 그대로이며, 브라우저에서 후딜 시작 시 이동 명령이 즉시 반영되는 것 확인',
+    ('darius', 'W'): '8차 수정(가렌 Q와 같은 원인): 강화 평타 후딜 중 이동·스킬 취소 허용. 브라우저에서 확인',
+    ('mordekaiser', 'R'): '8차 확인: 코드상 잠금 = 시전 0.5초(위키) + 엔진 여유 0.15초 = 0.65초. 측정 0.97초와의 차이는 setTimeout 지연(swiftshader 부하)으로 판단 - 실제 GPU 브라우저에서는 미확인',
 }
+VIDEO_METHOD = 'video_events.py: 프레임 차분 움직임 에너지(시전 시작·모션 피크) + HSV V>=230 밝은 영역 증가(이펙트 출현). 검증: 자체 녹화 6건 중 이펙트 4건 ±70ms, 시전 시작 2건 검출 실패'
 COND = 'Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)'
 rows = []
 for cid in glb:
@@ -72,11 +77,18 @@ for cid in glb:
         if clip_sec and unlock and unlock > clip_sec * 1000 + 300:
             flags.append('행동 잠금이 클립 길이보다 0.3초 이상 김')
         vid_file = os.path.join(D, f'video_events_{cid}_{s}.json')
-        video_onset = None
+        video_onset = None; video_peaks = ''; video_effect = None
         if os.path.exists(vid_file):
             ve = json.load(open(vid_file, encoding='utf-8'))
-            if ve.get('events', {}).get('motion_onset'):
-                video_onset = ve['events']['motion_onset']['t']
+            vev = ve.get('events', {})
+            if vev.get('motion_onset'):
+                video_onset = vev['motion_onset']['t']
+            video_peaks = ' '.join(str(p['t']) for p in (vev.get('motion_peaks') or []))
+            if vev.get('effect_onsets'):
+                video_effect = vev['effect_onsets'][0]['t']
+            video_status = '분석됨(영상 시각 기준, 게임 측정과 기준점 정렬 전 - 신뢰도 low)'
+        else:
+            video_status = '미비교: 영상 미확보 - ' + (v.get('mediaStatus') or '상태 없음')
         status = w.get('status', 'unknown')
         conf = 'high' if status == 'confirmed' and dmg is not None else ('medium' if status in ('confirmed', 'confirmed-db', 'conflict') else 'low')
         rows.append({
@@ -88,6 +100,9 @@ for cid in glb:
             'gameFirstVfxMs': vfx, 'gameProjectileMs': proj, 'gameFirstDamageMs': dmg, 'gameUnlockMs': unlock,
             'damageMinusWikiCastMs': (None if (dmg is None or cast is None) else round(dmg - cast * 1000)),
             'measurementConditions': COND, 'confidence': conf, 'flags': '; '.join(flags), 'investigation': INVESTIGATED.get((cid, s), ''),
+            # 영상 비교 칸(뒤에 추가 - 기존 칸 순서 유지). 영상에서 관찰한 이펙트 출현은 실제 피해 판정과 같은 값으로 취급하지 않는다.
+            'videoMotionPeaksSec': video_peaks, 'videoObservedEffectSec': video_effect,
+            'videoComparisonStatus': video_status, 'videoAnalysisMethod': VIDEO_METHOD if video_onset is not None or video_effect is not None else '',
         })
 with open(os.path.join(D, 'motion_timing.json'), 'w', encoding='utf-8') as f:
     json.dump(rows, f, ensure_ascii=False, indent=1)

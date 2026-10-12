@@ -645,7 +645,9 @@ CharacterController.prototype._consumeAttackOverride = function(override, handHi
       overrideClips = [seqName, ...override.clips];
       override.useIndex++;
     }
-    const attackData = { clips: overrideClips, cancelable: true };
+    // 버그 수정(모션 타이밍 측정): cancelToMove/cancelToSpell이 빠져 있어 강화 평타(가렌 Q·다리우스 W 등)의
+    // 후딜(공격속도 기준, 가렌 기본 약 1.2초) 동안 이동·스킬 입력이 대기열에만 쌓였다. 일반 평타와 같게 취소를 허용한다.
+    const attackData = { clips: overrideClips, cancelable: true, cancelToMove: true, cancelToSpell: true };
     // 버그 수정(QA - "가렌 Q 강화 기본 공격 소비 시점"): 문서는 "Q 소모 =
     // 실제 HIT 성공 시점"이라고 명시하는데, 이 지점(_beginAttackSwing이
     // 스윙을 "시작"하는 순간)은 아직 HIT 판정 이전(Windup)이다 - 여기서

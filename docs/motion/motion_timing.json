@@ -8,7 +8,7 @@
   "videoMeta": "Ogg Theora 11s 640x360, 2016-06-12 업로드",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1",
   "glbFirstClipSec": 1.0,
@@ -25,7 +25,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "행동 잠금이 클립 길이보다 0.3초 이상 김",
-  "investigation": ""
+  "investigation": "8차 수정: 강화 평타 오버라이드에 cancelToMove/cancelToSpell이 없어 적중 후 후딜(공격속도 기준 약 1.2초) 동안 이동이 대기열에만 쌓였음 → 일반 평타처럼 취소 허용. 측정의 잠금 해제값은 입력 없이 둔 경우라 그대로이며, 브라우저에서 후딜 시작 시 이동 명령이 즉시 반영되는 것 확인",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "garen",
@@ -36,7 +40,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Idle1_Base",
   "glbFirstClipSec": 2.1667,
@@ -53,7 +57,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "garen",
@@ -64,7 +72,7 @@
   "videoMeta": "",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3_0",
   "glbFirstClipSec": 3.0,
@@ -81,7 +89,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "투사체 없이 시전 시간보다 0.4초 이상 늦게 피해",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "garen",
@@ -92,7 +104,7 @@
   "videoMeta": "",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4_Base",
   "glbFirstClipSec": 1.5667,
@@ -109,7 +121,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "darius",
@@ -120,7 +136,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Darius_Spell1_IN.anm",
   "glbFirstClipSec": 0.8,
@@ -137,7 +153,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "투사체 없이 시전 시간보다 0.4초 이상 늦게 피해; 행동 잠금이 클립 길이보다 0.3초 이상 김",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "darius",
@@ -148,7 +168,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2",
   "glbFirstClipSec": 1.6667,
@@ -165,7 +185,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "투사체 없이 시전 시간보다 0.4초 이상 늦게 피해",
-  "investigation": ""
+  "investigation": "8차 수정(가렌 Q와 같은 원인): 강화 평타 후딜 중 이동·스킬 취소 허용. 브라우저에서 확인",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "darius",
@@ -176,7 +200,7 @@
   "videoMeta": "6.7s 640x360",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3",
   "glbFirstClipSec": 0.7667,
@@ -193,7 +217,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "darius",
@@ -204,7 +232,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4",
   "glbFirstClipSec": 1.3333,
@@ -221,7 +249,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "masteryi",
@@ -232,7 +264,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1",
   "glbFirstClipSec": 1.8333,
@@ -249,7 +281,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "투사체 없이 시전 시간보다 0.4초 이상 늦게 피해",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "masteryi",
@@ -260,7 +296,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2_Loop",
   "glbFirstClipSec": 1.6667,
@@ -277,7 +313,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "masteryi",
@@ -288,7 +328,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "masteryi_2013_idle1.anm",
   "glbFirstClipSec": 4.0,
@@ -305,7 +345,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "masteryi",
@@ -316,7 +360,7 @@
   "videoMeta": "13s 1056x720, 2018-11-09",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "masteryi_2013_idle1.anm",
   "glbFirstClipSec": 4.0,
@@ -333,7 +377,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "leesin",
@@ -344,7 +392,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1",
   "glbFirstClipSec": 1.1667,
@@ -361,7 +409,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "leesin",
@@ -372,7 +424,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2",
   "glbFirstClipSec": 1.3333,
@@ -389,7 +441,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "leesin",
@@ -400,7 +456,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3",
   "glbFirstClipSec": 2.1667,
@@ -417,7 +473,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "leesin",
@@ -428,7 +488,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4",
   "glbFirstClipSec": 0.3,
@@ -445,7 +505,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "nautilus",
@@ -456,7 +520,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1",
   "glbFirstClipSec": 0.4667,
@@ -473,7 +537,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "nautilus",
@@ -484,7 +552,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Idle1",
   "glbFirstClipSec": 15.2,
@@ -501,7 +569,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "nautilus",
@@ -512,7 +584,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3",
   "glbFirstClipSec": 1.0,
@@ -529,7 +601,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "nautilus",
@@ -540,7 +616,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4",
   "glbFirstClipSec": 1.9,
@@ -557,7 +633,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "yasuo",
@@ -568,7 +648,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1A",
   "glbFirstClipSec": 0.9667,
@@ -585,7 +665,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "yasuo",
@@ -596,7 +680,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2_0",
   "glbFirstClipSec": 0.7,
@@ -613,7 +697,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "yasuo",
@@ -624,7 +712,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3",
   "glbFirstClipSec": 1.0667,
@@ -641,7 +729,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "yasuo",
@@ -652,7 +744,7 @@
   "videoMeta": "12s 640x360",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Idle1_Raw",
   "glbFirstClipSec": 13.3333,
@@ -669,7 +761,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "yone",
@@ -680,7 +776,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Yone_Spell1_A_02.anm",
   "glbFirstClipSec": 0.7,
@@ -697,7 +793,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "yone",
@@ -708,7 +808,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2",
   "glbFirstClipSec": 0.5,
@@ -725,7 +825,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "yone",
@@ -736,7 +840,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3_Dash",
   "glbFirstClipSec": 0.0667,
@@ -753,7 +857,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "yone",
@@ -764,7 +872,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4",
   "glbFirstClipSec": 1.6667,
@@ -781,7 +889,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "sett",
@@ -792,7 +904,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Idle_Base",
   "glbFirstClipSec": 3.3333,
@@ -809,7 +921,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "sett",
@@ -820,7 +936,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Sett_spell2.anm",
   "glbFirstClipSec": 1.5667,
@@ -837,7 +953,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "sett",
@@ -848,7 +968,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3",
   "glbFirstClipSec": 0.4,
@@ -865,7 +985,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "sett",
@@ -876,7 +1000,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4_Dash",
   "glbFirstClipSec": 0.5,
@@ -893,7 +1017,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "투사체 없이 시전 시간보다 0.4초 이상 늦게 피해; 행동 잠금이 클립 길이보다 0.3초 이상 김",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "mordekaiser",
@@ -904,7 +1032,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1",
   "glbFirstClipSec": 0.8667,
@@ -921,7 +1049,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "mordekaiser",
@@ -932,7 +1064,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Idle.anm",
   "glbFirstClipSec": 4.2333,
@@ -949,7 +1081,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "mordekaiser",
@@ -960,7 +1096,7 @@
   "videoMeta": "4.2s 1056x720, 2019 갱신",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3_Cast.anm",
   "glbFirstClipSec": 2.6667,
@@ -977,7 +1113,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "mordekaiser",
@@ -988,7 +1128,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4",
   "glbFirstClipSec": 0.5,
@@ -1005,7 +1145,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "행동 잠금이 클립 길이보다 0.3초 이상 김",
-  "investigation": ""
+  "investigation": "8차 확인: 코드상 잠금 = 시전 0.5초(위키) + 엔진 여유 0.15초 = 0.65초. 측정 0.97초와의 차이는 setTimeout 지연(swiftshader 부하)으로 판단 - 실제 GPU 브라우저에서는 미확인",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "renekton",
@@ -1016,7 +1160,7 @@
   "videoMeta": "4.4s 1056x720, 2018-11-09",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1",
   "glbFirstClipSec": 0.8387,
@@ -1033,7 +1177,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": "피해 시점을 클립 길이×0.62 타이머로 정함 - 위키는 시전 시간 없음(즉시)"
+  "investigation": "7차에서 즉시 판정 + 0.25초 평타 금지로 수정(위키: 시전 시간 없음)",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "renekton",
@@ -1044,7 +1192,7 @@
   "videoMeta": "카테고리 목록에서 확인",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2",
   "glbFirstClipSec": 1.1,
@@ -1061,7 +1209,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "renekton",
@@ -1072,7 +1224,7 @@
   "videoMeta": "카테고리 목록에서 확인",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3",
   "glbFirstClipSec": 0.7419,
@@ -1089,7 +1241,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "renekton",
@@ -1100,7 +1256,7 @@
   "videoMeta": "9.0s",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4",
   "glbFirstClipSec": 0.9677,
@@ -1117,7 +1273,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "nilah",
@@ -1128,7 +1288,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1A",
   "glbFirstClipSec": 0.2,
@@ -1145,7 +1305,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "행동 잠금이 클립 길이보다 0.3초 이상 김",
-  "investigation": "위키 0.35~0.28초인데 측정 1.14초 - 원인 조사 필요"
+  "investigation": "7차에서 판정을 시전 시간(0.35~0.28초)으로 옮김. 남은 모션(nilahQTail)은 이동·평타·스킬로 언제든 끊김 - 잠금 플래그는 실제 행동 제약 아님",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "nilah",
@@ -1156,7 +1320,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2",
   "glbFirstClipSec": 0.8,
@@ -1173,7 +1337,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "nilah",
@@ -1184,7 +1352,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3A",
   "glbFirstClipSec": 0.7,
@@ -1201,7 +1369,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "nilah",
@@ -1212,7 +1384,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4_Idle",
   "glbFirstClipSec": 1.6,
@@ -1229,7 +1401,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "투사체 없이 시전 시간보다 0.4초 이상 늦게 피해; 행동 잠금이 클립 길이보다 0.3초 이상 김",
-  "investigation": ""
+  "investigation": "8차 확인: 채널 내내 이동 가능(canMove=true), 평타·스킬만 막힘. 코드상 잠금 = 선딜 0.16 + 채널 1.0 + 종료 후 0.12~0.32초. 측정 2.2초는 저프레임(17fps)에서 프레임당 dt 0.05초 제한으로 채널이 실제 약 1.75초 걸린 측정 조건 영향. 종료 후 0.32초 잠금의 원작 근거는 미확인",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "chogath",
@@ -1240,7 +1416,7 @@
   "videoMeta": "7.0s 640x360 (2016)",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1",
   "glbFirstClipSec": 1.0333,
@@ -1257,7 +1433,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "투사체 없이 시전 시간보다 0.4초 이상 늦게 피해",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "chogath",
@@ -1268,7 +1448,7 @@
   "videoMeta": "6.5s 640x360 (2016)",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2",
   "glbFirstClipSec": 1.3333,
@@ -1285,7 +1465,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": "부채꼴 판정 방향이 조준(마우스) 방향이 아니라 캐릭터의 현재 바라보는 방향 - 측정 시 빗나감"
+  "investigation": "7차에서 판정 방향을 조준(마우스) 방향으로 수정",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "chogath",
@@ -1296,7 +1480,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Idle1",
   "glbFirstClipSec": 2.0,
@@ -1313,7 +1497,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "chogath",
@@ -1324,7 +1512,7 @@
   "videoMeta": "11s 640x360 (2016)",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4",
   "glbFirstClipSec": 0.9032,
@@ -1341,7 +1529,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ezreal",
@@ -1352,7 +1544,7 @@
   "videoMeta": "6.7s 1056x720, 2018-11",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1",
   "glbFirstClipSec": 0.4,
@@ -1369,7 +1561,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ezreal",
@@ -1380,7 +1576,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2",
   "glbFirstClipSec": 0.3333,
@@ -1397,7 +1593,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ezreal",
@@ -1408,7 +1608,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3_0",
   "glbFirstClipSec": 0.4,
@@ -1425,7 +1625,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ezreal",
@@ -1436,7 +1640,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4",
   "glbFirstClipSec": 1.0,
@@ -1453,7 +1657,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ashe",
@@ -1464,7 +1672,7 @@
   "videoMeta": "VP9/Opus",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Idle1",
   "glbFirstClipSec": 9.3333,
@@ -1481,7 +1689,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ashe",
@@ -1492,7 +1704,7 @@
   "videoMeta": "850KB",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2",
   "glbFirstClipSec": 1.8333,
@@ -1509,7 +1721,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ashe",
@@ -1520,7 +1736,7 @@
   "videoMeta": "1.27MB",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3",
   "glbFirstClipSec": 1.6667,
@@ -1537,7 +1753,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ashe",
@@ -1548,7 +1768,7 @@
   "videoMeta": "2023-09-02",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4",
   "glbFirstClipSec": 2.1333,
@@ -1565,7 +1785,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "varus",
@@ -1576,7 +1800,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1_Idle",
   "glbFirstClipSec": 2.3333,
@@ -1593,7 +1817,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "varus",
@@ -1604,7 +1832,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "varus_idle1.anm",
   "glbFirstClipSec": 2.1,
@@ -1621,7 +1849,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "varus",
@@ -1632,7 +1864,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3",
   "glbFirstClipSec": 0.9677,
@@ -1649,7 +1881,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "varus",
@@ -1660,7 +1896,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4",
   "glbFirstClipSec": 0.9677,
@@ -1677,7 +1913,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "medium",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ahri",
@@ -1688,7 +1928,7 @@
   "videoMeta": "VP8 4.1s 1056x720, 2021-10-04",
   "videoSegment": "전체(스킬 미리보기 단일 클립)",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1",
   "glbFirstClipSec": 0.4333,
@@ -1705,7 +1945,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ahri",
@@ -1716,7 +1960,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2",
   "glbFirstClipSec": 1.3333,
@@ -1733,7 +1977,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ahri",
@@ -1744,7 +1992,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3_south",
   "glbFirstClipSec": 2.7667,
@@ -1761,7 +2009,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "ahri",
@@ -1772,7 +2024,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4",
   "glbFirstClipSec": 0.4,
@@ -1789,7 +2041,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "low",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "vex",
@@ -1800,7 +2056,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell1_Base",
   "glbFirstClipSec": 1.0333,
@@ -1817,7 +2073,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": "전용 구현 없음: 공용 직선 판정 대체 경로"
+  "investigation": "7차에서 전용 구현(가속 파동, 관통). 위 측정값은 7차 수정 후 값",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "vex",
@@ -1828,7 +2088,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell2_BASE",
   "glbFirstClipSec": 0.8333,
@@ -1845,7 +2105,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": "전용 구현 없음: 공용 대체 경로가 선택 대상에게 고정 피해만 줌(범위·보호막·둔화 없음). 측정 시 대상 미선택이라 피해 0"
+  "investigation": "7차에서 전용 구현(보호막 + 반경 피해, 시전 중 이동 가능). 잠금 해제가 짧은 것은 이동 허용 때문",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "vex",
@@ -1856,7 +2120,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell3_0",
   "glbFirstClipSec": 0.7667,
@@ -1873,7 +2137,11 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": "전용 구현 없음: 공용 대체 경로(선택 대상 고정 피해) - 범위·둔화·우울 표식 없음"
+  "investigation": "7차에서 전용 구현(지정 지점 폭발 + 둔화). 투사체 속도 1300은 추정값",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  },
  {
   "champion": "vex",
@@ -1884,7 +2152,7 @@
   "videoMeta": "",
   "videoSegment": "미확인",
   "videoMediaStatus": "not-downloaded",
-  "videoFailureReason": "네트워크 정책 차단: wiki.leagueoflegends.com(및 static.wikia.nocookie.net, YouTube, Riot CDN, archive.org) 연결 불가(curl 응답 000). 우회하지 않음.",
+  "videoFailureReason": "위키 API 접근 실패: egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 (URLError: <urlopen error Tunnel connection failed: 403 Forbidden>). 우회하지 않음.",
   "videoMotionOnsetSec": null,
   "glbFirstClip": "Spell4_Cast",
   "glbFirstClipSec": 0.7667,
@@ -1901,6 +2169,10 @@
   "measurementConditions": "Chromium 1194(swiftshader) 240x135, 약 46fps, 게임 시간/실제 시간 1.016, 측정 오차 ≈ ±(프레임 22ms + 폴링 간격)",
   "confidence": "high",
   "flags": "",
-  "investigation": ""
+  "investigation": "",
+  "videoMotionPeaksSec": "",
+  "videoObservedEffectSec": null,
+  "videoComparisonStatus": "미비교: 영상 미확보 - not-downloaded",
+  "videoAnalysisMethod": ""
  }
 ]

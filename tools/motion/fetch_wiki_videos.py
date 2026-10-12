@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -28,6 +29,16 @@ def api(params):
     url = API + '?' + urllib.parse.urlencode({**params, 'format': 'json'})
     with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=20) as r:
         return json.load(r)
+
+
+def classify(e):
+    """실패 원인을 구분한다: 프록시 CONNECT 단계 거부(대상 서버에 도달 못 함) / 대상 서버의 HTTP 응답 / 기타."""
+    msg = f'{type(e).__name__}: {e}'
+    if isinstance(e, urllib.error.HTTPError):
+        return f'대상 서버 응답 HTTP {e.code} ({msg})'
+    if 'Tunnel connection failed' in str(e):
+        return f'egress 프록시가 CONNECT 거부 - 대상 서버에 도달하지 못함, 프록시 정책 차단 ({msg}). 우회하지 않음.'
+    return f'네트워크 오류 ({msg})'
 
 
 def category_files(champ_name):
@@ -62,7 +73,7 @@ def main():
         except Exception as e:  # 네트워크 차단 등 - 우회하지 않고 기록만
             for s in 'QWER':
                 sources[cid][s]['mediaStatus'] = 'not-downloaded'
-                sources[cid][s]['failureReason'] = f'위키 API 접근 실패: {type(e).__name__}: {e}'
+                sources[cid][s]['failureReason'] = '위키 API 접근 실패: ' + classify(e)
             print(cid, 'API 실패:', e)
             continue
         for s in 'QWER':
@@ -85,7 +96,7 @@ def main():
                               'patch': '업로드 시점 기준(현재 패치와 다를 수 있음)', 'segment': f"전체 0~{res['durationSec']}s"})
                 print(cid, s, 'ok', title)
             except Exception as e:
-                entry.update({'mediaStatus': 'failed', 'failureReason': f'{type(e).__name__}: {e}'})
+                entry.update({'mediaStatus': 'failed', 'failureReason': classify(e)})
                 print(cid, s, '실패:', e)
     json.dump(sources, open(src_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 
