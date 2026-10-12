@@ -69,7 +69,7 @@ const stubs = {
   vfx: { spawn: () => {} },
   document: { getElementById: () => null },
   window: {},
-  THREE: { Vector3, LoopOnce: 2200, LoopRepeat: 2201, MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } },
+  THREE: { Vector3, LoopOnce: 2200, LoopRepeat: 2201, MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)), smoothstep: (x, a, b) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); } } },
 };
 const context = vm.createContext(stubs);
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -266,6 +266,14 @@ function recompute(c) {
   c.stats.moveSpeed = 0; // getFinalMoveSpeed 폴백 → 데이터 이동 속도 345
   c._yasuoCastE(null, true);
   assert(near(c._yasuo.eDashEnd.z, lolRangeToWorld(475)), '야스오 E: 대상을 지나 475만큼 돌진(예전엔 대상 앞에서 멈춤)');
+  // 피해는 돌진이 대상(200 지점)에 닿는 순간 - 돌진이 끝나기 전에 들어간다.
+  const hp0 = t.hp;
+  let steps = 0;
+  while (t.hp === hp0 && c._yasuo.eDashStart && steps < 200) { c._yasuoTick(0.01); steps++; }
+  assert(t.hp < hp0 && !!c._yasuo.eDashStart, '야스오 E: 대상에 닿는 순간 피해(돌진 종료 전)');
+  const hpHit = t.hp;
+  while (c._yasuo.eDashStart && steps < 400) { c._yasuoTick(0.01); steps++; }
+  assert(t.hp === hpHit, '야스오 E: 피해는 한 번만');
 }
 
 // --- R: 챔피언만, 기준 대상 주변 400, 추가 공격력 계수 ---

@@ -624,6 +624,8 @@ CharacterController.prototype._resumeAfterAction = function() {
 CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
     const slotCast = CHAMPION_SLOT_CASTS.Q[this.championId];
     if (slotCast) { slotCast(this, mouseWorldPoint, free); return; }
+    // PC 위키(Noxian Guillotine): R 시전 시간이 끝난 뒤 0.25초 동안 Q/E 사용 불가.
+    if (this.championId === 'darius' && performance.now() < (this._dariusRQeLockUntil || 0)) return;
     const db = this._championAbilityDbEntry();
     // 업데이트(다리우스 Q 문서 1~11절): Q가 방향별 단일 클립이 아니라
     // "웜업 클립 → 실제 공격 클립"을 강제로 연속 재생해야 하는 챔피언을 위한
@@ -1256,6 +1258,8 @@ CharacterController.prototype._castW = function(mouseWorldPoint, free = false) {
 CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
     const slotCast = CHAMPION_SLOT_CASTS.E[this.championId];
     if (slotCast) { slotCast(this, mouseWorldPoint, free); return; }
+    // PC 위키(Noxian Guillotine): R 시전 시간이 끝난 뒤 0.25초 동안 Q/E 사용 불가.
+    if (this.championId === 'darius' && performance.now() < (this._dariusRQeLockUntil || 0)) return;
     const db = this._championAbilityDbEntry();
     const channelCfg = db && db.E && db.E.directionalChannel;
 
@@ -1394,6 +1398,8 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
       : this.currentTarget
         ? new THREE.Vector3().subVectors(this.currentTarget.mesh.position, this.root.position).setY(0).normalize()
         : null;
+    // PC 위키(Death's Grasp): 시전 시작 시점의 위치에서 발동한다 - 시작 위치를 미리 잡아 둔다.
+    const mordeEOrigin = this.championId === 'mordekaiser' ? this.root.position.clone() : null;
     this.runAction(key, STATE.E_CAST, {
       faceDir: facing,
       dataOverride: clipsOverride ? { ...data, clips: clipsOverride } : undefined,
@@ -1421,9 +1427,15 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
           const worldRange = lolRangeToWorld(cd.E.range);
           const rawDist = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0).length() : worldRange;
           const dist = Math.min(rawDist, worldRange);
-          const hits = this._mordeEAreaHits(this.root.position.clone(), dir, dist);
-          if (hits.length) hits.forEach((u) => this._mordeEOnCast(u));
-          else debugSkillMiss('Mordekaiser E', 'no target in impact area');
+          // PC 위키: 시전 0.25초가 끝나면 행동 가능, 판정(피해·끌어오기)은 그 0.5초 뒤(모데카이저가 죽어도 발동).
+          // 예전엔 판정 시점(0.5초)까지 행동을 잠갔고, 판정 위치도 그 시점의 현재 위치였다.
+          // 0.5초는 위키 서술 관례대로 시전 종료 기준으로 해석(시작 기준이면 총 0.5초 - 미확인).
+          const origin = mordeEOrigin || this.root.position.clone();
+          setTimeout(() => {
+            const hits = this._mordeEAreaHits(origin, dir, dist);
+            if (hits.length) hits.forEach((u) => this._mordeEOnCast(u));
+            else debugSkillMiss('Mordekaiser E', 'no target in impact area');
+          }, (cd.E.effectDelaySec ?? 0.5) * 1000);
         } else if (this.currentTarget && this.currentTarget.hp > 0) {
           applyDamage(this.currentTarget, { rawDamage: data.dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
         }
@@ -1676,7 +1688,7 @@ CharacterController.prototype._castR = function(free = false) {
           vfx.spawn('r', this.root.position.clone());
           if (lockedRTarget && lockedRTarget.hp > 0) {
             if (this.championId === 'garen') { this._garenROnHit(lockedRTarget); debugSkillHit('Garen R', lockedRTarget); }
-            else if (this.championId === 'darius') { this._dariusROnHit(lockedRTarget); debugSkillHit('Darius R', lockedRTarget); }
+            else if (this.championId === 'darius') { this._dariusROnHit(lockedRTarget); debugSkillHit('Darius R', lockedRTarget); this._dariusRQeLockUntil = performance.now() + 250; }
             else if (this.championId === 'mordekaiser') {
               // 버그 수정(명세 2/3절 "R 유효 대상은 적 챔피언만 - 미니언/
               // 몬스터 등에는 발동되지 않아야 한다"): 이 데모의 유일한 상시

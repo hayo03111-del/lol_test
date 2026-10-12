@@ -2071,7 +2071,7 @@ function itemOnSlowOrImmobilize(ctrl, target, effectType) {
   // 같은 id의 상태이상을 다시 걸면 자동으로 덮어써서 지속시간이 연장되므로
   // 별도 처리가 필요 없다.
   const mandateSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].commandPassive);
-  const IMMOBILIZE_TYPES = ['STUN', 'ROOT', 'SUPPRESSION', 'KNOCKUP', 'CHARM']; // 둔화(SLOW) 제외
+  const IMMOBILIZE_TYPES = ['STUN', 'ROOT', 'SUPPRESSION', 'KNOCKUP', 'CHARM', 'FEAR']; // 둔화(SLOW) 제외
   if (mandateSlot && target && target.isChampion && IMMOBILIZE_TYPES.includes(effectType) && typeof applyStatus === 'function') {
     const p = ITEM_DATA[mandateSlot.id].commandPassive;
     applyStatus(target, { id: 'itemImperialMandateVulnerable', type: 'VULNERABLE', duration: p.durationSec, value: p.vulnerablePercent, source: ctrl });

@@ -45,17 +45,17 @@
  },
  "darius": {
   "Q": {
-   "dmgMs": 905,
+   "dmgMs": 918,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:q",
-     "ms": 804
+     "ms": 796
     }
    ]
   },
   "W": {
-   "dmgMs": 404,
+   "dmgMs": 385,
    "projectileMs": null,
    "events": [
     {
@@ -64,7 +64,7 @@
     },
     {
      "k": "vfx:basicAttack",
-     "ms": 370
+     "ms": 355
     }
    ]
   },
@@ -74,17 +74,17 @@
    "events": [
     {
      "k": "vfx:e",
-     "ms": 295
+     "ms": 313
     }
    ]
   },
   "R": {
-   "dmgMs": 541,
+   "dmgMs": 505,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:r",
-     "ms": 414
+     "ms": 392
     }
    ]
   },
@@ -285,7 +285,7 @@
  },
  "yasuo": {
   "Q": {
-   "dmgMs": 402,
+   "dmgMs": 442,
    "projectileMs": null,
    "events": []
   },
@@ -295,7 +295,7 @@
    "events": []
   },
   "E": {
-   "dmgMs": 507,
+   "dmgMs": 160,
    "projectileMs": null,
    "events": []
   },
@@ -404,12 +404,12 @@
  },
  "mordekaiser": {
   "Q": {
-   "dmgMs": 681,
+   "dmgMs": 614,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:q",
-     "ms": 531
+     "ms": 503
     }
    ]
   },
@@ -424,12 +424,12 @@
    ]
   },
   "E": {
-   "dmgMs": 592,
+   "dmgMs": 830,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:e",
-     "ms": 558
+     "ms": 290
     }
    ]
   },
@@ -439,7 +439,7 @@
    "events": [
     {
      "k": "vfx:r",
-     "ms": 541
+     "ms": 505
     }
    ]
   },
@@ -908,58 +908,58 @@
  },
  "vex": {
   "Q": {
-   "dmgMs": 439,
+   "dmgMs": 478,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:q",
-     "ms": 173
+     "ms": 202
     },
     {
      "k": "vfx:hit",
-     "ms": 401
+     "ms": 442
     }
    ]
   },
   "W": {
-   "dmgMs": 439,
+   "dmgMs": 414,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:w",
-     "ms": 270
+     "ms": 289
     }
    ]
   },
   "E": {
-   "dmgMs": 435,
+   "dmgMs": 532,
    "projectileMs": null,
    "events": [
     {
      "k": "vfx:e",
-     "ms": 322
+     "ms": 265
     },
     {
      "k": "vfx:hit",
-     "ms": 403
+     "ms": 466
     }
    ]
   },
   "R": {
-   "dmgMs": 472,
-   "projectileMs": 305,
+   "dmgMs": 497,
+   "projectileMs": 297,
    "events": [
     {
      "k": "projectile",
-     "ms": 305
+     "ms": 297
     },
     {
      "k": "vfx:r",
-     "ms": 356
+     "ms": 365
     },
     {
      "k": "vfx:hit",
-     "ms": 358
+     "ms": 366
     }
    ]
   },

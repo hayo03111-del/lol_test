@@ -139,6 +139,7 @@ CharacterController.prototype._vexCastQ = function(mouseWorldPoint, free = false
   const q = this._champData().Q;
   const dir = this._vexAimDir(mouseWorldPoint);
   if (!this._payCost('Q', free)) return;
+  const doom = this._vexConsumeDoom();
   this.faceDirectionInstant(dir);
   this._clearActionTimers();
   this.currentActionKey = 'vexQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
@@ -148,7 +149,7 @@ CharacterController.prototype._vexCastQ = function(mouseWorldPoint, free = false
   const castMs = (q.castTimeSec != null ? q.castTimeSec : 0.15) * 1000;
   const fire = setTimeout(() => {
     if (this.currentActionKey !== 'vexQ') return;
-    this._vex.qTravel = { origin: this.root.position.clone(), dir: dir.clone(), traveled: 0, hitSet: new Set(), lvl };
+    this._vex.qTravel = { origin: this.root.position.clone(), dir: dir.clone(), traveled: 0, hitSet: new Set(), lvl, doom };
     vfx.spawn('q', this.root.position.clone(), dir);
     this.currentActionKey = null; this.currentPhase = null;
     this._resumeAfterAction();
@@ -177,6 +178,7 @@ CharacterController.prototype._vexTickQ = function(dt) {
     t.hitSet.add(u);
     const raw = skillVal(q.damageByLevel, t.lvl) + (q.apRatio || 0) * (this.stats.abilityPower || 0);
     applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    this._vexOnAbilityHit(u, t.doom);
     vfx.spawn('hit', p.clone(), undefined, { color: 0x8b5cf6 });
     debugSkillHit('Vex Q', u);
   }
@@ -188,6 +190,7 @@ CharacterController.prototype._vexCastW = function(mouseWorldPoint, free = false
   if (isSilenced(this) || isCrowdControlled(this)) return;
   const w = this._champData().W;
   if (!this._payCost('W', free)) return;
+  const doom = this._vexConsumeDoom();
   this.playFirstAvailable([this.targetPos ? 'Spell2_Moving' : 'Spell2_BASE', 'Spell2_BASE'], { loop: THREE.LoopOnce, fade: 0.06 });
   const lvl = Math.max(1, this.skillLevels.W || 1);
   const t = setTimeout(() => {
@@ -199,6 +202,7 @@ CharacterController.prototype._vexCastW = function(mouseWorldPoint, free = false
     const raw = skillVal(w.damageByLevel, lvl) + (w.apRatio || 0) * (this.stats.abilityPower || 0);
     for (const h of findEnemiesInRadius(this.root.position, w.range || 475)) {
       applyDamage(h.unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+      this._vexOnAbilityHit(h.unit, doom);
       debugSkillHit('Vex W', h.unit);
     }
     updateBars(this);
@@ -224,6 +228,7 @@ CharacterController.prototype._vexCastE = function(mouseWorldPoint, free = false
   const rawDist = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0).length() : maxWorld;
   const dist = Math.min(rawDist, maxWorld);
   if (!this._payCost('E', free)) return;
+  const doom = this._vexConsumeDoom();
   this.faceDirectionInstant(dir);
   this._clearActionTimers();
   this.currentActionKey = 'vexE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
@@ -236,7 +241,7 @@ CharacterController.prototype._vexCastE = function(mouseWorldPoint, free = false
     const to = from.clone().addScaledVector(dir, dist);
     const frac = maxWorld > 0 ? dist / maxWorld : 1;
     const radius = (e.radiusMin || 200) + ((e.radiusMax || 300) - (e.radiusMin || 200)) * frac;
-    this._vex.eTravel = { from, to, total: dist, traveled: 0, radius, lvl };
+    this._vex.eTravel = { from, to, total: dist, traveled: 0, radius, lvl, doom };
     vfx.spawn('e', from.clone(), dir);
     this.currentActionKey = null; this.currentPhase = null;
     this._resumeAfterAction();
@@ -257,6 +262,85 @@ CharacterController.prototype._vexTickE = function(dt) {
   for (const h of findEnemiesInRadius(t.to, t.radius)) {
     applyDamage(h.unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     applyStatus(h.unit, { id: 'vexE_slow', type: 'SLOW', duration: e.slowDuration || 2, value: slow, source: this });
+    this._vexOnAbilityHit(h.unit, t.doom);
+    const pd = this._vexPassive();
+    if (h.unit.hp <= 0) this._vexRefundDoom(h.unit.isChampion ? pd.eKillRefundChampionPercent : pd.eKillRefundNonChampionPercent);
+    else this._vexMarkGloom(h.unit); // E 적중 대상에 우울 표식(기존 표식은 바로 위에서 먼저 소모)
     debugSkillHit('Vex E', h.unit);
   }
 };
+
+/* ---------------------------------------------------------------
+   패시브 - 파멸과 우울(Doom 'n Gloom)
+   --------------------------------------------------------------- */
+CharacterController.prototype._vexPassive = function() { return this._champData().passive; };
+
+CharacterController.prototype._vexDoomReady = function() {
+  return !!this._vex && performance.now() >= (this._vex.doomReadyAt || 0);
+};
+
+// 기본 스킬 시전 시점에 파멸을 소모한다(대기시간은 시전 시 시작 - 위키). 준비돼 있었으면 true.
+CharacterController.prototype._vexConsumeDoom = function() {
+  if (!this._vexDoomReady()) return false;
+  const cdMs = valueByBreakpoints(this._vexPassive().doomCooldownByLevel, this.champLevel || 1) * 1000; // 정적: 스킬 가속 무관
+  this._vex.doomReadyAt = performance.now() + cdMs;
+  this._vex.doomTotalMs = cdMs;
+  return true;
+};
+
+// 파멸 남은 대기시간을 전체의 pct%만큼 줄인다.
+CharacterController.prototype._vexRefundDoom = function(pct) {
+  if (!this._vex || !pct) return;
+  const now = performance.now();
+  if (this._vex.doomReadyAt <= now) return;
+  this._vex.doomReadyAt = Math.max(now, this._vex.doomReadyAt - (this._vex.doomTotalMs || 0) * pct / 100);
+};
+
+CharacterController.prototype._vexMarkGloom = function(unit) {
+  if (!unit || unit.hp <= 0) return;
+  this._vex.gloom.set(unit, performance.now() + this._vexPassive().gloomDuration * 1000);
+};
+
+// 우울 표식이 있으면 소모: 추가 마법 피해 + 파멸 대기시간 환급(챔피언 25%, 그 외 10%·피해 감소).
+CharacterController.prototype._vexConsumeGloom = function(unit) {
+  const until = this._vex && this._vex.gloom.get(unit);
+  if (!until) return false;
+  this._vex.gloom.delete(unit);
+  if (until <= performance.now() || !unit || unit.hp <= 0) return false;
+  const p = this._vexPassive();
+  const lvT = Math.min(1, Math.max(0, ((this.champLevel || 1) - 1) / 17));
+  let raw = p.gloomDamageAtLevel1 + (p.gloomDamageAtLevel18 - p.gloomDamageAtLevel1) * lvT + p.gloomApRatio * (this.stats.abilityPower || 0);
+  if (!unit.isChampion) raw *= valueByBreakpoints(p.gloomNonChampionPercentByLevel, this.champLevel || 1) / 100;
+  applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+  this._vexRefundDoom(unit.isChampion ? p.gloomRefundChampionPercent : p.gloomRefundNonChampionPercent);
+  debugSkillHit('Vex 패시브(우울 소모)', unit);
+  return true;
+};
+
+CharacterController.prototype._vexApplyFear = function(unit) {
+  if (!unit || unit.hp <= 0) return;
+  const p = this._vexPassive();
+  const full = lolRangeToWorld(p.fearSlowFullDistance || 800);
+  const fearSlowAt = (dist) => p.fearSlowMin + (p.fearSlowMax - p.fearSlowMin) * Math.min(1, Math.max(0, dist / full));
+  applyStatus(unit, { id: 'vexDoomFear', type: 'FEAR', duration: valueByBreakpoints(p.fearDurationByLevel, this.champLevel || 1), value: 1, source: this, fearSlowAt });
+  debugSkillHit('Vex 패시브(파멸 공포)', unit);
+};
+
+// 기본 스킬 적중 공통: 우울 소모 → 파멸이 실린 시전이면 공포.
+CharacterController.prototype._vexOnAbilityHit = function(unit, doom) {
+  this._vexConsumeGloom(unit);
+  if (doom) this._vexApplyFear(unit);
+};
+
+CharacterController.prototype._vexOnBasicAttackHit = function(target) { this._vexConsumeGloom(target); };
+
+// 적이 돌진·점멸했을 때 호출하는 훅(반경 1600 안의 적 챔피언·몬스터에 우울 표식).
+// 현재 데모의 적(허수아비·미니언)은 돌진하지 않아 호출부가 없다 - 적 돌진이 생기면 여기로 알린다.
+function vexNotifyEnemyDash(unit) {
+  const c = typeof controller !== 'undefined' ? controller : null;
+  if (!c || c.championId !== 'vex' || !c._vex || !unit || unit.hp <= 0) return;
+  if (!(unit.isChampion || unit.isMonster)) return;
+  const p = getWorldPosition(unit); if (!p) return;
+  const d = Math.hypot(p.x - c.root.position.x, p.z - c.root.position.z);
+  if (d <= lolRangeToWorld(c._vexPassive().gloomRadius)) c._vexMarkGloom(unit);
+}

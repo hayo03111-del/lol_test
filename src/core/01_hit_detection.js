@@ -167,7 +167,8 @@ function isSilenced(target) { return hasStatus(target, 'SILENCE'); }
 // 예전엔 여기에 ROOT가 들어 있어 속박된 허수아비가 반격하지 못하고, 속박을 기절처럼 다뤘다.
 // 이동 제한은 isRooted()로 따로 확인한다(moveTo 등).
 function isStunned(target) {
-  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM');
+  // 공포(FEAR, 벡스 패시브)도 매혹처럼 행동을 막고 강제로 이동시킨다(시전자에게서 멀어짐).
+  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM') || hasStatus(target, 'FEAR');
 }
 function isRooted(target) { return hasStatus(target, 'ROOT'); }
 // CC(기절/속박류)로 이동/행동이 실제로 막히는지 - 사용처: moveTo/castAbility/_tryEngageTarget
@@ -216,6 +217,17 @@ function tickStatusEffects(target, dt) {
       toSrc.multiplyScalar(1 / dist);
       target.mesh.position.addScaledVector(toSrc, Math.min(dist - stopDistance, walkSpeed * dt));
     }
+  }
+  // 벡스 패시브(파멸) 공포: 시전자에게서 멀어지는 쪽으로 걷는다. 공포 중 둔화(value=둔화 비율, 시전자에게서 멀수록 큼)를 이동 속도에 반영.
+  for (const e of target.statusEffects) {
+    if (e.type !== 'FEAR' || e.expiresAt <= now || !e.source || !target.mesh?.position) continue;
+    const srcPos = getWorldPosition(e.source);
+    if (!srcPos) continue;
+    const away = new THREE.Vector3(target.mesh.position.x - srcPos.x, 0, target.mesh.position.z - srcPos.z);
+    const dist = away.length();
+    if (dist < 1e-6) away.set(0, 0, 1); else away.multiplyScalar(1 / dist);
+    const slow = typeof e.fearSlowAt === 'function' ? e.fearSlowAt(dist) : 0.6;
+    target.mesh.position.addScaledVector(away, MOVE_SPEED * Math.max(0, 1 - slow) * dt);
   }
   if (target._yasuoAirborne && target.mesh?.position) {
     const a = target._yasuoAirborne;

@@ -114,9 +114,10 @@ this.resistDamageMultiplier = resistDamageMultiplier;
 this.prdConstant = prdConstant;
 this.isGhosted = isGhosted;
 this.setController = (c) => { controller = c; };
+this.vexNotifyEnemyDash = vexNotifyEnemyDash;
 `, context);
 const { CharacterController, CHAMPION_DATA, STATE, applyStatus, applyDamage, getStatus, getSlowPercent,
-  getAttackSpeedBuffPercent, getTenacity, computeChampionStats, lolRangeToWorld, setController, worldDistanceToLol, calculateDamage, isStunned, isRooted, tickStatusEffects, getMoveSpeedBuffPercent, getFinalAttackSpeed, getWindupDuration, getDamageReductionPercent, applyMoveSpeedSoftCap, resistDamageMultiplier, prdConstant, isGhosted } = context;
+  getAttackSpeedBuffPercent, getTenacity, computeChampionStats, lolRangeToWorld, setController, worldDistanceToLol, calculateDamage, isStunned, isRooted, tickStatusEffects, getMoveSpeedBuffPercent, getFinalAttackSpeed, getWindupDuration, getDamageReductionPercent, applyMoveSpeedSoftCap, resistDamageMultiplier, prdConstant, isGhosted, vexNotifyEnemyDash } = context;
 
 function makeChamp(championId, clipNames = [], overrides = {}) {
   const c = Object.create(CharacterController.prototype);
@@ -344,6 +345,51 @@ function clearPlaced() { stubs.placedDummies.length = 0; }
   advance(260);
   c._vexTickE(5.0);
   assert(getSlowPercent(e) > 0, '벡스 E: 착탄 범위 둔화');
+}
+{
+  // 다리우스 R: 시전 후 0.25초 Q/E 불가(PC 위키 Noxian Guillotine)
+  const c = makeChamp('darius');
+  c._dariusRQeLockUntil = now + 250;
+  const mp0 = c.mp, cdQ = c.cooldowns.Q, cdE = c.cooldowns.E;
+  c._castQ(null, false); c._castE(null, false);
+  assert(c.mp === mp0 && c.cooldowns.Q === cdQ && c.cooldowns.E === cdE && c.currentActionKey == null, '다리우스 R: 시전 직후 0.25초 동안 Q/E 시전 안 됨');
+}
+{
+  // 벡스 패시브(파멸과 우울) - PC 위키 + 공식 패치 노트
+  clearPlaced();
+  const c = makeChamp('vex', [], { stats: { attackDamage: 50, abilityPower: 100, armor: 30, magicResist: 30, critChance: 0, critMultiplier: 1.75, bonusAttackSpeedPercent: 0 } });
+  const e = place(makeEnemy(0, 1));
+  c.canStartNewAction = () => true;
+  const castAt = now;
+  c._vexCastQ(new Vector3(0, 0, 5), false); advance(160); c._vexTickQ(1.0);
+  const fear = getStatus(e, 'vexDoomFear');
+  assert(!!fear && fear.type === 'FEAR' && near(fear.duration, 0.75), '벡스 파멸: 준비된 상태의 다음 기본 스킬(Q)이 1레벨 0.75초 공포');
+  assert(isStunned(e), '벡스 파멸: 공포 중에는 행동 불가(CC)');
+  assert(near(c._vex.doomReadyAt - castAt, 25000), '벡스 파멸: 정적 대기시간 25초, 기본 스킬 시전 시점부터');
+  e.statusEffects = []; c.cooldowns.Q = 0;
+  c._vexCastQ(new Vector3(0, 0, 5), false); advance(160); c._vexTickQ(1.0);
+  assert(!getStatus(e, 'vexDoomFear'), '벡스 파멸: 대기시간 중 기본 스킬은 공포 없음');
+  c._vexMarkGloom(e);
+  const before = c._vex.doomReadyAt, hp1 = e.hp;
+  c._vexOnBasicAttackHit(e);
+  assert(near(hp1 - e.hp, 40 + 0.25 * 100), '벡스 우울: 평타가 표식 소모 - 1레벨 40 + 주문력 25%');
+  assert(near(before - c._vex.doomReadyAt, 25000 * 0.25) && !c._vex.gloom.has(e), '벡스 우울: 챔피언 소모 시 파멸 대기시간 25% 환급, 표식 제거');
+  const minion = place(makeEnemy(0, 1.2, { isChampion: false }));
+  c._vexMarkGloom(minion); const mhp = minion.hp;
+  c._vexOnBasicAttackHit(minion);
+  assert(near(mhp - minion.hp, (40 + 25) * 0.4), '벡스 우울: 챔피언 이외 대상은 1레벨 40% 피해');
+  advance(6100);
+  c._vexMarkGloom(e); advance(6100); const hp2 = e.hp; c._vexOnBasicAttackHit(e);
+  assert(e.hp === hp2, '벡스 우울: 표식은 6초 뒤 만료');
+  c._vexCastE(new Vector3(0, 0, 1), false); advance(260); c._vexTickE(5.0);
+  assert(c._vex.gloom.has(e), '벡스 E: 적중한 적에게 우울 표식');
+  const far = place(makeEnemy(0, lolRangeToWorld(1700))); const near1 = place(makeEnemy(0, lolRangeToWorld(1500)));
+  vexNotifyEnemyDash(far); vexNotifyEnemyDash(near1);
+  assert(!c._vex.gloom.has(far) && c._vex.gloom.has(near1), '벡스 우울: 반경 1600 안에서 돌진한 적만 표식');
+  // 공포 이동: 시전자에게서 멀어진다
+  e.statusEffects = []; c._vexApplyFear(e);
+  const z0 = e.mesh.position.z; tickStatusEffects(e, 0.1);
+  assert(e.mesh.position.z > z0, '벡스 파멸: 공포 대상은 벡스에게서 멀어지는 방향으로 이동');
 }
 {
   // 이즈리얼 Q: 시전 0.25초 뒤 발사(예전엔 즉시)

@@ -787,9 +787,22 @@ const CHAMPION_DATA = {
      passive: {
       name: '파멸과 우울',
       desc: '주기적으로 다음 기본 스킬이 적을 공포에 빠뜨린다,주변 적이 돌진하거나 순간적으로 이동할 때마다 벡스가 적에게 6초 동안 우울 표식을 남깁니다. 벡스의 다음 기본 공격은 우울 상태의 적에게 마법 피해를 추가로 입히며, 이 스킬의 재사용 대기시간이 25% 감소합니다.',
-      fearCooldown: [25, 22, 19, 16],
-      //챔피언 이외의 대상에게 감소된 피해를 입히고 이 스킬의 재사용 대기시간을 10% 돌려받음
-      //E 스킬로 공포에 빠진 적은 벡스에게서 멀어질수록 더 느려짐
+      // PC 위키(Template:Data_Vex/Doom_'n_Gloom) + 공식 패치 노트(14.5, 25.S1.1 - 40% AP는 스위프트플레이 전용으로 판단).
+      // 파멸: 정적 재사용 대기시간(스킬 가속 무관), 다음 기본 스킬(Q/W/E)이 적중한 적을 공포. 대기시간은 기본 스킬 시전 시 시작.
+      doomCooldownByLevel: { breakpoints: [1, 6, 11, 16], values: [25, 22, 19, 16] },
+      fearDurationByLevel: { breakpoints: [1, 6, 11, 16], values: [0.75, 1, 1.25, 1.5] },
+      doomBreakpointsGuessed: true, // 4단계 값의 레벨 구간(1/6/11/16)은 출처에 없어 추정
+      // 공포 중 둔화 60~99%(벡스에게서 멀수록 큼). 최대가 되는 거리는 출처에 없어 800(E 사거리)으로 추정.
+      fearSlowMin: 0.60, fearSlowMax: 0.99, fearSlowFullDistance: 800, fearSlowDistanceGuessed: true,
+      // 우울: 반경 1600 안에서 돌진/점멸한 적 챔피언·몬스터에 6초 표식. E 적중도 표식. 다음 평타/기본 스킬 적중이 소모.
+      gloomRadius: 1600, gloomDuration: 6,
+      // 소모 피해 40~150(레벨) + 주문력 25%. 레벨 사이 곡선은 출처에 없어 1~18 선형(위키 현행 표기는 40~162.94로 엇갈림).
+      gloomDamageAtLevel1: 40, gloomDamageAtLevel18: 150, gloomApRatio: 0.25, gloomCurveGuessed: true,
+      // 챔피언 이외 대상: 40/45/50/55/60% 피해, 재사용 대기시간 10% 환급(챔피언 25%). 5단계 레벨 구간은 추정.
+      gloomNonChampionPercentByLevel: { breakpoints: [1, 5, 9, 13, 17], values: [40, 45, 50, 55, 60] },
+      gloomRefundChampionPercent: 25, gloomRefundNonChampionPercent: 10,
+      // E로 처치 시 파멸 재사용 대기시간 환급(V14.5): 챔피언 25%, 그 외 10%.
+      eKillRefundChampionPercent: 25, eKillRefundNonChampionPercent: 10,
       },
 
      Q: {

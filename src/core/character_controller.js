@@ -263,7 +263,7 @@ class CharacterController {
   // 빠져 있었다).
   _freshChampionStates() {
     // 벡스 R(그림자 파동) 전용 상태: 1차 적중 후 대상에게 재시전할 수 있는 창과 실제 돌진 상태를 분리한다.
-    this._vex = { recastTarget: null, recastReadyUntil: 0, dashActive: false, dashStart: null, dashEnd: null, dashT: 0, dashDuration: 0.28, qTravel: null, eTravel: null, wShield: null };
+    this._vex = { recastTarget: null, recastReadyUntil: 0, dashActive: false, dashStart: null, dashEnd: null, dashT: 0, dashDuration: 0.28, qTravel: null, eTravel: null, wShield: null, doomReadyAt: 0, doomTotalMs: 0, gloom: new Map() };
     // 이즈리얼 전용 상태: markTarget/markExpiresAt은 W(정기 방출) 표식,
     // rTravel은 R(정조준 사격)이 매 프레임 진행하는 관통 광선 상태(요네 R/
     // 야스오 Q3 회오리와 동일한 패턴 - _ezrealTickRTravel 참고).

@@ -1451,7 +1451,7 @@ function getTenacity(target) {
   }
   return 1 - keep;
 }
-const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM']);
+const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM', 'FEAR']);
 function unitLabel(u) {
   if (typeof dummy !== 'undefined' && u === dummy) return '더미 타겟';
   if (typeof controller !== 'undefined' && u === controller) return controller.championId || '플레이어';
@@ -1495,7 +1495,7 @@ function applyStatus(target, effect) {
   // 강인함은 아이템(itemTenacityPercent)과 스킬 버프(TENACITY 상태 - 가렌 W 등)를
   // 원작과 같이 곱연산으로 합친다: 최종 = 1 - (1-a)(1-b).
   const tenacity = getTenacity(target);
-  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM'].includes(effect.type)) {
+  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR'].includes(effect.type)) {
     effDuration = effDuration * (1 - tenacity);
   }
   if (target && target.itemSlowResistPercent > 0 && effect.type === 'SLOW') {
@@ -1544,7 +1544,7 @@ function applyStatus(target, effect) {
   // 않으므로 제외). target/effect.type을 함께 넘겨서, 제국의명령처럼
   // "이동 불가"만(둔화 제외) 가려 쓰거나 "걸린 대상"을 표식해야 하는
   // 패시브도 이 훅 하나로 처리한다.
-  if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM'].includes(effect.type)
+  if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM', 'FEAR'].includes(effect.type)
       && typeof itemOnSlowOrImmobilize === 'function') {
     const attacker = effect.source || (typeof controller !== 'undefined' ? controller : null);
     if (attacker && attacker !== target) itemOnSlowOrImmobilize(attacker, target, effect.type);
@@ -1878,7 +1878,8 @@ function isSilenced(target) { return hasStatus(target, 'SILENCE'); }
 // 예전엔 여기에 ROOT가 들어 있어 속박된 허수아비가 반격하지 못하고, 속박을 기절처럼 다뤘다.
 // 이동 제한은 isRooted()로 따로 확인한다(moveTo 등).
 function isStunned(target) {
-  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM');
+  // 공포(FEAR, 벡스 패시브)도 매혹처럼 행동을 막고 강제로 이동시킨다(시전자에게서 멀어짐).
+  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM') || hasStatus(target, 'FEAR');
 }
 function isRooted(target) { return hasStatus(target, 'ROOT'); }
 // CC(기절/속박류)로 이동/행동이 실제로 막히는지 - 사용처: moveTo/castAbility/_tryEngageTarget
@@ -1927,6 +1928,17 @@ function tickStatusEffects(target, dt) {
       toSrc.multiplyScalar(1 / dist);
       target.mesh.position.addScaledVector(toSrc, Math.min(dist - stopDistance, walkSpeed * dt));
     }
+  }
+  // 벡스 패시브(파멸) 공포: 시전자에게서 멀어지는 쪽으로 걷는다. 공포 중 둔화(value=둔화 비율, 시전자에게서 멀수록 큼)를 이동 속도에 반영.
+  for (const e of target.statusEffects) {
+    if (e.type !== 'FEAR' || e.expiresAt <= now || !e.source || !target.mesh?.position) continue;
+    const srcPos = getWorldPosition(e.source);
+    if (!srcPos) continue;
+    const away = new THREE.Vector3(target.mesh.position.x - srcPos.x, 0, target.mesh.position.z - srcPos.z);
+    const dist = away.length();
+    if (dist < 1e-6) away.set(0, 0, 1); else away.multiplyScalar(1 / dist);
+    const slow = typeof e.fearSlowAt === 'function' ? e.fearSlowAt(dist) : 0.6;
+    target.mesh.position.addScaledVector(away, MOVE_SPEED * Math.max(0, 1 - slow) * dt);
   }
   if (target._yasuoAirborne && target.mesh?.position) {
     const a = target._yasuoAirborne;
@@ -2869,9 +2881,22 @@ const CHAMPION_DATA = {
      passive: {
       name: '파멸과 우울',
       desc: '주기적으로 다음 기본 스킬이 적을 공포에 빠뜨린다,주변 적이 돌진하거나 순간적으로 이동할 때마다 벡스가 적에게 6초 동안 우울 표식을 남깁니다. 벡스의 다음 기본 공격은 우울 상태의 적에게 마법 피해를 추가로 입히며, 이 스킬의 재사용 대기시간이 25% 감소합니다.',
-      fearCooldown: [25, 22, 19, 16],
-      //챔피언 이외의 대상에게 감소된 피해를 입히고 이 스킬의 재사용 대기시간을 10% 돌려받음
-      //E 스킬로 공포에 빠진 적은 벡스에게서 멀어질수록 더 느려짐
+      // PC 위키(Template:Data_Vex/Doom_'n_Gloom) + 공식 패치 노트(14.5, 25.S1.1 - 40% AP는 스위프트플레이 전용으로 판단).
+      // 파멸: 정적 재사용 대기시간(스킬 가속 무관), 다음 기본 스킬(Q/W/E)이 적중한 적을 공포. 대기시간은 기본 스킬 시전 시 시작.
+      doomCooldownByLevel: { breakpoints: [1, 6, 11, 16], values: [25, 22, 19, 16] },
+      fearDurationByLevel: { breakpoints: [1, 6, 11, 16], values: [0.75, 1, 1.25, 1.5] },
+      doomBreakpointsGuessed: true, // 4단계 값의 레벨 구간(1/6/11/16)은 출처에 없어 추정
+      // 공포 중 둔화 60~99%(벡스에게서 멀수록 큼). 최대가 되는 거리는 출처에 없어 800(E 사거리)으로 추정.
+      fearSlowMin: 0.60, fearSlowMax: 0.99, fearSlowFullDistance: 800, fearSlowDistanceGuessed: true,
+      // 우울: 반경 1600 안에서 돌진/점멸한 적 챔피언·몬스터에 6초 표식. E 적중도 표식. 다음 평타/기본 스킬 적중이 소모.
+      gloomRadius: 1600, gloomDuration: 6,
+      // 소모 피해 40~150(레벨) + 주문력 25%. 레벨 사이 곡선은 출처에 없어 1~18 선형(위키 현행 표기는 40~162.94로 엇갈림).
+      gloomDamageAtLevel1: 40, gloomDamageAtLevel18: 150, gloomApRatio: 0.25, gloomCurveGuessed: true,
+      // 챔피언 이외 대상: 40/45/50/55/60% 피해, 재사용 대기시간 10% 환급(챔피언 25%). 5단계 레벨 구간은 추정.
+      gloomNonChampionPercentByLevel: { breakpoints: [1, 5, 9, 13, 17], values: [40, 45, 50, 55, 60] },
+      gloomRefundChampionPercent: 25, gloomRefundNonChampionPercent: 10,
+      // E로 처치 시 파멸 재사용 대기시간 환급(V14.5): 챔피언 25%, 그 외 10%.
+      eKillRefundChampionPercent: 25, eKillRefundNonChampionPercent: 10,
       },
 
      Q: {
@@ -5565,9 +5590,9 @@ const SKILL_TIMING_DATABASE = {
     Q: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     W: { eventTime: 0, recovery: 0, lockMove: false, lockAbility: false },
     // E: CAST_THEN_DELAYED_EVENT - Cast Time 0.25초와 별개로 실제 효과는
-    // 0.5초 후에 발생(문서: "Cast Time과 실제 Effect Delay를 구분"). 중간
-    // 구간의 명시적 unlock 근거가 없어 이벤트 시점까지 전부 잠금으로 처리.
-    E: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+    // 0.5초 후에 발생(문서: "Cast Time과 실제 Effect Delay를 구분"). 예전엔 이벤트 시점까지 전부 잠갔다.
+    // 9차 수정(PC 위키 + 여러 출처: 시전 0.25초, 그 뒤 0.5초에 판정): 시전 0.25초만 잠그고, 실제 효과(0.5초 지연)는 onFire에서 별도 타이머로 처리한다(controller_casting 참고).
+    E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     R: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
   },
   vex: { 
@@ -9894,7 +9919,7 @@ class CharacterController {
   // 빠져 있었다).
   _freshChampionStates() {
     // 벡스 R(그림자 파동) 전용 상태: 1차 적중 후 대상에게 재시전할 수 있는 창과 실제 돌진 상태를 분리한다.
-    this._vex = { recastTarget: null, recastReadyUntil: 0, dashActive: false, dashStart: null, dashEnd: null, dashT: 0, dashDuration: 0.28, qTravel: null, eTravel: null, wShield: null };
+    this._vex = { recastTarget: null, recastReadyUntil: 0, dashActive: false, dashStart: null, dashEnd: null, dashT: 0, dashDuration: 0.28, qTravel: null, eTravel: null, wShield: null, doomReadyAt: 0, doomTotalMs: 0, gloom: new Map() };
     // 이즈리얼 전용 상태: markTarget/markExpiresAt은 W(정기 방출) 표식,
     // rTravel은 R(정조준 사격)이 매 프레임 진행하는 관통 광선 상태(요네 R/
     // 야스오 Q3 회오리와 동일한 패턴 - _ezrealTickRTravel 참고).
@@ -11429,6 +11454,7 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
     // 바루스: 기본 공격마다 패시브(살아있는 복수) 램프 갱신 + W(오한의
     // 화살통) 추가 마법 피해/오한 적용.
     if (this.championId === 'varus') this._varusOnBasicAttackHit(target);
+    if (this.championId === 'vex') this._vexOnBasicAttackHit(target);
 
     if (this.championId === 'garen' && overrideId === 'Q') { this._garenQOnHit(target); this._consumeAttackOverrideOnConfirmedHit('Q'); }
     if (this.championId === 'darius') {
@@ -12967,6 +12993,8 @@ CharacterController.prototype._resumeAfterAction = function() {
 CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
     const slotCast = CHAMPION_SLOT_CASTS.Q[this.championId];
     if (slotCast) { slotCast(this, mouseWorldPoint, free); return; }
+    // PC 위키(Noxian Guillotine): R 시전 시간이 끝난 뒤 0.25초 동안 Q/E 사용 불가.
+    if (this.championId === 'darius' && performance.now() < (this._dariusRQeLockUntil || 0)) return;
     const db = this._championAbilityDbEntry();
     // 업데이트(다리우스 Q 문서 1~11절): Q가 방향별 단일 클립이 아니라
     // "웜업 클립 → 실제 공격 클립"을 강제로 연속 재생해야 하는 챔피언을 위한
@@ -13599,6 +13627,8 @@ CharacterController.prototype._castW = function(mouseWorldPoint, free = false) {
 CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
     const slotCast = CHAMPION_SLOT_CASTS.E[this.championId];
     if (slotCast) { slotCast(this, mouseWorldPoint, free); return; }
+    // PC 위키(Noxian Guillotine): R 시전 시간이 끝난 뒤 0.25초 동안 Q/E 사용 불가.
+    if (this.championId === 'darius' && performance.now() < (this._dariusRQeLockUntil || 0)) return;
     const db = this._championAbilityDbEntry();
     const channelCfg = db && db.E && db.E.directionalChannel;
 
@@ -13737,6 +13767,8 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
       : this.currentTarget
         ? new THREE.Vector3().subVectors(this.currentTarget.mesh.position, this.root.position).setY(0).normalize()
         : null;
+    // PC 위키(Death's Grasp): 시전 시작 시점의 위치에서 발동한다 - 시작 위치를 미리 잡아 둔다.
+    const mordeEOrigin = this.championId === 'mordekaiser' ? this.root.position.clone() : null;
     this.runAction(key, STATE.E_CAST, {
       faceDir: facing,
       dataOverride: clipsOverride ? { ...data, clips: clipsOverride } : undefined,
@@ -13764,9 +13796,15 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
           const worldRange = lolRangeToWorld(cd.E.range);
           const rawDist = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0).length() : worldRange;
           const dist = Math.min(rawDist, worldRange);
-          const hits = this._mordeEAreaHits(this.root.position.clone(), dir, dist);
-          if (hits.length) hits.forEach((u) => this._mordeEOnCast(u));
-          else debugSkillMiss('Mordekaiser E', 'no target in impact area');
+          // PC 위키: 시전 0.25초가 끝나면 행동 가능, 판정(피해·끌어오기)은 그 0.5초 뒤(모데카이저가 죽어도 발동).
+          // 예전엔 판정 시점(0.5초)까지 행동을 잠갔고, 판정 위치도 그 시점의 현재 위치였다.
+          // 0.5초는 위키 서술 관례대로 시전 종료 기준으로 해석(시작 기준이면 총 0.5초 - 미확인).
+          const origin = mordeEOrigin || this.root.position.clone();
+          setTimeout(() => {
+            const hits = this._mordeEAreaHits(origin, dir, dist);
+            if (hits.length) hits.forEach((u) => this._mordeEOnCast(u));
+            else debugSkillMiss('Mordekaiser E', 'no target in impact area');
+          }, (cd.E.effectDelaySec ?? 0.5) * 1000);
         } else if (this.currentTarget && this.currentTarget.hp > 0) {
           applyDamage(this.currentTarget, { rawDamage: data.dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
         }
@@ -14019,7 +14057,7 @@ CharacterController.prototype._castR = function(free = false) {
           vfx.spawn('r', this.root.position.clone());
           if (lockedRTarget && lockedRTarget.hp > 0) {
             if (this.championId === 'garen') { this._garenROnHit(lockedRTarget); debugSkillHit('Garen R', lockedRTarget); }
-            else if (this.championId === 'darius') { this._dariusROnHit(lockedRTarget); debugSkillHit('Darius R', lockedRTarget); }
+            else if (this.championId === 'darius') { this._dariusROnHit(lockedRTarget); debugSkillHit('Darius R', lockedRTarget); this._dariusRQeLockUntil = performance.now() + 250; }
             else if (this.championId === 'mordekaiser') {
               // 버그 수정(명세 2/3절 "R 유효 대상은 적 챔피언만 - 미니언/
               // 몬스터 등에는 발동되지 않아야 한다"): 이 데모의 유일한 상시
@@ -16018,45 +16056,49 @@ CharacterController.prototype._yasuoCreateWindwall = function(dir,width) {
 
 };
 
-// Extracted from CharacterController: _yasuoFinishEDash
-CharacterController.prototype._yasuoFinishEDash = function() {
-    if (!this._yasuo || !this._yasuo.eDashStart || this.currentActionKey !== 'yasuoE') return;
+// 질풍검 피해: 돌진이 대상에 닿는 순간 적용(원작 - 관통하며 접촉 시 피해). 예전엔 돌진(475)이 끝난 뒤에 넣었다.
+CharacterController.prototype._yasuoApplyEDashDamage = function() {
+    if (!this._yasuo || this._yasuo.eDashDamageApplied) return;
+    this._yasuo.eDashDamageApplied = true;
     const target = this._yasuo.eDashTarget;
     const key = this._yasuo.eDashTargetKey;
     const e = this._champData().E;
     const lvl = Math.max(1, Math.min(5, Number(this.skillLevels.E) || 1));
     const stacks = Math.max(0, Math.min(4, this._yasuo.eDashStacksAtStart || 0));
     const mult = 1 + stacks * 0.25;
+    const min = this._yasuoLevelValue(e.damageMin, lvl);
+    const baseAd = computeChampionStats('yasuo', this.champLevel).attackDamage; // 레벨 기본 AD(원작 성장 공식)
+    const bonusAd = Math.max(0, this.stats.attackDamage - baseAd);
+    const raw = (min + e.bonusAdRatioMin * bonusAd + e.apRatioMin * this.stats.abilityPower) * mult;
+
+    if (target && target.hp > 0) {
+      // E(질풍검)는 치명타 스킬이 아니다 - crit/critMult 변수를 참조하지
+      // 않고(ReferenceError 방지) 항상 비치명타로 고정 적용한다.
+      applyDamage(target, {
+        rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL,
+        isCritical: false, critMultiplier: 1, source: this
+      });
+    }
+
+    if (key != null) {
+      this._yasuo.eTargetCooldowns.set(
+        key,
+        performance.now() + this._yasuoLevelValue(e.targetCooldown, lvl) * 1000
+      );
+    }
+    this._yasuo.eStacks = Math.min(4, stacks + 1);
+
+    this._yasuo.eStacksExpiresAt = performance.now() + e.stackDuration * 1000;
+};
+
+// Extracted from CharacterController: _yasuoFinishEDash
+CharacterController.prototype._yasuoFinishEDash = function() {
+    if (!this._yasuo || !this._yasuo.eDashStart || this.currentActionKey !== 'yasuoE') return;
 
     this.root.position.copy(this._yasuo.eDashEnd);
     if (this._yasuo.eqPending) { const eq = this._yasuo.eqPending; this._yasuo.eqPending = null; this._yasuoResolveEQ(eq); }
 
-    if (!this._yasuo.eDashDamageApplied) {
-      this._yasuo.eDashDamageApplied = true;
-      const min = this._yasuoLevelValue(e.damageMin, lvl);
-      const baseAd = computeChampionStats('yasuo', this.champLevel).attackDamage; // 레벨 기본 AD(원작 성장 공식)
-      const bonusAd = Math.max(0, this.stats.attackDamage - baseAd);
-      const raw = (min + e.bonusAdRatioMin * bonusAd + e.apRatioMin * this.stats.abilityPower) * mult;
-
-      if (target && target.hp > 0) {
-        // E(질풍검)는 치명타 스킬이 아니다 - crit/critMult 변수를 참조하지
-        // 않고(ReferenceError 방지) 항상 비치명타로 고정 적용한다.
-        applyDamage(target, {
-          rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL,
-          isCritical: false, critMultiplier: 1, source: this
-        });
-      }
-
-      if (key != null) {
-        this._yasuo.eTargetCooldowns.set(
-          key,
-          performance.now() + this._yasuoLevelValue(e.targetCooldown, lvl) * 1000
-        );
-      }
-      this._yasuo.eStacks = Math.min(4, stacks + 1);
-
-      this._yasuo.eStacksExpiresAt = performance.now() + e.stackDuration * 1000;
-    }
+    this._yasuoApplyEDashDamage(); // 대상에 닿을 때 이미 들어갔으면 아무것도 하지 않음(대상 이탈 등 대비 마지막 보장)
 
     this._yasuo.eDashStart = null;
     this._yasuo.eDashEnd = null;
@@ -16342,6 +16384,21 @@ CharacterController.prototype._yasuoTick = function(dt) {
         this._yasuo.eDashElapsed / this._yasuo.eDashDuration, 0, 1
       );
       this.root.position.lerpVectors(this._yasuo.eDashStart, this._yasuo.eDashEnd, t);
+      // 대상 위치를 지나는 순간(돌진 방향 투영 거리 기준) 피해를 준다.
+      const tg = this._yasuo.eDashTarget;
+      if (!this._yasuo.eDashDamageApplied && tg && tg.hp > 0) {
+        const tp = getWorldPosition(tg);
+        if (tp) {
+          const dir = new THREE.Vector3().subVectors(this._yasuo.eDashEnd, this._yasuo.eDashStart).setY(0);
+          const len = dir.length();
+          if (len > 1e-6) {
+            dir.multiplyScalar(1 / len);
+            const along = new THREE.Vector3(tp.x - this._yasuo.eDashStart.x, 0, tp.z - this._yasuo.eDashStart.z).dot(dir);
+            const covered = new THREE.Vector3(this.root.position.x - this._yasuo.eDashStart.x, 0, this.root.position.z - this._yasuo.eDashStart.z).dot(dir);
+            if (covered >= along - getCollisionRadius(tg)) this._yasuoApplyEDashDamage();
+          }
+        }
+      }
       if (this._yasuo.eDashElapsed >= this._yasuo.eDashDuration) {
         this._yasuoFinishEDash();
       }
@@ -20160,6 +20217,7 @@ CharacterController.prototype._vexCastQ = function(mouseWorldPoint, free = false
   const q = this._champData().Q;
   const dir = this._vexAimDir(mouseWorldPoint);
   if (!this._payCost('Q', free)) return;
+  const doom = this._vexConsumeDoom();
   this.faceDirectionInstant(dir);
   this._clearActionTimers();
   this.currentActionKey = 'vexQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
@@ -20169,7 +20227,7 @@ CharacterController.prototype._vexCastQ = function(mouseWorldPoint, free = false
   const castMs = (q.castTimeSec != null ? q.castTimeSec : 0.15) * 1000;
   const fire = setTimeout(() => {
     if (this.currentActionKey !== 'vexQ') return;
-    this._vex.qTravel = { origin: this.root.position.clone(), dir: dir.clone(), traveled: 0, hitSet: new Set(), lvl };
+    this._vex.qTravel = { origin: this.root.position.clone(), dir: dir.clone(), traveled: 0, hitSet: new Set(), lvl, doom };
     vfx.spawn('q', this.root.position.clone(), dir);
     this.currentActionKey = null; this.currentPhase = null;
     this._resumeAfterAction();
@@ -20198,6 +20256,7 @@ CharacterController.prototype._vexTickQ = function(dt) {
     t.hitSet.add(u);
     const raw = skillVal(q.damageByLevel, t.lvl) + (q.apRatio || 0) * (this.stats.abilityPower || 0);
     applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    this._vexOnAbilityHit(u, t.doom);
     vfx.spawn('hit', p.clone(), undefined, { color: 0x8b5cf6 });
     debugSkillHit('Vex Q', u);
   }
@@ -20209,6 +20268,7 @@ CharacterController.prototype._vexCastW = function(mouseWorldPoint, free = false
   if (isSilenced(this) || isCrowdControlled(this)) return;
   const w = this._champData().W;
   if (!this._payCost('W', free)) return;
+  const doom = this._vexConsumeDoom();
   this.playFirstAvailable([this.targetPos ? 'Spell2_Moving' : 'Spell2_BASE', 'Spell2_BASE'], { loop: THREE.LoopOnce, fade: 0.06 });
   const lvl = Math.max(1, this.skillLevels.W || 1);
   const t = setTimeout(() => {
@@ -20220,6 +20280,7 @@ CharacterController.prototype._vexCastW = function(mouseWorldPoint, free = false
     const raw = skillVal(w.damageByLevel, lvl) + (w.apRatio || 0) * (this.stats.abilityPower || 0);
     for (const h of findEnemiesInRadius(this.root.position, w.range || 475)) {
       applyDamage(h.unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+      this._vexOnAbilityHit(h.unit, doom);
       debugSkillHit('Vex W', h.unit);
     }
     updateBars(this);
@@ -20245,6 +20306,7 @@ CharacterController.prototype._vexCastE = function(mouseWorldPoint, free = false
   const rawDist = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0).length() : maxWorld;
   const dist = Math.min(rawDist, maxWorld);
   if (!this._payCost('E', free)) return;
+  const doom = this._vexConsumeDoom();
   this.faceDirectionInstant(dir);
   this._clearActionTimers();
   this.currentActionKey = 'vexE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
@@ -20257,7 +20319,7 @@ CharacterController.prototype._vexCastE = function(mouseWorldPoint, free = false
     const to = from.clone().addScaledVector(dir, dist);
     const frac = maxWorld > 0 ? dist / maxWorld : 1;
     const radius = (e.radiusMin || 200) + ((e.radiusMax || 300) - (e.radiusMin || 200)) * frac;
-    this._vex.eTravel = { from, to, total: dist, traveled: 0, radius, lvl };
+    this._vex.eTravel = { from, to, total: dist, traveled: 0, radius, lvl, doom };
     vfx.spawn('e', from.clone(), dir);
     this.currentActionKey = null; this.currentPhase = null;
     this._resumeAfterAction();
@@ -20278,9 +20340,88 @@ CharacterController.prototype._vexTickE = function(dt) {
   for (const h of findEnemiesInRadius(t.to, t.radius)) {
     applyDamage(h.unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     applyStatus(h.unit, { id: 'vexE_slow', type: 'SLOW', duration: e.slowDuration || 2, value: slow, source: this });
+    this._vexOnAbilityHit(h.unit, t.doom);
+    const pd = this._vexPassive();
+    if (h.unit.hp <= 0) this._vexRefundDoom(h.unit.isChampion ? pd.eKillRefundChampionPercent : pd.eKillRefundNonChampionPercent);
+    else this._vexMarkGloom(h.unit); // E 적중 대상에 우울 표식(기존 표식은 바로 위에서 먼저 소모)
     debugSkillHit('Vex E', h.unit);
   }
 };
+
+/* ---------------------------------------------------------------
+   패시브 - 파멸과 우울(Doom 'n Gloom)
+   --------------------------------------------------------------- */
+CharacterController.prototype._vexPassive = function() { return this._champData().passive; };
+
+CharacterController.prototype._vexDoomReady = function() {
+  return !!this._vex && performance.now() >= (this._vex.doomReadyAt || 0);
+};
+
+// 기본 스킬 시전 시점에 파멸을 소모한다(대기시간은 시전 시 시작 - 위키). 준비돼 있었으면 true.
+CharacterController.prototype._vexConsumeDoom = function() {
+  if (!this._vexDoomReady()) return false;
+  const cdMs = valueByBreakpoints(this._vexPassive().doomCooldownByLevel, this.champLevel || 1) * 1000; // 정적: 스킬 가속 무관
+  this._vex.doomReadyAt = performance.now() + cdMs;
+  this._vex.doomTotalMs = cdMs;
+  return true;
+};
+
+// 파멸 남은 대기시간을 전체의 pct%만큼 줄인다.
+CharacterController.prototype._vexRefundDoom = function(pct) {
+  if (!this._vex || !pct) return;
+  const now = performance.now();
+  if (this._vex.doomReadyAt <= now) return;
+  this._vex.doomReadyAt = Math.max(now, this._vex.doomReadyAt - (this._vex.doomTotalMs || 0) * pct / 100);
+};
+
+CharacterController.prototype._vexMarkGloom = function(unit) {
+  if (!unit || unit.hp <= 0) return;
+  this._vex.gloom.set(unit, performance.now() + this._vexPassive().gloomDuration * 1000);
+};
+
+// 우울 표식이 있으면 소모: 추가 마법 피해 + 파멸 대기시간 환급(챔피언 25%, 그 외 10%·피해 감소).
+CharacterController.prototype._vexConsumeGloom = function(unit) {
+  const until = this._vex && this._vex.gloom.get(unit);
+  if (!until) return false;
+  this._vex.gloom.delete(unit);
+  if (until <= performance.now() || !unit || unit.hp <= 0) return false;
+  const p = this._vexPassive();
+  const lvT = Math.min(1, Math.max(0, ((this.champLevel || 1) - 1) / 17));
+  let raw = p.gloomDamageAtLevel1 + (p.gloomDamageAtLevel18 - p.gloomDamageAtLevel1) * lvT + p.gloomApRatio * (this.stats.abilityPower || 0);
+  if (!unit.isChampion) raw *= valueByBreakpoints(p.gloomNonChampionPercentByLevel, this.champLevel || 1) / 100;
+  applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+  this._vexRefundDoom(unit.isChampion ? p.gloomRefundChampionPercent : p.gloomRefundNonChampionPercent);
+  debugSkillHit('Vex 패시브(우울 소모)', unit);
+  return true;
+};
+
+CharacterController.prototype._vexApplyFear = function(unit) {
+  if (!unit || unit.hp <= 0) return;
+  const p = this._vexPassive();
+  const full = lolRangeToWorld(p.fearSlowFullDistance || 800);
+  const fearSlowAt = (dist) => p.fearSlowMin + (p.fearSlowMax - p.fearSlowMin) * Math.min(1, Math.max(0, dist / full));
+  applyStatus(unit, { id: 'vexDoomFear', type: 'FEAR', duration: valueByBreakpoints(p.fearDurationByLevel, this.champLevel || 1), value: 1, source: this, fearSlowAt });
+  debugSkillHit('Vex 패시브(파멸 공포)', unit);
+};
+
+// 기본 스킬 적중 공통: 우울 소모 → 파멸이 실린 시전이면 공포.
+CharacterController.prototype._vexOnAbilityHit = function(unit, doom) {
+  this._vexConsumeGloom(unit);
+  if (doom) this._vexApplyFear(unit);
+};
+
+CharacterController.prototype._vexOnBasicAttackHit = function(target) { this._vexConsumeGloom(target); };
+
+// 적이 돌진·점멸했을 때 호출하는 훅(반경 1600 안의 적 챔피언·몬스터에 우울 표식).
+// 현재 데모의 적(허수아비·미니언)은 돌진하지 않아 호출부가 없다 - 적 돌진이 생기면 여기로 알린다.
+function vexNotifyEnemyDash(unit) {
+  const c = typeof controller !== 'undefined' ? controller : null;
+  if (!c || c.championId !== 'vex' || !c._vex || !unit || unit.hp <= 0) return;
+  if (!(unit.isChampion || unit.isMonster)) return;
+  const p = getWorldPosition(unit); if (!p) return;
+  const d = Math.hypot(p.x - c.root.position.x, p.z - c.root.position.z);
+  if (d <= lolRangeToWorld(c._vexPassive().gloomRadius)) c._vexMarkGloom(unit);
+}
 
 /* ===== src/champions/ezreal.js ===== */
 /* ============================================================
@@ -27493,7 +27634,7 @@ function itemOnSlowOrImmobilize(ctrl, target, effectType) {
   // 같은 id의 상태이상을 다시 걸면 자동으로 덮어써서 지속시간이 연장되므로
   // 별도 처리가 필요 없다.
   const mandateSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].commandPassive);
-  const IMMOBILIZE_TYPES = ['STUN', 'ROOT', 'SUPPRESSION', 'KNOCKUP', 'CHARM']; // 둔화(SLOW) 제외
+  const IMMOBILIZE_TYPES = ['STUN', 'ROOT', 'SUPPRESSION', 'KNOCKUP', 'CHARM', 'FEAR']; // 둔화(SLOW) 제외
   if (mandateSlot && target && target.isChampion && IMMOBILIZE_TYPES.includes(effectType) && typeof applyStatus === 'function') {
     const p = ITEM_DATA[mandateSlot.id].commandPassive;
     applyStatus(target, { id: 'itemImperialMandateVulnerable', type: 'VULNERABLE', duration: p.durationSec, value: p.vulnerablePercent, source: ctrl });

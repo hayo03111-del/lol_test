@@ -140,6 +140,7 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
     // 바루스: 기본 공격마다 패시브(살아있는 복수) 램프 갱신 + W(오한의
     // 화살통) 추가 마법 피해/오한 적용.
     if (this.championId === 'varus') this._varusOnBasicAttackHit(target);
+    if (this.championId === 'vex') this._vexOnBasicAttackHit(target);
 
     if (this.championId === 'garen' && overrideId === 'Q') { this._garenQOnHit(target); this._consumeAttackOverrideOnConfirmedHit('Q'); }
     if (this.championId === 'darius') {

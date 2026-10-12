@@ -251,45 +251,49 @@ CharacterController.prototype._yasuoCreateWindwall = function(dir,width) {
 
 };
 
-// Extracted from CharacterController: _yasuoFinishEDash
-CharacterController.prototype._yasuoFinishEDash = function() {
-    if (!this._yasuo || !this._yasuo.eDashStart || this.currentActionKey !== 'yasuoE') return;
+// 질풍검 피해: 돌진이 대상에 닿는 순간 적용(원작 - 관통하며 접촉 시 피해). 예전엔 돌진(475)이 끝난 뒤에 넣었다.
+CharacterController.prototype._yasuoApplyEDashDamage = function() {
+    if (!this._yasuo || this._yasuo.eDashDamageApplied) return;
+    this._yasuo.eDashDamageApplied = true;
     const target = this._yasuo.eDashTarget;
     const key = this._yasuo.eDashTargetKey;
     const e = this._champData().E;
     const lvl = Math.max(1, Math.min(5, Number(this.skillLevels.E) || 1));
     const stacks = Math.max(0, Math.min(4, this._yasuo.eDashStacksAtStart || 0));
     const mult = 1 + stacks * 0.25;
+    const min = this._yasuoLevelValue(e.damageMin, lvl);
+    const baseAd = computeChampionStats('yasuo', this.champLevel).attackDamage; // 레벨 기본 AD(원작 성장 공식)
+    const bonusAd = Math.max(0, this.stats.attackDamage - baseAd);
+    const raw = (min + e.bonusAdRatioMin * bonusAd + e.apRatioMin * this.stats.abilityPower) * mult;
+
+    if (target && target.hp > 0) {
+      // E(질풍검)는 치명타 스킬이 아니다 - crit/critMult 변수를 참조하지
+      // 않고(ReferenceError 방지) 항상 비치명타로 고정 적용한다.
+      applyDamage(target, {
+        rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL,
+        isCritical: false, critMultiplier: 1, source: this
+      });
+    }
+
+    if (key != null) {
+      this._yasuo.eTargetCooldowns.set(
+        key,
+        performance.now() + this._yasuoLevelValue(e.targetCooldown, lvl) * 1000
+      );
+    }
+    this._yasuo.eStacks = Math.min(4, stacks + 1);
+
+    this._yasuo.eStacksExpiresAt = performance.now() + e.stackDuration * 1000;
+};
+
+// Extracted from CharacterController: _yasuoFinishEDash
+CharacterController.prototype._yasuoFinishEDash = function() {
+    if (!this._yasuo || !this._yasuo.eDashStart || this.currentActionKey !== 'yasuoE') return;
 
     this.root.position.copy(this._yasuo.eDashEnd);
     if (this._yasuo.eqPending) { const eq = this._yasuo.eqPending; this._yasuo.eqPending = null; this._yasuoResolveEQ(eq); }
 
-    if (!this._yasuo.eDashDamageApplied) {
-      this._yasuo.eDashDamageApplied = true;
-      const min = this._yasuoLevelValue(e.damageMin, lvl);
-      const baseAd = computeChampionStats('yasuo', this.champLevel).attackDamage; // 레벨 기본 AD(원작 성장 공식)
-      const bonusAd = Math.max(0, this.stats.attackDamage - baseAd);
-      const raw = (min + e.bonusAdRatioMin * bonusAd + e.apRatioMin * this.stats.abilityPower) * mult;
-
-      if (target && target.hp > 0) {
-        // E(질풍검)는 치명타 스킬이 아니다 - crit/critMult 변수를 참조하지
-        // 않고(ReferenceError 방지) 항상 비치명타로 고정 적용한다.
-        applyDamage(target, {
-          rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL,
-          isCritical: false, critMultiplier: 1, source: this
-        });
-      }
-
-      if (key != null) {
-        this._yasuo.eTargetCooldowns.set(
-          key,
-          performance.now() + this._yasuoLevelValue(e.targetCooldown, lvl) * 1000
-        );
-      }
-      this._yasuo.eStacks = Math.min(4, stacks + 1);
-
-      this._yasuo.eStacksExpiresAt = performance.now() + e.stackDuration * 1000;
-    }
+    this._yasuoApplyEDashDamage(); // 대상에 닿을 때 이미 들어갔으면 아무것도 하지 않음(대상 이탈 등 대비 마지막 보장)
 
     this._yasuo.eDashStart = null;
     this._yasuo.eDashEnd = null;
@@ -575,6 +579,21 @@ CharacterController.prototype._yasuoTick = function(dt) {
         this._yasuo.eDashElapsed / this._yasuo.eDashDuration, 0, 1
       );
       this.root.position.lerpVectors(this._yasuo.eDashStart, this._yasuo.eDashEnd, t);
+      // 대상 위치를 지나는 순간(돌진 방향 투영 거리 기준) 피해를 준다.
+      const tg = this._yasuo.eDashTarget;
+      if (!this._yasuo.eDashDamageApplied && tg && tg.hp > 0) {
+        const tp = getWorldPosition(tg);
+        if (tp) {
+          const dir = new THREE.Vector3().subVectors(this._yasuo.eDashEnd, this._yasuo.eDashStart).setY(0);
+          const len = dir.length();
+          if (len > 1e-6) {
+            dir.multiplyScalar(1 / len);
+            const along = new THREE.Vector3(tp.x - this._yasuo.eDashStart.x, 0, tp.z - this._yasuo.eDashStart.z).dot(dir);
+            const covered = new THREE.Vector3(this.root.position.x - this._yasuo.eDashStart.x, 0, this.root.position.z - this._yasuo.eDashStart.z).dot(dir);
+            if (covered >= along - getCollisionRadius(tg)) this._yasuoApplyEDashDamage();
+          }
+        }
+      }
       if (this._yasuo.eDashElapsed >= this._yasuo.eDashDuration) {
         this._yasuoFinishEDash();
       }

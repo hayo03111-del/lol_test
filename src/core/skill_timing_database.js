@@ -39,9 +39,9 @@ const SKILL_TIMING_DATABASE = {
     Q: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     W: { eventTime: 0, recovery: 0, lockMove: false, lockAbility: false },
     // E: CAST_THEN_DELAYED_EVENT - Cast Time 0.25초와 별개로 실제 효과는
-    // 0.5초 후에 발생(문서: "Cast Time과 실제 Effect Delay를 구분"). 중간
-    // 구간의 명시적 unlock 근거가 없어 이벤트 시점까지 전부 잠금으로 처리.
-    E: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+    // 0.5초 후에 발생(문서: "Cast Time과 실제 Effect Delay를 구분"). 예전엔 이벤트 시점까지 전부 잠갔다.
+    // 9차 수정(PC 위키 + 여러 출처: 시전 0.25초, 그 뒤 0.5초에 판정): 시전 0.25초만 잠그고, 실제 효과(0.5초 지연)는 onFire에서 별도 타이머로 처리한다(controller_casting 참고).
+    E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     R: { eventTime: 0.5, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
   },
   vex: { 

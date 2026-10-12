@@ -29,7 +29,7 @@ function getTenacity(target) {
   }
   return 1 - keep;
 }
-const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM']);
+const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM', 'FEAR']);
 function unitLabel(u) {
   if (typeof dummy !== 'undefined' && u === dummy) return '더미 타겟';
   if (typeof controller !== 'undefined' && u === controller) return controller.championId || '플레이어';
@@ -73,7 +73,7 @@ function applyStatus(target, effect) {
   // 강인함은 아이템(itemTenacityPercent)과 스킬 버프(TENACITY 상태 - 가렌 W 등)를
   // 원작과 같이 곱연산으로 합친다: 최종 = 1 - (1-a)(1-b).
   const tenacity = getTenacity(target);
-  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM'].includes(effect.type)) {
+  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR'].includes(effect.type)) {
     effDuration = effDuration * (1 - tenacity);
   }
   if (target && target.itemSlowResistPercent > 0 && effect.type === 'SLOW') {
@@ -122,7 +122,7 @@ function applyStatus(target, effect) {
   // 않으므로 제외). target/effect.type을 함께 넘겨서, 제국의명령처럼
   // "이동 불가"만(둔화 제외) 가려 쓰거나 "걸린 대상"을 표식해야 하는
   // 패시브도 이 훅 하나로 처리한다.
-  if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM'].includes(effect.type)
+  if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM', 'FEAR'].includes(effect.type)
       && typeof itemOnSlowOrImmobilize === 'function') {
     const attacker = effect.source || (typeof controller !== 'undefined' ? controller : null);
     if (attacker && attacker !== target) itemOnSlowOrImmobilize(attacker, target, effect.type);

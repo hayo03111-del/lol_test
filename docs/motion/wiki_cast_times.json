@@ -224,7 +224,7 @@
    "castTimeSec": 0.25,
    "status": "confirmed",
    "source": "https://wiki.leagueoflegends.com/en-us/Template:Data_Mordekaiser/Death's_Grasp",
-   "note": "시전 0.25 + 효과 0.5초 지연 / 시전 0.25 위키 대조 일치(9차). 효과 0.5초 지연은 위키 요약에서 확인 못 함"
+   "note": "시전 0.25 위키 대조 일치(9차). 판정은 그 0.5초 뒤 - 위키·여러 출처 일치(10차), 시전 종료 기준으로 해석"
   },
   "R": {
    "castTimeSec": 0.5,
