@@ -28,7 +28,8 @@ function getAllEnemyUnits(ignoreRealm = false) { // ignoreRealm: 죽음의 세�
   if (!ignoreRealm && typeof controller !== 'undefined' && controller && controller.championId === 'mordekaiser'
       && controller._morde && controller._morde.isInDeathRealm) {
     const t = controller._morde.rTarget;
-    return (t && t.hp > 0) ? [t] : [];
+    // 구조물은 모든 세계에 존재한다(PC 위키) - 안에서도 구조물은 칠 수 있다.
+    return [...((t && t.hp > 0) ? [t] : []), ...getAllEnemyUnits(true).filter((u) => u.isStructure)];
   }
   const list = [];
   if (typeof dummy !== 'undefined' && dummy && dummy.hp > 0) list.push(dummy);
@@ -202,6 +203,10 @@ function tickStatusEffects(target, dt) {
   // 동일한 방식으로 XZ좌표를 직접 갱신한다(새 이동 시스템을 만들지 않음).
   // 이 뷰어의 "적"은 전부 더미/미니언(mesh.position만 있음)이라 target.mesh만
   // 확인하면 충분하다 - 실제 플레이어 챔피언은 아리의 대상이 될 수 없다.
+  // PC 위키(Types of Crowd Control): 매혹·공포는 시전자가 죽으면 풀린다.
+  for (const e of target.statusEffects) {
+    if ((e.type === 'CHARM' || e.type === 'FEAR') && e.expiresAt > now && e.source && (e.source.hp <= 0 || e.source.isDead)) e.expiresAt = now;
+  }
   for (const e of target.statusEffects) {
     if (e.type !== 'CHARM' || e.expiresAt <= now || !e.source || !target.mesh?.position) continue;
     const srcPos = getWorldPosition(e.source);
@@ -210,12 +215,11 @@ function tickStatusEffects(target, dt) {
     const dist = toSrc.length();
     const stopDistance = (getCollisionRadius(target) + getCollisionRadius(e.source)) * 0.8;
     if (dist > stopDistance) {
-      // 버그 수정(요청 "매혹 걸렸을 때 다가오는 속도 좀 느리게") - 기존
-      // 0.8배(평범한 이동속도에 가까움)는 "홀린 듯 천천히 다가온다"는
-      // 공식 설명의 느낌과 맞지 않았다. 확 느린 속도로 낮췄다.
-      const walkSpeed = MOVE_SPEED * 0.35;
+      // PC 위키: 매혹된 대상은 이동 속도가 줄어든 채 시전자 쪽으로 걷는다(아리 E: 65% 둔화 → 0.35배).
+      const walkSpeed = MOVE_SPEED * (1 - (e.charmSlow ?? 0.65));
       toSrc.multiplyScalar(1 / dist);
       target.mesh.position.addScaledVector(toSrc, Math.min(dist - stopDistance, walkSpeed * dt));
+      if (typeof constrainUnitPosition === 'function') constrainUnitPosition(target, target.mesh.position); // 지형·죽음의 세계 경계 통과 불가
     }
   }
   // 벡스 패시브(파멸) 공포: 시전자에게서 멀어지는 쪽으로 걷는다. 공포 중 둔화(value=둔화 비율, 시전자에게서 멀수록 큼)를 이동 속도에 반영.
@@ -228,6 +232,7 @@ function tickStatusEffects(target, dt) {
     if (dist < 1e-6) away.set(0, 0, 1); else away.multiplyScalar(1 / dist);
     const slow = typeof e.fearSlowAt === 'function' ? e.fearSlowAt(dist) : 0.6;
     target.mesh.position.addScaledVector(away, MOVE_SPEED * Math.max(0, 1 - slow) * dt);
+    if (typeof constrainUnitPosition === 'function') constrainUnitPosition(target, target.mesh.position);
   }
   if (target._yasuoAirborne && target.mesh?.position) {
     const a = target._yasuoAirborne;

@@ -147,7 +147,8 @@ CharacterController.prototype._dariusEOnCast = function(target) {
         debugSkillHit('Darius E (끌어당김)', target, { pullDistWorld: pullDist.toFixed(2) });
       }
       applyStatus(target, { id: 'dariusE_slow', type: 'SLOW', duration: e.slowDuration, value: e.slowPercent / 100 });
-      // 포획은 적을 끌어오면서 40% 둔화를 적용한다. 기절/에어본은 발생하지 않는다.
+      // 공식 툴팁(Data Dragon 16.20.1): "Pulling, and Knocking Up and Slowing" - 끌려오는 동안의 공중에 뜸은
+      // 공용 강제 이동(tickPullEffects)이 건다. 예전 주석은 "에어본은 발생하지 않는다"였다(틀림).
     }
   
 };

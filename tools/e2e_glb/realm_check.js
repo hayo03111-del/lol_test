@@ -42,23 +42,34 @@ const startServer = require('./server.js');
     tryMove();
     return r;
   });
-  await page.waitForTimeout(2200);
+  await page.waitForTimeout(3200);
   const mid2 = await page.evaluate(() => {
     const E = window.__e2e, c = window.controller, d = E.dummies[0], others = E.dummies.slice(1);
     const R = getDeathRealmForE2E(c._morde.realmId);
-    const out = { movedLol: Math.round(c.root.position.distanceTo(window.__movePos0) / E.lolRangeToWorld(1)), afterMoveOutDistFromCenterLol: R ? Math.round(c.root.position.distanceTo(R.center) / E.lolRangeToWorld(1)) : null, scale: +c.root.scale.x.toFixed(3), dummyScale: +d.mesh.scale.x.toFixed(3) };
+    const pm = c.root.position.clone().multiplyScalar(1.01); const pm2 = pm.clone(); window.__mapClamp(pm2);
+    const out = { mordeAtMapEdge: pm2.distanceTo(pm) > 1e-6, movedLol: Math.round(c.root.position.distanceTo(window.__movePos0) / E.lolRangeToWorld(1)), afterMoveOutDistFromCenterLol: R ? Math.round(c.root.position.distanceTo(R.center) / E.lolRangeToWorld(1)) : null, scale: +c.root.scale.x.toFixed(3), dummyScale: +d.mesh.scale.x.toFixed(3) };
     // 바깥 허수아비 공격 시도 → 피해 없어야 한다
     if (others[0]) { window.__otherHp = others[0].hp; c.root.position.copy(E.getWorldPosition(others[0])).add(new E.THREE.Vector3(0, 0, E.lolRangeToWorld(150))); c.selectTarget(others[0]); }
     return out;
   });
   await page.waitForTimeout(1500);
+  // 경계 밖으로 향하는 넉백(강제 이동)은 경계에서 멈춰야 한다(PC 위키)
+  mid2.knockOut = await page.evaluate(() => new Promise((res) => {
+    const E = window.__e2e, c = window.controller, d = E.dummies[0], R = getDeathRealmForE2E(c._morde.realmId);
+    if (!R) return res(null);
+    const mapEdge = (p) => { const q = p.clone(); window.__mapClamp(q); const q2 = p.clone().multiplyScalar(1.01); window.__mapClamp(q2); return q2.distanceTo(p.clone().multiplyScalar(1.01)) > 1e-6; };
+    const from = E.getWorldPosition(d).clone(); const dir = from.clone().sub(R.center).setY(0).normalize();
+    d._pullState = { from, to: from.clone().addScaledVector(dir, E.lolRangeToWorld(3000)), duration: 0.5, elapsed: 0 };
+    setTimeout(() => res({ distFromCenterLol: Math.round(E.getWorldPosition(d).distanceTo(R.center) / E.lolRangeToWorld(1)), atMapEdge: mapEdge(E.getWorldPosition(d)), airborneDuringMove: !!window.__airSeen }), 1400);
+    setTimeout(() => { window.__airSeen = (d.statusEffects || []).some((e) => e.type === 'KNOCKUP'); }, 150);
+  }));
   mid2.otherDamaged = await page.evaluate(() => { const o = window.__e2e.dummies[1]; return o ? Math.round(window.__otherHp - o.hp) : null; });
   // 캡처할 때만 UI 패널을 숨기고 게임 화면(캔버스)만 남긴다.
   await page.evaluate(() => { const cv = document.querySelector('canvas'); const keep = new Set(); for (let n = cv; n; n = n.parentElement) keep.add(n); document.querySelectorAll('body *').forEach((el) => { if (!keep.has(el) && !el.contains(cv)) el.style.visibility = 'hidden'; }); });
   await page.waitForTimeout(400);
   await page.screenshot({ path: process.argv[2] || 'realm.png' });
   await page.evaluate(() => document.querySelectorAll('body *').forEach((el) => { el.style.visibility = ''; }));
-  await page.waitForTimeout(4200);
+  await page.waitForTimeout(2000);
   const end = await page.evaluate(() => {
     const E = window.__e2e, c = window.controller, d = E.dummies[0], b = window.__before;
     const opac = (u) => { let o = null; u.mesh.traverse((m) => { if (m.isMesh && o == null && m.material && !Array.isArray(m.material)) o = m.material.opacity; }); return o; };

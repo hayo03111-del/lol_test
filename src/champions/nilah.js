@@ -699,7 +699,7 @@ CharacterController.prototype._nilahRFinish = function(seq) {
       const dealt=applyDamage(u,{rawDamage:raw,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,armorPenPercent:this.armorPenPercent||0});
       if(u.isChampion||u.type==='champion'||u.championId) seq.championDamage+=dealt; else seq.nonChampionDamage+=dealt;
       applyStatus(u,{id:'nilahR_slow',type:'SLOW',duration:r.slowDuration,value:r.slowPercent/100});
-      const from=getWorldPosition(u); if(from){const dir=new THREE.Vector3().subVectors(this.root.position,from).setY(0); if(dir.lengthSq()>1e-8){dir.normalize(); const to=this.root.position.clone();
+      const from=getWorldPosition(u); if(from){const dir=new THREE.Vector3().subVectors(this.root.position,from).setY(0); if(dir.lengthSq()>1e-8){dir.normalize(); const to=this.root.position.clone().addScaledVector(dir,-(this.collisionRadius+getCollisionRadius(u))); to.y=from.y; // 닐라 몸 바로 앞까지(예전엔 닐라 위치에 겹쳐 쌓였다)
         // 요청("적을 끌어올 때 아주 잠깐 에어본을 걸고 띄워서 끌고와"):
         // 끌어당기는 동안(0.22초)만 아주 짧게 KNOCKUP 상태를 걸어서
         // 다른 챔피언의 에어본(리신 R 등)과 같은 방식으로 이동/행동을

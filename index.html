@@ -1478,6 +1478,8 @@ function applyStatus(target, effect) {
     console.log(`[CC BLOCKED - UNSTOPPABLE] ${effect.type} 무시됨 (세트 R 진행 중)`);
     return null;
   }
+  // 구조물(포탑·억제기·넥서스)은 군중 제어에 걸리지 않는다(원작) - 광역 CC가 포탑을 기절시키거나 둔화시키던 문제 방지.
+  if (target && target.isStructure && CC_TYPES.has(effect.type) && effect.type !== 'ARMOR_SHRED' && effect.type !== 'MR_SHRED') return null;
   const now = performance.now();
   // 마스터 이 R(최후의 전사): 지속 중 둔화 면역(원작). 시전 시 기존 둔화는 _masteryiCastR이 제거한다.
   if (effect.type === 'SLOW' && target && target.championId === 'masteryi' && target._masteryi && (target._masteryi.rActiveUntil || 0) > now) {
@@ -1828,7 +1830,8 @@ function getAllEnemyUnits(ignoreRealm = false) { // ignoreRealm: 죽음의 세�
   if (!ignoreRealm && typeof controller !== 'undefined' && controller && controller.championId === 'mordekaiser'
       && controller._morde && controller._morde.isInDeathRealm) {
     const t = controller._morde.rTarget;
-    return (t && t.hp > 0) ? [t] : [];
+    // 구조물은 모든 세계에 존재한다(PC 위키) - 안에서도 구조물은 칠 수 있다.
+    return [...((t && t.hp > 0) ? [t] : []), ...getAllEnemyUnits(true).filter((u) => u.isStructure)];
   }
   const list = [];
   if (typeof dummy !== 'undefined' && dummy && dummy.hp > 0) list.push(dummy);
@@ -2002,6 +2005,10 @@ function tickStatusEffects(target, dt) {
   // 동일한 방식으로 XZ좌표를 직접 갱신한다(새 이동 시스템을 만들지 않음).
   // 이 뷰어의 "적"은 전부 더미/미니언(mesh.position만 있음)이라 target.mesh만
   // 확인하면 충분하다 - 실제 플레이어 챔피언은 아리의 대상이 될 수 없다.
+  // PC 위키(Types of Crowd Control): 매혹·공포는 시전자가 죽으면 풀린다.
+  for (const e of target.statusEffects) {
+    if ((e.type === 'CHARM' || e.type === 'FEAR') && e.expiresAt > now && e.source && (e.source.hp <= 0 || e.source.isDead)) e.expiresAt = now;
+  }
   for (const e of target.statusEffects) {
     if (e.type !== 'CHARM' || e.expiresAt <= now || !e.source || !target.mesh?.position) continue;
     const srcPos = getWorldPosition(e.source);
@@ -2010,12 +2017,11 @@ function tickStatusEffects(target, dt) {
     const dist = toSrc.length();
     const stopDistance = (getCollisionRadius(target) + getCollisionRadius(e.source)) * 0.8;
     if (dist > stopDistance) {
-      // 버그 수정(요청 "매혹 걸렸을 때 다가오는 속도 좀 느리게") - 기존
-      // 0.8배(평범한 이동속도에 가까움)는 "홀린 듯 천천히 다가온다"는
-      // 공식 설명의 느낌과 맞지 않았다. 확 느린 속도로 낮췄다.
-      const walkSpeed = MOVE_SPEED * 0.35;
+      // PC 위키: 매혹된 대상은 이동 속도가 줄어든 채 시전자 쪽으로 걷는다(아리 E: 65% 둔화 → 0.35배).
+      const walkSpeed = MOVE_SPEED * (1 - (e.charmSlow ?? 0.65));
       toSrc.multiplyScalar(1 / dist);
       target.mesh.position.addScaledVector(toSrc, Math.min(dist - stopDistance, walkSpeed * dt));
+      if (typeof constrainUnitPosition === 'function') constrainUnitPosition(target, target.mesh.position); // 지형·죽음의 세계 경계 통과 불가
     }
   }
   // 벡스 패시브(파멸) 공포: 시전자에게서 멀어지는 쪽으로 걷는다. 공포 중 둔화(value=둔화 비율, 시전자에게서 멀수록 큼)를 이동 속도에 반영.
@@ -2028,6 +2034,7 @@ function tickStatusEffects(target, dt) {
     if (dist < 1e-6) away.set(0, 0, 1); else away.multiplyScalar(1 / dist);
     const slow = typeof e.fearSlowAt === 'function' ? e.fearSlowAt(dist) : 0.6;
     target.mesh.position.addScaledVector(away, MOVE_SPEED * Math.max(0, 1 - slow) * dt);
+    if (typeof constrainUnitPosition === 'function') constrainUnitPosition(target, target.mesh.position);
   }
   if (target._yasuoAirborne && target.mesh?.position) {
     const a = target._yasuoAirborne;
@@ -14784,7 +14791,8 @@ CharacterController.prototype._dariusEOnCast = function(target) {
         debugSkillHit('Darius E (끌어당김)', target, { pullDistWorld: pullDist.toFixed(2) });
       }
       applyStatus(target, { id: 'dariusE_slow', type: 'SLOW', duration: e.slowDuration, value: e.slowPercent / 100 });
-      // 포획은 적을 끌어오면서 40% 둔화를 적용한다. 기절/에어본은 발생하지 않는다.
+      // 공식 툴팁(Data Dragon 16.20.1): "Pulling, and Knocking Up and Slowing" - 끌려오는 동안의 공중에 뜸은
+      // 공용 강제 이동(tickPullEffects)이 건다. 예전 주석은 "에어본은 발생하지 않는다"였다(틀림).
     }
   
 };
@@ -18314,7 +18322,7 @@ CharacterController.prototype._nilahRFinish = function(seq) {
       const dealt=applyDamage(u,{rawDamage:raw,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,armorPenPercent:this.armorPenPercent||0});
       if(u.isChampion||u.type==='champion'||u.championId) seq.championDamage+=dealt; else seq.nonChampionDamage+=dealt;
       applyStatus(u,{id:'nilahR_slow',type:'SLOW',duration:r.slowDuration,value:r.slowPercent/100});
-      const from=getWorldPosition(u); if(from){const dir=new THREE.Vector3().subVectors(this.root.position,from).setY(0); if(dir.lengthSq()>1e-8){dir.normalize(); const to=this.root.position.clone();
+      const from=getWorldPosition(u); if(from){const dir=new THREE.Vector3().subVectors(this.root.position,from).setY(0); if(dir.lengthSq()>1e-8){dir.normalize(); const to=this.root.position.clone().addScaledVector(dir,-(this.collisionRadius+getCollisionRadius(u))); to.y=from.y; // 닐라 몸 바로 앞까지(예전엔 닐라 위치에 겹쳐 쌓였다)
         // 요청("적을 끌어올 때 아주 잠깐 에어본을 걸고 띄워서 끌고와"):
         // 끌어당기는 동안(0.22초)만 아주 짧게 KNOCKUP 상태를 걸어서
         // 다른 챔피언의 에어본(리신 R 등)과 같은 방식으로 이동/행동을
@@ -20212,7 +20220,7 @@ CharacterController.prototype._mordeApplyStealToSelf = function(steal, sign) {
 // 바깥 유닛(적 미니언·포탑·다른 허수아비·아군)을 반투명 혼령으로 그린다. 새로 생긴 유닛도 매 프레임 확인한다.
 CharacterController.prototype._mordeGhostOutsiders = function() {
     const target = this._morde.rTarget;
-    for (const u of getAllEnemyUnits(true)) if (u !== target) ghostUnitForDeathRealm(u);
+    for (const u of getAllEnemyUnits(true)) if (u !== target && !u.isStructure) ghostUnitForDeathRealm(u); // 구조물은 모든 세계에 존재 - 혼령으로 그리지 않는다
     if (typeof getAllyChampions === 'function') for (const a of getAllyChampions()) ghostUnitForDeathRealm(a);
 };
 
@@ -24666,6 +24674,10 @@ let _mordeRealmCounter = 0;
 // 'main'(메인 월드)에 있는 것으로 취급한다 - 기존 유닛에 새 필드를
 // 강제로 추가하지 않아도 안전하게 동작한다.
 function canRealmInteract(a, b) {
+  // PC 위키: 구조물(포탑·억제기·넥서스)은 모든 세계에 동시에 존재하고, 포탑은 모든 유닛이 같은 세계에 있는
+  // 것처럼 정상 동작한다(Riot 기술 블로그의 "All Realms" 차원). 예전엔 죽음의 세계 안에서 포탑이 공격하지
+  // 못하고 모데카이저도 구조물을 칠 수 없었다.
+  if ((a && a.isStructure) || (b && b.isStructure)) return true;
   const ra = (a && a.realmId) || 'main';
   const rb = (b && b.realmId) || 'main';
   return ra === rb;
@@ -24774,6 +24786,16 @@ function getDeathRealm(realmId) { return realmId && realmId !== 'main' ? (_death
 function removeDeathRealm(realmId) { _deathRealms.delete(realmId); }
 // 경계 밖 좌표를 경계 안쪽으로 되돌린다(유닛 충돌 반경만큼 안쪽). 원작: 경계는 지형이 아니지만 통과할
 // 수 없고, 돌진·점멸·에어본 이동도 경계에서 멈춘다.
+// 강제 이동(넉백·끌어당김·매혹·공포)한 위치를 지형(맵 경계)과 죽음의 세계 경계 안으로 되돌린다.
+// PC 위키: 강제 이동은 지형을 통과하지 못하고, 죽음의 세계 경계에서도 멈춘다. realm을 넘기면 그 경계를 쓴다
+// (경계 안에서 시작한 넉백은 죽음의 세계가 끝난 뒤에도 그 경계에서 멈춘다 - PC 위키).
+function constrainUnitPosition(unit, pos, realm = null) {
+  if (!pos) return pos;
+  if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap && typeof howlingAbyssMap.clampPosition === 'function') howlingAbyssMap.clampPosition(pos);
+  const r = realm || getDeathRealm(unit && unit.realmId);
+  if (r) clampToDeathRealm(pos, r, typeof getCollisionRadius === 'function' ? getCollisionRadius(unit) : 0);
+  return pos;
+}
 function clampToDeathRealm(point, realm, margin = 0) {
   if (!realm) return point;
   const rel = new THREE.Vector3(point.x - realm.center.x, 0, point.z - realm.center.z);
@@ -31077,7 +31099,8 @@ function updateDummyAI(dt) {
 // 매 프레임 이 함수가 실제로 unit.mesh.position을 갱신한다 - 이펙트만
 // 표시되고 위치가 그대로인 문제를 막기 위한 공통 지점.
 function tickPullEffects(dt) {
-  for (const u of getAllEnemyUnits()) {
+  // 죽음의 세계 격리와 무관하게 모든 유닛의 강제 이동을 진행한다(예전엔 모데카이저 R 중 바깥 유닛의 넉백이 멈췄다).
+  for (const u of getAllEnemyUnits(true)) {
     const p = u._pullState;
     if (!p) continue;
     // 요청("넥서스, 억제기 스킬로 안 끌어오게 하기") - 포탑/억제기/넥서스
@@ -31087,9 +31110,29 @@ function tickPullEffects(dt) {
     // 자체가 화면에서 그대로 끌려오는 버그가 있었다 - 여기서 한 번만
     // 막으면 앞으로 추가될 모든 끌어당기기/넉백 스킬에 자동 적용된다.
     if (u.isStructure) { u._pullState = null; continue; }
+    if (!p._started) {
+      p._started = true;
+      // PC 위키(Airborne): 넉백·끌어당김·밀쳐내기는 모두 "공중에 뜸"이다 - 이동하는 동안 이동·공격·스킬 불가,
+      // 강인함 무시. 스킬이 이미 더 긴 공중에 뜸을 걸었으면(리 신 R 등) 그대로 둔다.
+      const remain = Math.max(0.05, p.duration - p.elapsed);
+      const air = (u.statusEffects || []).find((e) => e.type === 'KNOCKUP' && e.expiresAt > performance.now());
+      if (!p.noAirborne && (!air || air.expiresAt < performance.now() + remain * 1000)) {
+        applyStatus(u, { id: 'displacementAirborne', type: 'KNOCKUP', duration: remain, value: 1, airborneHeight: p.airborneHeight ?? BASE_UNIT * 0.2 });
+      }
+      // 경계 안에서 시작한 강제 이동은 죽음의 세계가 끝나도 그 경계에서 멈춘다(PC 위키).
+      if (typeof getDeathRealm === 'function') p.realmBound = getDeathRealm(u.realmId);
+    }
     p.elapsed += dt;
     const t = Math.min(1, p.elapsed / p.duration);
+    const y = u.mesh.position.y; // 공중에 뜸 높이(_yasuoAirborne)는 따로 계산된다
     u.mesh.position.lerpVectors(p.from, p.to, t);
+    u.mesh.position.y = y;
+    // 지형(맵 경계)·죽음의 세계 경계를 통과하지 못한다 - 막히면 그 자리에서 멈춘다.
+    if (typeof constrainUnitPosition === 'function') {
+      const bx = u.mesh.position.x, bz = u.mesh.position.z;
+      constrainUnitPosition(u, u.mesh.position, p.realmBound || null);
+      if (Math.abs(bx - u.mesh.position.x) > 1e-6 || Math.abs(bz - u.mesh.position.z) > 1e-6) { p.to.copy(u.mesh.position); p.from.copy(u.mesh.position); }
+    }
     if (t >= 1) { u._pullState = null; if (p.onComplete) p.onComplete(u); }
   }
   // 플레이어 챔피언 자신에게도 같은 트윈을 쓸 수 있게 한다(요청: "돌진

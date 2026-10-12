@@ -264,7 +264,7 @@ CharacterController.prototype._mordeApplyStealToSelf = function(steal, sign) {
 // 바깥 유닛(적 미니언·포탑·다른 허수아비·아군)을 반투명 혼령으로 그린다. 새로 생긴 유닛도 매 프레임 확인한다.
 CharacterController.prototype._mordeGhostOutsiders = function() {
     const target = this._morde.rTarget;
-    for (const u of getAllEnemyUnits(true)) if (u !== target) ghostUnitForDeathRealm(u);
+    for (const u of getAllEnemyUnits(true)) if (u !== target && !u.isStructure) ghostUnitForDeathRealm(u); // 구조물은 모든 세계에 존재 - 혼령으로 그리지 않는다
     if (typeof getAllyChampions === 'function') for (const a of getAllyChampions()) ghostUnitForDeathRealm(a);
 };
 

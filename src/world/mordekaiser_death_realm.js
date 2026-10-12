@@ -27,6 +27,10 @@ let _mordeRealmCounter = 0;
 // 'main'(메인 월드)에 있는 것으로 취급한다 - 기존 유닛에 새 필드를
 // 강제로 추가하지 않아도 안전하게 동작한다.
 function canRealmInteract(a, b) {
+  // PC 위키: 구조물(포탑·억제기·넥서스)은 모든 세계에 동시에 존재하고, 포탑은 모든 유닛이 같은 세계에 있는
+  // 것처럼 정상 동작한다(Riot 기술 블로그의 "All Realms" 차원). 예전엔 죽음의 세계 안에서 포탑이 공격하지
+  // 못하고 모데카이저도 구조물을 칠 수 없었다.
+  if ((a && a.isStructure) || (b && b.isStructure)) return true;
   const ra = (a && a.realmId) || 'main';
   const rb = (b && b.realmId) || 'main';
   return ra === rb;
@@ -135,6 +139,16 @@ function getDeathRealm(realmId) { return realmId && realmId !== 'main' ? (_death
 function removeDeathRealm(realmId) { _deathRealms.delete(realmId); }
 // 경계 밖 좌표를 경계 안쪽으로 되돌린다(유닛 충돌 반경만큼 안쪽). 원작: 경계는 지형이 아니지만 통과할
 // 수 없고, 돌진·점멸·에어본 이동도 경계에서 멈춘다.
+// 강제 이동(넉백·끌어당김·매혹·공포)한 위치를 지형(맵 경계)과 죽음의 세계 경계 안으로 되돌린다.
+// PC 위키: 강제 이동은 지형을 통과하지 못하고, 죽음의 세계 경계에서도 멈춘다. realm을 넘기면 그 경계를 쓴다
+// (경계 안에서 시작한 넉백은 죽음의 세계가 끝난 뒤에도 그 경계에서 멈춘다 - PC 위키).
+function constrainUnitPosition(unit, pos, realm = null) {
+  if (!pos) return pos;
+  if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap && typeof howlingAbyssMap.clampPosition === 'function') howlingAbyssMap.clampPosition(pos);
+  const r = realm || getDeathRealm(unit && unit.realmId);
+  if (r) clampToDeathRealm(pos, r, typeof getCollisionRadius === 'function' ? getCollisionRadius(unit) : 0);
+  return pos;
+}
 function clampToDeathRealm(point, realm, margin = 0) {
   if (!realm) return point;
   const rel = new THREE.Vector3(point.x - realm.center.x, 0, point.z - realm.center.z);

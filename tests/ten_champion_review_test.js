@@ -126,6 +126,9 @@ this.addShield = addShield;
 this.getShieldById = getShieldById;
 this.BASE_UNIT = BASE_UNIT;
 this.getAllEnemyUnits = getAllEnemyUnits;
+this.canRealmInteract = canRealmInteract;
+this.constrainUnitPosition = constrainUnitPosition;
+this.clearStatus = clearStatus;
 this.getDeathRealm = getDeathRealm;
 this.getFinalAttackSpeed = getFinalAttackSpeed;
 `, context);
@@ -597,4 +600,32 @@ stubs.targetRing = { clear() {} };
   assert(c._morde.rKept && c.bonusArmor > 0, '모데 R: 대상이 죽어 있는 동안 계속 유지');
   t.hp = 1000; c._mordeUpdateR();
   assert(!c._morde.rKept && near(c.bonusArmor, 0) && near(c.maxHp, maxHp0), '모데 R: 대상이 부활하면 유지하던 능력치 반환');
+}
+
+// --- 죽음의 세계 + CC 원작 규칙(15차) ---
+{
+  // 구조물은 모든 세계에 존재(PC 위키): 포탑은 죽음의 세계 안 유닛도 정상 공격, 안에서도 구조물을 칠 수 있다
+  const turret = { isStructure: true, isTurret: true, team: 'RED', hp: 5000, maxHp: 5000, statusEffects: [], mesh: { position: new Vector3(0, 0, 3) } };
+  assert(context.canRealmInteract(turret, { realmId: 'deathRealm_9' }) && context.canRealmInteract({ realmId: 'deathRealm_9' }, turret), '죽음의 세계: 구조물은 모든 세계와 상호작용(PC 위키)');
+  assert(!context.canRealmInteract({ realmId: 'deathRealm_9' }, { realmId: 'main' }), '죽음의 세계: 일반 유닛은 다른 세계와 상호작용 불가(그대로)');
+  // 구조물은 CC 면역
+  applyStatus(turret, { id: 'x', type: 'STUN', duration: 1, value: 1 });
+  applyStatus(turret, { id: 'y', type: 'SLOW', duration: 1, value: 0.5 });
+  assert(turret.statusEffects.length === 0, 'CC: 구조물은 기절·둔화에 걸리지 않는다');
+  // 매혹·공포는 시전자가 죽으면 풀린다
+  const src = { isChampion: true, hp: 100, root: { position: new Vector3(0, 0, 0) }, collisionRadius: 0.5 };
+  const e = makeEnemy(0, 3);
+  applyStatus(e, { id: 'ahriCharm', type: 'CHARM', duration: 2, value: 1, source: src });
+  src.hp = 0; tickStatusEffects(e, 0.016);
+  assert(!getStatus(e, 'ahriCharm'), 'CC: 매혹은 시전자가 죽으면 풀린다(PC 위키)');
+  // 강제 이동은 죽음의 세계 경계에서 멈춘다
+  const realm = { center: new Vector3(0, 0, 0), radius: 5 };
+  const pos = new Vector3(0, 0, 20);
+  context.constrainUnitPosition({ collisionRadius: 0.5 }, pos, realm);
+  assert(near(pos.length(), 4.5), '강제 이동: 경계(반경 − 충돌 반경)에서 멈춘다');
+  // 공중에 뜸(KNOCKUP)은 강인함 무시, 매혹은 강인함 적용
+  const ten = makeEnemy(0, 3, { itemTenacityPercent: 0.5 });
+  const k = applyStatus(ten, { id: 'k', type: 'KNOCKUP', duration: 1, value: 1 });
+  const ch = applyStatus(ten, { id: 'c', type: 'CHARM', duration: 1, value: 1, source: { hp: 1, root: { position: new Vector3() } } });
+  assert(near(k.duration, 1) && near(ch.duration, 0.5), 'CC: 공중에 뜸은 강인함 무시, 매혹은 강인함 적용');
 }

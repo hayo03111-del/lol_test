@@ -56,6 +56,8 @@ function applyStatus(target, effect) {
     console.log(`[CC BLOCKED - UNSTOPPABLE] ${effect.type} 무시됨 (세트 R 진행 중)`);
     return null;
   }
+  // 구조물(포탑·억제기·넥서스)은 군중 제어에 걸리지 않는다(원작) - 광역 CC가 포탑을 기절시키거나 둔화시키던 문제 방지.
+  if (target && target.isStructure && CC_TYPES.has(effect.type) && effect.type !== 'ARMOR_SHRED' && effect.type !== 'MR_SHRED') return null;
   const now = performance.now();
   // 마스터 이 R(최후의 전사): 지속 중 둔화 면역(원작). 시전 시 기존 둔화는 _masteryiCastR이 제거한다.
   if (effect.type === 'SLOW' && target && target.championId === 'masteryi' && target._masteryi && (target._masteryi.rActiveUntil || 0) > now) {

@@ -1401,7 +1401,8 @@ function updateDummyAI(dt) {
 // 매 프레임 이 함수가 실제로 unit.mesh.position을 갱신한다 - 이펙트만
 // 표시되고 위치가 그대로인 문제를 막기 위한 공통 지점.
 function tickPullEffects(dt) {
-  for (const u of getAllEnemyUnits()) {
+  // 죽음의 세계 격리와 무관하게 모든 유닛의 강제 이동을 진행한다(예전엔 모데카이저 R 중 바깥 유닛의 넉백이 멈췄다).
+  for (const u of getAllEnemyUnits(true)) {
     const p = u._pullState;
     if (!p) continue;
     // 요청("넥서스, 억제기 스킬로 안 끌어오게 하기") - 포탑/억제기/넥서스
@@ -1411,9 +1412,29 @@ function tickPullEffects(dt) {
     // 자체가 화면에서 그대로 끌려오는 버그가 있었다 - 여기서 한 번만
     // 막으면 앞으로 추가될 모든 끌어당기기/넉백 스킬에 자동 적용된다.
     if (u.isStructure) { u._pullState = null; continue; }
+    if (!p._started) {
+      p._started = true;
+      // PC 위키(Airborne): 넉백·끌어당김·밀쳐내기는 모두 "공중에 뜸"이다 - 이동하는 동안 이동·공격·스킬 불가,
+      // 강인함 무시. 스킬이 이미 더 긴 공중에 뜸을 걸었으면(리 신 R 등) 그대로 둔다.
+      const remain = Math.max(0.05, p.duration - p.elapsed);
+      const air = (u.statusEffects || []).find((e) => e.type === 'KNOCKUP' && e.expiresAt > performance.now());
+      if (!p.noAirborne && (!air || air.expiresAt < performance.now() + remain * 1000)) {
+        applyStatus(u, { id: 'displacementAirborne', type: 'KNOCKUP', duration: remain, value: 1, airborneHeight: p.airborneHeight ?? BASE_UNIT * 0.2 });
+      }
+      // 경계 안에서 시작한 강제 이동은 죽음의 세계가 끝나도 그 경계에서 멈춘다(PC 위키).
+      if (typeof getDeathRealm === 'function') p.realmBound = getDeathRealm(u.realmId);
+    }
     p.elapsed += dt;
     const t = Math.min(1, p.elapsed / p.duration);
+    const y = u.mesh.position.y; // 공중에 뜸 높이(_yasuoAirborne)는 따로 계산된다
     u.mesh.position.lerpVectors(p.from, p.to, t);
+    u.mesh.position.y = y;
+    // 지형(맵 경계)·죽음의 세계 경계를 통과하지 못한다 - 막히면 그 자리에서 멈춘다.
+    if (typeof constrainUnitPosition === 'function') {
+      const bx = u.mesh.position.x, bz = u.mesh.position.z;
+      constrainUnitPosition(u, u.mesh.position, p.realmBound || null);
+      if (Math.abs(bx - u.mesh.position.x) > 1e-6 || Math.abs(bz - u.mesh.position.z) > 1e-6) { p.to.copy(u.mesh.position); p.from.copy(u.mesh.position); }
+    }
     if (t >= 1) { u._pullState = null; if (p.onComplete) p.onComplete(u); }
   }
   // 플레이어 챔피언 자신에게도 같은 트윈을 쓸 수 있게 한다(요청: "돌진
