@@ -19,6 +19,20 @@ const visionSystemCheckboxEl = document.getElementById('visionSystemCheckbox');
 if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', () => visionSystem.setEnabled(visionSystemCheckboxEl.checked));
 // 스킬 예고 표시(아군·적군 모두에게 보이는 지면 연출 - skill_telegraph_system.js).
 const skillTelegraphs = new SkillTelegraphSystem(scene);
+// 부쉬(brush_system.js): 기본 두 곳 + 설치 모드(N)로 클릭한 자리에 추가.
+const brushSystem = new BrushSystem(scene);
+brushSystem.addDefaultLayout();
+let brushPlaceMode = false;
+const brushPlaceCheckboxEl = document.getElementById('brushPlaceCheckbox');
+function setBrushPlaceMode(v) {
+  brushPlaceMode = v;
+  if (v) { if (typeof setDummyPlaceMode === 'function' && dummyPlaceMode) setDummyPlaceMode(false); if (typeof setAllyPlaceMode === 'function' && allyPlaceMode) setAllyPlaceMode(false); }
+  if (brushPlaceCheckboxEl) brushPlaceCheckboxEl.checked = v;
+  renderer.domElement.style.cursor = v ? 'crosshair' : '';
+}
+if (brushPlaceCheckboxEl) brushPlaceCheckboxEl.addEventListener('change', () => setBrushPlaceMode(brushPlaceCheckboxEl.checked));
+const clearBrushesBtnEl = document.getElementById('clearBrushesBtn');
+if (clearBrushesBtnEl) clearBrushesBtnEl.addEventListener('click', () => brushSystem.clear());
 // "적 팀 시야로 보기": 화면을 빨강 팀이 보는 그대로 그린다(판정은 그대로 플레이어 팀 시야).
 const enemyViewCheckboxEl = document.getElementById('enemyVisionViewCheckbox');
 if (enemyViewCheckboxEl) enemyViewCheckboxEl.addEventListener('change', () => visionSystem.setViewTeam(enemyViewCheckboxEl.checked ? ENEMY_TEAM : PLAYER_TEAM));
@@ -677,6 +691,11 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
       if (groundPoint) placeAllyAt(groundPoint);
       return;
     }
+    if (brushPlaceMode) {
+      const groundPoint = getGroundPoint(e.clientX, e.clientY);
+      if (groundPoint) brushSystem.addBrush({ x: groundPoint.x, z: groundPoint.z });
+      return;
+    }
     const enemyHit = getEnemyHit(e.clientX, e.clientY);
     if (enemyHit) controller.selectTarget(enemyHit);
     else { controller.currentTarget = null; targetRing.clear(); }
@@ -689,7 +708,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 // 있을 때는 값이 안 바뀌므로 매 프레임이 아니라 실제 mousemove 이벤트가
 // 있을 때만 계산되고, 후보 수도 최대 수십 개 수준이라 비용이 거의 없다.
 renderer.domElement.addEventListener('pointermove', (e) => {
-  if (paused || !controller || dummyPlaceMode || allyPlaceMode) { renderer.domElement.style.cursor = ''; return; }
+  if (paused || !controller || dummyPlaceMode || allyPlaceMode || brushPlaceMode) { renderer.domElement.style.cursor = brushPlaceMode ? 'crosshair' : ''; return; }
   const enemyHit = getEnemyHit(e.clientX, e.clientY);
   renderer.domElement.style.cursor = enemyHit ? 'pointer' : '';
 });
@@ -713,6 +732,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyV') { rangeIndicators.toggle(); const cb = document.getElementById('rangeIndicatorCheckbox'); if (cb) cb.checked = rangeIndicators.visible; return; }
   if (e.code === 'KeyP') { if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
   if (e.code === 'KeyO') { setAllyPlaceMode(!allyPlaceMode); return; }
+  if (e.code === 'KeyN') { setBrushPlaceMode(!brushPlaceMode); return; }
   if (paused) return;
   // 버그 수정(핵심 - "마스터 이 W 모션이 반복된다"의 진짜 원인): 이
   // 리스너에 OS 키 반복(long-press) 방지 처리가 전혀 없었다. 키를 누르고

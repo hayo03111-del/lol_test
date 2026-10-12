@@ -904,3 +904,36 @@ Riot CDN 차단) 영상 프레임 비교는 0건이다. GLB 773개 클립 길이
     - 초가스 Q 균열은 빨강 시야 밖이어도 보이고, 일반 예고는 빨강이 그 지점을 볼 때만 보인다.
   - 네 예고 표시 모두 실제 게임에서 생성·표시를 확인했다.
   - 기제 점검(5챔피언) 피해량 변화 없음, 오류 0. 교체 격리 시험 이상 0.
+
+## 18차 - CommunityDragon 접속 불가 원인 + 부쉬 시스템
+- **CommunityDragon에 못 들어가는 이유**(직접 확인):
+  - 이 세션의 외부 연결은 에이전트 프록시 → 조직/환경 정책 게이트웨이를 거친다.
+  - raw.communitydragon.org / communitydragon.org / cdn.communitydragon.org에 연결(CONNECT)을 요청하면 게이트웨이가 **403 Forbidden**을 돌려준다.
+  - 프록시 상태 기록: "gateway answered 403 to CONNECT (policy denial)".
+  - 같은 이유로 ddragon.leagueoflegends.com, wiki.leagueoflegends.com도 막혀 있다.
+  - GitHub raw·npm·PyPI는 허용 목록에 있어서 열린다(그래서 Data Dragon은 GitHub 미러로 받았다).
+  - 사이트 문제가 아니라 이 클라우드 환경의 네트워크 접근 설정 때문이다.
+    - 고치려면 환경 설정(세션 제목 줄의 클라우드 환경 메뉴 → Edit)의 Network access에서 허용 도메인에 `raw.communitydragon.org`를 추가하거나 접근 수준을 넓힌다.
+    - 안내: https://code.claude.com/docs/en/cloud-environments#network-access
+- **부쉬 시스템**(`src/world/brush_system.js`, 시야 판정은 `vision_system.js`):
+  - PC 위키 Brush 규칙:
+    - 부쉬 안의 유닛은 상대 팀이 그 부쉬 안을 볼 때만 보인다(같은 부쉬 안의 유닛·와드).
+    - 바깥 → 안쪽 시야만 막고, 안에서는 바깥이 보인다.
+    - 지역을 드러내는 스킬 시야(애쉬 E·R, `grantVision(..., { revealsBrush: true })`)는 부쉬 안도 보인다.
+    - 와드는 놓인 위치 기준이다(부쉬 안에 놓아야 안이 보인다).
+  - 부쉬 안에서 평타·스킬을 쓰면 주변 300을 상대 팀에 2초 드러낸다(Fandom 위키 Brush - 공식 위키에는 수치 없음).
+    - 플레이어 평타·스킬, 허수아비 반격 모두 적용.
+  - 타게팅(getTargetableEnemyUnits)·예고 표시 판정(isPointVisibleTo)도 부쉬 규칙을 따른다.
+  - 화면: 내 챔피언이 들어간 부쉬는 반투명(0.35)으로 그린다.
+  - 배치:
+    - 연습장에 기본 두 곳((-9,2), (9,2) - 기존 시험 배치와 겹치지 않게)을 둔다.
+    - 설정 패널 "부쉬 설치 모드 (N)"으로 클릭한 자리에 추가하고, "부쉬 전부 제거"로 지운다.
+    - 크기 450×300(LoL 단위)은 원작 맵 데이터를 못 받아 근사값이다.
+    - 칼바람 원작 배치(6곳, 12.23 패치로 1곳 추가)는 지형이 제거돼 있어 넣지 않았다.
+- **확인**:
+  - 단위 테스트 11항목(`tests/team_vision_test.js`).
+  - 실제 게임 안 시험 `tools/e2e_glb/brush_check.js`(애쉬):
+    - 579 거리 부쉬 속 적이 안 보이다가, 같은 부쉬에 들어가면 보인다(부쉬 반투명 0.35).
+    - 애쉬 E 매 경로 시야로 부쉬 안이 드러난다.
+    - 빨강 시점: 부쉬 속 플레이어가 숨겨졌다가, 공격 시 드러나고 2초 뒤 다시 숨는다. 실제 평타로도 확인했다.
+  - 기제 점검 17챔피언 오류 0, 시야 시험(vision_check) 그대로 통과.

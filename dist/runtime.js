@@ -8302,8 +8302,9 @@ class TargetRing {
      타게팅·스킬 판정(isVisible)은 화면 전환과 무관하게 항상 플레이어 팀 시야를 쓴다.
    - 스킬 예고 표시(skill_telegraph_system.js)는 isPointVisibleTo()로 "그 지점이 상대 팀 시야 안인가"를 묻는다.
 
+   - 부쉬(brush_system.js): 부쉬 안의 대상은 같은 부쉬 안의 공급원이나 부쉬를 드러내는 스킬 시야로만 보인다.
+
    범위상 생략(지어내지 않고 명시적으로 생략):
-   - 덤불: 이 맵에 덤불 오브젝트가 없다(덤불은 바깥→안쪽 시야만 막는다 - PC 위키).
    - 지형에 의한 시야 차단: 칼바람 단일 통로라 원형 판정만 쓴다.
    - 은신: 은신 스킬·아이템이 아직 없다.
    ============================================================ */
@@ -8368,12 +8369,22 @@ class VisionSystem {
   // 챔피언 스킬(애쉬 E/R 등)이 임시 시야를 등록하는 범용 진입점.
   // position: THREE.Vector3(world), lolRadius: LoL 원본 단위 반경,
   // durationSec: 지속시간(초).
-  grantVision(position, lolRadius, durationSec, team = VISION_TEAM_BLUE) {
+  // opts.revealsBrush: 지역을 드러내는 스킬 시야(애쉬 E·R 등)는 부쉬 안도 보인다(PC 위키 Brush). 와드처럼 위치에
+  // 놓인 공급원은 기본값(false) - 부쉬 안에 놓였을 때만 그 부쉬 안을 본다.
+  grantVision(position, lolRadius, durationSec, team = VISION_TEAM_BLUE, opts = {}) {
     if (!position || !lolRadius || !durationSec) return;
     this.temporarySources.push({
-      position: position.clone(), lolRadius, team,
+      position: position.clone(), lolRadius, team, revealsBrush: !!(opts && opts.revealsBrush),
       expiresAt: performance.now() + durationSec * 1000,
     });
+  }
+
+  // 부쉬 규칙(PC 위키 Brush): 부쉬 안의 대상은 같은 부쉬 안의 공급원이나 부쉬를 드러내는 시야로만 보인다.
+  _brushAt(pos) { return (typeof brushSystem !== 'undefined' && brushSystem && pos) ? brushSystem.brushAt(pos) : null; }
+  _sourceSees(s, pos, targetBrush) {
+    if (!targetBrush || s.revealsBrush) return true;
+    if (s._brush === undefined) s._brush = this._brushAt(s.position);
+    return s._brush === targetBrush;
   }
 
   // 드러내기(True Sight): 시야와 무관하게 unit을 team에게 durationSec 동안 보이게 한다(가렌 R 등).
@@ -8392,10 +8403,11 @@ class VisionSystem {
   // team의 시야 공급원 반경 안에 pos가 있는가. insetLol만큼 안쪽이어야 참(예: 모데카이저 E - 시야 안 300).
   isPointVisibleTo(team, pos, insetLol = 0) {
     if (!this.enabled || !pos) return true;
+    const brush = this._brushAt(pos);
     for (const s of this._teamSources[team] || []) {
       const r = lolRangeToWorld(Math.max(0, s.lolRadius - insetLol));
       const dx = pos.x - s.position.x, dz = pos.z - s.position.z;
-      if (dx * dx + dz * dz <= r * r) return true;
+      if (dx * dx + dz * dz <= r * r && this._sourceSees(s, pos, brush)) return true;
     }
     return false;
   }
@@ -8469,7 +8481,9 @@ class VisionSystem {
     for (const u of units) {
       if (u.isStructure) { out.add(u); continue; }
       let visible = false;
-      for (const s of sources) { if (isInCircle(u, s.position, lolRangeToWorld(s.lolRadius))) { visible = true; break; } }
+      const up = typeof getWorldPosition === 'function' ? getWorldPosition(u) : null;
+      const ub = this._brushAt(up);
+      for (const s of sources) { if (isInCircle(u, s.position, lolRangeToWorld(s.lolRadius)) && this._sourceSees(s, up, ub)) { visible = true; break; } }
       if (!visible) visible = this.reveals.some((r) => r.unit === u && r.team === team && r.expiresAt > now);
       if (visible) out.add(u);
     }
@@ -8518,6 +8532,7 @@ class VisionSystem {
     const now = performance.now();
     if (this.temporarySources.length) this.temporarySources = this.temporarySources.filter((s) => s.expiresAt > now);
     if (this.reveals.length) this.reveals = this.reveals.filter((r) => r.expiresAt > now && r.unit && r.unit.hp > 0);
+    for (const s of this.temporarySources) s._brush = undefined; // 부쉬가 새로 놓였을 수 있다
     this._teamSources = this._collectSources(controller);
     const blueSources = this._teamSources[VISION_TEAM_BLUE];
 
@@ -8570,6 +8585,127 @@ class VisionSystem {
     }
     ctx.globalCompositeOperation = 'source-over';
     this._fogTexture.needsUpdate = true;
+  }
+}
+
+/* ===== src/world/brush_system.js ===== */
+/* ============================================================
+   BRUSH SYSTEM (부쉬 / 덤불)
+   ------------------------------------------------------------
+   원작 규칙(PC 위키 Brush, Sight):
+   - 부쉬 안의 유닛은 상대 팀에게 보이지 않는다(은신이 아니라 "전장의 안개" 취급). 상대 팀이 그 부쉬 안을 볼 때만
+     보인다 - 같은 부쉬 안에 있는 유닛·와드, 또는 지역을 드러내는 시야(애쉬 E 매 등 스킬 시야).
+   - 부쉬는 바깥 → 안쪽 시야만 막는다. 부쉬 안에서는 바깥이 그대로 보인다.
+   - 부쉬 안에서 대상 지정 공격·스킬을 쓰면 잠깐 드러난다: 주변 반경 300을 2초 동안(Fandom 위키 Brush - 공식 위키는
+     "공격·스킬 시전 시 은신이 풀릴 수 있다"까지만 서술해 Fandom 수치를 쓴다).
+   - 판정(타게팅·시야)은 vision_system.js가 이 파일의 brushAt()을 물어서 처리한다.
+
+   배치: 지금 쓰는 연습장 맵에는 원작 부쉬 위치가 없다(칼바람 지형은 제거된 상태). 기본으로 두 곳을 놓고,
+   설정 패널의 "부쉬 설치 모드(N)"로 클릭한 자리에 원하는 만큼 놓을 수 있다. 크기는 원작 부쉬와 비슷한
+   가로 450 × 세로 300(LoL 단위 - 맵 데이터를 받지 못해 근사값).
+   ============================================================ */
+const BRUSH_CONFIG = {
+  defaultSizeLol: { width: 450, depth: 300 },
+  revealOnActionRadiusLol: 300, // Fandom 위키 Brush
+  revealOnActionSec: 2,         // Fandom 위키 Brush
+  insideOpacity: 0.35,          // 내 챔피언이 들어가 있는 부쉬는 반투명하게(원작 화면처럼 안이 보이게)
+  defaultLayout: [
+    { x: -9, z: 2, rotY: 0 },
+    { x: 9, z: 2, rotY: 0 },
+  ],
+};
+
+class BrushSystem {
+  constructor(scene) {
+    this.scene = scene;
+    this.brushes = [];
+    this._nextId = 1;
+    this._grassMat = null;
+  }
+
+  _material() {
+    if (!this._grassMat && typeof THREE !== 'undefined') {
+      this._grassMat = new THREE.MeshStandardMaterial({ color: 0x2f7a35, roughness: 0.9, transparent: true, opacity: 1, side: THREE.DoubleSide });
+    }
+    return this._grassMat;
+  }
+
+  // 부쉬 하나 추가. x/z는 월드 좌표, 크기는 LoL 단위.
+  addBrush({ x, z, widthLol, depthLol, rotY = 0 } = {}) {
+    const w = lolRangeToWorld(widthLol || BRUSH_CONFIG.defaultSizeLol.width);
+    const d = lolRangeToWorld(depthLol || BRUSH_CONFIG.defaultSizeLol.depth);
+    const brush = { id: this._nextId++, center: new THREE.Vector3(x, 0, z), halfW: w / 2, halfD: d / 2, rotY, group: null, mats: [] };
+    if (this.scene && typeof THREE !== 'undefined') {
+      const group = new THREE.Group();
+      // 바닥 그늘
+      const baseMat = new THREE.MeshBasicMaterial({ color: 0x1b4d22, transparent: true, opacity: 0.55, depthWrite: false });
+      const base = new THREE.Mesh(new THREE.PlaneGeometry(w, d), baseMat);
+      base.rotation.x = -Math.PI / 2; base.position.y = 0.02;
+      group.add(base);
+      // 풀 덤불: 부쉬 안을 고르게 채우는 원뿔 묶음(위치는 부쉬마다 고정 - id로 만든 의사 난수)
+      const mat = this._material().clone();
+      const n = Math.max(12, Math.round((w * d) / 0.35));
+      let seed = brush.id * 9301 + 49297;
+      const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+      for (let i = 0; i < n; i++) {
+        const h = 0.55 + rnd() * 0.45, r = 0.16 + rnd() * 0.12;
+        const blade = new THREE.Mesh(new THREE.ConeGeometry(r, h, 5), mat);
+        blade.position.set((rnd() - 0.5) * w * 0.95, h / 2, (rnd() - 0.5) * d * 0.95);
+        blade.rotation.y = rnd() * Math.PI;
+        group.add(blade);
+      }
+      group.position.copy(brush.center);
+      group.rotation.y = rotY;
+      this.scene.add(group);
+      brush.group = group; brush.mats = [mat, baseMat];
+    }
+    this.brushes.push(brush);
+    return brush;
+  }
+
+  addDefaultLayout() { for (const b of BRUSH_CONFIG.defaultLayout) this.addBrush(b); }
+
+  clear() {
+    for (const b of this.brushes) {
+      if (b.group && this.scene) {
+        this.scene.remove(b.group);
+        b.group.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+        for (const m of b.mats) m.dispose();
+      }
+    }
+    this.brushes = [];
+  }
+
+  // 월드 좌표가 들어 있는 부쉬(없으면 null).
+  brushAt(pos) {
+    if (!pos) return null;
+    for (const b of this.brushes) {
+      const dx = pos.x - b.center.x, dz = pos.z - b.center.z;
+      const c = Math.cos(-b.rotY), s = Math.sin(-b.rotY);
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      if (Math.abs(lx) <= b.halfW && Math.abs(lz) <= b.halfD) return b;
+    }
+    return null;
+  }
+  unitBrush(unit) { return this.brushAt(typeof getWorldPosition === 'function' ? getWorldPosition(unit) : null); }
+
+  // 부쉬 안에서 공격·스킬을 쓰면 주변 300을 상대 팀에게 2초 드러낸다(Fandom 위키 Brush).
+  onActionFromBrush(unit) {
+    if (!unit || typeof visionSystem === 'undefined' || !visionSystem) return;
+    const pos = getWorldPosition(unit);
+    if (!this.brushAt(pos)) return;
+    const myTeam = unit.team || (typeof PLAYER_TEAM !== 'undefined' ? PLAYER_TEAM : 'BLUE');
+    const enemy = myTeam === 'RED' ? 'BLUE' : 'RED';
+    visionSystem.grantVision(pos, BRUSH_CONFIG.revealOnActionRadiusLol, BRUSH_CONFIG.revealOnActionSec, enemy, { revealsBrush: true });
+  }
+
+  // 화면: 내 챔피언이 들어가 있는 부쉬는 반투명.
+  update(controller) {
+    const mine = controller && controller.root ? this.brushAt(controller.root.position) : null;
+    for (const b of this.brushes) {
+      const target = b === mine ? BRUSH_CONFIG.insideOpacity : 1;
+      if (b.mats[0] && Math.abs(b.mats[0].opacity - target) > 1e-3) b.mats[0].opacity = target;
+    }
   }
 }
 
@@ -11906,6 +12042,7 @@ CharacterController.prototype._beginAttackSwing = function() {
       onFire: () => {
         // 죽음의 세계: 서로 다른 세계의 대상은 때릴 수 없다(스윙 도중 한쪽이 들어가도 명중 취소).
         if (typeof canRealmInteract === 'function' && !canRealmInteract(this, target)) return;
+        if (typeof brushSystem !== 'undefined') brushSystem.onActionFromBrush(this); // 부쉬 안에서 평타를 치면 잠깐 드러남
         const originPos = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.75, 0)).addScaledVector(dirToTarget, 0.35);
         // 요네 패시브(사냥꾼의 길 - Steel and Spirit): 평타가 강철 검/아자카나의
         // 검을 번갈아 사용하며, 아자카나의 검 차례일 때만 물리 50%+마법 50%로
@@ -12155,6 +12292,8 @@ CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
       ? this.targetPos.clone() : null;
     const keyBefore = this.currentActionKey, serialBefore = this._actionSerial;
     this._castAbilityImpl(slot, mouseWorldPoint);
+    // 부쉬 안에서 스킬을 쓰면 잠깐 드러난다(실제로 새 행동이 시작됐을 때만).
+    if (typeof brushSystem !== 'undefined' && (this.currentActionKey !== keyBefore || this._actionSerial !== serialBefore)) brushSystem.onActionFromBrush(this);
     if (!priorMove || this.pendingMove || this.state === STATE.MOVE || this._dashState) return;
     const startedAction = this.currentActionKey && (this.currentActionKey !== keyBefore || this._actionSerial !== serialBefore);
     if (!startedAction || this._isMovementAbility(slot)) return;
@@ -21997,7 +22136,7 @@ CharacterController.prototype._asheCastE = function(mouseWorldPoint, free = fals
 CharacterController.prototype._asheResolveEArrival = function(p) {
   const e = this._champData().E;
   if (typeof visionSystem !== 'undefined' && visionSystem) {
-    visionSystem.grantVision(p.targetPoint, e.visionRadius || 900, e.visionDurationSec || 5.0);
+    visionSystem.grantVision(p.targetPoint, e.visionRadius || 900, e.visionDurationSec || 5.0, this.team, { revealsBrush: true });
   }
   vfx.spawn('hit', p.targetPoint.clone(), undefined, { color: 0xd8f3ff });
   debugSkillHit('Ashe E (매 날리기 - 도착/시야 확보)', this);
@@ -22103,7 +22242,7 @@ CharacterController.prototype._asheResolveRHit = function(primary, travel) {
   debugSkillHit('Ashe R (마법의 수정화살 - 주 대상)', primary, { stunSec: stunSec.toFixed(2), lolDistance: lolDistance.toFixed(0) });
 
   if (typeof visionSystem !== 'undefined' && visionSystem) {
-    visionSystem.grantVision(travel.pos, r.visionRadius || 900, r.visionDurationSec || 3.0);
+    visionSystem.grantVision(travel.pos, r.visionRadius || 900, r.visionDurationSec || 3.0, this.team, { revealsBrush: true });
   }
 
   const splashRadius = lolRangeToWorld(r.splashRadius || 400);
@@ -22170,7 +22309,7 @@ CharacterController.prototype._asheUpdate = function(dt) {
       const flownLol = worldDistanceToLol(flown);
       while (p.nextPathLol <= flownLol && typeof visionSystem !== 'undefined' && visionSystem) {
         const at = p.origin.clone().addScaledVector(p.dir, lolRangeToWorld(p.nextPathLol));
-        visionSystem.grantVision(at, e.visionRadius || 1000, e.pathVisionSec || 0.5);
+        visionSystem.grantVision(at, e.visionRadius || 1000, e.pathVisionSec || 0.5, this.team, { revealsBrush: true });
         p.nextPathLol += e.pathVisionStepLol || 100;
       }
       if (p.remainingArriveSec <= 0) {
@@ -28551,6 +28690,20 @@ const visionSystemCheckboxEl = document.getElementById('visionSystemCheckbox');
 if (visionSystemCheckboxEl) visionSystemCheckboxEl.addEventListener('change', () => visionSystem.setEnabled(visionSystemCheckboxEl.checked));
 // 스킬 예고 표시(아군·적군 모두에게 보이는 지면 연출 - skill_telegraph_system.js).
 const skillTelegraphs = new SkillTelegraphSystem(scene);
+// 부쉬(brush_system.js): 기본 두 곳 + 설치 모드(N)로 클릭한 자리에 추가.
+const brushSystem = new BrushSystem(scene);
+brushSystem.addDefaultLayout();
+let brushPlaceMode = false;
+const brushPlaceCheckboxEl = document.getElementById('brushPlaceCheckbox');
+function setBrushPlaceMode(v) {
+  brushPlaceMode = v;
+  if (v) { if (typeof setDummyPlaceMode === 'function' && dummyPlaceMode) setDummyPlaceMode(false); if (typeof setAllyPlaceMode === 'function' && allyPlaceMode) setAllyPlaceMode(false); }
+  if (brushPlaceCheckboxEl) brushPlaceCheckboxEl.checked = v;
+  renderer.domElement.style.cursor = v ? 'crosshair' : '';
+}
+if (brushPlaceCheckboxEl) brushPlaceCheckboxEl.addEventListener('change', () => setBrushPlaceMode(brushPlaceCheckboxEl.checked));
+const clearBrushesBtnEl = document.getElementById('clearBrushesBtn');
+if (clearBrushesBtnEl) clearBrushesBtnEl.addEventListener('click', () => brushSystem.clear());
 // "적 팀 시야로 보기": 화면을 빨강 팀이 보는 그대로 그린다(판정은 그대로 플레이어 팀 시야).
 const enemyViewCheckboxEl = document.getElementById('enemyVisionViewCheckbox');
 if (enemyViewCheckboxEl) enemyViewCheckboxEl.addEventListener('change', () => visionSystem.setViewTeam(enemyViewCheckboxEl.checked ? ENEMY_TEAM : PLAYER_TEAM));
@@ -29209,6 +29362,11 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
       if (groundPoint) placeAllyAt(groundPoint);
       return;
     }
+    if (brushPlaceMode) {
+      const groundPoint = getGroundPoint(e.clientX, e.clientY);
+      if (groundPoint) brushSystem.addBrush({ x: groundPoint.x, z: groundPoint.z });
+      return;
+    }
     const enemyHit = getEnemyHit(e.clientX, e.clientY);
     if (enemyHit) controller.selectTarget(enemyHit);
     else { controller.currentTarget = null; targetRing.clear(); }
@@ -29221,7 +29379,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 // 있을 때는 값이 안 바뀌므로 매 프레임이 아니라 실제 mousemove 이벤트가
 // 있을 때만 계산되고, 후보 수도 최대 수십 개 수준이라 비용이 거의 없다.
 renderer.domElement.addEventListener('pointermove', (e) => {
-  if (paused || !controller || dummyPlaceMode || allyPlaceMode) { renderer.domElement.style.cursor = ''; return; }
+  if (paused || !controller || dummyPlaceMode || allyPlaceMode || brushPlaceMode) { renderer.domElement.style.cursor = brushPlaceMode ? 'crosshair' : ''; return; }
   const enemyHit = getEnemyHit(e.clientX, e.clientY);
   renderer.domElement.style.cursor = enemyHit ? 'pointer' : '';
 });
@@ -29245,6 +29403,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyV') { rangeIndicators.toggle(); const cb = document.getElementById('rangeIndicatorCheckbox'); if (cb) cb.checked = rangeIndicators.visible; return; }
   if (e.code === 'KeyP') { if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
   if (e.code === 'KeyO') { setAllyPlaceMode(!allyPlaceMode); return; }
+  if (e.code === 'KeyN') { setBrushPlaceMode(!brushPlaceMode); return; }
   if (paused) return;
   // 버그 수정(핵심 - "마스터 이 W 모션이 반복된다"의 진짜 원인): 이
   // 리스너에 OS 키 반복(long-press) 방지 처리가 전혀 없었다. 키를 누르고
@@ -30690,6 +30849,7 @@ function tickOneDummy(unit, dt) {
   const dist = getHorizontalDistance(unit.mesh.position, controller.root.position);
   if (dist <= unit.attackRange && unit.attackCooldown <= 0) {
     unit.attackCooldown = 1 / (unit.attackSpeed || 1 / 1.4);
+    if (typeof brushSystem !== 'undefined') brushSystem.onActionFromBrush(unit); // 부쉬 안에서 공격하면 잠깐 드러남
     applyDamage(controller, { rawDamage: unit.attackDamage ?? 6, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
   }
 }
@@ -30796,6 +30956,7 @@ function animate() {
     vfx.update(dt);
     nilahVfx2.update(dt);
     if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.update(dt);
+    if (typeof brushSystem !== 'undefined') brushSystem.update(controller);
     projectiles.update(dt);
     targetRing.update(dt);
     rangeIndicators.update(controller);

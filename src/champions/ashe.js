@@ -261,7 +261,7 @@ CharacterController.prototype._asheCastE = function(mouseWorldPoint, free = fals
 CharacterController.prototype._asheResolveEArrival = function(p) {
   const e = this._champData().E;
   if (typeof visionSystem !== 'undefined' && visionSystem) {
-    visionSystem.grantVision(p.targetPoint, e.visionRadius || 900, e.visionDurationSec || 5.0);
+    visionSystem.grantVision(p.targetPoint, e.visionRadius || 900, e.visionDurationSec || 5.0, this.team, { revealsBrush: true });
   }
   vfx.spawn('hit', p.targetPoint.clone(), undefined, { color: 0xd8f3ff });
   debugSkillHit('Ashe E (매 날리기 - 도착/시야 확보)', this);
@@ -367,7 +367,7 @@ CharacterController.prototype._asheResolveRHit = function(primary, travel) {
   debugSkillHit('Ashe R (마법의 수정화살 - 주 대상)', primary, { stunSec: stunSec.toFixed(2), lolDistance: lolDistance.toFixed(0) });
 
   if (typeof visionSystem !== 'undefined' && visionSystem) {
-    visionSystem.grantVision(travel.pos, r.visionRadius || 900, r.visionDurationSec || 3.0);
+    visionSystem.grantVision(travel.pos, r.visionRadius || 900, r.visionDurationSec || 3.0, this.team, { revealsBrush: true });
   }
 
   const splashRadius = lolRangeToWorld(r.splashRadius || 400);
@@ -434,7 +434,7 @@ CharacterController.prototype._asheUpdate = function(dt) {
       const flownLol = worldDistanceToLol(flown);
       while (p.nextPathLol <= flownLol && typeof visionSystem !== 'undefined' && visionSystem) {
         const at = p.origin.clone().addScaledVector(p.dir, lolRangeToWorld(p.nextPathLol));
-        visionSystem.grantVision(at, e.visionRadius || 1000, e.pathVisionSec || 0.5);
+        visionSystem.grantVision(at, e.visionRadius || 1000, e.pathVisionSec || 0.5, this.team, { revealsBrush: true });
         p.nextPathLol += e.pathVisionStepLol || 100;
       }
       if (p.remainingArriveSec <= 0) {

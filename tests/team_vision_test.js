@@ -51,4 +51,43 @@ assert(vs.isPointVisibleTo('BLUE', new V3(0, 0, 1200 * W), 0) && !vs.isPointVisi
 // 임시 시야는 팀별
 now += 10; vs.grantVision(new V3(0, 0, 1500 * W), 500, 1, 'RED'); vs.update(player, 0.016);
 assert(!vs.isVisible(enemyFar), '빨강 팀 임시 시야는 파랑 시야에 더해지지 않는다');
+
+// --- 부쉬(PC 위키 Brush) ---
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'src/world/brush_system.js'), 'utf8') + '\nthis.BrushSystem = BrushSystem; this.BRUSH_CONFIG = BRUSH_CONFIG;', ctx);
+const brushes = new ctx.BrushSystem(null);
+ctx.brushSystem = brushes;
+ctx.visionSystem = vs;
+const bush = brushes.addBrush({ x: 0, z: 1000 * W, widthLol: 450, depthLol: 300 });
+const hider = mk(0, 1000, { team: 'RED', isChampion: true });
+ctx.placedDummies = [hider]; ctx.minions = []; ctx.turrets = [];
+ctx.getAllEnemyUnits = () => [hider];
+player.root.position = new V3(0, 0, 0); now += 5000; vs.temporarySources = []; vs.reveals = [];
+vs.update(player, 0.016);
+assert(brushes.brushAt(hider.mesh.position) === bush && !vs.isVisible(hider), '부쉬: 시야 반경 안(1000)이어도 부쉬 밖에서는 안의 적이 안 보인다');
+player.root.position = new V3(100 * W, 0, 1000 * W); vs.update(player, 0.016);
+assert(vs.isVisible(hider), '부쉬: 같은 부쉬 안에 들어가면 보인다');
+player.root.position = new V3(0, 0, 0);
+vs.grantVision(new V3(0, 0, 700 * W), 400, 1, 'BLUE'); vs.update(player, 0.016);
+assert(!vs.isVisible(hider), '부쉬: 부쉬 밖에 놓인 와드(위치 공급원)로는 안이 안 보인다');
+vs.grantVision(new V3(0, 0, 1050 * W), 400, 1, 'BLUE'); vs.update(player, 0.016);
+assert(vs.isVisible(hider), '부쉬: 부쉬 안에 놓인 와드로는 보인다');
+now += 1100; vs.update(player, 0.016);
+vs.grantVision(new V3(0, 0, 800 * W), 900, 1, 'BLUE', { revealsBrush: true }); vs.update(player, 0.016);
+assert(vs.isVisible(hider), '부쉬: 지역을 드러내는 스킬 시야(애쉬 E·R)는 부쉬 안도 보인다');
+now += 1100; vs.update(player, 0.016);
+assert(!vs.isVisible(hider), '부쉬: 스킬 시야가 끝나면 다시 안 보인다');
+// 부쉬 안에서는 바깥이 보인다
+const outside = mk(0, 1900, { team: 'RED', isChampion: true });
+ctx.placedDummies = [hider, outside]; ctx.getAllEnemyUnits = () => [hider, outside];
+player.root.position = new V3(0, 0, 1000 * W); vs.update(player, 0.016);
+assert(vs.isVisible(outside), '부쉬: 부쉬 안에서는 바깥(900 거리)이 보인다');
+// 빨강 시점: 부쉬 안 플레이어는 바깥 빨강 유닛에게 안 보이고, 공격하면 2초 드러난다
+ctx.placedDummies = [outside]; ctx.getAllEnemyUnits = () => [outside];
+vs.update(player, 0.016);
+assert(!vs.isVisibleTo('RED', player), '부쉬: 부쉬 안의 플레이어는 바깥 빨강 유닛(900 거리)에게 안 보인다');
+brushes.onActionFromBrush(player); vs.update(player, 0.016);
+assert(vs.isVisibleTo('RED', player), '부쉬: 부쉬 안에서 공격·스킬을 쓰면 상대에게 드러난다(Fandom: 반경 300, 2초)');
+now += 2100; vs.update(player, 0.016);
+assert(!vs.isVisibleTo('RED', player), '부쉬: 2초 뒤 다시 숨는다');
+assert(!vs.isPointVisibleTo('RED', new V3(0, 0, 1000 * W)) && vs.isPointVisibleTo('BLUE', new V3(0, 0, 1000 * W)), '부쉬: 예고 표시 판정도 부쉬 규칙을 따른다');
 console.log(process.exitCode ? '\nSOME CHECKS FAILED' : '\nALL CHECKS PASSED');

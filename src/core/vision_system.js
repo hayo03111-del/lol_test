@@ -12,8 +12,9 @@
      타게팅·스킬 판정(isVisible)은 화면 전환과 무관하게 항상 플레이어 팀 시야를 쓴다.
    - 스킬 예고 표시(skill_telegraph_system.js)는 isPointVisibleTo()로 "그 지점이 상대 팀 시야 안인가"를 묻는다.
 
+   - 부쉬(brush_system.js): 부쉬 안의 대상은 같은 부쉬 안의 공급원이나 부쉬를 드러내는 스킬 시야로만 보인다.
+
    범위상 생략(지어내지 않고 명시적으로 생략):
-   - 덤불: 이 맵에 덤불 오브젝트가 없다(덤불은 바깥→안쪽 시야만 막는다 - PC 위키).
    - 지형에 의한 시야 차단: 칼바람 단일 통로라 원형 판정만 쓴다.
    - 은신: 은신 스킬·아이템이 아직 없다.
    ============================================================ */
@@ -78,12 +79,22 @@ class VisionSystem {
   // 챔피언 스킬(애쉬 E/R 등)이 임시 시야를 등록하는 범용 진입점.
   // position: THREE.Vector3(world), lolRadius: LoL 원본 단위 반경,
   // durationSec: 지속시간(초).
-  grantVision(position, lolRadius, durationSec, team = VISION_TEAM_BLUE) {
+  // opts.revealsBrush: 지역을 드러내는 스킬 시야(애쉬 E·R 등)는 부쉬 안도 보인다(PC 위키 Brush). 와드처럼 위치에
+  // 놓인 공급원은 기본값(false) - 부쉬 안에 놓였을 때만 그 부쉬 안을 본다.
+  grantVision(position, lolRadius, durationSec, team = VISION_TEAM_BLUE, opts = {}) {
     if (!position || !lolRadius || !durationSec) return;
     this.temporarySources.push({
-      position: position.clone(), lolRadius, team,
+      position: position.clone(), lolRadius, team, revealsBrush: !!(opts && opts.revealsBrush),
       expiresAt: performance.now() + durationSec * 1000,
     });
+  }
+
+  // 부쉬 규칙(PC 위키 Brush): 부쉬 안의 대상은 같은 부쉬 안의 공급원이나 부쉬를 드러내는 시야로만 보인다.
+  _brushAt(pos) { return (typeof brushSystem !== 'undefined' && brushSystem && pos) ? brushSystem.brushAt(pos) : null; }
+  _sourceSees(s, pos, targetBrush) {
+    if (!targetBrush || s.revealsBrush) return true;
+    if (s._brush === undefined) s._brush = this._brushAt(s.position);
+    return s._brush === targetBrush;
   }
 
   // 드러내기(True Sight): 시야와 무관하게 unit을 team에게 durationSec 동안 보이게 한다(가렌 R 등).
@@ -102,10 +113,11 @@ class VisionSystem {
   // team의 시야 공급원 반경 안에 pos가 있는가. insetLol만큼 안쪽이어야 참(예: 모데카이저 E - 시야 안 300).
   isPointVisibleTo(team, pos, insetLol = 0) {
     if (!this.enabled || !pos) return true;
+    const brush = this._brushAt(pos);
     for (const s of this._teamSources[team] || []) {
       const r = lolRangeToWorld(Math.max(0, s.lolRadius - insetLol));
       const dx = pos.x - s.position.x, dz = pos.z - s.position.z;
-      if (dx * dx + dz * dz <= r * r) return true;
+      if (dx * dx + dz * dz <= r * r && this._sourceSees(s, pos, brush)) return true;
     }
     return false;
   }
@@ -179,7 +191,9 @@ class VisionSystem {
     for (const u of units) {
       if (u.isStructure) { out.add(u); continue; }
       let visible = false;
-      for (const s of sources) { if (isInCircle(u, s.position, lolRangeToWorld(s.lolRadius))) { visible = true; break; } }
+      const up = typeof getWorldPosition === 'function' ? getWorldPosition(u) : null;
+      const ub = this._brushAt(up);
+      for (const s of sources) { if (isInCircle(u, s.position, lolRangeToWorld(s.lolRadius)) && this._sourceSees(s, up, ub)) { visible = true; break; } }
       if (!visible) visible = this.reveals.some((r) => r.unit === u && r.team === team && r.expiresAt > now);
       if (visible) out.add(u);
     }
@@ -228,6 +242,7 @@ class VisionSystem {
     const now = performance.now();
     if (this.temporarySources.length) this.temporarySources = this.temporarySources.filter((s) => s.expiresAt > now);
     if (this.reveals.length) this.reveals = this.reveals.filter((r) => r.expiresAt > now && r.unit && r.unit.hp > 0);
+    for (const s of this.temporarySources) s._brush = undefined; // 부쉬가 새로 놓였을 수 있다
     this._teamSources = this._collectSources(controller);
     const blueSources = this._teamSources[VISION_TEAM_BLUE];
 

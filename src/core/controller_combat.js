@@ -882,6 +882,7 @@ CharacterController.prototype._beginAttackSwing = function() {
       onFire: () => {
         // 죽음의 세계: 서로 다른 세계의 대상은 때릴 수 없다(스윙 도중 한쪽이 들어가도 명중 취소).
         if (typeof canRealmInteract === 'function' && !canRealmInteract(this, target)) return;
+        if (typeof brushSystem !== 'undefined') brushSystem.onActionFromBrush(this); // 부쉬 안에서 평타를 치면 잠깐 드러남
         const originPos = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.75, 0)).addScaledVector(dirToTarget, 0.35);
         // 요네 패시브(사냥꾼의 길 - Steel and Spirit): 평타가 강철 검/아자카나의
         // 검을 번갈아 사용하며, 아자카나의 검 차례일 때만 물리 50%+마법 50%로

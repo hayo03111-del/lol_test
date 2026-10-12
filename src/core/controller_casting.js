@@ -74,6 +74,8 @@ CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
       ? this.targetPos.clone() : null;
     const keyBefore = this.currentActionKey, serialBefore = this._actionSerial;
     this._castAbilityImpl(slot, mouseWorldPoint);
+    // 부쉬 안에서 스킬을 쓰면 잠깐 드러난다(실제로 새 행동이 시작됐을 때만).
+    if (typeof brushSystem !== 'undefined' && (this.currentActionKey !== keyBefore || this._actionSerial !== serialBefore)) brushSystem.onActionFromBrush(this);
     if (!priorMove || this.pendingMove || this.state === STATE.MOVE || this._dashState) return;
     const startedAction = this.currentActionKey && (this.currentActionKey !== keyBefore || this._actionSerial !== serialBefore);
     if (!startedAction || this._isMovementAbility(slot)) return;

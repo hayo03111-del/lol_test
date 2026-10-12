@@ -1387,6 +1387,7 @@ function tickOneDummy(unit, dt) {
   const dist = getHorizontalDistance(unit.mesh.position, controller.root.position);
   if (dist <= unit.attackRange && unit.attackCooldown <= 0) {
     unit.attackCooldown = 1 / (unit.attackSpeed || 1 / 1.4);
+    if (typeof brushSystem !== 'undefined') brushSystem.onActionFromBrush(unit); // 부쉬 안에서 공격하면 잠깐 드러남
     applyDamage(controller, { rawDamage: unit.attackDamage ?? 6, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
   }
 }
@@ -1493,6 +1494,7 @@ function animate() {
     vfx.update(dt);
     nilahVfx2.update(dt);
     if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.update(dt);
+    if (typeof brushSystem !== 'undefined') brushSystem.update(controller);
     projectiles.update(dt);
     targetRing.update(dt);
     rangeIndicators.update(controller);
