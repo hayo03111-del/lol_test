@@ -6586,6 +6586,51 @@ const HA_MAP_CONFIG = {
 const HA_REAL_MAP_SPAN_LOL = 12877; // 12849 - (-28)
 const HA_MAP_SCALE = lolRangeToWorld(HA_REAL_MAP_SPAN_LOL * Math.SQRT2) / (HA_MAP_CONFIG.laneMaxZ - HA_MAP_CONFIG.laneMinZ);
 
+// 원작 구조물 좌표(20차 요청 "포탑이랑 넥서스도 원작 위치에 배치해줘") - LoL 단위, 게임 맵 좌표 (x, z).
+// 출처: LeagueSandbox-Default(github.com/LeagueSandbox/LeagueSandbox-Default, 오픈소스 LoL 서버 에뮬레이터용으로 게임
+// 파일에서 뽑은 맵 데이터)의 Maps/Map12/Scene/*.sco.json "CentralPoint". 같은 폴더의 __LevelSize_(-28.43~12849.10,
+// -19.03~12858.50)가 위 HA_REAL_MAP_SPAN_LOL의 좌표 범위와 정확히 같아 같은 원본임을 확인했다. 예전 클라이언트(4.20 무렵)
+// 데이터라 그 뒤 패치로 바뀐 자리가 있으면 반영되지 않았다.
+// 종류: LeagueSandbox Map12 LevelScriptObjects.cs의 번호 규칙(1·8 외곽, 2·7 억제기 포탑, 3·4·9·10 넥서스 포탑, Shrine 분수)
+// + PC 위키 Howling Abyss "가운데부터 외곽 포탑 → 억제기 포탑 → 억제기 → 넥서스 포탑 2개 → 넥서스". 4포탑 구성에 없는
+// Turret_T1_C_05 / Turret_T2_C_05(번호 5)는 넣지 않았다.
+const HA_LEVEL_CENTER_LOL = [6410.333, 6419.734]; // __LevelSize_ 중심
+const HA_STRUCTURES_LOL = {
+  BLUE: { // Order(T1)
+    outer: [4943.478, 4929.819],          // Turret_T1_C_08
+    inhibTurret: [3809.061, 3829.052],    // Turret_T1_C_07
+    inhibitor: [3128.512, 3171.512],      // Barracks_T1_C1
+    nexusTurrets: [[2493.232, 2101.181], [2036.657, 2552.681]], // Turret_T1_C_09, Turret_T1_C_010
+    nexus: [1849.299, 1962.817],          // HQ_T1
+    fountain: [648.091, 764.227],         // Turret_OrderTurretShrine
+    shop: [491.802, 1949.296],            // OrderShop01
+  },
+  RED: { // Chaos(T2)
+    outer: [7879.103, 7774.802],          // Turret_T2_L_01
+    inhibTurret: [9017.631, 8871.361],    // Turret_T2_L_02
+    inhibitor: [9699.402, 9515.826],      // Barracks_T2_C1
+    nexusTurrets: [[10785.178, 10117.587], [10325.223, 10608.198]], // Turret_T2_L_03, Turret_T2_L_04
+    nexus: [10916.881, 10708.572],        // HQ_T2
+    fountain: [12168.727, 11913.289],     // Turret_ChaosTurretShrine
+    shop: [11065.5, 12306.484],           // ChaosShop01
+  },
+};
+// 원작 충돌 반경(LoL 단위): 포탑 88.4(LeagueSandbox-Default Stats/ARAM*Turret* GameplayCollisionRadius), 넥서스 353·억제기
+// 214(LeagueSandbox Map12 LevelScriptObjects.cs CreateNexus/CreateInhibitor 인자).
+const HA_STRUCTURE_RADIUS_LOL = { turret: 88.4, nexus: 353, inhibitor: 214 };
+// 게임 좌표 → 이 월드. 원작은 다리가 대각선(파랑 왼쪽 아래 → 빨강 오른쪽 위)이고 이 맵은 z축(파랑 -z → 빨강 +z)이다.
+// 다리 방향 성분이 z, 그에 수직인 성분이 x다. 미니맵의 다리 위쪽(왼쪽 위)이 -x다 - 원작 상점이 -x로 와서 이 맵의
+// 상점 자리(왼쪽)와 맞는다.
+function haLolToWorld(xz) {
+  const dx = xz[0] - HA_LEVEL_CENTER_LOL[0], dz = xz[1] - HA_LEVEL_CENTER_LOL[1];
+  return new THREE.Vector3(-lolRangeToWorld((dz - dx) / Math.SQRT2), 0, lolRangeToWorld((dx + dz) / Math.SQRT2));
+}
+// 외곽 포탑과 억제기 포탑 사이 한가운데의 z(월드) - 부쉬 배치용.
+function haTurretGapZ(team) {
+  const t = HA_STRUCTURES_LOL[team];
+  return (haLolToWorld(t.outer).z + haLolToWorld(t.inhibTurret).z) / 2;
+}
+
 function createHowlingAbyssMap(scene) {
   const cfg = HA_MAP_CONFIG;
   const S = HA_MAP_SCALE;
@@ -7086,6 +7131,10 @@ function createHowlingAbyssMap(scene) {
     const icicles = mat('prop_icicles_c.png',{rx:1.0,ry:1.0,roughness:.9,transparent:true,alphaTest:.06,side:THREE.DoubleSide});
     const shopMat = mat('props_sw_shop_ice_frame.png',{rx:1,ry:1,roughness:.82,transparent:true,alphaTest:.04,side:THREE.DoubleSide});
     const statueBaseMat = mat('statue_base.png',{rx:1,ry:1,roughness:.74,transparent:true,alphaTest:.04,side:THREE.DoubleSide});
+    // 원작 구조물 자리(HA_STRUCTURES_LOL)를 이 그룹의 줄이기 전 단위로 - 넥서스 포탑 받침대·넥서스 받침대·우물·상점을
+    // 실제 구조물 위치에 맞춘다(20차).
+    const real = HA_STRUCTURES_LOL[team.toUpperCase()];
+    const local = (xz) => { const w = haLolToWorld(xz); return { x: w.x / S, z: w.z / S }; };
 
     // ========================================================
     // BASE LAYOUT — exactly the requested open-plan shape.
@@ -7114,14 +7163,15 @@ function createHowlingAbyssMap(scene) {
     group.add(throat);
 
     // 3) Twin-turret zone: visually marked, but left open for real turret objects.
-    const turretZoneZ = baseZ-sign*22.5;
+    const nexusTurretPads = real.nexusTurrets.map(local);
+    const turretZoneZ = (nexusTurretPads[0].z + nexusTurretPads[1].z) / 2;
     const turretPad = new THREE.Mesh(new THREE.PlaneGeometry(28,10,1,1),baseGround);
     turretPad.rotation.x=-Math.PI/2;
     turretPad.position.set(0,.422,turretZoneZ);
     group.add(turretPad);
-    for(const x of [-3.0,3.0]){
+    for(const tp of nexusTurretPads){
       const pad=new THREE.Mesh(new THREE.CylinderGeometry(2.0,2.25,.18,20),baseGround);
-      pad.position.set(x,.51,turretZoneZ);
+      pad.position.set(tp.x,.51,tp.z);
       group.add(pad);
     }
 
@@ -7137,9 +7187,10 @@ function createHowlingAbyssMap(scene) {
 
     // 5) WELL / FOUNTAIN: centered, between the nexus and twin-turret zone.
     // Gameplay fountain turret is moved to the same coordinate elsewhere.
-    const wellZ = baseZ-sign*5.0;
+    const fountain = local(real.fountain);
+    const wellZ = fountain.z;
     const wellPad = new THREE.Mesh(new THREE.CylinderGeometry(5.2,5.6,.24,28),baseGround);
-    wellPad.position.set(0,.49,wellZ);
+    wellPad.position.set(fountain.x,.49,wellZ);
     wellPad.receiveShadow=true;
     group.add(wellPad);
     const wellRing = new THREE.Mesh(
@@ -7147,13 +7198,13 @@ function createHowlingAbyssMap(scene) {
       new THREE.MeshStandardMaterial({color:teamColor,emissive:teamColor,emissiveIntensity:.32,roughness:.6,transparent:true,opacity:.72})
     );
     wellRing.rotation.x=Math.PI/2;
-    wellRing.position.set(0,.64,wellZ);
+    wellRing.position.set(fountain.x,.64,wellZ);
     group.add(wellRing);
 
     // 6) SHOP: only on the LEFT side. The RIGHT side remains intentionally empty.
-    const shopZ = wellZ;
+    const shopAt = local(real.shop);
     const shopG=new THREE.Group();
-    shopG.position.set(-10.0,.42,shopZ);
+    shopG.position.set(shopAt.x,.42,shopAt.z);
     const shopBase=new THREE.Mesh(new THREE.CylinderGeometry(2.45,2.75,.34,10),statueBaseMat);
     shopG.add(shopBase);
     const shopFrame=new THREE.Mesh(new THREE.CylinderGeometry(2.25,2.25,2.35,8),shopMat);
@@ -7168,13 +7219,13 @@ function createHowlingAbyssMap(scene) {
 
     // 7) REAR NEXUS PLATFORM + NEXUS + OBELISK.
     // This is the far end of the base, beyond the well, exactly like the sketch.
-    const nexusZ = baseZ + sign*7.0;
+    const nexusAt = local(real.nexus);
     const nexusPad = new THREE.Mesh(new THREE.CylinderGeometry(7.0,7.6,.26,28),baseGround);
-    nexusPad.position.set(0,.52,nexusZ);
+    nexusPad.position.set(nexusAt.x,.52,nexusAt.z);
     nexusPad.receiveShadow=true;
     group.add(nexusPad);
 
-    // The real Nexus gameplay object is created later at HA_MAP_CONFIG.*NexusZ.
+    // 실제 넥서스 게임 오브젝트는 spawnHowlingAbyssStructures()가 같은 원작 좌표에 만든다.
     // 버그 수정(사용자 지적 "파란색 원들... 우물 원 하나만 남기고 지워줘") -
     // 여기 있던 nexusHalo(넥서스 후광 링)도 제거했다.
 
@@ -7314,6 +7365,28 @@ if (!howlingAbyssMap) howlingAbyssMap={group:null,laneMinX:-140,laneMaxX:140,lan
 // 맵이 있으면 연습장 바닥은 숨긴다(다리 아래가 심연이어야 한다).
 if (howlingAbyssMap.group && typeof ground !== 'undefined' && ground) ground.visible = false;
 window.HOWLING_ABYSS_MAP=howlingAbyssMap;
+
+// 원작 구조물 배치(20차): 양 팀 외곽 포탑·억제기 포탑·억제기·넥서스 포탑 2개·넥서스·분수(우물)를 원작 좌표
+// (HA_STRUCTURES_LOL)에 만든다. 구조물 오브젝트(createTurret 등, turret_system.js)는 챔피언 GLB 로더가 정의하는 자원
+// (minionBuildingAssets)을 쓰므로 첫 챔피언 로드 때 한 번만 부른다 - 챔피언을 바꿔도 구조물은 그대로 남는다.
+// 능력치는 기존 TURRET_DATA(사용자 제공 명세)를 그대로 쓴다 - 칼바람 전용 포탑 능력치는 이번 범위가 아니다.
+let howlingAbyssStructuresSpawned = false;
+function spawnHowlingAbyssStructures() {
+  if (howlingAbyssStructuresSpawned || !howlingAbyssMap || !howlingAbyssMap.group) return false;
+  howlingAbyssStructuresSpawned = true;
+  const R = HA_STRUCTURE_RADIUS_LOL;
+  const asTurret = (t) => { t.radius = t.collisionRadius = lolRangeToWorld(R.turret); t.selectionRadius = t.radius * 1.3; return t; };
+  for (const team of ['BLUE', 'RED']) {
+    const s = HA_STRUCTURES_LOL[team];
+    turrets.push(asTurret(createTurret(TURRET_TYPE.OUTER1, haLolToWorld(s.outer), team)));
+    turrets.push(asTurret(createTurret(TURRET_TYPE.INHIBITOR, haLolToWorld(s.inhibTurret), team)));
+    for (const nt of s.nexusTurrets) turrets.push(asTurret(createTurret(TURRET_TYPE.NEXUS_TWIN, haLolToWorld(nt), team)));
+    turrets.push(createTurret(TURRET_TYPE.NEXUS_WELL, haLolToWorld(s.fountain), team));
+    inhibitorBuildings.push(createInhibitorBuilding(haLolToWorld(s.inhibitor), team, lolRangeToWorld(R.inhibitor)));
+    nexusBuildings.push(createNexusBuilding(haLolToWorld(s.nexus), team, lolRangeToWorld(R.nexus)));
+  }
+  return true;
+}
 
 function addTree(x, z, heightRatio, radiusRatio, color) {
   const h = heightRatio * BASE_UNIT, r = radiusRatio * BASE_UNIT;
@@ -9374,21 +9447,23 @@ const BRUSH_CONFIG = {
   // (HA_MAP_CONFIG 기준, 넥서스 ±94.5·포탑 ±66)로 적고 맵 배율(howlingAbyssMap.scale)을 곱한다. x는 다리 가장자리에
   // 붙인다(부쉬가 다리 밖으로 나가지 않게). 원작 맵 좌표 데이터(CommunityDragon)를 받지 못해 위치·크기는 서술을 따른
   // 근사값이다 - 값만 고치면 된다(크기는 LoL 단위). 가운데 부쉬는 연습용 허수아비 줄(z=-6, x=0·±4)을 덮지 않게 놓았다
-  // (덮으면 허수아비가 부쉬에 숨어 지정·시험이 안 된다).
+  // (덮으면 허수아비가 부쉬에 숨어 지정·시험이 안 된다). 포탑 사이 부쉬(betweenTurrets)는 원작 포탑 좌표
+  // (howling_abyss.js HA_STRUCTURES_LOL)의 외곽 포탑과 억제기 포탑 한가운데에 놓는다(20차).
   howlingAbyssLayout: [
     { side: -1, z: -17, widthLol: 450, depthLol: 900 },   // 다리 가운데 왼쪽(위) - 파랑 쪽
     { side: -1, z: 17, widthLol: 450, depthLol: 900 },    // 다리 가운데 왼쪽(위) - 빨강 쪽
     { side: 1, z: 4.5, widthLol: 450, depthLol: 900 },    // 다리 가운데 오른쪽(아래) - 원래 1곳
     { side: 1, z: -16, widthLol: 450, depthLol: 700 },    // 다리 가운데 아래쪽 - 12.23 추가
-    { side: 1, z: -52, widthLol: 450, depthLol: 1100 },   // 파랑 진영 바깥~안쪽 포탑 사이(12.23 확대)
-    { side: -1, z: 52, widthLol: 450, depthLol: 1100 },   // 빨강 진영 바깥~안쪽 포탑 사이(12.23 확대)
+    { side: 1, betweenTurrets: 'BLUE', widthLol: 450, depthLol: 1100 },  // 파랑 진영 외곽~억제기 포탑 사이(12.23 확대)
+    { side: -1, betweenTurrets: 'RED', widthLol: 450, depthLol: 1100 },  // 빨강 진영 외곽~억제기 포탑 사이(12.23 확대)
   ],
 };
 
 // 칼바람 나락 배치 항목 → 월드 좌표(다리 가장자리에서 0.3 안쪽, z는 맵 배율 적용).
 function howlingAbyssBrushPlacement(b, map) {
   const halfW = lolRangeToWorld(b.widthLol) / 2;
-  return { x: b.side * (map.laneMaxX - halfW - 0.3), z: b.z * (map.scale || 1), widthLol: b.widthLol, depthLol: b.depthLol };
+  const z = b.betweenTurrets && typeof haTurretGapZ === 'function' ? haTurretGapZ(b.betweenTurrets) : b.z * (map.scale || 1);
+  return { x: b.side * (map.laneMaxX - halfW - 0.3), z, widthLol: b.widthLol, depthLol: b.depthLol };
 }
 
 class BrushSystem {
@@ -24920,11 +24995,12 @@ function updateGoldDisplay() {
 const NEXUS_MAX_HP = 5500; // 실제 LoL 넥서스 체력 표준값(수정: 3500 -> 5500)
 const NEXUS_ARMOR = 20; // 실제 LoL 넥서스 방어력 표준값(마법저항력은 0이 맞음)
 let nexusBuildings = [];
-function createNexusBuilding(position, team = 'RED') {
+// radiusWorld: 원작 충돌 반경(칼바람 배치가 넘긴다). 주면 GLB가 없을 때의 임시 도형도 그 크기로 만든다.
+function createNexusBuilding(position, team = 'RED', radiusWorld = null) {
   const assetKey = team.toLowerCase() + 'Nexus';
   const asset = minionBuildingAssets[assetKey];
   let group, body, mixer = null, actions = null, usingRealModel = false;
-  let nexusRadius = BASE_UNIT * 4.5; // GLB가 로드되면 아래에서 실측값으로 교체된다
+  let nexusRadius = radiusWorld || BASE_UNIT * 4.5; // GLB가 로드되면 아래에서 실측값으로 교체된다
   if (asset) {
     // 버그 수정("GLB 적용해도 미니언 이외는 적용 안 됨"): 원본 GLB 크기
     // 그대로 쓰지 않고 BASE_UNIT 기준으로 정규화한다(기존 장식 넥서스
@@ -24938,13 +25014,13 @@ function createNexusBuilding(position, team = 'RED') {
     // 대신 GLB 실측 가로/세로 폭으로 교체한다.
     // 버그 수정(같은 원인 - 억제기와 동일하게 bounding box 전체를 그대로
     // 쓰면 바닥 장식까지 충돌 범위에 포함된다): 충돌 목적으로는 60%만 사용.
-    if (inst.radius > 0.05) nexusRadius = inst.radius * 0.6;
+    if (inst.radius > 0.05 && !radiusWorld) nexusRadius = inst.radius * 0.6;
   } else {
     // 요청("넥서스를 1.5배 키워줘") - 3.0 → 4.5로 확대.
-    const bodyGeo = new THREE.IcosahedronGeometry(BASE_UNIT * 4.5, 0);
+    const bodyGeo = new THREE.IcosahedronGeometry(nexusRadius, 0);
     const bodyMat = new THREE.MeshStandardMaterial({ color: team === 'BLUE' ? 0x2a4a7a : 0x7a2a2a, roughness: 0.5 });
     body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = BASE_UNIT * 4.5; body.castShadow = true;
+    body.position.y = nexusRadius; body.castShadow = true;
     group = new THREE.Group(); group.add(body);
   }
   group.position.copy(position);
@@ -25020,11 +25096,12 @@ const INHIBITOR_MAX_HP = 4000; // 실제 LoL 억제기 체력 표준값
 const INHIBITOR_ARMOR = 20; // 요청("방어력과 마법 저항력이 제대로 작동하게") - 실제 LoL 억제기 방어력 표준값(마법저항력은 0이 맞음)
 const INHIBITOR_RESPAWN_SEC = 300; // 실제 LoL 5분 재생성
 let inhibitorBuildings = [];
-function createInhibitorBuilding(position, team = 'RED') {
+// radiusWorld: 원작 충돌 반경(칼바람 배치가 넘긴다). 주면 GLB가 없을 때의 임시 도형도 그 크기로 만든다.
+function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
   const assetKey = team.toLowerCase() + 'Inhibitor';
   const asset = minionBuildingAssets[assetKey];
   let group, body, mixer = null, actions = null, usingRealModel = false;
-  let inhibRadius = BASE_UNIT * 2.4; // GLB가 로드되면 아래에서 실측값으로 교체된다
+  let inhibRadius = radiusWorld || BASE_UNIT * 2.4; // GLB가 로드되면 아래에서 실측값으로 교체된다
   if (asset) {
     // 버그 수정("GLB 적용해도 미니언 이외는 적용 안 됨"): 원본 GLB 크기
     // 그대로 쓰지 않고 BASE_UNIT 기준으로 정규화한다(기존 억제기
@@ -25041,12 +25118,12 @@ function createInhibitorBuilding(position, team = 'RED') {
     // 장식용 얼음 조각/받침대까지 전부 "못 지나가는 벽"이 돼서 실제 몸통보다
     // 훨씬 큰 범위가 막혀 있었다. 충돌 목적으로는 60%만 사용한다(시각적
     // 크기는 그대로, 부딪히는 범위만 더 실제 몸통에 가깝게 줄임).
-    if (inst.radius > 0.05) inhibRadius = inst.radius * 0.6;
+    if (inst.radius > 0.05 && !radiusWorld) inhibRadius = inst.radius * 0.6;
   } else {
-    const bodyGeo = new THREE.DodecahedronGeometry(BASE_UNIT * 2.4, 0);
+    const bodyGeo = new THREE.DodecahedronGeometry(inhibRadius, 0);
     const bodyMat = new THREE.MeshStandardMaterial({ color: team === 'BLUE' ? 0x3a5a8a : 0x8a3a3a, roughness: 0.55 });
     body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = BASE_UNIT * 2.4; body.castShadow = true;
+    body.position.y = inhibRadius; body.castShadow = true;
     group = new THREE.Group(); group.add(body);
   }
   group.position.copy(position);
@@ -25056,8 +25133,9 @@ function createInhibitorBuilding(position, team = 'RED') {
   // 은 비대칭인 받침대/기둥 메시까지 포함해서 계산하다 보니 크리스탈이
   // 살짝 옆으로 밀려 보인다. "살짝만" 요청대로 작은 보정값만 더한다 -
   // RED는 180도 회전돼 있어 로컬 X가 뒤집히므로 부호를 반대로 적용한다.
+  // (GLB 모델 보정이라 임시 도형에는 적용하지 않는다 - 원작 좌표에서 0.5만큼 밀려 버린다.)
   const INHIBITOR_CRYSTAL_OFFSET = 0.5;
-  group.position.x += (team === 'RED' ? 1 : -1) * INHIBITOR_CRYSTAL_OFFSET;
+  if (usingRealModel) group.position.x += (team === 'RED' ? 1 : -1) * INHIBITOR_CRYSTAL_OFFSET;
   // 버그 수정(사용자 지적 "억제기가 살짝 옆쪽으로 치우쳐져있고") - 포탑엔
   // 이미 팀별 회전을 줬는데(아래팀=RED만 180도) 억제기/넥서스에는 회전을
   // 아예 준 적이 없었다 - 그래서 좌우 비대칭인 모델이 한쪽 팀에서는 항상
@@ -30547,10 +30625,9 @@ async function bootstrapChampion(gltf, fileName) {
   // "넥서스 오벨리스크"는 넥서스 바로 옆(같은 자리)의 장식물이라 별도
   // 좌표가 필요 없다 - 실제 넥서스 GLB 자체에 이미 포함돼 있다고 보고
   // 별도 오브젝트를 새로 만들지 않는다(요청 6절 - 중복 생성 금지 원칙).
-  // 포탑/미니언/억제기/넥서스 제거: 게임 시작 시 어떤 구조물도 생성하지 않는다.
-  turrets.length = 0;
-  inhibitorBuildings.length = 0;
-  nexusBuildings.length = 0;
+  // 20차: 칼바람 나락 맵이 있으면 원작 좌표에 포탑·억제기·넥서스·분수를 만든다(첫 로드 때 한 번만 - 챔피언을
+  // 바꿔도 구조물은 유지). 맵이 없으면 예전처럼 구조물 없는 연습 공간이다. 미니언은 여전히 만들지 않는다.
+  if (typeof spawnHowlingAbyssStructures === 'function') spawnHowlingAbyssStructures();
   minions.length = 0;
 
   // 요청("게임을 시작하면 자기 진영 우물에서 시작하게") - 실제 LoL처럼
@@ -30558,7 +30635,7 @@ async function bootstrapChampion(gltf, fileName) {
   // 설계대로 항상 PLAYER_TEAM(BLUE) 소속이다. 위에서 우물(NEXUS_WELL)이
   // 이미 다 만들어진 뒤라 실제 좌표를 그대로 읽어올 수 있다 - 좌표를
   // 또 하드코딩하지 않고, 우물 위치가 나중에 바뀌어도 자동으로 따라간다.
-  // 구조물이 없는 빈 연습 공간이므로 중앙에서 시작한다.
+  // 연습용 허수아비가 다리 가운데에 있으므로 중앙에서 시작한다(원작 출발점은 분수 - 20차에도 바꾸지 않음).
   root.position.set(0, 0, 0);
 
   loadingEl.classList.remove('show');
@@ -31740,6 +31817,8 @@ function animate() {
     updateDummyAI(dt);
     updateDyingMinions(dt);
     updateInhibitorBuildingAnim(dt);
+    updateTurrets(dt); // 20차: 원작 위치에 배치한 포탑(공격·우물 회복/피해)
+    updateNexusBuildingAnim(dt);
     if (howlingAbyssMap) howlingAbyssMap.updateSnow(dt, controller ? controller.root.position : null); // 요청 18: 카메라(플레이어) 주변에서 자연스럽게 보이도록 재활용
     tickPullEffects(dt);
     if (typeof tickAllyUnits === 'function') tickAllyUnits(dt);

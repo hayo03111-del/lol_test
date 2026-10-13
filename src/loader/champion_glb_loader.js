@@ -295,10 +295,9 @@ async function bootstrapChampion(gltf, fileName) {
   // "넥서스 오벨리스크"는 넥서스 바로 옆(같은 자리)의 장식물이라 별도
   // 좌표가 필요 없다 - 실제 넥서스 GLB 자체에 이미 포함돼 있다고 보고
   // 별도 오브젝트를 새로 만들지 않는다(요청 6절 - 중복 생성 금지 원칙).
-  // 포탑/미니언/억제기/넥서스 제거: 게임 시작 시 어떤 구조물도 생성하지 않는다.
-  turrets.length = 0;
-  inhibitorBuildings.length = 0;
-  nexusBuildings.length = 0;
+  // 20차: 칼바람 나락 맵이 있으면 원작 좌표에 포탑·억제기·넥서스·분수를 만든다(첫 로드 때 한 번만 - 챔피언을
+  // 바꿔도 구조물은 유지). 맵이 없으면 예전처럼 구조물 없는 연습 공간이다. 미니언은 여전히 만들지 않는다.
+  if (typeof spawnHowlingAbyssStructures === 'function') spawnHowlingAbyssStructures();
   minions.length = 0;
 
   // 요청("게임을 시작하면 자기 진영 우물에서 시작하게") - 실제 LoL처럼
@@ -306,7 +305,7 @@ async function bootstrapChampion(gltf, fileName) {
   // 설계대로 항상 PLAYER_TEAM(BLUE) 소속이다. 위에서 우물(NEXUS_WELL)이
   // 이미 다 만들어진 뒤라 실제 좌표를 그대로 읽어올 수 있다 - 좌표를
   // 또 하드코딩하지 않고, 우물 위치가 나중에 바뀌어도 자동으로 따라간다.
-  // 구조물이 없는 빈 연습 공간이므로 중앙에서 시작한다.
+  // 연습용 허수아비가 다리 가운데에 있으므로 중앙에서 시작한다(원작 출발점은 분수 - 20차에도 바꾸지 않음).
   root.position.set(0, 0, 0);
 
   loadingEl.classList.remove('show');
@@ -1488,6 +1487,8 @@ function animate() {
     updateDummyAI(dt);
     updateDyingMinions(dt);
     updateInhibitorBuildingAnim(dt);
+    updateTurrets(dt); // 20차: 원작 위치에 배치한 포탑(공격·우물 회복/피해)
+    updateNexusBuildingAnim(dt);
     if (howlingAbyssMap) howlingAbyssMap.updateSnow(dt, controller ? controller.root.position : null); // 요청 18: 카메라(플레이어) 주변에서 자연스럽게 보이도록 재활용
     tickPullEffects(dt);
     if (typeof tickAllyUnits === 'function') tickAllyUnits(dt);

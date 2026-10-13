@@ -21,13 +21,14 @@ const startServer = require('./server.js');
     const E = window.__e2e, c = window.controller, L = E.lolRangeToWorld, V = E.visionSystem;
     c.root.position.set(0, 0, 0);
     const [d0, d1, d2] = E.dummies;
-    d0.mesh.position.set(0, 0, L(1300)); d1.mesh.position.set(0, 0, -L(1500)); d2.mesh.position.set(L(3000), 0, 0);
+    // d1은 파랑 포탑 시야(1350) 밖이어야 한다 - 다리 방향(-z)으로 1500이면 파랑 외곽 포탑(20차 원작 배치) 시야 안이라 x축에 둔다.
+    d0.mesh.position.set(0, 0, L(1300)); d1.mesh.position.set(-L(1500), 0, 0); d2.mesh.position.set(L(3000), 0, 0);
     return { ok: true };
   });
   await wait(400);
   r.blue = await page.evaluate(() => {
     const E = window.__e2e, V = E.visionSystem, [d0, d1, d2] = E.dummies;
-    return { d0_1300: V.isVisible(d0), d1_1500: V.isVisible(d1), d2_3000: V.isVisible(d2), d1MeshVisible: d1.mesh.visible, turretsAllVisible: (E.turrets || []).every((t) => V.isVisible(t) && t.mesh.visible !== false), turretCount: (E.turrets || []).length };
+    return { d0_1300: V.isVisible(d0), d1_1500: V.isVisible(d1), d2_3000: V.isVisible(d2), d1MeshVisible: d1.mesh.visible, turretsAllVisible: (E.turrets || []).filter((t) => t.isStructure).every((t) => V.isVisible(t) && t.mesh.visible !== false), turretCount: (E.turrets || []).filter((t) => t.isStructure).length, enemyStructuresVisible: [...E.inhibitorBuildings, ...E.nexusBuildings].filter((s) => s.team === 'RED').every((s) => V.isVisible(s)) };
   });
   // 2) 아군 공유 시야: 먼 허수아비 옆에 아군 더미
   await page.evaluate(() => { const E = window.__e2e, L = E.lolRangeToWorld; const a = E.createAllyDummy(new E.THREE.Vector3(L(3000), 0, L(400))); E.placedAllies.push(a); window.__ally = a; });

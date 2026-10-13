@@ -52,6 +52,51 @@ const HA_MAP_CONFIG = {
 const HA_REAL_MAP_SPAN_LOL = 12877; // 12849 - (-28)
 const HA_MAP_SCALE = lolRangeToWorld(HA_REAL_MAP_SPAN_LOL * Math.SQRT2) / (HA_MAP_CONFIG.laneMaxZ - HA_MAP_CONFIG.laneMinZ);
 
+// 원작 구조물 좌표(20차 요청 "포탑이랑 넥서스도 원작 위치에 배치해줘") - LoL 단위, 게임 맵 좌표 (x, z).
+// 출처: LeagueSandbox-Default(github.com/LeagueSandbox/LeagueSandbox-Default, 오픈소스 LoL 서버 에뮬레이터용으로 게임
+// 파일에서 뽑은 맵 데이터)의 Maps/Map12/Scene/*.sco.json "CentralPoint". 같은 폴더의 __LevelSize_(-28.43~12849.10,
+// -19.03~12858.50)가 위 HA_REAL_MAP_SPAN_LOL의 좌표 범위와 정확히 같아 같은 원본임을 확인했다. 예전 클라이언트(4.20 무렵)
+// 데이터라 그 뒤 패치로 바뀐 자리가 있으면 반영되지 않았다.
+// 종류: LeagueSandbox Map12 LevelScriptObjects.cs의 번호 규칙(1·8 외곽, 2·7 억제기 포탑, 3·4·9·10 넥서스 포탑, Shrine 분수)
+// + PC 위키 Howling Abyss "가운데부터 외곽 포탑 → 억제기 포탑 → 억제기 → 넥서스 포탑 2개 → 넥서스". 4포탑 구성에 없는
+// Turret_T1_C_05 / Turret_T2_C_05(번호 5)는 넣지 않았다.
+const HA_LEVEL_CENTER_LOL = [6410.333, 6419.734]; // __LevelSize_ 중심
+const HA_STRUCTURES_LOL = {
+  BLUE: { // Order(T1)
+    outer: [4943.478, 4929.819],          // Turret_T1_C_08
+    inhibTurret: [3809.061, 3829.052],    // Turret_T1_C_07
+    inhibitor: [3128.512, 3171.512],      // Barracks_T1_C1
+    nexusTurrets: [[2493.232, 2101.181], [2036.657, 2552.681]], // Turret_T1_C_09, Turret_T1_C_010
+    nexus: [1849.299, 1962.817],          // HQ_T1
+    fountain: [648.091, 764.227],         // Turret_OrderTurretShrine
+    shop: [491.802, 1949.296],            // OrderShop01
+  },
+  RED: { // Chaos(T2)
+    outer: [7879.103, 7774.802],          // Turret_T2_L_01
+    inhibTurret: [9017.631, 8871.361],    // Turret_T2_L_02
+    inhibitor: [9699.402, 9515.826],      // Barracks_T2_C1
+    nexusTurrets: [[10785.178, 10117.587], [10325.223, 10608.198]], // Turret_T2_L_03, Turret_T2_L_04
+    nexus: [10916.881, 10708.572],        // HQ_T2
+    fountain: [12168.727, 11913.289],     // Turret_ChaosTurretShrine
+    shop: [11065.5, 12306.484],           // ChaosShop01
+  },
+};
+// 원작 충돌 반경(LoL 단위): 포탑 88.4(LeagueSandbox-Default Stats/ARAM*Turret* GameplayCollisionRadius), 넥서스 353·억제기
+// 214(LeagueSandbox Map12 LevelScriptObjects.cs CreateNexus/CreateInhibitor 인자).
+const HA_STRUCTURE_RADIUS_LOL = { turret: 88.4, nexus: 353, inhibitor: 214 };
+// 게임 좌표 → 이 월드. 원작은 다리가 대각선(파랑 왼쪽 아래 → 빨강 오른쪽 위)이고 이 맵은 z축(파랑 -z → 빨강 +z)이다.
+// 다리 방향 성분이 z, 그에 수직인 성분이 x다. 미니맵의 다리 위쪽(왼쪽 위)이 -x다 - 원작 상점이 -x로 와서 이 맵의
+// 상점 자리(왼쪽)와 맞는다.
+function haLolToWorld(xz) {
+  const dx = xz[0] - HA_LEVEL_CENTER_LOL[0], dz = xz[1] - HA_LEVEL_CENTER_LOL[1];
+  return new THREE.Vector3(-lolRangeToWorld((dz - dx) / Math.SQRT2), 0, lolRangeToWorld((dx + dz) / Math.SQRT2));
+}
+// 외곽 포탑과 억제기 포탑 사이 한가운데의 z(월드) - 부쉬 배치용.
+function haTurretGapZ(team) {
+  const t = HA_STRUCTURES_LOL[team];
+  return (haLolToWorld(t.outer).z + haLolToWorld(t.inhibTurret).z) / 2;
+}
+
 function createHowlingAbyssMap(scene) {
   const cfg = HA_MAP_CONFIG;
   const S = HA_MAP_SCALE;
@@ -552,6 +597,10 @@ function createHowlingAbyssMap(scene) {
     const icicles = mat('prop_icicles_c.png',{rx:1.0,ry:1.0,roughness:.9,transparent:true,alphaTest:.06,side:THREE.DoubleSide});
     const shopMat = mat('props_sw_shop_ice_frame.png',{rx:1,ry:1,roughness:.82,transparent:true,alphaTest:.04,side:THREE.DoubleSide});
     const statueBaseMat = mat('statue_base.png',{rx:1,ry:1,roughness:.74,transparent:true,alphaTest:.04,side:THREE.DoubleSide});
+    // 원작 구조물 자리(HA_STRUCTURES_LOL)를 이 그룹의 줄이기 전 단위로 - 넥서스 포탑 받침대·넥서스 받침대·우물·상점을
+    // 실제 구조물 위치에 맞춘다(20차).
+    const real = HA_STRUCTURES_LOL[team.toUpperCase()];
+    const local = (xz) => { const w = haLolToWorld(xz); return { x: w.x / S, z: w.z / S }; };
 
     // ========================================================
     // BASE LAYOUT — exactly the requested open-plan shape.
@@ -580,14 +629,15 @@ function createHowlingAbyssMap(scene) {
     group.add(throat);
 
     // 3) Twin-turret zone: visually marked, but left open for real turret objects.
-    const turretZoneZ = baseZ-sign*22.5;
+    const nexusTurretPads = real.nexusTurrets.map(local);
+    const turretZoneZ = (nexusTurretPads[0].z + nexusTurretPads[1].z) / 2;
     const turretPad = new THREE.Mesh(new THREE.PlaneGeometry(28,10,1,1),baseGround);
     turretPad.rotation.x=-Math.PI/2;
     turretPad.position.set(0,.422,turretZoneZ);
     group.add(turretPad);
-    for(const x of [-3.0,3.0]){
+    for(const tp of nexusTurretPads){
       const pad=new THREE.Mesh(new THREE.CylinderGeometry(2.0,2.25,.18,20),baseGround);
-      pad.position.set(x,.51,turretZoneZ);
+      pad.position.set(tp.x,.51,tp.z);
       group.add(pad);
     }
 
@@ -603,9 +653,10 @@ function createHowlingAbyssMap(scene) {
 
     // 5) WELL / FOUNTAIN: centered, between the nexus and twin-turret zone.
     // Gameplay fountain turret is moved to the same coordinate elsewhere.
-    const wellZ = baseZ-sign*5.0;
+    const fountain = local(real.fountain);
+    const wellZ = fountain.z;
     const wellPad = new THREE.Mesh(new THREE.CylinderGeometry(5.2,5.6,.24,28),baseGround);
-    wellPad.position.set(0,.49,wellZ);
+    wellPad.position.set(fountain.x,.49,wellZ);
     wellPad.receiveShadow=true;
     group.add(wellPad);
     const wellRing = new THREE.Mesh(
@@ -613,13 +664,13 @@ function createHowlingAbyssMap(scene) {
       new THREE.MeshStandardMaterial({color:teamColor,emissive:teamColor,emissiveIntensity:.32,roughness:.6,transparent:true,opacity:.72})
     );
     wellRing.rotation.x=Math.PI/2;
-    wellRing.position.set(0,.64,wellZ);
+    wellRing.position.set(fountain.x,.64,wellZ);
     group.add(wellRing);
 
     // 6) SHOP: only on the LEFT side. The RIGHT side remains intentionally empty.
-    const shopZ = wellZ;
+    const shopAt = local(real.shop);
     const shopG=new THREE.Group();
-    shopG.position.set(-10.0,.42,shopZ);
+    shopG.position.set(shopAt.x,.42,shopAt.z);
     const shopBase=new THREE.Mesh(new THREE.CylinderGeometry(2.45,2.75,.34,10),statueBaseMat);
     shopG.add(shopBase);
     const shopFrame=new THREE.Mesh(new THREE.CylinderGeometry(2.25,2.25,2.35,8),shopMat);
@@ -634,13 +685,13 @@ function createHowlingAbyssMap(scene) {
 
     // 7) REAR NEXUS PLATFORM + NEXUS + OBELISK.
     // This is the far end of the base, beyond the well, exactly like the sketch.
-    const nexusZ = baseZ + sign*7.0;
+    const nexusAt = local(real.nexus);
     const nexusPad = new THREE.Mesh(new THREE.CylinderGeometry(7.0,7.6,.26,28),baseGround);
-    nexusPad.position.set(0,.52,nexusZ);
+    nexusPad.position.set(nexusAt.x,.52,nexusAt.z);
     nexusPad.receiveShadow=true;
     group.add(nexusPad);
 
-    // The real Nexus gameplay object is created later at HA_MAP_CONFIG.*NexusZ.
+    // 실제 넥서스 게임 오브젝트는 spawnHowlingAbyssStructures()가 같은 원작 좌표에 만든다.
     // 버그 수정(사용자 지적 "파란색 원들... 우물 원 하나만 남기고 지워줘") -
     // 여기 있던 nexusHalo(넥서스 후광 링)도 제거했다.
 
@@ -780,6 +831,28 @@ if (!howlingAbyssMap) howlingAbyssMap={group:null,laneMinX:-140,laneMaxX:140,lan
 // 맵이 있으면 연습장 바닥은 숨긴다(다리 아래가 심연이어야 한다).
 if (howlingAbyssMap.group && typeof ground !== 'undefined' && ground) ground.visible = false;
 window.HOWLING_ABYSS_MAP=howlingAbyssMap;
+
+// 원작 구조물 배치(20차): 양 팀 외곽 포탑·억제기 포탑·억제기·넥서스 포탑 2개·넥서스·분수(우물)를 원작 좌표
+// (HA_STRUCTURES_LOL)에 만든다. 구조물 오브젝트(createTurret 등, turret_system.js)는 챔피언 GLB 로더가 정의하는 자원
+// (minionBuildingAssets)을 쓰므로 첫 챔피언 로드 때 한 번만 부른다 - 챔피언을 바꿔도 구조물은 그대로 남는다.
+// 능력치는 기존 TURRET_DATA(사용자 제공 명세)를 그대로 쓴다 - 칼바람 전용 포탑 능력치는 이번 범위가 아니다.
+let howlingAbyssStructuresSpawned = false;
+function spawnHowlingAbyssStructures() {
+  if (howlingAbyssStructuresSpawned || !howlingAbyssMap || !howlingAbyssMap.group) return false;
+  howlingAbyssStructuresSpawned = true;
+  const R = HA_STRUCTURE_RADIUS_LOL;
+  const asTurret = (t) => { t.radius = t.collisionRadius = lolRangeToWorld(R.turret); t.selectionRadius = t.radius * 1.3; return t; };
+  for (const team of ['BLUE', 'RED']) {
+    const s = HA_STRUCTURES_LOL[team];
+    turrets.push(asTurret(createTurret(TURRET_TYPE.OUTER1, haLolToWorld(s.outer), team)));
+    turrets.push(asTurret(createTurret(TURRET_TYPE.INHIBITOR, haLolToWorld(s.inhibTurret), team)));
+    for (const nt of s.nexusTurrets) turrets.push(asTurret(createTurret(TURRET_TYPE.NEXUS_TWIN, haLolToWorld(nt), team)));
+    turrets.push(createTurret(TURRET_TYPE.NEXUS_WELL, haLolToWorld(s.fountain), team));
+    inhibitorBuildings.push(createInhibitorBuilding(haLolToWorld(s.inhibitor), team, lolRangeToWorld(R.inhibitor)));
+    nexusBuildings.push(createNexusBuilding(haLolToWorld(s.nexus), team, lolRangeToWorld(R.nexus)));
+  }
+  return true;
+}
 
 function addTree(x, z, heightRatio, radiusRatio, color) {
   const h = heightRatio * BASE_UNIT, r = radiusRatio * BASE_UNIT;

@@ -28,21 +28,23 @@ const BRUSH_CONFIG = {
   // (HA_MAP_CONFIG 기준, 넥서스 ±94.5·포탑 ±66)로 적고 맵 배율(howlingAbyssMap.scale)을 곱한다. x는 다리 가장자리에
   // 붙인다(부쉬가 다리 밖으로 나가지 않게). 원작 맵 좌표 데이터(CommunityDragon)를 받지 못해 위치·크기는 서술을 따른
   // 근사값이다 - 값만 고치면 된다(크기는 LoL 단위). 가운데 부쉬는 연습용 허수아비 줄(z=-6, x=0·±4)을 덮지 않게 놓았다
-  // (덮으면 허수아비가 부쉬에 숨어 지정·시험이 안 된다).
+  // (덮으면 허수아비가 부쉬에 숨어 지정·시험이 안 된다). 포탑 사이 부쉬(betweenTurrets)는 원작 포탑 좌표
+  // (howling_abyss.js HA_STRUCTURES_LOL)의 외곽 포탑과 억제기 포탑 한가운데에 놓는다(20차).
   howlingAbyssLayout: [
     { side: -1, z: -17, widthLol: 450, depthLol: 900 },   // 다리 가운데 왼쪽(위) - 파랑 쪽
     { side: -1, z: 17, widthLol: 450, depthLol: 900 },    // 다리 가운데 왼쪽(위) - 빨강 쪽
     { side: 1, z: 4.5, widthLol: 450, depthLol: 900 },    // 다리 가운데 오른쪽(아래) - 원래 1곳
     { side: 1, z: -16, widthLol: 450, depthLol: 700 },    // 다리 가운데 아래쪽 - 12.23 추가
-    { side: 1, z: -52, widthLol: 450, depthLol: 1100 },   // 파랑 진영 바깥~안쪽 포탑 사이(12.23 확대)
-    { side: -1, z: 52, widthLol: 450, depthLol: 1100 },   // 빨강 진영 바깥~안쪽 포탑 사이(12.23 확대)
+    { side: 1, betweenTurrets: 'BLUE', widthLol: 450, depthLol: 1100 },  // 파랑 진영 외곽~억제기 포탑 사이(12.23 확대)
+    { side: -1, betweenTurrets: 'RED', widthLol: 450, depthLol: 1100 },  // 빨강 진영 외곽~억제기 포탑 사이(12.23 확대)
   ],
 };
 
 // 칼바람 나락 배치 항목 → 월드 좌표(다리 가장자리에서 0.3 안쪽, z는 맵 배율 적용).
 function howlingAbyssBrushPlacement(b, map) {
   const halfW = lolRangeToWorld(b.widthLol) / 2;
-  return { x: b.side * (map.laneMaxX - halfW - 0.3), z: b.z * (map.scale || 1), widthLol: b.widthLol, depthLol: b.depthLol };
+  const z = b.betweenTurrets && typeof haTurretGapZ === 'function' ? haTurretGapZ(b.betweenTurrets) : b.z * (map.scale || 1);
+  return { x: b.side * (map.laneMaxX - halfW - 0.3), z, widthLol: b.widthLol, depthLol: b.depthLol };
 }
 
 class BrushSystem {

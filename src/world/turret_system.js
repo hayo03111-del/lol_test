@@ -741,11 +741,12 @@ function updateGoldDisplay() {
 const NEXUS_MAX_HP = 5500; // 실제 LoL 넥서스 체력 표준값(수정: 3500 -> 5500)
 const NEXUS_ARMOR = 20; // 실제 LoL 넥서스 방어력 표준값(마법저항력은 0이 맞음)
 let nexusBuildings = [];
-function createNexusBuilding(position, team = 'RED') {
+// radiusWorld: 원작 충돌 반경(칼바람 배치가 넘긴다). 주면 GLB가 없을 때의 임시 도형도 그 크기로 만든다.
+function createNexusBuilding(position, team = 'RED', radiusWorld = null) {
   const assetKey = team.toLowerCase() + 'Nexus';
   const asset = minionBuildingAssets[assetKey];
   let group, body, mixer = null, actions = null, usingRealModel = false;
-  let nexusRadius = BASE_UNIT * 4.5; // GLB가 로드되면 아래에서 실측값으로 교체된다
+  let nexusRadius = radiusWorld || BASE_UNIT * 4.5; // GLB가 로드되면 아래에서 실측값으로 교체된다
   if (asset) {
     // 버그 수정("GLB 적용해도 미니언 이외는 적용 안 됨"): 원본 GLB 크기
     // 그대로 쓰지 않고 BASE_UNIT 기준으로 정규화한다(기존 장식 넥서스
@@ -759,13 +760,13 @@ function createNexusBuilding(position, team = 'RED') {
     // 대신 GLB 실측 가로/세로 폭으로 교체한다.
     // 버그 수정(같은 원인 - 억제기와 동일하게 bounding box 전체를 그대로
     // 쓰면 바닥 장식까지 충돌 범위에 포함된다): 충돌 목적으로는 60%만 사용.
-    if (inst.radius > 0.05) nexusRadius = inst.radius * 0.6;
+    if (inst.radius > 0.05 && !radiusWorld) nexusRadius = inst.radius * 0.6;
   } else {
     // 요청("넥서스를 1.5배 키워줘") - 3.0 → 4.5로 확대.
-    const bodyGeo = new THREE.IcosahedronGeometry(BASE_UNIT * 4.5, 0);
+    const bodyGeo = new THREE.IcosahedronGeometry(nexusRadius, 0);
     const bodyMat = new THREE.MeshStandardMaterial({ color: team === 'BLUE' ? 0x2a4a7a : 0x7a2a2a, roughness: 0.5 });
     body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = BASE_UNIT * 4.5; body.castShadow = true;
+    body.position.y = nexusRadius; body.castShadow = true;
     group = new THREE.Group(); group.add(body);
   }
   group.position.copy(position);
@@ -841,11 +842,12 @@ const INHIBITOR_MAX_HP = 4000; // 실제 LoL 억제기 체력 표준값
 const INHIBITOR_ARMOR = 20; // 요청("방어력과 마법 저항력이 제대로 작동하게") - 실제 LoL 억제기 방어력 표준값(마법저항력은 0이 맞음)
 const INHIBITOR_RESPAWN_SEC = 300; // 실제 LoL 5분 재생성
 let inhibitorBuildings = [];
-function createInhibitorBuilding(position, team = 'RED') {
+// radiusWorld: 원작 충돌 반경(칼바람 배치가 넘긴다). 주면 GLB가 없을 때의 임시 도형도 그 크기로 만든다.
+function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
   const assetKey = team.toLowerCase() + 'Inhibitor';
   const asset = minionBuildingAssets[assetKey];
   let group, body, mixer = null, actions = null, usingRealModel = false;
-  let inhibRadius = BASE_UNIT * 2.4; // GLB가 로드되면 아래에서 실측값으로 교체된다
+  let inhibRadius = radiusWorld || BASE_UNIT * 2.4; // GLB가 로드되면 아래에서 실측값으로 교체된다
   if (asset) {
     // 버그 수정("GLB 적용해도 미니언 이외는 적용 안 됨"): 원본 GLB 크기
     // 그대로 쓰지 않고 BASE_UNIT 기준으로 정규화한다(기존 억제기
@@ -862,12 +864,12 @@ function createInhibitorBuilding(position, team = 'RED') {
     // 장식용 얼음 조각/받침대까지 전부 "못 지나가는 벽"이 돼서 실제 몸통보다
     // 훨씬 큰 범위가 막혀 있었다. 충돌 목적으로는 60%만 사용한다(시각적
     // 크기는 그대로, 부딪히는 범위만 더 실제 몸통에 가깝게 줄임).
-    if (inst.radius > 0.05) inhibRadius = inst.radius * 0.6;
+    if (inst.radius > 0.05 && !radiusWorld) inhibRadius = inst.radius * 0.6;
   } else {
-    const bodyGeo = new THREE.DodecahedronGeometry(BASE_UNIT * 2.4, 0);
+    const bodyGeo = new THREE.DodecahedronGeometry(inhibRadius, 0);
     const bodyMat = new THREE.MeshStandardMaterial({ color: team === 'BLUE' ? 0x3a5a8a : 0x8a3a3a, roughness: 0.55 });
     body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = BASE_UNIT * 2.4; body.castShadow = true;
+    body.position.y = inhibRadius; body.castShadow = true;
     group = new THREE.Group(); group.add(body);
   }
   group.position.copy(position);
@@ -877,8 +879,9 @@ function createInhibitorBuilding(position, team = 'RED') {
   // 은 비대칭인 받침대/기둥 메시까지 포함해서 계산하다 보니 크리스탈이
   // 살짝 옆으로 밀려 보인다. "살짝만" 요청대로 작은 보정값만 더한다 -
   // RED는 180도 회전돼 있어 로컬 X가 뒤집히므로 부호를 반대로 적용한다.
+  // (GLB 모델 보정이라 임시 도형에는 적용하지 않는다 - 원작 좌표에서 0.5만큼 밀려 버린다.)
   const INHIBITOR_CRYSTAL_OFFSET = 0.5;
-  group.position.x += (team === 'RED' ? 1 : -1) * INHIBITOR_CRYSTAL_OFFSET;
+  if (usingRealModel) group.position.x += (team === 'RED' ? 1 : -1) * INHIBITOR_CRYSTAL_OFFSET;
   // 버그 수정(사용자 지적 "억제기가 살짝 옆쪽으로 치우쳐져있고") - 포탑엔
   // 이미 팀별 회전을 줬는데(아래팀=RED만 180도) 억제기/넥서스에는 회전을
   // 아예 준 적이 없었다 - 그래서 좌우 비대칭인 모델이 한쪽 팀에서는 항상
