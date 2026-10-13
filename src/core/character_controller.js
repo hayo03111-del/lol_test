@@ -354,7 +354,7 @@ class CharacterController {
     // 그 onCancel이 _resumeAfterAction()을 불러, 아직 남아 있던 공격 대상에게 새 평타를 시작했다 - 정리가 끝난 뒤에
     // 생긴 타이머라 버려진 컨트롤러가 교체 후에도 허수아비를 계속 때렸다. 재개할 명령(대상·이동·시전 예약)부터 비운다.
     this.currentTarget = null; this.attackOrderActive = false; this.attackOrderAnchor = null;
-    this.pendingMove = null; this.pendingCast = null; this.targetPos = null;
+    this.pendingMove = null; this.pendingCast = null; this.targetPos = null; this._approachCast = null;
     // 챔피언 교체/재선택 중 이전 레넥톤의 지속 R 오라가 남지 않도록 정리한다.
     if (this._renekton?.rAuraVfx && typeof vfx !== 'undefined') {
       vfx.stopRenektonRAura(this._renekton.rAuraVfx);
@@ -1291,6 +1291,7 @@ class CharacterController {
       }
       this._commitMove(p);
     }
+    if (this._updateApproachCast) this._updateApproachCast(); // 대상 지정 스킬: 사거리까지 걸어간 뒤 시전
     this.updateMovement(dt);
     this.updateTargetChase();
     this.updateEChannel(dt); // 요청(가렌형 한계 해결): 방향 채널링 E의 지속시간/도트 데미지

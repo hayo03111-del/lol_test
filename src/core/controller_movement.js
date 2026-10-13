@@ -8,6 +8,7 @@
 
 /* ---------------- movement ---------------- */
 CharacterController.prototype.moveTo = function(point) {
+    this._approachCast = null; // 이동 명령은 "다가가서 시전"을 취소한다(접근 시전 자신은 moveTo 뒤에 다시 건다)
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
     if (isCrowdControlled(this) || isRooted(this)) return; // 기절/속박 중에는 이동 명령을 받지 않는다
     if (this.currentActionKey === 'rWindup' || this.currentActionKey === 'rChannel' || this.currentActionKey === 'rCast'
@@ -323,6 +324,7 @@ CharacterController.prototype.faceDirectionInstant = function(dir) {
 
 /* ---------------- targeting / basic attack ---------------- */
 CharacterController.prototype.selectTarget = function(enemy) {
+    this._approachCast = null; // 공격 명령은 "다가가서 시전"을 취소한다
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
     if (!enemy || enemy.hp <= 0) return;
     // 죽음의 세계: 다른 세계의 유닛은 공격 대상으로 지정할 수 없다(위치만 보이는 혼령).

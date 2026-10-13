@@ -46,7 +46,7 @@ const SKILL_AIM = {
     Q: { type: 'line', range: (c, d) => (yasuoAimTornado(c) ? d.tornadoRange : d.range), width: (c, d) => (yasuoAimTornado(c) ? d.tornadoWidth : d.width) },
     W: { type: 'wall', width: (c, d, lvl) => skillVal(d.width, lvl) },                              // 앞쪽 width*0.75 지점, 길이 width
     E: { type: 'unit', range: (c, d) => d.range },
-    R: { type: 'unit', range: (c, d) => d.range },                                                   // 공중에 뜬 적
+    R: { type: 'unit', range: (c, d) => d.range, approach: false },                                  // 공중에 뜬 적(걸어가서 시전하지 않음 - 띄운 적이 사거리 안에 있을 때만)
   },
   yone: {
     Q: { type: 'line', range: (c, d) => (yoneAimEmpowered(c, d) ? d.missileRange : d.range), width: (c, d) => d.width,

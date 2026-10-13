@@ -70,6 +70,9 @@ const CHAMPION_SLOT_CASTS = {
 // 버려져 스킬마다 애니메이션이 끝날 때까지(최대 1.7초) 서 있거나 아예 멈췄다. 돌진·점멸 같은 이동 스킬은 원래 목적지를
 // 잇지 않는다. 시전 직후 저장한 목적지는 runAction의 판정 시점(시전 시간 끝) 또는 행동 종료 시 _resumeAfterAction이 쓴다.
 CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
+    // 새 시전 명령은 진행 중이던 "다가가서 시전"을 대체한다. 대상이 사거리 밖이면 여기서 걸어가기 시작한다.
+    this._approachCast = null;
+    if (this._tryBeginApproachCast(slot, mouseWorldPoint)) return;
     const priorMove = (this.state === STATE.MOVE && this.targetPos && !this.isChasing && !this.currentTarget && !this.pendingMove)
       ? this.targetPos.clone() : null;
     const keyBefore = this.currentActionKey, serialBefore = this._actionSerial;
@@ -81,6 +84,91 @@ CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
     if (!startedAction || this._isMovementAbility(slot)) return;
     this.pendingMove = priorMove;
 };
+// 대상 지정 스킬: 대상이 사거리 밖이면 사거리까지 걸어간 뒤 시전한다(원작). 예전엔 그 자리에서 시전이 취소됐다.
+// 사거리·대상 종류는 조준 정의(skill_aim_system.js SKILL_AIM의 unit/ally)를 그대로 쓴다 - 각 스킬 코드의 사거리 판정
+// (isInRange(this, 대상, 사거리))과 같은 값이다. 걸어가는 중 이동·공격·다른 스킬 명령을 내리거나, 대상이 죽거나 시야에서
+// 사라지면 취소된다. 스킬 사용 조건(레벨·쿨다운·마나·충전·침묵)이 안 되면 걷지 않고 원래 시전 경로(안내 메시지)로 넘긴다.
+CharacterController.prototype._approachSpec = function(slot) {
+    if (typeof skillAimSpec !== 'function') return null;
+    const spec = skillAimSpec(this.championId, slot);
+    if (!spec || (spec.type !== 'unit' && spec.type !== 'ally') || spec.approach === false) return null;
+    if (spec.instantIf && spec.instantIf(this)) return null;
+    return spec;
+};
+CharacterController.prototype._approachRangeLol = function(slot, spec) {
+    const cd = this._champData ? this._champData() : null;
+    const d = (cd && cd[slot]) || {};
+    const lvl = Math.max(1, (this.skillLevels && this.skillLevels[slot]) || 1);
+    return skillAimValue(spec.range, this, d, lvl);
+};
+CharacterController.prototype._approachCanCast = function(slot) {
+    if (isSilenced(this) || isCrowdControlled(this) || isRooted(this)) return false;
+    if (this.championId === 'nilah' && slot === 'E') {
+      if (this._nilahRestoreECharges) this._nilahRestoreECharges(performance.now());
+      return !!(this._nilah && this._nilah.eCharges > 0) && (this.skillLevels.E || 0) >= 1;
+    }
+    if (this.championId === 'darius' && slot === 'R' && this._rRecastReadyUntil && performance.now() < this._rRecastReadyUntil) {
+      const info = this._skillCostFor('R');
+      return this.mp >= (info ? info.mana : 0);
+    }
+    return typeof this._canAffordAbility !== 'function' || this._canAffordAbility(slot);
+};
+CharacterController.prototype._approachPickAlly = function(spec, mouseWorldPoint) {
+    if (!mouseWorldPoint || typeof getAllyChampions !== 'function') return null;
+    let best = null, bestD = Infinity;
+    for (const a of getAllyChampions(this)) {
+      const dd = getHorizontalDistance(getWorldPosition(a), mouseWorldPoint);
+      if (dd <= lolRangeToWorld(spec.pickLol || 150) + getCollisionRadius(a) && dd < bestD) { best = a; bestD = dd; }
+    }
+    return best;
+};
+CharacterController.prototype._tryBeginApproachCast = function(slot, mouseWorldPoint) {
+    const spec = this._approachSpec(slot);
+    if (!spec) return false;
+    const enemy = spec.type === 'unit';
+    const target = enemy ? this.currentTarget : this._approachPickAlly(spec, mouseWorldPoint);
+    if (!target || target.hp <= 0 || target.isDead || target.destroyed) return false;
+    if (typeof canRealmInteract === 'function' && !canRealmInteract(this, target)) return false;
+    const rangeLol = this._approachRangeLol(slot, spec);
+    if (!(rangeLol > 0) || isInRange(this, target, rangeLol)) return false;
+    if (!this._approachCanCast(slot)) return false;
+    this.moveTo(getWorldPosition(target).clone()); // 이동 명령과 같은 경로(행동 취소·대기·맵 경계 처리 포함)
+    if (this.state !== STATE.MOVE && !this.pendingMove) return false; // 지금은 걸을 수 없다 - 원래 경로로
+    if (enemy) { this.currentTarget = target; if (typeof targetRing !== 'undefined') targetRing.attachTo(target); }
+    this._approachCast = { slot, target, rangeLol, enemy };
+    return true;
+};
+// 매 프레임(update): 대상을 따라가다 사거리에 들어오면 시전한다.
+CharacterController.prototype._updateApproachCast = function() {
+    const a = this._approachCast;
+    if (!a) return;
+    const t = a.target;
+    const vs = typeof visionSystem !== 'undefined' ? visionSystem : null;
+    const lost = !t || t.hp <= 0 || t.isDead || t.destroyed || this.state === STATE.DEAD || this.hp <= 0
+      || (typeof canRealmInteract === 'function' && !canRealmInteract(this, t))
+      || (a.enemy && vs && vs.enabled && typeof vs.isVisible === 'function' && !vs.isVisible(t));
+    if (lost) {
+      this._approachCast = null;
+      if (this.state === STATE.MOVE && !this.currentActionKey) { this.targetPos = null; this.isChasing = false; this.setState(STATE.IDLE); this._returnToLocomotion && this._returnToLocomotion(); }
+      return;
+    }
+    const tp = getWorldPosition(t);
+    if (isInRange(this, t, a.rangeLol)) {
+      this._approachCast = null;
+      this.targetPos = null; this.isChasing = false;
+      if (a.enemy) this.currentTarget = t;
+      this.castAbility(a.slot, tp.clone());
+      return;
+    }
+    if (this.state === STATE.MOVE) this.targetPos = tp.clone();
+    else if (!this.currentActionKey && !this.pendingMove && !isCrowdControlled(this) && !isRooted(this)) {
+      // 기절 등으로 멈췄다가 풀리면 다시 걸어간다.
+      this.moveTo(tp.clone());
+      this._approachCast = a;
+      if (a.enemy) this.currentTarget = t;
+    }
+};
+
 CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint) {
     // 요청(귀환 캔슬): 귀환 중 QWER 입력 -> 귀환 모션부터 중단(Idle로 정리)한
     // 다음, 평소와 동일한 캐스트 가능 여부 판정(canStartNewAction)을 거친다.
