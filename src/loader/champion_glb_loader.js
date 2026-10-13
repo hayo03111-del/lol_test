@@ -1499,6 +1499,7 @@ function animate() {
     projectiles.update(dt);
     targetRing.update(dt);
     rangeIndicators.update(controller);
+    skillAim.update(controller, lastGroundPoint, lastPointerClient);
     visionSystem.update(controller, dt);
     // 최적화(문서 4-22/23절 "DOM 업데이트를 매 프레임 하지 마라") - 디버그
     // 패널은 매 프레임 innerHTML 전체를 새로 만들어서 매초 60번씩 DOM을

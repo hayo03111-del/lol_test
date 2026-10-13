@@ -11,6 +11,10 @@ const targetRing = new TargetRing(scene);
 const rangeIndicators = new RangeIndicatorSystem(scene);
 const rangeIndicatorCheckboxEl = document.getElementById('rangeIndicatorCheckbox');
 if (rangeIndicatorCheckboxEl) rangeIndicatorCheckboxEl.addEventListener('change', () => rangeIndicators.setVisible(rangeIndicatorCheckboxEl.checked));
+// 스킬 조준(skill_aim_system.js): 시전 방식(일반/표시기 사용 빠른/빠른) 선택은 설정 패널, 매 프레임 갱신은 animate().
+const skillAim = new SkillAimSystem(scene);
+const castModeSelectEl = document.getElementById('castModeSelect');
+if (castModeSelectEl) { castModeSelectEl.value = skillAim.mode; castModeSelectEl.addEventListener('change', () => { skillAim.setMode(castModeSelectEl.value); castModeSelectEl.blur(); }); }
 // 시야 시스템(전장의 안개) - 범용 인스턴스 하나를 여기서 만들어 animate()
 // 루프(champion_glb_loader.js)에서 매 프레임 update()를 호출한다. 다른
 // 전역 시스템(vfx/projectiles/rangeIndicators)과 동일한 패턴.
@@ -669,6 +673,16 @@ if (healDummyBtnEl) {
 
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (paused || !controller) return;
+  // 조준 중(일반 시전): 좌클릭 = 그 자리로 시전, 우클릭 = 조준 취소(아래 이동 명령은 그대로 처리).
+  if (skillAim.aiming) {
+    if (e.button === 0) {
+      const p = getGroundPoint(e.clientX, e.clientY) || lastGroundPoint;
+      const slot = skillAim.slot; skillAim.cancel();
+      skillAim.cast(controller, slot, p, { x: e.clientX, y: e.clientY });
+      return;
+    }
+    if (e.button === 2) skillAim.cancel();
+  }
   if (e.button === 2) {
     const groundPoint = getGroundPoint(e.clientX, e.clientY);
     if (!groundPoint) return;
@@ -708,7 +722,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 // 있을 때는 값이 안 바뀌므로 매 프레임이 아니라 실제 mousemove 이벤트가
 // 있을 때만 계산되고, 후보 수도 최대 수십 개 수준이라 비용이 거의 없다.
 renderer.domElement.addEventListener('pointermove', (e) => {
-  if (paused || !controller || dummyPlaceMode || allyPlaceMode || brushPlaceMode) { renderer.domElement.style.cursor = brushPlaceMode ? 'crosshair' : ''; return; }
+  if (paused || !controller || dummyPlaceMode || allyPlaceMode || brushPlaceMode || skillAim.aiming) { renderer.domElement.style.cursor = (brushPlaceMode || skillAim.aiming) ? 'crosshair' : ''; return; }
   const enemyHit = getEnemyHit(e.clientX, e.clientY);
   renderer.domElement.style.cursor = enemyHit ? 'pointer' : '';
 });
@@ -727,7 +741,7 @@ window.addEventListener('keydown', (e) => {
   const keepCursor = canvasEl.style.cursor;
   canvasEl.style.cursor = 'none';
   requestAnimationFrame(() => { canvasEl.style.cursor = keepCursor; });
-  if (e.code === 'Escape') { togglePause(); return; }
+  if (e.code === 'Escape') { if (skillAim.aiming) { skillAim.cancel(); return; } togglePause(); return; }
   if (e.code === 'F1') { e.preventDefault(); debugPanelVisible = !debugPanelVisible; return; }
   if (e.code === 'KeyV') { rangeIndicators.toggle(); const cb = document.getElementById('rangeIndicatorCheckbox'); if (cb) cb.checked = rangeIndicators.visible; return; }
   if (e.code === 'KeyP') { if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
@@ -746,9 +760,9 @@ window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   const mousePoint = lastGroundPoint || controller.root.position.clone();
   switch (e.code) {
-    case 'KeyQ': controller.castAbility('Q', mousePoint); break;
-    case 'KeyW': controller.castAbility('W', mousePoint); break;
-    case 'KeyE': controller.castAbility('E', mousePoint); break;
+    case 'KeyQ': onSkillKeyDown('Q', e.code, mousePoint); break;
+    case 'KeyW': onSkillKeyDown('W', e.code, mousePoint); break;
+    case 'KeyE': onSkillKeyDown('E', e.code, mousePoint); break;
     // 버그 수정("이즈리얼 궁이 마우스 커서 쪽으로 안 나간다"): 이 R
     // 키 핸들러가 다른 스킬(Q/W/E)과 달리 mousePoint를 아예 넘기지 않고
     // controller.castAbility('R')만 호출했다 - 가렌/다리우스/세트/모데카이저/
@@ -758,7 +772,8 @@ window.addEventListener('keydown', (e) => {
     // 나갔다. Q/W/E와 동일하게 mousePoint를 넘기도록 통일한다 - 방향이
     // 필요 없는 챔피언들의 _castR(free)/_nilahCastR 등은 애초에 두 번째
     // 인자를 받지 않으므로 영향이 없다.
-    case 'KeyR': controller.castAbility('R', mousePoint); break;
+    // (R도 Q/W/E와 같은 조준 경로 - onSkillKeyDown)
+    case 'KeyR': onSkillKeyDown('R', e.code, mousePoint); break;
     case 'KeyB': controller.startRecall(); break;
     case 'Space': if (dummy && dummy.hp > 0) controller.selectTarget(dummy); break;
     // 아이템 사용(실제 LoL과 동일한 숫자키 1~6 인벤토리 단축키) - 사용
@@ -779,7 +794,43 @@ window.addEventListener('keydown', (e) => {
 });
 
 let lastGroundPoint = null;
-window.addEventListener('pointermove', (e) => { const p = getGroundPoint(e.clientX, e.clientY); if (p) lastGroundPoint = p; });
+let lastPointerClient = null; // 조준 중 커서 아래 대상(getEnemyHit)을 고르는 데 쓴다
+window.addEventListener('pointermove', (e) => { lastPointerClient = { x: e.clientX, y: e.clientY }; const p = getGroundPoint(e.clientX, e.clientY); if (p) lastGroundPoint = p; });
+
+// 스킬 키 입력(skill_aim_system.js 머리말의 세 가지 시전 방식).
+// - 조준이 필요 없는 스킬(자기 강화 등)과 빠른 시전은 키를 누르는 즉시 시전한다.
+// - 바루스 Q(충전)는 방식과 무관하게 누르면 충전 시작, 떼면 발사(원작 "누르고 있다가 놓으면 발사").
+// - 표시기 사용 빠른 시전: 누르는 동안 조준, 떼면 시전(onSkillKeyUp).
+// - 일반 시전: 누르면 조준, 좌클릭으로 시전(pointerdown), 우클릭·Esc 취소. 다른 스킬 키를 누르면 그 스킬로 조준을 바꾼다.
+function onSkillKeyDown(slot, code, mousePoint) {
+  const spec = skillAimSpec(controller.championId, slot);
+  if (spec && spec.type === 'charge' && !skillAimIsInstant(controller, slot)) {
+    const charging = controller._varus && controller._varus.qCharge;
+    controller.castAbility(slot, mousePoint);
+    if (!charging && controller._varus && controller._varus.qCharge) skillAim.begin(slot, code, controller); else skillAim.cancel();
+    return;
+  }
+  if (skillAim.mode === 'quick' || skillAimIsInstant(controller, slot)) {
+    if (skillAim.aiming && skillAim.mode === 'normal') skillAim.cancel();
+    skillAim.cast(controller, slot, mousePoint, lastPointerClient);
+    return;
+  }
+  // 쿨다운·마나 부족이면 조준하지 않고 원래 시전 경로로 넘겨 그쪽의 안내(토스트 등)를 그대로 쓴다.
+  if (typeof controller._canAffordAbility === 'function' && !controller._canAffordAbility(slot)) { skillAim.cancel(); controller.castAbility(slot, mousePoint); return; }
+  skillAim.begin(slot, code, controller);
+}
+function onSkillKeyUp(code) {
+  if (!controller || !skillAim.aiming || skillAim.heldKey !== code) return;
+  const slot = skillAim.slot;
+  const spec = skillAimSpec(controller.championId, slot);
+  const p = lastGroundPoint || controller.root.position.clone();
+  if (spec && spec.type === 'charge') { skillAim.cancel(); if (controller._varus && controller._varus.qCharge) controller.castAbility(slot, p); return; }
+  if (skillAim.mode !== 'indicator') return; // 일반 시전은 클릭으로 시전
+  skillAim.cancel();
+  skillAim.cast(controller, slot, p, lastPointerClient);
+}
+window.addEventListener('keyup', (e) => { if (!paused) onSkillKeyUp(e.code); });
+window.addEventListener('blur', () => { if (skillAim.aiming && skillAim.mode === 'indicator') skillAim.cancel(); });
 
 function togglePause() {
   paused = !paused;

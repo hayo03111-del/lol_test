@@ -29,6 +29,7 @@
     "src/core/vision_system.js",
     "src/world/brush_system.js",
     "src/rendering/skill_telegraph_system.js",
+    "src/rendering/skill_aim_system.js",
     "src/animation/attack_sequence.js",
     "src/animation/animation_sequence_player.js",
     "src/core/character_controller.js",

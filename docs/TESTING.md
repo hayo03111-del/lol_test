@@ -54,7 +54,7 @@ node tests/some_test.js
 찍은 뒤 `process.exitCode = 1`만 설정하고 계속 진행한다 - 한 파일 안의
 여러 문제를 한 번에 다 보기 위해서다.
 
-## 테스트 범위(2026-10 기준, 38개 파일 / 약 2,310개 assert)
+## 테스트 범위(2026-10 기준, 39개 파일 / 약 2,440개 assert)
 
 | 파일 | 다루는 영역 |
 |---|---|
@@ -83,6 +83,7 @@ node tests/some_test.js
 | `vision_unit_test.js` | 시야 시스템 |
 | `team_system_test.js` | 팀 태그 기반 아군/적 판정 |
 | `minion_dot_tick_test.js` | 미니언 DoT 틱 타이밍 |
+| `skill_aim_test.js` | 스킬 조준 계산(모양·폭·사거리 당김·즉시 시전 판정, 21차) |
 
 이 표에 없는, 실제로 로드되지 않는 보조/디버그 스크립트(`runtime_check*.js`,
 `stripped.js`, `smoke_test*.js` 등)는 세션 스크래치패드에만 있고
@@ -127,7 +128,7 @@ devDependency로 추가하고 CI에 Chromium 설치 단계를 넣는 작업이 �
 ## 실제 챔피언 GLB로 브라우저 E2E 확인(`tools/e2e_glb/`)
 
 기제 점검(11차 추가): `GLB_DIR=<glb 폴더> THREE_DIR=<three package> node tools/e2e_glb/mechanics_check.js [챔피언...]`(스킬별 피해·상태이상·이동·보호막 기록)와
-`node tools/e2e_glb/combo_check.js [챔피언...]`(연계 기제 시간표 실행), `node tools/e2e_glb/switch_check.js [챔피언...]`(스킬 진행 중 챔피언 교체 후 잔존 상태·지연 피해 비교, 13차), `node tools/e2e_glb/realm_check.js [스크린샷.png]`(모데카이저 죽음의 세계, 14차), `node tools/e2e_glb/movement_check.js [챔피언...]`(회전·미끄러짐·재생 속도·스킬 후 이동 복귀, 16차), `node tools/e2e_glb/vision_check.js [스크린샷.png]`(팀 시야·스킬 예고 표시, 17차), `node tools/e2e_glb/brush_check.js [스크린샷.png]`(부쉬, 18차), `node tools/e2e_glb/structure_check.js [스크린샷.png]`(칼바람 구조물 원작 배치, 20차)를 쓴다. 결과는 JSON으로 출력되고, GLB는 저장소에 넣지 않는다.
+`node tools/e2e_glb/combo_check.js [챔피언...]`(연계 기제 시간표 실행), `node tools/e2e_glb/switch_check.js [챔피언...]`(스킬 진행 중 챔피언 교체 후 잔존 상태·지연 피해 비교, 13차), `node tools/e2e_glb/realm_check.js [스크린샷.png]`(모데카이저 죽음의 세계, 14차), `node tools/e2e_glb/movement_check.js [챔피언...]`(회전·미끄러짐·재생 속도·스킬 후 이동 복귀, 16차), `node tools/e2e_glb/vision_check.js [스크린샷.png]`(팀 시야·스킬 예고 표시, 17차), `node tools/e2e_glb/brush_check.js [스크린샷.png]`(부쉬, 18차), `node tools/e2e_glb/structure_check.js [스크린샷.png]`(칼바람 구조물 원작 배치, 20차), `node tools/e2e_glb/aim_check.js [스크린샷 접두어]`(스킬 조준·시전 방식, 실제 키보드·마우스 입력, 21차)를 쓴다. 결과는 JSON으로 출력되고, GLB는 저장소에 넣지 않는다.
 
 칼바람 나락 맵이 켜져 있으면(19차) CPU 렌더러에서 5~6fps로 떨어진다. 게임 루프가 프레임당 dt를 0.05초로 자르므로 게임 시간이 느려지고, 시간 기반 피해·이동 수치가 작게 잡힌다. 수치를 재는 점검(mechanics/movement/combo/switch)은 `E2E_HIDE_MAP=1`을 붙여 돌린다. 이 옵션은 맵·부쉬를 그리지만 않고, 이동 범위·시야·부쉬 판정은 그대로 둔다. 텍스처 요청의 `ERR_TUNNEL_CONNECTION_FAILED`는 이 환경에서 CommunityDragon이 막힌 탓이다(18차).
 

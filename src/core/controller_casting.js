@@ -104,6 +104,11 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
     // 비용을 지불하고 충전 중인 스킬이므로 재입력은 추가 비용 없이 항상
     // 통과되어야 한다.
     if (this.championId === 'varus' && slot === 'Q' && this.currentActionKey === 'varusQCharge') {
+      // 원작: 충전 중에도 조준을 바꿀 수 있고 놓는 순간의 커서 방향으로 발사한다(예전엔 충전 시작 방향에 고정).
+      if (mouseWorldPoint && this._varus.qCharge) {
+        const d = new THREE.Vector3(mouseWorldPoint.x - this.root.position.x, 0, mouseWorldPoint.z - this.root.position.z);
+        if (d.lengthSq() > 1e-6) { this._varus.qCharge.dir = d.normalize(); this.faceDirectionInstant(d); }
+      }
       this._varusReleaseQ();
       return;
     }
