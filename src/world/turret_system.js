@@ -424,7 +424,7 @@ function createTurret(type, position, team = 'RED') {
     });
     const zoneMesh = new THREE.Mesh(new THREE.CircleGeometry(zoneRadius, 32), zoneMat);
     zoneMesh.rotation.x = -Math.PI / 2;
-    zoneMesh.position.set(position.x, 0.42, position.z); // 바닥 타일(약 y=0.39~0.41) 바로 위에 얇게 깔림
+    zoneMesh.position.set(position.x, 0.03, position.z); // 바닥(24차부터 높이 0) 바로 위에 얇게 깔림
     zoneMesh.renderOrder = -1;
     scene.add(zoneMesh);
     // 은은한 테두리 링으로 구역 경계를 표시(요청: "영역이 나눠져있는 땅" -
@@ -432,7 +432,7 @@ function createTurret(type, position, team = 'RED') {
     const ringMat = new THREE.MeshBasicMaterial({ color: zoneMat.color, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
     const ringMesh = new THREE.Mesh(new THREE.RingGeometry(zoneRadius - 0.15, zoneRadius, 48), ringMat);
     ringMesh.rotation.x = -Math.PI / 2;
-    ringMesh.position.set(position.x, 0.43, position.z);
+    ringMesh.position.set(position.x, 0.035, position.z);
     scene.add(ringMesh);
     return {
       mesh: zoneMesh, body: zoneMesh, type, team,

@@ -994,6 +994,8 @@ const CUSTOM_SKILL_DAMAGE = { Q: 18, E: 16, R: 60 }; // W는 데미지 대신 �
 // 요청 1: AnimationSequencePlayer의 Step 전환 Cross Fade 기본 시간. 이미
 // crossFadeTo()가 쓰던 기존 기본값(0.15)을 그대로 재사용한다(새 값 발명 안 함).
 const DEFAULT_ANIMATION_FADE_TIME = 0.15;
+// 대기·이동 ↔ 평타·스킬 전환의 최소 페이드(초) - 원작 수치가 없어 기존 이동 전환 페이드(0.12)와 같게 정한 연출값.
+const MIN_LOCOMOTION_ACTION_FADE = 0.12;
 
 /* ============================================================
    0-A0. COMMON COMBAT MATH (요청 3, 5, 7, 9, 15~17, 21)
@@ -6594,6 +6596,7 @@ const HA_MAP_CONFIG = {
 // 대각선은 맵 끝 모서리까지 포함한 상한값이라, 실제 다리는 이보다 조금 짧을 수 있다(근사).
 // 아래 HA_MAP_CONFIG와 맵 안의 모든 모양 수치는 "줄이기 전" 단위이고, 맵 그룹 전체에 HA_MAP_SCALE을 곱한다.
 const HA_REAL_MAP_SPAN_LOL = 12877; // 12849 - (-28)
+const HA_FLOOR_TOP_LOCAL = 0.405; // 다리 눈 바닥(snowFloor) 윗면 높이(줄이기 전 단위)
 const HA_MAP_SCALE = lolRangeToWorld(HA_REAL_MAP_SPAN_LOL * Math.SQRT2) / (HA_MAP_CONFIG.laneMaxZ - HA_MAP_CONFIG.laneMinZ);
 
 // 원작 구조물 좌표(20차 요청 "포탑이랑 넥서스도 원작 위치에 배치해줘") - LoL 단위, 게임 맵 좌표 (x, z).
@@ -6646,6 +6649,10 @@ function createHowlingAbyssMap(scene) {
   const S = HA_MAP_SCALE;
   const group = new THREE.Group();
   group.scale.setScalar(S);
+  // 24차: 다리 바닥(눈 덮인 바닥 윗면, 줄이기 전 높이 0.405)이 월드 높이 0에 오도록 맵 전체를 내린다. 예전엔 바닥이
+  // 약 0.25 위에 떠 있어서 높이 0 부근에 그리는 조준 범위·스킬 예고·사거리 링이 바닥에 가려 안 보였고, 챔피언·허수아비
+  // 발도 바닥에 묻혀 있었다.
+  group.position.y = -HA_FLOOR_TOP_LOCAL * S;
   const bridgeLen = cfg.laneMaxZ - cfg.laneMinZ;
   const bridgeWidth = cfg.laneMaxX - cfg.laneMinX; // 14
   // 요청("각 끝 쪽 부분의 넓이를 늘려줘") - 실제 칼바람 나락처럼 기지
@@ -9724,7 +9731,7 @@ class SkillTelegraphSystem {
    ============================================================ */
 const CAST_MODES = ['normal', 'indicator', 'quick'];
 const SKILL_AIM_STYLE = {
-  fill: 0x5fc8ff, fillOpacity: 0.2,      // 조준 영역(밝은 하늘색 반투명)
+  fill: 0x5fc8ff, fillOpacity: 0.32,     // 조준 영역(밝은 하늘색 반투명 - 어두운 맵 바닥에서도 보이게)
   edge: 0xc4ecff, edgeOpacity: 0.85,     // 테두리
   range: 0x9fdcff, rangeOpacity: 0.55,   // 사거리 링
   bad: 0xff5a5a,                         // 대상이 사거리 밖
@@ -10376,6 +10383,93 @@ class RangeIndicatorSystem {
   }
 }
 
+
+/* ===== src/animation/attack_impact.js ===== */
+/* ============================================================
+   ATTACK IMPACT TIMING (평타 타격 모션 ↔ 실제 피해 시점 맞추기)
+   ------------------------------------------------------------
+   피해는 공격 속도로 정한 선딜(windup) 끝에 들어간다. 예전엔 평타 클립 전체를 공격 간격에 맞춰 늘이거나 줄여
+   재생해서(재생 속도 = 클립 길이 ÷ 공격 간격), 클립 안에서 실제로 무기가 닿는 장면이 그 시점과 따로 놀았다.
+   특히 리 신·요네·아리는 평타 클립이 0.33초 남짓이라, 1.5초 간격에 늘여 재생하면 휘두르는 장면이 피해보다
+   1초 넘게 늦게 나왔다.
+
+   이제 클립 안의 "실제 타격 시각"(초)을 구해, 재생 속도 = 타격 시각 ÷ 선딜 로 맞춘다 - 타격 장면이 정확히
+   피해 시점에 온다. 타격 시각을 구하는 방법은 챔피언별로, 실제 GLB 클립을 프레임 단위로 렌더링해 눈으로
+   확인한 결과에 따라 고른다(24차 측정, docs/KNOWN_LIMITATIONS.md 24차):
+   - peak:  무기/손 계열 뼈(가장 많이 움직이는 것)의 속도가 가장 빠른 시각.
+   - reach: 그 뼈가 몸 중심에서 수평으로 가장 멀리 뻗은 시각.
+   - fit:   클립 전체를 공격 간격에 맞추는 예전 방식(노틸러스는 이쪽이 실제 타격 장면과 맞았다).
+   - base:  원작 기본 선딜 시각(선딜% ÷ 기본 공속) - 공격 속도에 비례해서만 빨라지게 재생한다. 위 측정으로
+            확정하지 못한 챔피언의 기본값.
+   자동 측정값이 클립 길이에 비해 말이 안 되면(너무 이르거나 끝 프레임) base로 돌아간다.
+   ============================================================ */
+const ATTACK_IMPACT_METHOD = {
+  garen: 'peak', darius: 'peak', leesin: 'peak', yasuo: 'peak', yone: 'peak', mordekaiser: 'peak',
+  renekton: 'peak', chogath: 'peak', ahri: 'peak', ezreal: 'reach', nautilus: 'fit',
+  // masteryi·sett·vex·ashe·varus(·nilah는 별도 연속 평타 경로): base
+};
+
+// 클립 하나의 무기 뼈 궤적에서 peak/reach 시각을 잰다(클립마다 한 번, 결과는 clip.userData에 보관).
+function measureAttackClipImpact(model, clip, liveMixer = null) {
+  if (!model || !clip || typeof THREE === 'undefined') return null;
+  clip.userData = clip.userData || {};
+  if (clip.userData.impact) return clip.userData.impact;
+  const bones = [];
+  model.traverse((o) => { if (o.isBone) bones.push(o); });
+  if (!bones.length) return null;
+  const isWeapon = (n) => /weapon|sword|blade|mace|arrow|bow|cannon|hand|fist|knuckle|claw|axe|whip|glove|spear/i.test(n)
+    && !/finger|thumb|pinky|index|ring|middle|scarf|cape|cloth|hair/i.test(n);
+  const pool = bones.filter((b) => isWeapon(b.name));
+  const use = pool.length ? pool : bones;
+  const mixer = new THREE.AnimationMixer(model);
+  const act = mixer.clipAction(clip); act.play();
+  const N = 90, dt = clip.duration / N, tracks = use.map(() => []);
+  const v = new THREE.Vector3(), inv = new THREE.Matrix4();
+  for (let i = 0; i <= N; i++) {
+    mixer.setTime(i * dt); model.updateMatrixWorld(true);
+    inv.copy(model.matrixWorld).invert();
+    use.forEach((b, k) => { b.getWorldPosition(v); tracks[k].push(v.clone().applyMatrix4(inv)); });
+  }
+  act.stop(); mixer.uncacheRoot(model);
+  if (liveMixer) liveMixer.update(0); // 측정하느라 바뀐 자세를 지금 재생 중인 애니메이션으로 되돌린다
+  let bi = 0, bl = -1;
+  tracks.forEach((a, k) => { let L = 0; for (let i = 2; i < a.length - 1; i++) L += a[i].distanceTo(a[i - 1]); if (L > bl) { bl = L; bi = k; } });
+  const a = tracks[bi];
+  let pk = -1, pi = 0, rk = -1, ri = 0;
+  for (let i = 2; i < a.length - 1; i++) { const sp = a[i].distanceTo(a[i - 1]); if (sp > pk) { pk = sp; pi = i; } }
+  for (let i = 1; i < a.length - 1; i++) { const d = Math.hypot(a[i].x, a[i].z); if (d > rk) { rk = d; ri = i; } }
+  clip.userData.impact = { peak: pi * dt, reach: ri * dt, bone: use[bi].name };
+  return clip.userData.impact;
+}
+
+// 평타 재생 속도. windup = 이번 스윙 선딜(초), interval = 공격 간격(초).
+function attackClipTimeScale(ctrl, clip, windup, interval) {
+  if (!clip || !(clip.duration > 0)) return 1;
+  const clampTs = (x) => THREE.MathUtils.clamp(x, 0.4, 3.0);
+  const method = ATTACK_IMPACT_METHOD[ctrl && ctrl.championId] || 'base';
+  if (method === 'fit') return clampTs(clip.duration / interval);
+  const st = ctrl && ctrl.stats;
+  const baseImpact = st && st.windupPercent && st.baseAttackSpeed ? st.windupPercent / st.baseAttackSpeed : windup;
+  let impact = baseImpact;
+  if (method === 'peak' || method === 'reach') {
+    const m = measureAttackClipImpact(ctrl.model, clip, ctrl.mixer);
+    const t = m ? m[method] : null;
+    // 클립 시작 직후나 마지막 프레임 근처면 측정 실패로 보고 base로 돌아간다.
+    if (t != null && t > Math.min(0.05, clip.duration * 0.15) && t < clip.duration - 0.02) impact = t;
+  }
+  return clampTs(Math.min(impact, clip.duration) / Math.max(1e-3, windup));
+}
+
+// 챔피언을 불러올 때 평타 클립들을 미리 재 둔다(첫 평타에서 측정 비용·자세 튐이 없게).
+function precomputeAttackImpacts(ctrl) {
+  if (!ctrl || !ctrl.actionData || !ATTACK_IMPACT_METHOD[ctrl.championId]) return;
+  for (const [key, data] of Object.entries(ctrl.actionData)) {
+    if (!/^(attack|crit)/i.test(key) || !data || !data.clips) continue;
+    const clip = ctrl.resolveClip(data.clips);
+    if (clip) measureAttackClipImpact(ctrl.model, clip, null);
+  }
+  if (ctrl.mixer) ctrl.mixer.update(0);
+}
 
 /* ===== src/animation/animation_sequence_player.js ===== */
 /* ============================================================
@@ -11496,18 +11590,56 @@ class CharacterController {
   // 필요 없다(기존 로직 그대로 재사용).
   crossFadeToClip(clip, { loop = THREE.LoopRepeat, fade = DEFAULT_ANIMATION_FADE_TIME, clampWhenFinished = false, timeScale = 1.0, time = 0 } = {}) {
     if (!clip) return null;
-    const action = this.getOrCreateAction(clip);
-    action.reset();
+    let action = this.getOrCreateAction(clip);
+    // 24차(끊김 수정): 지금 재생 중인 클립을 다시 틀면 예전엔 페이드 없이 첫 프레임으로 되감아 자세가 튀었다.
+    // - 반복 클립(대기·달리기 등): 되감지 않고 그대로 이어서 재생한다.
+    // - 한 번 재생 클립(같은 평타 연속 등): 같은 클립의 복사본 액션으로 크로스페이드해 처음부터 다시 시작한다.
+    if (this.currentAction === action || (this._altActions && this.currentAction === this._altActions[clip.name])) {
+      if (loop !== THREE.LoopOnce && !time) {
+        const cur = this.currentAction;
+        cur.timeScale = timeScale; cur.enabled = true; cur.setEffectiveWeight(1);
+        if (!cur.isRunning()) cur.play();
+        return cur;
+      }
+      this._altActions = this._altActions || {};
+      if (!this._altActions[clip.name]) this._altActions[clip.name] = this.mixer.clipAction(clip.clone());
+      action = this.currentAction === this._altActions[clip.name] ? this.getOrCreateAction(clip) : this._altActions[clip.name];
+    }
+    // 24차(끊김 수정): 대기·이동 ↔ 평타·스킬 전환은 페이드를 최소 MIN_LOCOMOTION_ACTION_FADE로 맞춘다. 스킬 코드들이
+    // 0.03~0.05초처럼 짧은 페이드를 써서, 달리다가 스킬을 쓰면 한두 프레임 만에 자세가 바뀌어 튀었다(측정:
+    // tools/e2e_glb/smooth_check.js). 평타·스킬끼리 이어지는 전환(연속 시퀀스)은 타이밍 때문에 그대로 둔다.
+    if (this.currentAction && this.currentAction !== action && fade < MIN_LOCOMOTION_ACTION_FADE) {
+      const prevName = this.currentClipKey;
+      const loco = (n) => !!n && (this._moveClips().includes(n) || this._idleClips().includes(n));
+      if (loco(prevName) !== loco(clip.name)) fade = MIN_LOCOMOTION_ACTION_FADE;
+    }
+    // 24차(끊김 수정): 섞이는 비중을 "지금 비중"에서 이어 간다. 기본 crossFadeTo는 항상 새 동작 0→1, 이전 동작 1→0으로
+    // 다시 시작해서, 전환 도중 또 전환이 오면(예: 정지 명령 → 한 프레임 달리기 → 대기) 섞이던 동작의 비중이 순간적으로
+    // 0이나 1로 튀었다. 반복 클립이 아직 섞이는 중이면 되감지도 않는다.
+    const blending = this.currentAction && this.currentAction !== action;
+    const wNow = blending && action.isRunning() ? action.getEffectiveWeight() : 0;
+    const keepTime = wNow > 0.001 && loop !== THREE.LoopOnce && !time;
+    if (!keepTime) { action.reset(); action.time = time; }
     action.setLoop(loop, loop === THREE.LoopOnce ? 1 : Infinity);
     action.clampWhenFinished = clampWhenFinished;
     action.timeScale = timeScale;
-    action.time = time;
     action.enabled = true;
-    action.setEffectiveWeight(1);
-    if (this.currentAction && this.currentAction !== action) {
+    if (blending && fade > 0) {
       action.play();
-      this.currentAction.crossFadeTo(action, fade, false);
+      const others = new Set([...Object.values(this.actions || {}), ...Object.values(this._altActions || {})]);
+      for (const x of others) {
+        // 끝나서 마지막 자세로 멈춰 있는(clampWhenFinished) 1회 재생 동작도 비중을 계속 갖고 있으므로 같이 내린다.
+        if (x === action || !x.enabled || !this.mixer._isActiveAction(x)) continue;
+        const w = x.getEffectiveWeight();
+        // 실제 비중 = 기본 비중(weight) × 페이드 값이므로, 기본 비중은 1로 두고 페이드 값만 지금 비중에서 0으로 내린다
+        // (0이 되면 three.js가 알아서 끈다). setEffectiveWeight는 진행 중이던 페이드를 멈춘 뒤라 먼저 부른다.
+        if (w > 0.001) { x.setEffectiveWeight(1); x._scheduleFading(fade, w, 0); }
+      }
+      action.setEffectiveWeight(1);
+      action._scheduleFading(fade, wNow, 1);
     } else {
+      if (blending) this.currentAction.stop();
+      action.setEffectiveWeight(1);
       action.play();
     }
     this.currentAction = action;
@@ -11876,6 +12008,13 @@ class CharacterController {
         }
       }
       this._commitMove(p);
+    }
+    // 24차: 평타 클립이 다음 공격보다 먼저 끝나면(타격 장면을 피해 시점에 맞춰 재생하면 흔하다) 마지막 프레임에
+    // 굳어 있지 않고 대기 자세로 부드럽게 넘어간다. 0.15초는 원작 수치가 없어 정한 연출값이다.
+    if (this.state === STATE.ATTACK && this.currentPhase === 'RECOVERY' && this.currentAction && this.currentClipKey
+        && !this._idleClips().includes(this.currentClipKey)) {
+      const a = this.currentAction, clip = a.getClip ? a.getClip() : null;
+      if (clip && a.loop === THREE.LoopOnce && a.time >= clip.duration - 1e-3) this.playFirstAvailable(this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.15 });
     }
     if (this._updateApproachCast) this._updateApproachCast(); // 대상 지정 스킬: 사거리까지 걸어간 뒤 시전
     this.updateMovement(dt);
@@ -13275,9 +13414,14 @@ CharacterController.prototype._beginAttackSwing = function() {
     // 가능하면 실제 GLB 애니메이션 길이를 windup+recovery(attackInterval)에
     // 맞춰 재생 속도(timeScale)를 보정해서, Release 시점이 시각적으로도
     // 자연스럽게 맞아떨어지도록 한다(요청 11 단서 조항).
+    // 24차: 클립 전체를 간격에 맞추지 않고, 클립 안의 실제 타격 장면이 피해 시점(선딜 끝)에 오도록 재생 속도를 정한다
+    // (attack_impact.js - 챔피언별로 실제 GLB 프레임을 렌더링해 확인한 측정 방식).
+    // 강화 평타(가렌 Q·세트 Q·다리우스 W 등 스킬 클립으로 치는 평타)는 클립 구조가 일반 평타와 달라 타격 장면 측정이
+    // 맞지 않는다 - 예전처럼 클립 전체를 공격 간격에 맞춘다.
     const clip = this.resolveClip(attackData.clips);
-    const naturalDuration = clip ? clip.duration : attackInterval;
-    const timeScale = naturalDuration > 0 ? THREE.MathUtils.clamp(naturalDuration / attackInterval, 0.4, 3.0) : 1.0;
+    const plainAttack = /^(attack|crit)/i.test(key) && !/override/i.test(key);
+    const timeScale = !clip ? 1.0 : (plainAttack ? attackClipTimeScale(this, clip, windup, attackInterval)
+      : THREE.MathUtils.clamp(clip.duration / attackInterval, 0.4, 3.0));
 
     this.runAction(key, STATE.ATTACK, {
       faceDir: dirToTarget,
@@ -16873,7 +17017,7 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
     this._renektonFacePoint(getWorldPosition(target));
     const clipName=(this.comboIndex++%2===0)?'Attack1':'Attack2';
     const clip=this.findAnimation(clipName); const interval=getAttackInterval(this.stats); const windup=getWindupDuration(this.stats); const recovery=getRecoveryDuration(this.stats);
-    this.runAction(`renektonAA${this.comboIndex}`,STATE.ATTACK,{faceDir:dir,startupOverride:windup,recoveryOverride:recovery,timeScaleOverride:clip&&interval>0?THREE.MathUtils.clamp(clip.duration/interval,0.4,3):1,dataOverride:{clips:[clipName],startup:windup,recovery,cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{
+    this.runAction(`renektonAA${this.comboIndex}`,STATE.ATTACK,{faceDir:dir,startupOverride:windup,recoveryOverride:recovery,timeScaleOverride:clip&&interval>0?attackClipTimeScale(this,clip,windup,interval):1,dataOverride:{clips:[clipName],startup:windup,recovery,cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{
       if(!targetLockValid(target)) return;
       const attackResult={rawDamage:this.stats.attackDamage,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,isBasicAttack:true};
       applyDamage(target,attackResult); this._renektonOnBasicAttackHit(target);
@@ -25153,7 +25297,7 @@ function createTurret(type, position, team = 'RED') {
     });
     const zoneMesh = new THREE.Mesh(new THREE.CircleGeometry(zoneRadius, 32), zoneMat);
     zoneMesh.rotation.x = -Math.PI / 2;
-    zoneMesh.position.set(position.x, 0.42, position.z); // 바닥 타일(약 y=0.39~0.41) 바로 위에 얇게 깔림
+    zoneMesh.position.set(position.x, 0.03, position.z); // 바닥(24차부터 높이 0) 바로 위에 얇게 깔림
     zoneMesh.renderOrder = -1;
     scene.add(zoneMesh);
     // 은은한 테두리 링으로 구역 경계를 표시(요청: "영역이 나눠져있는 땅" -
@@ -25161,7 +25305,7 @@ function createTurret(type, position, team = 'RED') {
     const ringMat = new THREE.MeshBasicMaterial({ color: zoneMat.color, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
     const ringMesh = new THREE.Mesh(new THREE.RingGeometry(zoneRadius - 0.15, zoneRadius, 48), ringMat);
     ringMesh.rotation.x = -Math.PI / 2;
-    ringMesh.position.set(position.x, 0.43, position.z);
+    ringMesh.position.set(position.x, 0.035, position.z);
     scene.add(ringMesh);
     return {
       mesh: zoneMesh, body: zoneMesh, type, team,
@@ -31102,6 +31246,7 @@ async function bootstrapChampion(gltf, fileName) {
   controller.skillAnimStore = skillAnimStore; // Q/W/E/R 다중 애니메이션 시퀀스 저장소(섹션 0-A2)
   controller.abilityResolver = abilityResolver; // 서브 상태/평타 오버라이드가 championAbilityDatabase를 참조하기 위함
   controller.applyChampionData(championId); // 기획안 CHAMPION_DATA 연결 + 1레벨 스탯 적용(섹션 3/13)
+  if (typeof precomputeAttackImpacts === 'function') precomputeAttackImpacts(controller); // 평타 타격 시각 미리 측정(attack_impact.js)
   updateGoldDisplay(); // 아이템/골드는 챔피언 교체에도 유지되므로(생성자 참고) HUD도 그대로 재표시
   if (typeof updateItemUI === 'function') updateItemUI(controller);
   if (championId === 'renekton' && controller.findAnimation('Idle1')) {

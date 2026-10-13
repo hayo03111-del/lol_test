@@ -910,18 +910,56 @@ class CharacterController {
   // 필요 없다(기존 로직 그대로 재사용).
   crossFadeToClip(clip, { loop = THREE.LoopRepeat, fade = DEFAULT_ANIMATION_FADE_TIME, clampWhenFinished = false, timeScale = 1.0, time = 0 } = {}) {
     if (!clip) return null;
-    const action = this.getOrCreateAction(clip);
-    action.reset();
+    let action = this.getOrCreateAction(clip);
+    // 24차(끊김 수정): 지금 재생 중인 클립을 다시 틀면 예전엔 페이드 없이 첫 프레임으로 되감아 자세가 튀었다.
+    // - 반복 클립(대기·달리기 등): 되감지 않고 그대로 이어서 재생한다.
+    // - 한 번 재생 클립(같은 평타 연속 등): 같은 클립의 복사본 액션으로 크로스페이드해 처음부터 다시 시작한다.
+    if (this.currentAction === action || (this._altActions && this.currentAction === this._altActions[clip.name])) {
+      if (loop !== THREE.LoopOnce && !time) {
+        const cur = this.currentAction;
+        cur.timeScale = timeScale; cur.enabled = true; cur.setEffectiveWeight(1);
+        if (!cur.isRunning()) cur.play();
+        return cur;
+      }
+      this._altActions = this._altActions || {};
+      if (!this._altActions[clip.name]) this._altActions[clip.name] = this.mixer.clipAction(clip.clone());
+      action = this.currentAction === this._altActions[clip.name] ? this.getOrCreateAction(clip) : this._altActions[clip.name];
+    }
+    // 24차(끊김 수정): 대기·이동 ↔ 평타·스킬 전환은 페이드를 최소 MIN_LOCOMOTION_ACTION_FADE로 맞춘다. 스킬 코드들이
+    // 0.03~0.05초처럼 짧은 페이드를 써서, 달리다가 스킬을 쓰면 한두 프레임 만에 자세가 바뀌어 튀었다(측정:
+    // tools/e2e_glb/smooth_check.js). 평타·스킬끼리 이어지는 전환(연속 시퀀스)은 타이밍 때문에 그대로 둔다.
+    if (this.currentAction && this.currentAction !== action && fade < MIN_LOCOMOTION_ACTION_FADE) {
+      const prevName = this.currentClipKey;
+      const loco = (n) => !!n && (this._moveClips().includes(n) || this._idleClips().includes(n));
+      if (loco(prevName) !== loco(clip.name)) fade = MIN_LOCOMOTION_ACTION_FADE;
+    }
+    // 24차(끊김 수정): 섞이는 비중을 "지금 비중"에서 이어 간다. 기본 crossFadeTo는 항상 새 동작 0→1, 이전 동작 1→0으로
+    // 다시 시작해서, 전환 도중 또 전환이 오면(예: 정지 명령 → 한 프레임 달리기 → 대기) 섞이던 동작의 비중이 순간적으로
+    // 0이나 1로 튀었다. 반복 클립이 아직 섞이는 중이면 되감지도 않는다.
+    const blending = this.currentAction && this.currentAction !== action;
+    const wNow = blending && action.isRunning() ? action.getEffectiveWeight() : 0;
+    const keepTime = wNow > 0.001 && loop !== THREE.LoopOnce && !time;
+    if (!keepTime) { action.reset(); action.time = time; }
     action.setLoop(loop, loop === THREE.LoopOnce ? 1 : Infinity);
     action.clampWhenFinished = clampWhenFinished;
     action.timeScale = timeScale;
-    action.time = time;
     action.enabled = true;
-    action.setEffectiveWeight(1);
-    if (this.currentAction && this.currentAction !== action) {
+    if (blending && fade > 0) {
       action.play();
-      this.currentAction.crossFadeTo(action, fade, false);
+      const others = new Set([...Object.values(this.actions || {}), ...Object.values(this._altActions || {})]);
+      for (const x of others) {
+        // 끝나서 마지막 자세로 멈춰 있는(clampWhenFinished) 1회 재생 동작도 비중을 계속 갖고 있으므로 같이 내린다.
+        if (x === action || !x.enabled || !this.mixer._isActiveAction(x)) continue;
+        const w = x.getEffectiveWeight();
+        // 실제 비중 = 기본 비중(weight) × 페이드 값이므로, 기본 비중은 1로 두고 페이드 값만 지금 비중에서 0으로 내린다
+        // (0이 되면 three.js가 알아서 끈다). setEffectiveWeight는 진행 중이던 페이드를 멈춘 뒤라 먼저 부른다.
+        if (w > 0.001) { x.setEffectiveWeight(1); x._scheduleFading(fade, w, 0); }
+      }
+      action.setEffectiveWeight(1);
+      action._scheduleFading(fade, wNow, 1);
     } else {
+      if (blending) this.currentAction.stop();
+      action.setEffectiveWeight(1);
       action.play();
     }
     this.currentAction = action;
@@ -1290,6 +1328,13 @@ class CharacterController {
         }
       }
       this._commitMove(p);
+    }
+    // 24차: 평타 클립이 다음 공격보다 먼저 끝나면(타격 장면을 피해 시점에 맞춰 재생하면 흔하다) 마지막 프레임에
+    // 굳어 있지 않고 대기 자세로 부드럽게 넘어간다. 0.15초는 원작 수치가 없어 정한 연출값이다.
+    if (this.state === STATE.ATTACK && this.currentPhase === 'RECOVERY' && this.currentAction && this.currentClipKey
+        && !this._idleClips().includes(this.currentClipKey)) {
+      const a = this.currentAction, clip = a.getClip ? a.getClip() : null;
+      if (clip && a.loop === THREE.LoopOnce && a.time >= clip.duration - 1e-3) this.playFirstAvailable(this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.15 });
     }
     if (this._updateApproachCast) this._updateApproachCast(); // 대상 지정 스킬: 사거리까지 걸어간 뒤 시전
     this.updateMovement(dt);

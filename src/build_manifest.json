@@ -31,6 +31,7 @@
     "src/rendering/skill_telegraph_system.js",
     "src/rendering/skill_aim_system.js",
     "src/animation/attack_sequence.js",
+    "src/animation/attack_impact.js",
     "src/animation/animation_sequence_player.js",
     "src/core/character_controller.js",
     "src/core/controller_movement.js",

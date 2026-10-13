@@ -868,9 +868,14 @@ CharacterController.prototype._beginAttackSwing = function() {
     // 가능하면 실제 GLB 애니메이션 길이를 windup+recovery(attackInterval)에
     // 맞춰 재생 속도(timeScale)를 보정해서, Release 시점이 시각적으로도
     // 자연스럽게 맞아떨어지도록 한다(요청 11 단서 조항).
+    // 24차: 클립 전체를 간격에 맞추지 않고, 클립 안의 실제 타격 장면이 피해 시점(선딜 끝)에 오도록 재생 속도를 정한다
+    // (attack_impact.js - 챔피언별로 실제 GLB 프레임을 렌더링해 확인한 측정 방식).
+    // 강화 평타(가렌 Q·세트 Q·다리우스 W 등 스킬 클립으로 치는 평타)는 클립 구조가 일반 평타와 달라 타격 장면 측정이
+    // 맞지 않는다 - 예전처럼 클립 전체를 공격 간격에 맞춘다.
     const clip = this.resolveClip(attackData.clips);
-    const naturalDuration = clip ? clip.duration : attackInterval;
-    const timeScale = naturalDuration > 0 ? THREE.MathUtils.clamp(naturalDuration / attackInterval, 0.4, 3.0) : 1.0;
+    const plainAttack = /^(attack|crit)/i.test(key) && !/override/i.test(key);
+    const timeScale = !clip ? 1.0 : (plainAttack ? attackClipTimeScale(this, clip, windup, attackInterval)
+      : THREE.MathUtils.clamp(clip.duration / attackInterval, 0.4, 3.0));
 
     this.runAction(key, STATE.ATTACK, {
       faceDir: dirToTarget,

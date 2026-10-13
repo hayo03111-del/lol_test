@@ -238,6 +238,8 @@ const CUSTOM_SKILL_DAMAGE = { Q: 18, E: 16, R: 60 }; // W는 데미지 대신 �
 // 요청 1: AnimationSequencePlayer의 Step 전환 Cross Fade 기본 시간. 이미
 // crossFadeTo()가 쓰던 기존 기본값(0.15)을 그대로 재사용한다(새 값 발명 안 함).
 const DEFAULT_ANIMATION_FADE_TIME = 0.15;
+// 대기·이동 ↔ 평타·스킬 전환의 최소 페이드(초) - 원작 수치가 없어 기존 이동 전환 페이드(0.12)와 같게 정한 연출값.
+const MIN_LOCOMOTION_ACTION_FADE = 0.12;
 
 /* ============================================================
    0-A0. COMMON COMBAT MATH (요청 3, 5, 7, 9, 15~17, 21)

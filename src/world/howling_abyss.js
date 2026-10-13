@@ -50,6 +50,7 @@ const HA_MAP_CONFIG = {
 // 대각선은 맵 끝 모서리까지 포함한 상한값이라, 실제 다리는 이보다 조금 짧을 수 있다(근사).
 // 아래 HA_MAP_CONFIG와 맵 안의 모든 모양 수치는 "줄이기 전" 단위이고, 맵 그룹 전체에 HA_MAP_SCALE을 곱한다.
 const HA_REAL_MAP_SPAN_LOL = 12877; // 12849 - (-28)
+const HA_FLOOR_TOP_LOCAL = 0.405; // 다리 눈 바닥(snowFloor) 윗면 높이(줄이기 전 단위)
 const HA_MAP_SCALE = lolRangeToWorld(HA_REAL_MAP_SPAN_LOL * Math.SQRT2) / (HA_MAP_CONFIG.laneMaxZ - HA_MAP_CONFIG.laneMinZ);
 
 // 원작 구조물 좌표(20차 요청 "포탑이랑 넥서스도 원작 위치에 배치해줘") - LoL 단위, 게임 맵 좌표 (x, z).
@@ -102,6 +103,10 @@ function createHowlingAbyssMap(scene) {
   const S = HA_MAP_SCALE;
   const group = new THREE.Group();
   group.scale.setScalar(S);
+  // 24차: 다리 바닥(눈 덮인 바닥 윗면, 줄이기 전 높이 0.405)이 월드 높이 0에 오도록 맵 전체를 내린다. 예전엔 바닥이
+  // 약 0.25 위에 떠 있어서 높이 0 부근에 그리는 조준 범위·스킬 예고·사거리 링이 바닥에 가려 안 보였고, 챔피언·허수아비
+  // 발도 바닥에 묻혀 있었다.
+  group.position.y = -HA_FLOOR_TOP_LOCAL * S;
   const bridgeLen = cfg.laneMaxZ - cfg.laneMinZ;
   const bridgeWidth = cfg.laneMaxX - cfg.laneMinX; // 14
   // 요청("각 끝 쪽 부분의 넓이를 늘려줘") - 실제 칼바람 나락처럼 기지

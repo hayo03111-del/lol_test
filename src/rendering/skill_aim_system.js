@@ -14,7 +14,7 @@
    ============================================================ */
 const CAST_MODES = ['normal', 'indicator', 'quick'];
 const SKILL_AIM_STYLE = {
-  fill: 0x5fc8ff, fillOpacity: 0.2,      // 조준 영역(밝은 하늘색 반투명)
+  fill: 0x5fc8ff, fillOpacity: 0.32,     // 조준 영역(밝은 하늘색 반투명 - 어두운 맵 바닥에서도 보이게)
   edge: 0xc4ecff, edgeOpacity: 0.85,     // 테두리
   range: 0x9fdcff, rangeOpacity: 0.55,   // 사거리 링
   bad: 0xff5a5a,                         // 대상이 사거리 밖

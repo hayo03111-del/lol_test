@@ -246,6 +246,7 @@ async function bootstrapChampion(gltf, fileName) {
   controller.skillAnimStore = skillAnimStore; // Q/W/E/R 다중 애니메이션 시퀀스 저장소(섹션 0-A2)
   controller.abilityResolver = abilityResolver; // 서브 상태/평타 오버라이드가 championAbilityDatabase를 참조하기 위함
   controller.applyChampionData(championId); // 기획안 CHAMPION_DATA 연결 + 1레벨 스탯 적용(섹션 3/13)
+  if (typeof precomputeAttackImpacts === 'function') precomputeAttackImpacts(controller); // 평타 타격 시각 미리 측정(attack_impact.js)
   updateGoldDisplay(); // 아이템/골드는 챔피언 교체에도 유지되므로(생성자 참고) HUD도 그대로 재표시
   if (typeof updateItemUI === 'function') updateItemUI(controller);
   if (championId === 'renekton' && controller.findAnimation('Idle1')) {
