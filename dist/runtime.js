@@ -30448,6 +30448,49 @@ glbFileInput.addEventListener('change', (e) => { const f = e.target.files[0]; if
 
 document.getElementById('swapGlbBtn').addEventListener('click', () => glbFileInput.click());
 
+// 저장소에 들어 있는 챔피언 모델(assets/champions/<id>.glb)을 버튼 하나로 불러온다 - 파일을 직접 고르지 않아도 된다.
+// 웹 서버(GitHub Pages, 로컬 서버 등)로 열었을 때만 동작한다. index.html을 파일로 바로 열면(file://) 브라우저가
+// 같은 폴더 파일 읽기를 막으므로, 그때는 안내를 띄우고 기존 "파일 선택"을 쓰게 한다.
+// 주소 뒤에 ?champ=garen 처럼 붙이면 열자마자 그 챔피언을 불러온다.
+const CHAMPION_MODEL_LIBRARY = [
+  ['garen', '가렌'], ['darius', '다리우스'], ['masteryi', '마스터 이'], ['leesin', '리 신'], ['nautilus', '노틸러스'], ['yasuo', '야스오'],
+  ['yone', '요네'], ['sett', '세트'], ['mordekaiser', '모데카이저'], ['renekton', '레넥톤'], ['nilah', '닐라'], ['chogath', '초가스'],
+  ['ezreal', '이즈리얼'], ['ashe', '애쉬'], ['varus', '바루스'], ['ahri', '아리'], ['vex', '벡스'],
+];
+const CHAMPION_MODEL_DIR = 'assets/champions/';
+function loadChampionFromLibrary(id) {
+  if (!CHAMPION_MODEL_LIBRARY.some(([k]) => k === id)) return;
+  glbErrMsgEl.textContent = '';
+  if (location.protocol === 'file:') {
+    glbErrMsgEl.textContent = '파일로 바로 연 페이지에서는 저장소 모델을 불러올 수 없어요 - 웹 서버(GitHub Pages 등)로 열거나 아래 "파일 선택"을 쓰세요.';
+    glbEntryEl.classList.add('show');
+    return;
+  }
+  loadingEl.classList.add('show');
+  fetch(CHAMPION_MODEL_DIR + id + '.glb')
+    .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.arrayBuffer(); })
+    .then((buf) => loadFromArrayBuffer(buf, id + '.glb'))
+    .catch((err) => { loadingEl.classList.remove('show'); glbErrMsgEl.textContent = `${id} 모델을 불러오지 못했어요 (${err.message || err})`; glbEntryEl.classList.add('show'); });
+}
+(function setupChampionLibraryUI() {
+  const box = document.getElementById('championLibrary');
+  if (box) {
+    for (const [id, name] of CHAMPION_MODEL_LIBRARY) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = name; b.dataset.champ = id;
+      b.addEventListener('click', () => loadChampionFromLibrary(id));
+      box.appendChild(b);
+    }
+  }
+  const sel = document.getElementById('libraryChampSelect');
+  if (sel) {
+    for (const [id, name] of CHAMPION_MODEL_LIBRARY) { const o = document.createElement('option'); o.value = id; o.textContent = name; sel.appendChild(o); }
+    sel.addEventListener('change', () => { if (sel.value) loadChampionFromLibrary(sel.value); sel.value = ''; sel.blur(); });
+  }
+  const q = new URLSearchParams(location.search).get('champ');
+  if (q) loadChampionFromLibrary(q.toLowerCase());
+})();
+
 const glbDropHint = document.getElementById('glbDropHint');
 ['dragover', 'dragenter'].forEach(ev => glbDropHint.addEventListener(ev, (e) => { e.preventDefault(); glbDropHint.classList.add('dragover'); }));
 ['dragleave', 'drop'].forEach(ev => glbDropHint.addEventListener(ev, (e) => { e.preventDefault(); glbDropHint.classList.remove('dragover'); }));

@@ -15,9 +15,12 @@
 - `docs/ADDING_A_CHAMPION.md` — **새 챔피언을 추가하는 전체 체크리스트/템플릿 가이드**. `src/champions/_TEMPLATE.js`(빌드 대상 아님 - 복사해서 쓰는 스켈레톤)와 짝을 이룬다.
 
 ## GLB 모델 파일
-챔피언 3D 모델(`*.glb`)은 용량이 커서(챔피언당 5~20MB) 저장소에 커밋하지 않는다.
-`index.html`의 "GLB 교체" 화면에서 직접 파일을 불러와야 한다 - 파일명/애니메이션
-클립명으로 챔피언이 자동 인식된다(예: `ahri.glb`를 불러오면 자동으로 아리로 인식).
+챔피언 17명의 3D 모델이 `assets/champions/<챔피언 id>.glb`에 들어 있다(합계 약 132MB).
+- 시작 화면의 "챔피언 선택" 버튼, 또는 오른쪽 패널의 "챔피언 바꾸기"로 바로 불러온다.
+- 주소 뒤에 `?champ=garen`처럼 붙이면 열자마자 그 챔피언으로 시작한다.
+- 웹 서버로 열어야 한다(GitHub Pages, `python3 -m http.server` 등). `index.html`을 파일로 바로 열면 브라우저가 같은 폴더 파일 읽기를 막는다. 그때는 아래 "내 GLB 파일"로 직접 고르면 된다.
+- 다른 GLB도 "GLB 교체"로 직접 불러올 수 있다. 파일명/애니메이션 클립명으로 챔피언이 자동 인식된다(예: `ahri.glb` → 아리).
+- 챔피언 id: garen, darius, masteryi, leesin, nautilus, yasuo, yone, sett, mordekaiser, renekton, nilah, chogath, ezreal, ashe, varus, ahri, vex.
 
 ## 변경 원칙
 챔피언 전용 메서드는 `CharacterController.prototype` 확장으로 분리했습니다. 그래서 챔피언 파일을 수정해도 공용 Controller 코드를 직접 뒤섞지 않아도 됩니다.

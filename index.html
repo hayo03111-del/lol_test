@@ -37,6 +37,11 @@
     border-radius:10px; color:#888; font-size:13px;
   }
   #glbDropHint.dragover { border-color:#c8aa6e; color:#c8aa6e; background:rgba(200,170,110,0.06); }
+  #glbEntry .libraryTitle { color:#c8aa6e; font-size:13px; margin-top:6px; }
+  #championLibrary { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; max-width:620px; }
+  #championLibrary button { background:#1e2328; color:#f0e6d2; border:1px solid #785a28; padding:6px 10px; font-size:13px; cursor:pointer; }
+  #championLibrary button:hover { border-color:#c8aa6e; color:#fff; }
+  #libraryChampSelect { margin-top:6px; width:100%; }
   #glbEntry .errMsg { color:#e84057; font-size:13px; min-height:16px; }
 
   /* ============================================================
@@ -491,6 +496,9 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
   <p>LoL 챔피언의 GLB 파일을 넣으면 애니메이션 클립을 자동으로 분석해서<br>
   Idle / Move / Attack / Q / W / E / R / Death 등에 자동으로 연결하고 바로 플레이합니다.<br>
   자동 인식이 부정확하면 오른쪽 패널에서 언제든 수동으로 재매핑할 수 있습니다.</p>
+  <div class="libraryTitle">챔피언 선택 (저장소 모델)</div>
+  <div id="championLibrary"></div>
+  <div class="libraryTitle">또는 내 GLB 파일</div>
   <input type="file" id="glbFileInput" accept=".glb">
   <div id="glbDropHint">여기에 .glb 파일을 드래그하세요</div>
   <div class="errMsg" id="glbErrMsg"></div>
@@ -617,6 +625,7 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
     <div>
       <h3>챔피언 GLB</h3>
       <button id="swapGlbBtn">GLB 교체...</button>
+      <select id="libraryChampSelect" title="저장소에 들어 있는 챔피언 모델로 바꾸기"><option value="">챔피언 바꾸기 (저장소 모델)</option></select>
       <div class="mapRow" style="margin-top:8px;">
         <label>Champion (자동 식별 결과, 필요 시 수동 선택)</label>
         <select id="championIdSelect"></select>
@@ -31187,6 +31196,49 @@ const glbFileInput = document.getElementById('glbFileInput');
 glbFileInput.addEventListener('change', (e) => { const f = e.target.files[0]; if (f) loadChampionFile(f); });
 
 document.getElementById('swapGlbBtn').addEventListener('click', () => glbFileInput.click());
+
+// 저장소에 들어 있는 챔피언 모델(assets/champions/<id>.glb)을 버튼 하나로 불러온다 - 파일을 직접 고르지 않아도 된다.
+// 웹 서버(GitHub Pages, 로컬 서버 등)로 열었을 때만 동작한다. index.html을 파일로 바로 열면(file://) 브라우저가
+// 같은 폴더 파일 읽기를 막으므로, 그때는 안내를 띄우고 기존 "파일 선택"을 쓰게 한다.
+// 주소 뒤에 ?champ=garen 처럼 붙이면 열자마자 그 챔피언을 불러온다.
+const CHAMPION_MODEL_LIBRARY = [
+  ['garen', '가렌'], ['darius', '다리우스'], ['masteryi', '마스터 이'], ['leesin', '리 신'], ['nautilus', '노틸러스'], ['yasuo', '야스오'],
+  ['yone', '요네'], ['sett', '세트'], ['mordekaiser', '모데카이저'], ['renekton', '레넥톤'], ['nilah', '닐라'], ['chogath', '초가스'],
+  ['ezreal', '이즈리얼'], ['ashe', '애쉬'], ['varus', '바루스'], ['ahri', '아리'], ['vex', '벡스'],
+];
+const CHAMPION_MODEL_DIR = 'assets/champions/';
+function loadChampionFromLibrary(id) {
+  if (!CHAMPION_MODEL_LIBRARY.some(([k]) => k === id)) return;
+  glbErrMsgEl.textContent = '';
+  if (location.protocol === 'file:') {
+    glbErrMsgEl.textContent = '파일로 바로 연 페이지에서는 저장소 모델을 불러올 수 없어요 - 웹 서버(GitHub Pages 등)로 열거나 아래 "파일 선택"을 쓰세요.';
+    glbEntryEl.classList.add('show');
+    return;
+  }
+  loadingEl.classList.add('show');
+  fetch(CHAMPION_MODEL_DIR + id + '.glb')
+    .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.arrayBuffer(); })
+    .then((buf) => loadFromArrayBuffer(buf, id + '.glb'))
+    .catch((err) => { loadingEl.classList.remove('show'); glbErrMsgEl.textContent = `${id} 모델을 불러오지 못했어요 (${err.message || err})`; glbEntryEl.classList.add('show'); });
+}
+(function setupChampionLibraryUI() {
+  const box = document.getElementById('championLibrary');
+  if (box) {
+    for (const [id, name] of CHAMPION_MODEL_LIBRARY) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = name; b.dataset.champ = id;
+      b.addEventListener('click', () => loadChampionFromLibrary(id));
+      box.appendChild(b);
+    }
+  }
+  const sel = document.getElementById('libraryChampSelect');
+  if (sel) {
+    for (const [id, name] of CHAMPION_MODEL_LIBRARY) { const o = document.createElement('option'); o.value = id; o.textContent = name; sel.appendChild(o); }
+    sel.addEventListener('change', () => { if (sel.value) loadChampionFromLibrary(sel.value); sel.value = ''; sel.blur(); });
+  }
+  const q = new URLSearchParams(location.search).get('champ');
+  if (q) loadChampionFromLibrary(q.toLowerCase());
+})();
 
 const glbDropHint = document.getElementById('glbDropHint');
 ['dragover', 'dragenter'].forEach(ev => glbDropHint.addEventListener(ev, (e) => { e.preventDefault(); glbDropHint.classList.add('dragover'); }));
