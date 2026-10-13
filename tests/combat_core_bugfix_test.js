@@ -424,4 +424,20 @@ function skillValLocal(byLevel, lvl) {
   assert(ctrl.cooldowns.Q === 0 && ctrl.championId === 'garen', '챔피언 교체 기본 동작(쿨다운 초기화) 유지');
 }
 
+// 19차: 교체 정리 중 시퀀스 취소(onCancel → _resumeAfterAction)가 남은 공격 대상에게 새 평타를 시작하면
+// 버려진 컨트롤러가 교체 후에도 계속 때린다(E2E switch_check 닐라 Q에서 발견). 정리 함수는 재개할 명령부터 비워야 한다.
+{
+  const ctrl = makeMinimalChamp('nilah');
+  const target = makeTarget();
+  Object.assign(ctrl, { currentTarget: target, attackOrderActive: true, pendingMove: { x: 1 }, pendingCast: { slot: 'Q' }, cooldowns: { Q: 0, W: 0, E: 0, R: 0 }, _actionTimers: [], _championTimers: new Set() });
+  let engaged = 0, seenAtCancel = null;
+  ctrl._tryEngageTarget = () => { engaged++; };
+  ctrl._commitMove = () => { engaged++; };
+  ctrl._returnToLocomotion = () => {}; ctrl.canStartNewAction = () => true; ctrl.castAbility = () => { engaged++; ctrl.mp -= 1; };
+  ctrl.sequencePlayer = { isPlaying: true, cancel() { this.isPlaying = false; seenAtCancel = { target: ctrl.currentTarget, move: ctrl.pendingMove, cast: ctrl.pendingCast }; ctrl._resumeAfterAction(); } };
+  ctrl._teardownChampionRuntime();
+  assert(seenAtCancel && !seenAtCancel.target && !seenAtCancel.move && !seenAtCancel.cast, '교체 정리: 시퀀스 취소 시점엔 공격 대상·이동/시전 예약이 이미 비어 있다');
+  assert(engaged === 0 && ctrl.attackOrderActive === false, '교체 정리: 취소 콜백이 새 평타·이동을 시작하지 않는다');
+}
+
 console.log(process.exitCode ? '\nSOME CHECKS FAILED' : '\nALL CHECKS PASSED');

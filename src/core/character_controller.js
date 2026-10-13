@@ -350,6 +350,11 @@ class CharacterController {
    *  applyChampionData()(같은 모델에서 챔피언 id만 교체)와 disposeCurrentChampion()
    *  (GLB를 새로 불러와 컨트롤러 자체를 버림) 양쪽에서 부른다. */
   _teardownChampionRuntime() {
+    // 버그 수정(19차 E2E 교체 점검에서 발견): 아래 _clearActionTimers()가 진행 중인 시퀀스(닐라 Q 등)를 취소하면
+    // 그 onCancel이 _resumeAfterAction()을 불러, 아직 남아 있던 공격 대상에게 새 평타를 시작했다 - 정리가 끝난 뒤에
+    // 생긴 타이머라 버려진 컨트롤러가 교체 후에도 허수아비를 계속 때렸다. 재개할 명령(대상·이동·시전 예약)부터 비운다.
+    this.currentTarget = null; this.attackOrderActive = false; this.attackOrderAnchor = null;
+    this.pendingMove = null; this.pendingCast = null; this.targetPos = null;
     // 챔피언 교체/재선택 중 이전 레넥톤의 지속 R 오라가 남지 않도록 정리한다.
     if (this._renekton?.rAuraVfx && typeof vfx !== 'undefined') {
       vfx.stopRenektonRAura(this._renekton.rAuraVfx);

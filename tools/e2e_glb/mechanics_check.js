@@ -1,6 +1,7 @@
 // 전 챔피언 스킬 기제 점검(헤드리스 Chromium + 실제 GLB). 각 스킬을 허수아비에게 써서 실제 게임에서 일어난 일을 기록한다:
 // 허수아비 피해, 걸린 상태이상 종류, 허수아비/플레이어 이동 거리, 플레이어 보호막·회복·자기 버프, 오류.
 // 사용법: GLB_DIR=<챔피언명.glb 폴더> THREE_DIR=<three package> node tools/e2e_glb/mechanics_check.js [챔피언ID...] > out.json
+// 수치를 비교할 때는 E2E_HIDE_MAP=1을 켠다(server.js 참고 - 맵을 그리면 CPU 렌더러에서 게임 시간이 느려진다).
 const path = require('path'), fs = require('fs');
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const startServer = require('./server.js');
@@ -73,7 +74,7 @@ const SETUP = {
         }, 20);
       }), { slot, cfg });
     }
-    res[id].errors = errors.filter((e) => !/favicon|404/.test(e)).slice(0, 5);
+    res[id].errors = errors.filter((e) => !/favicon|404|ERR_TUNNEL_CONNECTION_FAILED/.test(e)).slice(0, 5); // 터널 실패 = 이 환경에서 막힌 CommunityDragon 텍스처
     await page.close();
   }
   console.log(JSON.stringify(res, null, 1));

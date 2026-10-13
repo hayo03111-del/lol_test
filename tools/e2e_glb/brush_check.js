@@ -18,14 +18,17 @@ const startServer = require('./server.js');
   const r = {};
   r.setup = await page.evaluate(() => {
     const E = window.__e2e, B = E.brushSystem, c = window.controller, [d0, d1, d2] = E.dummies;
-    // 기본 부쉬 두 곳: (-9,2), (9,2). 적 d2는 오른쪽 부쉬 안, d0·d1은 멀리.
-    d0.mesh.position.set(-60, 0, -60); d1.mesh.position.set(-70, 0, -60); d2.mesh.position.set(9, 0, 2);
-    c.root.position.set(4, 0, 2);
-    return { brushCount: B.brushes.length, d2InBrush: !!B.brushAt(d2.mesh.position), playerInBrush: !!B.brushAt(c.root.position) };
+    // 칼바람 원작 배치 중 다리 가운데 오른쪽 부쉬(brushes[2])에 적 d2, 왼쪽 부쉬(brushes[0])는 빨강 시점 시험용. d0·d1은 멀리.
+    // 위치는 맵 배율에 따라 달라지므로 부쉬 중심에서 계산한다.
+    const bc = B.brushes[2].center, b0 = B.brushes[0].center;
+    window.__bc = { x: bc.x, z: bc.z }; window.__b0 = { x: b0.x, z: b0.z };
+    d0.mesh.position.set(-60, 0, -60); d1.mesh.position.set(-70, 0, -60); d2.mesh.position.set(bc.x, 0, bc.z);
+    c.root.position.set(bc.x - 5, 0, bc.z);
+    return { brushCount: B.brushes.length, mapScale: E.howlingAbyssMap.scale, brushes: B.brushes.map((b) => [+b.center.x.toFixed(2), +b.center.z.toFixed(2)]), d2InBrush: !!B.brushAt(d2.mesh.position), playerInBrush: !!B.brushAt(c.root.position) };
   });
   await wait(400);
   r.outside = await page.evaluate(() => { const E = window.__e2e, d2 = E.dummies[2]; return { visible: E.visionSystem.isVisible(d2), meshVisible: d2.mesh.visible, distLol: Math.round(window.controller.root.position.distanceTo(d2.mesh.position) / E.lolRangeToWorld(1)) }; });
-  await page.evaluate(() => window.controller.root.position.set(9.6, 0, 2.4));
+  await page.evaluate(() => window.controller.root.position.set(window.__bc.x + 0.6, 0, window.__bc.z + 0.4));
   await wait(400);
   r.sameBrush = await page.evaluate(() => { const E = window.__e2e, B = E.brushSystem; const mine = B.brushAt(window.controller.root.position); return { visible: E.visionSystem.isVisible(E.dummies[2]), grassOpacity: mine && mine.mats[0] ? +mine.mats[0].opacity.toFixed(2) : null }; });
   if (process.argv[2]) {
@@ -34,13 +37,13 @@ const startServer = require('./server.js');
     await page.evaluate(() => document.querySelectorAll('body *').forEach((el) => { el.style.visibility = ''; }));
   }
   // 부쉬 밖으로 나와 애쉬 E(매)를 부쉬로
-  await page.evaluate(() => { const E = window.__e2e, c = window.controller; c.root.position.set(4, 0, 2); c.cooldowns.E = 0; c.mp = c.maxMp; c.castAbility('E', new E.THREE.Vector3(9, 0, 2)); });
+  await page.evaluate(() => { const E = window.__e2e, c = window.controller; c.root.position.set(window.__bc.x - 5, 0, window.__bc.z); c.cooldowns.E = 0; c.mp = c.maxMp; c.castAbility('E', new E.THREE.Vector3(window.__bc.x, 0, window.__bc.z)); });
   await wait(300);
   r.beforeHawkArrives = await page.evaluate(() => window.__e2e.visionSystem.isVisible(window.__e2e.dummies[2]));
   await wait(2500);
   r.afterAsheE = await page.evaluate(() => window.__e2e.visionSystem.isVisible(window.__e2e.dummies[2]));
   // 빨강 시점: 플레이어가 왼쪽 부쉬 안, 빨강 d0이 부쉬 밖 가까이
-  await page.evaluate(() => { const E = window.__e2e, c = window.controller, d0 = E.dummies[0]; d0.mesh.position.set(-4.5, 0, 2); c.root.position.set(-9, 0, 2); E.visionSystem.setViewTeam('RED'); });
+  await page.evaluate(() => { const E = window.__e2e, c = window.controller, d0 = E.dummies[0]; d0.mesh.position.set(window.__b0.x + 4.5, 0, window.__b0.z); c.root.position.set(window.__b0.x, 0, window.__b0.z); E.visionSystem.setViewTeam('RED'); });
   await wait(400);
   r.redHidden = await page.evaluate(() => ({ visibleToRed: window.__e2e.visionSystem.isVisibleTo('RED', window.controller), rootVisible: window.controller.root.visible }));
   await page.evaluate(() => { const E = window.__e2e; window.__e2e.brushSystem.onActionFromBrush(window.controller); });

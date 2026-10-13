@@ -9,20 +9,41 @@
      "공격·스킬 시전 시 은신이 풀릴 수 있다"까지만 서술해 Fandom 수치를 쓴다).
    - 판정(타게팅·시야)은 vision_system.js가 이 파일의 brushAt()을 물어서 처리한다.
 
-   배치: 지금 쓰는 연습장 맵에는 원작 부쉬 위치가 없다(칼바람 지형은 제거된 상태). 기본으로 두 곳을 놓고,
-   설정 패널의 "부쉬 설치 모드(N)"로 클릭한 자리에 원하는 만큼 놓을 수 있다. 크기는 원작 부쉬와 비슷한
-   가로 450 × 세로 300(LoL 단위 - 맵 데이터를 받지 못해 근사값).
+   배치: 칼바람 나락 맵이면 원작 6곳(BRUSH_CONFIG.howlingAbyssLayout), 맵이 없으면 연습장 2곳. 설정 패널의
+   "부쉬 설치 모드(N)"로 클릭한 자리에 더 놓을 수 있다. 위치·크기는 원작 맵 데이터를 받지 못해 근사값.
    ============================================================ */
 const BRUSH_CONFIG = {
   defaultSizeLol: { width: 450, depth: 300 },
   revealOnActionRadiusLol: 300, // Fandom 위키 Brush
   revealOnActionSec: 2,         // Fandom 위키 Brush
   insideOpacity: 0.35,          // 내 챔피언이 들어가 있는 부쉬는 반투명하게(원작 화면처럼 안이 보이게)
+  // 맵 없는 연습장 배치
   defaultLayout: [
     { x: -9, z: 2, rotY: 0 },
     { x: 9, z: 2, rotY: 0 },
   ],
+  // 칼바람 나락 원작 부쉬 6곳(PC 위키 Brush: 다리 왼쪽 2곳·가운데 오른쪽 1곳·양 진영 바깥~안쪽 포탑 사이 1곳씩 = 5곳,
+  // 12.23 패치: 다리 가운데 아래쪽 1곳 추가 + 포탑 사이 부쉬 확대). 이 맵은 다리가 z축(파랑 z<0 → 빨강 z>0)으로 곧게
+  // 뻗어 있어서 "왼쪽/위"를 -x(side -1), "오른쪽/아래"를 +x(side +1)로 옮겼다. z는 맵을 줄이기 전 단위
+  // (HA_MAP_CONFIG 기준, 넥서스 ±94.5·포탑 ±66)로 적고 맵 배율(howlingAbyssMap.scale)을 곱한다. x는 다리 가장자리에
+  // 붙인다(부쉬가 다리 밖으로 나가지 않게). 원작 맵 좌표 데이터(CommunityDragon)를 받지 못해 위치·크기는 서술을 따른
+  // 근사값이다 - 값만 고치면 된다(크기는 LoL 단위). 가운데 부쉬는 연습용 허수아비 줄(z=-6, x=0·±4)을 덮지 않게 놓았다
+  // (덮으면 허수아비가 부쉬에 숨어 지정·시험이 안 된다).
+  howlingAbyssLayout: [
+    { side: -1, z: -17, widthLol: 450, depthLol: 900 },   // 다리 가운데 왼쪽(위) - 파랑 쪽
+    { side: -1, z: 17, widthLol: 450, depthLol: 900 },    // 다리 가운데 왼쪽(위) - 빨강 쪽
+    { side: 1, z: 4.5, widthLol: 450, depthLol: 900 },    // 다리 가운데 오른쪽(아래) - 원래 1곳
+    { side: 1, z: -16, widthLol: 450, depthLol: 700 },    // 다리 가운데 아래쪽 - 12.23 추가
+    { side: 1, z: -52, widthLol: 450, depthLol: 1100 },   // 파랑 진영 바깥~안쪽 포탑 사이(12.23 확대)
+    { side: -1, z: 52, widthLol: 450, depthLol: 1100 },   // 빨강 진영 바깥~안쪽 포탑 사이(12.23 확대)
+  ],
 };
+
+// 칼바람 나락 배치 항목 → 월드 좌표(다리 가장자리에서 0.3 안쪽, z는 맵 배율 적용).
+function howlingAbyssBrushPlacement(b, map) {
+  const halfW = lolRangeToWorld(b.widthLol) / 2;
+  return { x: b.side * (map.laneMaxX - halfW - 0.3), z: b.z * (map.scale || 1), widthLol: b.widthLol, depthLol: b.depthLol };
+}
 
 class BrushSystem {
   constructor(scene) {
@@ -51,18 +72,22 @@ class BrushSystem {
       const base = new THREE.Mesh(new THREE.PlaneGeometry(w, d), baseMat);
       base.rotation.x = -Math.PI / 2; base.position.y = 0.02;
       group.add(base);
-      // 풀 덤불: 부쉬 안을 고르게 채우는 원뿔 묶음(위치는 부쉬마다 고정 - id로 만든 의사 난수)
+      // 풀 덤불: 부쉬 안을 고르게 채우는 원뿔 묶음(위치는 부쉬마다 고정 - id로 만든 의사 난수).
+      // 원뿔 수백 개를 메시 하나(InstancedMesh)로 그린다 - 따로 그리면 부쉬 6곳에 드로콜이 수천 번 늘어 느려진다.
       const mat = this._material().clone();
-      const n = Math.max(12, Math.round((w * d) / 0.35));
+      const n = Math.min(420, Math.max(16, Math.round((w * d) / 0.12))); // 부쉬로 읽히도록 촘촘하게
       let seed = brush.id * 9301 + 49297;
       const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+      const blades = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 5), mat, n);
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), sc = new THREE.Vector3(), at = new THREE.Vector3();
       for (let i = 0; i < n; i++) {
-        const h = 0.55 + rnd() * 0.45, r = 0.16 + rnd() * 0.12;
-        const blade = new THREE.Mesh(new THREE.ConeGeometry(r, h, 5), mat);
-        blade.position.set((rnd() - 0.5) * w * 0.95, h / 2, (rnd() - 0.5) * d * 0.95);
-        blade.rotation.y = rnd() * Math.PI;
-        group.add(blade);
+        const h = 0.6 + rnd() * 0.5, r = 0.18 + rnd() * 0.14;
+        at.set((rnd() - 0.5) * w * 0.95, h / 2, (rnd() - 0.5) * d * 0.95);
+        q.setFromAxisAngle(up, rnd() * Math.PI);
+        blades.setMatrixAt(i, m4.compose(at, q, sc.set(r, h, r)));
       }
+      blades.instanceMatrix.needsUpdate = true;
+      group.add(blades);
       group.position.copy(brush.center);
       group.rotation.y = rotY;
       this.scene.add(group);
@@ -72,7 +97,12 @@ class BrushSystem {
     return brush;
   }
 
-  addDefaultLayout() { for (const b of BRUSH_CONFIG.defaultLayout) this.addBrush(b); }
+  // 칼바람 나락 맵이 있으면 원작 6곳, 없으면 연습장 2곳.
+  addDefaultLayout() {
+    const onMap = typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap && howlingAbyssMap.group;
+    if (!onMap) { for (const b of BRUSH_CONFIG.defaultLayout) this.addBrush(b); return; }
+    for (const b of BRUSH_CONFIG.howlingAbyssLayout) this.addBrush(howlingAbyssBrushPlacement(b, howlingAbyssMap));
+  }
 
   clear() {
     for (const b of this.brushes) {

@@ -42,9 +42,21 @@ const HA_MAP_CONFIG = {
   blueTurretZ: -66, redTurretZ: 66,
 };
 
+// 원작 크기 맞춤(19차 요청 "실제 맵과 챔피언의 크기를 비교하여 여기 크기도 맞춰줘"): 챔피언 사거리·이동속도는
+// WORLD_DISTANCE_SCALE로 LoL 단위와 정확히 맞춰져 있는데, 맵은 손으로 늘린 값이라 원작보다 1.6배쯤 길었다
+// (끝에서 끝 250 월드 = 약 28,900 LoL 유닛). 원작 칼바람 나락 좌표 범위는 x -28~12849, y -19~12858
+// (Riot 매치 타임라인 좌표 범위 - HextechDocs "Map data" 정리, 비공식 문서)이고 다리는 이 정사각형의 대각선으로
+// 놓인다. 그래서 맵 전체 길이를 대각선 길이(12,877 x √2 ≈ 18,211)에 맞춰 맵 전체를 똑같은 비율로 줄인다.
+// 대각선은 맵 끝 모서리까지 포함한 상한값이라, 실제 다리는 이보다 조금 짧을 수 있다(근사).
+// 아래 HA_MAP_CONFIG와 맵 안의 모든 모양 수치는 "줄이기 전" 단위이고, 맵 그룹 전체에 HA_MAP_SCALE을 곱한다.
+const HA_REAL_MAP_SPAN_LOL = 12877; // 12849 - (-28)
+const HA_MAP_SCALE = lolRangeToWorld(HA_REAL_MAP_SPAN_LOL * Math.SQRT2) / (HA_MAP_CONFIG.laneMaxZ - HA_MAP_CONFIG.laneMinZ);
+
 function createHowlingAbyssMap(scene) {
   const cfg = HA_MAP_CONFIG;
+  const S = HA_MAP_SCALE;
   const group = new THREE.Group();
+  group.scale.setScalar(S);
   const bridgeLen = cfg.laneMaxZ - cfg.laneMinZ;
   const bridgeWidth = cfg.laneMaxX - cfg.laneMinX; // 14
   // 요청("각 끝 쪽 부분의 넓이를 늘려줘") - 실제 칼바람 나락처럼 기지
@@ -185,11 +197,7 @@ function createHowlingAbyssMap(scene) {
     }
   }
 
-  // 중앙의 얼음 문양/깨진 빛 타일.
-  for(let z=cfg.laneMinZ+7;z<cfg.laneMaxZ;z+=10.5){
-    const s=add(new THREE.PlaneGeometry(1.25,2.4),mat('prop_bridge_keystone.png',{rx:1,ry:1,roughness:.55,transparent:true,opacity:.72}),[0,.445,z],[-Math.PI/2,0,0]); s.castShadow=false;
-    add(new THREE.TorusGeometry(.45,.035,6,20),colorMat(0x9feaff,.28,0,0x46cfff,.55),[0,.47,z],[Math.PI/2,0,0]).castShadow=false;
-  }
+  // (삭제) 중앙선의 얼음 문양 타일 + 푸른 고리 장식 - 원작 칼바람 다리에 없는 임시 장식이라 지웠다(사용자 요청).
 
   // ============================================================
   // 2) SIDE PARAPETS: segmented walls, towers, chains, wood braces.
@@ -489,7 +497,7 @@ function createHowlingAbyssMap(scene) {
     // 셰이더 비용에 곱해진다. 불꽃 콘 메시의 emissive(주황색, 강도 2.0)
     // 만으로도 "빛나는 화로"처럼 충분히 보이므로 실제 광원은 만들지 않는다.
   }
-  for(let z=cfg.laneMinZ+5;z<cfg.laneMaxZ-4;z+=15.5){brazier(-7.75,z);brazier(7.75,z);}
+  // (삭제) 다리 양옆 화로(주황 불꽃 원뿔) 배치 - 원작 다리에 없는 임시 장식이라 지웠다(사용자 요청).
 
   function shop(x,z){
     // 임시 상점: 추후 실제 shop kitpiece로 교체
@@ -716,7 +724,7 @@ function createHowlingAbyssMap(scene) {
   snow.frustumCulled=false;group.add(snow);
   let snowFrameToggle=false;
   function updateSnow(dt,focusPos){
-    const cx=focusPos?.x??0,cz=focusPos?.z??0;
+    const cx=(focusPos?.x??0)/S,cz=(focusPos?.z??0)/S; // 눈 입자는 맵 그룹(줄이기 전 단위) 안에 있다
     snowFrameToggle=!snowFrameToggle;
     for(let i=0;i<snowCount;i++){
       const idx=i*3;
@@ -748,21 +756,29 @@ function createHowlingAbyssMap(scene) {
 
   scene.add(group);
   const pathBlueToRed=[],pathRedToBlue=[];
-  for(let i=0;i<11;i++){const z=cfg.laneMinZ+6+(i/10)*(bridgeLen-12);pathBlueToRed.push(new THREE.Vector3(0,.02,z));}
+  for(let i=0;i<11;i++){const z=cfg.laneMinZ+6+(i/10)*(bridgeLen-12);pathBlueToRed.push(new THREE.Vector3(0,.02,z*S));}
   for(let i=pathBlueToRed.length-1;i>=0;i--)pathRedToBlue.push(pathBlueToRed[i].clone());
   // 요청("각 끝 쪽 부분의 넓이를 늘려줘") - 이동 가능 범위도 벽/바닥과
   // 똑같이 widenExtraForZ()를 그대로 재사용해서 기지 근처에서 더 넓게
   // 걸어다닐 수 있게 한다(서로 다른 값을 쓰면 벽은 넓어졌는데 못 걸어가거나,
   // 반대로 바닥 없는 곳을 걸어가는 불일치가 생긴다).
-  function clampPosition(p){const maxX=cfg.laneMaxX+widenExtraForZ(p.z);p.x=THREE.MathUtils.clamp(p.x,-maxX,maxX);p.z=THREE.MathUtils.clamp(p.z,cfg.laneMinZ,cfg.laneMaxZ);return p;}
-  function isInsidePlayableArea(p){const maxX=cfg.laneMaxX+widenExtraForZ(p.z);return p.x>=-maxX&&p.x<=maxX&&p.z>=cfg.laneMinZ&&p.z<=cfg.laneMaxZ;}
-  return {group,laneMinX:cfg.laneMinX,laneMaxX:cfg.laneMaxX,laneMinZ:cfg.laneMinZ,laneMaxZ:cfg.laneMaxZ,
-    spawnBlue:new THREE.Vector3(0,0,cfg.blueBaseZ+10),spawnRed:new THREE.Vector3(0,0,cfg.redBaseZ-10),
+  // 판정은 월드 좌표로 받아서 줄이기 전 단위로 비교한다(맵 그룹 배율 S).
+  function clampPosition(p){const maxX=(cfg.laneMaxX+widenExtraForZ(p.z/S))*S;p.x=THREE.MathUtils.clamp(p.x,-maxX,maxX);p.z=THREE.MathUtils.clamp(p.z,cfg.laneMinZ*S,cfg.laneMaxZ*S);return p;}
+  function isInsidePlayableArea(p){const maxX=(cfg.laneMaxX+widenExtraForZ(p.z/S))*S;return p.x>=-maxX&&p.x<=maxX&&p.z>=cfg.laneMinZ*S&&p.z<=cfg.laneMaxZ*S;}
+  return {group,scale:S,laneMinX:cfg.laneMinX*S,laneMaxX:cfg.laneMaxX*S,laneMinZ:cfg.laneMinZ*S,laneMaxZ:cfg.laneMaxZ*S,
+    spawnBlue:new THREE.Vector3(0,0,(cfg.blueBaseZ+10)*S),spawnRed:new THREE.Vector3(0,0,(cfg.redBaseZ-10)*S),
     blueNexus:null,redNexus:null,blueTurret:null,redTurret:null,
     pathBlueToRed,pathRedToBlue,clampPosition,isInsidePlayableArea,updateSnow};
 }
-// 칼바람 나락 맵 제거: ARAM 지형/절벽/장식/눈/맵 그룹을 생성하지 않는다.
-const howlingAbyssMap={group:null,laneMinX:-140,laneMaxX:140,laneMinZ:-140,laneMaxZ:140,spawnBlue:new THREE.Vector3(0,0,0),spawnRed:new THREE.Vector3(0,0,0),blueNexus:null,redNexus:null,blueTurret:null,redTurret:null,pathBlueToRed:[],pathRedToBlue:[],clampPosition(p){p.x=THREE.MathUtils.clamp(p.x,-140,140);p.z=THREE.MathUtils.clamp(p.z,-140,140);return p;},isInsidePlayableArea(p){return p.x>=-140&&p.x<=140&&p.z>=-140&&p.z<=140;},updateSnow(){}};
+// 칼바람 나락 맵(요청 "칼바람 나락 맵 다시 넣고"): 지형·절벽·장식·눈을 만든다. 생성에 실패하면(텍스처 서버 문제 등과 무관하게
+// 코드 오류일 때) 예전처럼 맵 없는 연습장 경계로 돌아간다. 지형 텍스처는 CommunityDragon에서 받는다 - 접속이 막힌
+// 환경에서는 색만 보이고 모양·판정은 그대로다.
+const HOWLING_ABYSS_ENABLED = true;
+let howlingAbyssMap = null;
+if (HOWLING_ABYSS_ENABLED) { try { howlingAbyssMap = createHowlingAbyssMap(scene); } catch (e) { console.warn('[MAP] 칼바람 나락 생성 실패 - 연습장으로 대체', e); howlingAbyssMap = null; } }
+if (!howlingAbyssMap) howlingAbyssMap={group:null,laneMinX:-140,laneMaxX:140,laneMinZ:-140,laneMaxZ:140,spawnBlue:new THREE.Vector3(0,0,0),spawnRed:new THREE.Vector3(0,0,0),blueNexus:null,redNexus:null,blueTurret:null,redTurret:null,pathBlueToRed:[],pathRedToBlue:[],clampPosition(p){p.x=THREE.MathUtils.clamp(p.x,-140,140);p.z=THREE.MathUtils.clamp(p.z,-140,140);return p;},isInsidePlayableArea(p){return p.x>=-140&&p.x<=140&&p.z>=-140&&p.z<=140;},updateSnow(){}};
+// 맵이 있으면 연습장 바닥은 숨긴다(다리 아래가 심연이어야 한다).
+if (howlingAbyssMap.group && typeof ground !== 'undefined' && ground) ground.visible = false;
 window.HOWLING_ABYSS_MAP=howlingAbyssMap;
 
 function addTree(x, z, heightRatio, radiusRatio, color) {
@@ -813,8 +829,8 @@ const bushLayout = [
   [-2, 4, 0.7, 0.6, 0x3a4d34], [6, -3, 0.55, 0.5, 0x3f5238], [-8, -9, 0.65, 0.55, 0x3a4d34],
   [15, 4, 0.6, 0.5, 0x3f5238], [-12, 14, 0.7, 0.6, 0x3a4d34],
 ];
-smallTreeLayout.forEach(([x, z, hr, rr, c]) => addTree(x, z, hr, rr, c));
-bigTreeLayout.forEach(([x, z, hr, rr, c]) => addTree(x, z, hr, rr, c));
-rockLayout.forEach(([x, z, hr, rr, c]) => addRock(x, z, hr, rr, c));
-bushLayout.forEach(([x, z, hr, rr, c]) => addBush(x, z, hr, rr, c));
+if (!howlingAbyssMap.group) smallTreeLayout.forEach(([x, z, hr, rr, c]) => addTree(x, z, hr, rr, c));
+if (!howlingAbyssMap.group) bigTreeLayout.forEach(([x, z, hr, rr, c]) => addTree(x, z, hr, rr, c));
+if (!howlingAbyssMap.group) rockLayout.forEach(([x, z, hr, rr, c]) => addRock(x, z, hr, rr, c));
+if (!howlingAbyssMap.group) bushLayout.forEach(([x, z, hr, rr, c]) => addBush(x, z, hr, rr, c)); // 연습장 장식 - 맵의 실제 부쉬(brush_system.js)와 헷갈리지 않게 맵에서는 뺀다
 
