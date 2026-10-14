@@ -369,7 +369,7 @@ class NilahVFXManagerV2 {
   //  2단계(버스트+끌어당김, 55~100%): 주황~금색 촉수/발광
   // 색상 자체를 progress(p)에 따라 lerp로 전환시켜 하나의 재생 안에서
   // 자연스럽게 초록→금색으로 넘어가게 한다.
-  playR({ position, radius = 3.2, duration = 1.35 } = {}) {
+  playR({ position, radius = 3.2, duration = 1.35, follow = null } = {}) {
     if (!position) throw new Error("playR requires position.");
     const root = new THREE.Group();
     root.position.copy(position);
@@ -400,6 +400,8 @@ class NilahVFXManagerV2 {
     const _tmpColor = new THREE.Color();
     const phaseSplit = 0.55; // 휘두르기(1단계) 종료 시점 - R.channelDuration(1초)/전체 재생시간 비율과 대략 맞춘 값
     return this._add(root, duration, (inst, dt) => {
+      // 28차: R 범위는 닐라 중심으로 판정되므로(_nilahRApplyTick) 이펙트도 닐라를 따라간다.
+      if (follow) { const fp = follow(); if (fp) { root.position.x = fp.x; root.position.z = fp.z; } }
       const p = inst.t / duration;
       // 1단계→2단계 색 전환: phaseSplit 이전엔 라임그린 유지, 그 이후
       // 빠르게(약 0.18 구간) 골드/오렌지로 보간한다 - 실제 R처럼 "휘두르기

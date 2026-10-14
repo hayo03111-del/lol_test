@@ -106,10 +106,11 @@ function findEnemiesInRadius(center, lolRadius, { forward = null, maxAngleDeg = 
 // 통일해서 읽는다(허수아비 크기를 키워도 자동 반영). range는 LoL 원본
 // 사거리, halfWidth는 이미 world 단위의 판정 폭(스킬 데이터가 아니라 이
 // 엔진이 정한 시각적 두께이므로 변환하지 않는다).
-function findFirstInLine(origin, dir, lolRange, halfWidth) {
+function findFirstInLine(origin, dir, lolRange, halfWidth, filter = null) { // filter(u): 걸러낼 대상(예: 챔피언만) - 28차
   const range = lolRangeToWorld(lolRange); // 버그 수정: LoL 원본 사거리를 그대로 world 거리로 썼다
   let best = null;
   for (const u of getTargetableEnemyUnits()) {
+    if (filter && !filter(u)) continue;
     const p = getWorldPosition(u);
     const r = getCollisionRadius(u);
     const toTarget = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);

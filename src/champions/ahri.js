@@ -539,6 +539,9 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   if (isSilenced(this) || isCrowdControlled(this)) return;
   const r = this._champData().R;
   const isRecast = this._ahri.rCharges > 0 && performance.now() < this._ahri.rReadyUntil;
+  // 28차(요청 "아리 궁 연타 안 되게"): PC 위키 - 재시전 사이 1초 고정 대기(스킬 가속 영향 없음). 예전엔 대기 없이 연달아 나갔다.
+  const lockLeft = ((this._ahri.rNextAllowedAt || 0) - performance.now()) / 1000;
+  if (isRecast && lockLeft > 0) return;
   if (isRecast) {
     this._ahri.rCharges -= 1;
   } else {
@@ -547,6 +550,7 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
     this._ahri.rReadyUntil = performance.now() + (r.recastWindow || 15) * 1000;
   }
 
+  this._ahri.rNextAllowedAt = performance.now() + (r.recastLockoutSec != null ? r.recastLockoutSec : 1) * 1000;
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
     : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);

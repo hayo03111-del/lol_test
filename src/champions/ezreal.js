@@ -90,7 +90,7 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
   if (!hitUnit) debugSkillMiss('Ezreal Q', 'no target in line');
 
   };
-  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealQ') { __fire(); if (this.currentActionKey === 'ezrealQ') { this.currentPhase = 'RECOVERY'; this.phaseCancelable = true; } } }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000);
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealQ') { __fire(); if (this.currentActionKey === 'ezrealQ') { this.currentPhase = 'RECOVERY'; this.phaseCancelable = true; if (this.pendingMove || this.targetPos) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } } } }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000); // 28차: W와 같이 이동 중이면 발사 직후 이동 재개
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell1');
@@ -154,7 +154,9 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   if (!hitUnit) debugSkillMiss('Ezreal W', 'no valid target in line (챔피언/포탑/억제기/넥서스만 반응)');
 
   };
-  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealW') { __fire(); if (this.currentActionKey === 'ezrealW') { this.currentPhase = 'RECOVERY'; this.phaseCancelable = true; } } }, (w.castTimeSec != null ? w.castTimeSec : 0.25) * 1000);
+  // 28차(요청 "W 쓸 때 멈출 때가 있음"): 발사 뒤 남은 모션은 후딜이라, 이동 중에 썼거나 시전 중 이동 명령을 넣었으면
+  // 원작처럼 발사 직후 곧바로 이동을 이어 간다. 예전엔 RECOVERY로만 바꾸고 클립이 끝날 때까지 서 있었다.
+  const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealW') { __fire(); if (this.currentActionKey === 'ezrealW') { this.currentPhase = 'RECOVERY'; this.phaseCancelable = true; if (this.pendingMove || this.targetPos) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } } } }, (w.castTimeSec != null ? w.castTimeSec : 0.25) * 1000);
   this._actionTimers.push(__castTimer);
 
   const clip = this.findAnimation('Spell2');
@@ -247,6 +249,8 @@ CharacterController.prototype._ezrealCastE = function(mouseWorldPoint, free = fa
   // 버그 수정: 예전엔 즉시 순간이동했다 - PC 위키 시전 시간 0.25초 뒤 순간이동 + 유도탄.
   const __fire = () => {
   const blinkPos = this.root.position.clone().add(blinkOffset);
+  // 28차: 벽·맵 밖을 찍으면 그 안으로 들어가 갇히지 않게 가장 가까운 이동 가능 지점으로 당긴다(죽음의 세계 경계 포함).
+  if (typeof constrainUnitPosition === 'function') constrainUnitPosition(this, blinkPos);
   this.root.position.copy(blinkPos);
   vfx.spawn('e', blinkPos.clone());
 

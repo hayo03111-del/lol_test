@@ -245,7 +245,7 @@ async function bootstrapChampion(gltf, fileName) {
   const hpLabelDiv = document.createElement('div');
   hpLabelDiv.id = 'enemyLabel';
   hpLabelDiv.className = 'champion';
-  hpLabelDiv.innerHTML = `<div class="hpLevelBadge">18</div><div><div class="hpBarOuter"><div class="hpBarInner" style="background:linear-gradient(180deg,#70e35e 0%,#36b934 55%,#16851d 100%)"></div><div class="hpValueText">0 / 0</div></div><div class="champResourceBar"><div class="champResourceFill"></div></div></div>`;
+  hpLabelDiv.innerHTML = `<div class="hpLevelBadge">18</div><div><div class="hpBarOuter" style="position:relative;"><div class="hpBarInner" style="background:linear-gradient(180deg,#70e35e 0%,#36b934 55%,#16851d 100%)"></div><div class="hpBarShield" style="position:absolute;top:0;left:0;width:0;height:100%;background:#e8e8e8;opacity:0.85;"></div></div><div class="champResourceBar"><div class="champResourceFill"></div></div></div>`;
   const hpLabel3d = new CSS2DObject(hpLabelDiv);
   // 요청("챔피언 머리위 hp바가 챔피언을 너무 가려 좀더 위로") - 여유값을
   // 기존 위치에서 1.5만큼 더 올려 챔피언 머리 위에 확실히 표시한다.

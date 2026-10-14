@@ -16,9 +16,7 @@
 
    구현 범위상 단순화한 부분(전부 데이터를 지어내지 않고 명시적으로
    근사한 것 - 섹션 3/18 원칙):
-   - Q 충전 중 조준 방향은 충전을 시작한 순간에 고정된다(다른 스킬샷들도
-     캐스트 중 마우스를 계속 추적하지 않는 이 프로젝트의 기존 관례를
-     그대로 따름 - 이동 자체는 실시간으로 가능하다).
+   - (28차에 해소) Q 충전 중 조준 방향은 커서를 따라가고, 발사 순간 커서 방향으로 쏜다.
    - E(화살비)가 만드는 "저주받은 땅"은 지속되는 별도 지면 오브젝트가
      아니라, 착탄 시점에 범위 안에 있던 대상에게 슬로우/고통스러운 상처를
      즉시 그 지속시간만큼 건다(이 프로젝트에 모데카이저 죽음의 세계 같은
@@ -72,7 +70,8 @@ CharacterController.prototype._varusDetonateBlight = function(target, { viaQ = f
   cdrPercent = Math.min(100, cdrPercent);
   if (cdrPercent > 0) {
     const cd = this._champData();
-    for (const slot of ['Q', 'E', 'R']) {
+    // 28차: 원작은 "기본 스킬"(Q·W·E) 재사용 대기시간을 줄인다 - 예전엔 W가 빠지고 궁극기 R이 들어가 있었다.
+    for (const slot of ['Q', 'W', 'E']) {
       if (!(this.cooldowns[slot] > 0)) continue;
       const lvl = Math.max(1, this.skillLevels[slot] || 1);
       const fullCd = cd[slot] && cd[slot].cooldown != null ? skillVal(cd[slot].cooldown, lvl) : 0;
@@ -134,7 +133,7 @@ CharacterController.prototype._varusLvTick = function(dt) {
 // 'varusQCharge' 검사). 여기는 "새로 충전을 시작하는" 경로만 담당한다.
 CharacterController.prototype._varusCastQ = function(mouseWorldPoint, free = false) {
   if (isSilenced(this) || isCrowdControlled(this)) return;
-  if (this._varus.qCharge) { this._varusReleaseQ(); return; }
+  if (this._varus.qCharge) { this._varusReleaseQ(mouseWorldPoint); return; }
   const q = this._champData().Q;
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
@@ -172,13 +171,17 @@ CharacterController.prototype._varusCastQ = function(mouseWorldPoint, free = fal
 // minRange~maxRange 사이로, 피해량은 minChargeDamageRatio~1.0 사이로 함께
 // 늘어난다(bin ChargeMultiplierInverse=0.667을 "최소 충전 시 최대 충전
 // 대비 66.7%"로 해석 - champion_data.js 상단 주석 참고).
-CharacterController.prototype._varusReleaseQ = function() {
+CharacterController.prototype._varusReleaseQ = function(mouseWorldPoint = null) {
   const charge = this._varus.qCharge;
   if (!charge) return;
   this._varus.qCharge = null;
   clearStatus(this, 'varusQ_chargeSlow');
   const q = this._champData().Q;
-  const dir = charge.dir;
+  // 28차: 원작처럼 발사 순간 커서 방향으로 쏜다. 예전엔 충전을 시작한 방향으로 고정돼, 충전 중 커서를 따라가는 조준
+  // 표시와 실제 화살 방향이 달랐다.
+  const dir = charge.dir.clone();
+  if (mouseWorldPoint) { const d = new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0); if (d.lengthSq() > 1e-6) dir.copy(d.normalize()); }
+  if (this.state !== STATE.MOVE) this.faceDirectionInstant(dir);
   const heldMs = performance.now() - charge.startedAt;
   const chargeFraction = Math.max(0, Math.min(1, heldMs / ((q.chargeDuration || 1.25) * 1000))); // 피해·효과: 1.25초
   const rangeFraction = Math.max(0, Math.min(1, heldMs / ((q.rangeChargeDuration || 1.5) * 1000))); // 사거리: 1.5초(PC 위키)
@@ -358,9 +361,10 @@ CharacterController.prototype._varusCastR = function(mouseWorldPoint, free = fal
     if (this.currentActionKey !== 'varusR') return;
     this.currentPhase = 'ACTIVE';
     const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
-    const halfWidth = lolRangeToWorld(r.width || 450) * 0.5;
-    const hitUnit = findFirstInLine(this.root.position, dir, r.range || 1300, halfWidth);
-    const targetPoint = origin.clone().addScaledVector(dir, lolRangeToWorld(r.range || 1300));
+    const halfWidth = lolRangeToWorld(r.width || 240) * 0.5;
+    // 28차: 원작은 처음 맞힌 "적 챔피언"을 속박한다 - 미니언·몬스터는 통과(예전 findFirstInLine은 미니언에 막혔다).
+    const hitUnit = findFirstInLine(this.root.position, dir, r.range || 1370, halfWidth, (u) => !!u.isChampion);
+    const targetPoint = origin.clone().addScaledVector(dir, lolRangeToWorld(r.range || 1370));
     projectiles.spawn({
       from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(r.missileSpeed || 1200), damage: 0,
       color: 0xb08cff, realmId: this.realmId,
@@ -396,7 +400,7 @@ CharacterController.prototype._varusRHit = function(firstUnit, dir) {
   };
   applyOne(firstUnit);
 
-  const spreadRangeWorld = lolRangeToWorld(r.spreadRange || 600);
+  const spreadRangeWorld = lolRangeToWorld(r.spreadRange || 650);
   const tickMs = Math.max(50, (r.spreadTickInterval || 0.5) * 1000);
   const maxTicks = Math.max(1, Math.round((r.spreadTimeWindow || 1.75) / (r.spreadTickInterval || 0.5)));
   let ticks = 0;
@@ -427,5 +431,15 @@ CharacterController.prototype._varusRHit = function(firstUnit, dir) {
 CharacterController.prototype._varusUpdate = function(dt) {
   if (this.championId !== 'varus' || !this._varus) return;
   this._varusLvTick(dt);
-  if (this._varus.qCharge && isCrowdControlled(this)) this._varusReleaseQ();
+  if (this._varus.qCharge && isCrowdControlled(this)) { this._varusReleaseQ(); return; }
+  // 28차: 충전 중 조준 방향은 커서를 따라가고, 서 있으면 바루스도 그쪽을 바라본다(움직이는 중에는 이동 방향).
+  const charge = this._varus.qCharge;
+  const p = (typeof lastGroundPoint !== 'undefined') ? lastGroundPoint : null;
+  if (charge && p) {
+    const d = new THREE.Vector3().subVectors(p, this.root.position).setY(0);
+    if (d.lengthSq() > 1e-6) {
+      charge.dir.copy(d.normalize());
+      if (this.state !== STATE.MOVE) this.faceDirectionInstant(charge.dir);
+    }
+  }
 };

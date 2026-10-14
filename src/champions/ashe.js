@@ -184,6 +184,8 @@ CharacterController.prototype._asheResolveWImpact = function(p) {
   const coneDeg = skillVal(w.coneAngleDegByLevel, p.lvl) || 46;
   const arrows = skillVal(w.arrowsByLevel, p.lvl) || 9;
   const candidates = findEnemiesInRadius(origin, w.range || 1200, { forward: p.dir, maxAngleDeg: coneDeg / 2 });
+  // 28차: 화살 표시가 없어 범위가 보이지 않았다 - 판정 부채꼴(사거리·레벨별 각도)을 바닥에 잠깐 그린다(색·수명은 연출값).
+  if (typeof vfx.groundShapeFlash === 'function') vfx.groundShapeFlash(origin, p.dir, { kind: 'cone', range: lolRangeToWorld(w.range || 1200), angleDeg: coneDeg }, 0xbfe8ff, 0.45);
   const hits = [];
   const taken = new Set();
   for (let i = 0; i < arrows; i++) {

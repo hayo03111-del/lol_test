@@ -277,9 +277,13 @@ CharacterController.prototype._renektonCastR = function(free=false) {
     if(!free)this.cooldowns.R=abilityHasteCooldown(this, skillVal(r.cooldown,this.skillLevels.R||1));
     if(this._renekton.rActive)return;
     const lvl=this.skillLevels.R||1;
-    if(!free){
+    // 28차: 모션 테스트(free) 시전도 실제로 변신한다 - 예전엔 free면 변신 자체를 건너뛰어 크기가 안 바뀌었다(재사용 대기시간만 free가 면제).
+    {
       this._renekton.rActive=true;this._renekton.rActiveUntil=performance.now()+r.duration*1000;this._renekton.rAuraAccum=0;this._renekton.rRageAccum=0;
-      this._renekton.rBonusMaxHp=skillVal(r.bonusMaxHp,lvl);this.bonusMaxHp=this._renekton.rBonusMaxHp;this.root.scale.setScalar(1.15);this.recomputeStats();
+      // 28차: PC 위키 - 크기 20% 증가(판정 반경 80 → 96). 예전엔 출처 없는 15%였고 판정 반경은 그대로였다.
+      const sizeMul=1+(r.sizeIncreasePercent!=null?r.sizeIncreasePercent:20)/100;
+      this._renekton.rBaseCollisionRadius=this.collisionRadius;this.collisionRadius*=sizeMul;
+      this._renekton.rBonusMaxHp=skillVal(r.bonusMaxHp,lvl);this.bonusMaxHp=this._renekton.rBonusMaxHp;this.root.scale.setScalar((this._itemHeartsteelScale||1)*sizeMul);this.recomputeStats();
       this._renektonGainRage(r.immediateRage);this._renektonMarkCombat();
       if (this._renekton.rAuraVfx) vfx.stopRenektonRAura(this._renekton.rAuraVfx);
       this._renekton.rAuraVfx = vfx.startRenektonRAura(() => this.root.position, lolRangeToWorld(r.range));
@@ -296,7 +300,8 @@ CharacterController.prototype._renektonEndR = function() {
     if(!this._renekton.rActive)return;
     this._renekton.rActive=false;this._renekton.rActiveUntil=0;this._renekton.rAuraAccum=0;this._renekton.rRageAccum=0;this._renekton.rBonusMaxHp=0;
     if (this._renekton.rAuraVfx) { vfx.stopRenektonRAura(this._renekton.rAuraVfx); this._renekton.rAuraVfx=null; }
-    this.bonusMaxHp=0;this.root.scale.setScalar(1);this.recomputeStats();this.hp=Math.min(this.hp,this.maxHp);updateBars(this);
+    if(this._renekton.rBaseCollisionRadius){this.collisionRadius=this._renekton.rBaseCollisionRadius;this._renekton.rBaseCollisionRadius=0;}
+    this.bonusMaxHp=0;this.root.scale.setScalar(this._itemHeartsteelScale||1);this.recomputeStats();this.hp=Math.min(this.hp,this.maxHp);updateBars(this);
   
 };
 

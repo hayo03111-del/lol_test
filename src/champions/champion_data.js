@@ -225,6 +225,7 @@ const CHAMPION_DATA = {
     R: {
       name: '강신', cooldown: [120,100,80], mana: 0, range: 350, castTime: 0.125, duration: 15,
       bonusMaxHp: [300,500,700], immediateRage: 20, ragePerSecond: 5,
+      sizeIncreasePercent: 20, // 28차: PC 위키 Dominus - 크기 20% 증가(Unit size 표: 판정 반경 80 → 96)
       damagePerSecond: [60,150,240], bonusAdRatio: 0.1, apRatio: 0.1, tickSec: 0.5, bonusAttackRange: 25, damageType: 'MAGICAL' // PC 위키: 0.5초마다 30/75/120(+추가 AD 5%+AP 5%), 사거리 +25
     },
   },
@@ -589,6 +590,7 @@ const CHAMPION_DATA = {
       damageByLevel: [85, 125, 165, 205, 245], apRatio: 0.9, damageType: 'MAGICAL', // 26.18 피해 조정 반영, AP 계수 90%
       missileSpeed: 2000, width: 180, // PC 위키 Template:Data Nautilus/Dredge Line: 속도 2000, 폭 180(가장자리)
       castTimeSec: 0.25, // PC 위키: 시전 시간 0.25
+      pullDurationSec: 0.9, stunDurationSec: 1, // 28차: PC 위키 - 적 명중 시 서로 0.9초에 걸쳐 끌려가고 대상 1초 기절
       terrainRefundPercent: 50, // 지형에 맞으면 재사용 대기시간·마나 50% 환급
     },
     W: {
@@ -845,8 +847,10 @@ const CHAMPION_DATA = {
      },
 
      R: {
-      name: '끝없는 추적', cooldown: [140, 120, 100], mana: 100, targetRequired: true,
-      range: [2000, 2500, 3000], damageByLevel: [75, 125, 175],
+      name: '끝없는 추적', cooldown: [140, 120, 100], mana: 100,
+      // 28차: 방향 지정 스킬샷(예전 targetRequired:true는 원작과 달랐다). PC 위키 Template:Data Vex/Shadow Surge:
+      // 사거리 2000/2500/3000, 폭 260, 속도 1600(투사체) • 2200(재시전 돌진).
+      range: [2000, 2500, 3000], width: 260, missileSpeed: 1600, dashSpeed: 2200, damageByLevel: [75, 125, 175],
       apRatio: 0.2, recastRange: [2000, 2500, 3000],
       recastDamageByLevel: [150, 250, 350], recastApRatio: 0.5,
       recastEnabled: true, resetOnKill: true,
@@ -1092,6 +1096,7 @@ const CHAMPION_DATA = {
       // 처치 관여 시 돌진 재사용 횟수 +1).
       cooldown: [140, 120, 100], mana: 100,
       damageByLevel: [75, 125, 175], apRatio: 0.35,
+      recastLockoutSec: 1, // 28차: PC 위키 - 재시전 사이 1초 고정 대기(스킬 가속 영향 없음)
       dashDistance: 500, dashSpeed: 1200, maxCasts: 3, maxTargetsPerCast: 3,
       recastWindow: 15, acquisitionRange: 600, resetCastsOnTakedown: 1,
       recastWindowExtendOnTakedown: 10,
@@ -1176,9 +1181,12 @@ const CHAMPION_DATA = {
     R: {
       name: '속박의 사슬',
       desc: '직선으로 부패의 사슬을 날려 처음 맞힌 적 챔피언에게 마법 피해를 입히고 속박한다. 이후 사슬이 근처의 감염되지 않은 적 챔피언에게도 퍼져나가 닿는 대로 함께 피해를 입히고 속박한다.',
-      cooldown: [100, 80, 60], mana: 100, range: 1300, width: 450,
+      // 28차(요청 "범위가 이상할 정도로 넓음"): PC 위키(wiki.leagueoflegends.com Varus, Chain of Corruption) 폭 240·
+      // 속도 1500·사거리 1370·확산(테더) 반경 650으로 바꿨다. 예전 폭 450·사거리 1300·속도 1200·확산 600은 bin 해석값이었는데
+      // 폭이 거의 두 배였다.
+      cooldown: [100, 80, 60], mana: 100, range: 1370, width: 240,
       damageByLevel: [150, 250, 350], apRatio: 1.0, rootDuration: 2,
-      missileSpeed: 1200, spreadRange: 600, spreadTickInterval: 0.5, spreadTimeWindow: 1.75,
+      missileSpeed: 1500, spreadRange: 650, spreadTickInterval: 0.5, spreadTimeWindow: 1.75,
       damageType: 'MAGICAL',
     },
   },

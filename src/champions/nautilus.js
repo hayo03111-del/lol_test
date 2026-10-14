@@ -200,22 +200,26 @@ CharacterController.prototype._nautilusQHitUnit = function(unit) {
   const selfTo = from.clone().addScaledVector(dir, gap * 0.5);
   const unitTo = unitPos.clone().addScaledVector(dir, -gap * 0.5);
   selfTo.y = from.y;
-  const duration = this._nautilusStartPull(selfTo, unit);
+  // 28차(요청 "끌어갈 때 원작과 다른 느낌"): PC 위키 Template:Data Nautilus/Dredge Line - 적을 맞히면 대상을 0.9초에 걸쳐
+  // 끌어오고 노틸러스도 같은 0.9초 동안 대상 쪽으로 돌진하며, 대상은 1초 기절한다. 예전엔 닻 속도(2000)로 거리에 비례해
+  // 끌려가(보통 0.2초대) 너무 빨랐고, 기절도 끌려가는 시간만큼만 걸렸다.
+  const pullSec = q.pullDurationSec != null ? q.pullDurationSec : 0.9;
+  const duration = this._nautilusStartPull(selfTo, unit, pullSec);
   if (unit.mesh && !unit.isStructure) {
     unitTo.y = unit.mesh.position.y;
     unit._pullState = { from: unit.mesh.position.clone(), to: unitTo, duration, elapsed: 0 };
   }
-  applyStatus(unit, { id: 'nautilusQ_stun', type: 'STUN', duration, value: 1, source: this });
+  applyStatus(unit, { id: 'nautilusQ_stun', type: 'STUN', duration: q.stunDurationSec != null ? q.stunDurationSec : 1, value: 1, source: this });
   vfx.spawn('hit', unitPos, undefined, { color: 0x6fa8c8 });
   debugSkillHit('Nautilus Q(닻줄 견인)', unit, { dmg: raw.toFixed(1) });
 };
 
-// 노틸러스 자신의 돌진 - 닻줄 속도(missileSpeed)로 끌려간다. 반환값은 이동 시간.
-CharacterController.prototype._nautilusStartPull = function(to, unit) {
+// 노틸러스 자신의 돌진 - 적 명중은 고정 0.9초, 지형 명중은 닻줄 속도(missileSpeed)로 끌려간다. 반환값은 이동 시간.
+CharacterController.prototype._nautilusStartPull = function(to, unit, fixedSec = null) {
   const q = this._champData().Q;
   const from = this.root.position.clone();
   const dist = new THREE.Vector3().subVectors(to, from).setY(0).length();
-  const duration = Math.max(0.05, dist / lolRangeToWorld(q.missileSpeed));
+  const duration = fixedSec != null ? fixedSec : Math.max(0.05, dist / lolRangeToWorld(q.missileSpeed)); // 지형 명중은 속도 기준(위키에 시간 없음)
   const faceDir = new THREE.Vector3().subVectors(to, from).setY(0);
   this._dashState = { from, to: to.clone(), duration, elapsed: 0, faceDir: faceDir.lengthSq() > 1e-8 ? faceDir.normalize() : null };
   this._nautilus.qPull = { remainingSec: duration, unit };

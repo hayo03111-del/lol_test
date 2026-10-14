@@ -21,7 +21,7 @@ const CHAMPION_DIRECT_CASTS = {
     Q: (c, m, f) => c._nilahCastQ(m, f), W: (c, m, f) => c._nilahCastW(m, f),
     E: (c, m, f) => c._nilahCastE(m, f), R: (c, m, f) => c._nilahCastR(f),
   },
-  vex: { Q: (c, m, f) => c._vexCastQ(m, f), W: (c, m, f) => c._vexCastW(m, f), E: (c, m, f) => c._vexCastE(m, f), R: (c, m, f) => c._vexCastR(f) },
+  vex: { Q: (c, m, f) => c._vexCastQ(m, f), W: (c, m, f) => c._vexCastW(m, f), E: (c, m, f) => c._vexCastE(m, f), R: (c, m, f) => c._vexCastR(m, f) },
   renekton: {
     Q: (c, m, f) => c._renektonCastQ(m, f), W: (c, m, f) => c._renektonCastW(m, f),
     E: (c, m, f) => c._renektonCastE(m, f), R: (c, m, f) => c._renektonCastR(f),

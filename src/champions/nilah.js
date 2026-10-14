@@ -342,18 +342,6 @@ CharacterController.prototype._nilahQHit = function(impactPoint, free=false, ePa
     // 짧고 강한 링을 터뜨려 Hit 순간을 분리해서 보여준다.
     // 더 뚜렷하게: 링 하나로는 약해서, 크기/타이밍이 다른 2겹 충격파 +
     // 중심 플래시로 강화했다(이중 링이 바깥으로 퍼지는 느낌).
-    if (hitSomething && typeof nilahVfx2Ring === 'function') {
-      const hitAt = ePath ? ePath.to.clone() : (impactPoint ? impactPoint.clone() : this.root.position.clone());
-      hitAt.y += BASE_UNIT * 0.5;
-      nilahVfx2Ring(nilahVfx2.scene, hitAt, 0.85, 0xffffff, 0.14);
-      nilahVfx2Ring(nilahVfx2.scene, hitAt, 0.55, 0xfff1c8, 0.22);
-      this._champTimeout(() => { if (typeof nilahVfx2Ring === 'function') nilahVfx2Ring(nilahVfx2.scene, hitAt.clone(), 1.3, 0x9fe9ff, 0.26); }, 40);
-      if (typeof NilahVfx2ParticleField === 'function' && typeof nilahVfx2 !== 'undefined') {
-        const burst = new NilahVfx2ParticleField(26, 0.55, 0xfff1c8, 0.07);
-        burst.position.copy(hitAt);
-        nilahVfx2._add(burst, 0.32, (inst, dt) => { burst.tick(dt); burst.material.opacity = (1 - inst.t / 0.32) * 0.7; });
-      }
-    }
     return hitSomething;
   
 };
@@ -453,20 +441,10 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
       }
     }
 
-    // 동기화(5번 우선순위 "스킬 애니메이션과 VFX 프레임 동기화"): Q의
-    // 실제 재생시간은 Spell1A+1B+1C 세 클립을 합친 길이다 - VFX 내부에
-    // 하드코딩된 기본값(0.42초)을 쓰지 않고, 실제 애니메이션이 재생되는
-    // 만큼만 정확히 물결이 자라나고 사라지도록 이 값을 그대로 넘긴다.
-    const qAnimDuration = resolved.length && resolved.every(Boolean)
-      ? resolved.reduce((sum, clip) => sum + clip.duration, 0)
-      : 0.42;
 
-    vfx.spawn('nilahQ', this.root.position.clone(), dir, { ePath: dashPath, hitPoint: impact });
-    // 사용자가 제공한 VFX v2 (더 강한 연출용) - Cast/Active 단계: 발밑이
-    // 아니라 실제 칼날(BladeA_end) 뼈의 월드 좌표에서 재생해서, 캐릭터가
-    // 실제로 휘두르는 채찍을 따라가는 것처럼 보이게 한다. Hit 단계(적중
-    // 순간의 링)는 _nilahQHit()에서 실제 적중 지점 기준으로 별도 처리한다.
-    nilahVfx2.playQLoL({ position: this._nilahBladeAnchor('A'), direction: dir, length: lolRangeToWorld(q.range) / BASE_UNIT, duration: qAnimDuration });
+    // 28차(요청 "닐라 Q에 이상한 이펙트 다 빼야 함"): 예전엔 스프라이트 버스트(nilahQ)·물결 리본·잔상 2개·칼끝 고리
+    // 트레일·적중 고리 3겹+파티클이 겹쳐 그려졌다. 전부 빼고 실제 판정 직선(사거리 600, 폭 80)만 바닥에 잠깐 그린다.
+    if (!preserveDash && typeof vfx.groundShapeFlash === 'function') vfx.groundShapeFlash(this.root.position, dir, { kind: 'line', length: lolRangeToWorld(q.range), width: lolRangeToWorld(q.impactRadius || 80) }, 0x9be8ff, 0.3);
 
     // E 돌진 중 Q는 기존 돌진 모션을 끊지 않는다. Q 파동은 돌진 종료 시점에
     // 기존 _nilahResolveEDashEnd() 경로에서 처리한다.
@@ -643,10 +621,11 @@ CharacterController.prototype._nilahCastR = function(free=false) {
     // (예전 시전 즉시 고정 보호막은 PC 판에 없는 효과라 제거 - 보호막은 R 회복의 초과분 전환만.)
     // 사용자가 제공한 VFX v2 - 실제 R 반경(damageRadius)과 전체 지속시간
     // (선딜 + 채널링)에 맞춰 한 번만 재생한다(틱마다 반복 재생하지 않음).
-    nilahVfx2.playRLoL({
+    nilahVfx2.playR({ // 28차: playRLoL의 시전 자리 고정 고리 2개는 빼고, 닐라를 따라가는 본체만 쓴다
       position: this.root.position.clone(),
       radius: lolRangeToWorld(r.damageRadius) / BASE_UNIT,
       duration: startup + r.channelDuration,
+      follow: () => this.root.position,
     });
     this.playFirstAvailable(['Spell4_Idle','Spell4_Run'],{loop:THREE.LoopRepeat,fade:0.1});
     updateBars(this);
@@ -762,17 +741,6 @@ CharacterController.prototype._nilahUpdate = function(dt) {
     // 샘플링해서 물결 트레일을 남긴다 - E의 이동 트레일과 같은 방식으로,
     // 실제 스윙 궤적(직선이 아니라 애니메이션이 만드는 진짜 곡선)을
     // 그대로 따라간다. 전투 판정과는 무관한 순수 표시용.
-    if (this.currentActionKey === 'nilahQ' && typeof nilahVfx2Ring === 'function') {
-      n.qTrailAccum = (n.qTrailAccum || 0) + dt;
-      if (n.qTrailAccum >= 0.03) {
-        n.qTrailAccum = 0;
-        const empowered = this._nilahQActive();
-        const tipA = this._nilahBladeAnchor('A');
-        const tipB = this._nilahBladeAnchor('B');
-        nilahVfx2Ring(nilahVfx2.scene, tipA, empowered ? 0.32 : 0.24, empowered ? 0xfff1c8 : 0x8ff0ff, 0.22);
-        nilahVfx2Ring(nilahVfx2.scene, tipB, empowered ? 0.32 : 0.24, empowered ? 0xfff1c8 : 0x8ff0ff, 0.22);
-      }
-    }
     n.eCharges=Math.max(0,Math.min(d.E.maxCharges,n.eCharges));
     this._nilahRestoreECharges(now);
     this._nilahSyncStats();

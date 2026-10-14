@@ -122,15 +122,11 @@ function showDeathRealmBoundary(center, radius) {
 function hideDeathRealmBoundary() {
   if (deathRealmRing && deathRealmRing.parent) deathRealmRing.parent.remove(deathRealmRing);
 }
-// 경기장 등록/조회. 중심: PC 위키에는 중심 서술이 없다 - 나무위키(커뮤니티)의 "대상 방향으로 궁극기
-// 최대 사거리(650) 지점을 중심으로 반경 1200"을 따른다(위키 공략의 "모데카이저 앞쪽에 생겨 뒤로는 공간이
-// 적다"와도 맞는다).
+// 경기장 등록/조회. 중심: PC 위키에는 중심 서술이 없다. 예전엔 나무위키(커뮤니티)의 "대상 방향으로 궁극기
+// 최대 사거리(650) 지점을 중심으로"를 따랐지만, 28차 요청("범위가 열릴 때 모데카이저가 중심")에 따라 시전 순간
+// 모데카이저 위치를 중심으로 반경 1200을 연다(출처 간 차이는 KNOWN_LIMITATIONS 28차에 기록).
 function createDeathRealm(realmId, caster, target, castRangeLol, radiusLol) {
-  const from = getWorldPosition(caster).clone(); from.y = 0;
-  const to = getWorldPosition(target).clone(); to.y = 0;
-  const dir = new THREE.Vector3().subVectors(to, from);
-  if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1); else dir.normalize();
-  const center = from.clone().addScaledVector(dir, lolRangeToWorld(castRangeLol || 650));
+  const center = getWorldPosition(caster).clone(); center.y = 0;
   const realm = { center, radius: lolRangeToWorld(radiusLol || DEATH_REALM_RADIUS_LOL) };
   _deathRealms.set(realmId, realm);
   return realm;
@@ -161,7 +157,18 @@ function clampToDeathRealm(point, realm, margin = 0) {
 // 바깥 유닛은 "위치는 보이지만 서로 보거나 상호작용할 수 없다"(PC 위키) - 반투명 혼령으로 그린다.
 // 재질을 공유하는 유닛이 있을 수 있어 메시마다 재질을 복제해 바꾸고, 끝나면 원래 재질로 되돌린다.
 const _deathRealmGhosted = new Map(); // mesh -> 원래 material
+// 28차: 바깥 유닛의 체력 바·이름표를 숨긴다(원작: 죽음의 세계 안에서는 바깥 유닛과 서로 상호작용할 수 없고
+// 위치만 보인다). 시야 시스템이 display를 매 프레임 바꾸므로 겹치지 않게 visibility로 숨긴다.
+const _deathRealmHiddenLabels = new Set();
+function hideUnitBarsForDeathRealm(unit) {
+  for (const el of [unit && unit.labelDiv, unit && unit.healthBarLabelDiv]) {
+    if (!el || _deathRealmHiddenLabels.has(el)) continue;
+    _deathRealmHiddenLabels.add(el);
+    el.style.visibility = 'hidden';
+  }
+}
 function ghostUnitForDeathRealm(unit) {
+  hideUnitBarsForDeathRealm(unit);
   const root = unit && (unit.mesh || unit.root);
   if (!root || root.userData._deathRealmGhost) return;
   root.userData._deathRealmGhost = true;
@@ -182,6 +189,8 @@ function clearDeathRealmGhosts() {
     o.material = orig;
   }
   _deathRealmGhosted.clear();
+  for (const el of _deathRealmHiddenLabels) el.style.visibility = '';
+  _deathRealmHiddenLabels.clear();
 }
 // 명세 12/29절 "죽음의 세계 진입 시 어둡고 붉은 안개/단절된 분위기" -
 // 기존 scene.fog를 저장해뒀다가 죽음의 세계가 전부 끝나면 원래 값으로

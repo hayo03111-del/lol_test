@@ -90,7 +90,7 @@ const SKILL_AIM = {
       segments: (c, d) => [{ len: d.accelerationDistance, width: d.width }, { len: d.range - d.accelerationDistance, width: d.widthAfterAccel }] },
     W: { type: 'instant' },
     E: { type: 'circleAt', range: (c, d) => d.range, radiusAt: (c, d, lvl, frac) => d.radiusMin + (d.radiusMax - d.radiusMin) * frac }, // 거리에 비례해 커짐
-    R: { type: 'unit', range: (c, d, lvl) => skillVal(d.range, Math.min(3, lvl)),
+    R: { type: 'line', range: (c, d, lvl) => skillVal(d.range, Math.min(3, lvl)), width: (c, d) => d.width || 260,          // 28차: 방향 스킬샷
       instantIf: (c) => !!(c._vex && !c._vex.dashActive && c._vex.recastTarget && performance.now() < c._vex.recastReadyUntil) },
   },
   ezreal: {
@@ -170,6 +170,7 @@ function computeSkillAim(c, slot, point) {
       aim.rangeWorld = W(V('maxRange'));
       aim.charging = !!q; aim.chargeFrac = frac;
       aim.segments = [{ len: W(lol), width: W(V('width')) }];
+      aim.arrow = true; // 28차: 충전할수록 늘어나는 사거리 끝에 화살촉
       break;
     }
     case 'circleAt': case 'blink': {

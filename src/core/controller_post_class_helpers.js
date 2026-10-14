@@ -19,18 +19,26 @@ const _hudLast = { hpPct: '', hpText: '', shieldLeft: '', shieldWidth: '', shiel
 function updateBars(ch) {
   const hpPct = `${(ch.hp / ch.maxHp) * 100}%`;
   if (_hudLast.hpPct !== hpPct) { _hudEls.hpFill.style.width = hpPct; _hudLast.hpPct = hpPct; }
-  const hpText = `${Math.ceil(ch.hp)}/${ch.maxHp}${ch.shield > 0 ? ` (+${Math.ceil(ch.shield)} 보호막)` : ''}`;
+  // 28차: 최대 체력이 소수(레벨 성장)일 때 소수점까지 나오던 것을 정수로 표시한다.
+  const hpText = `${Math.ceil(ch.hp)}/${Math.round(ch.maxHp)}${ch.shield > 0 ? ` (+${Math.ceil(ch.shield)} 보호막)` : ''}`;
   if (_hudLast.hpText !== hpText) { _hudEls.hpText.textContent = hpText; _hudLast.hpText = hpText; }
   // 요청("챔피언한테도 hp바를 만들어줘") - 머리 위 월드 공간 체력바도
   // HUD와 동시에 갱신한다. 실제 LoL처럼 체력 비율에 따라 초록→노랑→빨강.
   // 요청 21/22(문서 4절) 원칙 그대로: 값이 실제로 바뀌었을 때만 DOM에 쓴다.
   if (ch.healthBarLabelDiv) {
+    // 28차: 머리 위 체력 바에 보호막을 원작처럼 체력 뒤 흰 구간으로 붙인다. 체력+보호막이 최대 체력을 넘으면
+    // 바 전체가 (체력+보호막) 기준이 된다. 숫자는 머리 위 바에 쓰지 않는다(아래 HUD에만 표시).
+    const shield = Math.max(0, ch.shield || 0);
+    const total = Math.max(ch.maxHp || 0, (ch.hp || 0) + shield) || 1;
     const pctNum = ch.maxHp ? Math.max(0, (ch.hp / ch.maxHp) * 100) : 0;
-    const worldHpPct = `${pctNum}%`;
+    const barPct = Math.max(0, (ch.hp / total) * 100);
+    const worldHpPct = `${barPct}%|${shield}`;
     if (_hudLast.worldHpPct !== worldHpPct) {
       const bar = ch.healthBarLabelDiv.querySelector('.hpBarInner');
+      const shieldBar = ch.healthBarLabelDiv.querySelector('.hpBarShield');
+      if (shieldBar) { shieldBar.style.left = `${barPct}%`; shieldBar.style.width = `${(shield / total) * 100}%`; }
       if (bar) {
-        bar.style.width = worldHpPct;
+        bar.style.width = `${barPct}%`;
         bar.style.background = pctNum > 50
           ? 'linear-gradient(180deg,#70e35e 0%,#36b934 55%,#16851d 100%)'
           : pctNum > 25
@@ -38,12 +46,6 @@ function updateBars(ch) {
             : 'linear-gradient(180deg,#e0605f 0%,#9e2f2f 100%)';
       }
       _hudLast.worldHpPct = worldHpPct;
-    }
-    const valueText = `${Math.ceil(ch.hp)} / ${ch.maxHp}`;
-    const valueEl = ch.healthBarLabelDiv.querySelector('.hpValueText');
-    if (valueEl && _hudLast.worldHpText !== valueText) {
-      valueEl.textContent = valueText;
-      _hudLast.worldHpText = valueText;
     }
     const levelEl = ch.healthBarLabelDiv.querySelector('.hpLevelBadge');
     if (levelEl) levelEl.textContent = String(ch.champLevel ?? ch.level ?? 18);

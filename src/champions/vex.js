@@ -12,7 +12,7 @@ CharacterController.prototype._vexClearRRecast = function() {
 };
 
 // Extracted from CharacterController: _vexCastR
-CharacterController.prototype._vexCastR = function(free = false) { 
+CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false) { 
     const cd = this._champData();
     const rd = cd && cd.R;
     if (!rd) return;
@@ -38,7 +38,8 @@ CharacterController.prototype._vexCastR = function(free = false) {
       this._vex.dashStart = start;
       this._vex.dashEnd = end;
       this._vex.dashT = 0;
-      this._vex.dashDuration = 0.28;
+      // 28차: 돌진 시간은 거리 ÷ 돌진 속도 2200(PC 위키 Template:Data Vex/Shadow Surge 속도 1600 • 2200). 예전엔 거리와 무관하게 0.28초.
+      this._vex.dashDuration = Math.max(0.05, start.distanceTo(end) / lolRangeToWorld(rd.dashSpeed || 2200));
       this.currentActionKey = 'vexRRecast';
       this.currentPhase = 'ACTIVE';
       this.setState(STATE.R_CAST);
@@ -69,27 +70,31 @@ CharacterController.prototype._vexCastR = function(free = false) {
       return;
     }
 
-    // 1차 그림자 파동: 현재 선택된 대상을 향해 투사체를 발사한다.
-    if (!this.currentTarget || this.currentTarget.hp <= 0) { debugSkillMiss('Vex R', 'no currentTarget selected'); return; }
+    // 1차 그림자 파동 - 28차: 원작처럼 방향 지정 스킬샷이다(예전엔 선택한 대상에게만 쏘는 지정 스킬이었다).
+    // 커서 방향으로 사거리 2000/2500/3000, 폭 260, 속도 1600의 투사체를 쏘아 경로상 처음 닿는 적 챔피언을
+    // 맞힌다(PC 위키 Template:Data Vex/Shadow Surge).
     const range = skillVal(rd.range, lvl);
-    if (!free && !isInRange(this, this.currentTarget, range)) { debugSkillMiss('Vex R', `out of range (${range})`); return; }
+    const dir = this._vexAimDir(mouseWorldPoint);
     if (!this._payCost('R', free)) return;
+    this.faceDirectionInstant(dir);
     this._clearActionTimers();
     this.currentActionKey = 'vexRCast'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
     this.setState(STATE.R_CAST);
-    const target = this.currentTarget;
     const raw = skillVal(rd.damageByLevel, lvl) + (rd.apRatio || 0) * (this.stats.abilityPower || 0);
     // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사 - PC 위키 시전 0.25초 뒤 발사.
     const fireTimer = this._champTimeout(() => {
-    if (this.currentActionKey !== 'vexRCast' || !target || target.hp <= 0) return;
+    if (this.currentActionKey !== 'vexRCast') return;
     const from = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));
+    const target = this._vexFindRTarget(this.root.position, dir, range, lolRangeToWorld(rd.width || 260) * 0.5);
+    const targetPoint = from.clone().addScaledVector(dir, lolRangeToWorld(range));
     projectiles.spawn({
       from,
-      target,
-      speed: 32,
-      damage: raw,
+      target: target || null,
+      targetPoint,
+      speed: lolRangeToWorld(rd.missileSpeed || 1600),
+      damage: 0,
       color: 0x8b5cf6,
-      realmId: 'main',
+      realmId: this.realmId,
       onHit: (hitTarget) => {
         if (!hitTarget || hitTarget.hp <= 0) return;
         applyDamage(hitTarget, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1 });
@@ -104,6 +109,7 @@ CharacterController.prototype._vexCastR = function(free = false) {
         }
       }
     });
+    if (!target) debugSkillMiss('Vex R', 'no champion in line');
     }, (rd.castTimeSec || 0.25) * 1000);
     this._actionTimers.push(fireTimer);
     // 버그 수정: GLB에 'Spell4' 클립이 없어 R 모션이 재생되지 않았다(실제 클립은 Spell4_Cast/Spell4_Dash/Spell4_Attack).
@@ -157,7 +163,6 @@ CharacterController.prototype._vexCastQ = function(mouseWorldPoint, free = false
   const fire = this._champTimeout(() => {
     if (this.currentActionKey !== 'vexQ') return;
     this._vex.qTravel = { origin: this.root.position.clone(), dir: dir.clone(), traveled: 0, hitSet: new Set(), lvl, doom };
-    vfx.spawn('q', this.root.position.clone(), dir);
     this.currentActionKey = null; this.currentPhase = null;
     this._resumeAfterAction();
   }, castMs);
@@ -171,15 +176,20 @@ CharacterController.prototype._vexTickQ = function(dt) {
   const accelAt = lolRangeToWorld(q.accelerationDistance || 500);
   const speed = lolRangeToWorld(t.traveled < accelAt ? (q.speed1 || 600) : (q.speed2 || 3200));
   const maxDist = lolRangeToWorld(q.range || 1200);
+  const prev = t.traveled;
   t.traveled = Math.min(maxDist, t.traveled + speed * dt);
   const width = t.traveled < accelAt ? (q.width || 360) : (q.widthAfterAccel || q.width || 160);
   const half = lolRangeToWorld(width) * 0.5;
+  // 28차: 파동이 실제로 있는 자리(사거리·속도·폭이 판정과 같은 값)를 보여 준다. 예전엔 범용 'q' 이펙트가
+  // 판정과 다른 거리·속도로 그려져 사거리가 이상해 보였다. 파동 두께(진행 방향)는 연출값.
+  this._vexUpdateQWave(t, half);
   for (const u of getAllEnemyUnits()) {
     if (!u || u.hp <= 0 || t.hitSet.has(u)) continue;
     const p = getWorldPosition(u); if (!p) continue;
     const v = new THREE.Vector3(p.x - t.origin.x, 0, p.z - t.origin.z);
     const along = v.dot(t.dir); const r = getCollisionRadius(u);
-    if (along < -r || along > t.traveled + r) continue;
+    // 이번 프레임에 파동이 지나간 구간만 본다(예전엔 시작점부터 파동 앞까지 전체를 매 프레임 다시 봤다).
+    if (along < prev - r || along > t.traveled + r) continue;
     const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
     if (lateral > half + r) continue;
     t.hitSet.add(u);
@@ -189,7 +199,30 @@ CharacterController.prototype._vexTickQ = function(dt) {
     vfx.spawn('hit', p.clone(), undefined, { color: 0x8b5cf6 });
     debugSkillHit('Vex Q', u);
   }
-  if (t.traveled >= maxDist - 1e-6) this._vex.qTravel = null;
+  if (t.traveled >= maxDist - 1e-6) { this._vexUpdateQWave(null); this._vex.qTravel = null; }
+};
+
+// 28차: Q 파동 표시(지면 위 반투명 띠). t=null이면 지운다.
+CharacterController.prototype._vexUpdateQWave = function(t, half) {
+  let m = this._vex.qWaveMesh;
+  if (!t) { this._vex.qWaveMesh = null; return; } // 실제 정리는 아래 vfx 항목이 한다
+  if (!m) {
+    if (typeof scene === 'undefined' || !scene || typeof THREE.PlaneGeometry !== 'function' || typeof vfx === 'undefined' || !vfx || !vfx.active) return; // 표시 전용(헤드리스 테스트 등에선 생략)
+    const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
+    m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x9b6bff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    m.renderOrder = 4; scene.add(m); this._vex.qWaveMesh = m;
+    // 정리는 공용 VFX 목록이 맡는다 - 파동이 끝났거나(qWaveMesh가 바뀜) 챔피언을 바꿔 이 컨트롤러가 더 이상 갱신되지
+    // 않으면(controller !== this) 다음 프레임에 지운다. 예전엔 교체 도중이면 띠가 장면에 남았다.
+    const owner = this;
+    const entry = { life: 30, maxLife: 30, tag: 'vexQWave',
+      update: () => { if (!owner._vex || owner._vex.qWaveMesh !== m || (typeof controller !== 'undefined' && controller !== owner)) entry.life = 0; },
+      dispose: () => { if (m.parent) m.parent.remove(m); m.geometry.dispose(); m.material.dispose(); if (owner._vex && owner._vex.qWaveMesh === m) owner._vex.qWaveMesh = null; } };
+    vfx.active.push(entry);
+  }
+  const thick = lolRangeToWorld(90);
+  m.scale.set(half * 2, 1, thick);
+  m.position.set(t.origin.x + t.dir.x * (t.traveled - thick / 2), 0.08, t.origin.z + t.dir.z * (t.traveled - thick / 2));
+  m.rotation.y = Math.atan2(t.dir.x, t.dir.z);
 };
 
 // W(거리 두기): 시전 0.25초(이동 가능) 뒤 보호막 50~150(+주문력 75%, 2.5초) + 반경 475 마법 피해.
@@ -351,3 +384,21 @@ function vexNotifyEnemyDash(unit) {
   const d = Math.hypot(p.x - c.root.position.x, p.z - c.root.position.z);
   if (d <= lolRangeToWorld(c._vexPassive().gloomRadius)) c._vexMarkGloom(unit);
 }
+
+// 28차: 벡스 R 직선 판정 - 경로상 처음 닿는(가장 가까운) 적 챔피언(미니언·몬스터는 통과).
+CharacterController.prototype._vexFindRTarget = function(origin, dir, lolRange, halfWidth) {
+  const range = lolRangeToWorld(lolRange);
+  let best = null, bestAlong = Infinity;
+  for (const u of getTargetableEnemyUnits()) {
+    if (!u || u.hp <= 0 || !u.isChampion) continue;
+    const p = getWorldPosition(u); if (!p) continue;
+    const r = getCollisionRadius(u);
+    const v = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
+    const along = v.dot(dir);
+    if (along < -r || along > range + r) continue;
+    const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
+    if (lateral > halfWidth + r) continue;
+    if (along < bestAlong) { bestAlong = along; best = u; }
+  }
+  return best;
+};
