@@ -21389,7 +21389,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
       let dashSec = 0.05;
       if (dir.length() > 0.05) {
         dir.normalize();
-        this.root.rotation.y = Math.atan2(dir.x, dir.z);
+        this.faceDirectionInstant(dir); // 29차: rotation.y만 바꾸면 직전 회전이 180°일 때 정반대를 봤다(쿼터니언으로 설정)
         const to = target.mesh.position.clone().addScaledVector(dir, -this.collisionRadius * 2);
         dashSec = 0.35;
         this._dashState = { from: this.root.position.clone(), to, duration: dashSec, elapsed: 0, faceDir: dir.clone() };
@@ -21495,37 +21495,44 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
     if (!this.canStartNewAction()) return;
     // 26차: 1타 쿨다운 확인. 예전엔 쿨다운을 설정만 하고 확인하지 않아, 2타를 쓴 직후 바로 다시 1타를 쓸 수 있었다.
     if (!free && this.cooldowns.W > 0) { showSkillToast(`W - 쿨다운 ${this.cooldowns.W.toFixed(1)}s 남음`); return; }
+    // 29차(요청 "방호가 아무것도 없는 곳에 사용됨"): PC 위키 - 방호는 대상(아군 챔피언·미니언·와드, 또는 자기 자신)을
+    // 지정해야 하고, 대상을 직접 찍지 않으면 커서 반경 100 안의 와드를 찾는다. 예전엔 빈 땅을 찍어도 자기 시전으로
+    // 처리됐다. 이제 아군·와드·자신(커서가 리 신 위)이 아니면 비용 없이 쓰지 않는다(모션 테스트 free는 자기 시전).
+    const ally = this._leesinPickWAlly(mouseWorldPoint);
+    const ward = ally ? null : this._leesinPickWWard(mouseWorldPoint);
+    const selfPick = !ally && !ward && (free || (mouseWorldPoint && getHorizontalDistance(this.root.position, mouseWorldPoint) <= this.collisionRadius + lolRangeToWorld(150)));
+    if (!ally && !ward && !selfPick) { showSkillToast('W - 아군·와드·자신을 지정해야 합니다'); return; }
     if (!free && this.mp < w.energy1) { debugSkillMiss('Lee Sin W', '기력 부족'); return; }
     if (!free) { this.mp -= w.energy1; this.cooldowns.W = abilityHasteCooldown(this, w.cooldown); updateBars(this); }
     vfx.spawn('w', this.root.position.clone());
     this._leesinOnSkillUsed();
     this._leesin.wMarkReadyUntil = now + w.markDuration * 1000;
-    // 방호 - 커서 근처의 아군 챔피언(사거리 700 안)에게 돌진해 둘 다 보호막,
-    // 아군이 없으면 자기 자신에게 보호막(원작의 자기 시전).
+    // 방호 - 지정한 아군 챔피언(사거리 700 안)에게 돌진해 둘 다 보호막, 와드면 와드로 돌진해 자기 보호막,
+    // 자기 자신을 지정하면 자기 보호막.
     const lvl = Math.max(1, this.skillLevels.W || 1);
     const amount = skillVal(w.shieldByLevel, lvl) + (w.shieldApRatio || 0) * (this.stats.abilityPower || 0);
-    const ally = this._leesinPickWAlly(mouseWorldPoint);
-    if (ally) {
-      const to = getWorldPosition(ally).clone();
+    const dashTarget = ally ? getWorldPosition(ally) : (ward ? ward.position : null);
+    if (dashTarget) {
+      const to = dashTarget.clone();
       const dir = new THREE.Vector3().subVectors(to, this.root.position).setY(0);
       if (dir.lengthSq() > 1e-6) {
         dir.normalize();
-        to.addScaledVector(dir, -(this.collisionRadius + getCollisionRadius(ally)));
+        to.addScaledVector(dir, -(this.collisionRadius + (ally ? getCollisionRadius(ally) : 0)));
         to.y = this.root.position.y;
         this._dashState = { from: this.root.position.clone(), to, duration: 0.35, elapsed: 0, faceDir: dir.clone() }; // Q2 돌진과 같은 시간
       }
-      if (typeof shieldAlly === 'function') shieldAlly(this, ally, amount, w.shieldDuration);
+      if (ally && typeof shieldAlly === 'function') shieldAlly(this, ally, amount, w.shieldDuration);
     }
     // 아군에게 돌진하면 돌진 시간(0.35초) 동안 행동을 잡고, 자기 시전은 시전 시간이
     // 없으므로 행동을 잡지 않는다(평타/이동 중이면 모션도 끼워 넣지 않음).
-    if (ally) {
+    if (dashTarget) {
       this._clearActionTimers();
       this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: 0.35, state: STATE.W_CAST, exitIdle: ['Spell2_ToIdle'] });
     } else if (!this.currentActionKey && !this.targetPos) {
       this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: 0, exitIdle: ['Spell2_ToIdle'] });
     }
     this._leesinApplySelfWShield(amount, w.shieldDuration);
-    debugSkillHit(`Lee Sin W (방호${ally ? ' - 아군에게 돌진' : ' - 자기 시전'})`, ally || this, { shield: amount.toFixed(1) });
+    debugSkillHit(`Lee Sin W (방호${ally ? ' - 아군에게 돌진' : ward ? ' - 와드로 돌진' : ' - 자기 시전'})`, ally || this, { shield: amount.toFixed(1) });
   
 };
 
@@ -21541,6 +21548,22 @@ CharacterController.prototype._leesinPickWAlly = function(mouseWorldPoint) {
     if (dMouse > lolRangeToWorld(150) + getCollisionRadius(a)) continue;
     if (!isInRange(this, a, w.range1)) continue;
     if (dMouse < bestD) { best = a; bestD = dMouse; }
+  }
+  return best;
+};
+
+// 29차: 방호 대상 와드 - 커서 반경 100 안(PC 위키 "대상을 직접 찍지 않으면 반경 100 안의 와드를 찾는다")의
+// 설치된 와드 중 리 신 W 사거리(range1) 안에서 커서에 가장 가까운 것.
+CharacterController.prototype._leesinPickWWard = function(mouseWorldPoint) {
+  if (!mouseWorldPoint || !this._placedWards || !this._placedWards.length) return null;
+  const w = this._champData().W;
+  let best = null, bestD = Infinity;
+  for (const ward of this._placedWards) {
+    if (!ward || !ward.position || (ward.expiresAt && ward.expiresAt <= performance.now())) continue;
+    const dMouse = getHorizontalDistance(ward.position, mouseWorldPoint);
+    if (dMouse > lolRangeToWorld(100)) continue;
+    if (getHorizontalDistance(ward.position, this.root.position) > lolRangeToWorld(w.range1) + this.collisionRadius) continue;
+    if (dMouse < bestD) { best = ward; bestD = dMouse; }
   }
   return best;
 };
@@ -24562,7 +24585,7 @@ CharacterController.prototype._nautilusTickQTravel = function(dt) {
   const prevTraveled = t.traveled;
   t.pos.addScaledVector(t.dir, step);
   t.traveled += step;
-  vfx.spawn('hit', t.pos.clone(), undefined, { color: 0x6fa8c8 });
+  // 29차: 예전엔 닻 대신 매 프레임 '맞음' 스프라이트를 찍어 잔상이 남았다 - 이제 닻·닻줄을 _nautilusUpdateChain()이 그린다.
 
   // 26차(판정 수정): 이번 프레임에 닻이 지나간 구간(직전 위치 → 지금 위치)을 폭(halfWidth)만큼 쓸고, 그 안에 든 대상 중
   // 경로상 가장 앞의 대상을 맞힌다. 예전엔 지금 위치 주변 원 안에 든 대상을 목록 순서대로 골라서
@@ -24657,7 +24680,7 @@ CharacterController.prototype._nautilusStartPull = function(to, unit, fixedSec =
   const duration = fixedSec != null ? fixedSec : Math.max(0.05, dist / lolRangeToWorld(q.missileSpeed)); // 지형 명중은 속도 기준(위키에 시간 없음)
   const faceDir = new THREE.Vector3().subVectors(to, from).setY(0);
   this._dashState = { from, to: to.clone(), duration, elapsed: 0, faceDir: faceDir.lengthSq() > 1e-8 ? faceDir.normalize() : null };
-  this._nautilus.qPull = { remainingSec: duration, unit };
+  this._nautilus.qPull = { remainingSec: duration, unit, anchor: unit ? null : to.clone() };
   this._nautilusPlayQClip('pullClip', false);
   return duration;
 };
@@ -24850,6 +24873,7 @@ CharacterController.prototype._nautilusUpdate = function(dt) {
     n.qPull.remainingSec -= dt;
     if (n.qPull.remainingSec <= 0) { n.qPull = null; this._nautilusFinishAction('nautilusQ'); }
   }
+  this._nautilusUpdateChain();
 
   this._nautilusTickW();
   this._nautilusTickE(dt);
@@ -24872,6 +24896,40 @@ CharacterController.prototype._nautilusReset = function() {
     wUntil: 0, wShieldRemaining: 0, wShieldSeen: 0,
     eSeq: null, rPending: null, rTravel: null,
   };
+};
+
+// 29차: 닻줄 견인 표시 - 닻이 날아가는 동안은 노틸러스 → 닻, 적을 끌어오는 동안은 노틸러스 → 대상(지형이면 → 박힌
+// 지점)까지 닻줄과 닻을 그린다. 예전엔 비행 중 '맞음' 스프라이트만 찍히고 끌려가는 동안은 아무 표시가 없어, 0.9초 동안
+// 이유 없이 미끄러지는 것처럼 보였다. 색·굵기는 연출값. 정리는 공용 VFX 목록이 맡는다(교체·종료 시 자동 제거).
+CharacterController.prototype._nautilusUpdateChain = function() {
+  const n = this._nautilus;
+  let end = null;
+  if (n.qTravel) end = n.qTravel.pos;
+  else if (n.qPull) end = n.qPull.unit ? getWorldPosition(n.qPull.unit) : n.qPull.anchor;
+  if (!end) { n.qChain = null; return; }
+  let ch = n.qChain;
+  if (!ch) {
+    if (typeof scene === 'undefined' || !scene || typeof vfx === 'undefined' || !vfx || !vfx.active || typeof THREE.CylinderGeometry !== 'function') return;
+    const group = new THREE.Group();
+    const lineGeo = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true); lineGeo.rotateX(Math.PI / 2); lineGeo.translate(0, 0, 0.5);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x7f9aa8, transparent: true, opacity: 0.9, depthWrite: false });
+    const line = new THREE.Mesh(lineGeo, mat);
+    const anchor = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0x9fb6c2 }));
+    group.add(line, anchor); scene.add(group);
+    ch = n.qChain = { group, line, anchor };
+    const owner = this;
+    const entry = { life: 30, maxLife: 30, tag: 'nautilusChain',
+      update: () => { if (!owner._nautilus || owner._nautilus.qChain !== ch || (typeof controller !== 'undefined' && controller !== owner)) entry.life = 0; },
+      dispose: () => { if (group.parent) group.parent.remove(group); line.geometry.dispose(); mat.dispose(); anchor.geometry.dispose(); anchor.material.dispose(); if (owner._nautilus && owner._nautilus.qChain === ch) owner._nautilus.qChain = null; } };
+    vfx.active.push(entry);
+  }
+  const h = BASE_UNIT * 0.55;
+  const from = new THREE.Vector3(this.root.position.x, this.root.position.y + h, this.root.position.z);
+  const to = new THREE.Vector3(end.x, (end.y || 0) + h, end.z);
+  const len = Math.max(1e-3, from.distanceTo(to));
+  const thick = lolRangeToWorld(6);
+  ch.line.position.copy(from); ch.line.scale.set(thick, thick, len); ch.line.lookAt(to);
+  ch.anchor.position.copy(to); ch.anchor.scale.setScalar(lolRangeToWorld(22));
 };
 
 /* ===== src/core/controller_post_class_helpers.js ===== */
@@ -33163,7 +33221,9 @@ function tickPullEffects(dt) {
     const t = Math.min(1, p.elapsed / p.duration);
     controller.root.position.lerpVectors(p.from, p.to, t);
     if (p.faceDir && p.faceDir.lengthSq() > 1e-8) {
-      controller.root.rotation.y = Math.atan2(p.faceDir.x, p.faceDir.z);
+      // 29차(요청 "리 신 Q2로 날아갈 때 날아가는 방향을 안 봄"): 예전엔 root.rotation.y(오일러)만 덮어썼다. 직전에
+      // faceDirectionInstant(쿼터니언)로 180° 돌아 있으면 오일러가 (π, 0, π)로 남아 있어, y만 바꾸면 정반대를 봤다.
+      controller.faceDirectionInstant(p.faceDir);
     }
     if (t >= 1) controller._dashState = null;
   }

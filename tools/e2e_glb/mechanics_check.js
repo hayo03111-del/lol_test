@@ -13,7 +13,7 @@ const SETUP = {
   'garen.Q': { keepTarget: true, dist: 150 }, 'darius.W': { keepTarget: true, dist: 150 }, 'darius.Q': { dist: 320 }, 'darius.E': { dist: 400 },
   'nautilus.W': { keepTarget: true, dist: 150 }, 'renekton.W': { keepTarget: true, dist: 150 }, 'sett.Q': { keepTarget: true, dist: 120 },
   'chogath.E': { keepTarget: true, dist: 120 }, 'masteryi.E': { keepTarget: true, dist: 150 }, 'ashe.Q': { keepTarget: true, dist: 400 },
-  'leesin.Q': { recastMs: 900 }, 'leesin.E': { dist: 200, recastMs: 700 }, 'leesin.R': { dist: 200 }, 'yasuo.R': { knockupFirst: true, dist: 400 },
+  'leesin.Q': { recastMs: 900 }, 'leesin.W': { selfCast: true }, 'leesin.E': { dist: 200, recastMs: 700 }, 'leesin.R': { dist: 200 }, 'yasuo.R': { knockupFirst: true, dist: 400 },
   'varus.Q': { recastMs: 900, dist: 500 }, 'yone.E': { recastMs: 1200 }, 'nilah.R': { dist: 200 }, 'mordekaiser.E': { dist: 500 },
   'ezreal.W': { dist: 500 }, 'ezreal.Q': { dist: 500 }, 'ezreal.R': { dist: 800 }, 'ahri.E': { dist: 400 }, 'vex.E': { dist: 400 },
   'sett.W': { dist: 300, gritFirst: true }, 'sett.R': { dist: 200, windowMs: 3800 }, 'chogath.R': { dist: 150 }, 'vex.R': { recastMs: 1200, windowMs: 3000 }, 'chogath.W': { dist: 250 }, 'chogath.Q': { dist: 400 }, 'yone.Q': { dist: 250 },
@@ -51,7 +51,7 @@ const SETUP = {
         const hp0 = d.hp, me0 = c.root.position.clone(), d0 = d.mesh.position.clone(), myHp0 = c.hp;
         const seenD = new Set(), seenMe = new Set(); let maxShield = 0, maxDDisp = 0, maxMeDisp = 0, maxHeal = 0;
         c.currentTarget = d;
-        c.castAbility(slot, E.getWorldPosition(d).clone());
+        c.castAbility(slot, cfg.selfCast ? c.root.position.clone() : E.getWorldPosition(d).clone()); // selfCast: 대상 지정 자기 시전(29차 리 신 W - 빈 곳·적은 대상 아님)
         if (!cfg.keepTarget) c.currentTarget = null;
         else if (typeof c.selectTarget === 'function') setTimeout(() => c.selectTarget(d), 30); // 강화 평타형: 공격 명령까지 내린다
         if (cfg.recastMs) setTimeout(() => { c.cooldowns[slot] = 0; c.castAbility(slot, E.getWorldPosition(d).clone()); }, cfg.recastMs);

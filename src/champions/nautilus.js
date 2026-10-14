@@ -127,7 +127,7 @@ CharacterController.prototype._nautilusTickQTravel = function(dt) {
   const prevTraveled = t.traveled;
   t.pos.addScaledVector(t.dir, step);
   t.traveled += step;
-  vfx.spawn('hit', t.pos.clone(), undefined, { color: 0x6fa8c8 });
+  // 29차: 예전엔 닻 대신 매 프레임 '맞음' 스프라이트를 찍어 잔상이 남았다 - 이제 닻·닻줄을 _nautilusUpdateChain()이 그린다.
 
   // 26차(판정 수정): 이번 프레임에 닻이 지나간 구간(직전 위치 → 지금 위치)을 폭(halfWidth)만큼 쓸고, 그 안에 든 대상 중
   // 경로상 가장 앞의 대상을 맞힌다. 예전엔 지금 위치 주변 원 안에 든 대상을 목록 순서대로 골라서
@@ -222,7 +222,7 @@ CharacterController.prototype._nautilusStartPull = function(to, unit, fixedSec =
   const duration = fixedSec != null ? fixedSec : Math.max(0.05, dist / lolRangeToWorld(q.missileSpeed)); // 지형 명중은 속도 기준(위키에 시간 없음)
   const faceDir = new THREE.Vector3().subVectors(to, from).setY(0);
   this._dashState = { from, to: to.clone(), duration, elapsed: 0, faceDir: faceDir.lengthSq() > 1e-8 ? faceDir.normalize() : null };
-  this._nautilus.qPull = { remainingSec: duration, unit };
+  this._nautilus.qPull = { remainingSec: duration, unit, anchor: unit ? null : to.clone() };
   this._nautilusPlayQClip('pullClip', false);
   return duration;
 };
@@ -415,6 +415,7 @@ CharacterController.prototype._nautilusUpdate = function(dt) {
     n.qPull.remainingSec -= dt;
     if (n.qPull.remainingSec <= 0) { n.qPull = null; this._nautilusFinishAction('nautilusQ'); }
   }
+  this._nautilusUpdateChain();
 
   this._nautilusTickW();
   this._nautilusTickE(dt);
@@ -437,4 +438,38 @@ CharacterController.prototype._nautilusReset = function() {
     wUntil: 0, wShieldRemaining: 0, wShieldSeen: 0,
     eSeq: null, rPending: null, rTravel: null,
   };
+};
+
+// 29차: 닻줄 견인 표시 - 닻이 날아가는 동안은 노틸러스 → 닻, 적을 끌어오는 동안은 노틸러스 → 대상(지형이면 → 박힌
+// 지점)까지 닻줄과 닻을 그린다. 예전엔 비행 중 '맞음' 스프라이트만 찍히고 끌려가는 동안은 아무 표시가 없어, 0.9초 동안
+// 이유 없이 미끄러지는 것처럼 보였다. 색·굵기는 연출값. 정리는 공용 VFX 목록이 맡는다(교체·종료 시 자동 제거).
+CharacterController.prototype._nautilusUpdateChain = function() {
+  const n = this._nautilus;
+  let end = null;
+  if (n.qTravel) end = n.qTravel.pos;
+  else if (n.qPull) end = n.qPull.unit ? getWorldPosition(n.qPull.unit) : n.qPull.anchor;
+  if (!end) { n.qChain = null; return; }
+  let ch = n.qChain;
+  if (!ch) {
+    if (typeof scene === 'undefined' || !scene || typeof vfx === 'undefined' || !vfx || !vfx.active || typeof THREE.CylinderGeometry !== 'function') return;
+    const group = new THREE.Group();
+    const lineGeo = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true); lineGeo.rotateX(Math.PI / 2); lineGeo.translate(0, 0, 0.5);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x7f9aa8, transparent: true, opacity: 0.9, depthWrite: false });
+    const line = new THREE.Mesh(lineGeo, mat);
+    const anchor = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0x9fb6c2 }));
+    group.add(line, anchor); scene.add(group);
+    ch = n.qChain = { group, line, anchor };
+    const owner = this;
+    const entry = { life: 30, maxLife: 30, tag: 'nautilusChain',
+      update: () => { if (!owner._nautilus || owner._nautilus.qChain !== ch || (typeof controller !== 'undefined' && controller !== owner)) entry.life = 0; },
+      dispose: () => { if (group.parent) group.parent.remove(group); line.geometry.dispose(); mat.dispose(); anchor.geometry.dispose(); anchor.material.dispose(); if (owner._nautilus && owner._nautilus.qChain === ch) owner._nautilus.qChain = null; } };
+    vfx.active.push(entry);
+  }
+  const h = BASE_UNIT * 0.55;
+  const from = new THREE.Vector3(this.root.position.x, this.root.position.y + h, this.root.position.z);
+  const to = new THREE.Vector3(end.x, (end.y || 0) + h, end.z);
+  const len = Math.max(1e-3, from.distanceTo(to));
+  const thick = lolRangeToWorld(6);
+  ch.line.position.copy(from); ch.line.scale.set(thick, thick, len); ch.line.lookAt(to);
+  ch.anchor.position.copy(to); ch.anchor.scale.setScalar(lolRangeToWorld(22));
 };

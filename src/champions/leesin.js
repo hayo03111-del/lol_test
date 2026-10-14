@@ -178,7 +178,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
       let dashSec = 0.05;
       if (dir.length() > 0.05) {
         dir.normalize();
-        this.root.rotation.y = Math.atan2(dir.x, dir.z);
+        this.faceDirectionInstant(dir); // 29차: rotation.y만 바꾸면 직전 회전이 180°일 때 정반대를 봤다(쿼터니언으로 설정)
         const to = target.mesh.position.clone().addScaledVector(dir, -this.collisionRadius * 2);
         dashSec = 0.35;
         this._dashState = { from: this.root.position.clone(), to, duration: dashSec, elapsed: 0, faceDir: dir.clone() };
@@ -284,37 +284,44 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
     if (!this.canStartNewAction()) return;
     // 26차: 1타 쿨다운 확인. 예전엔 쿨다운을 설정만 하고 확인하지 않아, 2타를 쓴 직후 바로 다시 1타를 쓸 수 있었다.
     if (!free && this.cooldowns.W > 0) { showSkillToast(`W - 쿨다운 ${this.cooldowns.W.toFixed(1)}s 남음`); return; }
+    // 29차(요청 "방호가 아무것도 없는 곳에 사용됨"): PC 위키 - 방호는 대상(아군 챔피언·미니언·와드, 또는 자기 자신)을
+    // 지정해야 하고, 대상을 직접 찍지 않으면 커서 반경 100 안의 와드를 찾는다. 예전엔 빈 땅을 찍어도 자기 시전으로
+    // 처리됐다. 이제 아군·와드·자신(커서가 리 신 위)이 아니면 비용 없이 쓰지 않는다(모션 테스트 free는 자기 시전).
+    const ally = this._leesinPickWAlly(mouseWorldPoint);
+    const ward = ally ? null : this._leesinPickWWard(mouseWorldPoint);
+    const selfPick = !ally && !ward && (free || (mouseWorldPoint && getHorizontalDistance(this.root.position, mouseWorldPoint) <= this.collisionRadius + lolRangeToWorld(150)));
+    if (!ally && !ward && !selfPick) { showSkillToast('W - 아군·와드·자신을 지정해야 합니다'); return; }
     if (!free && this.mp < w.energy1) { debugSkillMiss('Lee Sin W', '기력 부족'); return; }
     if (!free) { this.mp -= w.energy1; this.cooldowns.W = abilityHasteCooldown(this, w.cooldown); updateBars(this); }
     vfx.spawn('w', this.root.position.clone());
     this._leesinOnSkillUsed();
     this._leesin.wMarkReadyUntil = now + w.markDuration * 1000;
-    // 방호 - 커서 근처의 아군 챔피언(사거리 700 안)에게 돌진해 둘 다 보호막,
-    // 아군이 없으면 자기 자신에게 보호막(원작의 자기 시전).
+    // 방호 - 지정한 아군 챔피언(사거리 700 안)에게 돌진해 둘 다 보호막, 와드면 와드로 돌진해 자기 보호막,
+    // 자기 자신을 지정하면 자기 보호막.
     const lvl = Math.max(1, this.skillLevels.W || 1);
     const amount = skillVal(w.shieldByLevel, lvl) + (w.shieldApRatio || 0) * (this.stats.abilityPower || 0);
-    const ally = this._leesinPickWAlly(mouseWorldPoint);
-    if (ally) {
-      const to = getWorldPosition(ally).clone();
+    const dashTarget = ally ? getWorldPosition(ally) : (ward ? ward.position : null);
+    if (dashTarget) {
+      const to = dashTarget.clone();
       const dir = new THREE.Vector3().subVectors(to, this.root.position).setY(0);
       if (dir.lengthSq() > 1e-6) {
         dir.normalize();
-        to.addScaledVector(dir, -(this.collisionRadius + getCollisionRadius(ally)));
+        to.addScaledVector(dir, -(this.collisionRadius + (ally ? getCollisionRadius(ally) : 0)));
         to.y = this.root.position.y;
         this._dashState = { from: this.root.position.clone(), to, duration: 0.35, elapsed: 0, faceDir: dir.clone() }; // Q2 돌진과 같은 시간
       }
-      if (typeof shieldAlly === 'function') shieldAlly(this, ally, amount, w.shieldDuration);
+      if (ally && typeof shieldAlly === 'function') shieldAlly(this, ally, amount, w.shieldDuration);
     }
     // 아군에게 돌진하면 돌진 시간(0.35초) 동안 행동을 잡고, 자기 시전은 시전 시간이
     // 없으므로 행동을 잡지 않는다(평타/이동 중이면 모션도 끼워 넣지 않음).
-    if (ally) {
+    if (dashTarget) {
       this._clearActionTimers();
       this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: 0.35, state: STATE.W_CAST, exitIdle: ['Spell2_ToIdle'] });
     } else if (!this.currentActionKey && !this.targetPos) {
       this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: 0, exitIdle: ['Spell2_ToIdle'] });
     }
     this._leesinApplySelfWShield(amount, w.shieldDuration);
-    debugSkillHit(`Lee Sin W (방호${ally ? ' - 아군에게 돌진' : ' - 자기 시전'})`, ally || this, { shield: amount.toFixed(1) });
+    debugSkillHit(`Lee Sin W (방호${ally ? ' - 아군에게 돌진' : ward ? ' - 와드로 돌진' : ' - 자기 시전'})`, ally || this, { shield: amount.toFixed(1) });
   
 };
 
@@ -330,6 +337,22 @@ CharacterController.prototype._leesinPickWAlly = function(mouseWorldPoint) {
     if (dMouse > lolRangeToWorld(150) + getCollisionRadius(a)) continue;
     if (!isInRange(this, a, w.range1)) continue;
     if (dMouse < bestD) { best = a; bestD = dMouse; }
+  }
+  return best;
+};
+
+// 29차: 방호 대상 와드 - 커서 반경 100 안(PC 위키 "대상을 직접 찍지 않으면 반경 100 안의 와드를 찾는다")의
+// 설치된 와드 중 리 신 W 사거리(range1) 안에서 커서에 가장 가까운 것.
+CharacterController.prototype._leesinPickWWard = function(mouseWorldPoint) {
+  if (!mouseWorldPoint || !this._placedWards || !this._placedWards.length) return null;
+  const w = this._champData().W;
+  let best = null, bestD = Infinity;
+  for (const ward of this._placedWards) {
+    if (!ward || !ward.position || (ward.expiresAt && ward.expiresAt <= performance.now())) continue;
+    const dMouse = getHorizontalDistance(ward.position, mouseWorldPoint);
+    if (dMouse > lolRangeToWorld(100)) continue;
+    if (getHorizontalDistance(ward.position, this.root.position) > lolRangeToWorld(w.range1) + this.collisionRadius) continue;
+    if (dMouse < bestD) { best = ward; bestD = dMouse; }
   }
   return best;
 };

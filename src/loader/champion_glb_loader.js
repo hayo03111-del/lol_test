@@ -1530,7 +1530,9 @@ function tickPullEffects(dt) {
     const t = Math.min(1, p.elapsed / p.duration);
     controller.root.position.lerpVectors(p.from, p.to, t);
     if (p.faceDir && p.faceDir.lengthSq() > 1e-8) {
-      controller.root.rotation.y = Math.atan2(p.faceDir.x, p.faceDir.z);
+      // 29차(요청 "리 신 Q2로 날아갈 때 날아가는 방향을 안 봄"): 예전엔 root.rotation.y(오일러)만 덮어썼다. 직전에
+      // faceDirectionInstant(쿼터니언)로 180° 돌아 있으면 오일러가 (π, 0, π)로 남아 있어, y만 바꾸면 정반대를 봤다.
+      controller.faceDirectionInstant(p.faceDir);
     }
     if (t >= 1) controller._dashState = null;
   }

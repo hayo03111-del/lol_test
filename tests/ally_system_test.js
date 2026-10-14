@@ -145,9 +145,16 @@ function makeChamp(championId, overrides = {}) {
   const w = CHAMPION_DATA.leesin.W;
   const lee = makeChamp('leesin', { _leesin: { qMarkTarget: null, qMarkExpiresAt: 0, wMarkReadyUntil: 0, eMarkHits: [], eMarkExpiresAt: 0, passiveHitsLeft: 0 } });
   setAllies();
+  const mp0 = lee.mp;
   lee._leesinCastW(false, new Vector3(5, 0, 5));
-  assert(Math.abs(lee.shield - w.shieldByLevel[0]) < 1e-6, `리 신 W: 아군이 없으면 자기 자신에게 보호막 ${w.shieldByLevel[0]}`);
+  assert(lee.shield === 0 && lee.mp === mp0 && !(lee.cooldowns.W > 0), '리 신 W(29차): 빈 땅을 찍으면 쓰지 않는다(기력·쿨다운 그대로)');
+  lee._leesinCastW(false, lee.root.position.clone());
+  assert(Math.abs(lee.shield - w.shieldByLevel[0]) < 1e-6, `리 신 W: 자기 자신을 지정하면 자기 보호막 ${w.shieldByLevel[0]}`);
   assert(!lee._dashState, '리 신 W: 자기 시전은 돌진하지 않는다');
+  const leeW = makeChamp('leesin', { _leesin: { qMarkTarget: null, qMarkExpiresAt: 0, wMarkReadyUntil: 0, eMarkHits: [], eMarkExpiresAt: 0, passiveHitsLeft: 0 } });
+  leeW._placedWards = [{ position: new Vector3(lolRangeToWorld(400), 0, 0), expiresAt: now + 60000 }];
+  leeW._leesinCastW(false, new Vector3(lolRangeToWorld(450), 0, 0));
+  assert(leeW._dashState && leeW._dashState.to.x > lolRangeToWorld(300) && Math.abs(leeW.shield - w.shieldByLevel[0]) < 1e-6, '리 신 W(29차): 커서 반경 100 안의 와드로 돌진하고 자기 보호막');
 
   const lee2 = makeChamp('leesin', { _leesin: { qMarkTarget: null, qMarkExpiresAt: 0, wMarkReadyUntil: 0, eMarkHits: [], eMarkExpiresAt: 0, passiveHitsLeft: 0 } });
   const ally = makeAlly(lolRangeToWorld(500), 0);
@@ -161,7 +168,7 @@ function makeChamp(championId, overrides = {}) {
   const farAlly = makeAlly(lolRangeToWorld(1500), 0);
   setAllies(farAlly);
   lee3._leesinCastW(false, farAlly.root.position.clone());
-  assert(farAlly.shield === 0 && !lee3._dashState, '리 신 W: 사거리(700) 밖 아군은 대상이 아니다(자기 시전으로 처리)');
+  assert(farAlly.shield === 0 && !lee3._dashState && lee3.shield === 0, '리 신 W: 사거리(700) 밖 아군은 대상이 아니다(쓰지 않음)');
 
   // 보호막 만료
   timers.filter((t) => t.at <= now + 2100).forEach((t) => t.fn());
