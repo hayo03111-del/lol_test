@@ -590,7 +590,7 @@ const CHAMPION_DATA = {
       damageByLevel: [85, 125, 165, 205, 245], apRatio: 0.9, damageType: 'MAGICAL', // 26.18 피해 조정 반영, AP 계수 90%
       missileSpeed: 2000, width: 180, // PC 위키 Template:Data Nautilus/Dredge Line: 속도 2000, 폭 180(가장자리)
       castTimeSec: 0.25, // PC 위키: 시전 시간 0.25
-      pullDurationSec: 0.9, stunDurationSec: 1, // 28차: PC 위키 - 적 명중 시 서로 0.9초에 걸쳐 끌려가고 대상 1초 기절
+      pullDurationSec: 0.9, stunDurationSec: 1, // 28차: PC 위키 - 적 명중 시 서로 0.9초에 걸쳐 끌려가고 대상 1초 기절(30차: 0.9초 = 최대 사거리 기준으로 해석, 가까우면 더 빨리)
       terrainRefundPercent: 50, // 지형에 맞으면 재사용 대기시간·마나 50% 환급
     },
     W: {

@@ -2087,7 +2087,7 @@ const CHAMPION_DATA = {
       damageByLevel: [85, 125, 165, 205, 245], apRatio: 0.9, damageType: 'MAGICAL', // 26.18 피해 조정 반영, AP 계수 90%
       missileSpeed: 2000, width: 180, // PC 위키 Template:Data Nautilus/Dredge Line: 속도 2000, 폭 180(가장자리)
       castTimeSec: 0.25, // PC 위키: 시전 시간 0.25
-      pullDurationSec: 0.9, stunDurationSec: 1, // 28차: PC 위키 - 적 명중 시 서로 0.9초에 걸쳐 끌려가고 대상 1초 기절
+      pullDurationSec: 0.9, stunDurationSec: 1, // 28차: PC 위키 - 적 명중 시 서로 0.9초에 걸쳐 끌려가고 대상 1초 기절(30차: 0.9초 = 최대 사거리 기준으로 해석, 가까우면 더 빨리)
       terrainRefundPercent: 50, // 지형에 맞으면 재사용 대기시간·마나 50% 환급
     },
     W: {
@@ -23912,7 +23912,12 @@ CharacterController.prototype._nautilusQHitUnit = function(unit) {
   // 28차(요청 "끌어갈 때 원작과 다른 느낌"): PC 위키 Template:Data Nautilus/Dredge Line - 적을 맞히면 대상을 0.9초에 걸쳐
   // 끌어오고 노틸러스도 같은 0.9초 동안 대상 쪽으로 돌진하며, 대상은 1초 기절한다. 예전엔 닻 속도(2000)로 거리에 비례해
   // 끌려가(보통 0.2초대) 너무 빨랐고, 기절도 끌려가는 시간만큼만 걸렸다.
-  const pullSec = q.pullDurationSec != null ? q.pullDurationSec : 0.9;
+  // 30차(요청 "Q가 체감상 너무 느림"): 0.9초를 거리와 무관하게 고정하면 가까운 대상일수록 기어가듯 느렸다(300 거리면
+  // 각자 약 77유닛을 0.9초에). 위키의 0.9초를 "최대 사거리(1150)로 맞혔을 때 걸리는 시간"으로 해석해(추정) 끌려가는
+  // 속도를 거기서 계산해 고정한다 - 최대 사거리면 0.9초, 가까울수록 빨리 끝난다. 기절은 그대로 1초.
+  const maxHalfGap = Math.max(1e-3, (lolRangeToWorld(q.range) - this.collisionRadius - getCollisionRadius(unit)) * 0.5);
+  const pullSpeed = maxHalfGap / (q.pullDurationSec != null ? q.pullDurationSec : 0.9);
+  const pullSec = Math.max(0.05, (gap * 0.5) / pullSpeed);
   const duration = this._nautilusStartPull(selfTo, unit, pullSec);
   if (unit.mesh && !unit.isStructure) {
     unitTo.y = unit.mesh.position.y;

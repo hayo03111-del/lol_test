@@ -73,10 +73,11 @@ this.lolRangeToWorld = lolRangeToWorld;
 this.getSlowPercent = getSlowPercent;
 this.hasStatus = hasStatus;
 this.getStatus = getStatus;
+this.getCollisionRadius = getCollisionRadius;
 this.tickStatusEffects = typeof tickStatusEffects === 'function' ? tickStatusEffects : null;
 this.setController = (c) => { controller = c; };
 `, context);
-const { CharacterController, CHAMPION_DATA, lolRangeToWorld, getSlowPercent, hasStatus, getStatus, setController } = context;
+const { CharacterController, CHAMPION_DATA, lolRangeToWorld, getSlowPercent, hasStatus, getStatus, setController, getCollisionRadius } = context;
 const D = CHAMPION_DATA.nautilus;
 
 function makeNaut(overrides = {}) {
@@ -158,6 +159,13 @@ const mag = (lvl, arr, ratio, ap) => arr[lvl - 1] + ratio * ap;
   const expected = mag(1, D.Q.damageByLevel, D.Q.apRatio, 100);
   assert(Math.abs((hp0 - e.hp) - expected) < 1e-6, `Q: 적중 시 마법 피해 ${expected}`);
   assert(hasStatus(e, 'STUN'), 'Q: 끌려오는 동안 대상 기절');
+  {
+    const maxHalf = (lolRangeToWorld(D.Q.range) - c.collisionRadius - getCollisionRadius(e)) / 2;
+    const half = (dist - c.collisionRadius - getCollisionRadius(e)) / 2;
+    const expSec = half / (maxHalf / D.Q.pullDurationSec);
+    const pullSec = e._pullState ? e._pullState.duration : null;
+    assert(pullSec != null && Math.abs(pullSec - expSec) < 1e-6 && pullSec < D.Q.pullDurationSec, `Q(30차): 당김 시간은 거리 비례(최대 사거리 0.9초) - 800 거리 ${pullSec && pullSec.toFixed(3)}초`);
+  }
   step(c, 1.0);
   const gap = Math.abs(e.mesh.position.z - c.root.position.z);
   assert(c.root.position.z > dist * 0.3 && e.mesh.position.z < dist * 0.7, `Q: 서로 끌려가 중간에서 만난다(노틸러스 z=${c.root.position.z.toFixed(2)}, 대상 z=${e.mesh.position.z.toFixed(2)})`);
