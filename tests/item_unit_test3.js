@@ -41,6 +41,11 @@ const stubs = {
   },
   scene: { add: (m) => addedMeshes.push(m), remove: (m) => removedMeshes.push(m) },
   visionSystem: { grantVision(pos, radius, dur) { this.lastGrant = { pos, radius, dur }; } },
+  // 32차: 와드는 ward_system.js 유닛 - 아이템 쪽은 설치 명령(order)과 설치(place)만 넘긴다. 여기서는 기록만 하는 가짜.
+  wardSystem: {
+    order(ctrl, point, rangeLol, placeFn) { this.lastOrder = { point, rangeLol }; return placeFn(point); },
+    place(owner, type, pos, opts) { const w = { type, position: pos, ...opts }; this.lastPlace = w; if (owner) (owner._placedWards = owner._placedWards || []).push(w); return w; },
+  },
 };
 
 const context = vm.createContext(stubs);
@@ -132,12 +137,10 @@ const placed = placeWard(c18, new FakeVec3(100, 0, 0)); // well within 550 range
 assert(placed === true, 'placeWard succeeds with charges available');
 assert(c18.trinket.charges === 1, 'placing a ward consumes 1 charge');
 assert(c18._placedWards.length === 1, 'ward registered in _placedWards');
-assert(Math.abs(stubs.visionSystem.lastGrant.dur - 90) < 1e-6, 'early game ward duration is 90s');
-assert(stubs.visionSystem.lastGrant.radius === 900, 'ward grants 900 vision radius');
-// Range clamp: click far beyond 550 range -> landing point clamped to max range from origin.
-const maxWorldRange = stubs.lolRangeToWorld(550);
-const dist = Math.hypot(c18._placedWards[0].position.x - 0, c18._placedWards[0].position.z - 0);
-assert(Math.abs(dist - maxWorldRange) < 1e-6, 'ward placement clamped to max placeRange (550) when clicked beyond range');
+assert(Math.abs(stubs.wardSystem.lastPlace.durationSec - 90) < 1e-6, 'early game ward duration is 90s');
+assert(stubs.wardSystem.lastPlace.visionRadius === 900 && stubs.wardSystem.lastPlace.type === 'stealth' && stubs.wardSystem.lastPlace.maxHp === 3, 'trinket places a stealth ward: 900 vision, 3 health');
+// 32차: 사거리 밖을 찍으면 최대 거리로 당겨 놓지 않고, 사거리(550)까지 걸어가서 놓는다(wardSystem.order가 처리).
+assert(stubs.wardSystem.lastOrder.rangeLol === 550, 'ward placement order uses the trinket placeRange (550)');
 
 placeWard(c18, new FakeVec3(1, 0, 0));
 assert(c18.trinket.charges === 0, 'second placement uses the last charge');
@@ -152,20 +155,21 @@ assert(c18.trinket.charges === 1, 'trinket recharges 1 charge after 170s at game
 const c19 = makeFakeCtrl();
 gameTimeSec = 1200; // at or beyond the 20-minute full-scale point
 placeWard(c19, new FakeVec3(1, 0, 0));
-assert(Math.abs(stubs.visionSystem.lastGrant.dur - 120) < 1e-6, 'late game ward duration scales up to 120s');
+assert(Math.abs(stubs.wardSystem.lastPlace.durationSec - 120) < 1e-6, 'late game ward duration scales up to 120s');
 itemSystemTick(c19, 90.0);
 assert(c19.trinket.charges === 2, 'late game recharge is 90s (full charge restored after 90s, starting from 1/2)');
 
-// Ward expiry removes the mesh after its duration elapses.
+// 와드 만료·표시 제거는 ward_system.js가 맡는다(tests/ward_system_test.js).
 const c20 = makeFakeCtrl();
 gameTimeSec = 0;
-now = 0;
 placeWard(c20, new FakeVec3(1, 0, 0));
-assert(addedMeshes.length > 0, 'placing a ward adds a mesh to the scene');
-const meshCountBefore = removedMeshes.length;
-now = 91 * 1000; // past the 90s early-game duration
-itemSystemTick(c20, 0.016);
-assert(c20._placedWards.length === 0, 'expired ward removed from _placedWards');
-assert(removedMeshes.length === meshCountBefore + 1, 'expired ward mesh removed from the scene');
+c20.trinket.charges = 0;
+const lateOrder = stubs.wardSystem.lastOrder;
+stubs.wardSystem.order = function (ctrl, point, rangeLol, placeFn) { this.pending = placeFn; return true; };
+c20.trinket.charges = 1;
+placeWard(c20, new FakeVec3(1, 0, 0));
+c20.trinket.charges = 0; // 걸어가는 사이 충전이 사라짐
+assert(stubs.wardSystem.pending(new FakeVec3(1, 0, 0)) === false, 'walking to place a ward does not place it if the charge is gone on arrival');
+void lateOrder;
 
 console.log(process.exitCode ? '\nSOME CHECKS FAILED' : '\nALL CHECKS PASSED');

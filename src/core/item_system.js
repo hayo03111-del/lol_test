@@ -2321,105 +2321,58 @@ function _itemTickTrinketRecharge(ctrl, dt) {
   }
 }
 
-// 설치된 와드의 만료(시각 효과 정리) - 실제 시야 만료는 VisionSystem의
-// temporarySources가 자체적으로 처리하므로, 여기서는 지상에 놓인 마커
-// 메시만 같은 시각에 치운다.
-function _itemTickWardExpiry(ctrl, dt) {
-  if (!ctrl || !ctrl._placedWards || !ctrl._placedWards.length) return;
-  const now = performance.now();
-  ctrl._placedWards = ctrl._placedWards.filter((w) => {
-    if (now < w.expiresAt) return true;
-    if (w.mesh && typeof scene !== 'undefined') scene.remove(w.mesh);
-    return false;
-  });
-}
+// 32차: 와드는 이제 ward_system.js의 유닛이다(체력·팀·은신·시야·개수 제한·만료를 그쪽에서 관리). 여기서는
+// 충전·소지 개수를 소모하고 설치 명령(사거리 밖이면 걸어가서 놓기)만 넘긴다.
+function _itemTickWardExpiry() { /* 만료는 wardSystem.update()가 처리한다 */ }
 
-// 사정거리 clamp(목표 지점이 설치 사정거리 밖이면 실제 LoL처럼 그 방향
-// 최대 사거리에 놓는다) - 투명 와드/제어 와드가 공용으로 쓴다.
-function _clampWardTargetPos(ctrl, worldPoint, placeRangeLol) {
-  const origin = ctrl.root.position;
-  const maxWorldRange = lolRangeToWorld(placeRangeLol);
-  const dir = new THREE.Vector3().subVectors(worldPoint, origin);
-  dir.y = 0;
-  const dist = dir.length();
-  const finalPos = dist > maxWorldRange && dist > 0
-    ? origin.clone().add(dir.normalize().multiplyScalar(maxWorldRange))
-    : worldPoint.clone();
-  finalPos.y = 0;
-  return finalPos;
-}
-// 시야 부여 + 지상 마커 메시 생성 + ctrl._placedWards 등록 - 투명 와드/
-// 제어 와드가 공용으로 쓴다(색만 다르게 해서 구분 - 제어 와드는 실제
-// LoL처럼 분홍색 계열).
-function _spawnWardMarker(ctrl, finalPos, durationSec, hitsToDestroy, visionRadius, colorHex) {
-  if (typeof visionSystem !== 'undefined' && visionSystem) visionSystem.grantVision(finalPos, visionRadius, durationSec);
-  const ward = { position: finalPos.clone(), hitsRemaining: hitsToDestroy, expiresAt: performance.now() + durationSec * 1000, mesh: null };
-  if (typeof scene !== 'undefined' && typeof THREE !== 'undefined') {
-    const geo = new THREE.ConeGeometry(lolRangeToWorld(26), lolRangeToWorld(55), 6);
-    const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85 });
-    ward.mesh = new THREE.Mesh(geo, mat);
-    ward.mesh.position.copy(finalPos);
-    ward.mesh.position.y = lolRangeToWorld(27);
-    scene.add(ward.mesh);
-  }
-  ctrl._placedWards = ctrl._placedWards || [];
-  ctrl._placedWards.push(ward);
-}
-
-// 투명 와드 설치 - Q/W/E/R과 동일하게 키 입력 시 마우스 월드 좌표를 받아
-// 즉시 시전한다(character_controller.js에서 직접 호출하지 않고 전역
-// 키바인드(global_system_instances.js)에서 바로 호출 - 아이템은 챔피언
-// 고유 스킬이 아니므로 castAbility()를 거치지 않는다).
+// 투명 와드 설치(트린켓) - 키 입력 시 마우스 월드 좌표에 놓는다. 사거리 밖이면 사거리까지 걸어가서 놓는다(원작).
+// 아이템은 챔피언 고유 스킬이 아니므로 castAbility()를 거치지 않는다(전역 키바인드에서 바로 호출).
 function placeWard(ctrl, worldPoint) {
   if (!ctrl || !ctrl.trinket) { console.warn('[WARD] 장착한 트린켓이 없습니다.'); return false; }
   const data = ITEM_DATA[ctrl.trinket.id];
-  if (!data) return false;
+  if (!data || !worldPoint || typeof wardSystem === 'undefined' || !wardSystem) return false;
   if (!(ctrl.trinket.charges > 0)) { console.warn('[WARD] 충전량이 없습니다.'); return false; }
-  if (!worldPoint) return false;
-
-  const finalPos = _clampWardTargetPos(ctrl, worldPoint, data.placeRange);
-  ctrl.trinket.charges -= 1;
-  const durationSec = _itemScaleByGameTime(data.wardDurationEarlySec, data.wardDurationLateSec, data.scaleFullAtSec);
-  _spawnWardMarker(ctrl, finalPos, durationSec, data.hitsToDestroy, data.visionRadius, 0x3fae6a);
-  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
-  console.log(`[WARD] 투명 와드 설치 (지속시간 ${durationSec.toFixed(0)}초, 남은 충전 ${ctrl.trinket.charges}/${data.maxCharges})`);
-  return true;
+  return wardSystem.order(ctrl, worldPoint, data.placeRange, (pos) => {
+    if (!(ctrl.trinket && ctrl.trinket.charges > 0)) return false; // 걸어가는 사이 충전이 사라졌으면 취소
+    ctrl.trinket.charges -= 1;
+    const durationSec = _itemScaleByGameTime(data.wardDurationEarlySec, data.wardDurationLateSec, data.scaleFullAtSec);
+    wardSystem.place(ctrl, 'stealth', pos, { durationSec, maxHp: data.hitsToDestroy, visionRadius: data.visionRadius });
+    if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+    console.log(`[WARD] 투명 와드 설치 (지속시간 ${durationSec.toFixed(0)}초, 남은 충전 ${ctrl.trinket.charges}/${data.maxCharges})`);
+    return true;
+  });
 }
 
-// 제어 와드 설치 - useItem()에서 호출된다. 숫자키/인벤토리 클릭 둘 다
-// "클릭 시점의 마우스 월드 좌표"를 넘길 방법이 없으므로(useItem(ctrl,
-// slotIndex)는 슬롯 번호만 받는 공용 진입점 - 체력 물약 등 다른 소비
-// 아이템과 동일한 호출 규약을 그대로 따른다), 트린켓의 인벤토리 클릭
-// 폴백과 동일하게 "캐릭터 정면"에 설치한다.
-// 버그 수정 전까지는 wardPlacement를 가진 아이템이 전부 제어 와드처럼
-// "소모되면 인벤토리 칸에서 완전히 사라지는" slot.count(maxStack) 방식
-// 하나만 지원했다. 서포터 아이템 계열(세계지도집/룬 나침반/세계의 결실 +
-// 5종 업그레이드)의 와드는 "충전량 N회, 상점 이용 시 재충전"(체력 물약과
-// 동일한 maxCharges+refillOnShopUse 패턴)이라 그대로 재사용하면 slot.count가
-// undefined라서 와드가 무한정 나가는 잠재 버그가 될 뻔했다 - item.maxCharges
-// 보유 여부로 두 소모 방식을 분기한다(제어 와드 등 기존 maxStack 아이템은
-// 동작이 전혀 바뀌지 않는다 - 회귀 없음).
+// 제어 와드·서포터 아이템 와드 - useItem()에서 호출된다. 원작처럼 마우스 위치에 놓는다(사거리 밖이면 걸어가서).
+// 마우스 위치를 모르면(인벤토리 클릭 등) 캐릭터 정면 300에 놓는다.
+// 소모 방식: 제어 와드는 소지 개수(slot.count, 다 쓰면 칸에서 사라짐), 서포터 아이템 계열은 충전량(maxCharges).
+// 시간 제한 와드(durationSec이 유한 - 서포터 아이템)는 투명 와드, 영구 와드는 제어 와드로 놓는다.
 function _useControlWard(ctrl, slotIndex, item) {
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot || slot.id !== item.id) return false;
   if (item.maxCharges && !(slot.charges > 0)) { console.warn('[ITEM] 충전량이 없습니다.'); return false; }
+  if (typeof wardSystem === 'undefined' || !wardSystem) return false;
   const p = item.wardPlacement;
-  const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
-  const targetPoint = ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)));
-  const finalPos = _clampWardTargetPos(ctrl, targetPoint, p.placeRange);
-  if (item.maxCharges) {
-    slot.charges -= 1;
-  } else {
-    slot.count -= 1;
-    if (slot.count <= 0) {
-      const idx = ctrl.items.indexOf(slot);
-      if (idx >= 0) ctrl.items.splice(idx, 1);
-    }
+  const timed = Number.isFinite(p.durationSec) && p.durationSec < 9999;
+  let targetPoint = (typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : null;
+  if (!targetPoint) {
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
+    targetPoint = ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)));
   }
-  _spawnWardMarker(ctrl, finalPos, p.durationSec, p.hitsToDestroy, p.visionRadius, 0xd23fae);
-  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
-  console.log(`[WARD] 제어 와드 설치 (${item.nameKo})`);
-  return true;
+  return wardSystem.order(ctrl, targetPoint, p.placeRange, (pos) => {
+    const s = ctrl.items && ctrl.items.includes(slot) ? slot : null;
+    if (!s || (item.maxCharges ? !(s.charges > 0) : !(s.count > 0))) return false;
+    if (item.maxCharges) {
+      s.charges -= 1;
+    } else {
+      s.count -= 1;
+      if (s.count <= 0) { const idx = ctrl.items.indexOf(s); if (idx >= 0) ctrl.items.splice(idx, 1); }
+    }
+    wardSystem.place(ctrl, timed ? 'stealth' : 'control', pos, { durationSec: timed ? p.durationSec : Infinity, maxHp: p.hitsToDestroy, visionRadius: p.visionRadius });
+    if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+    console.log(`[WARD] ${item.nameKo} 설치`);
+    return true;
+  });
 }
 
 /* ============================================================

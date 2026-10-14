@@ -612,6 +612,7 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
 // 실제 HP 차감을 담당하고, 이 함수는 그 앞단의 "얼마나 깎일지" 계산만 맡는다.
 function applyDamage(target, result) {
   if (!target) return 0;
+  if (target.isWard) return 0; // 32차: 와드는 스킬 피해를 받지 않는다 - 기본 공격만 wardSystem.hitWard()로 체력 1씩(원작)
   // 요청 문서 20절(챔피언↔미니언/구조물 상호작용) - 미니언/포탑/억제기/
   // 넥서스는 각자 전용 피해 처리 함수를 갖고 있다(방패/이중갑옷/요새화,
   // 골드·경험치·사망 처리 등이 챔피언 피해와 다르게 갈라져 있음). 모든

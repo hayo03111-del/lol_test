@@ -544,6 +544,8 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
   <button id="clearDummiesBtn" style="margin-top:4px;width:100%;">설치한 허수아비 전부 제거</button>
   <label style="margin-top:4px;"><input type="checkbox" id="allyPlaceCheckbox"> 아군 더미 설치 모드 (O)</label>
   <label style="margin-top:4px;"><input type="checkbox" id="brushPlaceCheckbox"> 부쉬 설치 모드 (N)</label>
+  <label style="margin-top:4px;"><input type="checkbox" id="enemyWardPlaceCheckbox"> 적 와드 설치 모드 <select id="enemyWardTypeSelect" style="font-size:11px;"><option value="stealth">투명 와드</option><option value="control">제어 와드</option></select></label>
+  <button id="clearWardsBtn" style="margin-top:4px;width:100%;">와드 전부 제거</button>
   <button id="clearBrushesBtn" style="margin-top:4px;">부쉬 전부 제거</button>
   <button id="clearAlliesBtn" style="margin-top:4px;width:100%;">아군 더미 전부 제거</button>
   <button id="damageAlliesBtn" style="margin-top:4px;width:100%;">아군 더미에 데미지 적용(아래 숫자)</button>
@@ -1368,6 +1370,7 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
 // 실제 HP 차감을 담당하고, 이 함수는 그 앞단의 "얼마나 깎일지" 계산만 맡는다.
 function applyDamage(target, result) {
   if (!target) return 0;
+  if (target.isWard) return 0; // 32차: 와드는 스킬 피해를 받지 않는다 - 기본 공격만 wardSystem.hitWard()로 체력 1씩(원작)
   // 요청 문서 20절(챔피언↔미니언/구조물 상호작용) - 미니언/포탑/억제기/
   // 넥서스는 각자 전용 피해 처리 함수를 갖고 있다(방패/이중갑옷/요새화,
   // 골드·경험치·사망 처리 등이 챔피언 피해와 다르게 갈라져 있음). 모든
@@ -9410,6 +9413,8 @@ class VisionSystem {
       (t.team === VISION_TEAM_BLUE ? blue : red).push({ position: t.mesh.position, lolRadius: VISION_CONFIG.turretSightRange });
     }
     for (const s of this.temporarySources) if (s.expiresAt > now) ((s.team || VISION_TEAM_BLUE) === VISION_TEAM_RED ? red : blue).push(s);
+    // 와드(ward_system.js): 살아 있고 무력화되지 않은 와드가 시야 900을 준다(부쉬 안에 놓이면 그 부쉬 안만).
+    if (typeof wardSystem !== 'undefined' && wardSystem) { blue.push(...wardSystem.visionSources(VISION_TEAM_BLUE)); red.push(...wardSystem.visionSources(VISION_TEAM_RED)); }
     return { [VISION_TEAM_BLUE]: blue, [VISION_TEAM_RED]: red };
   }
 
@@ -9676,6 +9681,302 @@ class BrushSystem {
       const target = b === mine ? BRUSH_CONFIG.insideOpacity : 1;
       if (b.mats[0] && Math.abs(b.mats[0].opacity - target) > 1e-3) b.mats[0].opacity = target;
     }
+  }
+}
+
+/* ===== src/world/ward_system.js ===== */
+/* ============================================================
+   WARD SYSTEM (와드 - 32차)
+   ------------------------------------------------------------
+   예전 와드는 바닥에 놓인 작은 초록 원뿔 + 임시 시야(grantVision)뿐이었다. 체력도 팀도 없어서 때릴 수 없었고,
+   은신·설치 개수 제한·제어 와드의 무력화도 없었다. 원작(PC, 소환사의 협곡 규칙) 와드를 "유닛"으로 다시 만든다.
+
+   원작 규칙(PC 위키 Ward / Stealth Ward / Control Ward):
+   - 와드는 팀에 속한 유닛이고 시야 900을 준다. 부쉬 안에 놓으면 그 부쉬 안을 본다(시야 공급원 규칙 그대로).
+   - 투명 와드: 체력 3, 은신(상대는 드러내기 없이는 못 본다). 플레이어 한 명당 동시에 3개까지 - 4번째를 놓으면
+     가장 오래된 것이 사라진다.
+   - 제어 와드: 체력 4, 은신하지 않는다(상대 시야에 들어오면 보인다). 파괴될 때까지 유지. 플레이어 한 명당 1개까지.
+     반경 900 안의 상대 투명 와드를 드러내고 무력화한다(무력화된 와드는 시야를 주지 못한다).
+   - 기본 공격 1회 = 체력 1(공격력·치명타·적중 시 효과와 무관). 스킬로는 피해를 입지 않는다.
+   - 설치 사거리 밖을 찍으면 사거리까지 걸어가서 놓는다(사거리 안이면 행동을 끊지 않고 즉시 놓인다).
+   - 기절 등 행동 불가 상태에서는 놓을 수 없다.
+   범위상 생략(지어내지 않음): 와드 처치 골드·경험치(수치 확인 못함), 와드 자체 판정 반경(아래 WARD_SELECT_RADIUS_LOL은
+   클릭·사거리 계산용 추정값), 모델·이펙트(원본 파일이 없어 직접 만든 모양 - 연출값).
+   칼바람 나락(이 맵의 원작)에는 와드가 없다 - 연습용으로 소환사의 협곡 규칙을 쓴다.
+   ============================================================ */
+const WARD_TYPES = {
+  stealth: { maxHp: 3, visionRadius: 900, stealthed: true, revealRadius: 0, limitPerOwner: 3, eye: 0xd8ff5a, trim: 0xb89a4e },
+  control: { maxHp: 4, visionRadius: 900, stealthed: false, revealRadius: 900, limitPerOwner: 1, eye: 0xff3fa6, trim: 0x8a2c66 },
+};
+const WARD_SELECT_RADIUS_LOL = 25; // 추정값: 공격 사거리·클릭 판정에 쓰는 반경(원작 수치 미확인)
+const WARD_TEAM_COLOR = { ally: 0x3fa3ff, enemy: 0xff4a4a };
+
+class WardSystem {
+  constructor(scene) {
+    this.scene = scene;
+    this.wards = [];
+    this._glowTex = {};
+  }
+
+  _glow(hex) {
+    if (!this._glowTex[hex] && typeof generateGlowTexture === 'function') this._glowTex[hex] = generateGlowTexture(hex);
+    return this._glowTex[hex] || null;
+  }
+
+  // 모델(연출값 - 원본 모델 파일이 없어 직접 만든 모양): 원작 와드처럼 돌 받침 위 나무 토템 끝에 빛나는 눈이 달려 있고,
+  // 눈을 잎 모양 받침 세 장이 감싼다. 제어 와드는 더 굵고 눈이 분홍 수정이며 고리가 돈다. 바닥에 팀 색 고리.
+  // 키는 챔피언(약 1.8)의 절반 정도(원작 화면 비율을 눈으로 맞춘 값).
+  _buildMesh(ward) {
+    const cfg = WARD_TYPES[ward.wardType];
+    const L = lolRangeToWorld;
+    const control = ward.wardType === 'control';
+    const H = BASE_UNIT * (control ? 0.95 : 0.9);
+    const group = new THREE.Group();
+    group.position.copy(ward.position);
+    const parts = new THREE.Group(); // 설치 시 튀어 오르는 연출용(그림자·고리는 제외)
+    group.add(parts);
+    const stone = new THREE.MeshStandardMaterial({ color: 0x3a3f4a, roughness: 0.85, transparent: true });
+    const wood = new THREE.MeshStandardMaterial({ color: control ? 0x4a2a3e : 0x5a4330, roughness: 0.8, transparent: true });
+    const trim = new THREE.MeshStandardMaterial({ color: cfg.trim, roughness: 0.35, metalness: 0.7, emissive: cfg.trim, emissiveIntensity: 0.25, transparent: true });
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(H * 0.17, H * 0.23, H * 0.1, 7), stone);
+    base.position.y = H * 0.05;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(H * (control ? 0.075 : 0.06), H * (control ? 0.12 : 0.1), H * 0.62, 6), wood);
+    pole.position.y = H * 0.1 + H * 0.31;
+    const eyeY = H * 0.82;
+    const cradle = new THREE.Mesh(new THREE.CylinderGeometry(H * 0.12, H * 0.07, H * 0.1, 6), trim);
+    cradle.position.y = eyeY - H * 0.12;
+    parts.add(base, pole, cradle);
+    // 잎 모양 받침 세 장(눈을 감싸는 날개).
+    for (let i = 0; i < 3; i++) {
+      const leaf = new THREE.Mesh(new THREE.ConeGeometry(H * 0.07, H * 0.32, 4), trim);
+      const a = (i / 3) * Math.PI * 2;
+      leaf.position.set(Math.cos(a) * H * 0.13, eyeY + H * 0.02, Math.sin(a) * H * 0.13);
+      leaf.rotation.set(Math.sin(a) * 0.55, 0, -Math.cos(a) * 0.55);
+      parts.add(leaf);
+    }
+    let ring = null;
+    if (control) {
+      ring = new THREE.Mesh(new THREE.TorusGeometry(H * 0.2, H * 0.018, 6, 24), trim);
+      ring.position.y = eyeY;
+      ring.rotation.x = Math.PI / 2.4;
+      parts.add(ring);
+    }
+    const eyeMat = new THREE.MeshBasicMaterial({ color: cfg.eye, transparent: true });
+    const eye = new THREE.Mesh(control ? new THREE.OctahedronGeometry(H * 0.13, 0) : new THREE.SphereGeometry(H * 0.11, 14, 12), eyeMat);
+    eye.position.y = eyeY;
+    parts.add(eye);
+    let glow = null;
+    const tex = this._glow(cfg.eye);
+    if (tex) {
+      glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: cfg.eye, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.85 }));
+      glow.scale.setScalar(H * 0.75);
+      glow.position.y = eyeY;
+      parts.add(glow);
+    }
+    const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM;
+    const teamHex = ward.team === myTeam ? WARD_TEAM_COLOR.ally : WARD_TEAM_COLOR.enemy;
+    const groundRing = new THREE.Mesh(new THREE.RingGeometry(L(WARD_SELECT_RADIUS_LOL) * 1.1, L(WARD_SELECT_RADIUS_LOL) * 1.45, 32),
+      new THREE.MeshBasicMaterial({ color: teamHex, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }));
+    groundRing.rotation.x = -Math.PI / 2;
+    groundRing.position.y = 0.02;
+    group.add(groundRing);
+    if (typeof createBlobShadow === 'function') group.add(createBlobShadow(H * 0.4));
+    // 클릭 판정용 보이지 않는 몸통(레이캐스트 대상).
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(L(WARD_SELECT_RADIUS_LOL) * 1.3, L(WARD_SELECT_RADIUS_LOL) * 1.3, H, 8), new THREE.MeshBasicMaterial({ visible: false }));
+    body.position.y = H / 2;
+    group.add(body);
+    // 체력 칸(최대 체력만큼) + 남은 시간 막대(시간 제한 와드만). 숫자는 쓰지 않는다(28차 체력바 원칙).
+    const labelDiv = document.createElement('div');
+    labelDiv.className = 'wardBar';
+    labelDiv.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:1px;pointer-events:none;';
+    const pips = document.createElement('div');
+    pips.style.cssText = 'display:flex;gap:1px;padding:1px;background:#0b0b0f;border:1px solid #000;border-radius:1px;';
+    const pipEls = [];
+    for (let i = 0; i < ward.maxHp; i++) {
+      const p = document.createElement('div');
+      p.style.cssText = `width:7px;height:5px;background:#${teamHex.toString(16).padStart(6, '0')};`;
+      pips.appendChild(p); pipEls.push(p);
+    }
+    labelDiv.appendChild(pips);
+    let timeEl = null;
+    if (Number.isFinite(ward.expiresAt)) {
+      const outer = document.createElement('div');
+      outer.style.cssText = `width:${ward.maxHp * 8 + 1}px;height:2px;background:#111;`;
+      timeEl = document.createElement('div');
+      timeEl.style.cssText = 'width:100%;height:100%;background:#d8d8d8;';
+      outer.appendChild(timeEl); labelDiv.appendChild(outer);
+    }
+    let label = null;
+    if (typeof CSS2DObject !== 'undefined') {
+      label = new CSS2DObject(labelDiv);
+      label.position.set(0, H + 0.12, 0);
+      group.add(label);
+    }
+    this.scene.add(group);
+    Object.assign(ward, {
+      mesh: group, body, labelDiv, label, _parts: parts, _eye: eye, _glow: glow, _eyeMat: eyeMat, _ring: ring,
+      _mats: [stone, wood, trim, eyeMat], _pipEls: pipEls, _timeEl: timeEl, _teamHex: teamHex, _height: H,
+    });
+  }
+
+  // 와드 설치. owner: 설치한 챔피언(없으면 개수 제한 없음 - 연습용 적 와드). 반환: 와드 객체.
+  place(owner, type, position, opts = {}) {
+    const cfg = WARD_TYPES[type];
+    if (!cfg || !position) return null;
+    const team = opts.team || (owner && owner.team) || PLAYER_TEAM;
+    // 원작: 같은 종류의 개수 제한을 넘으면 가장 오래된 것부터 사라진다.
+    if (owner && cfg.limitPerOwner) {
+      const mine = this.wards.filter((w) => w.owner === owner && w.wardType === type && !w.destroyed).sort((a, b) => a.createdAt - b.createdAt);
+      while (mine.length >= cfg.limitPerOwner) this.destroy(mine.shift(), 'limit');
+    }
+    const now = performance.now();
+    const pos = position.clone(); pos.y = 0;
+    const maxHp = opts.maxHp || cfg.maxHp;
+    const ward = {
+      isWard: true, wardType: type, team, owner: owner || null, position: pos, createdAt: now,
+      expiresAt: Number.isFinite(opts.durationSec) ? now + opts.durationSec * 1000 : Infinity,
+      hp: maxHp, maxHp, destroyed: false, collisionRadius: lolRangeToWorld(WARD_SELECT_RADIUS_LOL),
+      visionRadius: opts.visionRadius || cfg.visionRadius,
+      _visionSource: { position: pos, lolRadius: opts.visionRadius || cfg.visionRadius, revealsBrush: false },
+      _spawnT: 0, _hitFlash: 0,
+    };
+    this._buildMesh(ward);
+    this.wards.push(ward);
+    this._syncOwner(owner);
+    return ward;
+  }
+
+  destroy(ward, reason = 'killed') {
+    if (!ward || ward.destroyed) return;
+    ward.destroyed = true; ward.hp = 0; ward._destroyReason = reason;
+    if (ward.labelDiv && ward.labelDiv.parentNode) ward.labelDiv.parentNode.removeChild(ward.labelDiv);
+    if (ward.mesh) this.scene.remove(ward.mesh);
+    if (reason === 'killed' && typeof vfx !== 'undefined' && vfx && typeof vfx.groundShockwave === 'function') {
+      vfx.groundShockwave(ward.position, lolRangeToWorld(60), WARD_TYPES[ward.wardType].eye, 0.3);
+    }
+    if (typeof controller !== 'undefined' && controller && controller.currentTarget === ward) {
+      controller.currentTarget = null;
+      if (typeof targetRing !== 'undefined') targetRing.clear();
+    }
+    this.wards = this.wards.filter((w) => w !== ward);
+    this._syncOwner(ward.owner);
+  }
+
+  clear(filter = null) { for (const w of [...this.wards]) if (!filter || filter(w)) this.destroy(w, 'cleared'); }
+
+  // 리 신 W 등 기존 코드가 읽는 owner._placedWards(자기 와드 목록)를 맞춘다.
+  _syncOwner(owner) {
+    if (!owner) return;
+    owner._placedWards = this.wards.filter((w) => w.owner === owner && !w.destroyed);
+  }
+
+  // 기본 공격 명중: 체력 1 감소(원작 - 공격력·치명타 무관).
+  hitWard(ward, attacker) {
+    if (!ward || ward.destroyed || ward.hp <= 0) return false;
+    if (attacker && attacker.team && attacker.team === ward.team) return false;
+    ward.hp = Math.max(0, ward.hp - 1);
+    ward._hitFlash = 0.15;
+    if (ward.hp <= 0) this.destroy(ward, 'killed');
+    else this._refreshBar(ward);
+    return true;
+  }
+
+  wardsOfTeam(team) { return this.wards.filter((w) => !w.destroyed && w.team === team); }
+
+  // 투명 와드가 상대 제어 와드 반경 안이면 드러나고 무력화된다.
+  _enemyControlWardCovering(ward) {
+    if (ward.wardType !== 'stealth') return null;
+    for (const c of this.wards) {
+      if (c.destroyed || c.team === ward.team || !WARD_TYPES[c.wardType].revealRadius) continue;
+      if (getHorizontalDistance(c.position, ward.position) <= lolRangeToWorld(WARD_TYPES[c.wardType].revealRadius)) return c;
+    }
+    return null;
+  }
+  isDisabled(ward) { return !!this._enemyControlWardCovering(ward); }
+
+  // team이 이 와드를 볼 수 있는가(같은 팀은 항상). 은신 와드는 드러내기(상대 제어 와드·드러내기 효과)가 있어야 보인다.
+  isVisibleTo(team, ward) {
+    if (!ward || ward.destroyed) return false;
+    if (ward.team === team) return true;
+    if (typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled) return true;
+    if (WARD_TYPES[ward.wardType].stealthed) {
+      const revealedByWard = !!this._enemyControlWardCovering(ward);
+      const revealedByEffect = (visionSystem.reveals || []).some((r) => r.unit === ward && r.team === team && r.expiresAt > performance.now());
+      if (!revealedByWard && !revealedByEffect) return false;
+    }
+    return visionSystem.isPointVisibleTo(team, ward.position);
+  }
+
+  // team이 공격 대상으로 고를 수 있는 상대 와드.
+  targetableFor(team) { return this.wards.filter((w) => !w.destroyed && w.team !== team && this.isVisibleTo(team, w)); }
+
+  // 시야 공급원(vision_system.js _collectSources). 무력화된 와드는 시야를 주지 못한다.
+  visionSources(team) {
+    const out = [];
+    for (const w of this.wards) if (!w.destroyed && w.team === team && !this.isDisabled(w)) out.push(w._visionSource);
+    return out;
+  }
+
+  _refreshBar(ward) {
+    if (!ward._pipEls) return;
+    const lost = '#2a2a2a', on = `#${ward._teamHex.toString(16).padStart(6, '0')}`;
+    ward._pipEls.forEach((p, i) => { p.style.background = i < ward.hp ? on : lost; });
+  }
+
+  update(dt) {
+    const now = performance.now();
+    for (const w of [...this.wards]) if (now >= w.expiresAt) this.destroy(w, 'expired');
+    const viewTeam = (typeof visionSystem !== 'undefined' && visionSystem) ? visionSystem.viewTeam : PLAYER_TEAM;
+    for (const w of this.wards) {
+      // 설치 연출(0.25초 튀어 오름) · 눈 흔들림 · 맞았을 때 번쩍임 - 연출값.
+      w._spawnT = Math.min(1, w._spawnT + dt / 0.25);
+      const s = w._spawnT < 1 ? (1 - Math.pow(1 - w._spawnT, 3)) * (1 + 0.18 * Math.sin(w._spawnT * Math.PI)) : 1;
+      w._parts.scale.setScalar(Math.max(0.01, s));
+      const t = (now - w.createdAt) / 1000;
+      w._eye.position.y = w._height * (0.82 + 0.015 * Math.sin(t * 2.4));
+      if (w._ring) w._ring.rotation.z = t * 1.2;
+      w._eye.rotation.y = t * (w.wardType === 'control' ? 1.6 : 0.6);
+      if (w._glow) { w._glow.position.y = w._eye.position.y; w._glow.material.opacity = 0.7 + 0.15 * Math.sin(t * 3.1); }
+      if (w._hitFlash > 0) { w._hitFlash = Math.max(0, w._hitFlash - dt); w._eyeMat.color.setHex(w._hitFlash > 0 ? 0xffffff : WARD_TYPES[w.wardType].eye); }
+      if (w._timeEl && Number.isFinite(w.expiresAt)) w._timeEl.style.width = `${Math.max(0, (w.expiresAt - now) / (w.expiresAt - w.createdAt)) * 100}%`;
+      // 화면 표시: 보는 팀에게 안 보이는 상대 와드는 숨긴다. 상대 제어 와드에 무력화된 자기 와드는 흐리게 그린다.
+      const visible = this.isVisibleTo(viewTeam, w);
+      if (w.mesh.visible !== visible) { w.mesh.visible = visible; if (w.labelDiv) w.labelDiv.style.display = visible ? '' : 'none'; }
+      if (visible) {
+        const own = w.team === viewTeam;
+        const disabled = this.isDisabled(w);
+        const op = own && disabled ? 0.4 : 1;
+        if (w._opacity !== op) { w._opacity = op; for (const m of w._mats) m.opacity = op; if (w._glow) w._glow.visible = !disabled; }
+      }
+    }
+  }
+
+  /* ---------------- 설치 명령(사거리 밖이면 걸어가서 놓기) ---------------- */
+  // ctrl: 플레이어 챔피언, point: 찍은 지점, rangeLol: 설치 사거리, placeFn(finalPos): 실제로 놓는 함수(충전 소모 포함).
+  order(ctrl, point, rangeLol, placeFn) {
+    if (!ctrl || !point) return false;
+    if (ctrl.state === STATE.DEAD || ctrl.state === STATE.RESPAWN || ctrl.hp <= 0) return false;
+    if (isCrowdControlled(ctrl)) return false;
+    let target = point.clone(); target.y = 0;
+    if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap) target = howlingAbyssMap.clampPosition(target); // 벽·맵 밖이면 가까운 걸을 수 있는 곳
+    const dist = getHorizontalDistance(ctrl.root.position, target);
+    if (dist <= lolRangeToWorld(rangeLol)) { ctrl._wardOrder = null; return placeFn(target); }
+    ctrl.moveTo(target.clone());
+    if (ctrl.state !== STATE.MOVE) return false; // 지금은 걸을 수 없다(시전 잠금 등)
+    ctrl._wardOrder = { target, rangeLol, placeFn }; // moveTo가 지운 뒤에 건다(이동·공격·스킬 명령이 오면 취소)
+    return true;
+  }
+
+  updateOrder(ctrl) {
+    const o = ctrl && ctrl._wardOrder;
+    if (!o) return;
+    if (ctrl.state === STATE.DEAD || ctrl.hp <= 0 || ctrl.state !== STATE.MOVE) { ctrl._wardOrder = null; return; }
+    if (getHorizontalDistance(ctrl.root.position, o.target) > lolRangeToWorld(o.rangeLol)) return;
+    ctrl._wardOrder = null;
+    if (isCrowdControlled(ctrl)) return;
+    o.placeFn(o.target);
+    ctrl.moveTo(ctrl.root.position.clone()); // 놓으면 멈춘다
+    ctrl._wardOrder = null;
   }
 }
 
@@ -12387,6 +12688,7 @@ class CharacterController {
     this._actionTimers.forEach(clearTimeout);
     this._actionTimers = [];
     if (this._leesinAnimTimer) { clearTimeout(this._leesinAnimTimer); this._leesinAnimTimer = null; }
+    if (this._leesinEndTransientClip) this._leesinEndTransientClip(); // 32차: 리 신 W2/E2 임시 이동 클립 등록도 같이 푼다
     if (this.sequencePlayer && this.sequencePlayer.isPlaying) this.sequencePlayer.cancel();
   }
 
@@ -12643,6 +12945,7 @@ CharacterController.prototype._cancelChampionTimers = function() {
 
 /* ---------------- movement ---------------- */
 CharacterController.prototype.moveTo = function(point) {
+    this._wardOrder = null; // 이동 명령은 "걸어가서 와드 놓기"를 취소한다(와드 명령 자신은 moveTo 뒤에 다시 건다)
     this._approachCast = null; // 이동 명령은 "다가가서 시전"을 취소한다(접근 시전 자신은 moveTo 뒤에 다시 건다)
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
     if (isCrowdControlled(this) || isRooted(this)) return; // 기절/속박 중에는 이동 명령을 받지 않는다
@@ -12963,6 +13266,7 @@ CharacterController.prototype.faceDirectionInstant = function(dir) {
 
 /* ---------------- targeting / basic attack ---------------- */
 CharacterController.prototype.selectTarget = function(enemy) {
+    this._wardOrder = null;
     this._approachCast = null; // 공격 명령은 "다가가서 시전"을 취소한다
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
     if (!enemy || enemy.hp <= 0) return;
@@ -13951,6 +14255,13 @@ CharacterController.prototype._beginAttackSwing = function() {
         if (typeof canRealmInteract === 'function' && !canRealmInteract(this, target)) return;
         if (typeof brushSystem !== 'undefined') brushSystem.onActionFromBrush(this); // 부쉬 안에서 평타를 치면 잠깐 드러남
         const originPos = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.75, 0)).addScaledVector(dirToTarget, 0.35);
+        // 32차: 와드는 기본 공격 1회에 체력 1(공격력·치명타·적중 시 효과 없음 - 원작). 원거리는 투사체가 닿을 때.
+        if (target.isWard) {
+          vfx.spawn('basicAttack', originPos, dirToTarget);
+          if (this.stats.attackRange > 300) projectiles.spawn({ from: originPos, target, speed: this.stats.projectileSpeed, color: 0xdff0ff, realmId: this.realmId, onHit: (t) => wardSystem.hitWard(t, this) });
+          else wardSystem.hitWard(target, this);
+          return;
+        }
         // 요네 패시브(사냥꾼의 길 - Steel and Spirit): 평타가 강철 검/아자카나의
         // 검을 번갈아 사용하며, 아자카나의 검 차례일 때만 물리 50%+마법 50%로
         // 나뉜다. 이번 스윙이 그 차례인지 먼저 확정하고(_yoneIsAzakanaSwing),
@@ -14200,6 +14511,15 @@ const CHAMPION_SLOT_CASTS = {
 // 버려져 스킬마다 애니메이션이 끝날 때까지(최대 1.7초) 서 있거나 아예 멈췄다. 돌진·점멸 같은 이동 스킬은 원래 목적지를
 // 잇지 않는다. 시전 직후 저장한 목적지는 runAction의 판정 시점(시전 시간 끝) 또는 행동 종료 시 _resumeAfterAction이 쓴다.
 CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
+    this._wardOrder = null; // 스킬 명령은 "걸어가서 와드 놓기"를 취소한다
+    // 32차: 평타 대상으로 고른 와드는 스킬 대상이 아니다(원작 - 대상 지정 스킬은 와드를 지정하지 못한다). 시전하는 동안만
+    // 대상을 비우고, 스킬이 새 대상을 정하지 않았으면 와드 공격 명령을 되돌린다.
+    if (this.currentTarget && this.currentTarget.isWard) {
+      const ward = this.currentTarget;
+      this.currentTarget = null;
+      try { return this.castAbility(slot, mouseWorldPoint); }
+      finally { if (!this.currentTarget && !ward.destroyed && ward.hp > 0) this.currentTarget = ward; }
+    }
     // 새 시전 명령은 진행 중이던 "다가가서 시전"을 대체한다. 대상이 사거리 밖이면 여기서 걸어가기 시작한다.
     this._approachCast = null;
     if (this._tryBeginApproachCast(slot, mouseWorldPoint)) return;
@@ -17533,7 +17853,7 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
     if (!target || target.hp<=0) { this.currentTarget=null; return; }
     if (isSilenced(this) || isCrowdControlled(this)) return;
     const w=this._renektonData().W;
-    if (this._renekton.wArmed) {
+    if (this._renekton.wArmed && !target.isWard) { // 와드에는 강화 평타(W)를 쓰지 않고 일반 평타로 친다
       const empowered=this._renekton.wEmpowered;
       this._renekton.wArmed=false; this._renekton.wEmpowered=false;
       const hits=empowered?w.empoweredHits:w.hits;
@@ -17557,6 +17877,7 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
     const clip=this.findAnimation(clipName); const interval=getAttackInterval(this.stats); const windup=getWindupDuration(this.stats); const recovery=getRecoveryDuration(this.stats);
     this.runAction(`renektonAA${this.comboIndex}`,STATE.ATTACK,{faceDir:dir,startupOverride:windup,recoveryOverride:recovery,timeScaleOverride:clip&&interval>0?attackClipTimeScale(this,clip,windup,interval):1,dataOverride:{clips:[clipName],startup:windup,recovery,cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{
       if(!targetLockValid(target)) return;
+      if(target.isWard){ wardSystem.hitWard(target,this); return; } // 32차: 와드는 평타 1회에 체력 1
       const attackResult={rawDamage:this.stats.attackDamage,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,isBasicAttack:true};
       applyDamage(target,attackResult); this._renektonOnBasicAttackHit(target);
     }});
@@ -21248,6 +21569,12 @@ CharacterController.prototype._clearLeeSinAnimTimer = function() {
       clearTimeout(this._leesinAnimTimer);
       this._leesinAnimTimer = null;
     }
+    this._leesinEndTransientClip();
+};
+// 32차: W2/E2 이동용 클립을 "임시 이동 클립"으로 등록한 뒤 해제 타이머가 지워지면(그 사이 평타·스킬 시작 →
+// _clearActionTimers) 등록이 영영 남아, 이후 이동할 때마다 그 클립(E2 이동 모션)으로 달렸다. 타이머를 지울 때 같이 푼다.
+CharacterController.prototype._leesinEndTransientClip = function() {
+    if (this._leesinTransientClip) { this._endTransientMoveClip(this._leesinTransientClip); this._leesinTransientClip = null; }
 };
 
 CharacterController.prototype._leesinFirstClip = function(names) {
@@ -21327,10 +21654,11 @@ CharacterController.prototype._leesinPlayInstantRecastClip = function(idleNames,
     this._clearLeeSinAnimTimer();
     if (moving) {
       this._beginTransientMoveClip(clip.name);
+      this._leesinTransientClip = clip.name;
       this.playFirstAvailable([clip.name], { loop: THREE.LoopOnce, clampWhenFinished: false, fade: 0.1 });
       this._leesinAnimTimer = this._champTimeout(() => {
         this._leesinAnimTimer = null;
-        this._endTransientMoveClip(clip.name);
+        this._leesinEndTransientClip();
         if (this.championId === 'leesin' && !this.currentActionKey && this.currentClipKey === clip.name) this._returnToLocomotion();
       }, Math.max(0.05, clip.duration - 0.05) * 1000);
     } else {
@@ -21571,10 +21899,14 @@ CharacterController.prototype._leesinPickWAlly = function(mouseWorldPoint) {
 // 29차: 방호 대상 와드 - 커서 반경 100 안(PC 위키 "대상을 직접 찍지 않으면 반경 100 안의 와드를 찾는다")의
 // 설치된 와드 중 리 신 W 사거리(range1) 안에서 커서에 가장 가까운 것.
 CharacterController.prototype._leesinPickWWard = function(mouseWorldPoint) {
-  if (!mouseWorldPoint || !this._placedWards || !this._placedWards.length) return null;
+  // 32차: 자기 와드뿐 아니라 아군 와드 전부(원작 - 아군 와드로 방호 가능).
+  const pool = [...(this._placedWards || [])];
+  if (typeof wardSystem !== 'undefined' && wardSystem) for (const aw of wardSystem.wardsOfTeam(this.team)) if (!pool.includes(aw)) pool.push(aw);
+  if (!mouseWorldPoint || !pool.length) return null;
   const w = this._champData().W;
   let best = null, bestD = Infinity;
-  for (const ward of this._placedWards) {
+  for (const ward of pool) {
+    if (ward && ward.destroyed) continue;
     if (!ward || !ward.position || (ward.expiresAt && ward.expiresAt <= performance.now())) continue;
     const dMouse = getHorizontalDistance(ward.position, mouseWorldPoint);
     if (dMouse > lolRangeToWorld(100)) continue;
@@ -30116,105 +30448,58 @@ function _itemTickTrinketRecharge(ctrl, dt) {
   }
 }
 
-// 설치된 와드의 만료(시각 효과 정리) - 실제 시야 만료는 VisionSystem의
-// temporarySources가 자체적으로 처리하므로, 여기서는 지상에 놓인 마커
-// 메시만 같은 시각에 치운다.
-function _itemTickWardExpiry(ctrl, dt) {
-  if (!ctrl || !ctrl._placedWards || !ctrl._placedWards.length) return;
-  const now = performance.now();
-  ctrl._placedWards = ctrl._placedWards.filter((w) => {
-    if (now < w.expiresAt) return true;
-    if (w.mesh && typeof scene !== 'undefined') scene.remove(w.mesh);
-    return false;
-  });
-}
+// 32차: 와드는 이제 ward_system.js의 유닛이다(체력·팀·은신·시야·개수 제한·만료를 그쪽에서 관리). 여기서는
+// 충전·소지 개수를 소모하고 설치 명령(사거리 밖이면 걸어가서 놓기)만 넘긴다.
+function _itemTickWardExpiry() { /* 만료는 wardSystem.update()가 처리한다 */ }
 
-// 사정거리 clamp(목표 지점이 설치 사정거리 밖이면 실제 LoL처럼 그 방향
-// 최대 사거리에 놓는다) - 투명 와드/제어 와드가 공용으로 쓴다.
-function _clampWardTargetPos(ctrl, worldPoint, placeRangeLol) {
-  const origin = ctrl.root.position;
-  const maxWorldRange = lolRangeToWorld(placeRangeLol);
-  const dir = new THREE.Vector3().subVectors(worldPoint, origin);
-  dir.y = 0;
-  const dist = dir.length();
-  const finalPos = dist > maxWorldRange && dist > 0
-    ? origin.clone().add(dir.normalize().multiplyScalar(maxWorldRange))
-    : worldPoint.clone();
-  finalPos.y = 0;
-  return finalPos;
-}
-// 시야 부여 + 지상 마커 메시 생성 + ctrl._placedWards 등록 - 투명 와드/
-// 제어 와드가 공용으로 쓴다(색만 다르게 해서 구분 - 제어 와드는 실제
-// LoL처럼 분홍색 계열).
-function _spawnWardMarker(ctrl, finalPos, durationSec, hitsToDestroy, visionRadius, colorHex) {
-  if (typeof visionSystem !== 'undefined' && visionSystem) visionSystem.grantVision(finalPos, visionRadius, durationSec);
-  const ward = { position: finalPos.clone(), hitsRemaining: hitsToDestroy, expiresAt: performance.now() + durationSec * 1000, mesh: null };
-  if (typeof scene !== 'undefined' && typeof THREE !== 'undefined') {
-    const geo = new THREE.ConeGeometry(lolRangeToWorld(26), lolRangeToWorld(55), 6);
-    const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85 });
-    ward.mesh = new THREE.Mesh(geo, mat);
-    ward.mesh.position.copy(finalPos);
-    ward.mesh.position.y = lolRangeToWorld(27);
-    scene.add(ward.mesh);
-  }
-  ctrl._placedWards = ctrl._placedWards || [];
-  ctrl._placedWards.push(ward);
-}
-
-// 투명 와드 설치 - Q/W/E/R과 동일하게 키 입력 시 마우스 월드 좌표를 받아
-// 즉시 시전한다(character_controller.js에서 직접 호출하지 않고 전역
-// 키바인드(global_system_instances.js)에서 바로 호출 - 아이템은 챔피언
-// 고유 스킬이 아니므로 castAbility()를 거치지 않는다).
+// 투명 와드 설치(트린켓) - 키 입력 시 마우스 월드 좌표에 놓는다. 사거리 밖이면 사거리까지 걸어가서 놓는다(원작).
+// 아이템은 챔피언 고유 스킬이 아니므로 castAbility()를 거치지 않는다(전역 키바인드에서 바로 호출).
 function placeWard(ctrl, worldPoint) {
   if (!ctrl || !ctrl.trinket) { console.warn('[WARD] 장착한 트린켓이 없습니다.'); return false; }
   const data = ITEM_DATA[ctrl.trinket.id];
-  if (!data) return false;
+  if (!data || !worldPoint || typeof wardSystem === 'undefined' || !wardSystem) return false;
   if (!(ctrl.trinket.charges > 0)) { console.warn('[WARD] 충전량이 없습니다.'); return false; }
-  if (!worldPoint) return false;
-
-  const finalPos = _clampWardTargetPos(ctrl, worldPoint, data.placeRange);
-  ctrl.trinket.charges -= 1;
-  const durationSec = _itemScaleByGameTime(data.wardDurationEarlySec, data.wardDurationLateSec, data.scaleFullAtSec);
-  _spawnWardMarker(ctrl, finalPos, durationSec, data.hitsToDestroy, data.visionRadius, 0x3fae6a);
-  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
-  console.log(`[WARD] 투명 와드 설치 (지속시간 ${durationSec.toFixed(0)}초, 남은 충전 ${ctrl.trinket.charges}/${data.maxCharges})`);
-  return true;
+  return wardSystem.order(ctrl, worldPoint, data.placeRange, (pos) => {
+    if (!(ctrl.trinket && ctrl.trinket.charges > 0)) return false; // 걸어가는 사이 충전이 사라졌으면 취소
+    ctrl.trinket.charges -= 1;
+    const durationSec = _itemScaleByGameTime(data.wardDurationEarlySec, data.wardDurationLateSec, data.scaleFullAtSec);
+    wardSystem.place(ctrl, 'stealth', pos, { durationSec, maxHp: data.hitsToDestroy, visionRadius: data.visionRadius });
+    if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+    console.log(`[WARD] 투명 와드 설치 (지속시간 ${durationSec.toFixed(0)}초, 남은 충전 ${ctrl.trinket.charges}/${data.maxCharges})`);
+    return true;
+  });
 }
 
-// 제어 와드 설치 - useItem()에서 호출된다. 숫자키/인벤토리 클릭 둘 다
-// "클릭 시점의 마우스 월드 좌표"를 넘길 방법이 없으므로(useItem(ctrl,
-// slotIndex)는 슬롯 번호만 받는 공용 진입점 - 체력 물약 등 다른 소비
-// 아이템과 동일한 호출 규약을 그대로 따른다), 트린켓의 인벤토리 클릭
-// 폴백과 동일하게 "캐릭터 정면"에 설치한다.
-// 버그 수정 전까지는 wardPlacement를 가진 아이템이 전부 제어 와드처럼
-// "소모되면 인벤토리 칸에서 완전히 사라지는" slot.count(maxStack) 방식
-// 하나만 지원했다. 서포터 아이템 계열(세계지도집/룬 나침반/세계의 결실 +
-// 5종 업그레이드)의 와드는 "충전량 N회, 상점 이용 시 재충전"(체력 물약과
-// 동일한 maxCharges+refillOnShopUse 패턴)이라 그대로 재사용하면 slot.count가
-// undefined라서 와드가 무한정 나가는 잠재 버그가 될 뻔했다 - item.maxCharges
-// 보유 여부로 두 소모 방식을 분기한다(제어 와드 등 기존 maxStack 아이템은
-// 동작이 전혀 바뀌지 않는다 - 회귀 없음).
+// 제어 와드·서포터 아이템 와드 - useItem()에서 호출된다. 원작처럼 마우스 위치에 놓는다(사거리 밖이면 걸어가서).
+// 마우스 위치를 모르면(인벤토리 클릭 등) 캐릭터 정면 300에 놓는다.
+// 소모 방식: 제어 와드는 소지 개수(slot.count, 다 쓰면 칸에서 사라짐), 서포터 아이템 계열은 충전량(maxCharges).
+// 시간 제한 와드(durationSec이 유한 - 서포터 아이템)는 투명 와드, 영구 와드는 제어 와드로 놓는다.
 function _useControlWard(ctrl, slotIndex, item) {
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot || slot.id !== item.id) return false;
   if (item.maxCharges && !(slot.charges > 0)) { console.warn('[ITEM] 충전량이 없습니다.'); return false; }
+  if (typeof wardSystem === 'undefined' || !wardSystem) return false;
   const p = item.wardPlacement;
-  const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
-  const targetPoint = ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)));
-  const finalPos = _clampWardTargetPos(ctrl, targetPoint, p.placeRange);
-  if (item.maxCharges) {
-    slot.charges -= 1;
-  } else {
-    slot.count -= 1;
-    if (slot.count <= 0) {
-      const idx = ctrl.items.indexOf(slot);
-      if (idx >= 0) ctrl.items.splice(idx, 1);
-    }
+  const timed = Number.isFinite(p.durationSec) && p.durationSec < 9999;
+  let targetPoint = (typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : null;
+  if (!targetPoint) {
+    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
+    targetPoint = ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)));
   }
-  _spawnWardMarker(ctrl, finalPos, p.durationSec, p.hitsToDestroy, p.visionRadius, 0xd23fae);
-  if (typeof updateItemUI === 'function') updateItemUI(ctrl);
-  console.log(`[WARD] 제어 와드 설치 (${item.nameKo})`);
-  return true;
+  return wardSystem.order(ctrl, targetPoint, p.placeRange, (pos) => {
+    const s = ctrl.items && ctrl.items.includes(slot) ? slot : null;
+    if (!s || (item.maxCharges ? !(s.charges > 0) : !(s.count > 0))) return false;
+    if (item.maxCharges) {
+      s.charges -= 1;
+    } else {
+      s.count -= 1;
+      if (s.count <= 0) { const idx = ctrl.items.indexOf(s); if (idx >= 0) ctrl.items.splice(idx, 1); }
+    }
+    wardSystem.place(ctrl, timed ? 'stealth' : 'control', pos, { durationSec: timed ? p.durationSec : Infinity, maxHp: p.hitsToDestroy, visionRadius: p.visionRadius });
+    if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+    console.log(`[WARD] ${item.nameKo} 설치`);
+    return true;
+  });
 }
 
 /* ============================================================
@@ -30900,6 +31185,25 @@ const skillTelegraphs = new SkillTelegraphSystem(scene);
 // 부쉬(brush_system.js): 기본 두 곳 + 설치 모드(N)로 클릭한 자리에 추가.
 const brushSystem = new BrushSystem(scene);
 brushSystem.addDefaultLayout();
+// 와드(32차, ward_system.js): 체력·팀·은신·시야를 가진 유닛. animate()에서 매 프레임 update().
+const wardSystem = new WardSystem(scene);
+// 연습용 적 와드 설치 모드: 켜고 좌클릭하면 그 자리에 빨강 팀 와드를 놓는다(원작에는 없는 연습 도구).
+let enemyWardPlaceMode = false;
+const enemyWardPlaceCheckboxEl = document.getElementById('enemyWardPlaceCheckbox');
+const enemyWardTypeSelectEl = document.getElementById('enemyWardTypeSelect');
+function setEnemyWardPlaceMode(v) {
+  enemyWardPlaceMode = v;
+  if (enemyWardPlaceCheckboxEl) enemyWardPlaceCheckboxEl.checked = v;
+  renderer.domElement.style.cursor = v ? 'crosshair' : '';
+}
+if (enemyWardPlaceCheckboxEl) enemyWardPlaceCheckboxEl.addEventListener('change', () => setEnemyWardPlaceMode(enemyWardPlaceCheckboxEl.checked));
+const clearWardsBtnEl = document.getElementById('clearWardsBtn');
+if (clearWardsBtnEl) clearWardsBtnEl.addEventListener('click', () => wardSystem.clear());
+function placeEnemyWardAt(point) {
+  const type = enemyWardTypeSelectEl && enemyWardTypeSelectEl.value === 'control' ? 'control' : 'stealth';
+  const data = type === 'stealth' ? ITEM_DATA.stealthWard : null;
+  wardSystem.place(null, type, point, { team: ENEMY_TEAM, durationSec: data ? data.wardDurationLateSec : Infinity });
+}
 let brushPlaceMode = false;
 const brushPlaceCheckboxEl = document.getElementById('brushPlaceCheckbox');
 function setBrushPlaceMode(v) {
@@ -31397,7 +31701,7 @@ function worldToScreenPx(worldPos) {
   const v = worldPos.clone().project(camera); // clone 필수 - project()는 벡터를 제자리에서 바꿔버려서, 원본(유닛 실제 좌표)에 그대로 쓰면 유닛이 순간이동한다
   return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
 }
-function getEnemyHit(clientX, clientY) {
+function getEnemyHit(clientX, clientY, { includeWards = false } = {}) {
   // getAllEnemyUnits()가 이제 RED 진영 포탑/억제기/넥서스/미니언을 전부
   // 포함하므로(요청 20절 - 기본 공격/스킬 대상에 미니언·구조물 포함) 여기서
   // 따로 배열을 또 합칠 필요가 없다(중복 후보 방지). 우물(기지)은
@@ -31409,6 +31713,8 @@ function getEnemyHit(clientX, clientY) {
   // 01_hit_detection.js 참고). 시스템이 꺼져 있으면 기존과 완전히 동일하게
   // 동작한다.
   const candidates = getTargetableEnemyUnits();
+  // 32차: 평타 대상 고르기(좌클릭·커서)에서만 보이는 적 와드도 후보로 넣는다 - 스킬 조준은 와드를 고르지 않는다.
+  if (includeWards && typeof wardSystem !== 'undefined' && wardSystem) candidates.push(...wardSystem.targetableFor((controller && controller.team) || PLAYER_TEAM));
   if (!candidates.length) return null;
   mouseNDC.x = (clientX / window.innerWidth) * 2 - 1;
   mouseNDC.y = -(clientY / window.innerHeight) * 2 + 1;
@@ -31426,7 +31732,7 @@ function getEnemyHit(clientX, clientY) {
     if (!p || isBehindCamera(p)) continue;
     const screen = worldToScreenPx(p);
     const dist = Math.hypot(screen.x - clientX, screen.y - clientY);
-    const radiusPx = u.isMinion ? ENEMY_CLICK_RADIUS_MINION_PX : ENEMY_CLICK_RADIUS_PX;
+    const radiusPx = (u.isMinion || u.isWard) ? ENEMY_CLICK_RADIUS_MINION_PX : ENEMY_CLICK_RADIUS_PX;
     if (dist <= radiusPx && dist < bestDist) { bestDist = dist; best = u; }
   }
   return best;
@@ -31584,7 +31890,12 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
       if (groundPoint) brushSystem.addBrush({ x: groundPoint.x, z: groundPoint.z });
       return;
     }
-    const enemyHit = getEnemyHit(e.clientX, e.clientY);
+    if (enemyWardPlaceMode) {
+      const groundPoint = getGroundPoint(e.clientX, e.clientY);
+      if (groundPoint) placeEnemyWardAt(groundPoint);
+      return;
+    }
+    const enemyHit = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
     if (enemyHit) controller.selectTarget(enemyHit);
     else { controller.currentTarget = null; targetRing.clear(); }
   }
@@ -31596,8 +31907,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 // 있을 때는 값이 안 바뀌므로 매 프레임이 아니라 실제 mousemove 이벤트가
 // 있을 때만 계산되고, 후보 수도 최대 수십 개 수준이라 비용이 거의 없다.
 renderer.domElement.addEventListener('pointermove', (e) => {
-  if (paused || !controller || dummyPlaceMode || allyPlaceMode || brushPlaceMode || skillAim.aiming) { renderer.domElement.style.cursor = (brushPlaceMode || skillAim.aiming) ? 'crosshair' : ''; return; }
-  const enemyHit = getEnemyHit(e.clientX, e.clientY);
+  if (paused || !controller || dummyPlaceMode || allyPlaceMode || brushPlaceMode || enemyWardPlaceMode || skillAim.aiming) { renderer.domElement.style.cursor = (brushPlaceMode || enemyWardPlaceMode || skillAim.aiming) ? 'crosshair' : ''; return; }
+  const enemyHit = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
   renderer.domElement.style.cursor = enemyHit ? 'pointer' : '';
 });
 
@@ -31659,10 +31970,8 @@ window.addEventListener('keydown', (e) => {
     case 'Digit4': if (typeof useItem === 'function') useItem(controller, 3); break;
     case 'Digit5': if (typeof useItem === 'function') useItem(controller, 4); break;
     case 'Digit6': if (typeof useItem === 'function') useItem(controller, 5); break;
-    // 트린켓(투명 와드) - 실제 LoL의 트린켓 키(기본 Y)와 겹치지 않게
-    // 이 프로젝트에서 안 쓰던 T를 쓴다. Q/W/E/R과 동일하게 현재 마우스
-    // 월드 좌표에 즉시 시전한다(설치 사정거리를 넘으면 placeWard()
-    // 내부에서 그 방향 최대 거리로 clamp).
+    // 트린켓(투명 와드) - 원작 기본 키는 4지만 이 프로젝트는 숫자키 1~6을 인벤토리 6칸에 쓰므로 T를 쓴다.
+    // 현재 마우스 위치에 놓는다(설치 사거리 밖이면 사거리까지 걸어가서 놓는다 - 원작).
     case 'KeyT': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
   }
 });
@@ -33304,6 +33613,7 @@ function animate() {
     skillAim.update(controller, lastGroundPoint, lastPointerClient);
     if (typeof statusIndicators !== 'undefined') statusIndicators.update(controller, dt); // 25차: 버프 바·스킬 칸 변화·대상 표식·준비 고리
     visionSystem.update(controller, dt);
+    if (typeof wardSystem !== 'undefined') { wardSystem.updateOrder(controller); wardSystem.update(dt); } // 32차: 와드(만료·표시·걸어가서 놓기)
     // 최적화(문서 4-22/23절 "DOM 업데이트를 매 프레임 하지 마라") - 디버그
     // 패널은 매 프레임 innerHTML 전체를 새로 만들어서 매초 60번씩 DOM을
     // 다시 그리고 있었다. 사람이 읽는 숫자 패널이라 60Hz 정밀도가 전혀

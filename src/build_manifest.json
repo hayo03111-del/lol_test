@@ -28,6 +28,7 @@
     "src/core/range_indicator.js",
     "src/core/vision_system.js",
     "src/world/brush_system.js",
+    "src/world/ward_system.js",
     "src/rendering/skill_telegraph_system.js",
     "src/rendering/skill_aim_system.js",
     "src/rendering/status_indicator_system.js",

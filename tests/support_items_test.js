@@ -73,6 +73,11 @@ const stubs = {
   getCollisionRadius: () => 0,
   scene: { add(){}, remove(){} },
   visionSystem: { grantVision(){} },
+  // 32차: 와드는 ward_system.js 유닛 - 아이템 쪽은 설치 명령(order)과 설치(place)만 넘긴다. 여기서는 기록만 하는 가짜.
+  wardSystem: {
+    order(ctrl, point, rangeLol, placeFn) { this.lastOrder = { point, rangeLol }; return placeFn(point); },
+    place(owner, type, pos, opts) { const w = { type, position: pos, ...opts }; this.lastPlace = w; if (owner) (owner._placedWards = owner._placedWards || []).push(w); return w; },
+  },
 };
 const context = vm.createContext(stubs);
 const itemDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/item_data.js'), 'utf8');

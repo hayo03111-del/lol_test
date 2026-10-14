@@ -70,6 +70,15 @@ const CHAMPION_SLOT_CASTS = {
 // 버려져 스킬마다 애니메이션이 끝날 때까지(최대 1.7초) 서 있거나 아예 멈췄다. 돌진·점멸 같은 이동 스킬은 원래 목적지를
 // 잇지 않는다. 시전 직후 저장한 목적지는 runAction의 판정 시점(시전 시간 끝) 또는 행동 종료 시 _resumeAfterAction이 쓴다.
 CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
+    this._wardOrder = null; // 스킬 명령은 "걸어가서 와드 놓기"를 취소한다
+    // 32차: 평타 대상으로 고른 와드는 스킬 대상이 아니다(원작 - 대상 지정 스킬은 와드를 지정하지 못한다). 시전하는 동안만
+    // 대상을 비우고, 스킬이 새 대상을 정하지 않았으면 와드 공격 명령을 되돌린다.
+    if (this.currentTarget && this.currentTarget.isWard) {
+      const ward = this.currentTarget;
+      this.currentTarget = null;
+      try { return this.castAbility(slot, mouseWorldPoint); }
+      finally { if (!this.currentTarget && !ward.destroyed && ward.hp > 0) this.currentTarget = ward; }
+    }
     // 새 시전 명령은 진행 중이던 "다가가서 시전"을 대체한다. 대상이 사거리 밖이면 여기서 걸어가기 시작한다.
     this._approachCast = null;
     if (this._tryBeginApproachCast(slot, mouseWorldPoint)) return;

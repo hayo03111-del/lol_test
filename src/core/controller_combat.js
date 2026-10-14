@@ -918,6 +918,13 @@ CharacterController.prototype._beginAttackSwing = function() {
         if (typeof canRealmInteract === 'function' && !canRealmInteract(this, target)) return;
         if (typeof brushSystem !== 'undefined') brushSystem.onActionFromBrush(this); // 부쉬 안에서 평타를 치면 잠깐 드러남
         const originPos = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.75, 0)).addScaledVector(dirToTarget, 0.35);
+        // 32차: 와드는 기본 공격 1회에 체력 1(공격력·치명타·적중 시 효과 없음 - 원작). 원거리는 투사체가 닿을 때.
+        if (target.isWard) {
+          vfx.spawn('basicAttack', originPos, dirToTarget);
+          if (this.stats.attackRange > 300) projectiles.spawn({ from: originPos, target, speed: this.stats.projectileSpeed, color: 0xdff0ff, realmId: this.realmId, onHit: (t) => wardSystem.hitWard(t, this) });
+          else wardSystem.hitWard(target, this);
+          return;
+        }
         // 요네 패시브(사냥꾼의 길 - Steel and Spirit): 평타가 강철 검/아자카나의
         // 검을 번갈아 사용하며, 아자카나의 검 차례일 때만 물리 50%+마법 50%로
         // 나뉜다. 이번 스윙이 그 차례인지 먼저 확정하고(_yoneIsAzakanaSwing),

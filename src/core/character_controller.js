@@ -1246,6 +1246,7 @@ class CharacterController {
     this._actionTimers.forEach(clearTimeout);
     this._actionTimers = [];
     if (this._leesinAnimTimer) { clearTimeout(this._leesinAnimTimer); this._leesinAnimTimer = null; }
+    if (this._leesinEndTransientClip) this._leesinEndTransientClip(); // 32차: 리 신 W2/E2 임시 이동 클립 등록도 같이 푼다
     if (this.sequencePlayer && this.sequencePlayer.isPlaying) this.sequencePlayer.cancel();
   }
 

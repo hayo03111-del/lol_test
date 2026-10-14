@@ -182,6 +182,8 @@ class VisionSystem {
       (t.team === VISION_TEAM_BLUE ? blue : red).push({ position: t.mesh.position, lolRadius: VISION_CONFIG.turretSightRange });
     }
     for (const s of this.temporarySources) if (s.expiresAt > now) ((s.team || VISION_TEAM_BLUE) === VISION_TEAM_RED ? red : blue).push(s);
+    // 와드(ward_system.js): 살아 있고 무력화되지 않은 와드가 시야 900을 준다(부쉬 안에 놓이면 그 부쉬 안만).
+    if (typeof wardSystem !== 'undefined' && wardSystem) { blue.push(...wardSystem.visionSources(VISION_TEAM_BLUE)); red.push(...wardSystem.visionSources(VISION_TEAM_RED)); }
     return { [VISION_TEAM_BLUE]: blue, [VISION_TEAM_RED]: red };
   }
 

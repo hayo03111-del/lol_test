@@ -1588,6 +1588,7 @@ function animate() {
     skillAim.update(controller, lastGroundPoint, lastPointerClient);
     if (typeof statusIndicators !== 'undefined') statusIndicators.update(controller, dt); // 25차: 버프 바·스킬 칸 변화·대상 표식·준비 고리
     visionSystem.update(controller, dt);
+    if (typeof wardSystem !== 'undefined') { wardSystem.updateOrder(controller); wardSystem.update(dt); } // 32차: 와드(만료·표시·걸어가서 놓기)
     // 최적화(문서 4-22/23절 "DOM 업데이트를 매 프레임 하지 마라") - 디버그
     // 패널은 매 프레임 innerHTML 전체를 새로 만들어서 매초 60번씩 DOM을
     // 다시 그리고 있었다. 사람이 읽는 숫자 패널이라 60Hz 정밀도가 전혀

@@ -26,6 +26,25 @@ const skillTelegraphs = new SkillTelegraphSystem(scene);
 // 부쉬(brush_system.js): 기본 두 곳 + 설치 모드(N)로 클릭한 자리에 추가.
 const brushSystem = new BrushSystem(scene);
 brushSystem.addDefaultLayout();
+// 와드(32차, ward_system.js): 체력·팀·은신·시야를 가진 유닛. animate()에서 매 프레임 update().
+const wardSystem = new WardSystem(scene);
+// 연습용 적 와드 설치 모드: 켜고 좌클릭하면 그 자리에 빨강 팀 와드를 놓는다(원작에는 없는 연습 도구).
+let enemyWardPlaceMode = false;
+const enemyWardPlaceCheckboxEl = document.getElementById('enemyWardPlaceCheckbox');
+const enemyWardTypeSelectEl = document.getElementById('enemyWardTypeSelect');
+function setEnemyWardPlaceMode(v) {
+  enemyWardPlaceMode = v;
+  if (enemyWardPlaceCheckboxEl) enemyWardPlaceCheckboxEl.checked = v;
+  renderer.domElement.style.cursor = v ? 'crosshair' : '';
+}
+if (enemyWardPlaceCheckboxEl) enemyWardPlaceCheckboxEl.addEventListener('change', () => setEnemyWardPlaceMode(enemyWardPlaceCheckboxEl.checked));
+const clearWardsBtnEl = document.getElementById('clearWardsBtn');
+if (clearWardsBtnEl) clearWardsBtnEl.addEventListener('click', () => wardSystem.clear());
+function placeEnemyWardAt(point) {
+  const type = enemyWardTypeSelectEl && enemyWardTypeSelectEl.value === 'control' ? 'control' : 'stealth';
+  const data = type === 'stealth' ? ITEM_DATA.stealthWard : null;
+  wardSystem.place(null, type, point, { team: ENEMY_TEAM, durationSec: data ? data.wardDurationLateSec : Infinity });
+}
 let brushPlaceMode = false;
 const brushPlaceCheckboxEl = document.getElementById('brushPlaceCheckbox');
 function setBrushPlaceMode(v) {
@@ -523,7 +542,7 @@ function worldToScreenPx(worldPos) {
   const v = worldPos.clone().project(camera); // clone 필수 - project()는 벡터를 제자리에서 바꿔버려서, 원본(유닛 실제 좌표)에 그대로 쓰면 유닛이 순간이동한다
   return { x: (v.x * 0.5 + 0.5) * window.innerWidth, y: (-v.y * 0.5 + 0.5) * window.innerHeight };
 }
-function getEnemyHit(clientX, clientY) {
+function getEnemyHit(clientX, clientY, { includeWards = false } = {}) {
   // getAllEnemyUnits()가 이제 RED 진영 포탑/억제기/넥서스/미니언을 전부
   // 포함하므로(요청 20절 - 기본 공격/스킬 대상에 미니언·구조물 포함) 여기서
   // 따로 배열을 또 합칠 필요가 없다(중복 후보 방지). 우물(기지)은
@@ -535,6 +554,8 @@ function getEnemyHit(clientX, clientY) {
   // 01_hit_detection.js 참고). 시스템이 꺼져 있으면 기존과 완전히 동일하게
   // 동작한다.
   const candidates = getTargetableEnemyUnits();
+  // 32차: 평타 대상 고르기(좌클릭·커서)에서만 보이는 적 와드도 후보로 넣는다 - 스킬 조준은 와드를 고르지 않는다.
+  if (includeWards && typeof wardSystem !== 'undefined' && wardSystem) candidates.push(...wardSystem.targetableFor((controller && controller.team) || PLAYER_TEAM));
   if (!candidates.length) return null;
   mouseNDC.x = (clientX / window.innerWidth) * 2 - 1;
   mouseNDC.y = -(clientY / window.innerHeight) * 2 + 1;
@@ -552,7 +573,7 @@ function getEnemyHit(clientX, clientY) {
     if (!p || isBehindCamera(p)) continue;
     const screen = worldToScreenPx(p);
     const dist = Math.hypot(screen.x - clientX, screen.y - clientY);
-    const radiusPx = u.isMinion ? ENEMY_CLICK_RADIUS_MINION_PX : ENEMY_CLICK_RADIUS_PX;
+    const radiusPx = (u.isMinion || u.isWard) ? ENEMY_CLICK_RADIUS_MINION_PX : ENEMY_CLICK_RADIUS_PX;
     if (dist <= radiusPx && dist < bestDist) { bestDist = dist; best = u; }
   }
   return best;
@@ -710,7 +731,12 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
       if (groundPoint) brushSystem.addBrush({ x: groundPoint.x, z: groundPoint.z });
       return;
     }
-    const enemyHit = getEnemyHit(e.clientX, e.clientY);
+    if (enemyWardPlaceMode) {
+      const groundPoint = getGroundPoint(e.clientX, e.clientY);
+      if (groundPoint) placeEnemyWardAt(groundPoint);
+      return;
+    }
+    const enemyHit = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
     if (enemyHit) controller.selectTarget(enemyHit);
     else { controller.currentTarget = null; targetRing.clear(); }
   }
@@ -722,8 +748,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 // 있을 때는 값이 안 바뀌므로 매 프레임이 아니라 실제 mousemove 이벤트가
 // 있을 때만 계산되고, 후보 수도 최대 수십 개 수준이라 비용이 거의 없다.
 renderer.domElement.addEventListener('pointermove', (e) => {
-  if (paused || !controller || dummyPlaceMode || allyPlaceMode || brushPlaceMode || skillAim.aiming) { renderer.domElement.style.cursor = (brushPlaceMode || skillAim.aiming) ? 'crosshair' : ''; return; }
-  const enemyHit = getEnemyHit(e.clientX, e.clientY);
+  if (paused || !controller || dummyPlaceMode || allyPlaceMode || brushPlaceMode || enemyWardPlaceMode || skillAim.aiming) { renderer.domElement.style.cursor = (brushPlaceMode || enemyWardPlaceMode || skillAim.aiming) ? 'crosshair' : ''; return; }
+  const enemyHit = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
   renderer.domElement.style.cursor = enemyHit ? 'pointer' : '';
 });
 
@@ -785,10 +811,8 @@ window.addEventListener('keydown', (e) => {
     case 'Digit4': if (typeof useItem === 'function') useItem(controller, 3); break;
     case 'Digit5': if (typeof useItem === 'function') useItem(controller, 4); break;
     case 'Digit6': if (typeof useItem === 'function') useItem(controller, 5); break;
-    // 트린켓(투명 와드) - 실제 LoL의 트린켓 키(기본 Y)와 겹치지 않게
-    // 이 프로젝트에서 안 쓰던 T를 쓴다. Q/W/E/R과 동일하게 현재 마우스
-    // 월드 좌표에 즉시 시전한다(설치 사정거리를 넘으면 placeWard()
-    // 내부에서 그 방향 최대 거리로 clamp).
+    // 트린켓(투명 와드) - 원작 기본 키는 4지만 이 프로젝트는 숫자키 1~6을 인벤토리 6칸에 쓰므로 T를 쓴다.
+    // 현재 마우스 위치에 놓는다(설치 사거리 밖이면 사거리까지 걸어가서 놓는다 - 원작).
     case 'KeyT': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
   }
 });

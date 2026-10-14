@@ -32,6 +32,11 @@ const stubs = {
   scene: { add(){}, remove(){} },
   visionSystem: { grantVision: (pos, radius, dur) => grantedVision.push({ pos, radius, dur }) },
   lolRangeToWorld: (v) => v, // identity for test simplicity
+  // 32차: 와드는 ward_system.js 유닛 - 아이템 쪽은 설치 명령(order)과 설치(place)만 넘긴다. 여기서는 기록만 하는 가짜.
+  wardSystem: {
+    order(ctrl, point, rangeLol, placeFn) { this.lastOrder = { point, rangeLol }; return placeFn(point); },
+    place(owner, type, pos, opts) { const w = { type, position: pos, ...opts }; this.lastPlace = w; if (owner) (owner._placedWards = owner._placedWards || []).push(w); return w; },
+  },
 };
 
 const context = vm.createContext(stubs);
@@ -94,8 +99,9 @@ grantedVision.length = 0;
 const placed1 = useItem(c1, 0);
 assert(placed1 === true, 'using a control ward from inventory succeeds');
 assert(c1.items[0].count === 1, 'placing one control ward consumes one count (1 left)');
-assert(grantedVision.length === 1 && grantedVision[0].radius === 900, 'placing a control ward grants vision with the expected radius (900, real LoL value - not given in the source text)');
-assert(c1._placedWards.length === 1, 'the placed control ward is tracked in _placedWards (reuses the same ward-marker system as stealth ward)');
+assert(stubs.wardSystem.lastPlace.type === 'control' && stubs.wardSystem.lastPlace.visionRadius === 900 && stubs.wardSystem.lastPlace.durationSec === Infinity, 'placing a control ward places a permanent control ward with 900 vision (real LoL value - not given in the source text)');
+assert(stubs.wardSystem.lastOrder.rangeLol === 600, 'control ward placement order uses the 600 placement range (beyond it the champion walks into range)');
+assert(c1._placedWards.length === 1, 'the placed control ward is tracked in _placedWards (ward_system unit)');
 useItem(c1, 0);
 assert(c1.items.length === 0, 'placing the last control ward removes the item slot entirely (count reaches 0)');
 

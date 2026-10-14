@@ -8,6 +8,7 @@
 
 /* ---------------- movement ---------------- */
 CharacterController.prototype.moveTo = function(point) {
+    this._wardOrder = null; // 이동 명령은 "걸어가서 와드 놓기"를 취소한다(와드 명령 자신은 moveTo 뒤에 다시 건다)
     this._approachCast = null; // 이동 명령은 "다가가서 시전"을 취소한다(접근 시전 자신은 moveTo 뒤에 다시 건다)
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
     if (isCrowdControlled(this) || isRooted(this)) return; // 기절/속박 중에는 이동 명령을 받지 않는다
@@ -328,6 +329,7 @@ CharacterController.prototype.faceDirectionInstant = function(dir) {
 
 /* ---------------- targeting / basic attack ---------------- */
 CharacterController.prototype.selectTarget = function(enemy) {
+    this._wardOrder = null;
     this._approachCast = null; // 공격 명령은 "다가가서 시전"을 취소한다
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
     if (!enemy || enemy.hp <= 0) return;

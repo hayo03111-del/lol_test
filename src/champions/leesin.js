@@ -21,6 +21,12 @@ CharacterController.prototype._clearLeeSinAnimTimer = function() {
       clearTimeout(this._leesinAnimTimer);
       this._leesinAnimTimer = null;
     }
+    this._leesinEndTransientClip();
+};
+// 32차: W2/E2 이동용 클립을 "임시 이동 클립"으로 등록한 뒤 해제 타이머가 지워지면(그 사이 평타·스킬 시작 →
+// _clearActionTimers) 등록이 영영 남아, 이후 이동할 때마다 그 클립(E2 이동 모션)으로 달렸다. 타이머를 지울 때 같이 푼다.
+CharacterController.prototype._leesinEndTransientClip = function() {
+    if (this._leesinTransientClip) { this._endTransientMoveClip(this._leesinTransientClip); this._leesinTransientClip = null; }
 };
 
 CharacterController.prototype._leesinFirstClip = function(names) {
@@ -100,10 +106,11 @@ CharacterController.prototype._leesinPlayInstantRecastClip = function(idleNames,
     this._clearLeeSinAnimTimer();
     if (moving) {
       this._beginTransientMoveClip(clip.name);
+      this._leesinTransientClip = clip.name;
       this.playFirstAvailable([clip.name], { loop: THREE.LoopOnce, clampWhenFinished: false, fade: 0.1 });
       this._leesinAnimTimer = this._champTimeout(() => {
         this._leesinAnimTimer = null;
-        this._endTransientMoveClip(clip.name);
+        this._leesinEndTransientClip();
         if (this.championId === 'leesin' && !this.currentActionKey && this.currentClipKey === clip.name) this._returnToLocomotion();
       }, Math.max(0.05, clip.duration - 0.05) * 1000);
     } else {
@@ -344,10 +351,14 @@ CharacterController.prototype._leesinPickWAlly = function(mouseWorldPoint) {
 // 29차: 방호 대상 와드 - 커서 반경 100 안(PC 위키 "대상을 직접 찍지 않으면 반경 100 안의 와드를 찾는다")의
 // 설치된 와드 중 리 신 W 사거리(range1) 안에서 커서에 가장 가까운 것.
 CharacterController.prototype._leesinPickWWard = function(mouseWorldPoint) {
-  if (!mouseWorldPoint || !this._placedWards || !this._placedWards.length) return null;
+  // 32차: 자기 와드뿐 아니라 아군 와드 전부(원작 - 아군 와드로 방호 가능).
+  const pool = [...(this._placedWards || [])];
+  if (typeof wardSystem !== 'undefined' && wardSystem) for (const aw of wardSystem.wardsOfTeam(this.team)) if (!pool.includes(aw)) pool.push(aw);
+  if (!mouseWorldPoint || !pool.length) return null;
   const w = this._champData().W;
   let best = null, bestD = Infinity;
-  for (const ward of this._placedWards) {
+  for (const ward of pool) {
+    if (ward && ward.destroyed) continue;
     if (!ward || !ward.position || (ward.expiresAt && ward.expiresAt <= performance.now())) continue;
     const dMouse = getHorizontalDistance(ward.position, mouseWorldPoint);
     if (dMouse > lolRangeToWorld(100)) continue;

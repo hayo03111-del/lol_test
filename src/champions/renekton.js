@@ -167,7 +167,7 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
     if (!target || target.hp<=0) { this.currentTarget=null; return; }
     if (isSilenced(this) || isCrowdControlled(this)) return;
     const w=this._renektonData().W;
-    if (this._renekton.wArmed) {
+    if (this._renekton.wArmed && !target.isWard) { // 와드에는 강화 평타(W)를 쓰지 않고 일반 평타로 친다
       const empowered=this._renekton.wEmpowered;
       this._renekton.wArmed=false; this._renekton.wEmpowered=false;
       const hits=empowered?w.empoweredHits:w.hits;
@@ -191,6 +191,7 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
     const clip=this.findAnimation(clipName); const interval=getAttackInterval(this.stats); const windup=getWindupDuration(this.stats); const recovery=getRecoveryDuration(this.stats);
     this.runAction(`renektonAA${this.comboIndex}`,STATE.ATTACK,{faceDir:dir,startupOverride:windup,recoveryOverride:recovery,timeScaleOverride:clip&&interval>0?attackClipTimeScale(this,clip,windup,interval):1,dataOverride:{clips:[clipName],startup:windup,recovery,cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{
       if(!targetLockValid(target)) return;
+      if(target.isWard){ wardSystem.hitWard(target,this); return; } // 32차: 와드는 평타 1회에 체력 1
       const attackResult={rawDamage:this.stats.attackDamage,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,isBasicAttack:true};
       applyDamage(target,attackResult); this._renektonOnBasicAttackHit(target);
     }});
