@@ -202,6 +202,8 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
     const origin = this.root.position.clone();
     const dir = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, origin).setY(0) : (this.currentTarget ? new THREE.Vector3().subVectors(this.currentTarget.mesh.position, origin).setY(0) : (this.moveDir.lengthSq() > 0 ? this.moveDir.clone() : new THREE.Vector3(0, 0, 1)));
     if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1); else dir.normalize();
+    // 26차: 1타 쿨다운 확인. 예전엔 쿨다운을 설정만 하고 확인하지 않아, 음파가 대상에 맞기 전(표식이 생기기 전)에는 기력만 있으면 계속 쏠 수 있었다.
+    if (!free && this.cooldowns.Q > 0) { showSkillToast(`Q - 쿨다운 ${this.cooldowns.Q.toFixed(1)}s 남음`); return; }
     if (!free && this.mp < q.energy1) { debugSkillMiss('Lee Sin Q', '기력 부족'); return; }
     if (!free) { this.mp -= q.energy1; this.cooldowns.Q = abilityHasteCooldown(this, skillVal(q.cooldown, Math.max(1, this.skillLevels.Q || 1))); updateBars(this); }
     // Q 음파 시전 순간, 투사체가 날아가는 방향을 즉시 바라본다.
@@ -280,6 +282,8 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
       return;
     }
     if (!this.canStartNewAction()) return;
+    // 26차: 1타 쿨다운 확인. 예전엔 쿨다운을 설정만 하고 확인하지 않아, 2타를 쓴 직후 바로 다시 1타를 쓸 수 있었다.
+    if (!free && this.cooldowns.W > 0) { showSkillToast(`W - 쿨다운 ${this.cooldowns.W.toFixed(1)}s 남음`); return; }
     if (!free && this.mp < w.energy1) { debugSkillMiss('Lee Sin W', '기력 부족'); return; }
     if (!free) { this.mp -= w.energy1; this.cooldowns.W = abilityHasteCooldown(this, w.cooldown); updateBars(this); }
     vfx.spawn('w', this.root.position.clone());
@@ -361,6 +365,8 @@ CharacterController.prototype._leesinCastE = function(free) {
       return;
     }
     if (!this.canStartNewAction()) return;
+    // 26차: 1타 쿨다운 확인. 예전엔 쿨다운을 설정만 하고 확인하지 않아, 빗나가거나 2타를 쓴 직후 바로 다시 쓸 수 있었다.
+    if (!free && this.cooldowns.E > 0) { showSkillToast(`E - 쿨다운 ${this.cooldowns.E.toFixed(1)}s 남음`); return; }
     if (!free && this.mp < e.energy1) { debugSkillMiss('Lee Sin E', '기력 부족'); return; }
     if (!free) { this.mp -= e.energy1; this.cooldowns.E = abilityHasteCooldown(this, e.cooldown); updateBars(this); }
     this._clearActionTimers();
@@ -368,6 +374,8 @@ CharacterController.prototype._leesinCastE = function(free) {
     this._leesinPlayCast({ actionKey: 'leesinE', clips: ['Spell3'], lockSec: e.castTimeSec || 0.25, state: STATE.E_CAST, exitIdle: ['Spell3_ToIdle'], onRelease: () => {
       const now = performance.now();
     vfx.spawn('e', this.root.position.clone());
+    // 26차: 판정 반경(e.range)만큼 퍼지는 지면 충격파로 E 범위를 보여 준다.
+    if (typeof vfx.groundShockwave === 'function') vfx.groundShockwave(this.root.position, lolRangeToWorld(e.range), 0xffc04d, 0.45);
     const hits = findEnemiesInRadius(this.root.position, e.range);
     if (hits.length) {
       const lvl = Math.max(1, this.skillLevels.E || 1);

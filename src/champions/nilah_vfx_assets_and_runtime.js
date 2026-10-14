@@ -258,6 +258,32 @@ class VFXSystem {
     });
     return sprite;
   }
+  // 26차: 지면 충격파 - 스킬 실제 판정 반경(radius, 월드)까지 고리가 퍼지고 바닥 원이 잠깐 빛났다가 사라진다
+  // (리 신 E 폭풍처럼 자기 중심 범위 스킬의 "범위가 어디까지였는지" 보여 주는 표시).
+  _shockwaveMaterial(color, opacity) {
+    return new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  }
+  groundShockwave(position, radius, color = 0xffc04d, life = 0.45) {
+    const g = new THREE.Group();
+    const ringMat = this._shockwaveMaterial(color, 0.95);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 64), ringMat);
+    const discMat = this._shockwaveMaterial(color, 0.35);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.0, 64), discMat);
+    ring.rotation.x = disc.rotation.x = -Math.PI / 2;
+    g.add(disc); g.add(ring);
+    g.position.set(position.x, 0.07, position.z);
+    g.renderOrder = 4;
+    this.scene.add(g);
+    this.active.push({ life, maxLife: life,
+      update: (t) => {
+        const r = radius * (0.25 + 0.75 * Math.min(1, t / 0.35)); // 앞 35% 동안 반경까지 퍼지고 그 뒤로는 반경 유지
+        ring.scale.setScalar(r); disc.scale.setScalar(r);
+        ringMat.opacity = 0.95 * (1 - t);
+        discMat.opacity = 0.35 * (1 - t) * (1 - t);
+      },
+      dispose: () => { this.scene.remove(g); ring.geometry.dispose(); disc.geometry.dispose(); ringMat.dispose(); discMat.dispose(); } });
+    return g;
+  }
   _basicAttackFlash(position, direction) {
     const pos = position.clone().addScaledVector(direction, 0.3);
     const sprite = this._makeSprite(VFX_TEXTURES.flashSharp, 0xffe9a8, 0.5, pos);

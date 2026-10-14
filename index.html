@@ -7832,6 +7832,32 @@ class VFXSystem {
     });
     return sprite;
   }
+  // 26차: 지면 충격파 - 스킬 실제 판정 반경(radius, 월드)까지 고리가 퍼지고 바닥 원이 잠깐 빛났다가 사라진다
+  // (리 신 E 폭풍처럼 자기 중심 범위 스킬의 "범위가 어디까지였는지" 보여 주는 표시).
+  _shockwaveMaterial(color, opacity) {
+    return new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  }
+  groundShockwave(position, radius, color = 0xffc04d, life = 0.45) {
+    const g = new THREE.Group();
+    const ringMat = this._shockwaveMaterial(color, 0.95);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 64), ringMat);
+    const discMat = this._shockwaveMaterial(color, 0.35);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.0, 64), discMat);
+    ring.rotation.x = disc.rotation.x = -Math.PI / 2;
+    g.add(disc); g.add(ring);
+    g.position.set(position.x, 0.07, position.z);
+    g.renderOrder = 4;
+    this.scene.add(g);
+    this.active.push({ life, maxLife: life,
+      update: (t) => {
+        const r = radius * (0.25 + 0.75 * Math.min(1, t / 0.35)); // 앞 35% 동안 반경까지 퍼지고 그 뒤로는 반경 유지
+        ring.scale.setScalar(r); disc.scale.setScalar(r);
+        ringMat.opacity = 0.95 * (1 - t);
+        discMat.opacity = 0.35 * (1 - t) * (1 - t);
+      },
+      dispose: () => { this.scene.remove(g); ring.geometry.dispose(); disc.geometry.dispose(); ringMat.dispose(); discMat.dispose(); } });
+    return g;
+  }
   _basicAttackFlash(position, direction) {
     const pos = position.clone().addScaledVector(direction, 0.3);
     const sprite = this._makeSprite(VFX_TEXTURES.flashSharp, 0xffe9a8, 0.5, pos);
@@ -10117,7 +10143,7 @@ class SkillAimSystem {
       시계 방향으로 줄어드는 그림자가 덮인다. 다 차서 다음 공격이 강화되면 테두리가 빛난다.
    2) 스킬 아이콘 변화: 야스오·요네 Q가 2중첩이면 Q 칸이 3타(회오리·돌진)로 바뀌고, 남은 시간 동안 칸 테두리가
       줄어든다. 리 신 Q 표식이 있으면 Q 칸이 2타(공명의 일격)로 바뀐다.
-   3) 대상 머리 위 표식: 다리우스 출혈(1~5), 바루스 역병(1~3), 벡스 우울, 리 신 Q 음파, 이즈리얼 W 정기 표식을
+   3) 대상 머리 위 표식: 다리우스 출혈 5중첩 특수 표식(26차), 바루스 역병(1~3), 벡스 우울, 리 신 Q 음파, 이즈리얼 W 정기 표식을
       허수아비 체력 바 위에 띄운다.
    4) 내 챔피언 발밑 "준비됨" 효과: 야스오·요네 Q3, 마스터 이 이중 타격, 다리우스 녹서스의 힘, 모데카이저 패시브
       오라, 벡스 파멸이 준비되면 발밑에 도는 고리를 띄운다.
@@ -10223,9 +10249,11 @@ function championSlotStates(c, now) {
 function unitMarkEntries(c, unit, now) {
   const out = [];
   if (!c || !unit) return out;
+  // 26차 요청: 다리우스 출혈은 중첩 수를 보이지 않고, 5중첩이 되면(녹서스의 힘 발동 - 이후 평타·스킬은 바로 5중첩)
+  // 대상 체력 바 위에 특수 표식만 띄운다.
   if (c.championId === 'darius' && c._darius) {
     const rec = c._darius.stacksOnTarget.get(unit);
-    if (rec && rec.stacks > 0 && (!rec.expiresAt || rec.expiresAt > now)) out.push({ kind: 'pips', n: rec.stacks, max: 5, color: '#e0342a', glyph: '●', full: rec.stacks >= 5 });
+    if (rec && rec.stacks >= 5 && (!rec.expiresAt || rec.expiresAt > now)) out.push({ kind: 'emblem', color: '#ff2a1f' });
   }
   if (c.championId === 'varus') {
     const rec = typeof getStatus === 'function' ? getStatus(unit, 'varusBlight') : null;
@@ -10250,6 +10278,13 @@ function championReadyAura(c, now) {
   if (c.championId === 'vex' && c._vex && now >= (c._vex.doomReadyAt || 0)) return { color: 0xa36bff, spin: 1.2 };
   return null;
 }
+
+// 다리우스 출혈 5중첩 표식: 핏방울 안에 도끼날 두 개를 교차한 모양(직접 그린 그림 - 원작 이펙트 파일이 아니다).
+const DARIUS_BLEED_EMBLEM_SVG = `<svg class="emblem" viewBox="0 0 32 32" aria-label="출혈 5중첩">
+  <path d="M16 2 C16 2 5 14.5 5 21 a11 11 0 0 0 22 0 C27 14.5 16 2 16 2 Z" fill="#7a0d0a" stroke="#ff3b2e" stroke-width="1.6"/>
+  <path d="M10.5 26 L21 13 M21.5 26 L11 13" stroke="#ffd2c9" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M19 11.2 l4.2 -1.3 -1.2 4.3 Z M13 11.2 l-4.2 -1.3 1.2 4.3 Z" fill="#ffd2c9"/>
+</svg>`;
 
 class StatusIndicatorSystem {
   constructor() {
@@ -10280,6 +10315,8 @@ class StatusIndicatorSystem {
       .unitMarks .tag { padding:0 3px; border:1px solid currentColor; border-radius:2px; font-size:9px; background:rgba(0,0,0,.55); font-weight:700; }
       .unitMarks .pip.off { opacity:.25; }
       .unitMarks .pip.full { filter:drop-shadow(0 0 3px currentColor); }
+      .unitMarks .emblem { width:30px; height:30px; margin-bottom:2px; filter:drop-shadow(0 0 4px #ff2a1f) drop-shadow(0 0 8px rgba(255,42,31,.6)); animation:dariusEmblem 0.9s ease-in-out infinite alternate; }
+      @keyframes dariusEmblem { from { transform:scale(.92); } to { transform:scale(1.08); } }
     `;
     document.head.appendChild(style);
     this._bar = document.createElement('div');
@@ -10355,7 +10392,7 @@ class StatusIndicatorSystem {
       let el = u.labelDiv.querySelector('.unitMarks');
       if (!marks.length) { if (el) el.remove(); continue; }
       if (!el) { el = document.createElement('div'); el.className = 'unitMarks'; u.labelDiv.insertBefore(el, u.labelDiv.firstChild); }
-      el.innerHTML = marks.map((m) => m.kind === 'tag'
+      el.innerHTML = marks.map((m) => m.kind === 'emblem' ? DARIUS_BLEED_EMBLEM_SVG : m.kind === 'tag'
         ? `<span class="tag" style="color:${m.color}">${m.text}</span>`
         : Array.from({ length: m.max }, (_, i) => `<span class="pip${i < m.n ? '' : ' off'}${m.full ? ' full' : ''}" style="color:${m.color}">${m.glyph}</span>`).join('')).join('');
     }
@@ -13629,6 +13666,24 @@ CharacterController.prototype._consumeAttackOverrideOnConfirmedHit = function(ov
     }
 };
 
+// 26차: 구조물(포탑·억제기·넥서스)을 친 평타의 강화 평타 처리. 예전엔 구조물 피해만 주고 적중 처리를 건너뛰어
+// 가렌 Q·다리우스 W 강화 평타가 소모되지 않았다 - 포탑을 칠 때마다 계속 강화 평타 모션으로 나갔다.
+// 원작(PC 위키): 가렌 Q 추가 피해는 포탑에도 들어가고, 다리우스 W도 대상이 "적·구조물"이다. 침묵·둔화·처치 환급은
+// 구조물과 무관하므로 넣지 않는다.
+CharacterController.prototype._onStructureBasicAttackHit = function(target, overrideId, applyFn) {
+    if (!overrideId || !target) return;
+    const cd = this._champData(); if (!cd) return;
+    let bonus = 0;
+    if (this.championId === 'garen' && overrideId === 'Q') {
+      const q = cd.Q, lvl = Math.max(1, this.skillLevels.Q || 1);
+      bonus = skillVal(q.damageByLevel, lvl) + q.adRatio * this.stats.attackDamage;
+    } else if (this.championId === 'darius' && overrideId === 'W') {
+      bonus = this.stats.attackDamage * skillVal(cd.W.bonusAdRatioByLevel, Math.max(1, this.skillLevels.W || 1));
+    } else return;
+    if (bonus > 0 && applyFn) applyFn(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, armorPenPercent: this.armorPenPercent || 0, source: this });
+    this._consumeAttackOverrideOnConfirmedHit(overrideId);
+};
+
 CharacterController.prototype._beginAttackSwing = function() {
     if (this.championId === 'renekton') return this._renektonBeginAttackSwing();
     // 마스터 이 명상 중 공격 입력 = W 즉시 종료 + E/R 지속시간 복구 + 즉시 평타.
@@ -13886,7 +13941,7 @@ CharacterController.prototype._beginAttackSwing = function() {
               // (요청 문서 11절) 일반 챔피언/더미 피해 경로(applyDamage +
               // _onBasicAttackHit)로 보내지 않고 전용 함수로 분리한다 -
               // applyDamageToTurret()이 방패/이중갑옷/요새화를 전부 처리한다.
-              if (t.isTurret) { applyDamageToTurret(t, attackResult, { isRanged: true, source: this }); return; }
+              if (t.isTurret) { applyDamageToTurret(t, attackResult, { isRanged: true, source: this }); this._onStructureBasicAttackHit(t, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: true, source: this })); return; }
               if (hasStatus(t, 'NILAH_W_DODGE')) { console.log('[NILAH W] 기본 공격 회피'); return; }
               if (t.isMinion) {
                 const wouldKill = t.hp > 0 && t.hp <= calculateDamage({ ...attackResult, target: t });
@@ -13894,15 +13949,20 @@ CharacterController.prototype._beginAttackSwing = function() {
                 this._onBasicAttackHit(t, overrideId, wouldKill, attackHand, willCrit);
                 return;
               }
-              if (t.isInhibitor) { applyDamageToInhibitor(t, attackResult); return; }
-              if (t.isNexus) { applyDamageToNexus(t, attackResult); return; }
+              if (t.isInhibitor) { applyDamageToInhibitor(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToInhibitor); return; }
+              if (t.isNexus) { applyDamageToNexus(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToNexus); return; }
               const hpB = t.hp, flB = isFlooredTrainingDummy(t); const dealtR = applyDamage(t, attackResult) || 0;
               const wouldKill = !flB && hpB > 0 && hpB <= dealtR; // 실제 입힌 피해(방어력·치명타 반영) 기준 처치 판정
               this._onBasicAttackHit(t, overrideId, wouldKill, null, willCrit);
             },
           });
         } else if (target.hp > 0) {
-          if (target.isTurret) { applyDamageToTurret(target, attackResult, { isRanged: this.stats.attackRange > 300, source: this }); return; }
+          if (target.isTurret) {
+            const ranged = this.stats.attackRange > 300;
+            applyDamageToTurret(target, attackResult, { isRanged: ranged, source: this });
+            this._onStructureBasicAttackHit(target, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: ranged, source: this }));
+            return;
+          }
           if (hasStatus(target, 'NILAH_W_DODGE')) { console.log('[NILAH W] 기본 공격 회피'); return; }
           if (target.isMinion) {
             const wouldKill = target.hp > 0 && target.hp <= calculateDamage({ ...attackResult, target });
@@ -13910,8 +13970,8 @@ CharacterController.prototype._beginAttackSwing = function() {
             this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
             return;
           }
-          if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); return; }
-          if (target.isNexus) { applyDamageToNexus(target, attackResult); return; }
+          if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToInhibitor); return; }
+          if (target.isNexus) { applyDamageToNexus(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToNexus); return; }
           // 처치 판정(버그 수정): 예전엔 방어력·치명타 적용 "전" 원본 공격력으로 판정해, 방어력이 높으면
           // 처치가 아닌데도 처치로, 치명타로 처치했는데도 처치 아님으로 판정됐다. 실제 피해 기준으로 바꿈.
           const hpBeforeAA = target.hp, flooredAA = isFlooredTrainingDummy(target);
@@ -21301,6 +21361,8 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
     const origin = this.root.position.clone();
     const dir = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, origin).setY(0) : (this.currentTarget ? new THREE.Vector3().subVectors(this.currentTarget.mesh.position, origin).setY(0) : (this.moveDir.lengthSq() > 0 ? this.moveDir.clone() : new THREE.Vector3(0, 0, 1)));
     if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1); else dir.normalize();
+    // 26차: 1타 쿨다운 확인. 예전엔 쿨다운을 설정만 하고 확인하지 않아, 음파가 대상에 맞기 전(표식이 생기기 전)에는 기력만 있으면 계속 쏠 수 있었다.
+    if (!free && this.cooldowns.Q > 0) { showSkillToast(`Q - 쿨다운 ${this.cooldowns.Q.toFixed(1)}s 남음`); return; }
     if (!free && this.mp < q.energy1) { debugSkillMiss('Lee Sin Q', '기력 부족'); return; }
     if (!free) { this.mp -= q.energy1; this.cooldowns.Q = abilityHasteCooldown(this, skillVal(q.cooldown, Math.max(1, this.skillLevels.Q || 1))); updateBars(this); }
     // Q 음파 시전 순간, 투사체가 날아가는 방향을 즉시 바라본다.
@@ -21379,6 +21441,8 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
       return;
     }
     if (!this.canStartNewAction()) return;
+    // 26차: 1타 쿨다운 확인. 예전엔 쿨다운을 설정만 하고 확인하지 않아, 2타를 쓴 직후 바로 다시 1타를 쓸 수 있었다.
+    if (!free && this.cooldowns.W > 0) { showSkillToast(`W - 쿨다운 ${this.cooldowns.W.toFixed(1)}s 남음`); return; }
     if (!free && this.mp < w.energy1) { debugSkillMiss('Lee Sin W', '기력 부족'); return; }
     if (!free) { this.mp -= w.energy1; this.cooldowns.W = abilityHasteCooldown(this, w.cooldown); updateBars(this); }
     vfx.spawn('w', this.root.position.clone());
@@ -21460,6 +21524,8 @@ CharacterController.prototype._leesinCastE = function(free) {
       return;
     }
     if (!this.canStartNewAction()) return;
+    // 26차: 1타 쿨다운 확인. 예전엔 쿨다운을 설정만 하고 확인하지 않아, 빗나가거나 2타를 쓴 직후 바로 다시 쓸 수 있었다.
+    if (!free && this.cooldowns.E > 0) { showSkillToast(`E - 쿨다운 ${this.cooldowns.E.toFixed(1)}s 남음`); return; }
     if (!free && this.mp < e.energy1) { debugSkillMiss('Lee Sin E', '기력 부족'); return; }
     if (!free) { this.mp -= e.energy1; this.cooldowns.E = abilityHasteCooldown(this, e.cooldown); updateBars(this); }
     this._clearActionTimers();
@@ -21467,6 +21533,8 @@ CharacterController.prototype._leesinCastE = function(free) {
     this._leesinPlayCast({ actionKey: 'leesinE', clips: ['Spell3'], lockSec: e.castTimeSec || 0.25, state: STATE.E_CAST, exitIdle: ['Spell3_ToIdle'], onRelease: () => {
       const now = performance.now();
     vfx.spawn('e', this.root.position.clone());
+    // 26차: 판정 반경(e.range)만큼 퍼지는 지면 충격파로 E 범위를 보여 준다.
+    if (typeof vfx.groundShockwave === 'function') vfx.groundShockwave(this.root.position, lolRangeToWorld(e.range), 0xffc04d, 0.45);
     const hits = findEnemiesInRadius(this.root.position, e.range);
     if (hits.length) {
       const lvl = Math.max(1, this.skillLevels.E || 1);
@@ -24349,7 +24417,7 @@ CharacterController.prototype._nautilusFireQ = function(p) {
   this.currentPhase = 'ACTIVE';
   this._nautilusPlayQClip('travelClip', true);
   this._nautilus.qTravel = {
-    dir: p.dir.clone(), pos: this.root.position.clone(),
+    dir: p.dir.clone(), pos: this.root.position.clone(), origin: this.root.position.clone(),
     maxDist: lolRangeToWorld(q.range), halfWidth: lolRangeToWorld(q.width) * 0.5,
     speed: lolRangeToWorld(q.missileSpeed), traveled: 0, free: p.free,
   };
@@ -24364,17 +24432,35 @@ CharacterController.prototype._nautilusTickQTravel = function(dt) {
   const t = this._nautilus.qTravel;
   if (!t) return;
   const step = Math.min(Math.max(0, t.maxDist - t.traveled), t.speed * dt);
+  const prevTraveled = t.traveled;
   t.pos.addScaledVector(t.dir, step);
   t.traveled += step;
   vfx.spawn('hit', t.pos.clone(), undefined, { color: 0x6fa8c8 });
 
-  if (this._nautilusIsTerrain(t.pos)) { this._nautilus.qTravel = null; this._nautilusQHitTerrain(t); return; }
+  // 26차(판정 수정): 이번 프레임에 닻이 지나간 구간(직전 위치 → 지금 위치)을 폭(halfWidth)만큼 쓸고, 그 안에 든 대상 중
+  // 경로상 가장 앞의 대상을 맞힌다. 예전엔 지금 위치 주변 원 안에 든 대상을 목록 순서대로 골라서
+  // (1) 발사 직후 노틸러스 뒤·옆에 붙어 있던 대상이 맞았고 (2) 한 프레임에 둘이 걸리면 앞의 대상이 아닌 쪽이 맞을 수 있었다.
+  // 발사 지점보다 뒤(중심이 진행 방향 반대쪽)에 있는 대상은 맞지 않는다.
+  let best = null;
   for (const u of getAllEnemyUnits()) {
     if (!u || u.hp <= 0) continue;
-    if (!isInCircle(u, t.pos, t.halfWidth)) continue;
+    const up = getWorldPosition(u); if (!up) continue;
+    const r = getCollisionRadius(u);
+    const rel = new THREE.Vector3(up.x - t.origin.x, 0, up.z - t.origin.z);
+    const along = rel.dot(t.dir);
+    if (along < 0 || along < prevTraveled - r || along > t.traveled + r) continue;
+    const lateral = Math.sqrt(Math.max(0, rel.lengthSq() - along * along));
+    if (lateral > t.halfWidth + r) continue;
+    const contact = Math.max(0, along - r); // 닻이 이 대상에 처음 닿는 진행 거리
+    if (!best || contact < best.contact) best = { u, contact };
+  }
+  // 지형은 대상보다 앞에서 닿았을 때만(대상이 지형보다 앞이면 대상이 먼저 맞는다)
+  if (this._nautilusIsTerrain(t.pos) && (!best || best.contact > t.traveled - step * 0.5)) { this._nautilus.qTravel = null; this._nautilusQHitTerrain(t); return; }
+  if (best) {
     this._nautilus.qTravel = null;
-    if (u.isStructure) this._nautilusQHitTerrain(t);
-    else this._nautilusQHitUnit(u);
+    t.pos.copy(t.origin).addScaledVector(t.dir, Math.min(t.traveled, best.contact)); // 닿은 지점
+    if (best.u.isStructure) this._nautilusQHitTerrain(t);
+    else this._nautilusQHitUnit(best.u);
     return;
   }
   if (t.traveled >= t.maxDist - 1e-4) {
@@ -24395,7 +24481,7 @@ CharacterController.prototype._nautilusQHitTerrain = function(t) {
     if (cost) this.mp = Math.min(this.maxMp, this.mp + cost.mana * refund);
     updateBars(this);
   }
-  const anchor = t.pos.clone().addScaledVector(t.dir, -this.collisionRadius);
+  const anchor = t.pos.clone().addScaledVector(t.dir, -(this.pathingRadius ?? this.collisionRadius)); // 26차: 지형 앞은 지형 충돌 반경만큼
   const map = (typeof window !== 'undefined' && window.HOWLING_ABYSS_MAP) || null;
   if (map && typeof map.clampPosition === 'function') map.clampPosition(anchor);
   anchor.y = this.root.position.y;
@@ -24415,9 +24501,12 @@ CharacterController.prototype._nautilusQHitUnit = function(unit) {
   const dir = new THREE.Vector3().subVectors(unitPos, from).setY(0);
   const dist = dir.length();
   if (dist > 1e-6) dir.divideScalar(dist); else dir.set(0, 0, 1);
-  const mid = from.clone().addScaledVector(dir, dist * 0.5);
-  const selfTo = mid.clone().addScaledVector(dir, -this.collisionRadius);
-  const unitTo = mid.clone().addScaledVector(dir, getCollisionRadius(unit));
+  // 26차: 둘 사이 빈 거리(중심 거리 − 두 반경)를 반씩 나눠 서로 다가가 몸이 닿는 곳에서 만난다. 예전엔 중심 거리의
+  // 절반 지점에서 각자 반경만큼 물러난 곳으로 보내서, 이미 붙어 있을 때(빈 거리 ≤ 0)는 노틸러스가 뒤로 밀리고 대상이
+  // 반대쪽으로 밀려났다.
+  const gap = Math.max(0, dist - this.collisionRadius - getCollisionRadius(unit));
+  const selfTo = from.clone().addScaledVector(dir, gap * 0.5);
+  const unitTo = unitPos.clone().addScaledVector(dir, -gap * 0.5);
   selfTo.y = from.y;
   const duration = this._nautilusStartPull(selfTo, unit);
   if (unit.mesh && !unit.isStructure) {

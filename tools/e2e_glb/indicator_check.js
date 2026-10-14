@@ -1,5 +1,5 @@
 // 스킬 상태 표시 점검(헤드리스 Chromium + 저장소 모델, 25차): 실제로 스킬·평타를 써서 버프 바(중첩·준비), 스킬 칸 바뀜
-// (야스오·요네 Q3, 리 신 Q2), 허수아비 머리 위 표식(다리우스 출혈·바루스 역병·리 신 음파), 발밑 준비 고리가 뜨는지 본다.
+// (야스오·요네 Q3, 리 신 Q2), 허수아비 머리 위 표식(다리우스 출혈 5중첩 특수 표식·바루스 역병·리 신 음파), 발밑 준비 고리가 뜨는지 본다.
 // 사용법: THREE_DIR=<three package> E2E_HIDE_MAP=1 node tools/e2e_glb/indicator_check.js [스크린샷 접두어]
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const startServer = require('./server.js');
@@ -22,7 +22,7 @@ const startServer = require('./server.js');
     const buffs = [...document.querySelectorAll('#buffBar .buff')].map((b) => ({ key: b.dataset.key, label: b.querySelector('.lbl').textContent, stacks: b.querySelector('.stk') ? +b.querySelector('.stk').textContent : null, ready: b.classList.contains('ready') }));
     const q = document.querySelector('#slotQ .slotState');
     const marks = d.labelDiv.querySelector('.unitMarks');
-    return { buffs, slotQ: q ? (q.firstChild.textContent + ' ' + q.querySelector('small').textContent) : null, marks: marks ? { on: marks.querySelectorAll('.pip:not(.off)').length, tags: [...marks.querySelectorAll('.tag')].map((t) => t.textContent) } : null, aura: !!(window.__e2e.statusIndicators && window.__e2e.statusIndicators._aura) };
+    return { buffs, slotQ: q ? (q.firstChild.textContent + ' ' + q.querySelector('small').textContent) : null, marks: marks ? { emblem: !!marks.querySelector('svg.emblem'), on: marks.querySelectorAll('.pip:not(.off)').length, tags: [...marks.querySelectorAll('.tag')].map((t) => t.textContent) } : null, aura: !!(window.__e2e.statusIndicators && window.__e2e.statusIndicators._aura) };
   });
   const shot = async (name) => {
     if (!process.argv[2]) return;
@@ -39,7 +39,7 @@ const startServer = require('./server.js');
   await page.waitForFunction(() => (window.controller._masteryi.attackCount || 0) % 4 === 3, null, { timeout: 12000 }).catch(() => {});
   await stop(); await wait(250); r.yiThree = await ui(); await shot('masteryi');
   await load('darius'); await setup(); await attack();
-  await page.waitForFunction(() => { const c = window.controller, rec = c._darius.stacksOnTarget.get(window.__e2e.dummies[0]); return rec && rec.stacks >= 3; }, null, { timeout: 12000 }).catch(() => {});
+  await page.waitForFunction(() => { const c = window.controller, rec = c._darius.stacksOnTarget.get(window.__e2e.dummies[0]); return rec && rec.stacks >= 5; }, null, { timeout: 15000 }).catch(() => {});
   await stop(); await wait(250); r.dariusBleed = await ui(); await shot('darius');
   await load('varus'); await setup(); await attack();
   await page.waitForFunction(() => { const s = window.__e2e.dummies[0].statusEffects.find((x) => x.id === 'varusBlight'); return s && s.stacks >= 2; }, null, { timeout: 12000 }).catch(() => {});

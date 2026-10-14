@@ -8,7 +8,7 @@
       시계 방향으로 줄어드는 그림자가 덮인다. 다 차서 다음 공격이 강화되면 테두리가 빛난다.
    2) 스킬 아이콘 변화: 야스오·요네 Q가 2중첩이면 Q 칸이 3타(회오리·돌진)로 바뀌고, 남은 시간 동안 칸 테두리가
       줄어든다. 리 신 Q 표식이 있으면 Q 칸이 2타(공명의 일격)로 바뀐다.
-   3) 대상 머리 위 표식: 다리우스 출혈(1~5), 바루스 역병(1~3), 벡스 우울, 리 신 Q 음파, 이즈리얼 W 정기 표식을
+   3) 대상 머리 위 표식: 다리우스 출혈 5중첩 특수 표식(26차), 바루스 역병(1~3), 벡스 우울, 리 신 Q 음파, 이즈리얼 W 정기 표식을
       허수아비 체력 바 위에 띄운다.
    4) 내 챔피언 발밑 "준비됨" 효과: 야스오·요네 Q3, 마스터 이 이중 타격, 다리우스 녹서스의 힘, 모데카이저 패시브
       오라, 벡스 파멸이 준비되면 발밑에 도는 고리를 띄운다.
@@ -114,9 +114,11 @@ function championSlotStates(c, now) {
 function unitMarkEntries(c, unit, now) {
   const out = [];
   if (!c || !unit) return out;
+  // 26차 요청: 다리우스 출혈은 중첩 수를 보이지 않고, 5중첩이 되면(녹서스의 힘 발동 - 이후 평타·스킬은 바로 5중첩)
+  // 대상 체력 바 위에 특수 표식만 띄운다.
   if (c.championId === 'darius' && c._darius) {
     const rec = c._darius.stacksOnTarget.get(unit);
-    if (rec && rec.stacks > 0 && (!rec.expiresAt || rec.expiresAt > now)) out.push({ kind: 'pips', n: rec.stacks, max: 5, color: '#e0342a', glyph: '●', full: rec.stacks >= 5 });
+    if (rec && rec.stacks >= 5 && (!rec.expiresAt || rec.expiresAt > now)) out.push({ kind: 'emblem', color: '#ff2a1f' });
   }
   if (c.championId === 'varus') {
     const rec = typeof getStatus === 'function' ? getStatus(unit, 'varusBlight') : null;
@@ -141,6 +143,13 @@ function championReadyAura(c, now) {
   if (c.championId === 'vex' && c._vex && now >= (c._vex.doomReadyAt || 0)) return { color: 0xa36bff, spin: 1.2 };
   return null;
 }
+
+// 다리우스 출혈 5중첩 표식: 핏방울 안에 도끼날 두 개를 교차한 모양(직접 그린 그림 - 원작 이펙트 파일이 아니다).
+const DARIUS_BLEED_EMBLEM_SVG = `<svg class="emblem" viewBox="0 0 32 32" aria-label="출혈 5중첩">
+  <path d="M16 2 C16 2 5 14.5 5 21 a11 11 0 0 0 22 0 C27 14.5 16 2 16 2 Z" fill="#7a0d0a" stroke="#ff3b2e" stroke-width="1.6"/>
+  <path d="M10.5 26 L21 13 M21.5 26 L11 13" stroke="#ffd2c9" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M19 11.2 l4.2 -1.3 -1.2 4.3 Z M13 11.2 l-4.2 -1.3 1.2 4.3 Z" fill="#ffd2c9"/>
+</svg>`;
 
 class StatusIndicatorSystem {
   constructor() {
@@ -171,6 +180,8 @@ class StatusIndicatorSystem {
       .unitMarks .tag { padding:0 3px; border:1px solid currentColor; border-radius:2px; font-size:9px; background:rgba(0,0,0,.55); font-weight:700; }
       .unitMarks .pip.off { opacity:.25; }
       .unitMarks .pip.full { filter:drop-shadow(0 0 3px currentColor); }
+      .unitMarks .emblem { width:30px; height:30px; margin-bottom:2px; filter:drop-shadow(0 0 4px #ff2a1f) drop-shadow(0 0 8px rgba(255,42,31,.6)); animation:dariusEmblem 0.9s ease-in-out infinite alternate; }
+      @keyframes dariusEmblem { from { transform:scale(.92); } to { transform:scale(1.08); } }
     `;
     document.head.appendChild(style);
     this._bar = document.createElement('div');
@@ -246,7 +257,7 @@ class StatusIndicatorSystem {
       let el = u.labelDiv.querySelector('.unitMarks');
       if (!marks.length) { if (el) el.remove(); continue; }
       if (!el) { el = document.createElement('div'); el.className = 'unitMarks'; u.labelDiv.insertBefore(el, u.labelDiv.firstChild); }
-      el.innerHTML = marks.map((m) => m.kind === 'tag'
+      el.innerHTML = marks.map((m) => m.kind === 'emblem' ? DARIUS_BLEED_EMBLEM_SVG : m.kind === 'tag'
         ? `<span class="tag" style="color:${m.color}">${m.text}</span>`
         : Array.from({ length: m.max }, (_, i) => `<span class="pip${i < m.n ? '' : ' off'}${m.full ? ' full' : ''}" style="color:${m.color}">${m.glyph}</span>`).join('')).join('');
     }

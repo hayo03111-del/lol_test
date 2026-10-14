@@ -109,7 +109,7 @@ CharacterController.prototype._nautilusFireQ = function(p) {
   this.currentPhase = 'ACTIVE';
   this._nautilusPlayQClip('travelClip', true);
   this._nautilus.qTravel = {
-    dir: p.dir.clone(), pos: this.root.position.clone(),
+    dir: p.dir.clone(), pos: this.root.position.clone(), origin: this.root.position.clone(),
     maxDist: lolRangeToWorld(q.range), halfWidth: lolRangeToWorld(q.width) * 0.5,
     speed: lolRangeToWorld(q.missileSpeed), traveled: 0, free: p.free,
   };
@@ -124,17 +124,35 @@ CharacterController.prototype._nautilusTickQTravel = function(dt) {
   const t = this._nautilus.qTravel;
   if (!t) return;
   const step = Math.min(Math.max(0, t.maxDist - t.traveled), t.speed * dt);
+  const prevTraveled = t.traveled;
   t.pos.addScaledVector(t.dir, step);
   t.traveled += step;
   vfx.spawn('hit', t.pos.clone(), undefined, { color: 0x6fa8c8 });
 
-  if (this._nautilusIsTerrain(t.pos)) { this._nautilus.qTravel = null; this._nautilusQHitTerrain(t); return; }
+  // 26차(판정 수정): 이번 프레임에 닻이 지나간 구간(직전 위치 → 지금 위치)을 폭(halfWidth)만큼 쓸고, 그 안에 든 대상 중
+  // 경로상 가장 앞의 대상을 맞힌다. 예전엔 지금 위치 주변 원 안에 든 대상을 목록 순서대로 골라서
+  // (1) 발사 직후 노틸러스 뒤·옆에 붙어 있던 대상이 맞았고 (2) 한 프레임에 둘이 걸리면 앞의 대상이 아닌 쪽이 맞을 수 있었다.
+  // 발사 지점보다 뒤(중심이 진행 방향 반대쪽)에 있는 대상은 맞지 않는다.
+  let best = null;
   for (const u of getAllEnemyUnits()) {
     if (!u || u.hp <= 0) continue;
-    if (!isInCircle(u, t.pos, t.halfWidth)) continue;
+    const up = getWorldPosition(u); if (!up) continue;
+    const r = getCollisionRadius(u);
+    const rel = new THREE.Vector3(up.x - t.origin.x, 0, up.z - t.origin.z);
+    const along = rel.dot(t.dir);
+    if (along < 0 || along < prevTraveled - r || along > t.traveled + r) continue;
+    const lateral = Math.sqrt(Math.max(0, rel.lengthSq() - along * along));
+    if (lateral > t.halfWidth + r) continue;
+    const contact = Math.max(0, along - r); // 닻이 이 대상에 처음 닿는 진행 거리
+    if (!best || contact < best.contact) best = { u, contact };
+  }
+  // 지형은 대상보다 앞에서 닿았을 때만(대상이 지형보다 앞이면 대상이 먼저 맞는다)
+  if (this._nautilusIsTerrain(t.pos) && (!best || best.contact > t.traveled - step * 0.5)) { this._nautilus.qTravel = null; this._nautilusQHitTerrain(t); return; }
+  if (best) {
     this._nautilus.qTravel = null;
-    if (u.isStructure) this._nautilusQHitTerrain(t);
-    else this._nautilusQHitUnit(u);
+    t.pos.copy(t.origin).addScaledVector(t.dir, Math.min(t.traveled, best.contact)); // 닿은 지점
+    if (best.u.isStructure) this._nautilusQHitTerrain(t);
+    else this._nautilusQHitUnit(best.u);
     return;
   }
   if (t.traveled >= t.maxDist - 1e-4) {
@@ -155,7 +173,7 @@ CharacterController.prototype._nautilusQHitTerrain = function(t) {
     if (cost) this.mp = Math.min(this.maxMp, this.mp + cost.mana * refund);
     updateBars(this);
   }
-  const anchor = t.pos.clone().addScaledVector(t.dir, -this.collisionRadius);
+  const anchor = t.pos.clone().addScaledVector(t.dir, -(this.pathingRadius ?? this.collisionRadius)); // 26차: 지형 앞은 지형 충돌 반경만큼
   const map = (typeof window !== 'undefined' && window.HOWLING_ABYSS_MAP) || null;
   if (map && typeof map.clampPosition === 'function') map.clampPosition(anchor);
   anchor.y = this.root.position.y;
@@ -175,9 +193,12 @@ CharacterController.prototype._nautilusQHitUnit = function(unit) {
   const dir = new THREE.Vector3().subVectors(unitPos, from).setY(0);
   const dist = dir.length();
   if (dist > 1e-6) dir.divideScalar(dist); else dir.set(0, 0, 1);
-  const mid = from.clone().addScaledVector(dir, dist * 0.5);
-  const selfTo = mid.clone().addScaledVector(dir, -this.collisionRadius);
-  const unitTo = mid.clone().addScaledVector(dir, getCollisionRadius(unit));
+  // 26차: 둘 사이 빈 거리(중심 거리 − 두 반경)를 반씩 나눠 서로 다가가 몸이 닿는 곳에서 만난다. 예전엔 중심 거리의
+  // 절반 지점에서 각자 반경만큼 물러난 곳으로 보내서, 이미 붙어 있을 때(빈 거리 ≤ 0)는 노틸러스가 뒤로 밀리고 대상이
+  // 반대쪽으로 밀려났다.
+  const gap = Math.max(0, dist - this.collisionRadius - getCollisionRadius(unit));
+  const selfTo = from.clone().addScaledVector(dir, gap * 0.5);
+  const unitTo = unitPos.clone().addScaledVector(dir, -gap * 0.5);
   selfTo.y = from.y;
   const duration = this._nautilusStartPull(selfTo, unit);
   if (unit.mesh && !unit.isStructure) {
