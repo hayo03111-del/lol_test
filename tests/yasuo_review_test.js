@@ -248,6 +248,8 @@ function recompute(c) {
   c._yasuo.flow = 100;
   c._yasuoOnTakeDamage({ isMinion: true });
   assert(c.shield === 0 && c._yasuo.flow === 100, '야스오 결의: 미니언 피해로는 보호막이 안 터짐');
+  c._yasuoOnTakeDamage(null);
+  assert(c.shield === 0 && c._yasuo.flow === 100, '야스오 결의(31차): 출처를 모르는 피해로는 보호막이 안 터짐');
   c._yasuoOnTakeDamage({ isChampion: true });
   assert(near(c.shield, Y.passive.shieldBase) && c._yasuo.flow === 0, '야스오 결의: 챔피언 피해 → 보호막 125(1레벨), 기류 0');
   now += 1100;

@@ -960,11 +960,20 @@ class CharacterController {
         // 실제 비중 = 기본 비중(weight) × 페이드 값이므로, 기본 비중은 1로 두고 페이드 값만 지금 비중에서 0으로 내린다
         // (0이 되면 three.js가 알아서 끈다). setEffectiveWeight는 진행 중이던 페이드를 멈춘 뒤라 먼저 부른다.
         if (w > 0.001) { x.setEffectiveWeight(1); x._scheduleFading(fade, w, 0); }
+        // 31차: 같은 프레임에 막 페이드인을 시작한 동작(지금 비중 0, 0→1 예약)은 건너뛰면 그 예약대로 비중 1까지
+        // 올라가 새 동작과 끝까지 섞였다(평타 시작 프레임에 이동 명령 → 달리면서 평타 자세로 미끄러짐). 끈다.
+        else if (x._weightInterpolant) x.stop();
       }
       action.setEffectiveWeight(1);
       action._scheduleFading(fade, wNow, 1);
     } else {
-      if (blending) this.currentAction.stop();
+      if (blending) {
+        this.currentAction.stop();
+        // 페이드 없는 전환: 아직 섞이던(페이드 예약이 남은) 다른 동작도 같이 끈다(위 31차 수정과 같은 이유).
+        for (const x of new Set([...Object.values(this.actions || {}), ...Object.values(this._altActions || {})])) {
+          if (x !== action && x._weightInterpolant && this.mixer._isActiveAction(x)) x.stop();
+        }
+      }
       action.setEffectiveWeight(1);
       action.play();
     }

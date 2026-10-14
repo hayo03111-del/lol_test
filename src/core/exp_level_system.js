@@ -631,7 +631,9 @@ function updateMinionAttack(minion, dt) {
       applyDamageToMinion(target, dmg);
     } else {
       // 챔피언(플레이어) 대상 - 실제 LoL 규칙대로 60%만 적용.
-      applyDamage(target, { ...dmg, rawDamage: dmg.rawDamage * MINION_CHAMPION_DAMAGE_PERCENT });
+      // 31차: 공격자(미니언)와 평타임을 넘긴다 - 예전엔 출처가 비어 있어 야스오 결의 보호막이 미니언 공격에도
+      // 발동했고(원작: 챔피언·몬스터 피해만), 가렌 인내심도 미니언에게 맞으면 멈췄다(원작: 챔피언·포탑·에픽 몬스터만).
+      applyDamage(target, { ...dmg, rawDamage: dmg.rawDamage * MINION_CHAMPION_DAMAGE_PERCENT, source: minion, isBasicAttack: true });
     }
   };
   if (hitDelaySec > 0) setTimeout(dealHit, hitDelaySec * 1000);

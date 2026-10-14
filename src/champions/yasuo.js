@@ -615,7 +615,7 @@ CharacterController.prototype._yasuoTick = function(dt) {
 // 버그 수정: 예전엔 출처를 가리지 않았고(포탑/미니언 포함) 보호막이 사라지지 않았다.
 CharacterController.prototype._yasuoOnTakeDamage = function(source) {
     if (this._yasuo.flow < 100) return;
-    if (source && !(source.isChampion || source.isMonster || source.championId)) return;
+    if (!source || !(source.isChampion || source.isMonster || source.championId)) return; // 31차: 출처를 모르는 피해(예전 미니언 공격 등)로는 발동하지 않는다
     const amt = this._yasuoShieldAmount() * getShieldReceivedMultiplier(this);
     addShield(this, 'yasuoPassive', amt, this._champData().passive.shieldDurationSec || 1);
     this._yasuo.flow = 0;

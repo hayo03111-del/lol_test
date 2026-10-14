@@ -1723,6 +1723,11 @@ CharacterController.prototype._castR = function(free = false) {
       this._rRecastReadyUntil = 0;
     } else if (!this._payCost('R', free)) return;
     this._clearActionTimers();
+    // 31차(전 챔피언 방향 점검으로 발견): 대상 지정 R(가렌·모데카이저 등 공용 경로)이 대상을 바라보지 않고 시전했다.
+    if (this.currentTarget && this.currentTarget.mesh) {
+      const toT = new THREE.Vector3().subVectors(this.currentTarget.mesh.position, this.root.position).setY(0);
+      if (toT.lengthSq() > 1e-6) this.faceDirectionInstant(toT.normalize());
+    }
     const cast = this.actionData.rCast;
 
     // R 궁극기 windup -> channel -> cast 3단계는 서로 다른 GLB AnimationClip을

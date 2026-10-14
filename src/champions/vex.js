@@ -16,6 +16,8 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
     const cd = this._champData();
     const rd = cd && cd.R;
     if (!rd) return;
+    // 31차(전 챔피언 시전 조건 점검으로 발견): 침묵·군중 제어 중에도 R(1차·재시전)이 나가고 마나·쿨다운까지 소모됐다.
+    if (isSilenced(this) || isCrowdControlled(this)) return;
     const lvl = Math.max(1, Math.min(3, this.skillLevels.R || 1));
     const now = performance.now();
 

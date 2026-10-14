@@ -28,6 +28,7 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
     const dir = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, origin).setY(0) : (this.moveDir.lengthSq() > 0 ? this.moveDir.clone() : new THREE.Vector3(0, 0, 1));
     const rawDist = dir.length();
     if (rawDist > 1e-4) dir.normalize(); else dir.set(0, 0, 1);
+    this.faceDirectionInstant(dir); // 31차: 지정 지점을 바라보고 시전(예전엔 몸을 돌리지 않았다)
     const impactPoint = origin.clone().addScaledVector(dir, Math.min(rawDist, lolRangeToWorld(q.range)));
     vfx.spawn('q', origin);
     const actionSafety = this._champTimeout(() => {
@@ -191,6 +192,7 @@ CharacterController.prototype._chogathCastR = function(free) {
     // PC 위키: 시전 0.25초 뒤 판정(예전엔 즉시). 그 사이 끊기면 취소.
     const target = this.currentTarget;
     this._clearActionTimers();
+    { const toT = new THREE.Vector3().subVectors(target.mesh.position, this.root.position).setY(0); if (toT.lengthSq() > 1e-6) this.faceDirectionInstant(toT.normalize()); } // 31차: 대상을 바라보고 시전
     this.setState(STATE.R_CAST);
     this.currentActionKey = 'chogathR'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
     this.playFirstAvailable((this.actionData?.rCast?.clips) || ['Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
