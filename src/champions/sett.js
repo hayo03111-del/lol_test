@@ -484,36 +484,48 @@ CharacterController.prototype._settUpdateR = function(dt) {
 
     if (seq.phase === 'CAST') return; // 시전 준비(Base) 클립 재생 대기 - onStepStart(1)이 DASH로 넘겨줄 때까지 위치 변화 없음
 
-    // 버그 수정(요청: "즉발로 잡고 날아가야 한다 - 날아가는 모션 중에
-    // 잡고 날아가야 함"): 예전엔 DASH를 지면 위에서 그냥 걸어가는 것처럼
-    // 처리하고, 다 걸어간 뒤에야 GRAB에서 잠깐 멈췄다가 CARRY에서 비로소
-    // 떠오르기 시작했다 - "걸어가서 잡고 그다음 날아오르는" 3단계 동작으로
-    // 보였다. 실제 세트 R은 도약과 동시에 붙잡고 그대로 날아간다. 이제
-    // DASH 시작 시점부터 이미 떠오르기 시작해서, DASH(도약 접근)->
-    // GRAB(공중에서 붙잡는 순간)->CARRY(계속 날아가 착지)까지 하나의 끊김
-    // 없는 포물선으로 처리한다 - 세 구간의 실제 애니메이션 길이(합)를
-    // 그대로 궤적의 총 시간으로 쓴다(요청: 실제 클립 길이 기준 유지).
-    // 버그 수정(요청: "Spell4_Dash 때는 하늘을 날지 않는다"): 예전엔
-    // DASH 구간도 airborneTotal(DASH+GRAB+CARRY)의 일부로 취급해서 sin
-    // 곡선상 작지만 0이 아닌 높이로 이미 살짝 떠 있었다. 이제 DASH는
-    // 완전히 지상에서만 접근하고(height=0 고정), 공중 포물선은 GRAB이
-    // 시작되는 순간부터(붙잡는 순간부터) 시작된다 - "붙잡자마자 공중으로
-    // 들어올려 그대로 날아간다"는 의미에 더 정확히 맞는다.
-    // R 비행 궤적은 PowerBomb 시작과 동시에 끝나면 안 된다.
-    // Spell4_PowerBomb가 재생되는 동안에도 세트/대상이 계속 공중에 떠서
-    // 마지막 구간까지 하강하고, PowerBomb 종료 직전에 지면에 거의 닿도록
-    // GRAB + CARRY + IMPACT 전체를 하나의 포물선 시간축으로 사용한다.
-    const airborneTotal = d.GRAB + d.CARRY + d.IMPACT;
-    const arcPeak = lolRangeToWorld(300);
+    // 27차(요청: "세트 궁 모션 이상") - 실제 GLB로 R 전체를 프레임 단위로 추적해 보니:
+    //  1) 코드가 출처 없는 포물선(lolRangeToWorld(300) ≈ 2.6)을 루트에 더했는데, Spell4_Grab/
+    //     Spin/PowerBomb 클립의 Root 본 트랙에 이미 점프 높이가 들어 있어(골반 기준 최대 약 +0.8)
+    //     둘이 겹쳐 골반이 지면 위 4.25까지 떴다(서 있을 때 0.9).
+    //  2) GRAB 순간 대상을 세트와 "같은 좌표"로 옮겨 두 모델이 겹쳤고, CARRY 시작에 대상이 앞으로
+    //     holdDist만큼 순간이동했다.
+    //  3) CARRY에서 세트가 landingPos(대상 착지점)까지 갔다가 PowerBomb 동안 holdDist만큼 "뒤로"
+    //     미끄러졌다(대상도 같이 뒤로).
+    // 고친 방식: 출처 없는 높이는 지우고 높이는 GLB 클립의 Root 트랙(원본 애니메이션)만 쓴다. 대상은
+    // 세트의 양손(L_Hand/R_Hand) 가운데를 따라가게 붙인다(원작처럼 손에 붙잡혀 같이 돈다 - 손에
+    // 대상의 몸 가운데를 맞추고 정면으로 대상 반경만큼 띄우는 것은 연출값). 세트의 수평 이동은 grabPoint → settLandPos 한 방향
+    // (600유닛)으로만 진행하고, 대상은 PowerBomb 마지막 35% 동안 손 위치에서 착지점으로 내려놓는다.
     const holdDist = this.collisionRadius + getCollisionRadius(target);
+    const approachDir = new THREE.Vector3().subVectors(seq.startPos, seq.targetStartPos).setY(0);
+    if (approachDir.lengthSq() < 1e-6) approachDir.set(0, 0, 1); else approachDir.normalize();
+    const grabPoint = seq.targetStartPos.clone().addScaledVector(approachDir, holdDist).setY(0);
+    const settLandPos = seq.landingPos.clone().addScaledVector(seq.throwDir, -holdDist).setY(0);
+    const smooth = (x) => { const k = THREE.MathUtils.clamp(x, 0, 1); return k * k * (3 - 2 * k); };
+    // 세트 손(양손 가운데)에 붙잡힌 대상의 위치 - 손 본이 없으면(폴백) 세트 정면 holdDist.
+    const holdPos = () => {
+      const hands = this._settRHands();
+      if (hands.length) {
+        this.root.updateMatrixWorld(true);
+        const mid = new THREE.Vector3(), v = new THREE.Vector3();
+        for (const h of hands) mid.add(h.getWorldPosition(v));
+        mid.multiplyScalar(1 / hands.length);
+        if (seq.targetHeight == null) {
+          const box = new THREE.Box3().setFromObject(target.mesh);
+          seq.targetHeight = Number.isFinite(box.max.y - box.min.y) && box.max.y > box.min.y ? box.max.y - box.min.y : 1.5;
+        }
+        // 손이 대상 몸 앞면을 잡도록 대상 중심을 세트 정면으로 대상 반경만큼 띄운다(몸 겹침 방지).
+        mid.addScaledVector(seq.throwDir, getCollisionRadius(target) || 0);
+        mid.y = Math.max(0, mid.y - seq.targetHeight * 0.5);
+        return mid;
+      }
+      return this.root.position.clone().addScaledVector(seq.throwDir, holdDist).setY(0);
+    };
 
     if (seq.phase === 'DASH') {
       const t = Math.min(1, seq.timer / Math.max(0.01, d.DASH));
-      const approachDir = new THREE.Vector3().subVectors(seq.startPos, seq.targetStartPos).setY(0);
-      if (approachDir.lengthSq() < 1e-6) approachDir.set(0, 0, 1); else approachDir.normalize();
-      const grabPoint = seq.targetStartPos.clone().addScaledVector(approachDir, holdDist);
       const groundPos = new THREE.Vector3().lerpVectors(seq.startPos, grabPoint, t);
-      // 요청: DASH 중에는 높이 0 고정 - 지상에서만 접근한다.
+      // 요청: DASH 중에는 지상에서만 접근한다.
       this.root.position.set(groundPos.x, 0, groundPos.z);
       // 버그 수정(핵심): 애니메이션 재생 중(useAnimTiming)일 때는 이 dt
       // 타이머가 아니라 onStepStart 콜백이 다음 단계로 넘긴다 - 타이머가
@@ -529,53 +541,31 @@ CharacterController.prototype._settUpdateR = function(dt) {
       return;
     }
     if (seq.phase === 'GRAB') {
-      // 짧게 붙잡는 구간 - 이 순간부터 공중으로 떠오르기 시작한다(요청:
-      // DASH는 지상, GRAB부터 공중). 이 순간부터 대상이 세트에게 붙는다
-      // (요청 6/7 "일반 AI가 아니라 R 시퀀스가 위치를 직접 관리").
-      const approachDir = new THREE.Vector3().subVectors(seq.startPos, seq.targetStartPos).setY(0);
-      if (approachDir.lengthSq() < 1e-6) approachDir.set(0, 0, 1); else approachDir.normalize();
-      const grabPoint = seq.targetStartPos.clone().addScaledVector(approachDir, holdDist);
-      const airborneElapsed = seq.timer; // GRAB 구간이 airborneTotal(GRAB+CARRY)의 앞부분
-      const height = arcPeak * Math.sin(Math.PI * Math.min(1, airborneElapsed / airborneTotal));
-      this.root.position.set(grabPoint.x, height, grabPoint.z);
-      target.mesh.position.set(grabPoint.x, height, grabPoint.z); // 붙잡히는 순간부터 세트와 같은 높이/위치로 즉시 동기화
-      if (!seq.useAnimTiming) {
-        const t = Math.min(1, seq.timer / Math.max(0.01, d.GRAB));
-        if (t >= 1) {
-          seq.phase = 'CARRY'; seq.timer = 0;
-          seq.carryStartSettPos = this.root.position.clone();
-          seq.carryStartTargetPos = target.mesh.position.clone();
-          console.log('[SETT R] SPIN/CARRY START');
-          console.log('[SETT R] CARRY DISTANCE = 600 LOL UNITS');
-        }
+      // 붙잡는 구간 - 세트는 grabPoint에 서고, 대상은 원래 자리에서 세트 손으로 GRAB 클립 길이에
+      // 걸쳐 끌려온다(예전처럼 세트와 같은 좌표로 순간이동하지 않는다).
+      this.root.position.set(grabPoint.x, 0, grabPoint.z);
+      const g = smooth(seq.timer / Math.max(0.01, d.GRAB));
+      target.mesh.position.lerpVectors(seq.targetStartPos.clone().setY(0), holdPos(), g);
+      if (!seq.useAnimTiming && seq.timer >= d.GRAB) {
+        seq.phase = 'CARRY'; seq.timer = 0;
+        seq.carryStartSettPos = this.root.position.clone();
+        seq.carryStartTargetPos = target.mesh.position.clone();
+        console.log('[SETT R] SPIN/CARRY START');
+        console.log('[SETT R] CARRY DISTANCE = 600 LOL UNITS');
       }
       return;
     }
+    // CARRY + IMPACT(PowerBomb)를 하나의 수평 이동 시간축으로 쓴다 - 세트는 grabPoint에서
+    // settLandPos까지 한 방향으로만 간다(뒤로 미끄러지지 않음).
+    const travelTotal = Math.max(0.01, d.CARRY + d.IMPACT);
     if (seq.phase === 'CARRY') {
-      if (!seq.carryStartSettPos) return; // onStepStart(3)이 아직 안 왔으면(애니메이션 모드) 대기
-      const t = Math.min(1, seq.timer / Math.max(0.01, d.CARRY));
-      // GRAB에서 이어지는 같은 포물선의 나머지 구간(요청: 끊김 없는
-      // 하나의 비행) - 각 단계를 따로 arcHeight=0에서 다시 시작하지 않는다.
-      const airborneElapsed = d.GRAB + seq.timer;
-      const height = arcPeak * Math.sin(Math.PI * Math.min(1, airborneElapsed / airborneTotal));
-      const groundPos = seq.carryStartSettPos.clone().lerp(seq.landingPos, t);
-      this.root.position.set(groundPos.x, height, groundPos.z);
-      // 버그 수정(요청: "상대를 세트가 바라보는 방향 앞으로 내려꽂는다" -
-      // "세트가 상대 앞으로 떨어지는 게 아니라"): 예전엔 대상의 offset
-      // 방향을 carryStartTargetPos-carryStartSettPos로 계산했는데, GRAB
-      // 순간 세트와 대상이 같은 좌표로 동기화되기 때문에 이 벡터는 항상
-      // 거의 0이었고, 그 결과 임의의 월드 +Z축으로 조용히 폴백하고
-      // 있었다(세트가 실제로 바라보는 방향과 무관). 이제 캐스트 시점에
-      // 고정해둔 seq.throwDir(세트가 바라보는 방향, 이후 절대 안 바뀜)을
-      // 그대로 써서, 대상이 항상 "세트가 바라보는 방향 앞"에 위치하게
-      // 한다.
-      const holdDir = seq.throwDir;
-      target.mesh.position.set(groundPos.x + holdDir.x * holdDist, height, groundPos.z + holdDir.z * holdDist);
-      if (!seq.useAnimTiming && t >= 1) {
-        // 버그 수정(요청: "PowerBomb가 끝나는 동시에 내려꽂는다"): 여기서
-        // 바로 스냅+피해를 적용하지 않는다 - PowerBomb 단계에 진입만 하고,
-        // 실제 착지/피해/Slide는 그 단계가 "끝나는" 시점(아래 IMPACT 블록)
-        // 에서 처리한다. 하강을 시작할 현재 위치만 기록해둔다.
+      if (!seq.carryStartSettPos) return; // onStepStart(2)가 아직 안 왔으면(애니메이션 모드) 대기
+      const u = Math.min(1, seq.timer / travelTotal);
+      const groundPos = grabPoint.clone().lerp(settLandPos, u);
+      this.root.position.set(groundPos.x, 0, groundPos.z);
+      target.mesh.position.copy(holdPos());
+      if (!seq.useAnimTiming && seq.timer >= d.CARRY) {
+        // PowerBomb 단계에 진입만 하고, 실제 착지/피해는 그 단계가 "끝나는" 시점에서 처리한다.
         seq.phase = 'IMPACT'; seq.timer = 0;
         seq.impactStartSettPos = this.root.position.clone();
         seq.impactStartTargetPos = target.mesh.position.clone();
@@ -584,32 +574,15 @@ CharacterController.prototype._settUpdateR = function(dt) {
       return;
     }
     if (seq.phase === 'IMPACT') {
-      // 요청: PowerBomb 클립이 실제로 재생되는 동안(윈드업~내려찍기) 자연
-      // 스럽게 하강하다가, 클립이 "끝나는" 순간에만 착지/피해가 발생한다.
-      // 애니메이션 모드에서는 이 진행률 계산에만 쓰이고(실제 종료는
-      // sequencePlayer의 onComplete가 담당), 폴백 모드에서는 이 dt
-      // 타이머가 종료까지 전부 담당한다.
+      // PowerBomb 클립이 재생되는 동안(윈드업~내려찍기) 수평 이동을 마저 끝내고, 클립이 "끝나는"
+      // 순간에만 착지/피해가 발생한다. 애니메이션 모드에서는 실제 종료를 sequencePlayer의
+      // onComplete가 담당하고, 폴백 모드에서는 이 dt 타이머가 종료까지 담당한다.
       const t = Math.min(1, seq.timer / Math.max(0.01, d.IMPACT));
-      // PowerBomb 동안에도 계속 비행한다. CARRY 종료 시 바로 지면으로
-      // 내려오지 않고, PowerBomb가 시작될 때는 아직 공중 높이를 유지한다.
-      // 이후 PowerBomb 마지막 순간까지 연속적으로 하강하여 지면에 닿는다.
-      const airborneElapsed = d.GRAB + d.CARRY + seq.timer;
-      const height = arcPeak * Math.sin(Math.PI * Math.min(1, airborneElapsed / airborneTotal));
-      // 버그 수정(요청: "세트가 앞으로 가는 게 아니라 상대를 세트 앞에
-      // 내려꽂는다"): 세트의 하강 목적지를 대상과 동일한 landingPos가
-      // 아니라 그보다 holdDist만큼 뒤(throwDir 반대 방향)로 잡는다 -
-      // 대상만 최종적으로 궁 방향의 끝 지점에 내려꽂히고, 세트는 앞으로
-      // 나아가지 않는다.
-      const holdDist = this.collisionRadius + getCollisionRadius(target);
-      const settLandPos = seq.landingPos.clone().addScaledVector(seq.throwDir, -holdDist);
-      if (seq.impactStartSettPos) {
-        const settPos = seq.impactStartSettPos.clone().lerp(new THREE.Vector3(settLandPos.x, 0, settLandPos.z), t);
-        this.root.position.set(settPos.x, Math.max(0, height), settPos.z);
-        if (target && seq.impactStartTargetPos) {
-          const tgtPos = seq.impactStartTargetPos.clone().lerp(new THREE.Vector3(seq.landingPos.x, 0, seq.landingPos.z), t);
-          target.mesh.position.set(tgtPos.x, Math.max(0, height), tgtPos.z);
-        }
-      }
+      const u = Math.min(1, (d.CARRY + seq.timer) / travelTotal);
+      const groundPos = grabPoint.clone().lerp(settLandPos, u);
+      this.root.position.set(groundPos.x, 0, groundPos.z);
+      const down = smooth((t - 0.65) / 0.35);
+      target.mesh.position.lerpVectors(holdPos(), new THREE.Vector3(seq.landingPos.x, 0, seq.landingPos.z), down);
       if (!seq.useAnimTiming && t >= 1) {
         this.root.position.set(settLandPos.x, 0, settLandPos.z);
         target.mesh.position.set(seq.landingPos.x, 0, seq.landingPos.z);
@@ -661,7 +634,8 @@ CharacterController.prototype._settRImpact = function(seq) {
       applyStatus(h.unit, { id: 'settR_slow', type: 'SLOW', duration: r.slowDuration, value: r.slowPercent / 100 });
       console.log(`[SETT R] IMPACT -> ${unitLabel(h.unit)}: dist=${h.distance.toFixed(2)} falloff=${(falloff * 100).toFixed(0)}% dmg=${dmg.toFixed(1)}`);
     }
-    vfx.spawn('r', seq.landingPos.clone());
+    // 27차: 착지 표시를 공중 스프라이트 대신 실제 판정 반경(impactRadius 600) 지면 충격파로(색/수명은 연출값).
+    vfx.groundShockwave(seq.landingPos, impactRadiusWorld, 0xffb070, 0.5);
     console.log(`[SETT R] IMPACT damage applied to ${hits.length} target(s), grabbedBonusHp=${grabbedBonusHp.toFixed(0)}, maxDmg=${maxDmg.toFixed(1)}`);
   
 };
@@ -683,3 +657,13 @@ CharacterController.prototype._settEndR = function(seq, aborted) {
   
 };
 
+
+// 27차: 세트 R에서 대상을 붙잡는 손 본(L_Hand/R_Hand) - 모델별로 한 번만 찾아 둔다.
+CharacterController.prototype._settRHands = function() {
+  if (this._settHandsModel !== this.model) {
+    const hands = [];
+    if (this.model) this.model.traverse((o) => { if (o.isBone && /^(l|r)_hand$/i.test(o.name)) hands.push(o); });
+    this._settHands = hands; this._settHandsModel = this.model;
+  }
+  return this._settHands;
+};

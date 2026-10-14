@@ -811,7 +811,9 @@ function applyStatus(target, effect) {
   }
   const rec = { ...effect, duration: effDuration, value: effValue, expiresAt: now + Math.max(0, effDuration) * 1000, _tickAccum: 0 };
   if (effect.type === 'KNOCKUP') {
-    const base = target.mesh?.position?.y ?? 0;
+    // 27차: 이미 떠 있는 대상을 다시 띄우면(야스오 Q3 → R 등) 처음 바닥 높이를 유지한다. 예전엔 지금(공중) 높이를
+    // 바닥으로 기억해서, 공중 상태가 끝나도 그 높이에 계속 떠 있었다.
+    const base = target._yasuoAirborne ? target._yasuoAirborne.baseY : (target.mesh?.position?.y ?? 0);
     target._yasuoAirborne = { baseY: base, elapsed: 0, duration: Math.max(0.05, effect.duration), height: effect.airborneHeight ?? 1.6 };
   }
   const idx = target.statusEffects.findIndex((e) => e.id === effect.id);
@@ -7099,7 +7101,7 @@ class VFXSystem {
     g.position.set(position.x, 0.07, position.z);
     g.renderOrder = 4;
     this.scene.add(g);
-    this.active.push({ life, maxLife: life,
+    this.active.push({ life, maxLife: life, tag: 'groundShockwave', radius, mesh: g,
       update: (t) => {
         const r = radius * (0.25 + 0.75 * Math.min(1, t / 0.35)); // 앞 35% 동안 반경까지 퍼지고 그 뒤로는 반경 유지
         ring.scale.setScalar(r); disc.scale.setScalar(r);
@@ -7108,6 +7110,37 @@ class VFXSystem {
       },
       dispose: () => { this.scene.remove(g); ring.geometry.dispose(); disc.geometry.dispose(); ringMat.dispose(); discMat.dispose(); } });
     return g;
+  }
+  // 27차: 바닥에 판정 모양(부채꼴·직선)을 잠깐 빛나게 그린다 - 요네 W(부채꼴)·요네 R(직선)처럼 판정 범위를 보여 준다.
+  // shape: { kind: 'cone', range, angleDeg } | { kind: 'line', length, width } (월드 단위), dir: 정면 방향.
+  groundShapeFlash(origin, dir, shape, color = 0x8fb8ff, life = 0.35) {
+    let geo;
+    if (shape.kind === 'cone') {
+      const half = THREE.MathUtils.degToRad(shape.angleDeg / 2);
+      geo = new THREE.CircleGeometry(shape.range, 40, Math.PI / 2 - half, half * 2); // +y(도형) = 정면
+    } else if (shape.kind === 'trapezoid') {
+      const tr = new THREE.Shape(); // 도형 +y = 정면, 근거리 반폭 hw0 → 끝 반폭 hw1
+      tr.moveTo(-shape.hw0, 0); tr.lineTo(shape.hw0, 0); tr.lineTo(shape.hw1, shape.length); tr.lineTo(-shape.hw1, shape.length); tr.closePath();
+      geo = new THREE.ShapeGeometry(tr);
+    } else {
+      geo = new THREE.PlaneGeometry(shape.width, shape.length);
+      geo.translate(0, shape.length / 2, 0);
+    }
+    // shape.hold: 예고(텔레그래프)용 - 수명 동안 일정 밝기로 유지하다 끝에서 사라진다.
+    const peak = shape.opacity != null ? shape.opacity : 0.55;
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: peak, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2; // 도형 +y → 월드 -z
+    const holder = new THREE.Group();
+    holder.add(mesh);
+    holder.position.set(origin.x, 0.07 + (shape.yOffset || 0), origin.z);
+    holder.rotation.y = Math.atan2(dir.x, dir.z) + Math.PI; // 월드 -z(도형 정면)를 dir로
+    holder.renderOrder = 4;
+    this.scene.add(holder);
+    this.active.push({ life, maxLife: life, tag: 'groundShape', shape, mesh: holder,
+      update: (t) => { mat.opacity = shape.hold ? peak * (t < 0.1 ? t / 0.1 : 1) : peak * (1 - t) * (t < 0.15 ? t / 0.15 : 1); },
+      dispose: () => { this.scene.remove(holder); geo.dispose(); mat.dispose(); } });
+    return holder;
   }
   _basicAttackFlash(position, direction) {
     const pos = position.clone().addScaledVector(direction, 0.3);
@@ -9305,7 +9338,10 @@ class SkillAimSystem {
         this._ring(aim.center, aim.radiusWorld, ringW, S.edge, S.edgeOpacity);
         break;
       case 'cone': this._cone(aim.origin, yaw, aim.rangeWorld, aim.angleDeg); break;
-      case 'trapezoid': this._trap(aim.origin, yaw, aim.rangeWorld, aim.centerHalfWidth, aim.endHalfWidth); break;
+      case 'trapezoid':
+        this._trap(aim.origin, yaw, aim.rangeWorld, aim.centerHalfWidth, aim.endHalfWidth);
+        this._lane(aim.origin, yaw, aim.rangeWorld, aim.centerHalfWidth); // 세트 W 중앙(고정 피해) 띠
+        break;
       case 'wall': this._rect(aim.origin, yaw, aim.wall.dist - aim.wall.thickness / 2, aim.wall.dist + aim.wall.thickness / 2, aim.wall.length / 2); break;
       case 'selfAim':
         this._disc(aim.origin, aim.radiusWorld);
@@ -9363,6 +9399,13 @@ class SkillAimSystem {
     this._outline(origin, yaw, pts);
   }
   _rect(origin, yaw, z0, z1, hw) { if (z1 > z0) this._poly(origin, yaw, [[-hw, z0], [hw, z0], [hw, z1], [-hw, z1]]); }
+  _lane(origin, yaw, len, hw) {
+    if (!(hw > 0) || !(len > 0)) return;
+    const pts = [[-hw, 0], [hw, 0], [hw, len], [-hw, len]];
+    const m = this._mesh(0xfff0c8, 0.3);
+    this._setGeo(m, this._flat(pts));
+    m.position.set(origin.x, 0.05, origin.z); m.rotation.y = yaw;
+  }
   _trap(origin, yaw, len, hw0, hw1) { this._poly(origin, yaw, [[-hw0, 0], [hw0, 0], [hw1, len], [-hw1, len]]); }
   _arrow(origin, yaw, z, width) { const h = Math.max(width, lolRangeToWorld(60)); this._poly(origin, yaw, [[-h, z], [h, z], [0, z + h * 1.2]]); }
   _cone(origin, yaw, r, angleDeg) {
@@ -9511,6 +9554,8 @@ function unitMarkEntries(c, unit, now) {
     if (rec && rec.stacks > 0 && rec.expiresAt > now) out.push({ kind: 'pips', n: rec.stacks, max: 3, color: '#b45cff', glyph: '◆', full: rec.stacks >= 3 });
   }
   if (c.championId === 'vex' && c._vex && (c._vex.gloom.get(unit) || 0) > now) out.push({ kind: 'tag', text: '우울', color: '#9b6bff' });
+  // 27차: 야스오 질풍검 같은 대상 재사용 대기(원작 10/9/8/7/6초) - 남은 초를 띄운다.
+  if (c.championId === 'yasuo' && c._yasuoETargetLockLeft) { const left = c._yasuoETargetLockLeft(unit); if (left > 0) out.push({ kind: 'tag', text: `E ${Math.ceil(left)}`, color: '#9aa7b4' }); }
   if (c.championId === 'leesin' && c._leesin && c._leesin.qMarkTarget === unit && c._leesin.qMarkExpiresAt > now) out.push({ kind: 'tag', text: '음파', color: '#ffd36b' });
   if (c.championId === 'ezreal' && c._ezreal && c._ezreal.markTarget === unit && c._ezreal.markExpiresAt > now) out.push({ kind: 'tag', text: '정기', color: '#ffcf5a' });
   return out;
@@ -13422,6 +13467,8 @@ CharacterController.prototype._approachCanCast = function(slot) {
       if (this._nilahRestoreECharges) this._nilahRestoreECharges(performance.now());
       return !!(this._nilah && this._nilah.eCharges > 0) && (this.skillLevels.E || 0) >= 1;
     }
+    // 27차: 야스오 E는 같은 대상 재사용 대기 중이면 걸어가지 않는다(예전엔 걸어간 뒤 시전이 무시됐다).
+    if (this.championId === 'yasuo' && slot === 'E' && this._yasuoETargetLockLeft && this._yasuoETargetLockLeft(this.currentTarget) > 0) return false;
     if (this.championId === 'darius' && slot === 'R' && this._rRecastReadyUntil && performance.now() < this._rRecastReadyUntil) {
       const info = this._skillCostFor('R');
       return this.mp >= (info ? info.mana : 0);
@@ -14646,8 +14693,23 @@ CharacterController.prototype._castW = function(mouseWorldPoint, free = false) {
     } else {
       settWForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
     }
+    // 27차(요청: "세트 w 가운데 고정데미지 범위 표시"): 0.75초 차징 동안 사다리꼴
+    // 전체(물리 피해)와 중앙 띠(고정 피해)를 땅에 예고 표시한다. 크기는 판정과 같은
+    // CHAMPION_DATA.sett.W(range/centerHalfWidth/endHalfWidth) - 색/투명도는 연출값.
+    const settWData = this.championId === 'sett' ? CHAMPION_DATA.sett?.W : null;
+    if (settWData) {
+      const wLen = lolRangeToWorld(settWData.range), wHw0 = lolRangeToWorld(settWData.centerHalfWidth), wHw1 = lolRangeToWorld(settWData.endHalfWidth);
+      const wWind = SKILL_TIMING_DATABASE.sett?.W?.eventTime || 0.75;
+      vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'trapezoid', length: wLen, hw0: wHw0, hw1: wHw1, hold: true, opacity: 0.18 }, 0xff9a5a, wWind);
+      vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'line', length: wLen, width: wHw0 * 2, hold: true, opacity: 0.32, yOffset: 0.005 }, 0xfff0c8, wWind);
+    }
     this.runAction('w', STATE.W_CAST, {
       onFire: () => {
+        if (settWData) {
+          const wLen = lolRangeToWorld(settWData.range), wHw0 = lolRangeToWorld(settWData.centerHalfWidth), wHw1 = lolRangeToWorld(settWData.endHalfWidth);
+          vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'trapezoid', length: wLen, hw0: wHw0, hw1: wHw1, opacity: 0.4 }, 0xff8a3a, 0.4);
+          vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'line', length: wLen, width: wHw0 * 2, opacity: 0.75, yOffset: 0.005 }, 0xffffff, 0.45);
+        }
         // 세트 W 문서 8/9절: 실제 전방 사다리꼴 범위 탐색 + 중앙(True Damage)/
         // 양옆(Physical Damage) 판정 - _settWOnCast가 getAllEnemyUnits() 전체를
         // 대상으로 판정한다(더 이상 currentTarget 단일 대상에 의존하지 않음).
@@ -14758,7 +14820,11 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
         faceDir: facing,
         dataOverride: { ...data, clips: data.clips && data.clips.length ? data.clips : ['Spell3'] },
         onFire: () => {
-          vfx.spawn('e', this.root.position.clone().addScaledVector(facing, 1.5));
+          // 27차(요청: "세트 e범위가 이상하게 떠있음"): 예전엔 앞쪽 1.5 지점 공중에
+          // 빌보드 스프라이트('e')를 띄웠다 - 실제 판정은 세트 중심 반경 e.range(490)
+          // 원이므로 그 원을 지면 충격파로 보여준다(색/수명은 연출값).
+          const eData = CHAMPION_DATA.sett?.E;
+          if (eData) vfx.groundShockwave(this.root.position, lolRangeToWorld(eData.range), 0xffb070, 0.4);
           this._settEOnCast(facing);
         },
       });
@@ -16338,36 +16404,48 @@ CharacterController.prototype._settUpdateR = function(dt) {
 
     if (seq.phase === 'CAST') return; // 시전 준비(Base) 클립 재생 대기 - onStepStart(1)이 DASH로 넘겨줄 때까지 위치 변화 없음
 
-    // 버그 수정(요청: "즉발로 잡고 날아가야 한다 - 날아가는 모션 중에
-    // 잡고 날아가야 함"): 예전엔 DASH를 지면 위에서 그냥 걸어가는 것처럼
-    // 처리하고, 다 걸어간 뒤에야 GRAB에서 잠깐 멈췄다가 CARRY에서 비로소
-    // 떠오르기 시작했다 - "걸어가서 잡고 그다음 날아오르는" 3단계 동작으로
-    // 보였다. 실제 세트 R은 도약과 동시에 붙잡고 그대로 날아간다. 이제
-    // DASH 시작 시점부터 이미 떠오르기 시작해서, DASH(도약 접근)->
-    // GRAB(공중에서 붙잡는 순간)->CARRY(계속 날아가 착지)까지 하나의 끊김
-    // 없는 포물선으로 처리한다 - 세 구간의 실제 애니메이션 길이(합)를
-    // 그대로 궤적의 총 시간으로 쓴다(요청: 실제 클립 길이 기준 유지).
-    // 버그 수정(요청: "Spell4_Dash 때는 하늘을 날지 않는다"): 예전엔
-    // DASH 구간도 airborneTotal(DASH+GRAB+CARRY)의 일부로 취급해서 sin
-    // 곡선상 작지만 0이 아닌 높이로 이미 살짝 떠 있었다. 이제 DASH는
-    // 완전히 지상에서만 접근하고(height=0 고정), 공중 포물선은 GRAB이
-    // 시작되는 순간부터(붙잡는 순간부터) 시작된다 - "붙잡자마자 공중으로
-    // 들어올려 그대로 날아간다"는 의미에 더 정확히 맞는다.
-    // R 비행 궤적은 PowerBomb 시작과 동시에 끝나면 안 된다.
-    // Spell4_PowerBomb가 재생되는 동안에도 세트/대상이 계속 공중에 떠서
-    // 마지막 구간까지 하강하고, PowerBomb 종료 직전에 지면에 거의 닿도록
-    // GRAB + CARRY + IMPACT 전체를 하나의 포물선 시간축으로 사용한다.
-    const airborneTotal = d.GRAB + d.CARRY + d.IMPACT;
-    const arcPeak = lolRangeToWorld(300);
+    // 27차(요청: "세트 궁 모션 이상") - 실제 GLB로 R 전체를 프레임 단위로 추적해 보니:
+    //  1) 코드가 출처 없는 포물선(lolRangeToWorld(300) ≈ 2.6)을 루트에 더했는데, Spell4_Grab/
+    //     Spin/PowerBomb 클립의 Root 본 트랙에 이미 점프 높이가 들어 있어(골반 기준 최대 약 +0.8)
+    //     둘이 겹쳐 골반이 지면 위 4.25까지 떴다(서 있을 때 0.9).
+    //  2) GRAB 순간 대상을 세트와 "같은 좌표"로 옮겨 두 모델이 겹쳤고, CARRY 시작에 대상이 앞으로
+    //     holdDist만큼 순간이동했다.
+    //  3) CARRY에서 세트가 landingPos(대상 착지점)까지 갔다가 PowerBomb 동안 holdDist만큼 "뒤로"
+    //     미끄러졌다(대상도 같이 뒤로).
+    // 고친 방식: 출처 없는 높이는 지우고 높이는 GLB 클립의 Root 트랙(원본 애니메이션)만 쓴다. 대상은
+    // 세트의 양손(L_Hand/R_Hand) 가운데를 따라가게 붙인다(원작처럼 손에 붙잡혀 같이 돈다 - 손에
+    // 대상의 몸 가운데를 맞추고 정면으로 대상 반경만큼 띄우는 것은 연출값). 세트의 수평 이동은 grabPoint → settLandPos 한 방향
+    // (600유닛)으로만 진행하고, 대상은 PowerBomb 마지막 35% 동안 손 위치에서 착지점으로 내려놓는다.
     const holdDist = this.collisionRadius + getCollisionRadius(target);
+    const approachDir = new THREE.Vector3().subVectors(seq.startPos, seq.targetStartPos).setY(0);
+    if (approachDir.lengthSq() < 1e-6) approachDir.set(0, 0, 1); else approachDir.normalize();
+    const grabPoint = seq.targetStartPos.clone().addScaledVector(approachDir, holdDist).setY(0);
+    const settLandPos = seq.landingPos.clone().addScaledVector(seq.throwDir, -holdDist).setY(0);
+    const smooth = (x) => { const k = THREE.MathUtils.clamp(x, 0, 1); return k * k * (3 - 2 * k); };
+    // 세트 손(양손 가운데)에 붙잡힌 대상의 위치 - 손 본이 없으면(폴백) 세트 정면 holdDist.
+    const holdPos = () => {
+      const hands = this._settRHands();
+      if (hands.length) {
+        this.root.updateMatrixWorld(true);
+        const mid = new THREE.Vector3(), v = new THREE.Vector3();
+        for (const h of hands) mid.add(h.getWorldPosition(v));
+        mid.multiplyScalar(1 / hands.length);
+        if (seq.targetHeight == null) {
+          const box = new THREE.Box3().setFromObject(target.mesh);
+          seq.targetHeight = Number.isFinite(box.max.y - box.min.y) && box.max.y > box.min.y ? box.max.y - box.min.y : 1.5;
+        }
+        // 손이 대상 몸 앞면을 잡도록 대상 중심을 세트 정면으로 대상 반경만큼 띄운다(몸 겹침 방지).
+        mid.addScaledVector(seq.throwDir, getCollisionRadius(target) || 0);
+        mid.y = Math.max(0, mid.y - seq.targetHeight * 0.5);
+        return mid;
+      }
+      return this.root.position.clone().addScaledVector(seq.throwDir, holdDist).setY(0);
+    };
 
     if (seq.phase === 'DASH') {
       const t = Math.min(1, seq.timer / Math.max(0.01, d.DASH));
-      const approachDir = new THREE.Vector3().subVectors(seq.startPos, seq.targetStartPos).setY(0);
-      if (approachDir.lengthSq() < 1e-6) approachDir.set(0, 0, 1); else approachDir.normalize();
-      const grabPoint = seq.targetStartPos.clone().addScaledVector(approachDir, holdDist);
       const groundPos = new THREE.Vector3().lerpVectors(seq.startPos, grabPoint, t);
-      // 요청: DASH 중에는 높이 0 고정 - 지상에서만 접근한다.
+      // 요청: DASH 중에는 지상에서만 접근한다.
       this.root.position.set(groundPos.x, 0, groundPos.z);
       // 버그 수정(핵심): 애니메이션 재생 중(useAnimTiming)일 때는 이 dt
       // 타이머가 아니라 onStepStart 콜백이 다음 단계로 넘긴다 - 타이머가
@@ -16383,53 +16461,31 @@ CharacterController.prototype._settUpdateR = function(dt) {
       return;
     }
     if (seq.phase === 'GRAB') {
-      // 짧게 붙잡는 구간 - 이 순간부터 공중으로 떠오르기 시작한다(요청:
-      // DASH는 지상, GRAB부터 공중). 이 순간부터 대상이 세트에게 붙는다
-      // (요청 6/7 "일반 AI가 아니라 R 시퀀스가 위치를 직접 관리").
-      const approachDir = new THREE.Vector3().subVectors(seq.startPos, seq.targetStartPos).setY(0);
-      if (approachDir.lengthSq() < 1e-6) approachDir.set(0, 0, 1); else approachDir.normalize();
-      const grabPoint = seq.targetStartPos.clone().addScaledVector(approachDir, holdDist);
-      const airborneElapsed = seq.timer; // GRAB 구간이 airborneTotal(GRAB+CARRY)의 앞부분
-      const height = arcPeak * Math.sin(Math.PI * Math.min(1, airborneElapsed / airborneTotal));
-      this.root.position.set(grabPoint.x, height, grabPoint.z);
-      target.mesh.position.set(grabPoint.x, height, grabPoint.z); // 붙잡히는 순간부터 세트와 같은 높이/위치로 즉시 동기화
-      if (!seq.useAnimTiming) {
-        const t = Math.min(1, seq.timer / Math.max(0.01, d.GRAB));
-        if (t >= 1) {
-          seq.phase = 'CARRY'; seq.timer = 0;
-          seq.carryStartSettPos = this.root.position.clone();
-          seq.carryStartTargetPos = target.mesh.position.clone();
-          console.log('[SETT R] SPIN/CARRY START');
-          console.log('[SETT R] CARRY DISTANCE = 600 LOL UNITS');
-        }
+      // 붙잡는 구간 - 세트는 grabPoint에 서고, 대상은 원래 자리에서 세트 손으로 GRAB 클립 길이에
+      // 걸쳐 끌려온다(예전처럼 세트와 같은 좌표로 순간이동하지 않는다).
+      this.root.position.set(grabPoint.x, 0, grabPoint.z);
+      const g = smooth(seq.timer / Math.max(0.01, d.GRAB));
+      target.mesh.position.lerpVectors(seq.targetStartPos.clone().setY(0), holdPos(), g);
+      if (!seq.useAnimTiming && seq.timer >= d.GRAB) {
+        seq.phase = 'CARRY'; seq.timer = 0;
+        seq.carryStartSettPos = this.root.position.clone();
+        seq.carryStartTargetPos = target.mesh.position.clone();
+        console.log('[SETT R] SPIN/CARRY START');
+        console.log('[SETT R] CARRY DISTANCE = 600 LOL UNITS');
       }
       return;
     }
+    // CARRY + IMPACT(PowerBomb)를 하나의 수평 이동 시간축으로 쓴다 - 세트는 grabPoint에서
+    // settLandPos까지 한 방향으로만 간다(뒤로 미끄러지지 않음).
+    const travelTotal = Math.max(0.01, d.CARRY + d.IMPACT);
     if (seq.phase === 'CARRY') {
-      if (!seq.carryStartSettPos) return; // onStepStart(3)이 아직 안 왔으면(애니메이션 모드) 대기
-      const t = Math.min(1, seq.timer / Math.max(0.01, d.CARRY));
-      // GRAB에서 이어지는 같은 포물선의 나머지 구간(요청: 끊김 없는
-      // 하나의 비행) - 각 단계를 따로 arcHeight=0에서 다시 시작하지 않는다.
-      const airborneElapsed = d.GRAB + seq.timer;
-      const height = arcPeak * Math.sin(Math.PI * Math.min(1, airborneElapsed / airborneTotal));
-      const groundPos = seq.carryStartSettPos.clone().lerp(seq.landingPos, t);
-      this.root.position.set(groundPos.x, height, groundPos.z);
-      // 버그 수정(요청: "상대를 세트가 바라보는 방향 앞으로 내려꽂는다" -
-      // "세트가 상대 앞으로 떨어지는 게 아니라"): 예전엔 대상의 offset
-      // 방향을 carryStartTargetPos-carryStartSettPos로 계산했는데, GRAB
-      // 순간 세트와 대상이 같은 좌표로 동기화되기 때문에 이 벡터는 항상
-      // 거의 0이었고, 그 결과 임의의 월드 +Z축으로 조용히 폴백하고
-      // 있었다(세트가 실제로 바라보는 방향과 무관). 이제 캐스트 시점에
-      // 고정해둔 seq.throwDir(세트가 바라보는 방향, 이후 절대 안 바뀜)을
-      // 그대로 써서, 대상이 항상 "세트가 바라보는 방향 앞"에 위치하게
-      // 한다.
-      const holdDir = seq.throwDir;
-      target.mesh.position.set(groundPos.x + holdDir.x * holdDist, height, groundPos.z + holdDir.z * holdDist);
-      if (!seq.useAnimTiming && t >= 1) {
-        // 버그 수정(요청: "PowerBomb가 끝나는 동시에 내려꽂는다"): 여기서
-        // 바로 스냅+피해를 적용하지 않는다 - PowerBomb 단계에 진입만 하고,
-        // 실제 착지/피해/Slide는 그 단계가 "끝나는" 시점(아래 IMPACT 블록)
-        // 에서 처리한다. 하강을 시작할 현재 위치만 기록해둔다.
+      if (!seq.carryStartSettPos) return; // onStepStart(2)가 아직 안 왔으면(애니메이션 모드) 대기
+      const u = Math.min(1, seq.timer / travelTotal);
+      const groundPos = grabPoint.clone().lerp(settLandPos, u);
+      this.root.position.set(groundPos.x, 0, groundPos.z);
+      target.mesh.position.copy(holdPos());
+      if (!seq.useAnimTiming && seq.timer >= d.CARRY) {
+        // PowerBomb 단계에 진입만 하고, 실제 착지/피해는 그 단계가 "끝나는" 시점에서 처리한다.
         seq.phase = 'IMPACT'; seq.timer = 0;
         seq.impactStartSettPos = this.root.position.clone();
         seq.impactStartTargetPos = target.mesh.position.clone();
@@ -16438,32 +16494,15 @@ CharacterController.prototype._settUpdateR = function(dt) {
       return;
     }
     if (seq.phase === 'IMPACT') {
-      // 요청: PowerBomb 클립이 실제로 재생되는 동안(윈드업~내려찍기) 자연
-      // 스럽게 하강하다가, 클립이 "끝나는" 순간에만 착지/피해가 발생한다.
-      // 애니메이션 모드에서는 이 진행률 계산에만 쓰이고(실제 종료는
-      // sequencePlayer의 onComplete가 담당), 폴백 모드에서는 이 dt
-      // 타이머가 종료까지 전부 담당한다.
+      // PowerBomb 클립이 재생되는 동안(윈드업~내려찍기) 수평 이동을 마저 끝내고, 클립이 "끝나는"
+      // 순간에만 착지/피해가 발생한다. 애니메이션 모드에서는 실제 종료를 sequencePlayer의
+      // onComplete가 담당하고, 폴백 모드에서는 이 dt 타이머가 종료까지 담당한다.
       const t = Math.min(1, seq.timer / Math.max(0.01, d.IMPACT));
-      // PowerBomb 동안에도 계속 비행한다. CARRY 종료 시 바로 지면으로
-      // 내려오지 않고, PowerBomb가 시작될 때는 아직 공중 높이를 유지한다.
-      // 이후 PowerBomb 마지막 순간까지 연속적으로 하강하여 지면에 닿는다.
-      const airborneElapsed = d.GRAB + d.CARRY + seq.timer;
-      const height = arcPeak * Math.sin(Math.PI * Math.min(1, airborneElapsed / airborneTotal));
-      // 버그 수정(요청: "세트가 앞으로 가는 게 아니라 상대를 세트 앞에
-      // 내려꽂는다"): 세트의 하강 목적지를 대상과 동일한 landingPos가
-      // 아니라 그보다 holdDist만큼 뒤(throwDir 반대 방향)로 잡는다 -
-      // 대상만 최종적으로 궁 방향의 끝 지점에 내려꽂히고, 세트는 앞으로
-      // 나아가지 않는다.
-      const holdDist = this.collisionRadius + getCollisionRadius(target);
-      const settLandPos = seq.landingPos.clone().addScaledVector(seq.throwDir, -holdDist);
-      if (seq.impactStartSettPos) {
-        const settPos = seq.impactStartSettPos.clone().lerp(new THREE.Vector3(settLandPos.x, 0, settLandPos.z), t);
-        this.root.position.set(settPos.x, Math.max(0, height), settPos.z);
-        if (target && seq.impactStartTargetPos) {
-          const tgtPos = seq.impactStartTargetPos.clone().lerp(new THREE.Vector3(seq.landingPos.x, 0, seq.landingPos.z), t);
-          target.mesh.position.set(tgtPos.x, Math.max(0, height), tgtPos.z);
-        }
-      }
+      const u = Math.min(1, (d.CARRY + seq.timer) / travelTotal);
+      const groundPos = grabPoint.clone().lerp(settLandPos, u);
+      this.root.position.set(groundPos.x, 0, groundPos.z);
+      const down = smooth((t - 0.65) / 0.35);
+      target.mesh.position.lerpVectors(holdPos(), new THREE.Vector3(seq.landingPos.x, 0, seq.landingPos.z), down);
       if (!seq.useAnimTiming && t >= 1) {
         this.root.position.set(settLandPos.x, 0, settLandPos.z);
         target.mesh.position.set(seq.landingPos.x, 0, seq.landingPos.z);
@@ -16515,7 +16554,8 @@ CharacterController.prototype._settRImpact = function(seq) {
       applyStatus(h.unit, { id: 'settR_slow', type: 'SLOW', duration: r.slowDuration, value: r.slowPercent / 100 });
       console.log(`[SETT R] IMPACT -> ${unitLabel(h.unit)}: dist=${h.distance.toFixed(2)} falloff=${(falloff * 100).toFixed(0)}% dmg=${dmg.toFixed(1)}`);
     }
-    vfx.spawn('r', seq.landingPos.clone());
+    // 27차: 착지 표시를 공중 스프라이트 대신 실제 판정 반경(impactRadius 600) 지면 충격파로(색/수명은 연출값).
+    vfx.groundShockwave(seq.landingPos, impactRadiusWorld, 0xffb070, 0.5);
     console.log(`[SETT R] IMPACT damage applied to ${hits.length} target(s), grabbedBonusHp=${grabbedBonusHp.toFixed(0)}, maxDmg=${maxDmg.toFixed(1)}`);
   
 };
@@ -16537,6 +16577,16 @@ CharacterController.prototype._settEndR = function(seq, aborted) {
   
 };
 
+
+// 27차: 세트 R에서 대상을 붙잡는 손 본(L_Hand/R_Hand) - 모델별로 한 번만 찾아 둔다.
+CharacterController.prototype._settRHands = function() {
+  if (this._settHandsModel !== this.model) {
+    const hands = [];
+    if (this.model) this.model.traverse((o) => { if (o.isBone && /^(l|r)_hand$/i.test(o.name)) hands.push(o); });
+    this._settHands = hands; this._settHandsModel = this.model;
+  }
+  return this._settHands;
+};
 
 /* ===== src/champions/renekton.js ===== */
 // Extracted from CharacterController: _renektonData
@@ -17229,7 +17279,10 @@ CharacterController.prototype._yasuoCastE = function(mouseWorldPoint, free=false
     const key = this._yasuoTargetKey(target);
     const now = performance.now();
 
-    if (now < (this._yasuo.eTargetCooldowns.get(key) || 0)) return;
+    // 원작 규칙: 같은 대상에게는 10/9/8/7/6초 동안 다시 쓸 수 없다. 27차: 예전엔 아무 안내 없이 무시돼 "클릭해도 안 나가는"
+    // 것처럼 보였다 - 남은 시간을 알려 준다(대상 머리 위에도 표시 - status_indicator_system.js).
+    const lockLeft = ((this._yasuo.eTargetCooldowns.get(key) || 0) - now) / 1000;
+    if (lockLeft > 0) { if (typeof showSkillToast === 'function') showSkillToast(`E - 같은 대상은 ${lockLeft.toFixed(1)}초 뒤 다시 사용 가능`); return; }
     if (!isInRange(this, target, e.range)) return;
     if (!this._payCost('E', free)) return;
 
@@ -17328,6 +17381,7 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
     // front of him. They remain individual units; only their positions are
     // repositioned for the R strike.
     const yasuoPos = anchorPos.clone();
+    yasuoPos.y = this.root.position.y; // 27차: 대상의 공중 높이를 복사하지 않는다(예전엔 야스오도 그 높이에 떠 있었다)
     this.root.position.copy(yasuoPos);
 
     const front = dir.clone();
@@ -17518,6 +17572,8 @@ CharacterController.prototype._yasuoOnTakeDamage = function(source) {
 CharacterController.prototype._yasuoResolveEQ = function(eq) {
     const q = this._champData().Q;
     const unique = this._yasuoFindQTargets(eq.dir, q.range, q.circleRadius);
+    // 27차: EQ 원형 베기 범위를 잠깐 보여 준다(예전엔 표시가 없어 EQ가 됐는지 알기 어려웠다).
+    if (typeof vfx.groundShockwave === 'function') vfx.groundShockwave(this.root.position, lolRangeToWorld(q.circleRadius), eq.tornado ? 0xc8f2ff : 0x8fe3ff, 0.35);
     this._yasuoQHitConsumed = false;
     this._yasuoQCritRoll = Math.random() < (this.stats.critChance || 0);
     for (const t of unique) this._yasuoApplyQHit(t, { tornado: eq.tornado, circle: true });
@@ -17548,6 +17604,12 @@ CharacterController.prototype._yasuoPlayPostQMoveEntry = function() {
 
 };
 
+
+// 27차: 이 대상에게 지금 질풍검을 쓸 수 있는가(같은 대상 재사용 대기) - 다가가서 시전·조준 표시에서 쓴다.
+CharacterController.prototype._yasuoETargetLockLeft = function(target) {
+  if (!this._yasuo || !target) return 0;
+  return Math.max(0, ((this._yasuo.eTargetCooldowns.get(this._yasuoTargetKey(target)) || 0) - performance.now()) / 1000);
+};
 
 /* ===== src/champions/yone.js ===== */
 /* ============================================================
@@ -18034,6 +18096,8 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
   const timer = this._champTimeout(() => {
     if (this.currentActionKey !== key) return;
     this.currentPhase = 'ACTIVE';
+    // 27차: 판정 부채꼴(사거리·각도)을 바닥에 잠깐 그린다 - 예전엔 맞혔을 때만 작은 반짝임이 있어 범위가 보이지 않았다.
+    if (typeof vfx.groundShapeFlash === 'function') vfx.groundShapeFlash(this.root.position, dir, { kind: 'cone', range: lolRangeToWorld(w.range), angleDeg: w.angleDeg || 80 }, 0x9fc8ff, 0.4);
     const targets = findEnemiesInRadius(this.root.position, w.range, { forward: dir, maxAngleDeg: (w.angleDeg || 80) / 2 })
       .map((h) => h.unit).filter((u) => u && u.hp > 0);
     let championHits = 0;
@@ -18439,10 +18503,11 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
       if (!u || u.hp <= 0) continue;
       const p = getWorldPosition(u);
       const toUnit = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
-      const along = toUnit.dot(dir);
-      if (along < -1 || along > worldRange + 1) continue;
+      const along = toUnit.dot(dir), ur = getCollisionRadius(u) || 0;
+      // 27차: 진행 방향 여유를 대상 판정 반경만큼만 준다. 예전엔 ±1 월드(약 115 LoL)를 줘서 요네 뒤쪽·사거리 끝 너머 대상도 맞았다.
+      if (along < -ur || along > worldRange + ur) continue;
       const lateral = Math.sqrt(Math.max(0, toUnit.lengthSq() - along * along));
-      if (lateral > halfWidth + (getCollisionRadius(u) || 0)) continue;
+      if (lateral > halfWidth + ur) continue;
       hits.push({ unit: u, along });
     }
     hits.forEach((h) => applyStatus(h.unit, { id: 'yoneRStun', type: 'STUN', duration: r.stunDuration || 1, value: 1 }));
@@ -18471,6 +18536,8 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
     if (map && typeof map.clampPosition === 'function') map.clampPosition(blinkPos);
     this.root.position.copy(blinkPos);
     vfx.spawn('r', blinkPos.clone());
+    // 27차: 벤 직선 판정(폭 r.width)을 바닥에 잠깐 그린다.
+    if (typeof vfx.groundShapeFlash === 'function') vfx.groundShapeFlash(origin, dir, { kind: 'line', length: worldRange, width: halfWidth * 2 }, 0x8fb8ff, 0.5);
     // 3단계(PC 위키): 시전 종료 시점에 표식된 적을 블링크 지점 쪽으로 3000 속도로 끌어오고,
     // 끌려가는 순간 기절(1초)이 끝나며, 끌려간 "뒤"에 0.75초 공중에 뜬다. 예전엔 0.3초 뒤에
     // 모두를 블링크 지점 한 점으로 순간이동시키고 기절과 공중에 뜸을 겹쳐 걸었다.
@@ -30881,7 +30948,8 @@ function alignModelOrigin(model) {
   return { box };
 }
 
-// 지금 재생 중인 자세(대기)에서 보이는 스킨 메시의 가장 낮은 점이 챔피언 루트 높이에 오도록 모델을 내리거나 올린다.
+// 지금 재생 중인 자세(대기)에서 보이는 스킨 메시의 가장 낮은 점이 챔피언 루트 높이에 오도록 모델을 내리거나 올리고,
+// 골반이 루트 바로 위에 오도록 수평 위치를 맞춘다(27차).
 // 반환값: 내린 월드 거리(머리 위 체력바 위치 보정용).
 function groundModelOnIdlePose(ctrl) {
   const model = ctrl && ctrl.model, wrap = model && model.parent;
@@ -30899,6 +30967,19 @@ function groundModelOnIdlePose(ctrl) {
   if (!isFinite(minY)) return 0;
   const drop = minY - ctrl.root.position.y;
   model.position.y -= drop / (wrap.scale.y || 1);
+  // 27차: 수평 위치도 대기 자세의 골반(없으면 Root 뼈)이 챔피언 위치 바로 위에 오게 맞춘다. alignModelOrigin()은 바인드
+  // 자세의 전체 상자 중심(큰 칼·철퇴 포함)을 써서, 대기 자세에서 몸이 한쪽으로 치우쳐 있었다(요네 옆 약 51·앞 약 57,
+  // 야스오 뒤 약 55 LoL 유닛 - 골반 뼈 기준).
+  let pelvis = null, rootBone = null;
+  model.traverse((o) => { if (!o.isBone) return; if (!pelvis && /^(c_)?(pelvis|hip)$/i.test(o.name)) pelvis = o; if (!rootBone && /^root$/i.test(o.name)) rootBone = o; });
+  const anchorBone = pelvis || rootBone;
+  if (anchorBone) {
+    model.updateMatrixWorld(true);
+    const p = anchorBone.getWorldPosition(new THREE.Vector3());
+    const off = p.sub(ctrl.root.position).setY(0).applyQuaternion(ctrl.root.quaternion.clone().invert()); // 루트 기준(회전 제외)
+    model.position.x -= off.x / (wrap.scale.x || 1);
+    model.position.z -= off.z / (wrap.scale.z || 1);
+  }
   model.updateMatrixWorld(true);
   return drop;
 }

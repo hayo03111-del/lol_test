@@ -85,7 +85,9 @@ function applyStatus(target, effect) {
   }
   const rec = { ...effect, duration: effDuration, value: effValue, expiresAt: now + Math.max(0, effDuration) * 1000, _tickAccum: 0 };
   if (effect.type === 'KNOCKUP') {
-    const base = target.mesh?.position?.y ?? 0;
+    // 27차: 이미 떠 있는 대상을 다시 띄우면(야스오 Q3 → R 등) 처음 바닥 높이를 유지한다. 예전엔 지금(공중) 높이를
+    // 바닥으로 기억해서, 공중 상태가 끝나도 그 높이에 계속 떠 있었다.
+    const base = target._yasuoAirborne ? target._yasuoAirborne.baseY : (target.mesh?.position?.y ?? 0);
     target._yasuoAirborne = { baseY: base, elapsed: 0, duration: Math.max(0.05, effect.duration), height: effect.airborneHeight ?? 1.6 };
   }
   const idx = target.statusEffects.findIndex((e) => e.id === effect.id);

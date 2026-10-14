@@ -139,7 +139,8 @@ function alignModelOrigin(model) {
   return { box };
 }
 
-// 지금 재생 중인 자세(대기)에서 보이는 스킨 메시의 가장 낮은 점이 챔피언 루트 높이에 오도록 모델을 내리거나 올린다.
+// 지금 재생 중인 자세(대기)에서 보이는 스킨 메시의 가장 낮은 점이 챔피언 루트 높이에 오도록 모델을 내리거나 올리고,
+// 골반이 루트 바로 위에 오도록 수평 위치를 맞춘다(27차).
 // 반환값: 내린 월드 거리(머리 위 체력바 위치 보정용).
 function groundModelOnIdlePose(ctrl) {
   const model = ctrl && ctrl.model, wrap = model && model.parent;
@@ -157,6 +158,19 @@ function groundModelOnIdlePose(ctrl) {
   if (!isFinite(minY)) return 0;
   const drop = minY - ctrl.root.position.y;
   model.position.y -= drop / (wrap.scale.y || 1);
+  // 27차: 수평 위치도 대기 자세의 골반(없으면 Root 뼈)이 챔피언 위치 바로 위에 오게 맞춘다. alignModelOrigin()은 바인드
+  // 자세의 전체 상자 중심(큰 칼·철퇴 포함)을 써서, 대기 자세에서 몸이 한쪽으로 치우쳐 있었다(요네 옆 약 51·앞 약 57,
+  // 야스오 뒤 약 55 LoL 유닛 - 골반 뼈 기준).
+  let pelvis = null, rootBone = null;
+  model.traverse((o) => { if (!o.isBone) return; if (!pelvis && /^(c_)?(pelvis|hip)$/i.test(o.name)) pelvis = o; if (!rootBone && /^root$/i.test(o.name)) rootBone = o; });
+  const anchorBone = pelvis || rootBone;
+  if (anchorBone) {
+    model.updateMatrixWorld(true);
+    const p = anchorBone.getWorldPosition(new THREE.Vector3());
+    const off = p.sub(ctrl.root.position).setY(0).applyQuaternion(ctrl.root.quaternion.clone().invert()); // 루트 기준(회전 제외)
+    model.position.x -= off.x / (wrap.scale.x || 1);
+    model.position.z -= off.z / (wrap.scale.z || 1);
+  }
   model.updateMatrixWorld(true);
   return drop;
 }

@@ -274,7 +274,7 @@ class VFXSystem {
     g.position.set(position.x, 0.07, position.z);
     g.renderOrder = 4;
     this.scene.add(g);
-    this.active.push({ life, maxLife: life,
+    this.active.push({ life, maxLife: life, tag: 'groundShockwave', radius, mesh: g,
       update: (t) => {
         const r = radius * (0.25 + 0.75 * Math.min(1, t / 0.35)); // 앞 35% 동안 반경까지 퍼지고 그 뒤로는 반경 유지
         ring.scale.setScalar(r); disc.scale.setScalar(r);
@@ -283,6 +283,37 @@ class VFXSystem {
       },
       dispose: () => { this.scene.remove(g); ring.geometry.dispose(); disc.geometry.dispose(); ringMat.dispose(); discMat.dispose(); } });
     return g;
+  }
+  // 27차: 바닥에 판정 모양(부채꼴·직선)을 잠깐 빛나게 그린다 - 요네 W(부채꼴)·요네 R(직선)처럼 판정 범위를 보여 준다.
+  // shape: { kind: 'cone', range, angleDeg } | { kind: 'line', length, width } (월드 단위), dir: 정면 방향.
+  groundShapeFlash(origin, dir, shape, color = 0x8fb8ff, life = 0.35) {
+    let geo;
+    if (shape.kind === 'cone') {
+      const half = THREE.MathUtils.degToRad(shape.angleDeg / 2);
+      geo = new THREE.CircleGeometry(shape.range, 40, Math.PI / 2 - half, half * 2); // +y(도형) = 정면
+    } else if (shape.kind === 'trapezoid') {
+      const tr = new THREE.Shape(); // 도형 +y = 정면, 근거리 반폭 hw0 → 끝 반폭 hw1
+      tr.moveTo(-shape.hw0, 0); tr.lineTo(shape.hw0, 0); tr.lineTo(shape.hw1, shape.length); tr.lineTo(-shape.hw1, shape.length); tr.closePath();
+      geo = new THREE.ShapeGeometry(tr);
+    } else {
+      geo = new THREE.PlaneGeometry(shape.width, shape.length);
+      geo.translate(0, shape.length / 2, 0);
+    }
+    // shape.hold: 예고(텔레그래프)용 - 수명 동안 일정 밝기로 유지하다 끝에서 사라진다.
+    const peak = shape.opacity != null ? shape.opacity : 0.55;
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: peak, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2; // 도형 +y → 월드 -z
+    const holder = new THREE.Group();
+    holder.add(mesh);
+    holder.position.set(origin.x, 0.07 + (shape.yOffset || 0), origin.z);
+    holder.rotation.y = Math.atan2(dir.x, dir.z) + Math.PI; // 월드 -z(도형 정면)를 dir로
+    holder.renderOrder = 4;
+    this.scene.add(holder);
+    this.active.push({ life, maxLife: life, tag: 'groundShape', shape, mesh: holder,
+      update: (t) => { mat.opacity = shape.hold ? peak * (t < 0.1 ? t / 0.1 : 1) : peak * (1 - t) * (t < 0.15 ? t / 0.15 : 1); },
+      dispose: () => { this.scene.remove(holder); geo.dispose(); mat.dispose(); } });
+    return holder;
   }
   _basicAttackFlash(position, direction) {
     const pos = position.clone().addScaledVector(direction, 0.3);

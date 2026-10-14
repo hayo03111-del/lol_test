@@ -193,6 +193,13 @@ function assert(cond, msg) {
   const rec4 = applyStatus(playerTenacity, { id: 'testSuppression', type: 'SUPPRESSION', duration: 1.5, value: 0 });
   assert(rec4.duration === 1.5, 'tenacity does not reduce SUPPRESSION duration');
 
+  // 27차: 공중에 뜬 대상을 다시 띄우면(야스오 Q3 → R) 처음 바닥 높이를 유지한다(공중 높이를 바닥으로 기억하지 않는다).
+  const airborne = { statusEffects: [], mesh: { position: { y: 0 } } };
+  applyStatus(airborne, { id: 'kuA', type: 'KNOCKUP', duration: 1.0, value: 1 });
+  airborne.mesh.position.y = 1.2;
+  applyStatus(airborne, { id: 'kuB', type: 'KNOCKUP', duration: 1.0, value: 1 });
+  assert(airborne._yasuoAirborne.baseY === 0, 're-applied KNOCKUP keeps the original ground height');
+
   // Slow resist reduces SLOW magnitude (value), not duration.
   const playerSlowResist = { statusEffects: [], itemSlowResistPercent: 0.25 };
   const rec5 = applyStatus(playerSlowResist, { id: 'testSlow', type: 'SLOW', duration: 3.0, value: 0.40 });

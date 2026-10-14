@@ -125,6 +125,8 @@ function unitMarkEntries(c, unit, now) {
     if (rec && rec.stacks > 0 && rec.expiresAt > now) out.push({ kind: 'pips', n: rec.stacks, max: 3, color: '#b45cff', glyph: '◆', full: rec.stacks >= 3 });
   }
   if (c.championId === 'vex' && c._vex && (c._vex.gloom.get(unit) || 0) > now) out.push({ kind: 'tag', text: '우울', color: '#9b6bff' });
+  // 27차: 야스오 질풍검 같은 대상 재사용 대기(원작 10/9/8/7/6초) - 남은 초를 띄운다.
+  if (c.championId === 'yasuo' && c._yasuoETargetLockLeft) { const left = c._yasuoETargetLockLeft(unit); if (left > 0) out.push({ kind: 'tag', text: `E ${Math.ceil(left)}`, color: '#9aa7b4' }); }
   if (c.championId === 'leesin' && c._leesin && c._leesin.qMarkTarget === unit && c._leesin.qMarkExpiresAt > now) out.push({ kind: 'tag', text: '음파', color: '#ffd36b' });
   if (c.championId === 'ezreal' && c._ezreal && c._ezreal.markTarget === unit && c._ezreal.markExpiresAt > now) out.push({ kind: 'tag', text: '정기', color: '#ffcf5a' });
   return out;

@@ -107,6 +107,8 @@ CharacterController.prototype._approachCanCast = function(slot) {
       if (this._nilahRestoreECharges) this._nilahRestoreECharges(performance.now());
       return !!(this._nilah && this._nilah.eCharges > 0) && (this.skillLevels.E || 0) >= 1;
     }
+    // 27차: 야스오 E는 같은 대상 재사용 대기 중이면 걸어가지 않는다(예전엔 걸어간 뒤 시전이 무시됐다).
+    if (this.championId === 'yasuo' && slot === 'E' && this._yasuoETargetLockLeft && this._yasuoETargetLockLeft(this.currentTarget) > 0) return false;
     if (this.championId === 'darius' && slot === 'R' && this._rRecastReadyUntil && performance.now() < this._rRecastReadyUntil) {
       const info = this._skillCostFor('R');
       return this.mp >= (info ? info.mana : 0);
@@ -1331,8 +1333,23 @@ CharacterController.prototype._castW = function(mouseWorldPoint, free = false) {
     } else {
       settWForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
     }
+    // 27차(요청: "세트 w 가운데 고정데미지 범위 표시"): 0.75초 차징 동안 사다리꼴
+    // 전체(물리 피해)와 중앙 띠(고정 피해)를 땅에 예고 표시한다. 크기는 판정과 같은
+    // CHAMPION_DATA.sett.W(range/centerHalfWidth/endHalfWidth) - 색/투명도는 연출값.
+    const settWData = this.championId === 'sett' ? CHAMPION_DATA.sett?.W : null;
+    if (settWData) {
+      const wLen = lolRangeToWorld(settWData.range), wHw0 = lolRangeToWorld(settWData.centerHalfWidth), wHw1 = lolRangeToWorld(settWData.endHalfWidth);
+      const wWind = SKILL_TIMING_DATABASE.sett?.W?.eventTime || 0.75;
+      vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'trapezoid', length: wLen, hw0: wHw0, hw1: wHw1, hold: true, opacity: 0.18 }, 0xff9a5a, wWind);
+      vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'line', length: wLen, width: wHw0 * 2, hold: true, opacity: 0.32, yOffset: 0.005 }, 0xfff0c8, wWind);
+    }
     this.runAction('w', STATE.W_CAST, {
       onFire: () => {
+        if (settWData) {
+          const wLen = lolRangeToWorld(settWData.range), wHw0 = lolRangeToWorld(settWData.centerHalfWidth), wHw1 = lolRangeToWorld(settWData.endHalfWidth);
+          vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'trapezoid', length: wLen, hw0: wHw0, hw1: wHw1, opacity: 0.4 }, 0xff8a3a, 0.4);
+          vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'line', length: wLen, width: wHw0 * 2, opacity: 0.75, yOffset: 0.005 }, 0xffffff, 0.45);
+        }
         // 세트 W 문서 8/9절: 실제 전방 사다리꼴 범위 탐색 + 중앙(True Damage)/
         // 양옆(Physical Damage) 판정 - _settWOnCast가 getAllEnemyUnits() 전체를
         // 대상으로 판정한다(더 이상 currentTarget 단일 대상에 의존하지 않음).
@@ -1443,7 +1460,11 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
         faceDir: facing,
         dataOverride: { ...data, clips: data.clips && data.clips.length ? data.clips : ['Spell3'] },
         onFire: () => {
-          vfx.spawn('e', this.root.position.clone().addScaledVector(facing, 1.5));
+          // 27차(요청: "세트 e범위가 이상하게 떠있음"): 예전엔 앞쪽 1.5 지점 공중에
+          // 빌보드 스프라이트('e')를 띄웠다 - 실제 판정은 세트 중심 반경 e.range(490)
+          // 원이므로 그 원을 지면 충격파로 보여준다(색/수명은 연출값).
+          const eData = CHAMPION_DATA.sett?.E;
+          if (eData) vfx.groundShockwave(this.root.position, lolRangeToWorld(eData.range), 0xffb070, 0.4);
           this._settEOnCast(facing);
         },
       });

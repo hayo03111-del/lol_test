@@ -333,7 +333,10 @@ CharacterController.prototype._yasuoCastE = function(mouseWorldPoint, free=false
     const key = this._yasuoTargetKey(target);
     const now = performance.now();
 
-    if (now < (this._yasuo.eTargetCooldowns.get(key) || 0)) return;
+    // 원작 규칙: 같은 대상에게는 10/9/8/7/6초 동안 다시 쓸 수 없다. 27차: 예전엔 아무 안내 없이 무시돼 "클릭해도 안 나가는"
+    // 것처럼 보였다 - 남은 시간을 알려 준다(대상 머리 위에도 표시 - status_indicator_system.js).
+    const lockLeft = ((this._yasuo.eTargetCooldowns.get(key) || 0) - now) / 1000;
+    if (lockLeft > 0) { if (typeof showSkillToast === 'function') showSkillToast(`E - 같은 대상은 ${lockLeft.toFixed(1)}초 뒤 다시 사용 가능`); return; }
     if (!isInRange(this, target, e.range)) return;
     if (!this._payCost('E', free)) return;
 
@@ -432,6 +435,7 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
     // front of him. They remain individual units; only their positions are
     // repositioned for the R strike.
     const yasuoPos = anchorPos.clone();
+    yasuoPos.y = this.root.position.y; // 27차: 대상의 공중 높이를 복사하지 않는다(예전엔 야스오도 그 높이에 떠 있었다)
     this.root.position.copy(yasuoPos);
 
     const front = dir.clone();
@@ -622,6 +626,8 @@ CharacterController.prototype._yasuoOnTakeDamage = function(source) {
 CharacterController.prototype._yasuoResolveEQ = function(eq) {
     const q = this._champData().Q;
     const unique = this._yasuoFindQTargets(eq.dir, q.range, q.circleRadius);
+    // 27차: EQ 원형 베기 범위를 잠깐 보여 준다(예전엔 표시가 없어 EQ가 됐는지 알기 어려웠다).
+    if (typeof vfx.groundShockwave === 'function') vfx.groundShockwave(this.root.position, lolRangeToWorld(q.circleRadius), eq.tornado ? 0xc8f2ff : 0x8fe3ff, 0.35);
     this._yasuoQHitConsumed = false;
     this._yasuoQCritRoll = Math.random() < (this.stats.critChance || 0);
     for (const t of unique) this._yasuoApplyQHit(t, { tornado: eq.tornado, circle: true });
@@ -652,3 +658,9 @@ CharacterController.prototype._yasuoPlayPostQMoveEntry = function() {
 
 };
 
+
+// 27차: 이 대상에게 지금 질풍검을 쓸 수 있는가(같은 대상 재사용 대기) - 다가가서 시전·조준 표시에서 쓴다.
+CharacterController.prototype._yasuoETargetLockLeft = function(target) {
+  if (!this._yasuo || !target) return 0;
+  return Math.max(0, ((this._yasuo.eTargetCooldowns.get(this._yasuoTargetKey(target)) || 0) - performance.now()) / 1000);
+};

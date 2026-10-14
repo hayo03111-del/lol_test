@@ -482,6 +482,8 @@ CharacterController.prototype._yoneCastW = function(mouseWorldPoint, free = fals
   const timer = this._champTimeout(() => {
     if (this.currentActionKey !== key) return;
     this.currentPhase = 'ACTIVE';
+    // 27차: 판정 부채꼴(사거리·각도)을 바닥에 잠깐 그린다 - 예전엔 맞혔을 때만 작은 반짝임이 있어 범위가 보이지 않았다.
+    if (typeof vfx.groundShapeFlash === 'function') vfx.groundShapeFlash(this.root.position, dir, { kind: 'cone', range: lolRangeToWorld(w.range), angleDeg: w.angleDeg || 80 }, 0x9fc8ff, 0.4);
     const targets = findEnemiesInRadius(this.root.position, w.range, { forward: dir, maxAngleDeg: (w.angleDeg || 80) / 2 })
       .map((h) => h.unit).filter((u) => u && u.hp > 0);
     let championHits = 0;
@@ -887,10 +889,11 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
       if (!u || u.hp <= 0) continue;
       const p = getWorldPosition(u);
       const toUnit = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
-      const along = toUnit.dot(dir);
-      if (along < -1 || along > worldRange + 1) continue;
+      const along = toUnit.dot(dir), ur = getCollisionRadius(u) || 0;
+      // 27차: 진행 방향 여유를 대상 판정 반경만큼만 준다. 예전엔 ±1 월드(약 115 LoL)를 줘서 요네 뒤쪽·사거리 끝 너머 대상도 맞았다.
+      if (along < -ur || along > worldRange + ur) continue;
       const lateral = Math.sqrt(Math.max(0, toUnit.lengthSq() - along * along));
-      if (lateral > halfWidth + (getCollisionRadius(u) || 0)) continue;
+      if (lateral > halfWidth + ur) continue;
       hits.push({ unit: u, along });
     }
     hits.forEach((h) => applyStatus(h.unit, { id: 'yoneRStun', type: 'STUN', duration: r.stunDuration || 1, value: 1 }));
@@ -919,6 +922,8 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
     if (map && typeof map.clampPosition === 'function') map.clampPosition(blinkPos);
     this.root.position.copy(blinkPos);
     vfx.spawn('r', blinkPos.clone());
+    // 27차: 벤 직선 판정(폭 r.width)을 바닥에 잠깐 그린다.
+    if (typeof vfx.groundShapeFlash === 'function') vfx.groundShapeFlash(origin, dir, { kind: 'line', length: worldRange, width: halfWidth * 2 }, 0x8fb8ff, 0.5);
     // 3단계(PC 위키): 시전 종료 시점에 표식된 적을 블링크 지점 쪽으로 3000 속도로 끌어오고,
     // 끌려가는 순간 기절(1초)이 끝나며, 끌려간 "뒤"에 0.75초 공중에 뜬다. 예전엔 0.3초 뒤에
     // 모두를 블링크 지점 한 점으로 순간이동시키고 기절과 공중에 뜸을 겹쳐 걸었다.

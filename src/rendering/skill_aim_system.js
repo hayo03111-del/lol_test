@@ -288,7 +288,10 @@ class SkillAimSystem {
         this._ring(aim.center, aim.radiusWorld, ringW, S.edge, S.edgeOpacity);
         break;
       case 'cone': this._cone(aim.origin, yaw, aim.rangeWorld, aim.angleDeg); break;
-      case 'trapezoid': this._trap(aim.origin, yaw, aim.rangeWorld, aim.centerHalfWidth, aim.endHalfWidth); break;
+      case 'trapezoid':
+        this._trap(aim.origin, yaw, aim.rangeWorld, aim.centerHalfWidth, aim.endHalfWidth);
+        this._lane(aim.origin, yaw, aim.rangeWorld, aim.centerHalfWidth); // 세트 W 중앙(고정 피해) 띠
+        break;
       case 'wall': this._rect(aim.origin, yaw, aim.wall.dist - aim.wall.thickness / 2, aim.wall.dist + aim.wall.thickness / 2, aim.wall.length / 2); break;
       case 'selfAim':
         this._disc(aim.origin, aim.radiusWorld);
@@ -346,6 +349,13 @@ class SkillAimSystem {
     this._outline(origin, yaw, pts);
   }
   _rect(origin, yaw, z0, z1, hw) { if (z1 > z0) this._poly(origin, yaw, [[-hw, z0], [hw, z0], [hw, z1], [-hw, z1]]); }
+  _lane(origin, yaw, len, hw) {
+    if (!(hw > 0) || !(len > 0)) return;
+    const pts = [[-hw, 0], [hw, 0], [hw, len], [-hw, len]];
+    const m = this._mesh(0xfff0c8, 0.3);
+    this._setGeo(m, this._flat(pts));
+    m.position.set(origin.x, 0.05, origin.z); m.rotation.y = yaw;
+  }
   _trap(origin, yaw, len, hw0, hw1) { this._poly(origin, yaw, [[-hw0, 0], [hw0, 0], [hw1, len], [-hw1, len]]); }
   _arrow(origin, yaw, z, width) { const h = Math.max(width, lolRangeToWorld(60)); this._poly(origin, yaw, [[-h, z], [h, z], [0, z + h * 1.2]]); }
   _cone(origin, yaw, r, angleDeg) {
