@@ -25,7 +25,7 @@ CharacterController.prototype.startRecall = function() {
     const t = setTimeout(() => {
       this._recallTimer = null;
       if (this.state !== STATE.RECALL) return; // 그 사이 cancelRecall()로 취소된 경우
-      this.root.position.set(0, 0, 0);
+      this._teleportToTeamSpawn();
       this._returnToLocomotion();
     }, RECALL_DURATION * 1000);
     this._recallTimer = t;
@@ -136,7 +136,7 @@ CharacterController.prototype._die = function() {
     // 아리만 이 정리가 빠져 있었다. _ahriUpdate(dt)는 죽어 있어도(DEAD여도)
     // championId만 확인하고 매 프레임 계속 도는 구조라, Q가 왕복하던 중이나
     // W 여우불이 떠 있던 중에 죽으면 그 스프라이트가 정리되지 않은 채
-    // 남아있다가 _respawn()이 this.root.position을 (0,0,0)으로 순간이동시킬
+    // 남아있다가 _respawn()이 챔피언을 리스폰 지점으로 순간이동시킬
     // 때 그 자리로 같이 딸려가는 시각적 버그가 생겼다. R 돌진/재사용
     // 충전(rCharges)·재시전 창(rReadyUntil)도 사망과 무관하게 그대로 남아,
     // 부활 직후 궁을 공짜로 재시전할 수 있는 상태가 되는 것도 함께 고친다.
@@ -185,9 +185,16 @@ CharacterController.prototype._die = function() {
     const t = setTimeout(() => this._respawn(), RESPAWN_WAIT * 1000);
     this._pendingTimeouts.push(t);
 };
+// 25차: 리스폰·귀환은 자기 팀 우물(원작 출현 지점)로 간다. 예전엔 둘 다 맵 한가운데(0,0,0)였다.
+CharacterController.prototype._teleportToTeamSpawn = function() {
+    const p = typeof getTeamSpawnPosition === 'function' ? getTeamSpawnPosition(this.team) : new THREE.Vector3(0, 0, 0);
+    this.root.position.copy(p);
+    this.targetPos = null;
+    if (typeof controller !== 'undefined' && controller === this && typeof snapCameraTo === 'function') snapCameraTo(p);
+};
 CharacterController.prototype._respawn = function() {
     this.setState(STATE.RESPAWN);
-    this.root.position.set(0, 0, 0);
+    this._teleportToTeamSpawn();
     this.hp = this.maxHp; this.mp = this.maxMp;
     updateBars(this);
     const action = this.playFirstAvailable(this.actionData.respawn.clips, { loop:THREE.LoopOnce, fade:0.15, clampWhenFinished:true });

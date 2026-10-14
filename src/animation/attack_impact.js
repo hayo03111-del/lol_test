@@ -14,12 +14,22 @@
    - fit:   클립 전체를 공격 간격에 맞추는 예전 방식(노틸러스는 이쪽이 실제 타격 장면과 맞았다).
    - base:  원작 기본 선딜 시각(선딜% ÷ 기본 공속) - 공격 속도에 비례해서만 빨라지게 재생한다. 위 측정으로
             확정하지 못한 챔피언의 기본값.
+   - 클립별 고정 시각(ATTACK_IMPACT_TIME_SEC): 프레임을 눈으로 확인한 값. 위 방법보다 우선한다(25차).
    자동 측정값이 클립 길이에 비해 말이 안 되면(너무 이르거나 끝 프레임) base로 돌아간다.
    ============================================================ */
 const ATTACK_IMPACT_METHOD = {
   garen: 'peak', darius: 'peak', leesin: 'peak', yasuo: 'peak', yone: 'peak', mordekaiser: 'peak',
   renekton: 'peak', chogath: 'peak', ahri: 'peak', ezreal: 'reach', nautilus: 'fit',
-  // masteryi·sett·vex·ashe·varus(·nilah는 별도 연속 평타 경로): base
+  masteryi: 'reach', // 25차: attack1 찌르는 장면 약 0.32초(프레임 확인) - reach 0.306초가 맞고 peak 0.265초는 이르다
+  // 세트·벡스 평타는 준비/타격 두 클립(attackStartHitPair)이라 방법과 무관. nilah는 별도 연속 평타 경로.
+};
+// 25차: 실제 GLB 프레임을 0.02초 간격으로 렌더링해 눈으로 확인한 클립별 타격(화살을 놓는) 시각(초). 위 방법보다 우선.
+// 바루스는 기본 선딜(0.267초)이면 아직 시위를 당기고 있을 때 피해가 났다. 세트 오른손(Spell1_B, 사용자가 정한 오른손
+// 평타 클립)은 자동 측정이 뒤따르는 동작(0.617초)을 잡았다.
+const ATTACK_IMPACT_TIME_SEC = {
+  ashe: { Attack1: 0.305, Attack2: 0.31, Crit: 0.31 },
+  varus: { Attack1: 0.33, Attack2: 0.34, Crit: 0.34 },
+  sett: { Spell1_B: 0.45 },
 };
 
 // 클립 하나의 무기 뼈 궤적에서 peak/reach 시각을 잰다(클립마다 한 번, 결과는 clip.userData에 보관).
@@ -64,7 +74,9 @@ function attackClipTimeScale(ctrl, clip, windup, interval) {
   const st = ctrl && ctrl.stats;
   const baseImpact = st && st.windupPercent && st.baseAttackSpeed ? st.windupPercent / st.baseAttackSpeed : windup;
   let impact = baseImpact;
-  if (method === 'peak' || method === 'reach') {
+  const fixed = ATTACK_IMPACT_TIME_SEC[ctrl && ctrl.championId];
+  if (fixed && fixed[clip.name] != null) impact = fixed[clip.name];
+  else if (method === 'peak' || method === 'reach') {
     const m = measureAttackClipImpact(ctrl.model, clip, ctrl.mixer);
     const t = m ? m[method] : null;
     // 클립 시작 직후나 마지막 프레임 근처면 측정 실패로 보고 base로 돌아간다.
@@ -82,4 +94,35 @@ function precomputeAttackImpacts(ctrl) {
     if (clip) measureAttackClipImpact(ctrl.model, clip, null);
   }
   if (ctrl.mixer) ctrl.mixer.update(0);
+}
+
+// 25차: 준비/타격으로 나뉜 평타(<이름>_Start → <이름>_Hit)의 짝. 평타 칸에 둘 중 어느 쪽이 배정돼 있어도 찾는다
+// (벡스는 세 번째 평타 칸에 Attack1_Start가 단독으로 배정돼 있었다 - 0.3초 준비 동작만 재생되고 끝났다).
+function attackStartHitPair(ctrl, clip) {
+  if (!ctrl || !clip) return null;
+  const m = /^(.*)_(Start|Hit)$/i.exec(clip.name);
+  if (!m) return null;
+  const start = m[2].toLowerCase() === 'start' ? clip : ctrl.findAnimation(m[1] + '_Start');
+  const hit = m[2].toLowerCase() === 'hit' ? clip : ctrl.findAnimation(m[1] + '_Hit');
+  return start && hit ? { start, hit } : null;
+}
+// 타격 클립 재생 속도: 원작 기본 공격 속도에서 1.0, 공격 속도가 오르면 선딜이 줄어든 만큼 빨라진다.
+function attackHitClipTimeScale(ctrl, windup) {
+  const st = ctrl && ctrl.stats;
+  const baseWindup = st && st.windupPercent && st.baseAttackSpeed ? st.windupPercent / st.baseAttackSpeed : windup;
+  return THREE.MathUtils.clamp(baseWindup / Math.max(1e-3, windup), 0.4, 3.0);
+}
+
+// 25차: 평타 클립의 마무리 클립(맞는 순간 이후 → 대기). 원작 GLB 이름 규칙: <이름>_ToIdle / _To_Idle / _Into_Idle
+// (대소문자·.anm·_Hit 무시). 리 신 Attack3_toIdle.ASU_LeeSin.anm처럼 꼬리표가 붙은 이름도 찾는다.
+function attackFollowThroughClip(ctrl, clip) {
+  if (!ctrl || !clip) return null;
+  clip.userData = clip.userData || {};
+  if (clip.userData.followThrough !== undefined) return clip.userData.followThrough ? ctrl.findAnimation(clip.userData.followThrough) : null;
+  const norm = (n) => n.toLowerCase().replace(/\.anm$/, '').replace(/\.asu_[a-z]+$/, '');
+  const base = norm(clip.name).replace(/_hit$/, '');
+  const want = new Set(['_toidle', '_to_idle', '_into_idle'].map((suf) => base + suf));
+  const found = (ctrl.clips || []).find((c) => want.has(norm(c.name))) || null;
+  clip.userData.followThrough = found ? found.name : null;
+  return found;
 }

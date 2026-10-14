@@ -207,8 +207,10 @@ this._myChampUpdate(dt);
   `Channel`/`Channel_Wndup` 클립이 있지만 실제로는 3단계 채널형이
   아닌 즉발 궁극기라면(바루스/애쉬 R이 이 경우), R을 여기 등록하는
   것만으로 자동 채널 추정(`hasRChannel`)이 꺼진다.
-- **`MODEL_SCALE_MULTIPLIERS.<id>`**: 모델 크기가 다른 챔피언과 비교해
-  작거나 크면 배율을 넣는다. 모르면 `1.00`(기본값)으로 둔다.
+- **`CHAMPION_UNIT_SIZE_LOL.<id>`**(`src/core/00_global_constants.js`, 25차): 원작 판정 반경(gameplay, 기본 65)·
+  지형 충돌 반경(pathing, 기본 35)·선택 반경(selection)·스킨 배율(skinScale, 기본 1.0)을 LoL 단위로 넣는다. 모델
+  크기는 GLB × 100 × skinScale(LoL 단위)로 자동 계산된다(GLB가 원작 좌표를 1/100로 내보낸 파일일 때). 모르면
+  넣지 않는다(원작 기본값을 쓴다). 예전 `MODEL_SCALE_MULTIPLIERS`(눈대중 배율)는 없어졌다.
 - **`CHAMPION_ALIASES`**: GLB 파일명/노드명으로 자동 식별하고 싶으면
   `id: 'id', '한글이름': 'id'` 두 줄을 추가한다. 안 넣어도 상점 드롭다운에서
   수동으로 고를 수 있으니 필수는 아니다.

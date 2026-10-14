@@ -491,7 +491,7 @@ var controller = null;
 let championRoot = null;
 let currentChampion = null; // { fileName, resolver, actionData, boundsRadius }
 let modelScaleMultiplier = 1.0; // scaleButtons(0.8/1.0/1.2) 수동 미리보기 배율 - 챔피언 고정 Multiplier 위에 곱해지는 별도의 사용자 조작 값
-let championBaseScaleMultiplier = 1.0; // 현재 로드된 챔피언의 MODEL_SCALE_MULTIPLIERS 고정값(원본 크기에 곱해짐)
+let championBaseScaleMultiplier = 1.0; // 현재 로드된 챔피언의 고정 크기 배율(resolveModelScaleMultiplier - 원작 스킨 배율 기준, 25차)
 
 /* ============================================================
    5. INPUT HANDLING

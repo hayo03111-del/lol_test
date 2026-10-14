@@ -525,7 +525,9 @@ stubs.targetRing = { clear() {} };
   c.passiveState.lastDamageTakenAt = now;
   context.addShield(c, 'settW', 300, 3);
   c.applyChampionData('garen');
-  assert(c.collisionRadius !== nilahRadius && near(c.collisionRadius, context.BASE_UNIT * 0.24), '교체 격리: 닐라 전용 충돌 반경이 다른 챔피언에 남지 않는다');
+  // 25차: 판정 반경(collisionRadius)은 둘 다 원작 기본 65라 같다 - 닐라 전용인 지형 충돌 반경(32)·선택 반경(120)이 남지 않는지 본다.
+  assert(near(nilahRadius, context.lolRangeToWorld(65)) && near(c.collisionRadius, context.lolRangeToWorld(65))
+    && near(c.pathingRadius, context.lolRangeToWorld(35)) && near(c.selectionRadius, context.lolRangeToWorld(75)), '교체 격리: 닐라 전용 충돌 반경이 다른 챔피언에 남지 않는다');
   assert(c.attackOverrides.length === 0 && Object.keys(c.subStates).length === 0, '교체 격리: 평타 강화/서브 상태 초기화');
   assert(c._dariusRQeLockUntil === 0 && c.magicPenPercent === 0 && c._eHitCountThisCast === 0, '교체 격리: 다리우스 R 잠금/모데 E 마법 관통/가렌 E 타격 수 초기화');
   assert(c.passiveState.lastDamageTakenAt === 0, '교체 격리: 패시브 비전투 시각 초기화(가렌 패시브가 이전 피격 시각을 물려받지 않음)');

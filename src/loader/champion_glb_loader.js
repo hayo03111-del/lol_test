@@ -139,6 +139,28 @@ function alignModelOrigin(model) {
   return { box };
 }
 
+// 지금 재생 중인 자세(대기)에서 보이는 스킨 메시의 가장 낮은 점이 챔피언 루트 높이에 오도록 모델을 내리거나 올린다.
+// 반환값: 내린 월드 거리(머리 위 체력바 위치 보정용).
+function groundModelOnIdlePose(ctrl) {
+  const model = ctrl && ctrl.model, wrap = model && model.parent;
+  if (!model || !wrap || !ctrl.mixer) return 0;
+  ctrl.mixer.update(0);
+  ctrl.root.updateMatrixWorld(true);
+  let minY = Infinity;
+  const v = new THREE.Vector3();
+  model.traverse((o) => {
+    if (!o.isSkinnedMesh || o.visible === false) return;
+    o.skeleton.update();
+    const ps = o.geometry.attributes.position;
+    for (let i = 0; i < ps.count; i += 2) { o.getVertexPosition(i, v); o.localToWorld(v); if (v.y < minY) minY = v.y; }
+  });
+  if (!isFinite(minY)) return 0;
+  const drop = minY - ctrl.root.position.y;
+  model.position.y -= drop / (wrap.scale.y || 1);
+  model.updateMatrixWorld(true);
+  return drop;
+}
+
 async function bootstrapChampion(gltf, fileName) {
   disposeCurrentChampion();
   // 요청("이 glb들 상시로 적용되있게 해줘") - 포탑/억제기/넥서스를 만들기
@@ -174,7 +196,7 @@ async function bootstrapChampion(gltf, fileName) {
   if (originCorrection) { model.position.x += originCorrection.x; model.position.z += originCorrection.z; }
   model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 
-  // scaleWrapper: 챔피언별 고정 Multiplier(MODEL_SCALE_MULTIPLIERS)는
+  // scaleWrapper: 챔피언별 고정 Multiplier(resolveModelScaleMultiplier - 25차부터 원작 스킨 배율 기준)는
   // 오직 이 외부 Wrapper에만 적용한다. GLB 원본 model.scale은 절대
   // 건드리지 않으므로, 최종 크기 = "GLB 원본 크기 × 고정 Multiplier"가
   // 정확히 유지된다(중복 Scale 없음). modelScaleMultiplier는 화면 우측
@@ -256,6 +278,10 @@ async function bootstrapChampion(gltf, fileName) {
   } else {
     controller.playFirstAvailable(actionData.idle.clips, { fade: 0 });
   }
+  // 25차: 대기 자세 기준으로 발을 바닥(높이 0)에 맞춘다. alignModelOrigin()은 애니메이션이 적용되기 전 바인드 자세로
+  // 바닥을 맞춰서, 실제 대기 자세에서는 챔피언이 떠 있었다(노틸러스 약 140, 애쉬 약 80, 다리우스·레넥톤 약 85 LoL 유닛).
+  const groundDrop = groundModelOnIdlePose(controller);
+  if (groundDrop) hpLabel3d.position.y -= groundDrop;
   updateBars(controller);
   updateSkillUI(controller.cooldowns);
   // 요청("ui적용해줘") - 새 HUD 초상화 박스에 챔피언 ID 앞 두 글자를 표시한다.
@@ -1544,6 +1570,7 @@ function animate() {
     targetRing.update(dt);
     rangeIndicators.update(controller);
     skillAim.update(controller, lastGroundPoint, lastPointerClient);
+    if (typeof statusIndicators !== 'undefined') statusIndicators.update(controller, dt); // 25차: 버프 바·스킬 칸 변화·대상 표식·준비 고리
     visionSystem.update(controller, dt);
     // 최적화(문서 4-22/23절 "DOM 업데이트를 매 프레임 하지 마라") - 디버그
     // 패널은 매 프레임 innerHTML 전체를 새로 만들어서 매초 60번씩 DOM을

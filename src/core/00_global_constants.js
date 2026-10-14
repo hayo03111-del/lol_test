@@ -80,6 +80,44 @@ function lolRangeToWorld(lolRange) { return (lolRange || 0) * WORLD_DISTANCE_SCA
 function worldDistanceToLol(worldDistance) { return (worldDistance || 0) / WORLD_DISTANCE_SCALE; }
 
 /* ============================================================
+   CHAMPION UNIT SIZE (25차 요청 "맵 크기랑 사거리 유닛 실제 크기 3요소를 비교해서 조정")
+   ------------------------------------------------------------
+   맵(HA_MAP_SCALE)·사거리(lolRangeToWorld)는 이미 같은 환산(WORLD_DISTANCE_SCALE)을 쓰는 LoL 단위다. 유닛 크기도 같은
+   기준으로 맞춘다.
+   - gameplay: 판정 반경(LoL) - 평타 사거리(가장자리 거리)·스킬 적중에 쓰는 collisionRadius. 원작 기본값 65(PC 위키:
+     대부분의 챔피언·허수아비 65). 다른 값은 LeagueSandbox-Default Stats/<챔피언>.json의 GameplayCollisionRadius
+     (패치 4.20 무렵 게임 파일 - 그 뒤 바뀌었으면 반영 안 됨).
+   - pathing: 지형·구조물 충돌 반경(LoL) - 같은 파일의 PathfindingCollisionRadius. 닐라 32는 원래 코드 값(실제 bin 확인).
+   - selection: 클릭 판정 반경(LoL) - 같은 파일의 SelectionRadius. 닐라 120은 원래 코드 값.
+   - skinScale: 원작 스킨 배율(같은 데이터의 Skins/Base SkinScale). 모델 크기 = GLB 원본 × 100 × skinScale(LoL 단위).
+     이 저장소 GLB는 원작 모델 좌표를 1/100로 내보낸 것이다(뼈대 Root 높이 ≈ 1.0 = 원작 약 100유닛).
+     4.20 이후 모델이 바뀐 챔피언(아리 등)이나 그 뒤 나온 챔피언(세트·요네·닐라·벡스), 4.20 값을 쓰면 크기가 원작
+     선택 높이와 크게 어긋나는 챔피언(리 신 1.82, 초가스 0.6)은 원작 값을 확인하지 못해 원작 기본값 1.0을 쓴다(미확인).
+     레넥톤 GLB는 내보낼 때 스킨 배율 1.3675가 이미 들어가 있어(Renekton_ModelScaleRoot 노드) 1.0으로 둔다.
+   ============================================================ */
+const UNIT_SIZE_DEFAULT_LOL = { gameplay: 65, pathing: 35, selection: 100, skinScale: 1.0, verified: false };
+const CHAMPION_UNIT_SIZE_LOL = {
+  garen:       { pathing: 35, selection: 75, skinScale: 1.0, verified: true },
+  darius:      { gameplay: 80, pathing: 25.7666, selection: 125, skinScale: 1.0, verified: true },
+  masteryi:    { pathing: 35, selection: 125, skinScale: 1.55, verified: true },
+  leesin:      { pathing: 35, selection: 102.7778 },
+  nautilus:    { gameplay: 80, pathing: 50, selection: 125, skinScale: 1.1, verified: true },
+  yasuo:       { pathing: 32, selection: 75, skinScale: 0.93, verified: true },
+  mordekaiser: {},
+  renekton:    { gameplay: 80, pathing: 50, selection: 125 },
+  chogath:     { gameplay: 80, pathing: 50, selection: 130 },
+  ezreal:      { pathing: 35, selection: 115, skinScale: 1.1, verified: true },
+  ashe:        { pathing: 35, selection: 120, skinScale: 1.1, verified: true },
+  varus:       { pathing: 35, selection: 120, skinScale: 1.55, verified: true },
+  ahri:        { pathing: 35, selection: 100 },
+  nilah:       { pathing: 32, selection: 120 },
+  sett: {}, yone: {}, vex: {},
+};
+function getChampionUnitSize(championId) {
+  return { ...UNIT_SIZE_DEFAULT_LOL, ...(CHAMPION_UNIT_SIZE_LOL[championId] || {}) };
+}
+
+/* ============================================================
    0-A00c. GLB SAFETY / DIAGNOSTICS
    ------------------------------------------------------------
    요청("상대팀 포탑을 공격할 때 GLB가 사라지는 버그를 완전히 제거") -

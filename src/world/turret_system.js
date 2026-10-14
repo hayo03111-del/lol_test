@@ -673,13 +673,13 @@ function updateNexusWell(well, dt) {
   // 요청("자기진영의 넥서스오벨리스크는 공격하지 않아. 상대팀이 우물에
   // 들어왔을 때 상대팀을 공격하는게 넥서스오벨리스크야") - 이 우물이
   // 자기 진영(well.team)과 같은 유닛은 절대 공격하지 않고, 다른 진영
-  // 유닛만 공격한다. 플레이어는 기존 설계대로 항상 BLUE 진영 취급
-  // (PLAYER_TEAM 상수) - RED 우물만 플레이어를 공격하고, BLUE(자기
-  // 진영) 우물은 플레이어를 공격하지 않는다. 공격 판정은 우물 자체의
+  // 유닛만 공격한다. 플레이어 진영은 controller.team(기본 PLAYER_TEAM=BLUE)
+  // 이다 - 25차: 예전엔 PLAYER_TEAM 상수와 비교해서, 플레이어 팀이 RED면
+  // 자기 우물(레드)에서 리스폰하자마자 공격당했다. 공격 판정은 우물 자체의
   // 좁은 충돌 반경(well.radius)만 쓴다 - 기지 전체를 위험 지대로 만들면
   // 안 되므로 회복 구역(BASE_ZONE_RADIUS)과는 의도적으로 분리했다.
   if (typeof controller !== 'undefined' && controller && controller.hp > 0 && controller.state !== STATE.DEAD
-      && well.team !== PLAYER_TEAM && canRealmInteract(well, controller)) {
+      && well.team !== (controller.team || PLAYER_TEAM) && canRealmInteract(well, controller)) {
     const dist = getHorizontalDistance(getWorldPosition(well), controller.root.position);
     if (dist <= well.radius) {
       applyDamage(controller, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: well, isStatusTick: true });
@@ -699,7 +699,7 @@ function updateNexusWell(well, dt) {
   // 우물의 좁은 충돌 반경이 아니라 기지 전체 구역(BASE_ZONE_RADIUS)
   // 안에 있으면 회복된다.
   if (typeof controller !== 'undefined' && controller && controller.hp > 0 && controller.state !== STATE.DEAD
-      && well.team === PLAYER_TEAM && canRealmInteract(well, controller)) {
+      && well.team === (controller.team || PLAYER_TEAM) && canRealmInteract(well, controller)) {
     if (isPositionInBaseZone(controller.root.position, well.team) && (controller.hp < controller.maxHp || controller.mp < controller.maxMp)) {
       controller.hp = Math.min(controller.maxHp, controller.hp + WELL_HEAL_HP_PER_SEC * dt);
       controller.mp = Math.min(controller.maxMp, controller.mp + WELL_HEAL_MP_PER_SEC * dt);

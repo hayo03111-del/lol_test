@@ -56,6 +56,12 @@ function updateCameraTransform(targetPos, dt) {
   camera.lookAt(cameraRig.followPos.x, cameraRig.followPos.y + BASE_UNIT * 0.65, cameraRig.followPos.z);
 }
 
+// 순간이동(리스폰·귀환) 뒤 카메라를 천천히 따라가지 않고 바로 옮긴다 - 원작도 리스폰·귀환하면 카메라가 챔피언 위로 바로 간다.
+function snapCameraTo(targetPos) {
+  cameraRig.followPos.copy(targetPos);
+  updateCameraTransform(targetPos, 1);
+}
+
 window.addEventListener('wheel', (e) => {
   cameraRig.distance = THREE.MathUtils.clamp(
     cameraRig.distance + Math.sign(e.deltaY) * 2.0,

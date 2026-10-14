@@ -19,6 +19,10 @@ const startServer = require('./server.js');
     await page.waitForTimeout(600);
     res[id] = {};
     for (const mode of ['fit', 'new']) {
+      // 25차: 앞 측정의 마지막 스윙이 끝날 때까지 기다린다 - 예전엔 'fit' 측정의 마지막 스윙(예전 재생 속도)이 끝나기 전에
+      // 'new' 측정을 시작해, 'new'의 첫 스윙이 +0.12~0.18초 늦은 것처럼 잡혔다(실제 문제가 아니라 측정 오염).
+      await page.waitForFunction(() => !window.controller.currentActionKey, null, { timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(300);
       res[id][mode] = await page.evaluate((mode) => new Promise((resolve) => {
         const E = window.__e2e, c = window.controller, T = E.THREE, M = E.ATTACK_IMPACT_METHOD;
         const saved = M[c.championId];
@@ -39,7 +43,7 @@ const startServer = require('./server.js');
           frames.push({ t, speed, key: c.currentActionKey, phase: c.currentPhase, clip: clip && clip.name });
           if (t < 6) requestAnimationFrame(tick);
           else {
-            M[c.championId] = saved; c.currentTarget = null; c.attackOrderActive = false;
+            M[c.championId] = saved; c.currentTarget = null; c.attackOrderActive = false; c.targetPos = null;
             const swings = []; let cur = null;
             frames.forEach((f, i) => {
               const isAtk = f.key && /^(attack|crit|renektonAA)/.test(f.key);

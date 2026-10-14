@@ -836,6 +836,44 @@ function lolRangeToWorld(lolRange) { return (lolRange || 0) * WORLD_DISTANCE_SCA
 function worldDistanceToLol(worldDistance) { return (worldDistance || 0) / WORLD_DISTANCE_SCALE; }
 
 /* ============================================================
+   CHAMPION UNIT SIZE (25차 요청 "맵 크기랑 사거리 유닛 실제 크기 3요소를 비교해서 조정")
+   ------------------------------------------------------------
+   맵(HA_MAP_SCALE)·사거리(lolRangeToWorld)는 이미 같은 환산(WORLD_DISTANCE_SCALE)을 쓰는 LoL 단위다. 유닛 크기도 같은
+   기준으로 맞춘다.
+   - gameplay: 판정 반경(LoL) - 평타 사거리(가장자리 거리)·스킬 적중에 쓰는 collisionRadius. 원작 기본값 65(PC 위키:
+     대부분의 챔피언·허수아비 65). 다른 값은 LeagueSandbox-Default Stats/<챔피언>.json의 GameplayCollisionRadius
+     (패치 4.20 무렵 게임 파일 - 그 뒤 바뀌었으면 반영 안 됨).
+   - pathing: 지형·구조물 충돌 반경(LoL) - 같은 파일의 PathfindingCollisionRadius. 닐라 32는 원래 코드 값(실제 bin 확인).
+   - selection: 클릭 판정 반경(LoL) - 같은 파일의 SelectionRadius. 닐라 120은 원래 코드 값.
+   - skinScale: 원작 스킨 배율(같은 데이터의 Skins/Base SkinScale). 모델 크기 = GLB 원본 × 100 × skinScale(LoL 단위).
+     이 저장소 GLB는 원작 모델 좌표를 1/100로 내보낸 것이다(뼈대 Root 높이 ≈ 1.0 = 원작 약 100유닛).
+     4.20 이후 모델이 바뀐 챔피언(아리 등)이나 그 뒤 나온 챔피언(세트·요네·닐라·벡스), 4.20 값을 쓰면 크기가 원작
+     선택 높이와 크게 어긋나는 챔피언(리 신 1.82, 초가스 0.6)은 원작 값을 확인하지 못해 원작 기본값 1.0을 쓴다(미확인).
+     레넥톤 GLB는 내보낼 때 스킨 배율 1.3675가 이미 들어가 있어(Renekton_ModelScaleRoot 노드) 1.0으로 둔다.
+   ============================================================ */
+const UNIT_SIZE_DEFAULT_LOL = { gameplay: 65, pathing: 35, selection: 100, skinScale: 1.0, verified: false };
+const CHAMPION_UNIT_SIZE_LOL = {
+  garen:       { pathing: 35, selection: 75, skinScale: 1.0, verified: true },
+  darius:      { gameplay: 80, pathing: 25.7666, selection: 125, skinScale: 1.0, verified: true },
+  masteryi:    { pathing: 35, selection: 125, skinScale: 1.55, verified: true },
+  leesin:      { pathing: 35, selection: 102.7778 },
+  nautilus:    { gameplay: 80, pathing: 50, selection: 125, skinScale: 1.1, verified: true },
+  yasuo:       { pathing: 32, selection: 75, skinScale: 0.93, verified: true },
+  mordekaiser: {},
+  renekton:    { gameplay: 80, pathing: 50, selection: 125 },
+  chogath:     { gameplay: 80, pathing: 50, selection: 130 },
+  ezreal:      { pathing: 35, selection: 115, skinScale: 1.1, verified: true },
+  ashe:        { pathing: 35, selection: 120, skinScale: 1.1, verified: true },
+  varus:       { pathing: 35, selection: 120, skinScale: 1.55, verified: true },
+  ahri:        { pathing: 35, selection: 100 },
+  nilah:       { pathing: 32, selection: 120 },
+  sett: {}, yone: {}, vex: {},
+};
+function getChampionUnitSize(championId) {
+  return { ...UNIT_SIZE_DEFAULT_LOL, ...(CHAMPION_UNIT_SIZE_LOL[championId] || {}) };
+}
+
+/* ============================================================
    0-A00c. GLB SAFETY / DIAGNOSTICS
    ------------------------------------------------------------
    요청("상대팀 포탑을 공격할 때 GLB가 사라지는 버그를 완전히 제거") -
@@ -5777,31 +5815,11 @@ function applySkillTimingDatabase(data, championId) {
   }
 }
 
-const MODEL_SCALE_MULTIPLIERS = {
-  nautilus: 1.00,
-  lux: 1.38,
-  blitzcrank: 1.74,
-  leesin: 1.00,
-  masteryi: 1.66,
-  mel: 1.00,
-  ahri: 1.00,
-  vex: 1.00,
-  mordekaiser: 1.00,
-  sett: 1.14,
-  darius: 1.10,
-  garen: 1.37,
-  kindred: 1.45,
-  nilah: 1.00,
-  yone: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
-  ezreal: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
-  varus: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
-  ashe: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
-};
-
-// championId(식별 실패 시 null 포함)로 고정 Multiplier를 조회한다.
-// 등록되지 않았거나 식별 실패 시 기본값 1.00(원본 크기 그대로) 사용.
+// 챔피언 크기 표(CHAMPION_UNIT_SIZE_LOL·getChampionUnitSize)는 00_global_constants.js에 있다(25차).
+// 모델 크기 배율(GLB 원본 크기에 곱함) = 원작 크기(GLB × 100 × skinScale, LoL 단위)를 월드로 바꾼 값.
+// 예전엔 챔피언별로 눈대중 배율(가렌 1.37, 마스터 이 1.66, 다리우스 1.10, 세트 1.14, 나머지 1.0)이었다.
 function resolveModelScaleMultiplier(championId) {
-  return (championId && MODEL_SCALE_MULTIPLIERS[championId] != null) ? MODEL_SCALE_MULTIPLIERS[championId] : 1.00;
+  return getChampionUnitSize(championId).skinScale * lolRangeToWorld(100);
 }
 
 // 파일명/노드명 등에서 이 표를 찾으면 championAbilityDatabase의 키로 정규화한다.
@@ -6456,6 +6474,12 @@ function updateCameraTransform(targetPos, dt) {
   camera.lookAt(cameraRig.followPos.x, cameraRig.followPos.y + BASE_UNIT * 0.65, cameraRig.followPos.z);
 }
 
+// 순간이동(리스폰·귀환) 뒤 카메라를 천천히 따라가지 않고 바로 옮긴다 - 원작도 리스폰·귀환하면 카메라가 챔피언 위로 바로 간다.
+function snapCameraTo(targetPos) {
+  cameraRig.followPos.copy(targetPos);
+  updateCameraTransform(targetPos, 1);
+}
+
 window.addEventListener('wheel', (e) => {
   cameraRig.distance = THREE.MathUtils.clamp(
     cameraRig.distance + Math.sign(e.deltaY) * 2.0,
@@ -6582,7 +6606,10 @@ const HA_MAP_CONFIG = {
   // 더 바깥까지(113 -> 125) 늘렸다 - 이동 범위/바닥/그리드/화로 배치가
   // 전부 이 값에서 파생되므로 챔피언도 그만큼 더 갈 수 있게 자동으로
   // 맞춰진다(clampPosition 참고).
-  laneMinZ: -125, laneMaxZ: 125,
+  // 25차(원작 이동 격자 대조): 걸을 수 있는 끝이 원작은 가운데에서 ±약 8,115 LoL(LeagueSandbox Map12 AIPath.aimesh_ngrid
+  // - 블루 -8,167 / 레드 +8,062)인데 이 맵은 ±125(약 9,105)까지 갔다. 8,115 LoL = 111.4(줄이기 전 단위, 1 = 72.84 LoL).
+  // 맵 배율(HA_MAP_SCALE)은 아래처럼 고정 길이(HA_MAP_SPAN_UNITS)로 정하므로 이 값을 바꿔도 맵 크기는 그대로다.
+  laneMinZ: -111.4, laneMaxZ: 111.4,
   blueBaseZ: -106.5, redBaseZ: 106.5,
   blueNexusZ: -94.5, redNexusZ: 94.5,
   blueTurretZ: -66, redTurretZ: 66,
@@ -6597,7 +6624,14 @@ const HA_MAP_CONFIG = {
 // 아래 HA_MAP_CONFIG와 맵 안의 모든 모양 수치는 "줄이기 전" 단위이고, 맵 그룹 전체에 HA_MAP_SCALE을 곱한다.
 const HA_REAL_MAP_SPAN_LOL = 12877; // 12849 - (-28)
 const HA_FLOOR_TOP_LOCAL = 0.405; // 다리 눈 바닥(snowFloor) 윗면 높이(줄이기 전 단위)
-const HA_MAP_SCALE = lolRangeToWorld(HA_REAL_MAP_SPAN_LOL * Math.SQRT2) / (HA_MAP_CONFIG.laneMaxZ - HA_MAP_CONFIG.laneMinZ);
+const HA_MAP_SPAN_UNITS = 250; // 19차에 대각선 18,211 LoL에 맞춘 맵 길이(줄이기 전 단위) - 25차부터 이동 끝(laneMaxZ)과 분리
+const HA_MAP_SCALE = lolRangeToWorld(HA_REAL_MAP_SPAN_LOL * Math.SQRT2) / HA_MAP_SPAN_UNITS;
+// 원작 이동 가능 영역 모양(25차, LoL 단위 - 가운데에서 다리 방향 거리 기준). LeagueSandbox-Default
+// AIMesh/Map12/AIPath.aimesh_ngrid(패치 4.20 무렵 원작 이동 격자, 50유닛 칸 248×240)에서 걸을 수 있는 칸을 단면마다 잰 값:
+//   다리 폭 약 1,450~1,525(이 맵 1,530 그대로), 4,050~4,500에서 넓어져 폭 약 2,900(가운데 기준 ±1,450),
+//   6,600부터 좁아져 7,500에서 약 1,300, 끝 약 8,115. 원작은 좌우가 조금 비대칭인데(우물 쪽이 한쪽으로 치우침)
+//   이 맵은 좌우 대칭으로 근사했다. 12.23 패치 등 그 뒤 지형 변경은 반영되지 않았다.
+const HA_WALK_SHAPE_LOL = { widenStart: 4050, widenFull: 4500, baseHalf: 1450, taperStart: 6600, taperEnd: 7550 };
 
 // 원작 구조물 좌표(20차 요청 "포탑이랑 넥서스도 원작 위치에 배치해줘") - LoL 단위, 게임 맵 좌표 (x, z).
 // 출처: LeagueSandbox-Default(github.com/LeagueSandbox/LeagueSandbox-Default, 오픈소스 LoL 서버 에뮬레이터용으로 게임
@@ -6631,6 +6665,10 @@ const HA_STRUCTURES_LOL = {
 // 원작 충돌 반경(LoL 단위): 포탑 88.4(LeagueSandbox-Default Stats/ARAM*Turret* GameplayCollisionRadius), 넥서스 353·억제기
 // 214(LeagueSandbox Map12 LevelScriptObjects.cs CreateNexus/CreateInhibitor 인자).
 const HA_STRUCTURE_RADIUS_LOL = { turret: 88.4, nexus: 353, inhibitor: 214 };
+// 챔피언 출현(리스폰) 지점(25차 요청 "레드 블루 팀 진영에 따라 리스폰지역을 각 우물로") - LeagueSandbox-Default
+// Maps/Map12/Scene/__Spawn_T1·__Spawn_T2.sco.json의 CentralPoint(LoL 단위, 게임 좌표 x, z). 분수(우물) 포탑 바로 앞,
+// 우물 발판 안이다.
+const HA_SPAWN_LOL = { BLUE: [936.9515, 1060.61426], RED: [11860.0889, 11596.1572] };
 // 게임 좌표 → 이 월드. 원작은 다리가 대각선(파랑 왼쪽 아래 → 빨강 오른쪽 위)이고 이 맵은 z축(파랑 -z → 빨강 +z)이다.
 // 다리 방향 성분이 z, 그에 수직인 성분이 x다. 미니맵의 다리 위쪽(왼쪽 위)이 -x다 - 원작 상점이 -x로 와서 이 맵의
 // 상점 자리(왼쪽)와 맞는다.
@@ -6655,32 +6693,31 @@ function createHowlingAbyssMap(scene) {
   group.position.y = -HA_FLOOR_TOP_LOCAL * S;
   const bridgeLen = cfg.laneMaxZ - cfg.laneMinZ;
   const bridgeWidth = cfg.laneMaxX - cfg.laneMinX; // 14
-  // 요청("각 끝 쪽 부분의 넓이를 늘려줘") - 실제 칼바람 나락처럼 기지
-  // 근처는 다리보다 넓은 개활지여야 한다. 각 끝(기지)에서 안쪽으로
-  // WIDEN_ZONE_DEPTH만큼은 폭이 점점 넓어지다가 기지에서 최대
-  // WIDEN_EXTRA_X만큼 더 넓어진다. 벽/난간/체인/바닥 타일/이동 범위
-  // (clampPosition) 전부 이 하나의 함수를 공유해서 서로 어긋나지 않는다.
-  // 요청("끝쪽 넓이가 2배정도 넓고... 구조물은 건드리지 말고") - 사진을
-  // 보면 기지 쪽 폭이 다리 폭의 대략 2배 정도다. WIDEN_EXTRA_X를 6 -> 10.5로
-  // 늘려서 맨 끝 폭(10.5+10.5=21 반폭, 즉 전체 폭 42)이 다리 폭(21)의
-  // 약 2배가 되게 했다. WIDEN_ZONE_DEPTH는 라인 길이가 늘어난 만큼(+12)
-  // 같이 늘려서, 구조물 좌표는 그대로 둔 채(요청) 넓어지는 구간이 시작되는
-  // 지점(포탑/억제기 근처)은 예전과 똑같이 유지하고 끝만 새 경계까지 늘렸다.
-  // 요청("끝쪽은 이런 구조야" - 손그림 첨부) - 완만하게 벌어지는 곡선이
-  // 아니라, 좁은 다리가 이어지다가 한 지점에서 각진 사각형 방(플라자)으로
-  // 갑자기 넓어지는 구조다(그림에서 벽이 직각으로 꺾임). WIDEN_ZONE_DEPTH
-  // 안쪽은 전부 최대폭을 쓰고, 문턱(DOORWAY_TRANSITION) 몇 유닛 안에서만
-  // 짧게 보간해 완전히 끊겨 보이지(z-fighting) 않게 한다 - 나머지는 각진
-  // 사각형 방처럼 보인다.
-  const WIDEN_ZONE_DEPTH = 42;
-  const WIDEN_EXTRA_X = 10.5;
-  const DOORWAY_TRANSITION = 3;
+  // 기지 근처는 다리보다 넓은 개활지다. 벽/난간/체인/바닥/이동 범위(clampPosition) 전부 아래 widenExtraForZ() 하나를
+  // 공유해서 서로 어긋나지 않는다. (예전 요청 "끝쪽 넓이 2배", "끝쪽은 이런 구조야" 손그림의 각진 사각형 방 모양을
+  // 25차에 원작 이동 격자 모양으로 바꿨다.)
+  // 25차: 기지 넓어짐을 원작 이동 격자 모양(HA_WALK_SHAPE_LOL)으로. 예전엔 끝에서 42(약 3,060 LoL) 안쪽에서 갑자기
+  // 사각형 방(반폭 21 = 약 1,530 LoL)으로 넓어져 끝까지 갔다 - 넓어지는 자리가 원작보다 약 2,000 LoL 뒤였고(억제기가
+  // 좁은 다리 위에 놓였다), 우물 쪽이 좁아지지 않았다.
+  const LOL_PER_UNIT = lolRangeToWorld(1) > 0 ? 1 / (lolRangeToWorld(1) / S) : 1; // 줄이기 전 1단위 = 약 72.84 LoL
+  const WIDEN_EXTRA_X = HA_WALK_SHAPE_LOL.baseHalf / LOL_PER_UNIT - cfg.laneMaxX; // 약 9.41
+  const BASE_FLOOR_START = HA_WALK_SHAPE_LOL.widenStart / LOL_PER_UNIT;            // 약 55.6
   function widenExtraForZ(z) {
-    const distFromEnd = Math.min(cfg.laneMaxZ - z, z - cfg.laneMinZ);
-    if (distFromEnd >= WIDEN_ZONE_DEPTH) return 0;
-    if (distFromEnd <= WIDEN_ZONE_DEPTH - DOORWAY_TRANSITION) return WIDEN_EXTRA_X; // 문턱을 넘으면 곧바로 최대폭(사각형 방)
-    const t = (WIDEN_ZONE_DEPTH - distFromEnd) / DOORWAY_TRANSITION; // 문턱 근처 몇 유닛만 짧게 보간
-    return t * WIDEN_EXTRA_X;
+    const a = Math.abs(z) * LOL_PER_UNIT, W = HA_WALK_SHAPE_LOL;
+    if (a < W.widenStart) return 0;
+    if (a < W.widenFull) return WIDEN_EXTRA_X * (a - W.widenStart) / (W.widenFull - W.widenStart);
+    if (a < W.taperStart) return WIDEN_EXTRA_X;
+    if (a < W.taperEnd) return WIDEN_EXTRA_X * (1 - (a - W.taperStart) / (W.taperEnd - W.taperStart));
+    return 0;
+  }
+  // 기지 바닥 모양(위 함수와 같은 경계) - sign: -1 블루, +1 레드. XY 평면 도형을 눕혀 쓴다(도형 y = -z).
+  function baseFloorShape(sign) {
+    const shape = new THREE.Shape(), steps = 60, z0 = BASE_FLOOR_START, z1 = cfg.laneMaxZ;
+    const pts = [];
+    for (let i = 0; i <= steps; i++) { const z = z0 + (z1 - z0) * i / steps; pts.push([cfg.laneMaxX + widenExtraForZ(z), sign * z]); }
+    for (let i = steps; i >= 0; i--) { const z = z0 + (z1 - z0) * i / steps; pts.push([-(cfg.laneMaxX + widenExtraForZ(z)), sign * z]); }
+    pts.forEach(([x, z], i) => (i ? shape.lineTo(x, -z) : shape.moveTo(x, -z)));
+    return shape;
   }
   const ASSET = 'https://raw.communitydragon.org/latest/game/assets/maps/kitpieces/howling_abyss/textures/';
   const loader = new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
@@ -6769,29 +6806,7 @@ function createHowlingAbyssMap(scene) {
   snowFloor.name = 'HA_IMAGE_TILED_SNOW_OVERLAY';
   group.add(snowFloor);
 
-  // 요청("각 끝 쪽 부분의 넓이를 늘려줘") - 위 벽/난간이 기지 근처에서
-  // 바깥으로 벌어진 만큼, 그 자리를 실제로 밟고 다닐 수 있게 바닥도
-  // 같이 넓힌다. 정확한 곡선(smoothstep) 모양 대신 그 구간을 넉넉히
-  // 덮는 사각형 패치 4장(양쪽 끝 × 좌우)만 추가한다 - 걸어보면 이음매가
-  // 살짝 보일 수 있지만 "밟을 바닥이 없는" 문제보다 훨씬 낫다.
-  for (const endZ of [cfg.laneMinZ, cfg.laneMaxZ]) {
-    const dir = endZ > 0 ? -1 : 1; // 기지 쪽에서 라인 중앙 방향
-    const patchCenterZ = endZ + dir * WIDEN_ZONE_DEPTH / 2;
-    for (const side of [-1, 1]) {
-      const patchCenterX = side * (bridgeWidth / 2 + WIDEN_EXTRA_X / 2);
-      const flarePatch = new THREE.Mesh(new THREE.PlaneGeometry(WIDEN_EXTRA_X, WIDEN_ZONE_DEPTH, 1, 1), floorMaterial);
-      flarePatch.rotation.x = -Math.PI / 2;
-      flarePatch.position.set(patchCenterX, .39, patchCenterZ);
-      flarePatch.receiveShadow = true;
-      group.add(flarePatch);
-      const flareSnow = new THREE.Mesh(new THREE.PlaneGeometry(WIDEN_EXTRA_X, WIDEN_ZONE_DEPTH, 1, 1), snowMaterial);
-      flareSnow.rotation.x = -Math.PI / 2;
-      flareSnow.position.set(patchCenterX, .405, patchCenterZ);
-      group.add(flareSnow);
-      // 구조용 슬랩(아래에서 봤을 때 빈 공간이 안 보이게)도 같이 늘린다.
-      add(new THREE.BoxGeometry(WIDEN_EXTRA_X, 1.5, WIDEN_ZONE_DEPTH), colorMat(0x15242c, .98), [patchCenterX, -.7, patchCenterZ]);
-    }
-  }
+  // 기지 쪽 넓어진 바닥은 addBaseEndDetail()이 원작 모양(baseFloorShape)으로 깐다(25차 - 예전엔 사각형 패치 4장).
 
   // (삭제) 중앙선의 얼음 문양 타일 + 푸른 고리 장식 - 원작 칼바람 다리에 없는 임시 장식이라 지웠다(사용자 요청).
 
@@ -6878,7 +6893,8 @@ function createHowlingAbyssMap(scene) {
 
   // 절벽 가장자리의 임시 눈 띠
   for(const side of [-1,1]){
-    add(new THREE.BoxGeometry(2.0,1.4,bridgeLen+8),iceSnowMat,[side*12.5,.35,0]);
+    // 25차: 좁은 다리 구간에만 둔다 - 예전엔 끝까지 이어져서 넓어진 기지 바닥 위로 눈 띠가 솟아 있었다.
+    add(new THREE.BoxGeometry(2.0,1.4,BASE_FLOOR_START*2),iceSnowMat,[side*12.5,.35,0]);
   }
 
   // ============================================================
@@ -7161,23 +7177,24 @@ function createHowlingAbyssMap(scene) {
     // No enclosing base wall, no giant gate, no decorative barrier.
     // ========================================================
 
-    // 1) Broad open base floor. It widens immediately after the bridge.
-    const plaza = new THREE.Mesh(new THREE.PlaneGeometry(42,46,1,1),baseGround);
+    // 1~2) 기지 바닥 - 원작 이동 격자 모양(25차, baseFloorShape). 예전엔 42×46 사각형 광장 + 15.5 길이 목 부분이라
+    // 이동 가능 영역보다 넓거나 끝 너머(우물 뒤 약 1,300 LoL)까지 깔려 있었다.
+    const shape = baseFloorShape(sign);
+    const shapeUv = (geo) => { const pos = geo.attributes.position, uv = geo.attributes.uv; for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / 42 + .5, pos.getY(i) / 46); uv.needsUpdate = true; return geo; };
+    const plaza = new THREE.Mesh(shapeUv(new THREE.ShapeGeometry(shape)), baseGround);
     plaza.rotation.x=-Math.PI/2;
-    plaza.position.set(0,.415,baseZ+sign*0.5);
+    plaza.position.y=.415;
     plaza.receiveShadow=true;
     group.add(plaza);
-    const plazaSnow = new THREE.Mesh(new THREE.PlaneGeometry(41.9,45.9,1,1),snow);
+    const plazaSnow = new THREE.Mesh(shapeUv(new THREE.ShapeGeometry(shape)), snow);
     plazaSnow.rotation.x=-Math.PI/2;
-    plazaSnow.position.set(0,.425,baseZ+sign*0.5);
+    plazaSnow.position.y=.425;
     group.add(plazaSnow);
-
-    // 2) Short transition from the narrow bridge into the wide base.
-    const throat = new THREE.Mesh(new THREE.PlaneGeometry(31.5,15.5,1,1),baseGround);
-    throat.rotation.x=-Math.PI/2;
-    throat.position.set(0,.418,baseZ-sign*16.5);
-    throat.receiveShadow=true;
-    group.add(throat);
+    // 아래에서 봤을 때 빈 공간이 안 보이게 받치는 판(예전 넓힘 패치 아래 슬랩과 같은 역할)
+    const slab = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 1.5, bevelEnabled: false }), colorMat(0x15242c, .98));
+    slab.rotation.x=-Math.PI/2;
+    slab.position.y=-1.45;
+    group.add(slab);
 
     // 3) Twin-turret zone: visually marked, but left open for real turret objects.
     const nexusTurretPads = real.nexusTurrets.map(local);
@@ -7247,7 +7264,7 @@ function createHowlingAbyssMap(scene) {
     // 여기 있던 nexusHalo(넥서스 후광 링)도 제거했다.
 
     // Obelisk sits behind the Nexus, at the farthest playable end.
-    const obeliskZ = baseZ + sign*15.5;
+    const obeliskZ = sign*(cfg.laneMaxZ + 1.5); // 25차: 이동 끝 바로 뒤(예전 baseZ+15.5는 끝이 줄어든 뒤 다리 밖 허공이었다)
     const obelisk = new THREE.Group();
     obelisk.position.set(0,.42,obeliskZ);
     const obBase = new THREE.Mesh(new THREE.CylinderGeometry(1.65,1.95,.55,12),statueBaseMat);
@@ -7368,7 +7385,7 @@ function createHowlingAbyssMap(scene) {
   function clampPosition(p){const maxX=(cfg.laneMaxX+widenExtraForZ(p.z/S))*S;p.x=THREE.MathUtils.clamp(p.x,-maxX,maxX);p.z=THREE.MathUtils.clamp(p.z,cfg.laneMinZ*S,cfg.laneMaxZ*S);return p;}
   function isInsidePlayableArea(p){const maxX=(cfg.laneMaxX+widenExtraForZ(p.z/S))*S;return p.x>=-maxX&&p.x<=maxX&&p.z>=cfg.laneMinZ*S&&p.z<=cfg.laneMaxZ*S;}
   return {group,scale:S,laneMinX:cfg.laneMinX*S,laneMaxX:cfg.laneMaxX*S,laneMinZ:cfg.laneMinZ*S,laneMaxZ:cfg.laneMaxZ*S,
-    spawnBlue:new THREE.Vector3(0,0,(cfg.blueBaseZ+10)*S),spawnRed:new THREE.Vector3(0,0,(cfg.redBaseZ-10)*S),
+    spawnBlue:haLolToWorld(HA_SPAWN_LOL.BLUE),spawnRed:haLolToWorld(HA_SPAWN_LOL.RED),
     blueNexus:null,redNexus:null,blueTurret:null,redTurret:null,
     pathBlueToRed,pathRedToBlue,clampPosition,isInsidePlayableArea,updateSnow};
 }
@@ -7382,6 +7399,12 @@ if (!howlingAbyssMap) howlingAbyssMap={group:null,laneMinX:-140,laneMaxX:140,lan
 // 맵이 있으면 연습장 바닥은 숨긴다(다리 아래가 심연이어야 한다).
 if (howlingAbyssMap.group && typeof ground !== 'undefined' && ground) ground.visible = false;
 window.HOWLING_ABYSS_MAP=howlingAbyssMap;
+// 팀별 리스폰·귀환 지점(25차). 맵이 없으면(연습장) 예전처럼 가운데(0,0,0).
+function getTeamSpawnPosition(team) {
+  const m = howlingAbyssMap;
+  const p = team === 'RED' ? m.spawnRed : m.spawnBlue;
+  return p ? p.clone() : new THREE.Vector3(0, 0, 0);
+}
 
 // 원작 구조물 배치(20차): 양 팀 외곽 포탑·억제기 포탑·억제기·넥서스 포탑 2개·넥서스·분수(우물)를 원작 좌표
 // (HA_STRUCTURES_LOL)에 만든다. 구조물 오브젝트(createTurret 등, turret_system.js)는 챔피언 GLB 로더가 정의하는 자원
@@ -10083,6 +10106,307 @@ class SkillAimSystem {
   _hideAll() { for (const m of this._meshes) m.visible = false; }
 }
 
+/* ===== src/rendering/status_indicator_system.js ===== */
+/* ============================================================
+   STATUS INDICATORS (25차 요청 "각 스킬에 따라서 추가적인 이팩트가 필요하거든? (예를 들면 요네와 야스오의 Q나 마이의
+   패시브가 차는게 뜨는 표시) 실제 롤게임에서 어떻게 표현하는지 보고 그에 맞춰서 해줘")
+   ------------------------------------------------------------
+   원작 HUD가 상태를 보여 주는 네 가지 방식을 그대로 따른다(그림은 원작 아이콘을 쓰지 않고 직접 그린다 - 원작
+   아이콘·이펙트 파일은 이 저장소에 넣지 않았다):
+   1) 버프 바: 체력 바 위에 내 버프·디버프 아이콘이 줄지어 뜨고, 오른쪽 아래에 중첩 수, 아이콘 위에 남은 시간이
+      시계 방향으로 줄어드는 그림자가 덮인다. 다 차서 다음 공격이 강화되면 테두리가 빛난다.
+   2) 스킬 아이콘 변화: 야스오·요네 Q가 2중첩이면 Q 칸이 3타(회오리·돌진)로 바뀌고, 남은 시간 동안 칸 테두리가
+      줄어든다. 리 신 Q 표식이 있으면 Q 칸이 2타(공명의 일격)로 바뀐다.
+   3) 대상 머리 위 표식: 다리우스 출혈(1~5), 바루스 역병(1~3), 벡스 우울, 리 신 Q 음파, 이즈리얼 W 정기 표식을
+      허수아비 체력 바 위에 띄운다.
+   4) 내 챔피언 발밑 "준비됨" 효과: 야스오·요네 Q3, 마스터 이 이중 타격, 다리우스 녹서스의 힘, 모데카이저 패시브
+      오라, 벡스 파멸이 준비되면 발밑에 도는 고리를 띄운다.
+   상태 값은 각 챔피언 코드가 이미 들고 있는 것(_yasuo.qStacks 등)을 읽기만 한다 - 게임 규칙은 바꾸지 않는다.
+   원작 화면을 영상으로 직접 대조하지 못했다(이 환경에서 영상·위키 접속 불가) - 표시 위치·색은 원작 HUD의 일반
+   규칙을 따른 근사다(docs/KNOWN_LIMITATIONS.md 25차).
+   ============================================================ */
+const STATUS_TYPE_LABEL = {
+  SLOW: ['둔화', 'debuff'], STUN: ['기절', 'debuff'], ROOT: ['속박', 'debuff'], SILENCE: ['침묵', 'debuff'], KNOCKUP: ['에어본', 'debuff'],
+  ARMOR_SHRED: ['방깎', 'debuff'], MR_SHRED: ['마저깎', 'debuff'], DOT: ['지속피해', 'debuff'], FEAR: ['공포', 'debuff'], CHARM: ['매혹', 'debuff'],
+  AS_BUFF: ['공속', 'buff'], MS_BUFF: ['이속', 'buff'], DAMAGE_REDUCTION: ['피해감소', 'buff'], TENACITY: ['강인함', 'buff'],
+  GHOST: ['유체화', 'buff'], NILAH_GHOST: ['유체화', 'buff'], MASTERYI_R_AS: ['공속', 'buff'], LEESIN_W_VAMP: ['흡혈', 'buff'],
+};
+// 챔피언 전용 상태 id의 이름(위 종류 이름보다 우선)
+const STATUS_ID_LABEL = {
+  garenQ_ms: '결정타', garenW_dr: '용기', garenW_tenacity: '용기', ezrealRSF: '마력', leesinPassive_as: '연타', leesinW_vamp: '철갑',
+};
+const INDICATOR_HIDDEN_TYPES = new Set(['BLIGHT', 'SHIELD', 'MARK']);
+
+// 내 챔피언의 전용 중첩·준비 상태(버프 바 아이콘). remain/total 단위는 초.
+function championStatusEntries(c, now) {
+  const out = [], sec = (ms) => Math.max(0, (ms - now) / 1000);
+  const d = (typeof c._champData === 'function') ? c._champData() : null;
+  switch (c.championId) {
+    case 'yasuo': {
+      const y = c._yasuo; if (!y) break;
+      if (y.qStacks > 0 && y.qStackExpiresAt > now) out.push({ key: 'yasuoQ', label: '폭풍', stacks: y.qStacks, max: 2, remain: sec(y.qStackExpiresAt), ready: y.qStacks >= 2, color: '#7fd6ff' });
+      if (y.eStacks > 0 && y.eStacksExpiresAt > now) out.push({ key: 'yasuoE', label: '질풍', stacks: y.eStacks, max: 4, remain: sec(y.eStacksExpiresAt), color: '#9fe3ff' });
+      break;
+    }
+    case 'yone': {
+      const y = c._yone; if (!y) break;
+      if (y.qStacks > 0 && y.qStackExpiresAt > now) out.push({ key: 'yoneQ', label: '폭풍', stacks: y.qStacks, max: 2, remain: sec(y.qStackExpiresAt), ready: y.qStacks >= 2, color: '#8fb8ff' });
+      break;
+    }
+    case 'masteryi': {
+      const m = c._masteryi; if (!m) break;
+      const n = (d && d.passive && d.passive.everyNAttacks) || 4;
+      const st = (m.attackCount || 0) % n;
+      if (st > 0) out.push({ key: 'yiP', label: '이중', stacks: st, max: n - 1, ready: st >= n - 1, color: '#f2c14e' });
+      break;
+    }
+    case 'leesin': {
+      const l = c._leesin, as = typeof getStatus === 'function' ? getStatus(c, 'leesinPassive_as') : null;
+      if (l && l.passiveHitsLeft > 0) out.push({ key: 'leeP', statusId: 'leesinPassive_as', label: '연타', stacks: l.passiveHitsLeft, max: 2, remain: as && as.expiresAt > now ? sec(as.expiresAt) : null, total: as ? as.duration : null, color: '#ffd36b' });
+      break;
+    }
+    case 'ashe': {
+      const a = c._ashe; if (!a) break;
+      if (a.focusStacks > 0) out.push({ key: 'asheF', label: '집중', stacks: a.focusStacks, max: 4, remain: a.focusExpiresAt > now ? sec(a.focusExpiresAt) : null, ready: a.focusStacks >= 4, color: '#9fdcff' });
+      if (a.qActiveUntil > now) out.push({ key: 'asheQ', label: '다발', remain: sec(a.qActiveUntil), color: '#bfe9ff', ready: true });
+      break;
+    }
+    case 'mordekaiser': {
+      const m = c._morde; if (!m) break;
+      if (m.auraExpiresAt > now) out.push({ key: 'mordeP', label: '어둠', remain: sec(m.auraExpiresAt), ready: true, color: '#7dff9a' });
+      else if (m.hitStacks > 0 && (m.stacksExpireAt || 0) > now) out.push({ key: 'mordeP', label: '어둠', stacks: m.hitStacks, max: 3, remain: sec(m.stacksExpireAt), color: '#7dff9a' });
+      break;
+    }
+    case 'darius': {
+      const x = c._darius; if (x && x.empoweredUntil > now) out.push({ key: 'dariusM', label: '녹서스', remain: sec(x.empoweredUntil), ready: true, color: '#ff5a4a' });
+      break;
+    }
+    case 'chogath': {
+      const x = c._chogath; if (x && x.predationStacks > 0) out.push({ key: 'choR', label: '포식', stacks: x.predationStacks, color: '#b48cff' });
+      break;
+    }
+    case 'garen': {
+      if (c._garenCourageStacks > 0) out.push({ key: 'garenW', label: '용기', stacks: c._garenCourageStacks, color: '#ffd36b' });
+      break;
+    }
+    case 'ahri': {
+      const a = c._ahri; if (!a) break;
+      if (a.passiveStacks > 0) out.push({ key: 'ahriP', label: '정기', stacks: a.passiveStacks, max: (d && d.passive && d.passive.maxStacks) || 9, color: '#ff9fd6' });
+      if (a.rCharges > 0 && a.rReadyUntil > now) out.push({ key: 'ahriR', label: '질주', stacks: a.rCharges, max: 3, remain: sec(a.rReadyUntil), ready: true, color: '#ff9fd6' });
+      break;
+    }
+    case 'vex': {
+      const v = c._vex; if (!v) break;
+      if (now >= (v.doomReadyAt || 0)) out.push({ key: 'vexP', label: '파멸', ready: true, color: '#b277ff' });
+      else out.push({ key: 'vexP', label: '파멸', remain: sec(v.doomReadyAt), color: '#6c4a99', cooldown: true });
+      break;
+    }
+    case 'varus': {
+      const v = c._varus; if (v && v.lv && v.lv.until > now) out.push({ key: 'varusP', label: '복수', remain: sec(v.lv.until), color: '#c27bff' });
+      break;
+    }
+    default: break;
+  }
+  return out;
+}
+
+// 스킬 칸 바뀜(원작: 같은 키의 다음 단계 스킬로 아이콘이 바뀐다)
+function championSlotStates(c, now) {
+  const s = {}, sec = (ms) => Math.max(0, (ms - now) / 1000);
+  if (c.championId === 'yasuo' && c._yasuo && c._yasuo.qStacks >= 2 && c._yasuo.qStackExpiresAt > now) s.Q = { text: 'Q3 회오리', remain: sec(c._yasuo.qStackExpiresAt) };
+  if (c.championId === 'yone' && c._yone && c._yone.qStacks >= 2 && c._yone.qStackExpiresAt > now) s.Q = { text: 'Q3 돌진', remain: sec(c._yone.qStackExpiresAt) };
+  if (c.championId === 'leesin' && c._leesin && c._leesin.qMarkTarget && c._leesin.qMarkExpiresAt > now) s.Q = { text: 'Q2 공명', remain: sec(c._leesin.qMarkExpiresAt) };
+  return s;
+}
+
+// 대상 머리 위 표식(내 챔피언이 그 대상에게 남긴 것)
+function unitMarkEntries(c, unit, now) {
+  const out = [];
+  if (!c || !unit) return out;
+  if (c.championId === 'darius' && c._darius) {
+    const rec = c._darius.stacksOnTarget.get(unit);
+    if (rec && rec.stacks > 0 && (!rec.expiresAt || rec.expiresAt > now)) out.push({ kind: 'pips', n: rec.stacks, max: 5, color: '#e0342a', glyph: '●', full: rec.stacks >= 5 });
+  }
+  if (c.championId === 'varus') {
+    const rec = typeof getStatus === 'function' ? getStatus(unit, 'varusBlight') : null;
+    if (rec && rec.stacks > 0 && rec.expiresAt > now) out.push({ kind: 'pips', n: rec.stacks, max: 3, color: '#b45cff', glyph: '◆', full: rec.stacks >= 3 });
+  }
+  if (c.championId === 'vex' && c._vex && (c._vex.gloom.get(unit) || 0) > now) out.push({ kind: 'tag', text: '우울', color: '#9b6bff' });
+  if (c.championId === 'leesin' && c._leesin && c._leesin.qMarkTarget === unit && c._leesin.qMarkExpiresAt > now) out.push({ kind: 'tag', text: '음파', color: '#ffd36b' });
+  if (c.championId === 'ezreal' && c._ezreal && c._ezreal.markTarget === unit && c._ezreal.markExpiresAt > now) out.push({ kind: 'tag', text: '정기', color: '#ffcf5a' });
+  return out;
+}
+
+// 발밑 "준비됨" 고리: 색과 이름
+function championReadyAura(c, now) {
+  if (c.championId === 'yasuo' && c._yasuo && c._yasuo.qStacks >= 2 && c._yasuo.qStackExpiresAt > now) return { color: 0x7fd6ff, spin: 5 };
+  if (c.championId === 'yone' && c._yone && c._yone.qStacks >= 2 && c._yone.qStackExpiresAt > now) return { color: 0x8fb8ff, spin: 5 };
+  if (c.championId === 'masteryi' && c._masteryi) {
+    const d = c._champData(), n = (d && d.passive && d.passive.everyNAttacks) || 4;
+    if ((c._masteryi.attackCount || 0) % n === n - 1) return { color: 0xf2c14e, spin: 3 };
+  }
+  if (c.championId === 'darius' && c._darius && c._darius.empoweredUntil > now) return { color: 0xff3b2e, spin: 2 };
+  if (c.championId === 'mordekaiser' && c._morde && c._morde.auraExpiresAt > now) return { color: 0x6dff8e, spin: 1.5 };
+  if (c.championId === 'vex' && c._vex && now >= (c._vex.doomReadyAt || 0)) return { color: 0xa36bff, spin: 1.2 };
+  return null;
+}
+
+class StatusIndicatorSystem {
+  constructor() {
+    this._bar = null; this._barSig = ''; this._totals = new Map(); this._slotSig = {}; this._markSig = new WeakMap();
+    this._aura = null; this._auraOwner = null; this._auraColor = null;
+  }
+  _ensureDom() {
+    if (this._bar || typeof document === 'undefined') return;
+    const style = document.createElement('style');
+    style.id = 'status-indicator-ui';
+    style.textContent = `
+      #buffBar { position:fixed; left:96px; bottom:124px; z-index:11; display:flex; gap:4px; pointer-events:none; max-width:420px; flex-wrap:wrap-reverse; }
+      #buffBar .buff { position:relative; width:30px; height:30px; border:1px solid #5d6b78; background:#141c24; color:#e8eef4;
+        font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; overflow:hidden; text-shadow:0 1px 2px #000; }
+      #buffBar .buff.debuff { border-color:#c0473f; }
+      #buffBar .buff.ready { border-color:#ffd36b; box-shadow:0 0 8px rgba(255,211,107,.8); }
+      #buffBar .buff.cooldown { opacity:.6; }
+      #buffBar .buff .sweep { position:absolute; inset:0; background:conic-gradient(rgba(0,0,0,.62) var(--gone), transparent 0); }
+      #buffBar .buff .lbl { position:relative; z-index:1; letter-spacing:-.5px; }
+      #buffBar .buff .stk { position:absolute; right:1px; bottom:0; z-index:2; font-size:11px; color:#fff; }
+      #buffBar .buff .bar { position:absolute; left:0; bottom:0; height:3px; z-index:1; }
+      .skillSlot .slotState { position:absolute; left:0; right:0; top:13px; text-align:center; font-size:13px; line-height:1.05; font-weight:800; color:#ffe9a8; text-shadow:0 1px 2px #000; z-index:3; white-space:nowrap; }
+      .skillSlot .slotState small { display:block; font-size:9px; font-weight:700; }
+      .skillSlot.stateNext { border-color:#ffd36b; box-shadow:0 0 12px rgba(255,211,107,.75); }
+      .skillSlot .slotTimer { position:absolute; inset:-1px; z-index:2; pointer-events:none;
+        background:conic-gradient(#ffd36b var(--left), transparent 0); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; padding:2px; }
+      .unitMarks { display:flex; justify-content:center; gap:2px; margin-bottom:1px; font-size:11px; line-height:1; text-shadow:0 0 3px #000, 0 1px 1px #000; }
+      .unitMarks .tag { padding:0 3px; border:1px solid currentColor; border-radius:2px; font-size:9px; background:rgba(0,0,0,.55); font-weight:700; }
+      .unitMarks .pip.off { opacity:.25; }
+      .unitMarks .pip.full { filter:drop-shadow(0 0 3px currentColor); }
+    `;
+    document.head.appendChild(style);
+    this._bar = document.createElement('div');
+    this._bar.id = 'buffBar';
+    document.body.appendChild(this._bar);
+  }
+
+  _entriesFor(c, now) {
+    const list = championStatusEntries(c, now);
+    for (const s of c.statusEffects || []) {
+      if (!s || s.expiresAt <= now || INDICATOR_HIDDEN_TYPES.has(s.type)) continue;
+      if (list.some((e) => e.statusId === s.id)) continue;
+      const t = STATUS_TYPE_LABEL[s.type];
+      const label = STATUS_ID_LABEL[s.id] || (t && t[0]);
+      if (!label) continue;
+      list.push({ key: 's:' + s.id, statusId: s.id, label, stacks: s.stacks > 1 ? s.stacks : null, remain: (s.expiresAt - now) / 1000, total: s.duration, debuff: !!(t && t[1] === 'debuff') });
+    }
+    return list;
+  }
+
+  _renderBar(c, now) {
+    const list = this._entriesFor(c, now);
+    const parts = list.map((e) => {
+      let total = e.total;
+      if (e.remain != null && !total) {
+        const prev = this._totals.get(e.key);
+        total = (!prev || e.remain > prev + 0.05) ? e.remain : prev; // 갱신(시간이 늘어남)되면 그때 남은 시간을 전체로
+        this._totals.set(e.key, total);
+      }
+      const gone = e.remain != null && total > 0 ? Math.min(1, Math.max(0, 1 - e.remain / total)) : 0;
+      const cls = ['buff', e.debuff ? 'debuff' : '', e.ready ? 'ready' : '', e.cooldown ? 'cooldown' : ''].join(' ');
+      const stk = e.stacks != null ? `<span class="stk">${e.stacks}</span>` : '';
+      const bar = e.max ? `<span class="bar" style="width:${Math.round(100 * Math.min(1, e.stacks / e.max))}%;background:${e.color || '#9fdcff'}"></span>` : '';
+      return `<div class="${cls}" data-key="${e.key}" style="${e.color ? `color:${e.color}` : ''}"><span class="sweep" style="--gone:${(gone * 360).toFixed(0)}deg"></span><span class="lbl">${e.label}</span>${stk}${bar}</div>`;
+    });
+    const sig = parts.join('');
+    if (sig !== this._barSig) { this._bar.innerHTML = sig; this._barSig = sig; }
+    for (const k of [...this._totals.keys()]) if (!list.some((e) => e.key === k)) this._totals.delete(k);
+    return list;
+  }
+
+  _renderSlots(c, now) {
+    const states = championSlotStates(c, now);
+    for (const key of ['Q', 'W', 'E', 'R']) {
+      const slot = document.getElementById('slot' + key);
+      if (!slot) continue;
+      const st = states[key];
+      const sig = st ? `${st.text}|${Math.round((st.remain || 0) * 10)}` : '';
+      if (this._slotSig[key] === sig) continue;
+      this._slotSig[key] = sig;
+      let lbl = slot.querySelector('.slotState'), tim = slot.querySelector('.slotTimer');
+      if (!st) { if (lbl) lbl.remove(); if (tim) tim.remove(); slot.classList.remove('stateNext'); continue; }
+      if (!lbl) { lbl = document.createElement('div'); lbl.className = 'slotState'; slot.appendChild(lbl); }
+      if (!tim) { tim = document.createElement('div'); tim.className = 'slotTimer'; slot.appendChild(tim); }
+      const [head, ...rest] = st.text.split(' ');
+      lbl.innerHTML = `${head}<small>${rest.join(' ')}</small>`;
+      const prev = this._totals.get('slot' + key) || 0;
+      const total = st.remain > prev + 0.05 ? st.remain : prev;
+      this._totals.set('slot' + key, total);
+      tim.style.setProperty('--left', `${(total > 0 ? 360 * st.remain / total : 0).toFixed(0)}deg`);
+      slot.classList.add('stateNext');
+    }
+  }
+
+  _renderMarks(c, now) {
+    const units = typeof getAllEnemyUnits === 'function' ? getAllEnemyUnits() : [];
+    for (const u of units) {
+      if (!u || !u.labelDiv || !u.isChampion) continue;
+      const marks = unitMarkEntries(c, u, now);
+      const sig = JSON.stringify(marks);
+      if (this._markSig.get(u) === sig) continue;
+      this._markSig.set(u, sig);
+      let el = u.labelDiv.querySelector('.unitMarks');
+      if (!marks.length) { if (el) el.remove(); continue; }
+      if (!el) { el = document.createElement('div'); el.className = 'unitMarks'; u.labelDiv.insertBefore(el, u.labelDiv.firstChild); }
+      el.innerHTML = marks.map((m) => m.kind === 'tag'
+        ? `<span class="tag" style="color:${m.color}">${m.text}</span>`
+        : Array.from({ length: m.max }, (_, i) => `<span class="pip${i < m.n ? '' : ' off'}${m.full ? ' full' : ''}" style="color:${m.color}">${m.glyph}</span>`).join('')).join('');
+    }
+  }
+
+  _renderAura(c, now, dt) {
+    const want = championReadyAura(c, now);
+    if (this._aura && (this._auraOwner !== c || !want || this._auraColor !== want.color)) {
+      if (this._aura.parent) this._aura.parent.remove(this._aura);
+      this._aura.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+      this._aura = null; this._auraOwner = null; this._auraColor = null;
+    }
+    if (!want || !c.root) return;
+    if (!this._aura) {
+      const g = new THREE.Group();
+      const r = Math.max(0.35, (c.collisionRadius || 0.5) * 1.15);
+      for (let i = 0; i < 3; i++) {
+        const m = new THREE.Mesh(new THREE.RingGeometry(r * 0.86, r, 40, 1, i * Math.PI * 2 / 3, Math.PI * 0.42),
+          new THREE.MeshBasicMaterial({ color: want.color, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+        m.rotation.x = -Math.PI / 2; g.add(m);
+      }
+      const glow = new THREE.Mesh(new THREE.CircleGeometry(r * 0.9, 32),
+        new THREE.MeshBasicMaterial({ color: want.color, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false }));
+      glow.rotation.x = -Math.PI / 2; g.add(glow);
+      g.position.y = 0.06; g.renderOrder = 3;
+      c.root.add(g);
+      this._aura = g; this._auraOwner = c; this._auraColor = want.color;
+    }
+    this._aura.rotation.y += (want.spin || 2) * dt;
+    const pulse = 0.6 + 0.25 * Math.sin(now / 180);
+    this._aura.children.forEach((m, i) => { if (i < 3) m.material.opacity = pulse; });
+  }
+
+  update(c, dt) {
+    if (!c) return;
+    this._ensureDom();
+    if (!this._bar) return;
+    const now = performance.now();
+    // DOM은 초당 약 20번만 갱신한다(남은 시간 그림자는 이 정도면 충분히 부드럽다). 발밑 고리는 매 프레임.
+    this._domAccum = (this._domAccum || 0) + (dt || 0);
+    if (this._domAccum >= 0.05 || this._domOwner !== c) {
+      this._domAccum = 0; this._domOwner = c;
+      this._renderBar(c, now);
+      this._renderSlots(c, now);
+      this._renderMarks(c, now);
+    }
+    this._renderAura(c, now, dt || 0);
+  }
+}
+const statusIndicators = new StatusIndicatorSystem();
+
 /* ===== src/animation/attack_sequence.js ===== */
 /* ============================================================
    0-A1c. ATTACK SEQUENCE (요청: 평타 모션 순서를 별도 데이터로 관리)
@@ -10401,12 +10725,22 @@ class RangeIndicatorSystem {
    - fit:   클립 전체를 공격 간격에 맞추는 예전 방식(노틸러스는 이쪽이 실제 타격 장면과 맞았다).
    - base:  원작 기본 선딜 시각(선딜% ÷ 기본 공속) - 공격 속도에 비례해서만 빨라지게 재생한다. 위 측정으로
             확정하지 못한 챔피언의 기본값.
+   - 클립별 고정 시각(ATTACK_IMPACT_TIME_SEC): 프레임을 눈으로 확인한 값. 위 방법보다 우선한다(25차).
    자동 측정값이 클립 길이에 비해 말이 안 되면(너무 이르거나 끝 프레임) base로 돌아간다.
    ============================================================ */
 const ATTACK_IMPACT_METHOD = {
   garen: 'peak', darius: 'peak', leesin: 'peak', yasuo: 'peak', yone: 'peak', mordekaiser: 'peak',
   renekton: 'peak', chogath: 'peak', ahri: 'peak', ezreal: 'reach', nautilus: 'fit',
-  // masteryi·sett·vex·ashe·varus(·nilah는 별도 연속 평타 경로): base
+  masteryi: 'reach', // 25차: attack1 찌르는 장면 약 0.32초(프레임 확인) - reach 0.306초가 맞고 peak 0.265초는 이르다
+  // 세트·벡스 평타는 준비/타격 두 클립(attackStartHitPair)이라 방법과 무관. nilah는 별도 연속 평타 경로.
+};
+// 25차: 실제 GLB 프레임을 0.02초 간격으로 렌더링해 눈으로 확인한 클립별 타격(화살을 놓는) 시각(초). 위 방법보다 우선.
+// 바루스는 기본 선딜(0.267초)이면 아직 시위를 당기고 있을 때 피해가 났다. 세트 오른손(Spell1_B, 사용자가 정한 오른손
+// 평타 클립)은 자동 측정이 뒤따르는 동작(0.617초)을 잡았다.
+const ATTACK_IMPACT_TIME_SEC = {
+  ashe: { Attack1: 0.305, Attack2: 0.31, Crit: 0.31 },
+  varus: { Attack1: 0.33, Attack2: 0.34, Crit: 0.34 },
+  sett: { Spell1_B: 0.45 },
 };
 
 // 클립 하나의 무기 뼈 궤적에서 peak/reach 시각을 잰다(클립마다 한 번, 결과는 clip.userData에 보관).
@@ -10451,7 +10785,9 @@ function attackClipTimeScale(ctrl, clip, windup, interval) {
   const st = ctrl && ctrl.stats;
   const baseImpact = st && st.windupPercent && st.baseAttackSpeed ? st.windupPercent / st.baseAttackSpeed : windup;
   let impact = baseImpact;
-  if (method === 'peak' || method === 'reach') {
+  const fixed = ATTACK_IMPACT_TIME_SEC[ctrl && ctrl.championId];
+  if (fixed && fixed[clip.name] != null) impact = fixed[clip.name];
+  else if (method === 'peak' || method === 'reach') {
     const m = measureAttackClipImpact(ctrl.model, clip, ctrl.mixer);
     const t = m ? m[method] : null;
     // 클립 시작 직후나 마지막 프레임 근처면 측정 실패로 보고 base로 돌아간다.
@@ -10469,6 +10805,37 @@ function precomputeAttackImpacts(ctrl) {
     if (clip) measureAttackClipImpact(ctrl.model, clip, null);
   }
   if (ctrl.mixer) ctrl.mixer.update(0);
+}
+
+// 25차: 준비/타격으로 나뉜 평타(<이름>_Start → <이름>_Hit)의 짝. 평타 칸에 둘 중 어느 쪽이 배정돼 있어도 찾는다
+// (벡스는 세 번째 평타 칸에 Attack1_Start가 단독으로 배정돼 있었다 - 0.3초 준비 동작만 재생되고 끝났다).
+function attackStartHitPair(ctrl, clip) {
+  if (!ctrl || !clip) return null;
+  const m = /^(.*)_(Start|Hit)$/i.exec(clip.name);
+  if (!m) return null;
+  const start = m[2].toLowerCase() === 'start' ? clip : ctrl.findAnimation(m[1] + '_Start');
+  const hit = m[2].toLowerCase() === 'hit' ? clip : ctrl.findAnimation(m[1] + '_Hit');
+  return start && hit ? { start, hit } : null;
+}
+// 타격 클립 재생 속도: 원작 기본 공격 속도에서 1.0, 공격 속도가 오르면 선딜이 줄어든 만큼 빨라진다.
+function attackHitClipTimeScale(ctrl, windup) {
+  const st = ctrl && ctrl.stats;
+  const baseWindup = st && st.windupPercent && st.baseAttackSpeed ? st.windupPercent / st.baseAttackSpeed : windup;
+  return THREE.MathUtils.clamp(baseWindup / Math.max(1e-3, windup), 0.4, 3.0);
+}
+
+// 25차: 평타 클립의 마무리 클립(맞는 순간 이후 → 대기). 원작 GLB 이름 규칙: <이름>_ToIdle / _To_Idle / _Into_Idle
+// (대소문자·.anm·_Hit 무시). 리 신 Attack3_toIdle.ASU_LeeSin.anm처럼 꼬리표가 붙은 이름도 찾는다.
+function attackFollowThroughClip(ctrl, clip) {
+  if (!ctrl || !clip) return null;
+  clip.userData = clip.userData || {};
+  if (clip.userData.followThrough !== undefined) return clip.userData.followThrough ? ctrl.findAnimation(clip.userData.followThrough) : null;
+  const norm = (n) => n.toLowerCase().replace(/\.anm$/, '').replace(/\.asu_[a-z]+$/, '');
+  const base = norm(clip.name).replace(/_hit$/, '');
+  const want = new Set(['_toidle', '_to_idle', '_into_idle'].map((suf) => base + suf));
+  const found = (ctrl.clips || []).find((c) => want.has(norm(c.name))) || null;
+  clip.userData.followThrough = found ? found.name : null;
+  return found;
 }
 
 /* ===== src/animation/animation_sequence_player.js ===== */
@@ -10756,13 +11123,13 @@ class CharacterController {
       abilityPower: 0, // 이 데모에는 아이템/주문력 시스템이 없어 항상 0 - 기획안의 "+주문력" 항은 공식에는 남겨두되 실질 기여는 0이다(수치 임의 발명 방지)
     };
     // Range/Distance 시스템(요청 3): Visual Model(GLB 스케일)과 Collision
-    // Shape를 별개 개념으로 관리한다. 기획안에 챔피언별 충돌 반경 수치가
-    // 없으므로(전투 밸런스 수치가 아니라 엔진 차원의 값) 허수아비 원본
-    // 크기(확대 전)와 동일한 기준값 하나를 모든 챔피언에 균일하게 적용한다
-    // - 임의의 게임 수치를 만든 것이 아니라 렌더링 엔진의 충돌 반경일 뿐이다.
-    this.collisionRadius = BASE_UNIT * 0.24;
+    // Shape를 별개 개념으로 관리한다. 25차: 예전엔 모든 챔피언에 균일값
+    // (BASE_UNIT*0.24 = 약 28 LoL 유닛)을 썼는데, 원작 판정 반경은 대부분 65다.
+    // 챔피언이 정해지면 applyChampionData()가 원작 값(getChampionUnitSize)으로 바꾼다.
+    this.collisionRadius = lolRangeToWorld(UNIT_SIZE_DEFAULT_LOL.gameplay);
+    this.pathingRadius = lolRangeToWorld(UNIT_SIZE_DEFAULT_LOL.pathing);
     this.collisionHeight = BASE_UNIT * 1.1;
-    this.selectionRadius = this.collisionRadius * 1.3;
+    this.selectionRadius = lolRangeToWorld(UNIT_SIZE_DEFAULT_LOL.selection);
 
     this.comboIndex = 0;
     // SETT 전용 2단계 손 순서: 0=LEFT, 1=RIGHT.
@@ -11110,9 +11477,12 @@ class CharacterController {
     this._eHitCountThisCast = 0;
     this.magicPenPercent = 0; // 모데카이저 E 패시브 - 매 tick 다시 계산되지만 다른 챔피언에선 계산 자체를 안 한다
     this.passiveState = { lastDamageTakenAt: 0, lastEnemySkillHitAt: 0, lastPassiveHealAt: 0 };
-    // 닐라만 실제 충돌/선택 반경을 쓴다 - 다른 챔피언은 생성자의 균일값으로 되돌린다.
-    this.collisionRadius = BASE_UNIT * 0.24;
-    this.selectionRadius = this.collisionRadius * 1.3;
+    // 25차: 판정·지형 충돌·선택 반경을 원작 값으로(getChampionUnitSize - 00_global_constants.js).
+    // collisionRadius = 판정 반경(gameplay radius: 평타 가장자리 거리·스킬 적중), pathingRadius = 구조물·경계 충돌.
+    const unitSize = getChampionUnitSize(championId);
+    this.collisionRadius = lolRangeToWorld(unitSize.gameplay);
+    this.pathingRadius = lolRangeToWorld(unitSize.pathing);
+    this.selectionRadius = lolRangeToWorld(unitSize.selection);
     this._dariusWArmed = false;
     // 챔피언 전용 전투 상태 - Darius 출혈 Map, Lee Sin Q 표식, Sett Q/W/R, Nilah E/R,
     // Yasuo/마스터 이/레넥톤 임시 상태 등이 다음 챔피언에 새어 나오지 않게 새로 만든다.
@@ -11152,16 +11522,7 @@ class CharacterController {
     if (this.championId === 'yone') { this.stats.critMultiplier = this._champData().passive.critDamage; this.mp = 0; }
     if (this.championId === 'nilah') {
       this.armorPenPercent = 0;
-      // 데이터 수정(실제 bin 확인): 충돌 반경은 원래 "챔피언별 실제 수치가
-      // 없어서" 전 챔피언에 균일값(BASE_UNIT*0.24, 약 24 LoL 단위 상당)을
-      // 적용해뒀다. 닐라는 실제 pathfindingCollisionRadius=32(LoL 단위)가
-      // 확인됐으므로 닐라만 실제 값으로 덮어쓴다 - 다른 챔피언은 여전히
-      // 실제 수치가 없으니 균일값을 유지한다. selectionRadius(클릭 판정
-      // 크기)도 실제 값(120)이 확인됐다 - 충돌 반경의 1.3배 근사식(약 42
-      // 상당)보다 실제로 훨씬 커서(모델 폭에 맞춘 값), 근사식 대신 실제
-      // 값을 쓴다.
-      this.collisionRadius = lolRangeToWorld(32);
-      this.selectionRadius = lolRangeToWorld(120);
+      // 닐라 지형 충돌 반경 32·선택 반경 120(실제 bin 확인)은 25차부터 CHAMPION_UNIT_SIZE_LOL 표에서 위 공통 코드가 넣는다.
     }
     this.hp = this.maxHp; this.mp = this.maxMp;
     if (this.championId === 'yasuo') this.mp = 0;
@@ -11616,8 +11977,20 @@ class CharacterController {
     // 24차(끊김 수정): 섞이는 비중을 "지금 비중"에서 이어 간다. 기본 crossFadeTo는 항상 새 동작 0→1, 이전 동작 1→0으로
     // 다시 시작해서, 전환 도중 또 전환이 오면(예: 정지 명령 → 한 프레임 달리기 → 대기) 섞이던 동작의 비중이 순간적으로
     // 0이나 1로 튀었다. 반복 클립이 아직 섞이는 중이면 되감지도 않는다.
+    // 25차: 지금 비중은 페이드 곡선에서 바로 계산한다. getEffectiveWeight()는 마지막 mixer.update() 때 값이라, 같은
+    // 프레임 안에서 전환이 두 번 오면(정지 명령 = 한 프레임 달리기 → 도착 → 대기) 방금 시작한 달리기를 비중 1로 읽어
+    // 그 한 프레임 동안 달리기와 대기가 반반 섞였다(팔꿈치가 한 프레임에 크게 튐).
+    const mixerTime = this.mixer.time;
+    const weightNow = (a) => {
+      if (!a || !a.enabled || !this.mixer._isActiveAction(a)) return 0;
+      const ip = a._weightInterpolant;
+      if (!ip) return a.weight;
+      const pp = ip.parameterPositions, sv = ip.sampleValues;
+      const k = pp[1] > pp[0] ? THREE.MathUtils.clamp((mixerTime - pp[0]) / (pp[1] - pp[0]), 0, 1) : 1;
+      return a.weight * (sv[0] + (sv[1] - sv[0]) * k);
+    };
     const blending = this.currentAction && this.currentAction !== action;
-    const wNow = blending && action.isRunning() ? action.getEffectiveWeight() : 0;
+    const wNow = blending && action.isRunning() ? weightNow(action) : 0;
     const keepTime = wNow > 0.001 && loop !== THREE.LoopOnce && !time;
     if (!keepTime) { action.reset(); action.time = time; }
     action.setLoop(loop, loop === THREE.LoopOnce ? 1 : Infinity);
@@ -11630,7 +12003,7 @@ class CharacterController {
       for (const x of others) {
         // 끝나서 마지막 자세로 멈춰 있는(clampWhenFinished) 1회 재생 동작도 비중을 계속 갖고 있으므로 같이 내린다.
         if (x === action || !x.enabled || !this.mixer._isActiveAction(x)) continue;
-        const w = x.getEffectiveWeight();
+        const w = weightNow(x);
         // 실제 비중 = 기본 비중(weight) × 페이드 값이므로, 기본 비중은 1로 두고 페이드 값만 지금 비중에서 0으로 내린다
         // (0이 되면 three.js가 알아서 끈다). setEffectiveWeight는 진행 중이던 페이드를 멈춘 뒤라 먼저 부른다.
         if (w > 0.001) { x.setEffectiveWeight(1); x._scheduleFading(fade, w, 0); }
@@ -12011,10 +12384,17 @@ class CharacterController {
     }
     // 24차: 평타 클립이 다음 공격보다 먼저 끝나면(타격 장면을 피해 시점에 맞춰 재생하면 흔하다) 마지막 프레임에
     // 굳어 있지 않고 대기 자세로 부드럽게 넘어간다. 0.15초는 원작 수치가 없어 정한 연출값이다.
-    if (this.state === STATE.ATTACK && this.currentPhase === 'RECOVERY' && this.currentAction && this.currentClipKey
-        && !this._idleClips().includes(this.currentClipKey)) {
+    // 25차: 원작 GLB에 짝이 되는 마무리 클립(Attack1 → Attack1_ToIdle 등 - 아리·리 신·모데카이저·벡스·요네)이 있으면
+    // 그 클립으로 이어 간다. 이 챔피언들의 평타 클립은 맞는 순간에서 끝나도록 만들어져 있어(요네 Attack1은 마지막
+    // 키프레임이 칼이 닿는 자세), 예전엔 그 자세로 굳어 있다가 대기로 섞였다.
+    if (this.state === STATE.ATTACK && this.currentAction && this.currentClipKey && !this._idleClips().includes(this.currentClipKey)) {
       const a = this.currentAction, clip = a.getClip ? a.getClip() : null;
-      if (clip && a.loop === THREE.LoopOnce && a.time >= clip.duration - 1e-3) this.playFirstAvailable(this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.15 });
+      if (clip && a.loop === THREE.LoopOnce && a.time >= clip.duration - 1e-3) {
+        const plain = /^(attack|crit)/i.test(this.currentActionKey || '') && !/override/i.test(this.currentActionKey || '');
+        const follow = plain && typeof attackFollowThroughClip === 'function' ? attackFollowThroughClip(this, clip) : null;
+        if (follow) this.crossFadeToClip(follow, { loop: THREE.LoopOnce, clampWhenFinished: true, fade: 0.05, timeScale: Math.abs(a.timeScale || 1) });
+        else if (this.currentPhase === 'RECOVERY') this.playFirstAvailable(this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.15 });
+      }
     }
     if (this._updateApproachCast) this._updateApproachCast(); // 대상 지정 스킬: 사거리까지 걸어간 뒤 시전
     this.updateMovement(dt);
@@ -12172,7 +12552,7 @@ CharacterController.prototype.moveTo = function(point) {
     if (this.realmId && this.realmId !== 'main') {
       // 죽음의 세계는 일반 맵 위 반경 1200 경기장이다 - 맵 경계와 경기장 경계를 둘 다 지킨다.
       if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap) point = howlingAbyssMap.clampPosition(point.clone());
-      point = clampToDeathRealm(point.clone(), getDeathRealm(this.realmId), this.collisionRadius || 0);
+      point = clampToDeathRealm(point.clone(), getDeathRealm(this.realmId), this.pathingRadius ?? this.collisionRadius ?? 0);
     } else if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap) {
       // 요청(칼바람 나락 맵 7절 "플레이어가 맵 밖으로 나가지 못하게") -
       // 죽음의 세계에 있지 않은 일반 상태(realmId==='main')에서만 적용한다 -
@@ -12311,6 +12691,10 @@ CharacterController.prototype._commitMove = function(point) {
     this.setState(STATE.MOVE);
     // 요청 4/23: 이미 MOVE 애니메이션이 재생 중이면 Idle을 거치지 않고 그대로
     // 유지한 채(재시작 없이) 방향과 목표만 바꾼다. 재생 중이 아닐 때만 새로 튼다.
+    // 25차: 이미 도착 거리(updateMovement의 0.08) 안이면(= 정지 명령) 이동 클립을 틀지 않는다 - 다음 프레임에 바로 도착
+    // 처리되는데, 그 한 프레임 동안 달리기 클립이 섞였다가 되돌아가 팔다리가 한 번 튀었다.
+    const stopHere = new THREE.Vector3().subVectors(point, this.root.position).setY(0).length() < 0.08;
+    if (stopHere && (!this.currentClipKey || !this._moveClips().includes(this.currentClipKey))) return;
     if (this.championId === 'yasuo' && this._yasuoPlayPostQMoveEntry()) return;
     if (!this.currentClipKey || !this._moveClips().includes(this.currentClipKey)) {
       // 업데이트(W 전용 상세 문서 12절): W처럼 Idle→Walk 전용 전환 클립이
@@ -13420,8 +13804,18 @@ CharacterController.prototype._beginAttackSwing = function() {
     // 맞지 않는다 - 예전처럼 클립 전체를 공격 간격에 맞춘다.
     const clip = this.resolveClip(attackData.clips);
     const plainAttack = /^(attack|crit)/i.test(key) && !/override/i.test(key);
-    const timeScale = !clip ? 1.0 : (plainAttack ? attackClipTimeScale(this, clip, windup, attackInterval)
+    let timeScale = !clip ? 1.0 : (plainAttack ? attackClipTimeScale(this, clip, windup, attackInterval)
       : THREE.MathUtils.clamp(clip.duration / attackInterval, 0.4, 3.0));
+    // 25차: 준비/타격 두 클립으로 나뉜 평타(세트·벡스의 Attack1_Start → Attack1_Hit). _Hit 클립은 맞는 순간의 자세에서
+    // 시작한다(실제 GLB 프레임 확인) - 예전엔 _Hit만 처음부터 재생해서 공격을 시작하자마자 이미 주먹·손을 뻗어 있었다.
+    // 원작 구조대로 선딜 동안 _Start를 재생해 선딜 끝에 정확히 끝내고, 피해 순간(onFire)에 _Hit로 넘긴다.
+    const startHit = plainAttack ? attackStartHitPair(this, clip) : null;
+    let hitClip = null;
+    if (startHit) {
+      hitClip = startHit.hit;
+      attackData = { ...attackData, clips: [startHit.start.name] };
+      timeScale = THREE.MathUtils.clamp(startHit.start.duration / Math.max(1e-3, windup), 0.4, 3.0);
+    }
 
     this.runAction(key, STATE.ATTACK, {
       faceDir: dirToTarget,
@@ -13431,6 +13825,7 @@ CharacterController.prototype._beginAttackSwing = function() {
       dataOverride: attackData,
       animationSequenceClips: attackData.animationSequenceClips || null,
       onFire: () => {
+        if (hitClip) this.crossFadeToClip(hitClip, { loop: THREE.LoopOnce, clampWhenFinished: true, fade: 0.05, timeScale: attackHitClipTimeScale(this, windup) });
         // 죽음의 세계: 서로 다른 세계의 대상은 때릴 수 없다(스윙 도중 한쪽이 들어가도 명중 취소).
         if (typeof canRealmInteract === 'function' && !canRealmInteract(this, target)) return;
         if (typeof brushSystem !== 'undefined') brushSystem.onActionFromBrush(this); // 부쉬 안에서 평타를 치면 잠깐 드러남
@@ -15503,7 +15898,7 @@ CharacterController.prototype.startRecall = function() {
     const t = setTimeout(() => {
       this._recallTimer = null;
       if (this.state !== STATE.RECALL) return; // 그 사이 cancelRecall()로 취소된 경우
-      this.root.position.set(0, 0, 0);
+      this._teleportToTeamSpawn();
       this._returnToLocomotion();
     }, RECALL_DURATION * 1000);
     this._recallTimer = t;
@@ -15614,7 +16009,7 @@ CharacterController.prototype._die = function() {
     // 아리만 이 정리가 빠져 있었다. _ahriUpdate(dt)는 죽어 있어도(DEAD여도)
     // championId만 확인하고 매 프레임 계속 도는 구조라, Q가 왕복하던 중이나
     // W 여우불이 떠 있던 중에 죽으면 그 스프라이트가 정리되지 않은 채
-    // 남아있다가 _respawn()이 this.root.position을 (0,0,0)으로 순간이동시킬
+    // 남아있다가 _respawn()이 챔피언을 리스폰 지점으로 순간이동시킬
     // 때 그 자리로 같이 딸려가는 시각적 버그가 생겼다. R 돌진/재사용
     // 충전(rCharges)·재시전 창(rReadyUntil)도 사망과 무관하게 그대로 남아,
     // 부활 직후 궁을 공짜로 재시전할 수 있는 상태가 되는 것도 함께 고친다.
@@ -15663,9 +16058,16 @@ CharacterController.prototype._die = function() {
     const t = setTimeout(() => this._respawn(), RESPAWN_WAIT * 1000);
     this._pendingTimeouts.push(t);
 };
+// 25차: 리스폰·귀환은 자기 팀 우물(원작 출현 지점)로 간다. 예전엔 둘 다 맵 한가운데(0,0,0)였다.
+CharacterController.prototype._teleportToTeamSpawn = function() {
+    const p = typeof getTeamSpawnPosition === 'function' ? getTeamSpawnPosition(this.team) : new THREE.Vector3(0, 0, 0);
+    this.root.position.copy(p);
+    this.targetPos = null;
+    if (typeof controller !== 'undefined' && controller === this && typeof snapCameraTo === 'function') snapCameraTo(p);
+};
 CharacterController.prototype._respawn = function() {
     this.setState(STATE.RESPAWN);
-    this.root.position.set(0, 0, 0);
+    this._teleportToTeamSpawn();
     this.hp = this.maxHp; this.mp = this.maxMp;
     updateBars(this);
     const action = this.playFirstAvailable(this.actionData.respawn.clips, { loop:THREE.LoopOnce, fade:0.15, clampWhenFinished:true });
@@ -21494,11 +21896,11 @@ CharacterController.prototype._mordeUpdateR = function() {
     if (performance.now() >= this._morde.rEndsAt) { this._mordeEndDeathRealm('duration-expired'); return; }
     const realm = getDeathRealm(this._morde.realmId);
     if (realm) {
-      clampToDeathRealm(this.root.position, realm, this.collisionRadius || 0);
+      clampToDeathRealm(this.root.position, realm, this.pathingRadius ?? this.collisionRadius ?? 0);
       const tp = target.mesh ? target.mesh.position : (target.root && target.root.position);
       if (tp) clampToDeathRealm(tp, realm, getCollisionRadius(target));
       if (target._pullState && target._pullState.to) clampToDeathRealm(target._pullState.to, realm, getCollisionRadius(target));
-      if (this._dashState && this._dashState.to) clampToDeathRealm(this._dashState.to, realm, this.collisionRadius || 0);
+      if (this._dashState && this._dashState.to) clampToDeathRealm(this._dashState.to, realm, this.pathingRadius ?? this.collisionRadius ?? 0);
     }
     this._mordeGhostOutsiders();
 };
@@ -24705,7 +25107,7 @@ function createDummyEnemy(position) {
   // enemy.radius를 그대로 사용).
   const DUMMY_SCALE = 1.75;
   const dummyHeight = BASE_UNIT * 1.1 * DUMMY_SCALE;
-  const bodyRadius = BASE_UNIT * 0.24 * DUMMY_SCALE;
+  const bodyRadius = lolRangeToWorld(65); // 25차: 원작 허수아비 판정 반경 65(PC 위키 - 대부분의 챔피언과 같음). 예전 0.24×1.75 월드 = 약 49 LoL 유닛
   const bodyLength = Math.max(0.1, dummyHeight - bodyRadius * 2);
   const group = new THREE.Group();
   const bodyGeo = new THREE.CapsuleGeometry(bodyRadius, bodyLength, 4, 8);
@@ -24813,7 +25215,7 @@ function damageEnemy(enemy, dmg, result = null) {
 function createAllyDummy(position) {
   const DUMMY_SCALE = 1.75;
   const dummyHeight = BASE_UNIT * 1.1 * DUMMY_SCALE;
-  const bodyRadius = BASE_UNIT * 0.24 * DUMMY_SCALE;
+  const bodyRadius = lolRangeToWorld(65); // 25차: 원작 허수아비 판정 반경 65(PC 위키 - 대부분의 챔피언과 같음). 예전 0.24×1.75 월드 = 약 49 LoL 유닛
   const bodyLength = Math.max(0.1, dummyHeight - bodyRadius * 2);
   const group = new THREE.Group();
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(bodyRadius, bodyLength, 4, 8), new THREE.MeshStandardMaterial({ color: 0x3b62a8, roughness: 0.7 }));
@@ -25546,13 +25948,13 @@ function updateNexusWell(well, dt) {
   // 요청("자기진영의 넥서스오벨리스크는 공격하지 않아. 상대팀이 우물에
   // 들어왔을 때 상대팀을 공격하는게 넥서스오벨리스크야") - 이 우물이
   // 자기 진영(well.team)과 같은 유닛은 절대 공격하지 않고, 다른 진영
-  // 유닛만 공격한다. 플레이어는 기존 설계대로 항상 BLUE 진영 취급
-  // (PLAYER_TEAM 상수) - RED 우물만 플레이어를 공격하고, BLUE(자기
-  // 진영) 우물은 플레이어를 공격하지 않는다. 공격 판정은 우물 자체의
+  // 유닛만 공격한다. 플레이어 진영은 controller.team(기본 PLAYER_TEAM=BLUE)
+  // 이다 - 25차: 예전엔 PLAYER_TEAM 상수와 비교해서, 플레이어 팀이 RED면
+  // 자기 우물(레드)에서 리스폰하자마자 공격당했다. 공격 판정은 우물 자체의
   // 좁은 충돌 반경(well.radius)만 쓴다 - 기지 전체를 위험 지대로 만들면
   // 안 되므로 회복 구역(BASE_ZONE_RADIUS)과는 의도적으로 분리했다.
   if (typeof controller !== 'undefined' && controller && controller.hp > 0 && controller.state !== STATE.DEAD
-      && well.team !== PLAYER_TEAM && canRealmInteract(well, controller)) {
+      && well.team !== (controller.team || PLAYER_TEAM) && canRealmInteract(well, controller)) {
     const dist = getHorizontalDistance(getWorldPosition(well), controller.root.position);
     if (dist <= well.radius) {
       applyDamage(controller, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: well, isStatusTick: true });
@@ -25572,7 +25974,7 @@ function updateNexusWell(well, dt) {
   // 우물의 좁은 충돌 반경이 아니라 기지 전체 구역(BASE_ZONE_RADIUS)
   // 안에 있으면 회복된다.
   if (typeof controller !== 'undefined' && controller && controller.hp > 0 && controller.state !== STATE.DEAD
-      && well.team === PLAYER_TEAM && canRealmInteract(well, controller)) {
+      && well.team === (controller.team || PLAYER_TEAM) && canRealmInteract(well, controller)) {
     if (isPositionInBaseZone(controller.root.position, well.team) && (controller.hp < controller.maxHp || controller.mp < controller.maxMp)) {
       controller.hp = Math.min(controller.maxHp, controller.hp + WELL_HEAL_HP_PER_SEC * dt);
       controller.mp = Math.min(controller.maxMp, controller.mp + WELL_HEAL_MP_PER_SEC * dt);
@@ -26702,7 +27104,7 @@ function resolvePlayerStructureCollisions(ctrl) {
   for (const s of structures) {
     const sp = getWorldPosition(s);
     let dx = pos.x - sp.x, dz = pos.z - sp.z;
-    const minDist = (s.collisionRadius || s.radius || 0) + ctrl.collisionRadius;
+    const minDist = (s.collisionRadius || s.radius || 0) + (ctrl.pathingRadius != null ? ctrl.pathingRadius : ctrl.collisionRadius); // 25차: 지형·구조물은 원작처럼 지형 충돌 반경(pathing)
     let dist = Math.sqrt(dx * dx + dz * dz);
     if (dist >= minDist) continue;
     if (dist < 0.001) { dx = 1; dz = 0; dist = 1; } // 완전히 중심에 겹친 극단값
@@ -30649,7 +31051,7 @@ var controller = null;
 let championRoot = null;
 let currentChampion = null; // { fileName, resolver, actionData, boundsRadius }
 let modelScaleMultiplier = 1.0; // scaleButtons(0.8/1.0/1.2) 수동 미리보기 배율 - 챔피언 고정 Multiplier 위에 곱해지는 별도의 사용자 조작 값
-let championBaseScaleMultiplier = 1.0; // 현재 로드된 챔피언의 MODEL_SCALE_MULTIPLIERS 고정값(원본 크기에 곱해짐)
+let championBaseScaleMultiplier = 1.0; // 현재 로드된 챔피언의 고정 크기 배율(resolveModelScaleMultiplier - 원작 스킨 배율 기준, 25차)
 
 /* ============================================================
    5. INPUT HANDLING
@@ -31139,6 +31541,28 @@ function alignModelOrigin(model) {
   return { box };
 }
 
+// 지금 재생 중인 자세(대기)에서 보이는 스킨 메시의 가장 낮은 점이 챔피언 루트 높이에 오도록 모델을 내리거나 올린다.
+// 반환값: 내린 월드 거리(머리 위 체력바 위치 보정용).
+function groundModelOnIdlePose(ctrl) {
+  const model = ctrl && ctrl.model, wrap = model && model.parent;
+  if (!model || !wrap || !ctrl.mixer) return 0;
+  ctrl.mixer.update(0);
+  ctrl.root.updateMatrixWorld(true);
+  let minY = Infinity;
+  const v = new THREE.Vector3();
+  model.traverse((o) => {
+    if (!o.isSkinnedMesh || o.visible === false) return;
+    o.skeleton.update();
+    const ps = o.geometry.attributes.position;
+    for (let i = 0; i < ps.count; i += 2) { o.getVertexPosition(i, v); o.localToWorld(v); if (v.y < minY) minY = v.y; }
+  });
+  if (!isFinite(minY)) return 0;
+  const drop = minY - ctrl.root.position.y;
+  model.position.y -= drop / (wrap.scale.y || 1);
+  model.updateMatrixWorld(true);
+  return drop;
+}
+
 async function bootstrapChampion(gltf, fileName) {
   disposeCurrentChampion();
   // 요청("이 glb들 상시로 적용되있게 해줘") - 포탑/억제기/넥서스를 만들기
@@ -31174,7 +31598,7 @@ async function bootstrapChampion(gltf, fileName) {
   if (originCorrection) { model.position.x += originCorrection.x; model.position.z += originCorrection.z; }
   model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 
-  // scaleWrapper: 챔피언별 고정 Multiplier(MODEL_SCALE_MULTIPLIERS)는
+  // scaleWrapper: 챔피언별 고정 Multiplier(resolveModelScaleMultiplier - 25차부터 원작 스킨 배율 기준)는
   // 오직 이 외부 Wrapper에만 적용한다. GLB 원본 model.scale은 절대
   // 건드리지 않으므로, 최종 크기 = "GLB 원본 크기 × 고정 Multiplier"가
   // 정확히 유지된다(중복 Scale 없음). modelScaleMultiplier는 화면 우측
@@ -31256,6 +31680,10 @@ async function bootstrapChampion(gltf, fileName) {
   } else {
     controller.playFirstAvailable(actionData.idle.clips, { fade: 0 });
   }
+  // 25차: 대기 자세 기준으로 발을 바닥(높이 0)에 맞춘다. alignModelOrigin()은 애니메이션이 적용되기 전 바인드 자세로
+  // 바닥을 맞춰서, 실제 대기 자세에서는 챔피언이 떠 있었다(노틸러스 약 140, 애쉬 약 80, 다리우스·레넥톤 약 85 LoL 유닛).
+  const groundDrop = groundModelOnIdlePose(controller);
+  if (groundDrop) hpLabel3d.position.y -= groundDrop;
   updateBars(controller);
   updateSkillUI(controller.cooldowns);
   // 요청("ui적용해줘") - 새 HUD 초상화 박스에 챔피언 ID 앞 두 글자를 표시한다.
@@ -32544,6 +32972,7 @@ function animate() {
     targetRing.update(dt);
     rangeIndicators.update(controller);
     skillAim.update(controller, lastGroundPoint, lastPointerClient);
+    if (typeof statusIndicators !== 'undefined') statusIndicators.update(controller, dt); // 25차: 버프 바·스킬 칸 변화·대상 표식·준비 고리
     visionSystem.update(controller, dt);
     // 최적화(문서 4-22/23절 "DOM 업데이트를 매 프레임 하지 마라") - 디버그
     // 패널은 매 프레임 innerHTML 전체를 새로 만들어서 매초 60번씩 DOM을

@@ -76,13 +76,13 @@ class CharacterController {
       abilityPower: 0, // 이 데모에는 아이템/주문력 시스템이 없어 항상 0 - 기획안의 "+주문력" 항은 공식에는 남겨두되 실질 기여는 0이다(수치 임의 발명 방지)
     };
     // Range/Distance 시스템(요청 3): Visual Model(GLB 스케일)과 Collision
-    // Shape를 별개 개념으로 관리한다. 기획안에 챔피언별 충돌 반경 수치가
-    // 없으므로(전투 밸런스 수치가 아니라 엔진 차원의 값) 허수아비 원본
-    // 크기(확대 전)와 동일한 기준값 하나를 모든 챔피언에 균일하게 적용한다
-    // - 임의의 게임 수치를 만든 것이 아니라 렌더링 엔진의 충돌 반경일 뿐이다.
-    this.collisionRadius = BASE_UNIT * 0.24;
+    // Shape를 별개 개념으로 관리한다. 25차: 예전엔 모든 챔피언에 균일값
+    // (BASE_UNIT*0.24 = 약 28 LoL 유닛)을 썼는데, 원작 판정 반경은 대부분 65다.
+    // 챔피언이 정해지면 applyChampionData()가 원작 값(getChampionUnitSize)으로 바꾼다.
+    this.collisionRadius = lolRangeToWorld(UNIT_SIZE_DEFAULT_LOL.gameplay);
+    this.pathingRadius = lolRangeToWorld(UNIT_SIZE_DEFAULT_LOL.pathing);
     this.collisionHeight = BASE_UNIT * 1.1;
-    this.selectionRadius = this.collisionRadius * 1.3;
+    this.selectionRadius = lolRangeToWorld(UNIT_SIZE_DEFAULT_LOL.selection);
 
     this.comboIndex = 0;
     // SETT 전용 2단계 손 순서: 0=LEFT, 1=RIGHT.
@@ -430,9 +430,12 @@ class CharacterController {
     this._eHitCountThisCast = 0;
     this.magicPenPercent = 0; // 모데카이저 E 패시브 - 매 tick 다시 계산되지만 다른 챔피언에선 계산 자체를 안 한다
     this.passiveState = { lastDamageTakenAt: 0, lastEnemySkillHitAt: 0, lastPassiveHealAt: 0 };
-    // 닐라만 실제 충돌/선택 반경을 쓴다 - 다른 챔피언은 생성자의 균일값으로 되돌린다.
-    this.collisionRadius = BASE_UNIT * 0.24;
-    this.selectionRadius = this.collisionRadius * 1.3;
+    // 25차: 판정·지형 충돌·선택 반경을 원작 값으로(getChampionUnitSize - 00_global_constants.js).
+    // collisionRadius = 판정 반경(gameplay radius: 평타 가장자리 거리·스킬 적중), pathingRadius = 구조물·경계 충돌.
+    const unitSize = getChampionUnitSize(championId);
+    this.collisionRadius = lolRangeToWorld(unitSize.gameplay);
+    this.pathingRadius = lolRangeToWorld(unitSize.pathing);
+    this.selectionRadius = lolRangeToWorld(unitSize.selection);
     this._dariusWArmed = false;
     // 챔피언 전용 전투 상태 - Darius 출혈 Map, Lee Sin Q 표식, Sett Q/W/R, Nilah E/R,
     // Yasuo/마스터 이/레넥톤 임시 상태 등이 다음 챔피언에 새어 나오지 않게 새로 만든다.
@@ -472,16 +475,7 @@ class CharacterController {
     if (this.championId === 'yone') { this.stats.critMultiplier = this._champData().passive.critDamage; this.mp = 0; }
     if (this.championId === 'nilah') {
       this.armorPenPercent = 0;
-      // 데이터 수정(실제 bin 확인): 충돌 반경은 원래 "챔피언별 실제 수치가
-      // 없어서" 전 챔피언에 균일값(BASE_UNIT*0.24, 약 24 LoL 단위 상당)을
-      // 적용해뒀다. 닐라는 실제 pathfindingCollisionRadius=32(LoL 단위)가
-      // 확인됐으므로 닐라만 실제 값으로 덮어쓴다 - 다른 챔피언은 여전히
-      // 실제 수치가 없으니 균일값을 유지한다. selectionRadius(클릭 판정
-      // 크기)도 실제 값(120)이 확인됐다 - 충돌 반경의 1.3배 근사식(약 42
-      // 상당)보다 실제로 훨씬 커서(모델 폭에 맞춘 값), 근사식 대신 실제
-      // 값을 쓴다.
-      this.collisionRadius = lolRangeToWorld(32);
-      this.selectionRadius = lolRangeToWorld(120);
+      // 닐라 지형 충돌 반경 32·선택 반경 120(실제 bin 확인)은 25차부터 CHAMPION_UNIT_SIZE_LOL 표에서 위 공통 코드가 넣는다.
     }
     this.hp = this.maxHp; this.mp = this.maxMp;
     if (this.championId === 'yasuo') this.mp = 0;
@@ -936,8 +930,20 @@ class CharacterController {
     // 24차(끊김 수정): 섞이는 비중을 "지금 비중"에서 이어 간다. 기본 crossFadeTo는 항상 새 동작 0→1, 이전 동작 1→0으로
     // 다시 시작해서, 전환 도중 또 전환이 오면(예: 정지 명령 → 한 프레임 달리기 → 대기) 섞이던 동작의 비중이 순간적으로
     // 0이나 1로 튀었다. 반복 클립이 아직 섞이는 중이면 되감지도 않는다.
+    // 25차: 지금 비중은 페이드 곡선에서 바로 계산한다. getEffectiveWeight()는 마지막 mixer.update() 때 값이라, 같은
+    // 프레임 안에서 전환이 두 번 오면(정지 명령 = 한 프레임 달리기 → 도착 → 대기) 방금 시작한 달리기를 비중 1로 읽어
+    // 그 한 프레임 동안 달리기와 대기가 반반 섞였다(팔꿈치가 한 프레임에 크게 튐).
+    const mixerTime = this.mixer.time;
+    const weightNow = (a) => {
+      if (!a || !a.enabled || !this.mixer._isActiveAction(a)) return 0;
+      const ip = a._weightInterpolant;
+      if (!ip) return a.weight;
+      const pp = ip.parameterPositions, sv = ip.sampleValues;
+      const k = pp[1] > pp[0] ? THREE.MathUtils.clamp((mixerTime - pp[0]) / (pp[1] - pp[0]), 0, 1) : 1;
+      return a.weight * (sv[0] + (sv[1] - sv[0]) * k);
+    };
     const blending = this.currentAction && this.currentAction !== action;
-    const wNow = blending && action.isRunning() ? action.getEffectiveWeight() : 0;
+    const wNow = blending && action.isRunning() ? weightNow(action) : 0;
     const keepTime = wNow > 0.001 && loop !== THREE.LoopOnce && !time;
     if (!keepTime) { action.reset(); action.time = time; }
     action.setLoop(loop, loop === THREE.LoopOnce ? 1 : Infinity);
@@ -950,7 +956,7 @@ class CharacterController {
       for (const x of others) {
         // 끝나서 마지막 자세로 멈춰 있는(clampWhenFinished) 1회 재생 동작도 비중을 계속 갖고 있으므로 같이 내린다.
         if (x === action || !x.enabled || !this.mixer._isActiveAction(x)) continue;
-        const w = x.getEffectiveWeight();
+        const w = weightNow(x);
         // 실제 비중 = 기본 비중(weight) × 페이드 값이므로, 기본 비중은 1로 두고 페이드 값만 지금 비중에서 0으로 내린다
         // (0이 되면 three.js가 알아서 끈다). setEffectiveWeight는 진행 중이던 페이드를 멈춘 뒤라 먼저 부른다.
         if (w > 0.001) { x.setEffectiveWeight(1); x._scheduleFading(fade, w, 0); }
@@ -1331,10 +1337,17 @@ class CharacterController {
     }
     // 24차: 평타 클립이 다음 공격보다 먼저 끝나면(타격 장면을 피해 시점에 맞춰 재생하면 흔하다) 마지막 프레임에
     // 굳어 있지 않고 대기 자세로 부드럽게 넘어간다. 0.15초는 원작 수치가 없어 정한 연출값이다.
-    if (this.state === STATE.ATTACK && this.currentPhase === 'RECOVERY' && this.currentAction && this.currentClipKey
-        && !this._idleClips().includes(this.currentClipKey)) {
+    // 25차: 원작 GLB에 짝이 되는 마무리 클립(Attack1 → Attack1_ToIdle 등 - 아리·리 신·모데카이저·벡스·요네)이 있으면
+    // 그 클립으로 이어 간다. 이 챔피언들의 평타 클립은 맞는 순간에서 끝나도록 만들어져 있어(요네 Attack1은 마지막
+    // 키프레임이 칼이 닿는 자세), 예전엔 그 자세로 굳어 있다가 대기로 섞였다.
+    if (this.state === STATE.ATTACK && this.currentAction && this.currentClipKey && !this._idleClips().includes(this.currentClipKey)) {
       const a = this.currentAction, clip = a.getClip ? a.getClip() : null;
-      if (clip && a.loop === THREE.LoopOnce && a.time >= clip.duration - 1e-3) this.playFirstAvailable(this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.15 });
+      if (clip && a.loop === THREE.LoopOnce && a.time >= clip.duration - 1e-3) {
+        const plain = /^(attack|crit)/i.test(this.currentActionKey || '') && !/override/i.test(this.currentActionKey || '');
+        const follow = plain && typeof attackFollowThroughClip === 'function' ? attackFollowThroughClip(this, clip) : null;
+        if (follow) this.crossFadeToClip(follow, { loop: THREE.LoopOnce, clampWhenFinished: true, fade: 0.05, timeScale: Math.abs(a.timeScale || 1) });
+        else if (this.currentPhase === 'RECOVERY') this.playFirstAvailable(this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.15 });
+      }
     }
     if (this._updateApproachCast) this._updateApproachCast(); // 대상 지정 스킬: 사거리까지 걸어간 뒤 시전
     this.updateMovement(dt);

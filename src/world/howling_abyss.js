@@ -36,7 +36,10 @@ const HA_MAP_CONFIG = {
   // 더 바깥까지(113 -> 125) 늘렸다 - 이동 범위/바닥/그리드/화로 배치가
   // 전부 이 값에서 파생되므로 챔피언도 그만큼 더 갈 수 있게 자동으로
   // 맞춰진다(clampPosition 참고).
-  laneMinZ: -125, laneMaxZ: 125,
+  // 25차(원작 이동 격자 대조): 걸을 수 있는 끝이 원작은 가운데에서 ±약 8,115 LoL(LeagueSandbox Map12 AIPath.aimesh_ngrid
+  // - 블루 -8,167 / 레드 +8,062)인데 이 맵은 ±125(약 9,105)까지 갔다. 8,115 LoL = 111.4(줄이기 전 단위, 1 = 72.84 LoL).
+  // 맵 배율(HA_MAP_SCALE)은 아래처럼 고정 길이(HA_MAP_SPAN_UNITS)로 정하므로 이 값을 바꿔도 맵 크기는 그대로다.
+  laneMinZ: -111.4, laneMaxZ: 111.4,
   blueBaseZ: -106.5, redBaseZ: 106.5,
   blueNexusZ: -94.5, redNexusZ: 94.5,
   blueTurretZ: -66, redTurretZ: 66,
@@ -51,7 +54,14 @@ const HA_MAP_CONFIG = {
 // 아래 HA_MAP_CONFIG와 맵 안의 모든 모양 수치는 "줄이기 전" 단위이고, 맵 그룹 전체에 HA_MAP_SCALE을 곱한다.
 const HA_REAL_MAP_SPAN_LOL = 12877; // 12849 - (-28)
 const HA_FLOOR_TOP_LOCAL = 0.405; // 다리 눈 바닥(snowFloor) 윗면 높이(줄이기 전 단위)
-const HA_MAP_SCALE = lolRangeToWorld(HA_REAL_MAP_SPAN_LOL * Math.SQRT2) / (HA_MAP_CONFIG.laneMaxZ - HA_MAP_CONFIG.laneMinZ);
+const HA_MAP_SPAN_UNITS = 250; // 19차에 대각선 18,211 LoL에 맞춘 맵 길이(줄이기 전 단위) - 25차부터 이동 끝(laneMaxZ)과 분리
+const HA_MAP_SCALE = lolRangeToWorld(HA_REAL_MAP_SPAN_LOL * Math.SQRT2) / HA_MAP_SPAN_UNITS;
+// 원작 이동 가능 영역 모양(25차, LoL 단위 - 가운데에서 다리 방향 거리 기준). LeagueSandbox-Default
+// AIMesh/Map12/AIPath.aimesh_ngrid(패치 4.20 무렵 원작 이동 격자, 50유닛 칸 248×240)에서 걸을 수 있는 칸을 단면마다 잰 값:
+//   다리 폭 약 1,450~1,525(이 맵 1,530 그대로), 4,050~4,500에서 넓어져 폭 약 2,900(가운데 기준 ±1,450),
+//   6,600부터 좁아져 7,500에서 약 1,300, 끝 약 8,115. 원작은 좌우가 조금 비대칭인데(우물 쪽이 한쪽으로 치우침)
+//   이 맵은 좌우 대칭으로 근사했다. 12.23 패치 등 그 뒤 지형 변경은 반영되지 않았다.
+const HA_WALK_SHAPE_LOL = { widenStart: 4050, widenFull: 4500, baseHalf: 1450, taperStart: 6600, taperEnd: 7550 };
 
 // 원작 구조물 좌표(20차 요청 "포탑이랑 넥서스도 원작 위치에 배치해줘") - LoL 단위, 게임 맵 좌표 (x, z).
 // 출처: LeagueSandbox-Default(github.com/LeagueSandbox/LeagueSandbox-Default, 오픈소스 LoL 서버 에뮬레이터용으로 게임
@@ -85,6 +95,10 @@ const HA_STRUCTURES_LOL = {
 // 원작 충돌 반경(LoL 단위): 포탑 88.4(LeagueSandbox-Default Stats/ARAM*Turret* GameplayCollisionRadius), 넥서스 353·억제기
 // 214(LeagueSandbox Map12 LevelScriptObjects.cs CreateNexus/CreateInhibitor 인자).
 const HA_STRUCTURE_RADIUS_LOL = { turret: 88.4, nexus: 353, inhibitor: 214 };
+// 챔피언 출현(리스폰) 지점(25차 요청 "레드 블루 팀 진영에 따라 리스폰지역을 각 우물로") - LeagueSandbox-Default
+// Maps/Map12/Scene/__Spawn_T1·__Spawn_T2.sco.json의 CentralPoint(LoL 단위, 게임 좌표 x, z). 분수(우물) 포탑 바로 앞,
+// 우물 발판 안이다.
+const HA_SPAWN_LOL = { BLUE: [936.9515, 1060.61426], RED: [11860.0889, 11596.1572] };
 // 게임 좌표 → 이 월드. 원작은 다리가 대각선(파랑 왼쪽 아래 → 빨강 오른쪽 위)이고 이 맵은 z축(파랑 -z → 빨강 +z)이다.
 // 다리 방향 성분이 z, 그에 수직인 성분이 x다. 미니맵의 다리 위쪽(왼쪽 위)이 -x다 - 원작 상점이 -x로 와서 이 맵의
 // 상점 자리(왼쪽)와 맞는다.
@@ -109,32 +123,31 @@ function createHowlingAbyssMap(scene) {
   group.position.y = -HA_FLOOR_TOP_LOCAL * S;
   const bridgeLen = cfg.laneMaxZ - cfg.laneMinZ;
   const bridgeWidth = cfg.laneMaxX - cfg.laneMinX; // 14
-  // 요청("각 끝 쪽 부분의 넓이를 늘려줘") - 실제 칼바람 나락처럼 기지
-  // 근처는 다리보다 넓은 개활지여야 한다. 각 끝(기지)에서 안쪽으로
-  // WIDEN_ZONE_DEPTH만큼은 폭이 점점 넓어지다가 기지에서 최대
-  // WIDEN_EXTRA_X만큼 더 넓어진다. 벽/난간/체인/바닥 타일/이동 범위
-  // (clampPosition) 전부 이 하나의 함수를 공유해서 서로 어긋나지 않는다.
-  // 요청("끝쪽 넓이가 2배정도 넓고... 구조물은 건드리지 말고") - 사진을
-  // 보면 기지 쪽 폭이 다리 폭의 대략 2배 정도다. WIDEN_EXTRA_X를 6 -> 10.5로
-  // 늘려서 맨 끝 폭(10.5+10.5=21 반폭, 즉 전체 폭 42)이 다리 폭(21)의
-  // 약 2배가 되게 했다. WIDEN_ZONE_DEPTH는 라인 길이가 늘어난 만큼(+12)
-  // 같이 늘려서, 구조물 좌표는 그대로 둔 채(요청) 넓어지는 구간이 시작되는
-  // 지점(포탑/억제기 근처)은 예전과 똑같이 유지하고 끝만 새 경계까지 늘렸다.
-  // 요청("끝쪽은 이런 구조야" - 손그림 첨부) - 완만하게 벌어지는 곡선이
-  // 아니라, 좁은 다리가 이어지다가 한 지점에서 각진 사각형 방(플라자)으로
-  // 갑자기 넓어지는 구조다(그림에서 벽이 직각으로 꺾임). WIDEN_ZONE_DEPTH
-  // 안쪽은 전부 최대폭을 쓰고, 문턱(DOORWAY_TRANSITION) 몇 유닛 안에서만
-  // 짧게 보간해 완전히 끊겨 보이지(z-fighting) 않게 한다 - 나머지는 각진
-  // 사각형 방처럼 보인다.
-  const WIDEN_ZONE_DEPTH = 42;
-  const WIDEN_EXTRA_X = 10.5;
-  const DOORWAY_TRANSITION = 3;
+  // 기지 근처는 다리보다 넓은 개활지다. 벽/난간/체인/바닥/이동 범위(clampPosition) 전부 아래 widenExtraForZ() 하나를
+  // 공유해서 서로 어긋나지 않는다. (예전 요청 "끝쪽 넓이 2배", "끝쪽은 이런 구조야" 손그림의 각진 사각형 방 모양을
+  // 25차에 원작 이동 격자 모양으로 바꿨다.)
+  // 25차: 기지 넓어짐을 원작 이동 격자 모양(HA_WALK_SHAPE_LOL)으로. 예전엔 끝에서 42(약 3,060 LoL) 안쪽에서 갑자기
+  // 사각형 방(반폭 21 = 약 1,530 LoL)으로 넓어져 끝까지 갔다 - 넓어지는 자리가 원작보다 약 2,000 LoL 뒤였고(억제기가
+  // 좁은 다리 위에 놓였다), 우물 쪽이 좁아지지 않았다.
+  const LOL_PER_UNIT = lolRangeToWorld(1) > 0 ? 1 / (lolRangeToWorld(1) / S) : 1; // 줄이기 전 1단위 = 약 72.84 LoL
+  const WIDEN_EXTRA_X = HA_WALK_SHAPE_LOL.baseHalf / LOL_PER_UNIT - cfg.laneMaxX; // 약 9.41
+  const BASE_FLOOR_START = HA_WALK_SHAPE_LOL.widenStart / LOL_PER_UNIT;            // 약 55.6
   function widenExtraForZ(z) {
-    const distFromEnd = Math.min(cfg.laneMaxZ - z, z - cfg.laneMinZ);
-    if (distFromEnd >= WIDEN_ZONE_DEPTH) return 0;
-    if (distFromEnd <= WIDEN_ZONE_DEPTH - DOORWAY_TRANSITION) return WIDEN_EXTRA_X; // 문턱을 넘으면 곧바로 최대폭(사각형 방)
-    const t = (WIDEN_ZONE_DEPTH - distFromEnd) / DOORWAY_TRANSITION; // 문턱 근처 몇 유닛만 짧게 보간
-    return t * WIDEN_EXTRA_X;
+    const a = Math.abs(z) * LOL_PER_UNIT, W = HA_WALK_SHAPE_LOL;
+    if (a < W.widenStart) return 0;
+    if (a < W.widenFull) return WIDEN_EXTRA_X * (a - W.widenStart) / (W.widenFull - W.widenStart);
+    if (a < W.taperStart) return WIDEN_EXTRA_X;
+    if (a < W.taperEnd) return WIDEN_EXTRA_X * (1 - (a - W.taperStart) / (W.taperEnd - W.taperStart));
+    return 0;
+  }
+  // 기지 바닥 모양(위 함수와 같은 경계) - sign: -1 블루, +1 레드. XY 평면 도형을 눕혀 쓴다(도형 y = -z).
+  function baseFloorShape(sign) {
+    const shape = new THREE.Shape(), steps = 60, z0 = BASE_FLOOR_START, z1 = cfg.laneMaxZ;
+    const pts = [];
+    for (let i = 0; i <= steps; i++) { const z = z0 + (z1 - z0) * i / steps; pts.push([cfg.laneMaxX + widenExtraForZ(z), sign * z]); }
+    for (let i = steps; i >= 0; i--) { const z = z0 + (z1 - z0) * i / steps; pts.push([-(cfg.laneMaxX + widenExtraForZ(z)), sign * z]); }
+    pts.forEach(([x, z], i) => (i ? shape.lineTo(x, -z) : shape.moveTo(x, -z)));
+    return shape;
   }
   const ASSET = 'https://raw.communitydragon.org/latest/game/assets/maps/kitpieces/howling_abyss/textures/';
   const loader = new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
@@ -223,29 +236,7 @@ function createHowlingAbyssMap(scene) {
   snowFloor.name = 'HA_IMAGE_TILED_SNOW_OVERLAY';
   group.add(snowFloor);
 
-  // 요청("각 끝 쪽 부분의 넓이를 늘려줘") - 위 벽/난간이 기지 근처에서
-  // 바깥으로 벌어진 만큼, 그 자리를 실제로 밟고 다닐 수 있게 바닥도
-  // 같이 넓힌다. 정확한 곡선(smoothstep) 모양 대신 그 구간을 넉넉히
-  // 덮는 사각형 패치 4장(양쪽 끝 × 좌우)만 추가한다 - 걸어보면 이음매가
-  // 살짝 보일 수 있지만 "밟을 바닥이 없는" 문제보다 훨씬 낫다.
-  for (const endZ of [cfg.laneMinZ, cfg.laneMaxZ]) {
-    const dir = endZ > 0 ? -1 : 1; // 기지 쪽에서 라인 중앙 방향
-    const patchCenterZ = endZ + dir * WIDEN_ZONE_DEPTH / 2;
-    for (const side of [-1, 1]) {
-      const patchCenterX = side * (bridgeWidth / 2 + WIDEN_EXTRA_X / 2);
-      const flarePatch = new THREE.Mesh(new THREE.PlaneGeometry(WIDEN_EXTRA_X, WIDEN_ZONE_DEPTH, 1, 1), floorMaterial);
-      flarePatch.rotation.x = -Math.PI / 2;
-      flarePatch.position.set(patchCenterX, .39, patchCenterZ);
-      flarePatch.receiveShadow = true;
-      group.add(flarePatch);
-      const flareSnow = new THREE.Mesh(new THREE.PlaneGeometry(WIDEN_EXTRA_X, WIDEN_ZONE_DEPTH, 1, 1), snowMaterial);
-      flareSnow.rotation.x = -Math.PI / 2;
-      flareSnow.position.set(patchCenterX, .405, patchCenterZ);
-      group.add(flareSnow);
-      // 구조용 슬랩(아래에서 봤을 때 빈 공간이 안 보이게)도 같이 늘린다.
-      add(new THREE.BoxGeometry(WIDEN_EXTRA_X, 1.5, WIDEN_ZONE_DEPTH), colorMat(0x15242c, .98), [patchCenterX, -.7, patchCenterZ]);
-    }
-  }
+  // 기지 쪽 넓어진 바닥은 addBaseEndDetail()이 원작 모양(baseFloorShape)으로 깐다(25차 - 예전엔 사각형 패치 4장).
 
   // (삭제) 중앙선의 얼음 문양 타일 + 푸른 고리 장식 - 원작 칼바람 다리에 없는 임시 장식이라 지웠다(사용자 요청).
 
@@ -332,7 +323,8 @@ function createHowlingAbyssMap(scene) {
 
   // 절벽 가장자리의 임시 눈 띠
   for(const side of [-1,1]){
-    add(new THREE.BoxGeometry(2.0,1.4,bridgeLen+8),iceSnowMat,[side*12.5,.35,0]);
+    // 25차: 좁은 다리 구간에만 둔다 - 예전엔 끝까지 이어져서 넓어진 기지 바닥 위로 눈 띠가 솟아 있었다.
+    add(new THREE.BoxGeometry(2.0,1.4,BASE_FLOOR_START*2),iceSnowMat,[side*12.5,.35,0]);
   }
 
   // ============================================================
@@ -615,23 +607,24 @@ function createHowlingAbyssMap(scene) {
     // No enclosing base wall, no giant gate, no decorative barrier.
     // ========================================================
 
-    // 1) Broad open base floor. It widens immediately after the bridge.
-    const plaza = new THREE.Mesh(new THREE.PlaneGeometry(42,46,1,1),baseGround);
+    // 1~2) 기지 바닥 - 원작 이동 격자 모양(25차, baseFloorShape). 예전엔 42×46 사각형 광장 + 15.5 길이 목 부분이라
+    // 이동 가능 영역보다 넓거나 끝 너머(우물 뒤 약 1,300 LoL)까지 깔려 있었다.
+    const shape = baseFloorShape(sign);
+    const shapeUv = (geo) => { const pos = geo.attributes.position, uv = geo.attributes.uv; for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / 42 + .5, pos.getY(i) / 46); uv.needsUpdate = true; return geo; };
+    const plaza = new THREE.Mesh(shapeUv(new THREE.ShapeGeometry(shape)), baseGround);
     plaza.rotation.x=-Math.PI/2;
-    plaza.position.set(0,.415,baseZ+sign*0.5);
+    plaza.position.y=.415;
     plaza.receiveShadow=true;
     group.add(plaza);
-    const plazaSnow = new THREE.Mesh(new THREE.PlaneGeometry(41.9,45.9,1,1),snow);
+    const plazaSnow = new THREE.Mesh(shapeUv(new THREE.ShapeGeometry(shape)), snow);
     plazaSnow.rotation.x=-Math.PI/2;
-    plazaSnow.position.set(0,.425,baseZ+sign*0.5);
+    plazaSnow.position.y=.425;
     group.add(plazaSnow);
-
-    // 2) Short transition from the narrow bridge into the wide base.
-    const throat = new THREE.Mesh(new THREE.PlaneGeometry(31.5,15.5,1,1),baseGround);
-    throat.rotation.x=-Math.PI/2;
-    throat.position.set(0,.418,baseZ-sign*16.5);
-    throat.receiveShadow=true;
-    group.add(throat);
+    // 아래에서 봤을 때 빈 공간이 안 보이게 받치는 판(예전 넓힘 패치 아래 슬랩과 같은 역할)
+    const slab = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 1.5, bevelEnabled: false }), colorMat(0x15242c, .98));
+    slab.rotation.x=-Math.PI/2;
+    slab.position.y=-1.45;
+    group.add(slab);
 
     // 3) Twin-turret zone: visually marked, but left open for real turret objects.
     const nexusTurretPads = real.nexusTurrets.map(local);
@@ -701,7 +694,7 @@ function createHowlingAbyssMap(scene) {
     // 여기 있던 nexusHalo(넥서스 후광 링)도 제거했다.
 
     // Obelisk sits behind the Nexus, at the farthest playable end.
-    const obeliskZ = baseZ + sign*15.5;
+    const obeliskZ = sign*(cfg.laneMaxZ + 1.5); // 25차: 이동 끝 바로 뒤(예전 baseZ+15.5는 끝이 줄어든 뒤 다리 밖 허공이었다)
     const obelisk = new THREE.Group();
     obelisk.position.set(0,.42,obeliskZ);
     const obBase = new THREE.Mesh(new THREE.CylinderGeometry(1.65,1.95,.55,12),statueBaseMat);
@@ -822,7 +815,7 @@ function createHowlingAbyssMap(scene) {
   function clampPosition(p){const maxX=(cfg.laneMaxX+widenExtraForZ(p.z/S))*S;p.x=THREE.MathUtils.clamp(p.x,-maxX,maxX);p.z=THREE.MathUtils.clamp(p.z,cfg.laneMinZ*S,cfg.laneMaxZ*S);return p;}
   function isInsidePlayableArea(p){const maxX=(cfg.laneMaxX+widenExtraForZ(p.z/S))*S;return p.x>=-maxX&&p.x<=maxX&&p.z>=cfg.laneMinZ*S&&p.z<=cfg.laneMaxZ*S;}
   return {group,scale:S,laneMinX:cfg.laneMinX*S,laneMaxX:cfg.laneMaxX*S,laneMinZ:cfg.laneMinZ*S,laneMaxZ:cfg.laneMaxZ*S,
-    spawnBlue:new THREE.Vector3(0,0,(cfg.blueBaseZ+10)*S),spawnRed:new THREE.Vector3(0,0,(cfg.redBaseZ-10)*S),
+    spawnBlue:haLolToWorld(HA_SPAWN_LOL.BLUE),spawnRed:haLolToWorld(HA_SPAWN_LOL.RED),
     blueNexus:null,redNexus:null,blueTurret:null,redTurret:null,
     pathBlueToRed,pathRedToBlue,clampPosition,isInsidePlayableArea,updateSnow};
 }
@@ -836,6 +829,12 @@ if (!howlingAbyssMap) howlingAbyssMap={group:null,laneMinX:-140,laneMaxX:140,lan
 // 맵이 있으면 연습장 바닥은 숨긴다(다리 아래가 심연이어야 한다).
 if (howlingAbyssMap.group && typeof ground !== 'undefined' && ground) ground.visible = false;
 window.HOWLING_ABYSS_MAP=howlingAbyssMap;
+// 팀별 리스폰·귀환 지점(25차). 맵이 없으면(연습장) 예전처럼 가운데(0,0,0).
+function getTeamSpawnPosition(team) {
+  const m = howlingAbyssMap;
+  const p = team === 'RED' ? m.spawnRed : m.spawnBlue;
+  return p ? p.clone() : new THREE.Vector3(0, 0, 0);
+}
 
 // 원작 구조물 배치(20차): 양 팀 외곽 포탑·억제기 포탑·억제기·넥서스 포탑 2개·넥서스·분수(우물)를 원작 좌표
 // (HA_STRUCTURES_LOL)에 만든다. 구조물 오브젝트(createTurret 등, turret_system.js)는 챔피언 GLB 로더가 정의하는 자원

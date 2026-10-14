@@ -107,31 +107,11 @@ function applySkillTimingDatabase(data, championId) {
   }
 }
 
-const MODEL_SCALE_MULTIPLIERS = {
-  nautilus: 1.00,
-  lux: 1.38,
-  blitzcrank: 1.74,
-  leesin: 1.00,
-  masteryi: 1.66,
-  mel: 1.00,
-  ahri: 1.00,
-  vex: 1.00,
-  mordekaiser: 1.00,
-  sett: 1.14,
-  darius: 1.10,
-  garen: 1.37,
-  kindred: 1.45,
-  nilah: 1.00,
-  yone: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
-  ezreal: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
-  varus: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
-  ashe: 1.00, // 별도 보정 검증 전 기본값(다른 미보정 챔피언들과 동일 원칙)
-};
-
-// championId(식별 실패 시 null 포함)로 고정 Multiplier를 조회한다.
-// 등록되지 않았거나 식별 실패 시 기본값 1.00(원본 크기 그대로) 사용.
+// 챔피언 크기 표(CHAMPION_UNIT_SIZE_LOL·getChampionUnitSize)는 00_global_constants.js에 있다(25차).
+// 모델 크기 배율(GLB 원본 크기에 곱함) = 원작 크기(GLB × 100 × skinScale, LoL 단위)를 월드로 바꾼 값.
+// 예전엔 챔피언별로 눈대중 배율(가렌 1.37, 마스터 이 1.66, 다리우스 1.10, 세트 1.14, 나머지 1.0)이었다.
 function resolveModelScaleMultiplier(championId) {
-  return (championId && MODEL_SCALE_MULTIPLIERS[championId] != null) ? MODEL_SCALE_MULTIPLIERS[championId] : 1.00;
+  return getChampionUnitSize(championId).skinScale * lolRangeToWorld(100);
 }
 
 // 파일명/노드명 등에서 이 표를 찾으면 championAbilityDatabase의 키로 정규화한다.

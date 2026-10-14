@@ -346,11 +346,11 @@ CharacterController.prototype._mordeUpdateR = function() {
     if (performance.now() >= this._morde.rEndsAt) { this._mordeEndDeathRealm('duration-expired'); return; }
     const realm = getDeathRealm(this._morde.realmId);
     if (realm) {
-      clampToDeathRealm(this.root.position, realm, this.collisionRadius || 0);
+      clampToDeathRealm(this.root.position, realm, this.pathingRadius ?? this.collisionRadius ?? 0);
       const tp = target.mesh ? target.mesh.position : (target.root && target.root.position);
       if (tp) clampToDeathRealm(tp, realm, getCollisionRadius(target));
       if (target._pullState && target._pullState.to) clampToDeathRealm(target._pullState.to, realm, getCollisionRadius(target));
-      if (this._dashState && this._dashState.to) clampToDeathRealm(this._dashState.to, realm, this.collisionRadius || 0);
+      if (this._dashState && this._dashState.to) clampToDeathRealm(this._dashState.to, realm, this.pathingRadius ?? this.collisionRadius ?? 0);
     }
     this._mordeGhostOutsiders();
 };

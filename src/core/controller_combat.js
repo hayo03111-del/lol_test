@@ -874,8 +874,18 @@ CharacterController.prototype._beginAttackSwing = function() {
     // 맞지 않는다 - 예전처럼 클립 전체를 공격 간격에 맞춘다.
     const clip = this.resolveClip(attackData.clips);
     const plainAttack = /^(attack|crit)/i.test(key) && !/override/i.test(key);
-    const timeScale = !clip ? 1.0 : (plainAttack ? attackClipTimeScale(this, clip, windup, attackInterval)
+    let timeScale = !clip ? 1.0 : (plainAttack ? attackClipTimeScale(this, clip, windup, attackInterval)
       : THREE.MathUtils.clamp(clip.duration / attackInterval, 0.4, 3.0));
+    // 25차: 준비/타격 두 클립으로 나뉜 평타(세트·벡스의 Attack1_Start → Attack1_Hit). _Hit 클립은 맞는 순간의 자세에서
+    // 시작한다(실제 GLB 프레임 확인) - 예전엔 _Hit만 처음부터 재생해서 공격을 시작하자마자 이미 주먹·손을 뻗어 있었다.
+    // 원작 구조대로 선딜 동안 _Start를 재생해 선딜 끝에 정확히 끝내고, 피해 순간(onFire)에 _Hit로 넘긴다.
+    const startHit = plainAttack ? attackStartHitPair(this, clip) : null;
+    let hitClip = null;
+    if (startHit) {
+      hitClip = startHit.hit;
+      attackData = { ...attackData, clips: [startHit.start.name] };
+      timeScale = THREE.MathUtils.clamp(startHit.start.duration / Math.max(1e-3, windup), 0.4, 3.0);
+    }
 
     this.runAction(key, STATE.ATTACK, {
       faceDir: dirToTarget,
@@ -885,6 +895,7 @@ CharacterController.prototype._beginAttackSwing = function() {
       dataOverride: attackData,
       animationSequenceClips: attackData.animationSequenceClips || null,
       onFire: () => {
+        if (hitClip) this.crossFadeToClip(hitClip, { loop: THREE.LoopOnce, clampWhenFinished: true, fade: 0.05, timeScale: attackHitClipTimeScale(this, windup) });
         // 죽음의 세계: 서로 다른 세계의 대상은 때릴 수 없다(스윙 도중 한쪽이 들어가도 명중 취소).
         if (typeof canRealmInteract === 'function' && !canRealmInteract(this, target)) return;
         if (typeof brushSystem !== 'undefined') brushSystem.onActionFromBrush(this); // 부쉬 안에서 평타를 치면 잠깐 드러남

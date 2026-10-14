@@ -450,7 +450,7 @@ function resolvePlayerStructureCollisions(ctrl) {
   for (const s of structures) {
     const sp = getWorldPosition(s);
     let dx = pos.x - sp.x, dz = pos.z - sp.z;
-    const minDist = (s.collisionRadius || s.radius || 0) + ctrl.collisionRadius;
+    const minDist = (s.collisionRadius || s.radius || 0) + (ctrl.pathingRadius != null ? ctrl.pathingRadius : ctrl.collisionRadius); // 25차: 지형·구조물은 원작처럼 지형 충돌 반경(pathing)
     let dist = Math.sqrt(dx * dx + dz * dz);
     if (dist >= minDist) continue;
     if (dist < 0.001) { dx = 1; dz = 0; dist = 1; } // 완전히 중심에 겹친 극단값

@@ -20,7 +20,7 @@ CharacterController.prototype.moveTo = function(point) {
     if (this.realmId && this.realmId !== 'main') {
       // 죽음의 세계는 일반 맵 위 반경 1200 경기장이다 - 맵 경계와 경기장 경계를 둘 다 지킨다.
       if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap) point = howlingAbyssMap.clampPosition(point.clone());
-      point = clampToDeathRealm(point.clone(), getDeathRealm(this.realmId), this.collisionRadius || 0);
+      point = clampToDeathRealm(point.clone(), getDeathRealm(this.realmId), this.pathingRadius ?? this.collisionRadius ?? 0);
     } else if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap) {
       // 요청(칼바람 나락 맵 7절 "플레이어가 맵 밖으로 나가지 못하게") -
       // 죽음의 세계에 있지 않은 일반 상태(realmId==='main')에서만 적용한다 -
@@ -159,6 +159,10 @@ CharacterController.prototype._commitMove = function(point) {
     this.setState(STATE.MOVE);
     // 요청 4/23: 이미 MOVE 애니메이션이 재생 중이면 Idle을 거치지 않고 그대로
     // 유지한 채(재시작 없이) 방향과 목표만 바꾼다. 재생 중이 아닐 때만 새로 튼다.
+    // 25차: 이미 도착 거리(updateMovement의 0.08) 안이면(= 정지 명령) 이동 클립을 틀지 않는다 - 다음 프레임에 바로 도착
+    // 처리되는데, 그 한 프레임 동안 달리기 클립이 섞였다가 되돌아가 팔다리가 한 번 튀었다.
+    const stopHere = new THREE.Vector3().subVectors(point, this.root.position).setY(0).length() < 0.08;
+    if (stopHere && (!this.currentClipKey || !this._moveClips().includes(this.currentClipKey))) return;
     if (this.championId === 'yasuo' && this._yasuoPlayPostQMoveEntry()) return;
     if (!this.currentClipKey || !this._moveClips().includes(this.currentClipKey)) {
       // 업데이트(W 전용 상세 문서 12절): W처럼 Idle→Walk 전용 전환 클립이

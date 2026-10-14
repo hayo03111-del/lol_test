@@ -9,7 +9,7 @@
 function createAllyDummy(position) {
   const DUMMY_SCALE = 1.75;
   const dummyHeight = BASE_UNIT * 1.1 * DUMMY_SCALE;
-  const bodyRadius = BASE_UNIT * 0.24 * DUMMY_SCALE;
+  const bodyRadius = lolRangeToWorld(65); // 25차: 원작 허수아비 판정 반경 65(PC 위키 - 대부분의 챔피언과 같음). 예전 0.24×1.75 월드 = 약 49 LoL 유닛
   const bodyLength = Math.max(0.1, dummyHeight - bodyRadius * 2);
   const group = new THREE.Group();
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(bodyRadius, bodyLength, 4, 8), new THREE.MeshStandardMaterial({ color: 0x3b62a8, roughness: 0.7 }));
