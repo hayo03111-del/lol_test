@@ -40,6 +40,9 @@ function setEnemyWardPlaceMode(v) {
 if (enemyWardPlaceCheckboxEl) enemyWardPlaceCheckboxEl.addEventListener('change', () => setEnemyWardPlaceMode(enemyWardPlaceCheckboxEl.checked));
 const clearWardsBtnEl = document.getElementById('clearWardsBtn');
 if (clearWardsBtnEl) clearWardsBtnEl.addEventListener('click', () => wardSystem.clear());
+// 37차: 연습용 골드 지급(설정 패널) - 누를 때마다 골드 +10000.
+const addGoldBtnEl = document.getElementById('addGoldBtn');
+if (addGoldBtnEl) addGoldBtnEl.addEventListener('click', () => { if (!controller) return; controller.gold = (controller.gold || 0) + 10000; updateGoldDisplay(); });
 function placeEnemyWardAt(point) {
   const type = enemyWardTypeSelectEl && enemyWardTypeSelectEl.value === 'control' ? 'control' : 'stealth';
   const data = type === 'stealth' ? ITEM_DATA.stealthWard : null;

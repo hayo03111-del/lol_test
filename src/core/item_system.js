@@ -258,6 +258,11 @@ function _itemUniqueGroupConflict(ctrl, item, excludeIds) {
     return other && other.uniqueGroup === item.uniqueGroup;
   });
 }
+// 37차: 같은 전설급 아이템을 이미 들고 있는지(원작 - 전설급은 같은 것 하나만).
+function _itemLegendaryDuplicate(ctrl, item) {
+  if (typeof LEGENDARY_ITEM_IDS === 'undefined' || !LEGENDARY_ITEM_IDS.has(item.id)) return false;
+  return (ctrl.items || []).some((s) => s.id === item.id);
+}
 function buyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
@@ -272,6 +277,9 @@ function buyItem(ctrl, itemId) {
     console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
+  // 37차: 서포터 업그레이드(세계의 결실 → 5종)는 직접 살 수 없다 - 세계의 결실을 들고 있으면 buildOrBuyItem()의 조합 경로로만.
+  if (item.upgradeOnly) { console.warn(`[ITEM] ${item.nameKo}: 세계의 결실을 업그레이드해서만 얻을 수 있습니다.`); return false; }
+  if (_itemLegendaryDuplicate(ctrl, item)) { console.warn(`[ITEM] ${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
   // 신발은 "하나밖에 사지 못한다"(원문) - 6칸 인벤토리가 아니라 전용
   // boots 슬롯으로 간다(buyBoots()가 기존 신발 교체/환급까지 처리).
   if (item.isBoots) return _buyBoots(ctrl, item);
@@ -363,6 +371,7 @@ function buildOrBuyItem(ctrl, itemId) {
     console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
+  if (_itemLegendaryDuplicate(ctrl, item)) { console.warn(`[ITEM] ${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
   const cost = combineCost(item);
   if ((ctrl.gold || 0) < cost) { console.warn('[ITEM] 골드가 부족합니다(조합 비용).'); return false; }
   // 하위템 소모 - 개수만큼 각 id의 슬롯을 하나씩 제거한다. 소모(N개) 후

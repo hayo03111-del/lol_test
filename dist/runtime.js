@@ -4164,7 +4164,7 @@ const ITEM_DATA = {
     // "조합 비용 0원"으로 그대로 처리한다(새 메커니즘 불필요).
   },
   zaZaksRealmspike: {
-    id: 'zaZaksRealmspike', nameKo: '자자크의 세계가시', cost: 0, recipe: ['bountyOfWorlds'],
+    id: 'zaZaksRealmspike', nameKo: '자자크의 세계가시', cost: 0, recipe: ['bountyOfWorlds'], upgradeOnly: true, // 37차: 세계의 결실 업그레이드로만(상점 목록·직접 구매 불가)
     stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
     goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
     wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
@@ -4178,7 +4178,7 @@ const ITEM_DATA = {
     voidBurstPassive: { icdSec: 10, baseDmg: 10, apPercent: 0.15, maxHpPercent: 0.03, monsterMaxHpBonusCap: 300, radius: 400, radiusGuessed: true },
   },
   bloodsong: {
-    id: 'bloodsong', nameKo: '피의 노래', cost: 0, recipe: ['bountyOfWorlds'],
+    id: 'bloodsong', nameKo: '피의 노래', cost: 0, recipe: ['bountyOfWorlds'], upgradeOnly: true, // 37차: 세계의 결실 업그레이드로만(상점 목록·직접 구매 불가)
     stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
     goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
     wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
@@ -4192,7 +4192,7 @@ const ITEM_DATA = {
     spellbladePassive: { procCooldownSec: 1.5, bonusAdPercent: 1.0, exposeWeaknessPassive: { durationSec: 4.0, meleePercent: 0.08, rangedPercent: 0.05 } },
   },
   solsticeSleigh: {
-    id: 'solsticeSleigh', nameKo: '태양의 썰매', cost: 0, recipe: ['bountyOfWorlds'],
+    id: 'solsticeSleigh', nameKo: '태양의 썰매', cost: 0, recipe: ['bountyOfWorlds'], upgradeOnly: true, // 37차: 세계의 결실 업그레이드로만(상점 목록·직접 구매 불가)
     stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
     goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
     wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
@@ -4205,7 +4205,7 @@ const ITEM_DATA = {
     ccTriggerPassive: { icdSec: 30, minHeal: 50, maxHeal: 230, levelMin: 1, levelMax: 18, msPercent: 0.20, msDurationSec: 2.5, allyRadius: 1000, allyRadiusGuessed: true },
   },
   dreamMaker: {
-    id: 'dreamMaker', nameKo: '꿈 생성기', cost: 0, recipe: ['bountyOfWorlds'],
+    id: 'dreamMaker', nameKo: '꿈 생성기', cost: 0, recipe: ['bountyOfWorlds'], upgradeOnly: true, // 37차: 세계의 결실 업그레이드로만(상점 목록·직접 구매 불가)
     stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
     goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
     wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
@@ -4221,7 +4221,7 @@ const ITEM_DATA = {
     dreamBubblePassive: { intervalSec: 8, allyDurationSec: 3, blueMin: 50, blueMax: 194, purpleMin: 40, purpleMax: 160, purpleNonChampionAoePercent: 0.333, levelMin: 1, levelMax: 18 },
   },
   celestialOpposition: {
-    id: 'celestialOpposition', nameKo: '천상의 이의', cost: 0, recipe: ['bountyOfWorlds'],
+    id: 'celestialOpposition', nameKo: '천상의 이의', cost: 0, recipe: ['bountyOfWorlds'], upgradeOnly: true, // 37차: 세계의 결실 업그레이드로만(상점 목록·직접 구매 불가)
     stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
     goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
     wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
@@ -4361,8 +4361,18 @@ const ITEM_CATEGORIES = [
   // 서포터 아이템(세계지도집 퀘스트 라인) - 무라마나/대천사의포옹과 동일한
   // 이유로 변신 전용 2종(룬나침반/세계의 결실)은 숨기고, 구매 가능한
   // 시작 아이템(세계지도집)과 그 최종 업그레이드 5종만 노출한다.
-  { id: 'support', nameKo: '서포터', items: ['worldAtlas', 'zaZaksRealmspike', 'bloodsong', 'solsticeSleigh', 'dreamMaker', 'celestialOpposition'] },
+  // 37차: 상위 5종(자자크의 세계가시 등)은 상점에서 파는 게 아니라 세계의 결실을 업그레이드해서만 얻는다(원작) -
+  // 예전엔 여기 올라 있어 세계의 결실 없이도 0골드로 바로 살 수 있었다. 세계의 결실을 들고 있을 때만 상점 창 맨 위
+  // "세계의 결실 업그레이드" 줄에 나온다(shop_ui.js).
+  { id: 'support', nameKo: '서포터', items: ['worldAtlas'] },
 ];
+// 37차: 전설급 아이템 - 원작처럼 같은 전설급 아이템은 하나만 가질 수 있다(item_system.js의 _itemLegendaryDuplicate).
+// 상점 전설급 탭 전부 + 변신으로만 얻는 전설급(무라마나·대천사의포옹) + 서포터 업그레이드 5종.
+const LEGENDARY_ITEM_IDS = new Set([
+  ...ITEM_CATEGORIES.find((c) => c.id === 'legendary').items,
+  'muramana', 'seraphsEmbrace',
+  ...Object.keys(ITEM_DATA).filter((id) => ITEM_DATA[id].upgradeOnly),
+]);
 
 /* ===== src/animation/animation_role_resolver.js ===== */
 /* ============================================================
@@ -27726,6 +27736,11 @@ function _itemUniqueGroupConflict(ctrl, item, excludeIds) {
     return other && other.uniqueGroup === item.uniqueGroup;
   });
 }
+// 37차: 같은 전설급 아이템을 이미 들고 있는지(원작 - 전설급은 같은 것 하나만).
+function _itemLegendaryDuplicate(ctrl, item) {
+  if (typeof LEGENDARY_ITEM_IDS === 'undefined' || !LEGENDARY_ITEM_IDS.has(item.id)) return false;
+  return (ctrl.items || []).some((s) => s.id === item.id);
+}
 function buyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
@@ -27740,6 +27755,9 @@ function buyItem(ctrl, itemId) {
     console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
+  // 37차: 서포터 업그레이드(세계의 결실 → 5종)는 직접 살 수 없다 - 세계의 결실을 들고 있으면 buildOrBuyItem()의 조합 경로로만.
+  if (item.upgradeOnly) { console.warn(`[ITEM] ${item.nameKo}: 세계의 결실을 업그레이드해서만 얻을 수 있습니다.`); return false; }
+  if (_itemLegendaryDuplicate(ctrl, item)) { console.warn(`[ITEM] ${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
   // 신발은 "하나밖에 사지 못한다"(원문) - 6칸 인벤토리가 아니라 전용
   // boots 슬롯으로 간다(buyBoots()가 기존 신발 교체/환급까지 처리).
   if (item.isBoots) return _buyBoots(ctrl, item);
@@ -27831,6 +27849,7 @@ function buildOrBuyItem(ctrl, itemId) {
     console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
+  if (_itemLegendaryDuplicate(ctrl, item)) { console.warn(`[ITEM] ${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
   const cost = combineCost(item);
   if ((ctrl.gold || 0) < cost) { console.warn('[ITEM] 골드가 부족합니다(조합 비용).'); return false; }
   // 하위템 소모 - 개수만큼 각 id의 슬롯을 하나씩 제거한다. 소모(N개) 후
@@ -30933,6 +30952,8 @@ let _shopSelectedItemId = null;
 let _shopSelectedSlot = null; // 인벤토리 칸 번호(0~5) 또는 'boots'
 let _shopStateSig = '';
 let _shopTicker = null;
+let _shopHadBounty = false;
+function _shopOwnsBounty() { return !!(controller && (controller.items || []).some((s) => s.id === 'bountyOfWorlds')); }
 
 function _shopEl(id) { return document.getElementById(id); }
 function _shopEsc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -30966,6 +30987,8 @@ function shopBlockReason(ctrl, itemId) {
   const build = _shopCanBuild(ctrl, item);
   if (typeof _itemUniqueGroupConflict === 'function' && _itemUniqueGroupConflict(ctrl, item, build ? new Set(item.recipe) : null)) return '같은 계열 유일 아이템 보유 중';
   if (item.isBoots && ctrl.boots && ctrl.boots.id === itemId) return '이미 착용 중';
+  if (item.upgradeOnly && !build) return '세계의 결실을 업그레이드해서만 얻음';
+  if (typeof _itemLegendaryDuplicate === 'function' && _itemLegendaryDuplicate(ctrl, item)) return '같은 전설급 아이템 보유 중';
   const cost = _shopPayCost(ctrl, item);
   const gold = Math.floor(ctrl.gold || 0);
   if (gold < cost) return `골드 부족 (${(cost - gold).toLocaleString()} 더 필요)`;
@@ -31026,7 +31049,12 @@ function _shopRenderCats() {
 function _shopRenderGrid() {
   const grid = _shopEl('shopGrid');
   if (!grid) return;
-  const cats = _shopCat === 'all' ? ITEM_CATEGORIES : ITEM_CATEGORIES.filter((c) => c.id === _shopCat);
+  let cats = _shopCat === 'all' ? ITEM_CATEGORIES : ITEM_CATEGORIES.filter((c) => c.id === _shopCat);
+  // 37차: 세계의 결실을 들고 있으면 맨 위에 업그레이드 5종(무료)을 보여 준다(원작 상점의 업그레이드 선택).
+  _shopHadBounty = _shopOwnsBounty();
+  if (_shopHadBounty && (_shopCat === 'all' || _shopCat === 'support')) {
+    cats = [{ id: 'bountyUpgrade', nameKo: '세계의 결실 업그레이드 (무료)', items: Object.keys(ITEM_DATA).filter((id) => ITEM_DATA[id].upgradeOnly) }].concat(cats);
+  }
   let html = '';
   for (const cat of cats) {
     const ids = _shopVisibleIds(cat);
@@ -31177,6 +31205,7 @@ function renderShopPanel(force) {
     : 'none';
   if (!force && sig === _shopStateSig) return;
   _shopStateSig = sig;
+  if (_shopOwnsBounty() !== _shopHadBounty) { _shopRenderGrid(); return; } // 세계의 결실을 얻거나 업그레이드하면 업그레이드 줄을 다시 그린다
   const goldEl = _shopEl('shopGold');
   if (goldEl) goldEl.textContent = ctrl ? Math.floor(ctrl.gold || 0).toLocaleString() : '0';
   const zone = _shopEl('shopZoneChip');
@@ -31432,6 +31461,9 @@ function setEnemyWardPlaceMode(v) {
 if (enemyWardPlaceCheckboxEl) enemyWardPlaceCheckboxEl.addEventListener('change', () => setEnemyWardPlaceMode(enemyWardPlaceCheckboxEl.checked));
 const clearWardsBtnEl = document.getElementById('clearWardsBtn');
 if (clearWardsBtnEl) clearWardsBtnEl.addEventListener('click', () => wardSystem.clear());
+// 37차: 연습용 골드 지급(설정 패널) - 누를 때마다 골드 +10000.
+const addGoldBtnEl = document.getElementById('addGoldBtn');
+if (addGoldBtnEl) addGoldBtnEl.addEventListener('click', () => { if (!controller) return; controller.gold = (controller.gold || 0) + 10000; updateGoldDisplay(); });
 function placeEnemyWardAt(point) {
   const type = enemyWardTypeSelectEl && enemyWardTypeSelectEl.value === 'control' ? 'control' : 'stealth';
   const data = type === 'stealth' ? ITEM_DATA.stealthWard : null;

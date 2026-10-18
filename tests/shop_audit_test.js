@@ -46,9 +46,10 @@ this.ITEM_DATA = ITEM_DATA;
 this.ITEM_ORDER = ITEM_ORDER;
 this.ITEM_CATEGORIES = ITEM_CATEGORIES;
 this.buyItem = buyItem;
+this.buildOrBuyItem = buildOrBuyItem;
 this.recomputeItemStats = recomputeItemStats;
 `, context);
-const { ITEM_DATA, ITEM_ORDER, ITEM_CATEGORIES, buyItem } = context;
+const { ITEM_DATA, ITEM_ORDER, ITEM_CATEGORIES, buyItem, buildOrBuyItem } = context;
 
 // ---- 1) Shop categorization audit ----
 const categorized = [];
@@ -64,7 +65,8 @@ for (const cat of ITEM_CATEGORIES) {
 // Every purchasable item (everything except the trinket, which is free/auto-equipped,
 // and items like Muramana that are reachable only via another item's transformation)
 // must appear in exactly one category.
-const purchasable = ITEM_ORDER.filter((id) => !ITEM_DATA[id].trinket && !ITEM_DATA[id].hiddenFromShop);
+// 37차: 서포터 업그레이드 5종(upgradeOnly)은 상점에서 팔지 않는다 - 세계의 결실 업그레이드로만(아래 따로 확인).
+const purchasable = ITEM_ORDER.filter((id) => !ITEM_DATA[id].trinket && !ITEM_DATA[id].hiddenFromShop && !ITEM_DATA[id].upgradeOnly);
 const missingFromShop = purchasable.filter((id) => !seen.has(id));
 assert(missingFromShop.length === 0, `every purchasable item is shown in some shop tab (missing: ${missingFromShop.join(', ') || 'none'})`);
 const extraInShop = categorized.filter((id) => !purchasable.includes(id));
@@ -119,6 +121,31 @@ for (const id of purchasable) {
   const ctrl = makeFakeCtrl();
   const bought = buyItem(ctrl, id);
   assert(bought === true, `buyItem() successfully purchases "${item.nameKo}" (${id})`);
+  auditStats(ctrl, id, item, statKeys);
+  auditedCount++;
+}
+// 37차: 서포터 업그레이드 - 상점 탭에 없고, 직접 구매는 거절되며, 세계의 결실을 들고 있으면 무료 조합(업그레이드)으로 얻고 능력치도 그대로 들어간다.
+const upgradeOnly = ITEM_ORDER.filter((id) => ITEM_DATA[id].upgradeOnly);
+assert(upgradeOnly.length === 5, `서포터 업그레이드 5종이 upgradeOnly로 표시됨 (${upgradeOnly.join(', ')})`);
+for (const id of upgradeOnly) {
+  const item = ITEM_DATA[id];
+  assert(!seen.has(id), `"${item.nameKo}" (${id}): 상점 탭에 없다(세계의 결실 업그레이드로만)`);
+  const c0 = makeFakeCtrl();
+  assert(buyItem(c0, id) === false && !(c0.items || []).length, `"${item.nameKo}" (${id}): 세계의 결실 없이 직접 구매 불가`);
+  const ctrl = makeFakeCtrl();
+  ctrl.items = [{ id: 'bountyOfWorlds', count: 1, charges: 4 }];
+  const gold0 = ctrl.gold;
+  assert(buildOrBuyItem(ctrl, id) === true && ctrl.items.length === 1 && ctrl.items[0].id === id && ctrl.gold === gold0, `"${item.nameKo}" (${id}): 세계의 결실 → 무료 업그레이드`);
+  auditStats(ctrl, id, item, Object.keys(item.stats || {}));
+}
+// 37차: 같은 전설급 아이템은 하나만.
+{
+  const ctrl = makeFakeCtrl();
+  assert(buyItem(ctrl, 'infinityEdge') === true, '전설급 첫 구매(무한의 대검)');
+  assert(buyItem(ctrl, 'infinityEdge') === false && ctrl.items.length === 1, '같은 전설급 두 번째 구매는 거절');
+  assert(buyItem(ctrl, 'longSword') === true && buyItem(ctrl, 'longSword') === true, '전설급이 아닌 아이템(롱소드)은 여러 개 살 수 있다');
+}
+function auditStats(ctrl, id, item, statKeys) {
   for (const key of statKeys) {
     const bonusField = STAT_FIELD_MAP[key];
     assert(!!bonusField, `"${id}".stats.${key} maps to a known itemBonus* field (no typo'd/unrecognized stat key)`);
@@ -143,7 +170,6 @@ for (const id of purchasable) {
     const actual = ctrl[bonusField];
     assert(Math.abs(actual - expected) < 1e-9, `"${item.nameKo}" (${id}): stats.${key}=${expected} correctly lands on ${bonusField} (got ${actual})`);
   }
-  auditedCount++;
 }
 console.log(`\n(stat-application sweep covered ${auditedCount} items with a stats{} block out of ${purchasable.length} purchasable items)`);
 

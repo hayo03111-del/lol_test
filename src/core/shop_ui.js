@@ -52,6 +52,8 @@ let _shopSelectedItemId = null;
 let _shopSelectedSlot = null; // 인벤토리 칸 번호(0~5) 또는 'boots'
 let _shopStateSig = '';
 let _shopTicker = null;
+let _shopHadBounty = false;
+function _shopOwnsBounty() { return !!(controller && (controller.items || []).some((s) => s.id === 'bountyOfWorlds')); }
 
 function _shopEl(id) { return document.getElementById(id); }
 function _shopEsc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -85,6 +87,8 @@ function shopBlockReason(ctrl, itemId) {
   const build = _shopCanBuild(ctrl, item);
   if (typeof _itemUniqueGroupConflict === 'function' && _itemUniqueGroupConflict(ctrl, item, build ? new Set(item.recipe) : null)) return '같은 계열 유일 아이템 보유 중';
   if (item.isBoots && ctrl.boots && ctrl.boots.id === itemId) return '이미 착용 중';
+  if (item.upgradeOnly && !build) return '세계의 결실을 업그레이드해서만 얻음';
+  if (typeof _itemLegendaryDuplicate === 'function' && _itemLegendaryDuplicate(ctrl, item)) return '같은 전설급 아이템 보유 중';
   const cost = _shopPayCost(ctrl, item);
   const gold = Math.floor(ctrl.gold || 0);
   if (gold < cost) return `골드 부족 (${(cost - gold).toLocaleString()} 더 필요)`;
@@ -145,7 +149,12 @@ function _shopRenderCats() {
 function _shopRenderGrid() {
   const grid = _shopEl('shopGrid');
   if (!grid) return;
-  const cats = _shopCat === 'all' ? ITEM_CATEGORIES : ITEM_CATEGORIES.filter((c) => c.id === _shopCat);
+  let cats = _shopCat === 'all' ? ITEM_CATEGORIES : ITEM_CATEGORIES.filter((c) => c.id === _shopCat);
+  // 37차: 세계의 결실을 들고 있으면 맨 위에 업그레이드 5종(무료)을 보여 준다(원작 상점의 업그레이드 선택).
+  _shopHadBounty = _shopOwnsBounty();
+  if (_shopHadBounty && (_shopCat === 'all' || _shopCat === 'support')) {
+    cats = [{ id: 'bountyUpgrade', nameKo: '세계의 결실 업그레이드 (무료)', items: Object.keys(ITEM_DATA).filter((id) => ITEM_DATA[id].upgradeOnly) }].concat(cats);
+  }
   let html = '';
   for (const cat of cats) {
     const ids = _shopVisibleIds(cat);
@@ -296,6 +305,7 @@ function renderShopPanel(force) {
     : 'none';
   if (!force && sig === _shopStateSig) return;
   _shopStateSig = sig;
+  if (_shopOwnsBounty() !== _shopHadBounty) { _shopRenderGrid(); return; } // 세계의 결실을 얻거나 업그레이드하면 업그레이드 줄을 다시 그린다
   const goldEl = _shopEl('shopGold');
   if (goldEl) goldEl.textContent = ctrl ? Math.floor(ctrl.gold || 0).toLocaleString() : '0';
   const zone = _shopEl('shopZoneChip');

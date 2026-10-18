@@ -1305,7 +1305,7 @@ const ITEM_DATA = {
     // "조합 비용 0원"으로 그대로 처리한다(새 메커니즘 불필요).
   },
   zaZaksRealmspike: {
-    id: 'zaZaksRealmspike', nameKo: '자자크의 세계가시', cost: 0, recipe: ['bountyOfWorlds'],
+    id: 'zaZaksRealmspike', nameKo: '자자크의 세계가시', cost: 0, recipe: ['bountyOfWorlds'], upgradeOnly: true, // 37차: 세계의 결실 업그레이드로만(상점 목록·직접 구매 불가)
     stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
     goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
     wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
@@ -1319,7 +1319,7 @@ const ITEM_DATA = {
     voidBurstPassive: { icdSec: 10, baseDmg: 10, apPercent: 0.15, maxHpPercent: 0.03, monsterMaxHpBonusCap: 300, radius: 400, radiusGuessed: true },
   },
   bloodsong: {
-    id: 'bloodsong', nameKo: '피의 노래', cost: 0, recipe: ['bountyOfWorlds'],
+    id: 'bloodsong', nameKo: '피의 노래', cost: 0, recipe: ['bountyOfWorlds'], upgradeOnly: true, // 37차: 세계의 결실 업그레이드로만(상점 목록·직접 구매 불가)
     stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
     goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
     wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
@@ -1333,7 +1333,7 @@ const ITEM_DATA = {
     spellbladePassive: { procCooldownSec: 1.5, bonusAdPercent: 1.0, exposeWeaknessPassive: { durationSec: 4.0, meleePercent: 0.08, rangedPercent: 0.05 } },
   },
   solsticeSleigh: {
-    id: 'solsticeSleigh', nameKo: '태양의 썰매', cost: 0, recipe: ['bountyOfWorlds'],
+    id: 'solsticeSleigh', nameKo: '태양의 썰매', cost: 0, recipe: ['bountyOfWorlds'], upgradeOnly: true, // 37차: 세계의 결실 업그레이드로만(상점 목록·직접 구매 불가)
     stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
     goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
     wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
@@ -1346,7 +1346,7 @@ const ITEM_DATA = {
     ccTriggerPassive: { icdSec: 30, minHeal: 50, maxHeal: 230, levelMin: 1, levelMax: 18, msPercent: 0.20, msDurationSec: 2.5, allyRadius: 1000, allyRadiusGuessed: true },
   },
   dreamMaker: {
-    id: 'dreamMaker', nameKo: '꿈 생성기', cost: 0, recipe: ['bountyOfWorlds'],
+    id: 'dreamMaker', nameKo: '꿈 생성기', cost: 0, recipe: ['bountyOfWorlds'], upgradeOnly: true, // 37차: 세계의 결실 업그레이드로만(상점 목록·직접 구매 불가)
     stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
     goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
     wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
@@ -1362,7 +1362,7 @@ const ITEM_DATA = {
     dreamBubblePassive: { intervalSec: 8, allyDurationSec: 3, blueMin: 50, blueMax: 194, purpleMin: 40, purpleMax: 160, purpleNonChampionAoePercent: 0.333, levelMin: 1, levelMax: 18 },
   },
   celestialOpposition: {
-    id: 'celestialOpposition', nameKo: '천상의 이의', cost: 0, recipe: ['bountyOfWorlds'],
+    id: 'celestialOpposition', nameKo: '천상의 이의', cost: 0, recipe: ['bountyOfWorlds'], upgradeOnly: true, // 37차: 세계의 결실 업그레이드로만(상점 목록·직접 구매 불가)
     stats: { maxHp: 200, hpRegenPercent: 0.75, mpRegenPercent: 0.75 },
     goldPerIntervalPassive: { gold: 5, intervalSec: 10 },
     wardPlacement: { placeRange: 600, visionRadius: 900, durationSec: 60, hitsToDestroy: 1 },
@@ -1502,5 +1502,15 @@ const ITEM_CATEGORIES = [
   // 서포터 아이템(세계지도집 퀘스트 라인) - 무라마나/대천사의포옹과 동일한
   // 이유로 변신 전용 2종(룬나침반/세계의 결실)은 숨기고, 구매 가능한
   // 시작 아이템(세계지도집)과 그 최종 업그레이드 5종만 노출한다.
-  { id: 'support', nameKo: '서포터', items: ['worldAtlas', 'zaZaksRealmspike', 'bloodsong', 'solsticeSleigh', 'dreamMaker', 'celestialOpposition'] },
+  // 37차: 상위 5종(자자크의 세계가시 등)은 상점에서 파는 게 아니라 세계의 결실을 업그레이드해서만 얻는다(원작) -
+  // 예전엔 여기 올라 있어 세계의 결실 없이도 0골드로 바로 살 수 있었다. 세계의 결실을 들고 있을 때만 상점 창 맨 위
+  // "세계의 결실 업그레이드" 줄에 나온다(shop_ui.js).
+  { id: 'support', nameKo: '서포터', items: ['worldAtlas'] },
 ];
+// 37차: 전설급 아이템 - 원작처럼 같은 전설급 아이템은 하나만 가질 수 있다(item_system.js의 _itemLegendaryDuplicate).
+// 상점 전설급 탭 전부 + 변신으로만 얻는 전설급(무라마나·대천사의포옹) + 서포터 업그레이드 5종.
+const LEGENDARY_ITEM_IDS = new Set([
+  ...ITEM_CATEGORIES.find((c) => c.id === 'legendary').items,
+  'muramana', 'seraphsEmbrace',
+  ...Object.keys(ITEM_DATA).filter((id) => ITEM_DATA[id].upgradeOnly),
+]);
