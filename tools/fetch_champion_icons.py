@@ -45,11 +45,12 @@ def one(item):
     for slot, sp in zip('QWER', data['spells']):
         with open(os.path.join(d, f'{slot}.png'), 'wb') as f:
             f.write(fetch(f'{MIRROR}/img/spell/{sp["image"]["full"]}'))
-    # 51차: 재시전 그림 - assets/champion_icons/<id>/<칸>2.png를 직접 넣어 두면(원작 재시전 그림은 Data Dragon에 없다)
-    # HUD가 재시전 창이 열린 동안 그 그림으로 바꾼다. 이 스크립트는 그 파일을 지우거나 덮어쓰지 않는다.
-    recast = [s for s in 'QWER' if os.path.exists(os.path.join(d, f'{s}2.png'))]
+    # 51·53차: 단계·재시전 그림 - assets/champion_icons/<id>/<칸><단계>.png(예: yasuo/Q2.png·Q3.png - 사용자가 준 원작 그림)를 넣어 두면
+    # HUD가 그 단계(야스오 Q 중첩 1·2, 요네 Q3, 리 신 Q2 같은 재시전 창)일 때 그 그림으로 바꾼다. 원작 단계 그림은 Data Dragon에 없다.
+    # 이 스크립트는 그 파일을 지우거나 덮어쓰지 않는다.
+    variants = sorted(f[:-4] for f in os.listdir(d) if re.fullmatch(r'[QWER][2-9]\.png', f))
     return cid, {'passiveName': data['passive']['name'], 'passiveDesc': clean(data['passive']['description']),
-                 'spellNames': {s: sp['name'] for s, sp in zip('QWER', data['spells'])}, 'recastIcons': recast}
+                 'spellNames': {s: sp['name'] for s, sp in zip('QWER', data['spells'])}, 'iconVariants': variants}
 
 
 # 50차: 능력치 칸 아이콘 - 원작 능력치 아이콘(Data Dragon에는 없고 noxelisdev/LoL_DDragon의 extras/statistics에 있다)

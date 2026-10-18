@@ -225,15 +225,24 @@ function getSkillRecastState(c, key) {
     default: return null;
   }
 }
-// 재시전 아이콘: assets/champion_icons/<id>/<칸>2.png가 있으면(meta.recastIcons) 그 그림으로 바꾸고, 없으면 같은 그림을
-// 금빛 테두리·밝게 처리한 "재시전" 모습으로 보여 준다(원작 재시전 그림은 Data Dragon·접근 가능한 미러에 없다).
+// 53차: 칸 그림 단계 - 원작은 같은 키의 다음 단계 스킬로 그림이 바뀐다(야스오 Q 중첩 1 → Q2, 2 → Q3 회오리, 요네 Q3).
+// 그림 파일 <칸><단계>.png가 있을 때만(meta.iconVariants - 사용자가 준 원작 그림). 그 밖의 재시전은 그림 "2"가 있으면 그것.
+function getSkillIconStage(c, key, recast) {
+  if (!c) return '';
+  const now = performance.now();
+  if (key === 'Q' && c.championId === 'yasuo' && c._yasuo && c._yasuo.qStackExpiresAt > now) return c._yasuo.qStacks >= 2 ? '3' : (c._yasuo.qStacks === 1 ? '2' : '');
+  if (key === 'Q' && c.championId === 'yone' && c._yone && c._yone.qStackExpiresAt > now && c._yone.qStacks >= 2) return '3';
+  return recast ? '2' : '';
+}
+// 재시전: 금빛 테두리·고리·↻, 칸 그림은 단계 그림이 있으면 그것(원작 단계·재시전 그림은 Data Dragon에 없어 사용자가 준 것만).
 function applySkillRecastUI(slot, key, c) {
   const st = getSkillRecastState(c, key);
   let ring = slot.querySelector('.recastRing');
   slot.classList.toggle('recast', !!st);
   const meta = (typeof CHAMPION_ICON_META !== 'undefined' && c && c.championId) ? CHAMPION_ICON_META[c.championId] : null;
-  const altIcon = st && meta && meta.recastIcons && meta.recastIcons.includes(key);
-  const wantBg = meta ? `url("${HUD_ICON_DIR}${c.championId}/${key}${altIcon ? '2' : ''}.png")` : '';
+  const stage = getSkillIconStage(c, key, !!st);
+  const altIcon = !!(stage && meta && (meta.iconVariants || []).includes(key + stage));
+  const wantBg = meta ? `url("${HUD_ICON_DIR}${c.championId}/${key}${altIcon ? stage : ''}.png")` : '';
   if (meta && slot.dataset.bg !== wantBg) { slot.style.backgroundImage = wantBg; slot.dataset.bg = wantBg; }
   if (!st) { if (ring) ring.remove(); const b = slot.querySelector('.recastCount'); if (b) b.remove(); return null; }
   if (!ring) { ring = document.createElement('div'); ring.className = 'recastRing'; slot.appendChild(ring); }

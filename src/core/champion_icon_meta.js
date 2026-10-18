@@ -9,7 +9,7 @@ const CHAMPION_ICON_META = {
    "E": "매혹",
    "R": "혼령 질주"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "ashe": {
   "passiveName": "서리 화살",
@@ -20,7 +20,7 @@ const CHAMPION_ICON_META = {
    "E": "매 날리기",
    "R": "마법의 수정화살"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "chogath": {
   "passiveName": "육식",
@@ -31,7 +31,7 @@ const CHAMPION_ICON_META = {
    "E": "날카로운 가시",
    "R": "포식"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "darius": {
   "passiveName": "과다출혈",
@@ -42,7 +42,7 @@ const CHAMPION_ICON_META = {
    "E": "포획",
    "R": "녹서스의 단두대"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "ezreal": {
   "passiveName": "끓어오르는 주문의 힘",
@@ -53,7 +53,7 @@ const CHAMPION_ICON_META = {
    "E": "비전 이동",
    "R": "정조준 일격"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "garen": {
   "passiveName": "인내심",
@@ -64,7 +64,7 @@ const CHAMPION_ICON_META = {
    "E": "심판",
    "R": "데마시아의 정의"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "leesin": {
   "passiveName": "질풍격",
@@ -75,7 +75,7 @@ const CHAMPION_ICON_META = {
    "E": "폭풍/무력화",
    "R": "용의 분노"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "lux": {
   "passiveName": "광채",
@@ -86,7 +86,7 @@ const CHAMPION_ICON_META = {
    "E": "광휘의 특이점",
    "R": "최후의 섬광"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "masteryi": {
   "passiveName": "2연속 공격",
@@ -97,7 +97,7 @@ const CHAMPION_ICON_META = {
    "E": "우주류 검술",
    "R": "최후의 전사"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "mordekaiser": {
   "passiveName": "암흑 탄생",
@@ -108,7 +108,7 @@ const CHAMPION_ICON_META = {
    "E": "죽음의 손아귀",
    "R": "죽음의 세계"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "nautilus": {
   "passiveName": "강력한 일격",
@@ -119,7 +119,7 @@ const CHAMPION_ICON_META = {
    "E": "역조",
    "R": "폭뢰"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "nilah": {
   "passiveName": "영원한 기쁨",
@@ -130,7 +130,7 @@ const CHAMPION_ICON_META = {
    "E": "급류",
    "R": "환희"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "rammus": {
   "passiveName": "가시박힌 껍질",
@@ -141,7 +141,7 @@ const CHAMPION_ICON_META = {
    "E": "광란의 도발",
    "R": "지진 폭격"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "renekton": {
   "passiveName": "분노의 지배",
@@ -152,7 +152,7 @@ const CHAMPION_ICON_META = {
    "E": "자르고 토막내기",
    "R": "강신"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "sett": {
   "passiveName": "투기장의 투지",
@@ -163,7 +163,7 @@ const CHAMPION_ICON_META = {
    "E": "안면 강타",
    "R": "대미 장식"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "varus": {
   "passiveName": "죽지 않는 복수심",
@@ -174,7 +174,7 @@ const CHAMPION_ICON_META = {
    "E": "퍼붓는 화살",
    "R": "부패의 사슬"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "vex": {
   "passiveName": "파멸과 우울",
@@ -185,7 +185,7 @@ const CHAMPION_ICON_META = {
    "E": "커지는 어둠",
    "R": "그림자 파동"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "yasuo": {
   "passiveName": "낭인의 길",
@@ -196,8 +196,9 @@ const CHAMPION_ICON_META = {
    "E": "질풍검",
    "R": "최후의 숨결"
   },
-  "recastIcons": [
-   "Q"
+  "iconVariants": [
+   "Q2",
+   "Q3"
   ]
  },
  "yone": {
@@ -209,8 +210,8 @@ const CHAMPION_ICON_META = {
    "E": "영혼해방",
    "R": "운명봉인"
   },
-  "recastIcons": [
-   "Q"
+  "iconVariants": [
+   "Q3"
   ]
  }
 };

@@ -32589,7 +32589,7 @@ const CHAMPION_ICON_META = {
    "E": "매혹",
    "R": "혼령 질주"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "ashe": {
   "passiveName": "서리 화살",
@@ -32600,7 +32600,7 @@ const CHAMPION_ICON_META = {
    "E": "매 날리기",
    "R": "마법의 수정화살"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "chogath": {
   "passiveName": "육식",
@@ -32611,7 +32611,7 @@ const CHAMPION_ICON_META = {
    "E": "날카로운 가시",
    "R": "포식"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "darius": {
   "passiveName": "과다출혈",
@@ -32622,7 +32622,7 @@ const CHAMPION_ICON_META = {
    "E": "포획",
    "R": "녹서스의 단두대"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "ezreal": {
   "passiveName": "끓어오르는 주문의 힘",
@@ -32633,7 +32633,7 @@ const CHAMPION_ICON_META = {
    "E": "비전 이동",
    "R": "정조준 일격"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "garen": {
   "passiveName": "인내심",
@@ -32644,7 +32644,7 @@ const CHAMPION_ICON_META = {
    "E": "심판",
    "R": "데마시아의 정의"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "leesin": {
   "passiveName": "질풍격",
@@ -32655,7 +32655,7 @@ const CHAMPION_ICON_META = {
    "E": "폭풍/무력화",
    "R": "용의 분노"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "lux": {
   "passiveName": "광채",
@@ -32666,7 +32666,7 @@ const CHAMPION_ICON_META = {
    "E": "광휘의 특이점",
    "R": "최후의 섬광"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "masteryi": {
   "passiveName": "2연속 공격",
@@ -32677,7 +32677,7 @@ const CHAMPION_ICON_META = {
    "E": "우주류 검술",
    "R": "최후의 전사"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "mordekaiser": {
   "passiveName": "암흑 탄생",
@@ -32688,7 +32688,7 @@ const CHAMPION_ICON_META = {
    "E": "죽음의 손아귀",
    "R": "죽음의 세계"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "nautilus": {
   "passiveName": "강력한 일격",
@@ -32699,7 +32699,7 @@ const CHAMPION_ICON_META = {
    "E": "역조",
    "R": "폭뢰"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "nilah": {
   "passiveName": "영원한 기쁨",
@@ -32710,7 +32710,7 @@ const CHAMPION_ICON_META = {
    "E": "급류",
    "R": "환희"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "rammus": {
   "passiveName": "가시박힌 껍질",
@@ -32721,7 +32721,7 @@ const CHAMPION_ICON_META = {
    "E": "광란의 도발",
    "R": "지진 폭격"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "renekton": {
   "passiveName": "분노의 지배",
@@ -32732,7 +32732,7 @@ const CHAMPION_ICON_META = {
    "E": "자르고 토막내기",
    "R": "강신"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "sett": {
   "passiveName": "투기장의 투지",
@@ -32743,7 +32743,7 @@ const CHAMPION_ICON_META = {
    "E": "안면 강타",
    "R": "대미 장식"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "varus": {
   "passiveName": "죽지 않는 복수심",
@@ -32754,7 +32754,7 @@ const CHAMPION_ICON_META = {
    "E": "퍼붓는 화살",
    "R": "부패의 사슬"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "vex": {
   "passiveName": "파멸과 우울",
@@ -32765,7 +32765,7 @@ const CHAMPION_ICON_META = {
    "E": "커지는 어둠",
    "R": "그림자 파동"
   },
-  "recastIcons": []
+  "iconVariants": []
  },
  "yasuo": {
   "passiveName": "낭인의 길",
@@ -32776,8 +32776,9 @@ const CHAMPION_ICON_META = {
    "E": "질풍검",
    "R": "최후의 숨결"
   },
-  "recastIcons": [
-   "Q"
+  "iconVariants": [
+   "Q2",
+   "Q3"
   ]
  },
  "yone": {
@@ -32789,8 +32790,8 @@ const CHAMPION_ICON_META = {
    "E": "영혼해방",
    "R": "운명봉인"
   },
-  "recastIcons": [
-   "Q"
+  "iconVariants": [
+   "Q3"
   ]
  }
 };
@@ -33878,15 +33879,24 @@ function getSkillRecastState(c, key) {
     default: return null;
   }
 }
-// 재시전 아이콘: assets/champion_icons/<id>/<칸>2.png가 있으면(meta.recastIcons) 그 그림으로 바꾸고, 없으면 같은 그림을
-// 금빛 테두리·밝게 처리한 "재시전" 모습으로 보여 준다(원작 재시전 그림은 Data Dragon·접근 가능한 미러에 없다).
+// 53차: 칸 그림 단계 - 원작은 같은 키의 다음 단계 스킬로 그림이 바뀐다(야스오 Q 중첩 1 → Q2, 2 → Q3 회오리, 요네 Q3).
+// 그림 파일 <칸><단계>.png가 있을 때만(meta.iconVariants - 사용자가 준 원작 그림). 그 밖의 재시전은 그림 "2"가 있으면 그것.
+function getSkillIconStage(c, key, recast) {
+  if (!c) return '';
+  const now = performance.now();
+  if (key === 'Q' && c.championId === 'yasuo' && c._yasuo && c._yasuo.qStackExpiresAt > now) return c._yasuo.qStacks >= 2 ? '3' : (c._yasuo.qStacks === 1 ? '2' : '');
+  if (key === 'Q' && c.championId === 'yone' && c._yone && c._yone.qStackExpiresAt > now && c._yone.qStacks >= 2) return '3';
+  return recast ? '2' : '';
+}
+// 재시전: 금빛 테두리·고리·↻, 칸 그림은 단계 그림이 있으면 그것(원작 단계·재시전 그림은 Data Dragon에 없어 사용자가 준 것만).
 function applySkillRecastUI(slot, key, c) {
   const st = getSkillRecastState(c, key);
   let ring = slot.querySelector('.recastRing');
   slot.classList.toggle('recast', !!st);
   const meta = (typeof CHAMPION_ICON_META !== 'undefined' && c && c.championId) ? CHAMPION_ICON_META[c.championId] : null;
-  const altIcon = st && meta && meta.recastIcons && meta.recastIcons.includes(key);
-  const wantBg = meta ? `url("${HUD_ICON_DIR}${c.championId}/${key}${altIcon ? '2' : ''}.png")` : '';
+  const stage = getSkillIconStage(c, key, !!st);
+  const altIcon = !!(stage && meta && (meta.iconVariants || []).includes(key + stage));
+  const wantBg = meta ? `url("${HUD_ICON_DIR}${c.championId}/${key}${altIcon ? stage : ''}.png")` : '';
   if (meta && slot.dataset.bg !== wantBg) { slot.style.backgroundImage = wantBg; slot.dataset.bg = wantBg; }
   if (!st) { if (ring) ring.remove(); const b = slot.querySelector('.recastCount'); if (b) b.remove(); return null; }
   if (!ring) { ring = document.createElement('div'); ring.className = 'recastRing'; slot.appendChild(ring); }
