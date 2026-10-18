@@ -22,6 +22,7 @@ const startServer = require('./server.js');
     c._clearActionTimers && c._clearActionTimers();
     if (c._luxReset) c._luxReset();
     c.currentActionKey = null; c.currentPhase = null; c.setState('IDLE'); c.targetPos = null; c.currentTarget = null; c._dashState = null;
+    c.runePage = null; // 52차: 룬 효과(주문 작열 등) 없이 스킬 수치만 본다
     c.statusEffects = []; c.shieldEntries = []; c.root.position.set(0, 0, 0); c.hp = c.maxHp; c.mp = c.maxMp;
     c.cooldowns = { Q: 0, W: 0, E: 0, R: 0 }; c.skillLevels = { Q: 1, W: 1, E: 1, R: 1 };
     for (const d of E.dummies) { d.hp = d.maxHp = 1e5; d.statusEffects = []; d._pullState = null; d.mesh.position.set(40, 0, 40); }

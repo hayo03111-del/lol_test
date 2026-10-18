@@ -75,6 +75,7 @@
     "src/core/rune_system.js",
     "src/core/hud_stats_ui.js",
     "src/core/global_system_instances.js",
-    "src/loader/champion_glb_loader.js"
+    "src/loader/champion_glb_loader.js",
+    "src/core/lobby_ui.js"
   ]
 }

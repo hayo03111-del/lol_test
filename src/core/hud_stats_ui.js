@@ -57,11 +57,23 @@ const HUD_STAT_PAGES = [
     ['mp5', '마나 재생(5초당)', (c) => (c.mpRegen || 0).toFixed(1)],
   ],
 ];
-const hudStatsState = { page: 0, lastAt: 0, cells: null, builtPage: -1 };
+const hudStatsState = { page: 0, lastAt: 0, cells: null, builtPage: -1, runeSig: '' };
+// 52차: 쪽 = 능력치 1·2 + 룬(원작 왼쪽 아래 창처럼 룬 페이지를 볼 수 있다). 칸을 누르면 다음 쪽.
+const HUD_PAGE_COUNT = HUD_STAT_PAGES.length + 1;
+const HUD_RUNE_PAGE = HUD_STAT_PAGES.length;
+function _hudPager(box) {
+  const pager = document.createElement('div');
+  pager.className = 'hs-page';
+  pager.textContent = hudStatsState.page === HUD_RUNE_PAGE ? `룬 ${hudStatsState.page + 1}/${HUD_PAGE_COUNT}` : `${hudStatsState.page + 1}/${HUD_PAGE_COUNT}`;
+  box.appendChild(pager);
+}
 function _hudBuildStatCells() {
   const box = document.getElementById('hudStats');
   if (!box) return null;
   box.innerHTML = '';
+  box.classList.toggle('rune-view', hudStatsState.page === HUD_RUNE_PAGE);
+  hudStatsState.builtPage = hudStatsState.page;
+  if (hudStatsState.page === HUD_RUNE_PAGE) { hudStatsState.cells = []; hudStatsState.runeSig = ''; return hudStatsState.cells; }
   hudStatsState.cells = HUD_STAT_PAGES[hudStatsState.page].map(([icon, label]) => {
     const cell = document.createElement('div');
     cell.className = 'hs-cell';
@@ -73,12 +85,29 @@ function _hudBuildStatCells() {
     box.appendChild(cell);
     return cell.querySelector('.hs-val');
   });
-  const pager = document.createElement('div');
-  pager.className = 'hs-page';
-  pager.textContent = `${hudStatsState.page + 1}/${HUD_STAT_PAGES.length}`;
-  box.appendChild(pager);
-  hudStatsState.builtPage = hudStatsState.page;
+  _hudPager(box);
   return hudStatsState.cells;
+}
+// 룬 쪽: 핵심 룬(크게) + 주 빌드 3개 / 보조 2개 / 능력치 파편 3개. 마우스를 올리면 이름·설명.
+function _hudRenderRunes(ctrl) {
+  const box = document.getElementById('hudStats');
+  const p = ctrl && ctrl.runePage;
+  const sig = p ? JSON.stringify(p) : 'none';
+  if (!box || hudStatsState.runeSig === sig) return;
+  hudStatsState.runeSig = sig;
+  box.innerHTML = '';
+  if (!p || typeof runeFind !== 'function') { box.innerHTML = '<div class="hs-norune">룬 없음</div>'; _hudPager(box); return; }
+  const tip = (id) => { const f = runeFind(id); return f ? `${f.rune.name}\n${f.rune.desc}${RUNE_IMPLEMENTED.has(f.rune.key) ? '' : '\n(이 연습장에서는 효과 없음)'}` : ''; };
+  const img = (id, cls) => `<img class="${cls}" src="assets/runes/${id}.png" title="${tip(id).replace(/"/g, '&quot;')}" alt="">`;
+  const shardName = (i, k) => ((RUNE_SHARD_ROWS[i] || []).find((x) => x.key === k) || {}).name || k;
+  box.innerHTML = `<div class="hr-wrap">
+    <div class="hr-key">${img(p.keystone, 'hr-keystone')}</div>
+    <div class="hr-rest">
+      <div class="hr-line">${p.rows.map((id) => img(id, 'hr-minor')).join('')}</div>
+      <div class="hr-line">${p.secondaryRunes.map((id) => img(id, 'hr-minor')).join('')}<img class="hr-tree" src="assets/runes/tree_${p.secondary}.png" title="보조: ${(runeTree(p.secondary) || {}).name || ''}" alt=""></div>
+      <div class="hr-line">${p.shards.map((k, i) => `<img class="hr-shard" src="assets/runes/shard_${k}.png" title="${shardName(i, k)}" alt="">`).join('')}</div>
+    </div></div>`;
+  _hudPager(box);
 }
 function updateHudStats(ctrl, force = false) {
   if (!ctrl || !ctrl.stats || typeof document === 'undefined') return;
@@ -86,6 +115,7 @@ function updateHudStats(ctrl, force = false) {
   if (!force && now - hudStatsState.lastAt < 150) return;
   hudStatsState.lastAt = now;
   if (!hudStatsState.cells || hudStatsState.builtPage !== hudStatsState.page) _hudBuildStatCells();
+  if (hudStatsState.page === HUD_RUNE_PAGE) { _hudRenderRunes(ctrl); return; }
   if (!hudStatsState.cells) return;
   HUD_STAT_PAGES[hudStatsState.page].forEach(([, , fn], i) => {
     let v;
@@ -95,7 +125,7 @@ function updateHudStats(ctrl, force = false) {
   });
 }
 function toggleHudStatsPage() {
-  hudStatsState.page = (hudStatsState.page + 1) % HUD_STAT_PAGES.length;
+  hudStatsState.page = (hudStatsState.page + 1) % HUD_PAGE_COUNT;
   if (typeof controller !== 'undefined' && controller) updateHudStats(controller, true);
 }
 

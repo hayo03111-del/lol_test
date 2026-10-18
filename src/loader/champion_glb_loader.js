@@ -312,6 +312,7 @@ async function bootstrapChampion(gltf, fileName) {
   renderMappingPanel();
   updateAbilitySlotNames();
   if (typeof setHudChampionIcons === 'function') setHudChampionIcons(championId); // 48차: 초상화·패시브·스킬 아이콘
+  if (typeof lobbyApplyPending === 'function') lobbyApplyPending(controller); // 52차: 로비에서 고른 소환사 주문 + 로비 닫기
   if (typeof updateHudStats === 'function') updateHudStats(controller, true);
 
   // 요청: 중앙에 연습용 허수아비 3개를 다시 기본 배치한다.
