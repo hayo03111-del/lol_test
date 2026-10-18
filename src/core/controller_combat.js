@@ -935,7 +935,7 @@ CharacterController.prototype._beginAttackSwing = function() {
         // 32차: 와드는 기본 공격 1회에 체력 1(공격력·치명타·적중 시 효과 없음 - 원작). 원거리는 투사체가 닿을 때.
         if (target.isWard) {
           vfx.spawn('basicAttack', originPos, dirToTarget);
-          if (this.stats.attackRange > 300) projectiles.spawn({ from: originPos, target, speed: this.stats.projectileSpeed, color: 0xdff0ff, realmId: this.realmId, onHit: (t) => wardSystem.hitWard(t, this) });
+          if (isRangedAttacker(this)) projectiles.spawn({ from: originPos, target, speed: basicAttackMissileSpeedWorld(this), color: 0xdff0ff, realmId: this.realmId, onHit: (t) => wardSystem.hitWard(t, this) });
           else wardSystem.hitWard(target, this);
           return;
         }
@@ -988,10 +988,10 @@ CharacterController.prototype._beginAttackSwing = function() {
         // 즉시 명중 처리한다(실제 LoL도 근접 평타는 판정이 즉시 발생한다).
         // 새 데이터를 추가하지 않고 이미 있는 stats.attackRange 하나로만
         // 판단한다.
-        const isRangedAutoAttack = this.stats.attackRange > 300;
+        const isRangedAutoAttack = isRangedAttacker(this);
         if (isRangedAutoAttack) {
           projectiles.spawn({
-            from: originPos, target, speed: this.stats.projectileSpeed,
+            from: originPos, target, speed: basicAttackMissileSpeedWorld(this),
             color: willCrit ? 0xffdf6b : 0xdff0ff,
             realmId: this.realmId, // Phase 2 요청 17 - 발사 시점 realm 스냅샷(모데카이저 R 등으로 비행 중 target의 realm이 바뀌면 명중 취소)
             onHit: (t) => {
@@ -1017,7 +1017,7 @@ CharacterController.prototype._beginAttackSwing = function() {
           });
         } else if (target.hp > 0) {
           if (target.isTurret) {
-            const ranged = this.stats.attackRange > 300;
+            const ranged = isRangedAttacker(this);
             applyDamageToTurret(target, attackResult, { isRanged: ranged, source: this });
             this._onStructureBasicAttackHit(target, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: ranged, source: this }));
             return;

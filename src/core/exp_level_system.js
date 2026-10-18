@@ -128,7 +128,7 @@ function findMinionsOfTypesNear(turret, types) {
   // 요청(두 진영 미니언 전투): 이제 미니언이 RED/BLUE 양쪽에서 다 생성되므로
   // "포탑과 다른 팀"인 미니언만 적으로 간주한다(같은 편 미니언은 제외).
   return minions.filter((m) => !m.isDead && m.team !== turret.team && types.includes(m.minionType) && canRealmInteract(turret, m)
-    && getHorizontalDistance(getWorldPosition(turret), m.mesh.position) <= range);
+    && getHorizontalDistance(getWorldPosition(turret), m.mesh.position) <= range + getCollisionRadius(m)); // 44차: 포탑 사거리는 대상 가장자리까지
 }
 
 // 1. 웨이브 생성 - spawnMinionWave(gameTime, lane). 이 데모엔 라인이
@@ -323,7 +323,9 @@ function isValidMinionTarget(minion, target) {
   // 유효한 적이다 - 같은 편은 아예 공격 후보에서 제외한다(요청 10).
   if (target.team && target.team === minion.team) return false;
   if (!canRealmInteract(minion, target)) return false;
-  const range = lolRangeToWorld(minion.attackRange);
+  // 44차: 원작처럼 가장자리 대 가장자리(사거리 + 두 유닛 반경). 예전엔 중심 대 중심이라 구조물 충돌로 멈춘 근접 미니언
+  // (포탑 중심에서 약 151)이 사거리 110으로는 구조물을 때리지 못했다.
+  const range = lolRangeToWorld(minion.attackRange) + getCollisionRadius(minion) + getCollisionRadius(target);
   return getHorizontalDistance(minion.mesh.position, getWorldPosition(target)) <= range;
 }
 // 5순위(가까운 적 미니언) - 요청 10/11: RED↔BLUE 미니언이 서로를 적으로
@@ -385,7 +387,7 @@ function isValidChampionTarget(minion, champion) {
   if (isAllyUnit(minion, champion)) return false; // 아군 챔피언은 공격 불가(요청 20-B) - champion.team(플레이어는 PLAYER_TEAM)과 generic 비교
   if (champion.hp <= 0 || champion.state === STATE.DEAD || champion.isUntargetable) return false;
   if (!canRealmInteract(minion, champion)) return false;
-  const range = lolRangeToWorld(minion.attackRange);
+  const range = lolRangeToWorld(minion.attackRange) + getCollisionRadius(minion) + getCollisionRadius(champion); // 44차: 가장자리 기준
   return getHorizontalDistance(minion.mesh.position, getWorldPosition(champion)) <= range;
 }
 function getMinionAttackTarget(minion) {

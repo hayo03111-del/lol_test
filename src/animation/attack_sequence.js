@@ -254,7 +254,9 @@ class RangeIndicatorSystem {
       mesh.quaternion.copy(quat);
       mesh.visible = true;
     };
-    setCircle('attack', ctrl.stats ? ctrl.stats.attackRange : null);
+    // 44차: 원작 사거리 표시는 "사거리 + 자기 크기(gameplay 반경)" - 평타 판정(isInAttackRange)이 가장자리 대 가장자리라
+    // 예전 링(자기 중심에서 사거리만)은 실제로 닿는 거리보다 자기 반경만큼 작았다(대상 반경만큼은 원작도 링 밖에서 닿는다).
+    setCircle('attack', ctrl.stats ? ctrl.stats.attackRange + getCollisionRadius(ctrl) : null);
     const cd = ctrl._champData ? ctrl._champData() : null;
     this.centerLaneMesh.visible = false;
     for (const slot of ['Q', 'W', 'E', 'R']) {

@@ -244,7 +244,7 @@ CharacterController.prototype._findNearbyAttackRetarget = function(anchor = null
     if (!this.attackOrderActive) return null;
     const origin = anchor ? getWorldPosition(anchor) : getWorldPosition(this);
     if (!origin) return null;
-    const maxRange = Math.max(this.attackOrderRetargetRadius, lolRangeToWorld(this.stats.attackRange || 0) * 3);
+    const maxRange = Math.max(this.attackOrderRetargetRadius, (this.stats.attackRange || 0) * 3); // stats.attackRange는 이미 world 단위(44차: 이중 변환 제거)
     let best = null, bestDist = Infinity;
     const candidates = typeof getTargetableEnemyUnits === 'function' ? getTargetableEnemyUnits() : [];
     for (const candidate of candidates) {
@@ -279,7 +279,7 @@ CharacterController.prototype.updateTargetChase = function() {
         return;
       }
     }
-    if (isInAttackRange(this, this.currentTarget)) { this.targetPos = null; this.isChasing = false; this._tryEngageTarget(); }
+    if (this._isInAttackRangeWithBonus(this.currentTarget)) { this.targetPos = null; this.isChasing = false; this._tryEngageTarget(); }
     else { this.targetPos = getWorldPosition(this.currentTarget).clone(); this.isChasing = true; }
 };
 
@@ -378,6 +378,15 @@ CharacterController.prototype._dariusWRangeBonusWorld = function() {
     return cd ? lolRangeToWorld(cd.W.rangeBonus || 0) : 0;
 };
 
+// 세트 왼손·다리우스 W 사거리 보너스까지 넣은 평타 사거리 판정. 44차: 쫓아가다 멈추는 판정(updateTargetChase)과
+// 휘두르기 판정(_tryEngageTarget)이 같은 값을 쓰게 한다 - 예전엔 쫓아갈 때 보너스를 빼고 봐서 기본 사거리까지 걸어 들어갔다.
+CharacterController.prototype._isInAttackRangeWithBonus = function(target) {
+    const rangeBonus = this._settLeftHandRangeBonusWorld() + this._dariusWRangeBonusWorld();
+    if (rangeBonus > 0) this.stats.attackRange += rangeBonus;
+    const inRange = isInAttackRange(this, target);
+    if (rangeBonus > 0) this.stats.attackRange -= rangeBonus; // 판정 직후 즉시 원상복구 - 사거리 표시 링 등 다른 시스템에 영향 주지 않음
+    return inRange;
+};
 CharacterController.prototype._tryEngageTarget = function() {
     if (!this.currentTarget || this.currentTarget.hp <= 0 || (typeof canRealmInteract === 'function' && !canRealmInteract(this, this.currentTarget))) { this.currentTarget = null; this.isChasing = false; return; }
     // 38차: 람머스 대회전 중에는 평타 대신 대상에게 굴러간다(닿으면 rammus.js가 충돌 처리).
@@ -387,10 +396,7 @@ CharacterController.prototype._tryEngageTarget = function() {
       this.setState(STATE.MOVE);
       return;
     }
-    const rangeBonus = this._settLeftHandRangeBonusWorld() + this._dariusWRangeBonusWorld();
-    if (rangeBonus > 0) this.stats.attackRange += rangeBonus;
-    const inRange = isInAttackRange(this, this.currentTarget);
-    if (rangeBonus > 0) this.stats.attackRange -= rangeBonus; // 판정 직후 즉시 원상복구 - 사거리 표시 링 등 다른 시스템에 영향 주지 않음
+    const inRange = this._isInAttackRangeWithBonus(this.currentTarget);
     if (!inRange) {
       this.targetPos = this.currentTarget.mesh.position.clone();
       this.isChasing = true;

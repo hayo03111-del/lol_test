@@ -434,9 +434,23 @@ function isInAttackRange(attacker, target) {
   // 변환된 값이므로(생성자 기본값 ATTACK_RANGE도 원래부터 world-scale),
   // 여기서는 isInRange()의 LoL 변환을 거치지 않고 Effective Distance와
   // 직접 비교한다 - 이중 변환을 방지한다.
-  let attackRange = attacker.stats.attackRange;
-  if (attacker.championId === 'renekton' && attacker._renekton?.rActive) attackRange += lolRangeToWorld(25);
-  return getEffectiveDistance(attacker, target) <= attackRange;
+  // 44차: 레넥톤 R 사거리 +25는 recomputeStats()가 이미 stats.attackRange에 넣는다 - 여기서 또 더해 +50이 되던 것을 뺐다.
+  return getEffectiveDistance(attacker, target) <= attacker.stats.attackRange;
+}
+
+// 44차: 원거리 평타 여부 - 원작 기준 기본 사거리 300 초과. 예전엔 world 단위 stats.attackRange(최대 약 5)를 LoL 단위
+// 300과 비교해 모든 챔피언이 근접 취급(애쉬·바루스·이즈리얼·아리·벡스 평타가 투사체 없이 즉시 명중, 포탑에 근접 피해,
+// 아이템 근접 수치)이었다.
+function isRangedAttacker(unit) {
+  if (!unit) return false;
+  const cd = unit.championId && typeof CHAMPION_DATA !== 'undefined' ? CHAMPION_DATA[unit.championId] : null;
+  const lol = cd && cd.stats && cd.stats.range != null ? cd.stats.range : worldDistanceToLol((unit.stats && unit.stats.attackRange) || 0);
+  return lol > 300;
+}
+// 평타 투사체 속도(LoL 단위/초 - 위키 기본 공격 미사일 속도). 목록에 없으면 2000.
+const BASIC_ATTACK_MISSILE_SPEED_LOL = { ashe: 2000, varus: 2000, ezreal: 2000, ahri: 1750, vex: 1600 };
+function basicAttackMissileSpeedWorld(unit) {
+  return lolRangeToWorld(BASIC_ATTACK_MISSILE_SPEED_LOL[unit && unit.championId] || 2000);
 }
 
 // 치명타 의사 난수(PRD, 원작): N번째 시도의 치명타 확률 = C × N(치명타가 나면 N=1로 초기화).

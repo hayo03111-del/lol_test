@@ -781,7 +781,7 @@ function _itemTickHpRegen(ctrl, item, dt, now) {
   const healMult = getHealReceivedMultiplier(ctrl);
   if (item.champDamageRegen && typeof ctrl._itemLastTookChampionDamageAt === 'number'
       && (now - ctrl._itemLastTookChampionDamageAt) <= item.champDamageRegen.durationSec * 1000) {
-    const isMelee = !!(ctrl.stats && ctrl.stats.attackRange <= 300);
+    const isMelee = !_itemIsRanged(ctrl);
     const total = isMelee ? item.champDamageRegen.meleeMaxHp : item.champDamageRegen.rangedMaxHp;
     const perSec = total / item.champDamageRegen.durationSec;
     ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + perSec * healMult * dt);
@@ -2492,7 +2492,14 @@ function _itemTargetKey(t) { return (t && (t.id || t.uuid)) || t; }
 // 이 프로젝트엔 챔피언 기본 AD만 따로 캐시해두는 필드가 없어, 아이템
 // AD(itemBonusAD)와 챔피언 전용 임시 버프(bonusAD) 합으로 근사한다.
 function _itemBonusAD(ctrl) { return (ctrl.itemBonusAD || 0) + (ctrl.bonusAD || 0); }
-function _itemIsMelee(ctrl) { return !!(ctrl.stats && ctrl.stats.attackRange <= 300); }
+function _itemIsMelee(ctrl) { return !!(ctrl && ctrl.stats) && !_itemIsRanged(ctrl); }
+// 44차: 근접/원거리는 공용 isRangedAttacker(원작 기본 사거리 300 초과)로 판단. 아이템 모듈만 불러오는 단위 테스트에서는
+// 공용 함수가 없으니 stats.attackRange를 LoL 단위로 환산(없으면 그대로)해 같은 기준으로 본다.
+function _itemIsRanged(ctrl) {
+  if (typeof isRangedAttacker === 'function') return isRangedAttacker(ctrl);
+  const r = (ctrl && ctrl.stats && ctrl.stats.attackRange) || 0;
+  return (typeof worldDistanceToLol === 'function' ? worldDistanceToLol(r) : r) > 300;
+}
 function _itemIsStructure(u) { return !!(u && (u.isTurret || u.isInhibitor || u.isNexus)); }
 
 // 서포터 아이템(세계지도집 퀘스트 라인) 공용 골드 지급 - 재물 공유(피해/

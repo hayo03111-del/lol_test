@@ -349,7 +349,7 @@ function masterYiQRangeDebugText(ctrl, cd) {
   }
   const center = getHorizontalDistanceOf(ctrl, candidate);
   const eff = getEffectiveDistance(ctrl, candidate);
-  // isInRange()와 완전히 동일한 판정식(getEffectiveDistance <= range)을 그대로
+  // isInRange()(중심 → 대상 가장자리: 중심 거리 <= 사거리 + 대상 반경)를 그대로
   // 재사용한다 - 별도 Q 전용 판정 함수를 새로 만들지 않는다(문서 4/19절).
   const inRange = isInRange(ctrl, candidate, range);
   return `<span class="k">Q Cast Range</span>: ${range}

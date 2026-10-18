@@ -158,13 +158,13 @@ function findEnemyChampionsNear(turret) {
   if (!canRealmInteract(turret, controller)) return [];
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
   const dist = getHorizontalDistance(getWorldPosition(turret), getWorldPosition(controller));
-  return dist <= range ? [controller] : [];
+  return dist <= range + getCollisionRadius(controller) ? [controller] : []; // 44차: 원작 - 포탑 중심에서 대상 가장자리까지
 }
 function isValidTurretTarget(turret, target) {
   if (!target || target.hp <= 0) return false;
   if (target.isUntargetable) return false; // 무적/대상 지정 불가(요청 13 단서, 22 단서)
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
-  return getHorizontalDistance(getWorldPosition(turret), getWorldPosition(target)) <= range;
+  return getHorizontalDistance(getWorldPosition(turret), getWorldPosition(target)) <= range + getCollisionRadius(target);
 }
 // 요청 8/9 - 8단계 우선순위를 순서대로 확인하고, 요청 10(현재 대상
 // 유지) - 이미 있던 대상이 여전히 유효하면 재계산 없이 그대로 둔다.
@@ -203,7 +203,7 @@ function hasLiveEnemyMinionsNear(turret) {
   // 이중 갑옷을 해제한다. 챔피언/소환수/샤코 상자 등은 여기 전혀
   // 관여하지 않는다(이 함수는 미니언 유무만 확인).
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
-  return minions.some((m) => !m.isDead && m.team !== turret.team && canRealmInteract(turret, m) && getHorizontalDistance(getWorldPosition(turret), m.mesh.position) <= range);
+  return minions.some((m) => !m.isDead && m.team !== turret.team && canRealmInteract(turret, m) && getHorizontalDistance(getWorldPosition(turret), m.mesh.position) <= range + getCollisionRadius(m));
 }
 function isDoubleArmorActive(turret) {
   const data = TURRET_DATA[turret.type];

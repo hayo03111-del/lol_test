@@ -441,9 +441,23 @@ function isInAttackRange(attacker, target) {
   // 변환된 값이므로(생성자 기본값 ATTACK_RANGE도 원래부터 world-scale),
   // 여기서는 isInRange()의 LoL 변환을 거치지 않고 Effective Distance와
   // 직접 비교한다 - 이중 변환을 방지한다.
-  let attackRange = attacker.stats.attackRange;
-  if (attacker.championId === 'renekton' && attacker._renekton?.rActive) attackRange += lolRangeToWorld(25);
-  return getEffectiveDistance(attacker, target) <= attackRange;
+  // 44차: 레넥톤 R 사거리 +25는 recomputeStats()가 이미 stats.attackRange에 넣는다 - 여기서 또 더해 +50이 되던 것을 뺐다.
+  return getEffectiveDistance(attacker, target) <= attacker.stats.attackRange;
+}
+
+// 44차: 원거리 평타 여부 - 원작 기준 기본 사거리 300 초과. 예전엔 world 단위 stats.attackRange(최대 약 5)를 LoL 단위
+// 300과 비교해 모든 챔피언이 근접 취급(애쉬·바루스·이즈리얼·아리·벡스 평타가 투사체 없이 즉시 명중, 포탑에 근접 피해,
+// 아이템 근접 수치)이었다.
+function isRangedAttacker(unit) {
+  if (!unit) return false;
+  const cd = unit.championId && typeof CHAMPION_DATA !== 'undefined' ? CHAMPION_DATA[unit.championId] : null;
+  const lol = cd && cd.stats && cd.stats.range != null ? cd.stats.range : worldDistanceToLol((unit.stats && unit.stats.attackRange) || 0);
+  return lol > 300;
+}
+// 평타 투사체 속도(LoL 단위/초 - 위키 기본 공격 미사일 속도). 목록에 없으면 2000.
+const BASIC_ATTACK_MISSILE_SPEED_LOL = { ashe: 2000, varus: 2000, ezreal: 2000, ahri: 1750, vex: 1600 };
+function basicAttackMissileSpeedWorld(unit) {
+  return lolRangeToWorld(BASIC_ATTACK_MISSILE_SPEED_LOL[unit && unit.championId] || 2000);
 }
 
 // 치명타 의사 난수(PRD, 원작): N번째 시도의 치명타 확률 = C × N(치명타가 나면 N=1로 초기화).
@@ -10448,7 +10462,9 @@ class RangeIndicatorSystem {
       mesh.quaternion.copy(quat);
       mesh.visible = true;
     };
-    setCircle('attack', ctrl.stats ? ctrl.stats.attackRange : null);
+    // 44차: 원작 사거리 표시는 "사거리 + 자기 크기(gameplay 반경)" - 평타 판정(isInAttackRange)이 가장자리 대 가장자리라
+    // 예전 링(자기 중심에서 사거리만)은 실제로 닿는 거리보다 자기 반경만큼 작았다(대상 반경만큼은 원작도 링 밖에서 닿는다).
+    setCircle('attack', ctrl.stats ? ctrl.stats.attackRange + getCollisionRadius(ctrl) : null);
     const cd = ctrl._champData ? ctrl._champData() : null;
     this.centerLaneMesh.visible = false;
     for (const slot of ['Q', 'W', 'E', 'R']) {
@@ -12576,7 +12592,7 @@ CharacterController.prototype._findNearbyAttackRetarget = function(anchor = null
     if (!this.attackOrderActive) return null;
     const origin = anchor ? getWorldPosition(anchor) : getWorldPosition(this);
     if (!origin) return null;
-    const maxRange = Math.max(this.attackOrderRetargetRadius, lolRangeToWorld(this.stats.attackRange || 0) * 3);
+    const maxRange = Math.max(this.attackOrderRetargetRadius, (this.stats.attackRange || 0) * 3); // stats.attackRange는 이미 world 단위(44차: 이중 변환 제거)
     let best = null, bestDist = Infinity;
     const candidates = typeof getTargetableEnemyUnits === 'function' ? getTargetableEnemyUnits() : [];
     for (const candidate of candidates) {
@@ -12611,7 +12627,7 @@ CharacterController.prototype.updateTargetChase = function() {
         return;
       }
     }
-    if (isInAttackRange(this, this.currentTarget)) { this.targetPos = null; this.isChasing = false; this._tryEngageTarget(); }
+    if (this._isInAttackRangeWithBonus(this.currentTarget)) { this.targetPos = null; this.isChasing = false; this._tryEngageTarget(); }
     else { this.targetPos = getWorldPosition(this.currentTarget).clone(); this.isChasing = true; }
 };
 
@@ -12710,6 +12726,15 @@ CharacterController.prototype._dariusWRangeBonusWorld = function() {
     return cd ? lolRangeToWorld(cd.W.rangeBonus || 0) : 0;
 };
 
+// 세트 왼손·다리우스 W 사거리 보너스까지 넣은 평타 사거리 판정. 44차: 쫓아가다 멈추는 판정(updateTargetChase)과
+// 휘두르기 판정(_tryEngageTarget)이 같은 값을 쓰게 한다 - 예전엔 쫓아갈 때 보너스를 빼고 봐서 기본 사거리까지 걸어 들어갔다.
+CharacterController.prototype._isInAttackRangeWithBonus = function(target) {
+    const rangeBonus = this._settLeftHandRangeBonusWorld() + this._dariusWRangeBonusWorld();
+    if (rangeBonus > 0) this.stats.attackRange += rangeBonus;
+    const inRange = isInAttackRange(this, target);
+    if (rangeBonus > 0) this.stats.attackRange -= rangeBonus; // 판정 직후 즉시 원상복구 - 사거리 표시 링 등 다른 시스템에 영향 주지 않음
+    return inRange;
+};
 CharacterController.prototype._tryEngageTarget = function() {
     if (!this.currentTarget || this.currentTarget.hp <= 0 || (typeof canRealmInteract === 'function' && !canRealmInteract(this, this.currentTarget))) { this.currentTarget = null; this.isChasing = false; return; }
     // 38차: 람머스 대회전 중에는 평타 대신 대상에게 굴러간다(닿으면 rammus.js가 충돌 처리).
@@ -12719,10 +12744,7 @@ CharacterController.prototype._tryEngageTarget = function() {
       this.setState(STATE.MOVE);
       return;
     }
-    const rangeBonus = this._settLeftHandRangeBonusWorld() + this._dariusWRangeBonusWorld();
-    if (rangeBonus > 0) this.stats.attackRange += rangeBonus;
-    const inRange = isInAttackRange(this, this.currentTarget);
-    if (rangeBonus > 0) this.stats.attackRange -= rangeBonus; // 판정 직후 즉시 원상복구 - 사거리 표시 링 등 다른 시스템에 영향 주지 않음
+    const inRange = this._isInAttackRangeWithBonus(this.currentTarget);
     if (!inRange) {
       this.targetPos = this.currentTarget.mesh.position.clone();
       this.isChasing = true;
@@ -13674,7 +13696,7 @@ CharacterController.prototype._beginAttackSwing = function() {
         // 32차: 와드는 기본 공격 1회에 체력 1(공격력·치명타·적중 시 효과 없음 - 원작). 원거리는 투사체가 닿을 때.
         if (target.isWard) {
           vfx.spawn('basicAttack', originPos, dirToTarget);
-          if (this.stats.attackRange > 300) projectiles.spawn({ from: originPos, target, speed: this.stats.projectileSpeed, color: 0xdff0ff, realmId: this.realmId, onHit: (t) => wardSystem.hitWard(t, this) });
+          if (isRangedAttacker(this)) projectiles.spawn({ from: originPos, target, speed: basicAttackMissileSpeedWorld(this), color: 0xdff0ff, realmId: this.realmId, onHit: (t) => wardSystem.hitWard(t, this) });
           else wardSystem.hitWard(target, this);
           return;
         }
@@ -13727,10 +13749,10 @@ CharacterController.prototype._beginAttackSwing = function() {
         // 즉시 명중 처리한다(실제 LoL도 근접 평타는 판정이 즉시 발생한다).
         // 새 데이터를 추가하지 않고 이미 있는 stats.attackRange 하나로만
         // 판단한다.
-        const isRangedAutoAttack = this.stats.attackRange > 300;
+        const isRangedAutoAttack = isRangedAttacker(this);
         if (isRangedAutoAttack) {
           projectiles.spawn({
-            from: originPos, target, speed: this.stats.projectileSpeed,
+            from: originPos, target, speed: basicAttackMissileSpeedWorld(this),
             color: willCrit ? 0xffdf6b : 0xdff0ff,
             realmId: this.realmId, // Phase 2 요청 17 - 발사 시점 realm 스냅샷(모데카이저 R 등으로 비행 중 target의 realm이 바뀌면 명중 취소)
             onHit: (t) => {
@@ -13756,7 +13778,7 @@ CharacterController.prototype._beginAttackSwing = function() {
           });
         } else if (target.hp > 0) {
           if (target.isTurret) {
-            const ranged = this.stats.attackRange > 300;
+            const ranged = isRangedAttacker(this);
             applyDamageToTurret(target, attackResult, { isRanged: ranged, source: this });
             this._onStructureBasicAttackHit(target, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: ranged, source: this }));
             return;
@@ -25585,7 +25607,7 @@ function masterYiQRangeDebugText(ctrl, cd) {
   }
   const center = getHorizontalDistanceOf(ctrl, candidate);
   const eff = getEffectiveDistance(ctrl, candidate);
-  // isInRange()와 완전히 동일한 판정식(getEffectiveDistance <= range)을 그대로
+  // isInRange()(중심 → 대상 가장자리: 중심 거리 <= 사거리 + 대상 반경)를 그대로
   // 재사용한다 - 별도 Q 전용 판정 함수를 새로 만들지 않는다(문서 4/19절).
   const inRange = isInRange(ctrl, candidate, range);
   return `<span class="k">Q Cast Range</span>: ${range}
@@ -26046,13 +26068,13 @@ function findEnemyChampionsNear(turret) {
   if (!canRealmInteract(turret, controller)) return [];
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
   const dist = getHorizontalDistance(getWorldPosition(turret), getWorldPosition(controller));
-  return dist <= range ? [controller] : [];
+  return dist <= range + getCollisionRadius(controller) ? [controller] : []; // 44차: 원작 - 포탑 중심에서 대상 가장자리까지
 }
 function isValidTurretTarget(turret, target) {
   if (!target || target.hp <= 0) return false;
   if (target.isUntargetable) return false; // 무적/대상 지정 불가(요청 13 단서, 22 단서)
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
-  return getHorizontalDistance(getWorldPosition(turret), getWorldPosition(target)) <= range;
+  return getHorizontalDistance(getWorldPosition(turret), getWorldPosition(target)) <= range + getCollisionRadius(target);
 }
 // 요청 8/9 - 8단계 우선순위를 순서대로 확인하고, 요청 10(현재 대상
 // 유지) - 이미 있던 대상이 여전히 유효하면 재계산 없이 그대로 둔다.
@@ -26091,7 +26113,7 @@ function hasLiveEnemyMinionsNear(turret) {
   // 이중 갑옷을 해제한다. 챔피언/소환수/샤코 상자 등은 여기 전혀
   // 관여하지 않는다(이 함수는 미니언 유무만 확인).
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
-  return minions.some((m) => !m.isDead && m.team !== turret.team && canRealmInteract(turret, m) && getHorizontalDistance(getWorldPosition(turret), m.mesh.position) <= range);
+  return minions.some((m) => !m.isDead && m.team !== turret.team && canRealmInteract(turret, m) && getHorizontalDistance(getWorldPosition(turret), m.mesh.position) <= range + getCollisionRadius(m));
 }
 function isDoubleArmorActive(turret) {
   const data = TURRET_DATA[turret.type];
@@ -27404,7 +27426,7 @@ function findMinionsOfTypesNear(turret, types) {
   // 요청(두 진영 미니언 전투): 이제 미니언이 RED/BLUE 양쪽에서 다 생성되므로
   // "포탑과 다른 팀"인 미니언만 적으로 간주한다(같은 편 미니언은 제외).
   return minions.filter((m) => !m.isDead && m.team !== turret.team && types.includes(m.minionType) && canRealmInteract(turret, m)
-    && getHorizontalDistance(getWorldPosition(turret), m.mesh.position) <= range);
+    && getHorizontalDistance(getWorldPosition(turret), m.mesh.position) <= range + getCollisionRadius(m)); // 44차: 포탑 사거리는 대상 가장자리까지
 }
 
 // 1. 웨이브 생성 - spawnMinionWave(gameTime, lane). 이 데모엔 라인이
@@ -27599,7 +27621,9 @@ function isValidMinionTarget(minion, target) {
   // 유효한 적이다 - 같은 편은 아예 공격 후보에서 제외한다(요청 10).
   if (target.team && target.team === minion.team) return false;
   if (!canRealmInteract(minion, target)) return false;
-  const range = lolRangeToWorld(minion.attackRange);
+  // 44차: 원작처럼 가장자리 대 가장자리(사거리 + 두 유닛 반경). 예전엔 중심 대 중심이라 구조물 충돌로 멈춘 근접 미니언
+  // (포탑 중심에서 약 151)이 사거리 110으로는 구조물을 때리지 못했다.
+  const range = lolRangeToWorld(minion.attackRange) + getCollisionRadius(minion) + getCollisionRadius(target);
   return getHorizontalDistance(minion.mesh.position, getWorldPosition(target)) <= range;
 }
 // 5순위(가까운 적 미니언) - 요청 10/11: RED↔BLUE 미니언이 서로를 적으로
@@ -27661,7 +27685,7 @@ function isValidChampionTarget(minion, champion) {
   if (isAllyUnit(minion, champion)) return false; // 아군 챔피언은 공격 불가(요청 20-B) - champion.team(플레이어는 PLAYER_TEAM)과 generic 비교
   if (champion.hp <= 0 || champion.state === STATE.DEAD || champion.isUntargetable) return false;
   if (!canRealmInteract(minion, champion)) return false;
-  const range = lolRangeToWorld(minion.attackRange);
+  const range = lolRangeToWorld(minion.attackRange) + getCollisionRadius(minion) + getCollisionRadius(champion); // 44차: 가장자리 기준
   return getHorizontalDistance(minion.mesh.position, getWorldPosition(champion)) <= range;
 }
 function getMinionAttackTarget(minion) {
@@ -28888,7 +28912,7 @@ function _itemTickHpRegen(ctrl, item, dt, now) {
   const healMult = getHealReceivedMultiplier(ctrl);
   if (item.champDamageRegen && typeof ctrl._itemLastTookChampionDamageAt === 'number'
       && (now - ctrl._itemLastTookChampionDamageAt) <= item.champDamageRegen.durationSec * 1000) {
-    const isMelee = !!(ctrl.stats && ctrl.stats.attackRange <= 300);
+    const isMelee = !_itemIsRanged(ctrl);
     const total = isMelee ? item.champDamageRegen.meleeMaxHp : item.champDamageRegen.rangedMaxHp;
     const perSec = total / item.champDamageRegen.durationSec;
     ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + perSec * healMult * dt);
@@ -30599,7 +30623,14 @@ function _itemTargetKey(t) { return (t && (t.id || t.uuid)) || t; }
 // 이 프로젝트엔 챔피언 기본 AD만 따로 캐시해두는 필드가 없어, 아이템
 // AD(itemBonusAD)와 챔피언 전용 임시 버프(bonusAD) 합으로 근사한다.
 function _itemBonusAD(ctrl) { return (ctrl.itemBonusAD || 0) + (ctrl.bonusAD || 0); }
-function _itemIsMelee(ctrl) { return !!(ctrl.stats && ctrl.stats.attackRange <= 300); }
+function _itemIsMelee(ctrl) { return !!(ctrl && ctrl.stats) && !_itemIsRanged(ctrl); }
+// 44차: 근접/원거리는 공용 isRangedAttacker(원작 기본 사거리 300 초과)로 판단. 아이템 모듈만 불러오는 단위 테스트에서는
+// 공용 함수가 없으니 stats.attackRange를 LoL 단위로 환산(없으면 그대로)해 같은 기준으로 본다.
+function _itemIsRanged(ctrl) {
+  if (typeof isRangedAttacker === 'function') return isRangedAttacker(ctrl);
+  const r = (ctrl && ctrl.stats && ctrl.stats.attackRange) || 0;
+  return (typeof worldDistanceToLol === 'function' ? worldDistanceToLol(r) : r) > 300;
+}
 function _itemIsStructure(u) { return !!(u && (u.isTurret || u.isInhibitor || u.isNexus)); }
 
 // 서포터 아이템(세계지도집 퀘스트 라인) 공용 골드 지급 - 재물 공유(피해/
