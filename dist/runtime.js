@@ -5722,7 +5722,41 @@ const cameraRig = {
   minDistance: 20,
   maxDistance: 48,
   followPos: new THREE.Vector3(0, 0, 0),
+  // 34차: 원작 카메라 조작 - Y = 카메라 고정 켜기/끄기, Space(누르고 있기)·F1 = 내 챔피언으로 카메라 이동.
+  // 고정을 풀면 마우스를 화면 가장자리에 대면 그쪽으로 카메라가 움직인다. 처음은 지금까지처럼 고정 상태.
+  locked: true,
+  centerHeld: false,
+  freePos: new THREE.Vector3(0, 0, 0),
+  edgePointer: null,
 };
+const CAMERA_EDGE_PX = 14;             // 화면 가장자리 몇 픽셀 안에서 움직일지
+const CAMERA_EDGE_SPEED_PER_DIST = 1.4; // 초당 이동 거리 = 카메라 거리 x 이 값(멀리 볼수록 빨리)
+window.addEventListener('pointermove', (e) => { cameraRig.edgePointer = { x: e.clientX, y: e.clientY }; });
+document.addEventListener('mouseleave', () => { cameraRig.edgePointer = null; });
+window.addEventListener('blur', () => { cameraRig.edgePointer = null; cameraRig.centerHeld = false; });
+// 이번 프레임 카메라가 바라볼 지점. 고정이거나 Space를 누르고 있으면 챔피언, 아니면 가장자리로 움직인 자유 지점.
+function cameraFocusPoint(champPos, dt) {
+  if (cameraRig.locked || cameraRig.centerHeld) { cameraRig.freePos.copy(champPos); return champPos; }
+  const p = cameraRig.edgePointer;
+  if (p && document.hasFocus()) {
+    let sx = 0, sy = 0;
+    if (p.x <= CAMERA_EDGE_PX) sx = -1; else if (p.x >= window.innerWidth - 1 - CAMERA_EDGE_PX) sx = 1;
+    if (p.y <= CAMERA_EDGE_PX) sy = -1; else if (p.y >= window.innerHeight - 1 - CAMERA_EDGE_PX) sy = 1;
+    if (sx || sy) {
+      // 화면 오른쪽/위쪽에 해당하는 바닥 방향(카메라는 yaw 방향 뒤에서 내려다본다).
+      const right = new THREE.Vector3(Math.cos(cameraRig.yaw), 0, -Math.sin(cameraRig.yaw));
+      const up = new THREE.Vector3(-Math.sin(cameraRig.yaw), 0, -Math.cos(cameraRig.yaw));
+      const step = cameraRig.distance * CAMERA_EDGE_SPEED_PER_DIST * dt;
+      cameraRig.freePos.addScaledVector(right, sx * step).addScaledVector(up, -sy * step);
+      if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap && howlingAbyssMap.clampPosition) cameraRig.freePos.copy(howlingAbyssMap.clampPosition(cameraRig.freePos.clone()));
+    }
+  }
+  return cameraRig.freePos;
+}
+function toggleCameraLock() {
+  cameraRig.locked = !cameraRig.locked;
+  if (typeof showSkillToast === 'function') showSkillToast(cameraRig.locked ? '카메라 고정 (Y)' : '카메라 고정 해제 (Y) - 화면 가장자리로 이동, Space로 복귀');
+}
 
 function updateCameraTransform(targetPos, dt) {
   cameraRig.followPos.lerp(targetPos, Math.min(1, dt * 6));
@@ -5740,6 +5774,7 @@ function updateCameraTransform(targetPos, dt) {
 // 순간이동(리스폰·귀환) 뒤 카메라를 천천히 따라가지 않고 바로 옮긴다 - 원작도 리스폰·귀환하면 카메라가 챔피언 위로 바로 간다.
 function snapCameraTo(targetPos) {
   cameraRig.followPos.copy(targetPos);
+  cameraRig.freePos.copy(targetPos);
   updateCameraTransform(targetPos, 1);
 }
 
@@ -8794,7 +8829,7 @@ class VisionSystem {
    - 판정(타게팅·시야)은 vision_system.js가 이 파일의 brushAt()을 물어서 처리한다.
 
    배치: 칼바람 나락 맵이면 원작 6곳(BRUSH_CONFIG.howlingAbyssLayout), 맵이 없으면 연습장 2곳. 설정 패널의
-   "부쉬 설치 모드(N)"로 클릭한 자리에 더 놓을 수 있다. 위치·크기는 원작 맵 데이터를 받지 못해 근사값.
+   "부쉬 설치 모드(F8)"로 클릭한 자리에 더 놓을 수 있다. 위치·크기는 원작 맵 데이터를 받지 못해 근사값.
    ============================================================ */
 const BRUSH_CONFIG = {
   defaultSizeLol: { width: 450, depth: 300 },
@@ -10854,6 +10889,7 @@ class CharacterController {
     // 칼바람 포탑 시스템(destroyTurret 참고) - 팀/골드 시스템이 따로
     // 없어 "아군 전원에게 지급"을 지금은 플레이어 자신의 누적치로 대신한다.
     this.gold = 0;
+    this.score = { kills: 0, deaths: 0, assists: 0, cs: 0 }; // 34차 스코어보드(K/D/A·CS) - 골드처럼 챔피언을 바꿔도 유지
     // 아이템 시스템(item_system.js) - 장착한 아이템 슬롯 배열(최대 6칸, 실제
     // LoL 인벤토리와 동일). 각 슬롯은 {id, count, charges?} 형태다 - count는
     // 쌓이는 소비 아이템(체력 물약, 최대 5개까지 한 칸에 중첩)의 개수이고,
@@ -15775,6 +15811,7 @@ CharacterController.prototype._die = function() {
     this.targetPos = null; this.currentTarget = null; this.pendingMove = null; this.pendingCast = null;
     targetRing.clear();
     this.setState(STATE.DEAD);
+    if (typeof ensureScore === 'function' && typeof controller !== 'undefined' && controller === this) ensureScore(this).deaths += 1; // 34차 스코어보드
     vfx.spawn('death', this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)));
     this.playFirstAvailable(this.actionData.death.clips, { loop:THREE.LoopOnce, fade:0.1, clampWhenFinished:true });
     const t = setTimeout(() => this._respawn(), RESPAWN_WAIT * 1000);
@@ -24771,6 +24808,38 @@ function updateExpUI(champion) {
   const sp = champion.skillPoints || 0;
   const spText = sp > 0 ? `+${sp}` : '';
   if (spEl && _expUiLast.spText !== spText) { spEl.textContent = spText; _expUiLast.spText = spText; }
+  _updateSkillLevelUpButtons(champion);
+}
+// 34차: 스킬 포인트가 있으면 올릴 수 있는 스킬 칸 위에 레벨 업 버튼을 띄운다(원작처럼 - 키는 Ctrl+Q/W/E/R).
+// levelUpSkill()과 같은 조건(최대 랭크, R은 레벨 11/16 제한)을 그대로 따진다.
+function _updateSkillLevelUpButtons(champion) {
+  const sp = champion.skillPoints || 0;
+  for (const key of ['Q', 'W', 'E', 'R']) {
+    const slot = document.getElementById('slot' + key);
+    if (!slot) continue;
+    const cur = (champion.skillLevels && champion.skillLevels[key]) || 0;
+    const cap = key === 'R' ? 3 : 5;
+    const gate = key === 'R' ? R_RANK_LEVEL_GATE[cur + 1] : null;
+    const can = sp > 0 && cur < cap && !(gate && champion.champLevel < gate);
+    let btn = slot.querySelector('.lvlUp');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.className = 'lvlUp';
+      btn.textContent = '▲ 레벨 업';
+      btn.title = `Ctrl+${key}: ${key} 스킬 레벨 업`;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof controller !== 'undefined' && controller && controller.levelUpSkill(key) && typeof renderLevelPanel === 'function') renderLevelPanel();
+      });
+      slot.appendChild(btn);
+    }
+    btn.style.display = can ? '' : 'none';
+    // 랭크 표시(원작 스킬 칸 아래 점) - 칸마다 최대 랭크만큼.
+    let pips = slot.querySelector('.rankPips');
+    if (!pips) { pips = document.createElement('div'); pips.className = 'rankPips'; slot.appendChild(pips); }
+    const sig = `${cur}/${cap}`;
+    if (pips.dataset.sig !== sig) { pips.dataset.sig = sig; pips.innerHTML = Array.from({ length: cap }, (_, i) => `<span${i < cur ? ' class="on"' : ''}></span>`).join(''); }
+  }
 }
 // 요청 8: "레벨업 시 시각적인 레벨업 효과... 화면을 가리지 않게 짧고
 // 깔끔하게" - 텍스트 하나가 잠깐 떴다 사라지는 정도로 제한한다.
@@ -24800,7 +24869,7 @@ function stateDisplayLabel(ctrl) {
 function updateDebugPanel() {
   if (!debugPanelVisible) { debugPanelEl.style.display = 'none'; return; }
   debugPanelEl.style.display = 'block';
-  if (!controller) { debugPanelEl.textContent = 'GLB를 불러오면 여기에 상태가 표시됩니다. (F1: 패널 토글)'; return; }
+  if (!controller) { debugPanelEl.textContent = 'GLB를 불러오면 여기에 상태가 표시됩니다. (F9: 패널 토글)'; return; }
   const targetName = controller.currentTarget ? (controller.currentTarget.hp > 0 ? '더미 타겟' : '(사망)') : '-';
   const action = controller.currentAction;
   const animTime = action ? `${action.time.toFixed(2)}/${action.getClip().duration.toFixed(2)}` : '-';
@@ -24822,7 +24891,7 @@ function updateDebugPanel() {
 <span class="k">Target</span>     : ${targetName}
 <span class="k">Combo</span>      : ${controller.comboIndex}
 <span class="k">Gold</span>       : ${controller.gold || 0}
---- stats (F1 toggle) ---
+--- stats (F9 toggle) ---
 <span class="k">MoveSpeed</span>  : ${finalMoveSpeed.toFixed(2)}
 <span class="k">AtkDamage</span>  : ${s.attackDamage.toFixed(1)}
 <span class="k">AtkSpeed</span>   : ${finalAtkSpeed.toFixed(2)}/s
@@ -24922,7 +24991,7 @@ function masterYiDebugText(ctrl) {
 <span class="k">Collision Fix</span>: ${dbg.collisionCorrected ? 'YES' : '-'}
 <span class="k">Used Fallback</span>: ${dbg.usedFallback ? 'YES' : '-'}`;
   }
-  return `--- [Master Yi Debug] (F1) ---
+  return `--- [Master Yi Debug] (F9) ---
 <span class="k">Passive</span>    : ${dots} (${stackNow}/${everyN}, next=${nextIsPassive})
 <span class="k">E (Wuju)</span>   : ${hasStatus(ctrl, 'MASTERYI_E') ? 'ACTIVE' : '-'}
 <span class="k">R (Highlander)</span>: ${ctrl.isSubStateActive('R') ? 'ACTIVE' : '-'}
@@ -24932,7 +25001,7 @@ ${alphaLines}`;
 }
 
 // 요청 19: [Distance Debug] 패널. Range/Distance 시스템의 실제 값을
-// F1 디버그 패널에서 바로 확인할 수 있게 한다 - 더미가 없으면 생략.
+// F9 디버그 패널에서 바로 확인할 수 있게 한다 - 더미가 없으면 생략.
 function distanceDebugText(ctrl) {
   if (typeof dummy === 'undefined' || !dummy) return '';
   const center = getHorizontalDistanceOf(ctrl, dummy);
@@ -24964,7 +25033,7 @@ function distanceDebugText(ctrl) {
     if (lol == null) return `<span class="k">${label} Range</span>  : -`;
     return `<span class="k">${label} Range</span>  : LoL ${lol} / World ${lolRangeToWorld(lol).toFixed(2)} → ${castable(slot)}`;
   };
-  return `--- [World Distance Debug] (F1) ---
+  return `--- [World Distance Debug] (F9) ---
 <span class="k">World Scale</span>   : 1 LoL unit = ${WORLD_DISTANCE_SCALE.toFixed(4)} world unit
 <span class="k">Player Radius</span>  : ${(ctrl.collisionRadius || 0).toFixed(2)}
 <span class="k">Dummy Radius</span>   : ${(dummy.collisionRadius || dummy.radius || 0).toFixed(2)}
@@ -27220,6 +27289,8 @@ function killMinion(minion) {
   if (minion.healthBar) minion.healthBar.sprite.visible = false; // 요청 22/21-G: 사망 즉시 체력바 숨김
   rewardMinionKill(minion);
   grantMinionExperience(minion);
+  // 34차 스코어보드 CS - 플레이어가 마지막으로 때린 미니언만 센다(원작 CS = 마지막 타격).
+  if (typeof controller !== 'undefined' && controller && minion._lastHitBy === controller && typeof ensureScore === 'function') ensureScore(controller).cs += 1;
   // 아리 패시브(정기 흡수) - 아리가 마지막으로 때린 미니언이 죽으면 스택 1개.
   if (typeof controller !== 'undefined' && controller && controller.championId === 'ahri'
       && minion._lastHitBy === controller && typeof controller._ahriOnMinionKill === 'function') {
@@ -30778,6 +30849,137 @@ function isShopOpen() { return _shopOpen; }
   if (hudBtn) hudBtn.addEventListener('click', toggleShop);
 })();
 
+/* ===== src/core/scoreboard_ui.js ===== */
+/* ============================================================
+   SCOREBOARD UI (스코어보드 - 34차)
+   ------------------------------------------------------------
+   요청("스코어 보드도 미리 만들어 두고") - 원작처럼 Tab을 누르고 있는 동안(또는 O로 켜고 끄기) 화면 가운데에 양 팀 표를 띄운다.
+   디자인은 상점 창과 같은 moba_ui_system 토큰(베벨 패널·청동 강조색·진영색 띠).
+
+   지금 이 연습장에는 플레이어 한 명뿐이라 실제 수치가 있는 줄은 플레이어 하나다:
+   - 레벨·골드·아이템(6칸+장신구)·CS(마지막 타격으로 잡은 미니언)·데스(사망 횟수)는 실제 값.
+   - 처치·어시스트: 적 챔피언이 아직 없어 0이다. 나중에 적 챔피언이 생기면 recordChampionTakedown()만 부르면 된다.
+   - 아군 더미·적 더미는 "연습 상대" 줄로 체력만 보여 준다. 남는 자리는 빈 자리로 5칸까지 채운다.
+   맨 위에는 팀별 처치 합계·부순 포탑 수, 가운데 게임 시간(포탑 시스템의 게임 시계)을 보여 준다.
+   ============================================================ */
+const SCOREBOARD_TEAM_SIZE = 5;
+let _scoreboardHeld = false;   // Tab 누르는 동안
+let _scoreboardToggled = false; // O로 켬
+let _scoreboardTicker = null;
+
+function _sbEl(id) { return document.getElementById(id); }
+function _sbEsc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function ensureScore(ctrl) {
+  if (!ctrl) return null;
+  if (!ctrl.score) ctrl.score = { kills: 0, deaths: 0, assists: 0, cs: 0 };
+  return ctrl.score;
+}
+// 이후 적 챔피언이 생기면 처치/어시스트를 여기로 넘긴다(지금은 부르는 곳이 없다).
+function recordChampionTakedown(ctrl, isKill) {
+  const s = ensureScore(ctrl);
+  if (!s) return;
+  if (isKill) s.kills += 1; else s.assists += 1;
+}
+function _sbChampName(id) {
+  const d = typeof CHAMPION_DATA !== 'undefined' && id ? CHAMPION_DATA[id] : null;
+  return (d && (d.displayName || d.nameKo)) || id || '-';
+}
+function _sbClock() {
+  const t = typeof getTurretGameTimeSec === 'function' ? Math.max(0, getTurretGameTimeSec()) : 0;
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+}
+// 상대 팀 포탑을 몇 개 부쉈는지(우물처럼 파괴 불가인 것은 뺀다).
+function _sbTowersDestroyedBy(team) {
+  if (typeof turrets === 'undefined' || typeof TURRET_DATA === 'undefined') return 0;
+  return turrets.filter((t) => t.team !== team && t.destroyed && !(TURRET_DATA[t.type] && TURRET_DATA[t.type].indestructible)).length;
+}
+function _sbItemsHtml(ctrl) {
+  let html = '';
+  const items = (ctrl && ctrl.items) || [];
+  for (let i = 0; i < 6; i++) {
+    const data = items[i] && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[items[i].id] : null;
+    html += `<div class="sb-item${data ? '' : ' empty'}" title="${data ? _sbEsc(data.nameKo) : ''}">${data && typeof _shopIconHtml === 'function' ? _shopIconHtml(data) : ''}</div>`;
+  }
+  const t = ctrl && ctrl.trinket && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[ctrl.trinket.id] : null;
+  html += `<div class="sb-item trinket${t ? '' : ' empty'}" title="${t ? _sbEsc(t.nameKo) : ''}">${t && typeof _shopIconHtml === 'function' ? _shopIconHtml(t) : ''}</div>`;
+  const b = ctrl && ctrl.boots && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[ctrl.boots.id] : null;
+  if (b) html += `<div class="sb-item boots" title="${_sbEsc(b.nameKo)}">${_shopIconHtml(b)}</div>`;
+  return `<div class="sb-items">${html}</div>`;
+}
+function _sbPlayerRow(ctrl) {
+  const s = ensureScore(ctrl);
+  const champ = _sbChampName(ctrl.championId);
+  return `<div class="sb-row me">
+    <div class="sb-portrait bevel-s">${_sbEsc(String(ctrl.championId || '-').slice(0, 2).toUpperCase())}<span class="sb-lv">${ctrl.champLevel || 1}</span></div>
+    <div class="sb-name"><b>${_sbEsc(champ)}</b><small>플레이어 (나)</small></div>
+    ${_sbItemsHtml(ctrl)}
+    <div class="sb-kda">${s.kills} / ${s.deaths} / ${s.assists}</div>
+    <div class="sb-cs">${s.cs}</div>
+    <div class="sb-gold">${Math.floor(ctrl.gold || 0).toLocaleString()}</div>
+  </div>`;
+}
+function _sbDummyRow(unit, label) {
+  const pct = unit.maxHp ? Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100)) : 0;
+  return `<div class="sb-row dummy">
+    <div class="sb-portrait bevel-s">더미</div>
+    <div class="sb-name"><b>${_sbEsc(label)}</b><small>연습 상대</small></div>
+    <div class="sb-items sb-hp"><div class="sb-hpbar"><div style="width:${pct.toFixed(0)}%"></div></div><span>${Math.ceil(unit.hp || 0).toLocaleString()} / ${Math.ceil(unit.maxHp || 0).toLocaleString()}</span></div>
+    <div class="sb-kda">-</div><div class="sb-cs">-</div><div class="sb-gold">-</div>
+  </div>`;
+}
+function _sbEmptyRow() {
+  return '<div class="sb-row empty"><div class="sb-portrait bevel-s"></div><div class="sb-name"><small>빈 자리</small></div><div class="sb-items"></div><div class="sb-kda"></div><div class="sb-cs"></div><div class="sb-gold"></div></div>';
+}
+function _sbTeamRows(team, ctrl) {
+  const rows = [];
+  if (ctrl && (ctrl.team || PLAYER_TEAM) === team) rows.push(_sbPlayerRow(ctrl));
+  const playerTeam = (ctrl && ctrl.team) || PLAYER_TEAM;
+  if (team === playerTeam) {
+    if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbDummyRow(a, '아군 더미'));
+  } else {
+    const enemies = typeof dummy !== 'undefined' && dummy ? [dummy, ...(typeof placedDummies !== 'undefined' ? placedDummies : [])] : (typeof placedDummies !== 'undefined' ? placedDummies : []);
+    for (const d of enemies) if (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbDummyRow(d, '더미 타겟'));
+  }
+  while (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbEmptyRow());
+  return rows.join('');
+}
+function _sbTeamKills(team, ctrl) {
+  return ctrl && (ctrl.team || PLAYER_TEAM) === team ? ensureScore(ctrl).kills : 0;
+}
+function renderScoreboard() {
+  const box = _sbEl('scoreboardPanel');
+  if (!box) return;
+  const ctrl = typeof controller !== 'undefined' ? controller : null;
+  const teams = [{ id: 'BLUE', nameKo: '블루 팀', cls: 'blue' }, { id: 'RED', nameKo: '레드 팀', cls: 'red' }];
+  let html = `<div class="sb-top">
+    <div class="sb-team-sum blue"><span class="sb-sum-kills">${_sbTeamKills('BLUE', ctrl)}</span><span class="sb-sum-tower" title="부순 포탑">▲ ${_sbTowersDestroyedBy('BLUE')}</span></div>
+    <div class="sb-clock">${_sbClock()}</div>
+    <div class="sb-team-sum red"><span class="sb-sum-tower" title="부순 포탑">▲ ${_sbTowersDestroyedBy('RED')}</span><span class="sb-sum-kills">${_sbTeamKills('RED', ctrl)}</span></div>
+  </div>`;
+  for (const t of teams) {
+    html += `<div class="sb-team ${t.cls}">
+      <div class="sb-head uc"><span class="sb-team-name">${t.nameKo}</span><span></span><span>아이템</span><span>K / D / A</span><span>CS</span><span>골드</span></div>
+      ${_sbTeamRows(t.id, ctrl)}
+    </div>`;
+  }
+  box.innerHTML = html;
+}
+function _sbApplyVisible() {
+  const overlay = _sbEl('scoreboardOverlay');
+  if (!overlay) return;
+  const show = _scoreboardHeld || _scoreboardToggled;
+  overlay.classList.toggle('show', show);
+  clearInterval(_scoreboardTicker);
+  _scoreboardTicker = null;
+  if (show) { renderScoreboard(); _scoreboardTicker = setInterval(renderScoreboard, 250); }
+}
+function setScoreboardHeld(held) { if (_scoreboardHeld === !!held) return; _scoreboardHeld = !!held; _sbApplyVisible(); }
+function toggleScoreboard() { _scoreboardToggled = !_scoreboardToggled; _sbApplyVisible(); }
+function isScoreboardOpen() { return _scoreboardHeld || _scoreboardToggled; }
+// 창이 포커스를 잃으면(Alt+Tab 등) Tab 떼는 신호가 안 올 수 있다 - 누르고 있던 상태를 푼다.
+window.addEventListener('blur', () => setScoreboardHeld(false));
+
 /* ===== src/core/global_system_instances.js ===== */
 /* ============================================================
    4. GLOBAL SYSTEM INSTANCES
@@ -31370,6 +31572,9 @@ window.addEventListener('keydown', (e) => {
   if (typing) { if (e.code === 'Escape' && typeof isShopOpen === 'function' && isShopOpen()) setShopOpen(false); return; }
   // 상점(P - 원작 기본 키)은 챔피언을 불러오기 전에도 열어 볼 수 있다.
   if (e.code === 'KeyP' && !e.repeat) { if (typeof toggleShop === 'function') toggleShop(); return; }
+  // 34차 스코어보드: Tab 누르고 있기 / O 켜고 끄기(원작 기본 키). Tab의 브라우저 포커스 이동은 막는다.
+  if (e.code === 'Tab') { e.preventDefault(); if (typeof setScoreboardHeld === 'function') setScoreboardHeld(true); return; }
+  if (e.code === 'KeyO' && !e.repeat && !e.ctrlKey) { if (typeof toggleScoreboard === 'function') toggleScoreboard(); return; }
   if (e.code === 'Escape' && typeof isShopOpen === 'function' && isShopOpen()) { setShopOpen(false); return; }
   if (!controller) return;
   // 버그 수정("스킬 쓰면 마우스 커서가 사라진다"): 이 앱 자체는 커서를
@@ -31385,11 +31590,15 @@ window.addEventListener('keydown', (e) => {
   canvasEl.style.cursor = 'none';
   requestAnimationFrame(() => { canvasEl.style.cursor = keepCursor; });
   if (e.code === 'Escape') { if (skillAim.aiming) { skillAim.cancel(); return; } togglePause(); return; }
-  if (e.code === 'F1') { e.preventDefault(); debugPanelVisible = !debugPanelVisible; return; }
+  // 34차: 원작 카메라 키 - Y 고정 켜기/끄기, Space(누르고 있기)·F1 내 챔피언으로.
+  if (e.code === 'KeyY' && !e.repeat) { if (typeof toggleCameraLock === 'function') toggleCameraLock(); return; }
+  if (e.code === 'Space' || e.code === 'F1') { e.preventDefault(); cameraRig.centerHeld = true; return; }
+  // 연습장 전용(원작에 없는 기능) 키는 원작 키와 겹치지 않게 F6~F9로 모았다.
+  if (e.code === 'F9') { e.preventDefault(); debugPanelVisible = !debugPanelVisible; return; }
   if (e.code === 'KeyV') { rangeIndicators.toggle(); const cb = document.getElementById('rangeIndicatorCheckbox'); if (cb) cb.checked = rangeIndicators.visible; return; }
-  if (e.code === 'KeyJ') { if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
-  if (e.code === 'KeyO') { setAllyPlaceMode(!allyPlaceMode); return; }
-  if (e.code === 'KeyN') { setBrushPlaceMode(!brushPlaceMode); return; }
+  if (e.code === 'F6') { e.preventDefault(); if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
+  if (e.code === 'F7') { e.preventDefault(); setAllyPlaceMode(!allyPlaceMode); return; }
+  if (e.code === 'F8') { e.preventDefault(); setBrushPlaceMode(!brushPlaceMode); return; }
   if (paused) return;
   // 버그 수정(핵심 - "마스터 이 W 모션이 반복된다"의 진짜 원인): 이
   // 리스너에 OS 키 반복(long-press) 방지 처리가 전혀 없었다. 키를 누르고
@@ -31402,6 +31611,13 @@ window.addEventListener('keydown', (e) => {
   // 막는다(각 스킬 로직은 전혀 건드리지 않음).
   if (e.repeat) return;
   const mousePoint = lastGroundPoint || controller.root.position.clone();
+  // 34차: Ctrl+Q/W/E/R = 스킬 레벨 업(원작 기본 키). 스킬을 쓰지 않는다.
+  // (Ctrl+W는 브라우저가 탭 닫기로 먼저 가져갈 수 있다 - 그때는 스킬 칸 위 레벨 업 버튼을 누르면 된다.)
+  if (e.ctrlKey && ['KeyQ', 'KeyW', 'KeyE', 'KeyR'].includes(e.code)) {
+    e.preventDefault();
+    if (controller.levelUpSkill(e.code.slice(3)) && typeof renderLevelPanel === 'function') renderLevelPanel();
+    return;
+  }
   switch (e.code) {
     case 'KeyQ': onSkillKeyDown('Q', e.code, mousePoint); break;
     case 'KeyW': onSkillKeyDown('W', e.code, mousePoint); break;
@@ -31418,7 +31634,8 @@ window.addEventListener('keydown', (e) => {
     // (R도 Q/W/E와 같은 조준 경로 - onSkillKeyDown)
     case 'KeyR': onSkillKeyDown('R', e.code, mousePoint); break;
     case 'KeyB': controller.startRecall(); break;
-    case 'Space': if (dummy && dummy.hp > 0) controller.selectTarget(dummy); break;
+    // 정지(원작 기본 키 S) - 이동·공격 명령을 멈추고 그 자리에 선다(제자리로 이동 = 정지, _commitMove 참고).
+    case 'KeyS': controller.moveTo(controller.root.position.clone()); break;
     // 아이템 사용 - 원작 키 배치(1·2·3·5·6·7 = 인벤토리 6칸, 4 = 장신구). 사용 불가 아이템(스탯
     // 아이템)이면 useItem() 내부에서 콘솔 경고만 내고 조용히 무시된다.
     case 'Digit1': if (typeof useItem === 'function') useItem(controller, 0); break;
@@ -31468,7 +31685,11 @@ function onSkillKeyUp(code) {
   skillAim.cancel();
   skillAim.cast(controller, slot, p, lastPointerClient);
 }
-window.addEventListener('keyup', (e) => { if (!paused) onSkillKeyUp(e.code); });
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Tab' && typeof setScoreboardHeld === 'function') setScoreboardHeld(false);
+  if (e.code === 'Space' || e.code === 'F1') cameraRig.centerHeld = false;
+  if (!paused) onSkillKeyUp(e.code);
+});
 window.addEventListener('blur', () => { if (skillAim.aiming && skillAim.mode === 'indicator') skillAim.cancel(); });
 
 function togglePause() {
@@ -32599,7 +32820,7 @@ document.querySelectorAll('#helpBox .panelHeader, #rangeIndicatorToggle .panelHe
   header.addEventListener('click', () => header.closest('#helpBox, #rangeIndicatorToggle').classList.toggle('collapsed'));
 });
 // debugPanel은 매 프레임 내용이 통째로 다시 그려지므로(updateDebugPanel),
-// 버튼을 그 안에 두지 않고 별도 요소로 만들어 기존 F1 토글과 같은
+// 버튼을 그 안에 두지 않고 별도 요소로 만들어 기존 F9(예전 F1) 토글과 같은
 // debugPanelVisible 플래그를 그대로 공유한다.
 document.getElementById('debugPanelToggle').addEventListener('click', () => {
   debugPanelVisible = !debugPanelVisible;
@@ -33048,7 +33269,7 @@ function animate() {
   if (!isFinite(dt) || dt < 0) dt = 1 / 60; // 비정상적인 값이면 안전한 기본 프레임 시간으로 대체
   dt = Math.min(dt, 0.05);
   if (!paused) {
-    if (controller) { controller.update(dt); updateCameraTransform(controller.root.position, dt); }
+    if (controller) { controller.update(dt); updateCameraTransform(cameraFocusPoint(controller.root.position, dt), dt); }
     else updateCameraTransform(new THREE.Vector3(0,0,0), dt);
     updateMarkers(dt);
     updateDummyAI(dt);

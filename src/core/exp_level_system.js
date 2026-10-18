@@ -672,6 +672,8 @@ function killMinion(minion) {
   if (minion.healthBar) minion.healthBar.sprite.visible = false; // 요청 22/21-G: 사망 즉시 체력바 숨김
   rewardMinionKill(minion);
   grantMinionExperience(minion);
+  // 34차 스코어보드 CS - 플레이어가 마지막으로 때린 미니언만 센다(원작 CS = 마지막 타격).
+  if (typeof controller !== 'undefined' && controller && minion._lastHitBy === controller && typeof ensureScore === 'function') ensureScore(controller).cs += 1;
   // 아리 패시브(정기 흡수) - 아리가 마지막으로 때린 미니언이 죽으면 스택 1개.
   if (typeof controller !== 'undefined' && controller && controller.championId === 'ahri'
       && minion._lastHitBy === controller && typeof controller._ahriOnMinionKill === 'function') {

@@ -1118,7 +1118,7 @@ document.querySelectorAll('#helpBox .panelHeader, #rangeIndicatorToggle .panelHe
   header.addEventListener('click', () => header.closest('#helpBox, #rangeIndicatorToggle').classList.toggle('collapsed'));
 });
 // debugPanel은 매 프레임 내용이 통째로 다시 그려지므로(updateDebugPanel),
-// 버튼을 그 안에 두지 않고 별도 요소로 만들어 기존 F1 토글과 같은
+// 버튼을 그 안에 두지 않고 별도 요소로 만들어 기존 F9(예전 F1) 토글과 같은
 // debugPanelVisible 플래그를 그대로 공유한다.
 document.getElementById('debugPanelToggle').addEventListener('click', () => {
   debugPanelVisible = !debugPanelVisible;
@@ -1567,7 +1567,7 @@ function animate() {
   if (!isFinite(dt) || dt < 0) dt = 1 / 60; // 비정상적인 값이면 안전한 기본 프레임 시간으로 대체
   dt = Math.min(dt, 0.05);
   if (!paused) {
-    if (controller) { controller.update(dt); updateCameraTransform(controller.root.position, dt); }
+    if (controller) { controller.update(dt); updateCameraTransform(cameraFocusPoint(controller.root.position, dt), dt); }
     else updateCameraTransform(new THREE.Vector3(0,0,0), dt);
     updateMarkers(dt);
     updateDummyAI(dt);

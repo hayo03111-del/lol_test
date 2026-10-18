@@ -180,6 +180,7 @@ CharacterController.prototype._die = function() {
     this.targetPos = null; this.currentTarget = null; this.pendingMove = null; this.pendingCast = null;
     targetRing.clear();
     this.setState(STATE.DEAD);
+    if (typeof ensureScore === 'function' && typeof controller !== 'undefined' && controller === this) ensureScore(this).deaths += 1; // 34차 스코어보드
     vfx.spawn('death', this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)));
     this.playFirstAvailable(this.actionData.death.clips, { loop:THREE.LoopOnce, fade:0.1, clampWhenFinished:true });
     const t = setTimeout(() => this._respawn(), RESPAWN_WAIT * 1000);

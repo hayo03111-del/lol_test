@@ -41,7 +41,41 @@ const cameraRig = {
   minDistance: 20,
   maxDistance: 48,
   followPos: new THREE.Vector3(0, 0, 0),
+  // 34차: 원작 카메라 조작 - Y = 카메라 고정 켜기/끄기, Space(누르고 있기)·F1 = 내 챔피언으로 카메라 이동.
+  // 고정을 풀면 마우스를 화면 가장자리에 대면 그쪽으로 카메라가 움직인다. 처음은 지금까지처럼 고정 상태.
+  locked: true,
+  centerHeld: false,
+  freePos: new THREE.Vector3(0, 0, 0),
+  edgePointer: null,
 };
+const CAMERA_EDGE_PX = 14;             // 화면 가장자리 몇 픽셀 안에서 움직일지
+const CAMERA_EDGE_SPEED_PER_DIST = 1.4; // 초당 이동 거리 = 카메라 거리 x 이 값(멀리 볼수록 빨리)
+window.addEventListener('pointermove', (e) => { cameraRig.edgePointer = { x: e.clientX, y: e.clientY }; });
+document.addEventListener('mouseleave', () => { cameraRig.edgePointer = null; });
+window.addEventListener('blur', () => { cameraRig.edgePointer = null; cameraRig.centerHeld = false; });
+// 이번 프레임 카메라가 바라볼 지점. 고정이거나 Space를 누르고 있으면 챔피언, 아니면 가장자리로 움직인 자유 지점.
+function cameraFocusPoint(champPos, dt) {
+  if (cameraRig.locked || cameraRig.centerHeld) { cameraRig.freePos.copy(champPos); return champPos; }
+  const p = cameraRig.edgePointer;
+  if (p && document.hasFocus()) {
+    let sx = 0, sy = 0;
+    if (p.x <= CAMERA_EDGE_PX) sx = -1; else if (p.x >= window.innerWidth - 1 - CAMERA_EDGE_PX) sx = 1;
+    if (p.y <= CAMERA_EDGE_PX) sy = -1; else if (p.y >= window.innerHeight - 1 - CAMERA_EDGE_PX) sy = 1;
+    if (sx || sy) {
+      // 화면 오른쪽/위쪽에 해당하는 바닥 방향(카메라는 yaw 방향 뒤에서 내려다본다).
+      const right = new THREE.Vector3(Math.cos(cameraRig.yaw), 0, -Math.sin(cameraRig.yaw));
+      const up = new THREE.Vector3(-Math.sin(cameraRig.yaw), 0, -Math.cos(cameraRig.yaw));
+      const step = cameraRig.distance * CAMERA_EDGE_SPEED_PER_DIST * dt;
+      cameraRig.freePos.addScaledVector(right, sx * step).addScaledVector(up, -sy * step);
+      if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap && howlingAbyssMap.clampPosition) cameraRig.freePos.copy(howlingAbyssMap.clampPosition(cameraRig.freePos.clone()));
+    }
+  }
+  return cameraRig.freePos;
+}
+function toggleCameraLock() {
+  cameraRig.locked = !cameraRig.locked;
+  if (typeof showSkillToast === 'function') showSkillToast(cameraRig.locked ? '카메라 고정 (Y)' : '카메라 고정 해제 (Y) - 화면 가장자리로 이동, Space로 복귀');
+}
 
 function updateCameraTransform(targetPos, dt) {
   cameraRig.followPos.lerp(targetPos, Math.min(1, dt * 6));
@@ -59,6 +93,7 @@ function updateCameraTransform(targetPos, dt) {
 // 순간이동(리스폰·귀환) 뒤 카메라를 천천히 따라가지 않고 바로 옮긴다 - 원작도 리스폰·귀환하면 카메라가 챔피언 위로 바로 간다.
 function snapCameraTo(targetPos) {
   cameraRig.followPos.copy(targetPos);
+  cameraRig.freePos.copy(targetPos);
   updateCameraTransform(targetPos, 1);
 }
 

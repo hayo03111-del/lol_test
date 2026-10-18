@@ -589,6 +589,9 @@ window.addEventListener('keydown', (e) => {
   if (typing) { if (e.code === 'Escape' && typeof isShopOpen === 'function' && isShopOpen()) setShopOpen(false); return; }
   // 상점(P - 원작 기본 키)은 챔피언을 불러오기 전에도 열어 볼 수 있다.
   if (e.code === 'KeyP' && !e.repeat) { if (typeof toggleShop === 'function') toggleShop(); return; }
+  // 34차 스코어보드: Tab 누르고 있기 / O 켜고 끄기(원작 기본 키). Tab의 브라우저 포커스 이동은 막는다.
+  if (e.code === 'Tab') { e.preventDefault(); if (typeof setScoreboardHeld === 'function') setScoreboardHeld(true); return; }
+  if (e.code === 'KeyO' && !e.repeat && !e.ctrlKey) { if (typeof toggleScoreboard === 'function') toggleScoreboard(); return; }
   if (e.code === 'Escape' && typeof isShopOpen === 'function' && isShopOpen()) { setShopOpen(false); return; }
   if (!controller) return;
   // 버그 수정("스킬 쓰면 마우스 커서가 사라진다"): 이 앱 자체는 커서를
@@ -604,11 +607,15 @@ window.addEventListener('keydown', (e) => {
   canvasEl.style.cursor = 'none';
   requestAnimationFrame(() => { canvasEl.style.cursor = keepCursor; });
   if (e.code === 'Escape') { if (skillAim.aiming) { skillAim.cancel(); return; } togglePause(); return; }
-  if (e.code === 'F1') { e.preventDefault(); debugPanelVisible = !debugPanelVisible; return; }
+  // 34차: 원작 카메라 키 - Y 고정 켜기/끄기, Space(누르고 있기)·F1 내 챔피언으로.
+  if (e.code === 'KeyY' && !e.repeat) { if (typeof toggleCameraLock === 'function') toggleCameraLock(); return; }
+  if (e.code === 'Space' || e.code === 'F1') { e.preventDefault(); cameraRig.centerHeld = true; return; }
+  // 연습장 전용(원작에 없는 기능) 키는 원작 키와 겹치지 않게 F6~F9로 모았다.
+  if (e.code === 'F9') { e.preventDefault(); debugPanelVisible = !debugPanelVisible; return; }
   if (e.code === 'KeyV') { rangeIndicators.toggle(); const cb = document.getElementById('rangeIndicatorCheckbox'); if (cb) cb.checked = rangeIndicators.visible; return; }
-  if (e.code === 'KeyJ') { if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
-  if (e.code === 'KeyO') { setAllyPlaceMode(!allyPlaceMode); return; }
-  if (e.code === 'KeyN') { setBrushPlaceMode(!brushPlaceMode); return; }
+  if (e.code === 'F6') { e.preventDefault(); if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
+  if (e.code === 'F7') { e.preventDefault(); setAllyPlaceMode(!allyPlaceMode); return; }
+  if (e.code === 'F8') { e.preventDefault(); setBrushPlaceMode(!brushPlaceMode); return; }
   if (paused) return;
   // 버그 수정(핵심 - "마스터 이 W 모션이 반복된다"의 진짜 원인): 이
   // 리스너에 OS 키 반복(long-press) 방지 처리가 전혀 없었다. 키를 누르고
@@ -621,6 +628,13 @@ window.addEventListener('keydown', (e) => {
   // 막는다(각 스킬 로직은 전혀 건드리지 않음).
   if (e.repeat) return;
   const mousePoint = lastGroundPoint || controller.root.position.clone();
+  // 34차: Ctrl+Q/W/E/R = 스킬 레벨 업(원작 기본 키). 스킬을 쓰지 않는다.
+  // (Ctrl+W는 브라우저가 탭 닫기로 먼저 가져갈 수 있다 - 그때는 스킬 칸 위 레벨 업 버튼을 누르면 된다.)
+  if (e.ctrlKey && ['KeyQ', 'KeyW', 'KeyE', 'KeyR'].includes(e.code)) {
+    e.preventDefault();
+    if (controller.levelUpSkill(e.code.slice(3)) && typeof renderLevelPanel === 'function') renderLevelPanel();
+    return;
+  }
   switch (e.code) {
     case 'KeyQ': onSkillKeyDown('Q', e.code, mousePoint); break;
     case 'KeyW': onSkillKeyDown('W', e.code, mousePoint); break;
@@ -637,7 +651,8 @@ window.addEventListener('keydown', (e) => {
     // (R도 Q/W/E와 같은 조준 경로 - onSkillKeyDown)
     case 'KeyR': onSkillKeyDown('R', e.code, mousePoint); break;
     case 'KeyB': controller.startRecall(); break;
-    case 'Space': if (dummy && dummy.hp > 0) controller.selectTarget(dummy); break;
+    // 정지(원작 기본 키 S) - 이동·공격 명령을 멈추고 그 자리에 선다(제자리로 이동 = 정지, _commitMove 참고).
+    case 'KeyS': controller.moveTo(controller.root.position.clone()); break;
     // 아이템 사용 - 원작 키 배치(1·2·3·5·6·7 = 인벤토리 6칸, 4 = 장신구). 사용 불가 아이템(스탯
     // 아이템)이면 useItem() 내부에서 콘솔 경고만 내고 조용히 무시된다.
     case 'Digit1': if (typeof useItem === 'function') useItem(controller, 0); break;
@@ -687,7 +702,11 @@ function onSkillKeyUp(code) {
   skillAim.cancel();
   skillAim.cast(controller, slot, p, lastPointerClient);
 }
-window.addEventListener('keyup', (e) => { if (!paused) onSkillKeyUp(e.code); });
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Tab' && typeof setScoreboardHeld === 'function') setScoreboardHeld(false);
+  if (e.code === 'Space' || e.code === 'F1') cameraRig.centerHeld = false;
+  if (!paused) onSkillKeyUp(e.code);
+});
 window.addEventListener('blur', () => { if (skillAim.aiming && skillAim.mode === 'indicator') skillAim.cancel(); });
 
 function togglePause() {

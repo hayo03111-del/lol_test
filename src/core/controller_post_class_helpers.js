@@ -231,6 +231,38 @@ function updateExpUI(champion) {
   const sp = champion.skillPoints || 0;
   const spText = sp > 0 ? `+${sp}` : '';
   if (spEl && _expUiLast.spText !== spText) { spEl.textContent = spText; _expUiLast.spText = spText; }
+  _updateSkillLevelUpButtons(champion);
+}
+// 34차: 스킬 포인트가 있으면 올릴 수 있는 스킬 칸 위에 레벨 업 버튼을 띄운다(원작처럼 - 키는 Ctrl+Q/W/E/R).
+// levelUpSkill()과 같은 조건(최대 랭크, R은 레벨 11/16 제한)을 그대로 따진다.
+function _updateSkillLevelUpButtons(champion) {
+  const sp = champion.skillPoints || 0;
+  for (const key of ['Q', 'W', 'E', 'R']) {
+    const slot = document.getElementById('slot' + key);
+    if (!slot) continue;
+    const cur = (champion.skillLevels && champion.skillLevels[key]) || 0;
+    const cap = key === 'R' ? 3 : 5;
+    const gate = key === 'R' ? R_RANK_LEVEL_GATE[cur + 1] : null;
+    const can = sp > 0 && cur < cap && !(gate && champion.champLevel < gate);
+    let btn = slot.querySelector('.lvlUp');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.className = 'lvlUp';
+      btn.textContent = '▲ 레벨 업';
+      btn.title = `Ctrl+${key}: ${key} 스킬 레벨 업`;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof controller !== 'undefined' && controller && controller.levelUpSkill(key) && typeof renderLevelPanel === 'function') renderLevelPanel();
+      });
+      slot.appendChild(btn);
+    }
+    btn.style.display = can ? '' : 'none';
+    // 랭크 표시(원작 스킬 칸 아래 점) - 칸마다 최대 랭크만큼.
+    let pips = slot.querySelector('.rankPips');
+    if (!pips) { pips = document.createElement('div'); pips.className = 'rankPips'; slot.appendChild(pips); }
+    const sig = `${cur}/${cap}`;
+    if (pips.dataset.sig !== sig) { pips.dataset.sig = sig; pips.innerHTML = Array.from({ length: cap }, (_, i) => `<span${i < cur ? ' class="on"' : ''}></span>`).join(''); }
+  }
 }
 // 요청 8: "레벨업 시 시각적인 레벨업 효과... 화면을 가리지 않게 짧고
 // 깔끔하게" - 텍스트 하나가 잠깐 떴다 사라지는 정도로 제한한다.
@@ -260,7 +292,7 @@ function stateDisplayLabel(ctrl) {
 function updateDebugPanel() {
   if (!debugPanelVisible) { debugPanelEl.style.display = 'none'; return; }
   debugPanelEl.style.display = 'block';
-  if (!controller) { debugPanelEl.textContent = 'GLB를 불러오면 여기에 상태가 표시됩니다. (F1: 패널 토글)'; return; }
+  if (!controller) { debugPanelEl.textContent = 'GLB를 불러오면 여기에 상태가 표시됩니다. (F9: 패널 토글)'; return; }
   const targetName = controller.currentTarget ? (controller.currentTarget.hp > 0 ? '더미 타겟' : '(사망)') : '-';
   const action = controller.currentAction;
   const animTime = action ? `${action.time.toFixed(2)}/${action.getClip().duration.toFixed(2)}` : '-';
@@ -282,7 +314,7 @@ function updateDebugPanel() {
 <span class="k">Target</span>     : ${targetName}
 <span class="k">Combo</span>      : ${controller.comboIndex}
 <span class="k">Gold</span>       : ${controller.gold || 0}
---- stats (F1 toggle) ---
+--- stats (F9 toggle) ---
 <span class="k">MoveSpeed</span>  : ${finalMoveSpeed.toFixed(2)}
 <span class="k">AtkDamage</span>  : ${s.attackDamage.toFixed(1)}
 <span class="k">AtkSpeed</span>   : ${finalAtkSpeed.toFixed(2)}/s
@@ -382,7 +414,7 @@ function masterYiDebugText(ctrl) {
 <span class="k">Collision Fix</span>: ${dbg.collisionCorrected ? 'YES' : '-'}
 <span class="k">Used Fallback</span>: ${dbg.usedFallback ? 'YES' : '-'}`;
   }
-  return `--- [Master Yi Debug] (F1) ---
+  return `--- [Master Yi Debug] (F9) ---
 <span class="k">Passive</span>    : ${dots} (${stackNow}/${everyN}, next=${nextIsPassive})
 <span class="k">E (Wuju)</span>   : ${hasStatus(ctrl, 'MASTERYI_E') ? 'ACTIVE' : '-'}
 <span class="k">R (Highlander)</span>: ${ctrl.isSubStateActive('R') ? 'ACTIVE' : '-'}
@@ -392,7 +424,7 @@ ${alphaLines}`;
 }
 
 // 요청 19: [Distance Debug] 패널. Range/Distance 시스템의 실제 값을
-// F1 디버그 패널에서 바로 확인할 수 있게 한다 - 더미가 없으면 생략.
+// F9 디버그 패널에서 바로 확인할 수 있게 한다 - 더미가 없으면 생략.
 function distanceDebugText(ctrl) {
   if (typeof dummy === 'undefined' || !dummy) return '';
   const center = getHorizontalDistanceOf(ctrl, dummy);
@@ -424,7 +456,7 @@ function distanceDebugText(ctrl) {
     if (lol == null) return `<span class="k">${label} Range</span>  : -`;
     return `<span class="k">${label} Range</span>  : LoL ${lol} / World ${lolRangeToWorld(lol).toFixed(2)} → ${castable(slot)}`;
   };
-  return `--- [World Distance Debug] (F1) ---
+  return `--- [World Distance Debug] (F9) ---
 <span class="k">World Scale</span>   : 1 LoL unit = ${WORLD_DISTANCE_SCALE.toFixed(4)} world unit
 <span class="k">Player Radius</span>  : ${(ctrl.collisionRadius || 0).toFixed(2)}
 <span class="k">Dummy Radius</span>   : ${(dummy.collisionRadius || dummy.radius || 0).toFixed(2)}
