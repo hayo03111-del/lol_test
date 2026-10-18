@@ -79,6 +79,10 @@
   "riotItemId": "3867",
   "riotNameKo": "세계의 결실"
  },
+ "brambleVest": {
+  "riotItemId": "3076",
+  "riotNameKo": "덤불 조끼"
+ },
  "brokenWristGuard": {
   "riotItemId": "2421",
   "riotNameKo": "부서진 팔목 보호대"
@@ -218,6 +222,10 @@
  "feralization": {
   "riotItemId": "2020",
   "riotNameKo": "야수화"
+ },
+ "fiendhunterBolts": {
+  "riotItemId": "2512",
+  "riotNameKo": "악마사냥꾼의 화살"
  },
  "fiendishCodex": {
   "riotItemId": "3108",
@@ -558,6 +566,10 @@
  "tempestStaff": {
   "riotItemId": "4646",
   "riotNameKo": "폭풍 쇄도"
+ },
+ "thornmail": {
+  "riotItemId": "3075",
+  "riotNameKo": "가시 갑옷"
  },
  "tiamat": {
   "riotItemId": "3077",

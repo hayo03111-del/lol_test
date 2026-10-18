@@ -7,7 +7,8 @@
    이 데모에 맞춘 해석(명시):
    - Q(대회전): 구르는 동안에도 우클릭으로 방향을 바꾼다(원작). 적을 우클릭하면 공격 대신 그쪽으로 굴러간다.
      적(챔피언·미니언)에 닿으면 멈추고 반경 250에 피해·넉백·기절·둔화. 재사용 대기시간은 구르기가 끝난 뒤부터 돈다.
-     구르는 모습: 몸을 만 공 자세(Channel_Wndup)를 반복하고, 공 전체를 실제 이동 거리만큼 앞으로 굴린다(GLB에 굴림 반복 클립이 없음 - 39차).
+     구르는 모습: Spell1로 몸을 만 뒤 팔다리를 다 집어넣은 지점에서 멈춰 그 공 자세를 실제 이동 거리만큼 앞으로 굴린다
+     (GLB에 굴림 반복 클립이 없음 - 39·40차).
    - W(몸 말아 웅크리기): 평타로 람머스를 때린 적(포탑 제외)에게 마법 피해를 돌려준다. W를 쓰면 구르기가 끝난다(원작).
    - E(광란의 도발): 도발된 대상은 행동 불가 + 람머스에게 걸어온다(이 연습장의 적은 평타를 하지 않아 "람머스를 공격"을
      "람머스에게 다가감"으로 표현 - 아리 매혹과 같은 이동 처리, 감속 없음).
@@ -53,7 +54,7 @@ CharacterController.prototype._rammusCastQ = function(mouseWorldPoint, free = fa
   applyStatus(this, { id: 'rammusQ_ms', type: 'MS_BUFF', duration: q.rollDurationSec + 0.5, value: 0 });
   const clip = this._rammusRollClip();
   this._beginTransientMoveClip(clip);
-  this.playFirstAvailable([clip], { loop: THREE.LoopRepeat, fade: 0.1 });
+  this.playFirstAvailable([clip], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true }); // 몸을 마는 모습(공 자세에서 멈춤 - _rammusHoldBallPose)
   this._rammusBeginBallSpin();
   if (this.currentTarget && this.currentTarget.hp > 0) this._tryEngageTarget(); // 대상이 있으면 그쪽으로 굴러간다
   debugSkillHit('Rammus Q(대회전) 시작', this);
@@ -68,10 +69,8 @@ CharacterController.prototype._rammusTickRoll = function(dt) {
   const cap = this._rammusLevelLerp(q.msPercentCapAt1, q.msPercentCapAt18);
   const ms = getStatus(this, 'rammusQ_ms');
   if (ms) ms.value = Math.min(cap, rate * roll.elapsed) / 100;
-  // 멈춰 있거나 다른 모션으로 바뀌었으면 공 자세로 되돌린다.
-  const clip = this._rammusRollClip();
-  if (!this.currentActionKey && this.currentClipKey !== clip) this.playFirstAvailable([clip], { loop: THREE.LoopRepeat, fade: 0.1 });
-  this._rammusTickBallSpin();
+  this._rammusHoldBallPose();
+  this._rammusTickBallSpin(dt);
   // 적과 충돌(구조물·와드 제외) → 멈추고 폭발.
   const pos = this.root.position;
   for (const u of getTargetableEnemyUnits()) {
@@ -132,12 +131,27 @@ CharacterController.prototype._rammusRollClip = function() {
   const name = db && db.Q && db.Q.rollClip;
   return name && this.findAnimation(name) ? name : 'Spell1';
 };
-// 공 굴리기: 몸을 만 자세가 자리 잡으면(구르기 시작 0.15초 뒤) 실제 메시 정점으로 공 중심을 재고, 모델 크기 래퍼(scaleWrapper)를
+// 공 자세 유지: 몸을 마는 클립이 rollHoldAt 지점에 오면 거기서 멈춘다. 다른 모션(이동·기절 등)으로 바뀌었으면 몸 마는 모습을
+// 다시 보여 주지 않고 곧장 공 자세로 되돌린다.
+CharacterController.prototype._rammusHoldBallPose = function() {
+  const roll = this._rammus.roll;
+  const clip = this._rammusRollClip();
+  const db = this._championAbilityDbEntry();
+  const holdAt = (db && db.Q && db.Q.rollHoldAt != null) ? db.Q.rollHoldAt : 1;
+  if (this.currentActionKey) return;
+  if (this.currentClipKey !== clip || !this.currentAction) {
+    this.playFirstAvailable([clip], { loop: THREE.LoopOnce, fade: 0.1, clampWhenFinished: true });
+    if (this.currentAction && roll.held) { this.currentAction.time = this.currentAction.getClip().duration * holdAt; this.currentAction.paused = true; }
+    return;
+  }
+  const a = this.currentAction, holdTime = a.getClip().duration * holdAt;
+  if (a.time >= holdTime - 1e-4 || roll.held) { a.time = holdTime; a.paused = true; roll.held = true; }
+};
+// 공 굴리기: 공 자세가 잡히면(_rammusHoldBallPose) 실제 메시 정점으로 공 중심을 재고, 모델 크기 래퍼(scaleWrapper)를
 // 그 중심에 둔 회전축(pivot) 아래로 옮긴 뒤 이동한 거리 / 반지름만큼 앞으로 돌린다. 가시 달린 공이라 완전한 구가 아니어서,
 // 회전 각도마다 "중심 → 가장 낮은 점" 거리를 미리 재 두고(32칸) 매 프레임 그만큼 띄워 가장 낮은 점이 항상 지면에 닿게 한다
 // (예전: 모델 원점을 축으로 돌려 공이 땅에 박혔다 떴다 했다). root는 이동 방향을 바라보므로 회전축의 로컬 X축 둘레로 + 회전이면
 // 윗면이 앞(+Z)으로 넘어간다.
-const RAMMUS_SPIN_CALIBRATE_SEC = 0.15;
 const RAMMUS_SPIN_SAMPLES = 32;
 CharacterController.prototype._rammusBeginBallSpin = function() {
   if (!this._rammus.spin) this._rammus.spinPending = true;
@@ -171,16 +185,16 @@ CharacterController.prototype._rammusCalibrateBallSpin = function() {
   }
   const radius = Math.max(1e-3, lowest.reduce((a, x) => a + x, 0) / RAMMUS_SPIN_SAMPLES); // 굴림 속도용 평균 반지름
   const pivot = new THREE.Group();
-  pivot.position.set(c.x, lowest[0], c.z);
+  pivot.position.set(c.x, c.y, c.z); // 지금 공이 있는 높이에서 시작해 지면으로 내려앉는다(_rammusTickBallSpin)
   this.root.add(pivot);
   const basePos = wrapper.position.clone();
   pivot.add(wrapper);
   wrapper.position.set(basePos.x - c.x, basePos.y - c.y, basePos.z - c.z);
-  r.spin = { pivot, wrapper, basePos, radius, lowest, angle: 0, last: this.root.position.clone() };
+  r.spin = { pivot, wrapper, basePos, radius, lowest, angle: 0, yCur: c.y, last: this.root.position.clone() };
 };
-CharacterController.prototype._rammusTickBallSpin = function() {
+CharacterController.prototype._rammusTickBallSpin = function(dt = 0) {
   const r = this._rammus;
-  if (r.spinPending && r.roll && r.roll.elapsed >= RAMMUS_SPIN_CALIBRATE_SEC) this._rammusCalibrateBallSpin();
+  if (r.spinPending && r.roll && (r.roll.held || r.roll.elapsed >= 1.5)) this._rammusCalibrateBallSpin(); // 공 자세가 잡힌 뒤에 잰다
   const sp = r.spin;
   if (!sp) return;
   const p = this.root.position;
@@ -189,7 +203,10 @@ CharacterController.prototype._rammusTickBallSpin = function() {
   if (moved > 0 && moved < sp.radius * 20) sp.angle = (sp.angle + moved / sp.radius) % (Math.PI * 2); // 순간이동(점멸 등)은 굴리지 않는다
   sp.pivot.rotation.x = sp.angle;
   const f = (sp.angle / (Math.PI * 2)) * RAMMUS_SPIN_SAMPLES, k0 = Math.floor(f) % RAMMUS_SPIN_SAMPLES, k1 = (k0 + 1) % RAMMUS_SPIN_SAMPLES, t = f - Math.floor(f);
-  sp.pivot.position.y = sp.lowest[k0] * (1 - t) + sp.lowest[k1] * t; // 가장 낮은 점이 지면에 닿게
+  const groundY = sp.lowest[k0] * (1 - t) + sp.lowest[k1] * t; // 가장 낮은 점이 지면에 닿는 높이
+  // 몸을 말며 뛰어오른 높이에서 지면까지는 순간 이동 없이 내려앉게 한다.
+  sp.yCur += (groundY - sp.yCur) * Math.min(1, dt * 14);
+  sp.pivot.position.y = sp.yCur;
 };
 CharacterController.prototype._rammusEndBallSpin = function() {
   if (this._rammus) this._rammus.spinPending = false;
@@ -223,8 +240,17 @@ CharacterController.prototype._rammusCastW = function(free = false) {
   r.wStartedAt = performance.now();
   r.wUntil = r.wStartedAt + w.durationSec * 1000;
   this.recomputeStats();
-  if (!this.currentActionKey && this.state !== STATE.MOVE) this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: false });
+  // 웅크리는 모션(Spell2)은 한 번 - 끝나면 대기/달리기로 돌아간다(40차: 예전엔 마지막 프레임에 멈춘 채 다음 행동까지 굳어 있었다).
+  if (!this.currentActionKey && this.state !== STATE.MOVE && this.findAnimation('Spell2')) {
+    this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
+    this._champTimeout(() => {
+      if (this.championId !== 'rammus' || this.currentClipKey !== 'Spell2' || this.currentActionKey || this._rammusRolling()) return;
+      if (this.state === STATE.MOVE && this.targetPos) this.playFirstAvailable(this._moveClips(), { loop: THREE.LoopRepeat, fade: 0.12 });
+      else this._returnToLocomotion();
+    }, Math.max(0.1, this.findAnimation('Spell2').duration - 0.08) * 1000);
+  }
   if (typeof vfx !== 'undefined') vfx.groundShockwave(this.root.position.clone(), BASE_UNIT * 0.8, 0xc9b27a, 0.4);
+  this._rammusShowWRing(true);
   debugSkillHit('Rammus W(몸 말아 웅크리기)', this, { armor: r.wArmor.toFixed(1), mr: r.wMr.toFixed(1) });
 };
 CharacterController.prototype._rammusEndW = function() {
@@ -234,6 +260,18 @@ CharacterController.prototype._rammusEndW = function() {
   this.bonusMr = Math.max(0, (this.bonusMr || 0) - r.wMr);
   r.wArmor = 0; r.wMr = 0; r.wUntil = 0;
   this.recomputeStats();
+  this._rammusShowWRing(false);
+};
+// W가 켜져 있는 동안 발밑에 가시 고리(연출 - 색·크기는 연출값). 람머스를 따라다니도록 root에 붙인다.
+CharacterController.prototype._rammusShowWRing = function(on) {
+  const r = this._rammus;
+  if (!on) { if (r.wRing) { if (r.wRing.parent) r.wRing.parent.remove(r.wRing); r.wRing.geometry.dispose(); r.wRing.material.dispose(); r.wRing = null; } return; }
+  if (r.wRing || !this.root) return;
+  const radius = (this.collisionRadius || BASE_UNIT * 0.5) * 1.6;
+  const ring = new THREE.Mesh(new THREE.RingGeometry(radius * 0.82, radius, 40), new THREE.MeshBasicMaterial({ color: 0xd8b45a, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03;
+  this.root.add(ring);
+  r.wRing = ring;
 };
 // 평타로 람머스를 때린 적에게 반사 피해(포탑 제외 - 위키). controller_lifecycle.js takeDamage()에서 호출.
 CharacterController.prototype._rammusOnTakeDamage = function(source, meta) {

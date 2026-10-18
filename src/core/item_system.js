@@ -1353,10 +1353,44 @@ function applyItemPhysicalVamp(source, finalDmg, damageType, isBasicAttack = fal
 // 이번에 받는 피해량 자체를 바꿔야 하는 효과라서 반환값을 쓰는 구조로
 // 바꿨다 - 호출부(takeDamage())는 `itemOnTakeDamage(...) ?? remaining`로
 // undefined(아무것도 안 바꿈)와 "새 피해량"을 모두 안전하게 받는다.
+// 40차: 가시(덤불 조끼·가시 갑옷) - 기본 공격에 맞으면 공격자에게 마법 피해(기본 + 추가 방어력 비례), 공격자가 챔피언이면
+// 고통스러운 상처. 가시는 중첩되지 않는다(가장 센 아이템 하나). 구조물(포탑)의 공격에는 반응하지 않는다.
+function _itemThornsOnStruck(ctrl, source, meta) {
+  if (!meta || !meta.isBasicAttack || !source || source === ctrl || !(source.hp > 0) || source.isStructure || source.isTurret) return;
+  let best = null;
+  const bonusArmor = Math.max(0, ((ctrl.stats && ctrl.stats.armor) || 0) - ((ctrl.stats && ctrl.stats.baseArmor) || 0));
+  for (const slot of (ctrl.items || [])) {
+    const p = ITEM_DATA[slot.id] && ITEM_DATA[slot.id].thornsPassive;
+    if (!p) continue;
+    const dmg = p.flatDamage + p.bonusArmorRatio * bonusArmor;
+    if (!best || dmg > best.dmg) best = { p, dmg };
+  }
+  if (!best) return;
+  applyDamage(source, { rawDamage: best.dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true });
+  if (source.isChampion && source.hp > 0) applyStatus(source, { id: 'itemThornsGrievous', type: 'GRIEVOUS', duration: best.p.grievousSec, value: best.p.grievousPercent, source: ctrl, isItemEffect: true });
+}
+// 40차: 악마사냥꾼의 화살(폭격 개시) - 궁극기를 쓰면(controller_casting.js _dispatchCast가 부름) 8초 동안 다음 3회 평타 강화.
+function itemOnUltimateCast(ctrl) {
+  const slot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].openingBarragePassive);
+  if (!slot) return;
+  const p = ITEM_DATA[slot.id].openingBarragePassive;
+  ctrl._itemBarrage = { remaining: p.attacks, until: performance.now() + p.durationSec * 1000, p };
+  applyStatus(ctrl, { id: 'itemOpeningBarrageAs', type: 'AS_BUFF', duration: p.durationSec, value: p.attackSpeedPercent });
+}
+// 평타 치명타를 굴릴 때(controller_combat.js _rollBasicAttackCrit) 폭격 개시가 남아 있으면 한 번 쓰고 true. 다 쓰거나 끝나면 공속 버프도 끈다.
+function itemBarrageTakeSwing(ctrl) {
+  const b = ctrl && ctrl._itemBarrage;
+  if (!b) return false;
+  if (performance.now() >= b.until || b.remaining <= 0) { ctrl._itemBarrage = null; clearStatus(ctrl, 'itemOpeningBarrageAs'); return false; }
+  b.remaining -= 1;
+  if (b.remaining <= 0) { ctrl._itemBarrage = null; clearStatus(ctrl, 'itemOpeningBarrageAs'); }
+  return b.p;
+}
 function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null) {
   if (!ctrl) return incomingDamage;
   let remaining = incomingDamage;
   const now = performance.now();
+  _itemThornsOnStruck(ctrl, source, meta);
 
   // 신록의 장벽/벤시의장막(무효화) - 원문 그대로 "적 챔피언의 다음 스킬"만
   // 막는 주문 방어막이다. 미니언/포탑 기본 공격, 우물, 도트 틱, 아이템 효과

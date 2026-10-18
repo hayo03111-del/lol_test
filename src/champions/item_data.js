@@ -1460,6 +1460,26 @@ const ITEM_DATA = {
     controlPassive: { abilityHaste: 20 },
   },
 };
+// 40차(요청 "가시갑옷과 악마사냥꾼의 화살도 추가"): Data Dragon 16.20.1(가격·능력치·조합·효과 문구) + 가시 피해 수치는 위키 검색
+// (가시 갑옷 20 + 추가 방어력 10% - 25.5, 덤불 조끼 10 - 14.19).
+ITEM_DATA.brambleVest = {
+  id: 'brambleVest', nameKo: '덤불 조끼', cost: 800, recipe: ['chainVest', 'chainVest'], stats: { armor: 30 },
+  // 가시: 기본 공격에 맞으면 공격자에게 마법 피해, 챔피언이면 3초 동안 40% 고통스러운 상처(가시 효과는 중첩되지 않는다 - 가장 센 것 하나).
+  thornsPassive: { flatDamage: 10, bonusArmorRatio: 0, grievousPercent: 0.40, grievousSec: 3 },
+};
+ITEM_DATA.thornmail = {
+  id: 'thornmail', nameKo: '가시 갑옷', cost: 2450, recipe: ['brambleVest', 'chainmailVest', 'rubyCrystal'], stats: { maxHp: 150, armor: 75 },
+  thornsPassive: { flatDamage: 20, bonusArmorRatio: 0.10, grievousPercent: 0.40, grievousSec: 3 },
+};
+ITEM_DATA.fiendhunterBolts = {
+  id: 'fiendhunterBolts', nameKo: '악마사냥꾼의 화살', cost: 2650, recipe: ['zealSword', 'scoutsSlingshot'],
+  stats: { attackSpeedPercent: 0.45, critChance: 0.25, moveSpeedPercent: 0.04 },
+  ultimateHasteFlat: 30, // 한밤 경계: 궁극기 가속 30
+  // 폭격 개시: 궁극기를 쓰면 8초 동안 다음 3회 기본 공격이 공격 속도 50% + 치명타(일반 치명타 피해의 80%). 원래 치명타였던 공격은
+  // 대신 15% 추가 고정 피해.
+  openingBarragePassive: { attacks: 3, durationSec: 8, attackSpeedPercent: 0.5, critDamageFactor: 0.8, onNaturalCritTruePercent: 0.15 },
+};
+
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
   'cull', 'darkSeal', 'tearOfGoddess', 'healthPotion', 'refillablePotion', 'stealthWard',
@@ -1485,6 +1505,7 @@ const ITEM_ORDER = [
   'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask',
   'worldAtlas', 'runesteelSpaulders', 'bountyOfWorlds', 'zaZaksRealmspike', 'bloodsong', 'solsticeSleigh', 'dreamMaker', 'celestialOpposition',
   'bandleglassMirror', 'forbiddenIdol', 'shurelyasBattlesong', 'moonstoneRenewer', 'ironSolariLocket', 'bandlePipe', 'imperialMandate',
+  'brambleVest', 'thornmail', 'fiendhunterBolts', // 40차
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -1495,10 +1516,10 @@ const ITEM_CATEGORIES = [
   // 중간 조립 아이템(전설급 2차분의 하위템이면서 그 자체로도 완결된 에픽
   // 아이템)도 여기 함께 넣는다 - 실제 LoL 상점도 조합 재료를 "서사급" 탭
   // 하나에서 같이 보여준다.
-  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise', 'plagueGem', 'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard', 'bandleglassMirror', 'forbiddenIdol'] },
+  { id: 'epic', nameKo: '서사급', items: ['executionersCalling', 'vampiricScepter', 'lastWhisper', 'tiamat', 'sheen', 'embersOfFate', 'catalystOfAeons', 'devourerAxe', 'phageAxe', 'recurveBow', 'serratedDirk', 'spellbinder', 'caulfieldsWarhammer', 'tunnelers', 'ascendedPauldrons', 'kircheisShard', 'giantsBelt', 'ironSeal', 'zealSword', 'scoutsSlingshot', 'peakArrow', 'tailFeather', 'feralization', 'lostChapter', 'fiendishCodex', 'hextechAlternator', 'aetherialWisp', 'hauntingGuise', 'plagueGem', 'negatronMantle', 'chainmailVest', 'crystallineBracer', 'ghostlyHood', 'verdantBarrier', 'pursuerWristGuard', 'bandleglassMirror', 'forbiddenIdol', 'brambleVest'] },
   // 무라마나/대천사의포옹은 각각 마나무네/대천사의지팡이가 변신해서만
   // 얻으므로(hiddenFromShop) 이 탭에 넣지 않는다.
-  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade', 'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask', 'shurelyasBattlesong', 'moonstoneRenewer', 'ironSolariLocket', 'bandlePipe', 'imperialMandate'] },
+  { id: 'legendary', nameKo: '전설급', items: ['trinityForce', 'bladeOfTheRuinedKing', 'witsEnd', 'eclipse', 'manamune', 'maw', 'shojinSpear', 'hullbreaker', 'blackCleaver', 'divineSunderer', 'eternalThirst', 'overlordsBloodmail', 'titanicHydra', 'hydraOfHeroism', 'sterakssGage', 'deathsDance', 'guardianAngel', 'essenceReaver', 'collector', 'magicOpticsC44', 'rageblade', 'krakenSlayer', 'stormrazor', 'phantomDancer', 'rapidFireCannon', 'naboriFlickerblade', 'lordDominiksRegards', 'mortalReminder', 'vigilance', 'wrathblade', 'infinityEdge', 'immortalShieldbow', 'bloodthirster', 'youmuusGhostblade', 'stormsurge', 'hubris', 'fortressBreaker', 'serylasGrudge', 'mejaisSoulstealer', 'rodOfAges', 'archangelsStaff', 'malignance', 'blackfireTorch', 'ludensEcho', 'hextechRocketbelt', 'rylaisCrystalScepter', 'liandrysTorment', 'cosmicDrive', 'riftmaker', 'duskAndDawn', 'nashorsTooth', 'lichBane', 'voidStaff', 'tempestStaff', 'shadowflame', 'hextechGunblade', 'banshees', 'zhonyasHourglass', 'rabadonsDeathcap', 'heartsteel', 'warmogsArmor', 'endlessDespair', 'spiritVisage', 'abyssalMask', 'shurelyasBattlesong', 'moonstoneRenewer', 'ironSolariLocket', 'bandlePipe', 'imperialMandate', 'thornmail', 'fiendhunterBolts'] },
   // 서포터 아이템(세계지도집 퀘스트 라인) - 무라마나/대천사의포옹과 동일한
   // 이유로 변신 전용 2종(룬나침반/세계의 결실)은 숨기고, 구매 가능한
   // 시작 아이템(세계지도집)과 그 최종 업그레이드 5종만 노출한다.

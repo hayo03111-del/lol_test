@@ -16,6 +16,19 @@
 // 이고, 여기에 다리우스의 임시 empower 보너스가 있으면 더해준다.
 // 기본 공격 치명타 판정 - 원작처럼 의사 난수(PRD)로 굴린다(prdConstant 참고).
 CharacterController.prototype._rollBasicAttackCrit = function() {
+    // 40차: 악마사냥꾼의 화살(폭격 개시) - 남은 강화 평타면 치명타 확정. 원래도 치명타였으면 'natural'(15% 추가 고정 피해),
+    // 강제로 만든 치명타면 'forced'(치명타 피해 80%) - 이번 스윙의 공격 결과(attackResult)가 _itemBarrageSwing을 읽는다.
+    const barrage = typeof itemBarrageTakeSwing === 'function' ? itemBarrageTakeSwing(this) : null;
+    const natural = this._rollNaturalCrit();
+    this._itemBarrageSwing = barrage ? { kind: natural ? 'natural' : 'forced', p: barrage } : null;
+    return natural || !!barrage;
+};
+// 평타 결과에 붙은 아이템 추가 고정 피해(폭격 개시)를 명중 순간에 준다. 준 피해를 돌려준다.
+CharacterController.prototype._applyItemExtraTrue = function(target, attackResult) {
+    if (!attackResult.itemExtraTrue || !target || target.hp <= 0) return 0;
+    return applyDamage(target, { rawDamage: attackResult.itemExtraTrue, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: this, isItemEffect: true }) || 0;
+};
+CharacterController.prototype._rollNaturalCrit = function() {
     const p = Math.max(0, Math.min(1, this.stats.critChance || 0));
     if (p <= 0) return false;
     if (p >= 1) return true;
@@ -741,6 +754,7 @@ CharacterController.prototype._beginAttackSwing = function() {
     // 피해량을 정확히 계산한다 - 여기서 바뀌는 것은 "어떤 애니메이션을
     // 보여주는가"뿐이다.
     const willCrit = this._rollBasicAttackCrit();
+    const barrageSwing = this._itemBarrageSwing; this._itemBarrageSwing = null; // 40차: 폭격 개시(이번 스윙)
     // 요청(다리우스/노틸러스형): 치명타가 기본적으로 최우선("치명타는 이 큐와
     // 무관하게 최우선"), 그 다음이 활성 오버라이드 중 priority가 가장
     // 높은 것, 마지막이 평소의 attack1/2/3 콤보 순환이다. 단, 마스터 이
@@ -960,6 +974,11 @@ CharacterController.prototype._beginAttackSwing = function() {
           yoneAzakana,
           isBasicAttack: true,
         };
+        // 40차: 폭격 개시 - 강제 치명타는 치명타 피해 80%, 원래 치명타였으면 15% 추가 고정 피해(명중 시 따로 - _applyItemExtraTrue).
+        if (barrageSwing && attackResult.isCritical) {
+          if (barrageSwing.kind === 'forced') attackResult.critMultiplier = 1 + (attackResult.critMultiplier - 1) * barrageSwing.p.critDamageFactor;
+          else attackResult.itemExtraTrue = attackResult.rawDamage * attackResult.critMultiplier * barrageSwing.p.onNaturalCritTruePercent;
+        }
         vfx.spawn('basicAttack', originPos, dirToTarget);
         // 버그 수정: 지금까지 모든 챔피언의 평타가 예외 없이 물리 투사체를
         // 발사했다 - 근접 챔피언(가렌/다리우스/세트/모데카이저/마스터
@@ -991,7 +1010,7 @@ CharacterController.prototype._beginAttackSwing = function() {
               }
               if (t.isInhibitor) { applyDamageToInhibitor(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToInhibitor); return; }
               if (t.isNexus) { applyDamageToNexus(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToNexus); return; }
-              const hpB = t.hp, flB = isFlooredTrainingDummy(t); const dealtR = applyDamage(t, attackResult) || 0;
+              const hpB = t.hp, flB = isFlooredTrainingDummy(t); const dealtR = (applyDamage(t, attackResult) || 0) + this._applyItemExtraTrue(t, attackResult);
               const wouldKill = !flB && hpB > 0 && hpB <= dealtR; // 실제 입힌 피해(방어력·치명타 반영) 기준 처치 판정
               this._onBasicAttackHit(t, overrideId, wouldKill, null, willCrit);
             },
@@ -1020,7 +1039,7 @@ CharacterController.prototype._beginAttackSwing = function() {
             const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= dealtAz;
             this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
           } else {
-            const dealtAA = applyDamage(target, attackResult);
+            const dealtAA = (applyDamage(target, attackResult) || 0) + this._applyItemExtraTrue(target, attackResult);
             const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= (dealtAA || 0);
             // 요네 정신체(E) 중에는 강철 검(일반) 평타 피해도 표식에 쌓인다 - 예전엔 아자카나
             // 평타만 기록돼 일반 평타 피해가 표식에서 빠졌다.

@@ -82,6 +82,26 @@ const startServer = require('./server.js');
     const iv = setInterval(() => { if (!c._rammus.jump) { clearInterval(iv); setTimeout(() => res({ rollEnded: !c._rammus.roll, qCdStarted: c.cooldowns.Q > 0, dmg: Math.round(h - d.hp), rangeLol: Math.round(c._rammusRRangeLol()), knockup: !!(d.statusEffects || []).find((e) => e.type === 'KNOCKUP') }), 80); } }, 20); }));
   await wait(400);
   await page.screenshot({ path: path.join(shotDir, 'rammus_r.png') });
+  // 40차: W 모션은 한 번 뒤 대기로 돌아오고 W 고리 표시, Q는 Spell1 공 자세(0.8)에서 멈춤
+  await reset(1500);
+  await page.evaluate(() => window.controller.castAbility('W'));
+  await wait(1300);
+  r.wAnim = await page.evaluate(() => { const c = window.controller; return { clip: c.currentClipKey, ring: !!c._rammus.wRing }; });
+  await page.evaluate(() => window.controller.castAbility('W')); await wait(150); // 재사용으로 끝내기(0.5초 뒤)
+  r.wRecastEnds = await page.evaluate(() => { const c = window.controller; return { active: c._rammusWActive(), ring: !!c._rammus.wRing }; });
+  await reset(1500);
+  await page.evaluate(() => window.controller.castAbility('Q')); await wait(900);
+  r.qHold = await page.evaluate(() => { const c = window.controller, a = c.currentAction; return { clip: c.currentClipKey, paused: !!(a && a.paused), frac: a ? +(a.time / a.getClip().duration).toFixed(2) : null, spin: !!c._rammus.spin }; });
+  // 아이템: 가시 갑옷 + 악마사냥꾼의 화살(기지에서 구매)
+  await reset(300);
+  r.items = await page.evaluate(() => { const E = window.__e2e, c = window.controller; const sp = E.getTeamSpawnPosition(E.PLAYER_TEAM); c.root.position.set(sp.x, 0, sp.z); c.gold = 20000;
+    const ok = [window.buildOrBuyItemForE2E(c, 'thornmail'), window.buildOrBuyItemForE2E(c, 'fiendhunterBolts')]; c.root.position.set(0, 0, 0);
+    const d = E.dummies[0]; const h = d.hp; E.applyDamage(c, { rawDamage: 10, damageType: 'PHYSICAL', isCritical: false, critMultiplier: 1, isBasicAttack: true, source: d });
+    const thorns = Math.round(h - d.hp); const gw = (d.statusEffects || []).some((e) => e.type === 'GRIEVOUS');
+    c.cooldowns.R = 0; c.mp = c.maxMp; c.castAbility('R', new E.THREE.Vector3(0, 0, -E.lolRangeToWorld(200)));
+    const as = c.statusEffects.some((e) => e.id === 'itemOpeningBarrageAs' && e.value === 0.5);
+    const rolls = [c._rollBasicAttackCrit(), c._rollBasicAttackCrit(), c._rollBasicAttackCrit()];
+    return { bought: ok, thornsDmg: thorns, grievous: gw, barrageAs: as, threeCrits: rolls.every(Boolean), rCdWithHaste: +c.cooldowns.R.toFixed(1) }; });
   r.errors = errors;
   console.log(JSON.stringify(r, null, 1));
   await browser.close(); srv.close();

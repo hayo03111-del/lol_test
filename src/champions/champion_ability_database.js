@@ -248,14 +248,14 @@ const championAbilityDatabase = {
   // Q는 Spell1(던지기) → Spell1_Idle(닻이 날아가는 동안) → Spell1_Dash(끌려감).
   // 38차: 실제 람머스.glb(18클립) - 평타 Attack1·2(+Crit), R은 Spell4_Jump.anm(2초 도약 전체) 우선, 없으면 Spell4.
   // 39차: Q 구르기 - Spell1은 "서 있다 → 웅크림 → 뛰어오르며 뒤집기 시작" 한 번짜리 모션이라 반복하면 0.65초마다 다시
-  // 뛰어오르며 뒤집혔다(요청 "Q 구를 때 모션 이상"). 굴림 반복 클립이 GLB에 없어서, 몸을 만 공 자세 Channel_Wndup을 반복하고
-  // 공 전체를 이동 거리만큼 코드로 굴린다(rammus.js _rammusTickBallSpin). rollPivot*: Channel_Wndup 자세의 공 중심 높이·반지름(GLB 단위,
-  // 실제 메시 범위 -0.15~0.794에서 계산).
+  // 뛰어오르며 뒤집혔다(요청 "Q 구를 때 모션 이상"). 굴림 반복 클립이 GLB에 없어 공 자세를 코드로 굴린다(rammus.js _rammusTickBallSpin).
+  // 40차: 39차의 Channel_Wndup(웅크린 자세)은 팔·머리가 밖으로 나와 공이 아니었다 - Spell1을 한 번 재생해 몸을 마는 모습을 보여 준 뒤
+  // 팔다리를 다 집어넣은 0.8 지점(rollHoldAt)에서 멈춰 그 공 자세를 굴린다.
   rammus: {
     idleAnimationNames: ['Idle1'],
     moveAnimationNames: ['Run'],
     attackAnimationNames: ['Attack1', 'Attack2'],
-    Q: { animationNames: ['Spell1'], animationPatterns: [/^spell1/i, /powerball/i], rollClip: 'Channel_Wndup', rollPivotCenter: 0.322, rollPivotRadius: 0.472 },
+    Q: { animationNames: ['Spell1'], animationPatterns: [/^spell1/i, /powerball/i], rollClip: 'Spell1', rollHoldAt: 0.8 },
     W: { animationNames: ['Spell2'], animationPatterns: [/^spell2/i] },
     E: { animationNames: ['Spell3'], animationPatterns: [/^spell3/i] },
     R: { animationNames: ['Spell4'], animationPatterns: [/^spell4/i], jumpClip: 'Spell4_Jump.anm' },

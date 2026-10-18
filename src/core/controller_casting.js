@@ -541,6 +541,7 @@ CharacterController.prototype._dispatchCast = function(slot, mouseWorldPoint, fr
     // 시전 슬롯과 시각만 기록해두면 챔피언 파일을 건드리지 않고도 "방금
     // 궁극기(R)를 썼는지"를 item_system.js에서 판정할 수 있다.
     if (!free) { this._itemLastCastSlot = slot; this._itemLastCastSlotAt = performance.now(); }
+    if (!free && slot === 'R' && typeof itemOnUltimateCast === 'function') itemOnUltimateCast(this); // 40차: 악마사냥꾼의 화살(폭격 개시)
     const direct = CHAMPION_DIRECT_CASTS[this.championId] && CHAMPION_DIRECT_CASTS[this.championId][slot];
     if (direct) return direct(this, mouseWorldPoint, free);
     if (free && this.playSkillAnimationSequence(slot, { mouseWorldPoint, free })) return;

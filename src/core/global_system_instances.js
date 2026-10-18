@@ -267,6 +267,9 @@ function _itemStatsSummary(item) {
   if (item.healAndShieldPowerPassive) { const p = item.healAndShieldPowerPassive; parts.push(`별빛 은총(자신에게 돌아오는 회복·보호막 효과 회복+${Math.round(p.healPercent * 100)}%｜보호막+${Math.round(p.shieldPercent * 100)}% 증가 - 아군이 없을 때의 자기 대상 적용으로 근사)`); }
   if (item.fanfarePassive) { const p = item.fanfarePassive; parts.push(`팡파르(적 챔피언을 둔화·이동 불가 상태로 만들면 근접${p.meleeDurationSec}초｜원거리${p.rangedDurationSec}초간 이동 속도 +${p.msFlat} + 공격 속도 근접+${Math.round(p.meleeAsPercent * 100)}%｜원거리+${Math.round(p.rangedAsPercent * 100)}%)`); }
   if (item.commandPassive) { const p = item.commandPassive; parts.push(`명령(적 챔피언을 이동 불가 상태로 만들면 ${p.durationSec}초간 취약 표식 - 받는 피해 +${Math.round(p.vulnerablePercent * 100)}%, 중첩 없이 지속시간만 연장)`); }
+  // 40차: 가시(덤불 조끼·가시 갑옷), 폭격 개시(악마사냥꾼의 화살).
+  if (item.thornsPassive) { const p = item.thornsPassive; parts.push(`가시(기본 공격에 맞으면 공격자에게 ${p.flatDamage}${p.bonusArmorRatio ? `+추가 방어력 ${Math.round(p.bonusArmorRatio * 100)}%` : ''} 마법 피해, 챔피언이면 ${p.grievousSec}초 동안 ${Math.round(p.grievousPercent * 100)}% 고통스러운 상처)`); }
+  if (item.openingBarragePassive) { const p = item.openingBarragePassive; parts.push(`폭격 개시(궁극기 사용 후 ${p.durationSec}초 동안 다음 ${p.attacks}회 기본 공격: 공격 속도 +${Math.round(p.attackSpeedPercent * 100)}%, 치명타(일반 치명타 피해의 ${Math.round(p.critDamageFactor * 100)}%) - 원래 치명타였으면 대신 ${Math.round(p.onNaturalCritTruePercent * 100)}% 추가 고정 피해)`); }
   if (item.recipe && item.recipe.length) {
     const counts = {};
     for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
