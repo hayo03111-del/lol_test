@@ -348,7 +348,10 @@ CharacterController.prototype._yoneTickEmpoweredQ = function(dt) {
 // _resumeAfterAction()으로 넘긴다. 해당 클립이 이 GLB에 없으면(예: 일반
 // 필멸의 검은 Idle 전환 클립이 따로 없음) 그냥 즉시 onDone을 호출해
 // 기존 동작과 동일하게 동작한다 - 에러 없이 항상 안전하게 폴백된다.
-CharacterController.prototype._yonePlayExitTransition = function(idleClipNames, moveClipNames, onDone) {
+// 46차: lockSec(초)를 주면 정지 상태 전환 클립을 재생하더라도 행동 잠금은 그 시간 뒤에 풀린다(강화 Q: 돌진이 끝나는 순간).
+// 예전엔 전환 클립(Spell1C_ToIdle 2.57초)이 끝날 때까지 'yoneQ'로 잠겨 다른 행동을 못 했다. 잠금이 풀린 뒤에도 할 일이
+// 없으면 전환 클립은 연출로 계속 재생되고(onDone(true) - 조용히 해제), 끝나면 대기 모션으로 돌아간다.
+CharacterController.prototype._yonePlayExitTransition = function(idleClipNames, moveClipNames, onDone, lockSec = null) {
   const moving = !!(this.targetPos || this.pendingMove);
   const candidates = (moving ? moveClipNames : idleClipNames) || [];
   const clip = this.resolveClip(candidates);
@@ -358,13 +361,27 @@ CharacterController.prototype._yonePlayExitTransition = function(idleClipNames, 
     // 클립으로 등록해 이동 루프가 덮어쓰지 않게 하고, 끝나면 일반 이동 루프로 넘어간다.
     this.playFirstAvailable(candidates, { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
     this._beginTransientMoveClip(clip.name);
-    this._champTimeout(() => this._endTransientMoveClip(clip.name), Math.max(0, clip.duration - 0.1) * 1000);
+    // 46차: 전환 클립(최대 2.57초)을 끝까지 보여 주면 달리는 동안 걷기 전환 자세가 길게 남는다 - 0.45초만 보여 주고
+    // 이동 루프로 넘긴다(이동 루프가 페이드로 자연스럽게 이어 받는다).
+    this._champTimeout(() => {
+      this._endTransientMoveClip(clip.name);
+      if (this.currentClipKey === clip.name && !this.currentActionKey && this.state === STATE.MOVE) this.playFirstAvailable(this._moveClips(), { loop: THREE.LoopRepeat, fade: 0.2 });
+    }, Math.min(0.45, Math.max(0, clip.duration - 0.1)) * 1000);
     onDone();
     return;
   }
   if (clip) {
+    if (this.sequencePlayer && this.sequencePlayer.isPlaying) this.sequencePlayer.stop(); // 강화 Q 3연쇄의 마지막 클립이 전환 클립을 덮지 않게
     this.playFirstAvailable(candidates, { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
-    const t = this._champTimeout(() => onDone(), Math.max(0, clip.duration - 0.03) * 1000);
+    const lockMs = Math.max(0, lockSec != null ? Math.min(lockSec, clip.duration - 0.03) : clip.duration - 0.03) * 1000;
+    const t = this._champTimeout(() => {
+      const busy = !!(this.pendingMove || this.pendingCast || this.targetPos || (this.currentTarget && this.currentTarget.hp > 0));
+      onDone(!busy);
+      if (busy) return;
+      this._champTimeout(() => {
+        if (this.currentClipKey === clip.name && !this.currentActionKey && this.state === STATE.IDLE) this._returnToLocomotion();
+      }, Math.max(0, clip.duration * 1000 - lockMs));
+    }, lockMs);
     this._actionTimers.push(t);
   } else {
     onDone();
@@ -417,8 +434,13 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
       // 조정 없이 항상 존재하는 정면 버전을 기본으로 사용 - 좌/우 회전
       // 버전(_90/_-90)은 실제 회전각 판정까지는 이 범위에서 구현하지
       // 않는다), 정지 중이면 Spell1C_ToIdle.
-      const doneEmpowered = () => { if (this.currentActionKey === key) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } };
-      this._yonePlayExitTransition(['Spell1C_ToIdle'], ['Spell1C_ToWalk_0', 'Spell1C_ToWalk_90', 'Spell1C_ToWalk_-90'], doneEmpowered);
+      const doneEmpowered = (quiet) => {
+        if (this.currentActionKey !== key) return;
+        this.currentActionKey = null; this.currentPhase = null;
+        if (quiet) { if (this.state === STATE.Q_CAST) this.setState(STATE.IDLE); } else this._resumeAfterAction();
+      };
+      const travel = this._yone.qDashTravel;
+      this._yonePlayExitTransition(['Spell1C_ToIdle'], ['Spell1C_ToWalk_0', 'Spell1C_ToWalk_90', 'Spell1C_ToWalk_-90'], doneEmpowered, travel ? travel.bodyDuration : 0.3);
     }, Math.max(0, castTime) * 1000);
     this._actionTimers.push(timer);
     if (!free) this.cooldowns.Q = abilityHasteCooldown(this, this._yoneQCooldown());

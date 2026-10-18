@@ -32,7 +32,15 @@ function buildActionData(resolver, abilityResolver) {
   // 뿐이라 Attack4는 순환에서 아예 빠진다 - 그 결과가 "모션이 한 개만
   // 반복되는 것처럼 보이는" 증상이었다. 야스오와 동일하게 정확한 4개
   // 클립명만 명시적으로 골라 쓴다.
-  if (abilityResolver.championId === 'yone') { attackVariants = ['Attack1','Attack2','Attack3','Attack4'].filter(n => resolver.clipByName(n)); }
+  if (abilityResolver.championId === 'yone') {
+    attackVariants = ['Attack1','Attack2','Attack3','Attack4'].filter(n => resolver.clipByName(n));
+    // 46차: 자동 채점이 이동/대기 목록에 전환 클립(…toWalk, …toRun, …toIdle 등 20여 개)까지 넣어서, 전환 클립이 한 번
+    // 재생되면 이동 루프가 "이미 이동 클립 재생 중"으로 보고 끝난 전환 클립(마지막 프레임 고정)을 계속 보여 줬다
+    // (Q 쓰고 이동하면 Yone_Spell1A_toWalk01이 이동 내내 유지). 실제 반복 클립만 쓴다 - 전환 클립은 각 스킬이 1회성으로 재생.
+    const mv = ['Run_Base', 'Yone_Run01.anm'].filter((n) => resolver.clipByName(n));
+    if (mv.length) data.move = { clips: mv };
+    if (resolver.clipByName('Idle1_Base')) data.idle = { clips: ['Idle1_Base'] };
+  }
   // 리 신: 사용자가 지정한 Attack1~Attack4를 순서대로 반복한다.
   if (abilityResolver.championId === 'nilah') {
     const ndb = championAbilityDatabase.nilah;

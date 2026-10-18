@@ -84,6 +84,30 @@ const startServer = require('./server.js');
     leeQHit: await shot('leesin', 'Q', 900, false), leeQDodged: await shot('leesin', 'Q', 900, true),
     ezrealQOutOfRange: await shot('ezreal', 'Q', 1400, false),
   };
+  // 8) 46차: 아리 R은 지정 위치로(최대 500) 돌진 / 요네 Q3 잠금은 돌진이 끝나면 풀림 / 이동 중 Q 뒤 달리기 모션 복귀
+  await pick('ahri');
+  r.ahriR = await page.evaluate(async () => {
+    const E = window.__e2e, c = window.controller, L = E.lolRangeToWorld;
+    const go = async (lol) => { c._clearActionTimers(); c.currentActionKey = null; c.setState('IDLE'); c._ahri.rCharges = 0; c._ahri.rNextAllowedAt = 0; c.cooldowns.R = 0; c.mp = c.maxMp; c.root.position.set(0, 0, 0);
+      c.castAbility('R', new E.THREE.Vector3(L(lol), 0, 0)); await new Promise((res) => setTimeout(res, 900)); return Math.round(E.worldDistanceToLol(c.root.position.x)); };
+    return { short200: await go(200), far900: await go(900) };
+  });
+  await pick('yone');
+  r.yone = await page.evaluate(async () => {
+    const E = window.__e2e, c = window.controller;
+    for (const d of E.dummies) d.mesh.position.set(30, 0, 30);
+    c.root.position.set(0, 0, 0); c.cooldowns.Q = 0; c._yone.qStacks = 2; c._yone.qStackExpiresAt = performance.now() + 6000;
+    const t0 = performance.now(); c.castAbility('Q', new E.THREE.Vector3(0, 0, -5));
+    while (c.currentActionKey === 'yoneQ' && performance.now() - t0 < 4000) await new Promise((res) => setTimeout(res, 20));
+    const q3LockSec = +((performance.now() - t0) / 1000).toFixed(2);
+    await new Promise((res) => setTimeout(res, 3000));
+    const idleAfter = c.currentClipKey;
+    c.cooldowns.Q = 0; c.root.position.set(0, 0, 0); c.moveTo(new E.THREE.Vector3(-10, 0, 0));
+    await new Promise((res) => setTimeout(res, 200));
+    c.castAbility('Q', new E.THREE.Vector3(-10, 0, 0));
+    await new Promise((res) => setTimeout(res, 1300));
+    return { q3LockSec, idleAfter, runClipAfterQ: c.currentClipKey, moving: c.state };
+  });
   r.errors = errors;
   console.log(JSON.stringify(r, null, 1));
   await browser.close(); srv.close();

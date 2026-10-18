@@ -554,6 +554,7 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
     : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+  const cursorDist = mouseWorldPoint ? dir.length() : Infinity;
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   this.faceDirectionInstant(dir);
@@ -563,9 +564,11 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   this.setState(STATE.R_CAST);
   this.targetPos = null; this.isChasing = false;
 
-  const dashWorldDist = lolRangeToWorld(r.dashDistance || 500);
+  // 46차: 원작처럼 "지정한 위치로" 돌진한다(사거리 500 - PC 위키 Template:Data Ahri/Spirit Rush). 커서가 가까우면 짧게 간다.
+  // 예전엔 커서 거리와 무관하게 항상 500을 돌진했다.
+  const dashWorldDist = Math.min(lolRangeToWorld(r.dashDistance || 500), cursorDist);
   const dashWorldSpeed = lolRangeToWorld(r.dashSpeed || 1200);
-  const dashDuration = Math.max(0.05, dashWorldDist / Math.max(0.01, dashWorldSpeed));
+  const dashDuration = Math.max(0.05, dashWorldDist / Math.max(0.01, dashWorldSpeed)); // 짧은 돌진도 최소 0.05초
   const startPos = this.root.position.clone();
   const endPos = startPos.clone().addScaledVector(dir, dashWorldDist);
   if (typeof constrainUnitPosition === 'function') constrainUnitPosition(this, endPos); // 45차: 맵 밖·지형 너머로 돌진하지 않게(이즈리얼 E와 같은 처리)

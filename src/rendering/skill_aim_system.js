@@ -109,7 +109,7 @@ const SKILL_AIM = {
     Q: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
     W: { type: 'instant' },
     E: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
-    R: { type: 'dash', range: (c, d) => d.dashDistance },
+    R: { type: 'blink', range: (c, d) => d.dashDistance },                                           // 46차: 지정 위치로 돌진(최대 500)
   },
   varus: {
     Q: { type: 'charge', minRange: (c, d) => d.minRange, maxRange: (c, d) => d.maxRange, chargeSec: (c, d) => d.rangeChargeDuration || 1.5, width: (c, d) => d.width },

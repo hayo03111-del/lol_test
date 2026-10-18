@@ -5474,7 +5474,15 @@ function buildActionData(resolver, abilityResolver) {
   // 뿐이라 Attack4는 순환에서 아예 빠진다 - 그 결과가 "모션이 한 개만
   // 반복되는 것처럼 보이는" 증상이었다. 야스오와 동일하게 정확한 4개
   // 클립명만 명시적으로 골라 쓴다.
-  if (abilityResolver.championId === 'yone') { attackVariants = ['Attack1','Attack2','Attack3','Attack4'].filter(n => resolver.clipByName(n)); }
+  if (abilityResolver.championId === 'yone') {
+    attackVariants = ['Attack1','Attack2','Attack3','Attack4'].filter(n => resolver.clipByName(n));
+    // 46차: 자동 채점이 이동/대기 목록에 전환 클립(…toWalk, …toRun, …toIdle 등 20여 개)까지 넣어서, 전환 클립이 한 번
+    // 재생되면 이동 루프가 "이미 이동 클립 재생 중"으로 보고 끝난 전환 클립(마지막 프레임 고정)을 계속 보여 줬다
+    // (Q 쓰고 이동하면 Yone_Spell1A_toWalk01이 이동 내내 유지). 실제 반복 클립만 쓴다 - 전환 클립은 각 스킬이 1회성으로 재생.
+    const mv = ['Run_Base', 'Yone_Run01.anm'].filter((n) => resolver.clipByName(n));
+    if (mv.length) data.move = { clips: mv };
+    if (resolver.clipByName('Idle1_Base')) data.idle = { clips: ['Idle1_Base'] };
+  }
   // 리 신: 사용자가 지정한 Attack1~Attack4를 순서대로 반복한다.
   if (abilityResolver.championId === 'nilah') {
     const ndb = championAbilityDatabase.nilah;
@@ -9712,7 +9720,7 @@ const SKILL_AIM = {
     Q: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
     W: { type: 'instant' },
     E: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
-    R: { type: 'dash', range: (c, d) => d.dashDistance },
+    R: { type: 'blink', range: (c, d) => d.dashDistance },                                           // 46차: 지정 위치로 돌진(최대 500)
   },
   varus: {
     Q: { type: 'charge', minRange: (c, d) => d.minRange, maxRange: (c, d) => d.maxRange, chargeSec: (c, d) => d.rangeChargeDuration || 1.5, width: (c, d) => d.width },
@@ -18627,7 +18635,10 @@ CharacterController.prototype._yoneTickEmpoweredQ = function(dt) {
 // _resumeAfterAction()으로 넘긴다. 해당 클립이 이 GLB에 없으면(예: 일반
 // 필멸의 검은 Idle 전환 클립이 따로 없음) 그냥 즉시 onDone을 호출해
 // 기존 동작과 동일하게 동작한다 - 에러 없이 항상 안전하게 폴백된다.
-CharacterController.prototype._yonePlayExitTransition = function(idleClipNames, moveClipNames, onDone) {
+// 46차: lockSec(초)를 주면 정지 상태 전환 클립을 재생하더라도 행동 잠금은 그 시간 뒤에 풀린다(강화 Q: 돌진이 끝나는 순간).
+// 예전엔 전환 클립(Spell1C_ToIdle 2.57초)이 끝날 때까지 'yoneQ'로 잠겨 다른 행동을 못 했다. 잠금이 풀린 뒤에도 할 일이
+// 없으면 전환 클립은 연출로 계속 재생되고(onDone(true) - 조용히 해제), 끝나면 대기 모션으로 돌아간다.
+CharacterController.prototype._yonePlayExitTransition = function(idleClipNames, moveClipNames, onDone, lockSec = null) {
   const moving = !!(this.targetPos || this.pendingMove);
   const candidates = (moving ? moveClipNames : idleClipNames) || [];
   const clip = this.resolveClip(candidates);
@@ -18637,13 +18648,27 @@ CharacterController.prototype._yonePlayExitTransition = function(idleClipNames, 
     // 클립으로 등록해 이동 루프가 덮어쓰지 않게 하고, 끝나면 일반 이동 루프로 넘어간다.
     this.playFirstAvailable(candidates, { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
     this._beginTransientMoveClip(clip.name);
-    this._champTimeout(() => this._endTransientMoveClip(clip.name), Math.max(0, clip.duration - 0.1) * 1000);
+    // 46차: 전환 클립(최대 2.57초)을 끝까지 보여 주면 달리는 동안 걷기 전환 자세가 길게 남는다 - 0.45초만 보여 주고
+    // 이동 루프로 넘긴다(이동 루프가 페이드로 자연스럽게 이어 받는다).
+    this._champTimeout(() => {
+      this._endTransientMoveClip(clip.name);
+      if (this.currentClipKey === clip.name && !this.currentActionKey && this.state === STATE.MOVE) this.playFirstAvailable(this._moveClips(), { loop: THREE.LoopRepeat, fade: 0.2 });
+    }, Math.min(0.45, Math.max(0, clip.duration - 0.1)) * 1000);
     onDone();
     return;
   }
   if (clip) {
+    if (this.sequencePlayer && this.sequencePlayer.isPlaying) this.sequencePlayer.stop(); // 강화 Q 3연쇄의 마지막 클립이 전환 클립을 덮지 않게
     this.playFirstAvailable(candidates, { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
-    const t = this._champTimeout(() => onDone(), Math.max(0, clip.duration - 0.03) * 1000);
+    const lockMs = Math.max(0, lockSec != null ? Math.min(lockSec, clip.duration - 0.03) : clip.duration - 0.03) * 1000;
+    const t = this._champTimeout(() => {
+      const busy = !!(this.pendingMove || this.pendingCast || this.targetPos || (this.currentTarget && this.currentTarget.hp > 0));
+      onDone(!busy);
+      if (busy) return;
+      this._champTimeout(() => {
+        if (this.currentClipKey === clip.name && !this.currentActionKey && this.state === STATE.IDLE) this._returnToLocomotion();
+      }, Math.max(0, clip.duration * 1000 - lockMs));
+    }, lockMs);
     this._actionTimers.push(t);
   } else {
     onDone();
@@ -18696,8 +18721,13 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
       // 조정 없이 항상 존재하는 정면 버전을 기본으로 사용 - 좌/우 회전
       // 버전(_90/_-90)은 실제 회전각 판정까지는 이 범위에서 구현하지
       // 않는다), 정지 중이면 Spell1C_ToIdle.
-      const doneEmpowered = () => { if (this.currentActionKey === key) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } };
-      this._yonePlayExitTransition(['Spell1C_ToIdle'], ['Spell1C_ToWalk_0', 'Spell1C_ToWalk_90', 'Spell1C_ToWalk_-90'], doneEmpowered);
+      const doneEmpowered = (quiet) => {
+        if (this.currentActionKey !== key) return;
+        this.currentActionKey = null; this.currentPhase = null;
+        if (quiet) { if (this.state === STATE.Q_CAST) this.setState(STATE.IDLE); } else this._resumeAfterAction();
+      };
+      const travel = this._yone.qDashTravel;
+      this._yonePlayExitTransition(['Spell1C_ToIdle'], ['Spell1C_ToWalk_0', 'Spell1C_ToWalk_90', 'Spell1C_ToWalk_-90'], doneEmpowered, travel ? travel.bodyDuration : 0.3);
     }, Math.max(0, castTime) * 1000);
     this._actionTimers.push(timer);
     if (!free) this.cooldowns.Q = abilityHasteCooldown(this, this._yoneQCooldown());
@@ -23311,6 +23341,7 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
     : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+  const cursorDist = mouseWorldPoint ? dir.length() : Infinity;
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   this.faceDirectionInstant(dir);
@@ -23320,9 +23351,11 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   this.setState(STATE.R_CAST);
   this.targetPos = null; this.isChasing = false;
 
-  const dashWorldDist = lolRangeToWorld(r.dashDistance || 500);
+  // 46차: 원작처럼 "지정한 위치로" 돌진한다(사거리 500 - PC 위키 Template:Data Ahri/Spirit Rush). 커서가 가까우면 짧게 간다.
+  // 예전엔 커서 거리와 무관하게 항상 500을 돌진했다.
+  const dashWorldDist = Math.min(lolRangeToWorld(r.dashDistance || 500), cursorDist);
   const dashWorldSpeed = lolRangeToWorld(r.dashSpeed || 1200);
-  const dashDuration = Math.max(0.05, dashWorldDist / Math.max(0.01, dashWorldSpeed));
+  const dashDuration = Math.max(0.05, dashWorldDist / Math.max(0.01, dashWorldSpeed)); // 짧은 돌진도 최소 0.05초
   const startPos = this.root.position.clone();
   const endPos = startPos.clone().addScaledVector(dir, dashWorldDist);
   if (typeof constrainUnitPosition === 'function') constrainUnitPosition(this, endPos); // 45차: 맵 밖·지형 너머로 돌진하지 않게(이즈리얼 E와 같은 처리)
