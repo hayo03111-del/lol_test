@@ -3084,6 +3084,9 @@ const CHAMPION_DATA = {
       msPercentPerSecAt1: 25, msPercentPerSecAt18: 40.83, msPercentCapAt1: 150, msPercentCapAt18: 245, // 초당 이동 속도 증가율·최대치(레벨 비례)
       impactRadius: 250, knockbackDistance: 125, knockbackSec: 0.15, stunSec: 0.4, // knockbackSec(밀려나는 시간)은 추정
       slowPercentByLevel: [40, 50, 60, 70, 80], slowDurationSec: 1,
+      // 공 회전 속도 - 수치 공개 없음(추정). 원작은 거리만큼 굴러가는 것보다 훨씬 빨리 돈다:
+      // 제자리에서도 초당 spinBaseRevPerSec 바퀴 + 실제 굴러간 거리 회전 × spinRollMult
+      spinBaseRevPerSec: 1.5, spinRollMult: 2.2,
     },
     W: {
       name: '몸 말아 웅크리기', cooldown: 7, mana: 40, durationSec: 7, recastLockSec: 0.5, // 25.12: 6 → 7초. recastLockSec는 추정
@@ -25875,7 +25878,10 @@ CharacterController.prototype._rammusTickBallSpin = function(dt = 0) {
   const p = this.root.position;
   const moved = Math.hypot(p.x - sp.last.x, p.z - sp.last.z);
   sp.last.copy(p);
-  if (moved > 0 && moved < sp.radius * 20) sp.angle = (sp.angle + moved / sp.radius) % (Math.PI * 2); // 순간이동(점멸 등)은 굴리지 않는다
+  const qd = (CHAMPION_DATA.rammus && CHAMPION_DATA.rammus.Q) || {};
+  let dAngle = Math.max(0, dt) * Math.PI * 2 * (qd.spinBaseRevPerSec || 0); // 제자리에서도 빠르게 돈다
+  if (moved > 0 && moved < sp.radius * 20) dAngle += (moved / sp.radius) * (qd.spinRollMult || 1); // 순간이동(점멸 등)은 굴리지 않는다
+  sp.angle = (sp.angle + dAngle) % (Math.PI * 2);
   sp.pivot.rotation.x = sp.angle;
   const f = (sp.angle / (Math.PI * 2)) * RAMMUS_SPIN_SAMPLES, k0 = Math.floor(f) % RAMMUS_SPIN_SAMPLES, k1 = (k0 + 1) % RAMMUS_SPIN_SAMPLES, t = f - Math.floor(f);
   const groundY = sp.lowest[k0] * (1 - t) + sp.lowest[k1] * t; // 가장 낮은 점이 지면에 닿는 높이

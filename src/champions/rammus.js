@@ -200,7 +200,10 @@ CharacterController.prototype._rammusTickBallSpin = function(dt = 0) {
   const p = this.root.position;
   const moved = Math.hypot(p.x - sp.last.x, p.z - sp.last.z);
   sp.last.copy(p);
-  if (moved > 0 && moved < sp.radius * 20) sp.angle = (sp.angle + moved / sp.radius) % (Math.PI * 2); // 순간이동(점멸 등)은 굴리지 않는다
+  const qd = (CHAMPION_DATA.rammus && CHAMPION_DATA.rammus.Q) || {};
+  let dAngle = Math.max(0, dt) * Math.PI * 2 * (qd.spinBaseRevPerSec || 0); // 제자리에서도 빠르게 돈다
+  if (moved > 0 && moved < sp.radius * 20) dAngle += (moved / sp.radius) * (qd.spinRollMult || 1); // 순간이동(점멸 등)은 굴리지 않는다
+  sp.angle = (sp.angle + dAngle) % (Math.PI * 2);
   sp.pivot.rotation.x = sp.angle;
   const f = (sp.angle / (Math.PI * 2)) * RAMMUS_SPIN_SAMPLES, k0 = Math.floor(f) % RAMMUS_SPIN_SAMPLES, k1 = (k0 + 1) % RAMMUS_SPIN_SAMPLES, t = f - Math.floor(f);
   const groundY = sp.lowest[k0] * (1 - t) + sp.lowest[k1] * t; // 가장 낮은 점이 지면에 닿는 높이
