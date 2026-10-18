@@ -32795,6 +32795,7 @@ const CHAMPION_ICON_META = {
    "R": "운명봉인"
   },
   "iconVariants": [
+   "E2",
    "Q3"
   ]
  }
