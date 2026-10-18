@@ -56,6 +56,7 @@ const ATTACK_SEQUENCE_OVERRIDES = {
   // 챔피언들과 동일한 유형의 버그가 생긴다.
   ashe: ['attack1', 'attack2'],
   nautilus: ['attack1', 'attack2', 'attack3'],
+  rammus: ['attack1', 'attack2'], // 38차: 실제 GLB 평타 2개(+Crit)
 };
 // 시퀀스 배열에서의 위치를 챔피언 고유의 "손/방향" 의미로 변환한다.
 // 새 챔피언이 추가되면 이 매핑만 확장하면 된다 - 애니메이션 선택 로직

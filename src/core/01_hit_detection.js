@@ -170,7 +170,7 @@ function isSilenced(target) { return hasStatus(target, 'SILENCE'); }
 // 이동 제한은 isRooted()로 따로 확인한다(moveTo 등).
 function isStunned(target) {
   // 공포(FEAR, 벡스 패시브)도 매혹처럼 행동을 막고 강제로 이동시킨다(시전자에게서 멀어짐).
-  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM') || hasStatus(target, 'FEAR');
+  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM') || hasStatus(target, 'FEAR') || hasStatus(target, 'TAUNT');
 }
 function isRooted(target) { return hasStatus(target, 'ROOT'); }
 // CC(기절/속박류)로 이동/행동이 실제로 막히는지 - 사용처: moveTo/castAbility/_tryEngageTarget
@@ -206,10 +206,11 @@ function tickStatusEffects(target, dt) {
   // 확인하면 충분하다 - 실제 플레이어 챔피언은 아리의 대상이 될 수 없다.
   // PC 위키(Types of Crowd Control): 매혹·공포는 시전자가 죽으면 풀린다.
   for (const e of target.statusEffects) {
-    if ((e.type === 'CHARM' || e.type === 'FEAR') && e.expiresAt > now && e.source && (e.source.hp <= 0 || e.source.isDead)) e.expiresAt = now;
+    if ((e.type === 'CHARM' || e.type === 'FEAR' || e.type === 'TAUNT') && e.expiresAt > now && e.source && (e.source.hp <= 0 || e.source.isDead)) e.expiresAt = now;
   }
   for (const e of target.statusEffects) {
-    if (e.type !== 'CHARM' || e.expiresAt <= now || !e.source || !target.mesh?.position) continue;
+    // 38차: 도발(TAUNT - 람머스 E)도 같은 이동 - 원작은 "시전자를 공격"이지만 이 연습장의 적은 평타를 하지 않아 시전자에게 다가가는 것으로 표현(감속 없음).
+    if ((e.type !== 'CHARM' && e.type !== 'TAUNT') || e.expiresAt <= now || !e.source || !target.mesh?.position) continue;
     const srcPos = getWorldPosition(e.source);
     if (!srcPos) continue;
     const toSrc = new THREE.Vector3(srcPos.x - target.mesh.position.x, 0, srcPos.z - target.mesh.position.z);
@@ -217,7 +218,7 @@ function tickStatusEffects(target, dt) {
     const stopDistance = (getCollisionRadius(target) + getCollisionRadius(e.source)) * 0.8;
     if (dist > stopDistance) {
       // PC 위키: 매혹된 대상은 이동 속도가 줄어든 채 시전자 쪽으로 걷는다(아리 E: 65% 둔화 → 0.35배).
-      const walkSpeed = MOVE_SPEED * (1 - (e.charmSlow ?? 0.65));
+      const walkSpeed = MOVE_SPEED * (1 - (e.type === 'TAUNT' ? 0 : (e.charmSlow ?? 0.65)));
       toSrc.multiplyScalar(1 / dist);
       target.mesh.position.addScaledVector(toSrc, Math.min(dist - stopDistance, walkSpeed * dt));
       if (typeof constrainUnitPosition === 'function') constrainUnitPosition(target, target.mesh.position); // 지형·죽음의 세계 경계 통과 불가

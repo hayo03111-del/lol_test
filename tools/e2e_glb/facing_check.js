@@ -6,7 +6,7 @@ const startServer = require('./server.js');
 // 방향을 정하는 스킬(skill_aim_system.js SKILL_AIM에서 instant가 아닌 것). 야스오 R(공중 대상 필요)·마스터 이 Q(모델 숨김)는 제외.
 const SLOTS = {
   garen: ['R'], darius: ['E', 'R'], sett: ['W', 'R'], renekton: ['E'], yasuo: ['Q', 'W', 'E'], yone: ['Q', 'W', 'E', 'R'],
-  nilah: ['Q', 'E'], mordekaiser: ['Q', 'E', 'R'], nautilus: ['Q', 'R'], chogath: ['Q', 'W', 'R'], leesin: ['Q', 'R'],
+  nilah: ['Q', 'E'], mordekaiser: ['Q', 'E', 'R'], nautilus: ['Q', 'R'], rammus: ['E', 'R'], chogath: ['Q', 'W', 'R'], leesin: ['Q', 'R'],
   vex: ['Q', 'E', 'R'], ezreal: ['Q', 'W', 'E', 'R'], ahri: ['Q', 'E', 'R'], varus: ['E', 'R'], ashe: ['W', 'E', 'R'],
 };
 (async () => {

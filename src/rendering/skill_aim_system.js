@@ -72,6 +72,11 @@ const SKILL_AIM = {
     R: { type: 'unit', range: (c, d) => d.range },
   },
   masteryi: { Q: { type: 'unit', range: (c, d) => d.range }, W: { type: 'instant' }, E: { type: 'instant' }, R: { type: 'instant' } },
+  rammus: { // 38차
+    Q: { type: 'instant' }, W: { type: 'instant' },
+    E: { type: 'unit', range: (c, d) => d.range },
+    R: { type: 'circleAt', range: (c) => (typeof c._rammusRRangeLol === 'function' ? c._rammusRRangeLol() : 800), radius: (c, d) => d.radius },
+  },
   chogath: {
     Q: { type: 'circleAt', range: (c, d) => d.range, radius: (c, d) => d.radius },
     W: { type: 'cone', range: (c, d) => d.range, angleDeg: (c, d) => d.coneAngleDeg },

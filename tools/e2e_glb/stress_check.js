@@ -7,7 +7,7 @@
 // 사용법: THREE_DIR=<three package> E2E_HIDE_MAP=1 node tools/e2e_glb/stress_check.js [챔피언ID...] > out.json
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const startServer = require('./server.js');
-const CHAMPS = ['garen', 'darius', 'masteryi', 'leesin', 'nautilus', 'yasuo', 'yone', 'sett', 'mordekaiser', 'renekton', 'nilah', 'chogath', 'ezreal', 'ashe', 'varus', 'ahri', 'vex'];
+const CHAMPS = ['garen', 'darius', 'masteryi', 'leesin', 'nautilus', 'yasuo', 'yone', 'sett', 'mordekaiser', 'renekton', 'nilah', 'chogath', 'ezreal', 'ashe', 'varus', 'ahri', 'vex', 'rammus'];
 const SCENARIOS = ['solo', 'moving', 'attacking', 'spam'];
 (async () => {
   const srv = await startServer(); const port = srv.address().port;

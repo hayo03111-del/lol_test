@@ -97,6 +97,7 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     // 보호막)" 발동해야 하므로, 실제로 피해를 받는 이 지점(takeDamage, 이미
     // 계산된 actualHpLoss 사용)으로 옮긴다.
     if (this.championId === 'yasuo' && actualHpLoss > 0) this._yasuoOnTakeDamage(source);
+    if (this.championId === 'rammus') this._rammusOnTakeDamage(source, damageMeta); // 38차: W 반사 피해
     if (this.championId === 'mordekaiser') {
       const cd = this._champData();
       this._morde.dealtBank = (this._morde.dealtBank || 0) + actualHpLoss * (cd.W.takenDamageBankPercent / 100);
@@ -173,6 +174,7 @@ CharacterController.prototype._die = function() {
       clearStatus(this, 'asheRangersFocus');
     }
     if (this.championId === 'nautilus' && typeof this._nautilusReset === 'function') this._nautilusReset();
+    if (this.championId === 'rammus' && typeof this._rammusReset === 'function') this._rammusReset();
     // 세트 R 도중 사망: 위 _clearActionTimers()가 시퀀스를 끊으면 잡힌 대상의 제압(isGrabbedBySett)이
     // 풀리지 않고 영구히 남았다 - 정상 종료 함수로 대상을 먼저 풀어준다.
     if (this._sett?.rSeq) { this.pendingMove = null; this.pendingCast = null; this.currentTarget = null; this._settEndR(this._sett.rSeq, true); }

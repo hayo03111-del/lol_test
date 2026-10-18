@@ -75,6 +75,11 @@ const SKILL_TIMING_DATABASE = {
   // 고정한다 - 이 GLB에 "Channel"/"Channel_Wndup" 클립이 있어도 실제
   // 애쉬 R은 윈드업->채널 3단계가 아니라 짧은 단일 캐스트형이므로 3단계
   // 채널 로직이 걸리면 안 된다(바루스 R과 동일한 이유).
+  // 38차: 람머스 GLB에 Channel/Channel_Wndup 클립이 있지만 R은 채널형이 아닌 도약 - R을 등록해 자동 채널 추정(hasRChannel)을 끈다.
+  // 실제 시전은 rammus.js가 직접 처리한다(아래 값은 공용 경로용 기록 - 시전 시간 미확인, 즉시 도약으로 처리).
+  rammus: {
+    R: { eventTime: 0, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+  },
   ashe: {
     W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
@@ -123,6 +128,7 @@ const CHAMPION_ALIASES = {
   'ahri':'ahri', '아리':'ahri',
   'garen':'garen', '가렌':'garen',
   'nautilus':'nautilus', '노틸러스':'nautilus',
+  'rammus':'rammus', '람머스':'rammus',
   'lux':'lux', '럭스':'lux',
   'blitzcrank':'blitzcrank', '블리츠크랭크':'blitzcrank',
   'leesin':'leesin', '리신':'leesin',

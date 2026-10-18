@@ -389,7 +389,7 @@ document.getElementById('swapGlbBtn').addEventListener('click', () => glbFileInp
 const CHAMPION_MODEL_LIBRARY = [
   ['garen', '가렌'], ['darius', '다리우스'], ['masteryi', '마스터 이'], ['leesin', '리 신'], ['nautilus', '노틸러스'], ['yasuo', '야스오'],
   ['yone', '요네'], ['sett', '세트'], ['mordekaiser', '모데카이저'], ['renekton', '레넥톤'], ['nilah', '닐라'], ['chogath', '초가스'],
-  ['ezreal', '이즈리얼'], ['ashe', '애쉬'], ['varus', '바루스'], ['ahri', '아리'], ['vex', '벡스'],
+  ['ezreal', '이즈리얼'], ['ashe', '애쉬'], ['varus', '바루스'], ['ahri', '아리'], ['vex', '벡스'], ['rammus', '람머스'],
 ];
 const CHAMPION_MODEL_DIR = 'assets/champions/';
 function loadChampionFromLibrary(id) {

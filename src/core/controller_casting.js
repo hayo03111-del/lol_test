@@ -36,6 +36,10 @@ const CHAMPION_DIRECT_CASTS = {
     Q: (c, m, f) => c._nautilusCastQ(m, f), W: (c, m, f) => c._nautilusCastW(f),
     E: (c, m, f) => c._nautilusCastE(f), R: (c, m, f) => c._nautilusCastR(f),
   },
+  rammus: {
+    Q: (c, m, f) => c._rammusCastQ(m, f), W: (c, m, f) => c._rammusCastW(f),
+    E: (c, m, f) => c._rammusCastE(f), R: (c, m, f) => c._rammusCastR(m, f),
+  },
   ashe: {
     Q: (c, m, f) => c._asheCastQ(f), W: (c, m, f) => c._asheCastW(m, f),
     E: (c, m, f) => c._asheCastE(m, f), R: (c, m, f) => c._asheCastR(m, f),
@@ -360,6 +364,11 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
     // 노틸러스 W(타이탄의 분노)도 시전 모션 없는 즉시 보호막이라 평타 중에도
     // 바로 쓸 수 있다(애쉬 Q와 같은 이유 - 진행 중 행동 상태를 건드리지 않음).
     if (this.championId === 'nautilus' && slot === 'W') {
+      this._dispatchCast(slot, mouseWorldPoint, false);
+      return;
+    }
+    // 38차: 람머스 Q(대회전 - 구르기 시작·재사용 종료)와 W(웅크리기 - 즉시 버프)도 시전 모션 없이 상태만 바꾼다 - 평타 중에도 바로.
+    if (this.championId === 'rammus' && (slot === 'Q' || slot === 'W')) {
       this._dispatchCast(slot, mouseWorldPoint, false);
       return;
     }

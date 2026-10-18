@@ -38,7 +38,7 @@ const SUMMONER_SPELL_DATA = {
 const SUMMONER_SPELL_ORDER = ['flash', 'heal', 'ghost', 'barrier', 'exhaust', 'ignite', 'cleanse', 'clarity', 'mark'];
 const SUMMONER_SLOTS = ['D', 'F'];
 // 정화가 지우는 군중 제어(제압·공중에 뜸 제외 - 원작).
-const CLEANSE_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'CHARM', 'FEAR']);
+const CLEANSE_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'CHARM', 'FEAR', 'TAUNT']);
 
 function _summonerLevelValue(ctrl, min, max) {
   const lvl = Math.max(1, Math.min(18, (ctrl && ctrl.champLevel) || 1));

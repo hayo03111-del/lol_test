@@ -4,7 +4,7 @@
 // 사용법: THREE_DIR=<three package> E2E_HIDE_MAP=1 node tools/e2e_glb/cost_check.js [챔피언ID...]
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const startServer = require('./server.js');
-const CHAMPS = ['garen', 'darius', 'masteryi', 'leesin', 'nautilus', 'yasuo', 'yone', 'sett', 'mordekaiser', 'renekton', 'nilah', 'chogath', 'ezreal', 'ashe', 'varus', 'ahri', 'vex'];
+const CHAMPS = ['garen', 'darius', 'masteryi', 'leesin', 'nautilus', 'yasuo', 'yone', 'sett', 'mordekaiser', 'renekton', 'nilah', 'chogath', 'ezreal', 'ashe', 'varus', 'ahri', 'vex', 'rammus'];
 (async () => {
   const srv = await startServer(); const port = srv.address().port;
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });

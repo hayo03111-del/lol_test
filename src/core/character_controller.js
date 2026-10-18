@@ -300,6 +300,7 @@ class CharacterController {
       eCharges: 2, eRechargeEndAt: 0, // E(매 날리기) 충전 2회 - 한 번에 하나씩 재충전(원작 충전형 스킬 규칙)
       wPending: null, ePending: null, rPending: null, rTravel: null,
     };
+    this._rammus = { roll: null, wUntil: 0, wStartedAt: 0, wArmor: 0, wMr: 0, jump: null, aftershocks: null }; // 38차 람머스(rammus.js)
     this._nautilus = {
       passiveReadyAt: new Map(),
       qPending: null, qTravel: null, qPull: null,
@@ -1450,6 +1451,7 @@ class CharacterController {
     this._varusUpdate(dt);
     this._asheUpdate(dt);
     if (typeof this._nautilusUpdate === 'function') this._nautilusUpdate(dt);
+    if (typeof this._rammusUpdate === 'function') this._rammusUpdate(dt);
     if (typeof itemSystemTick === 'function') itemSystemTick(this, dt);
   }
 }

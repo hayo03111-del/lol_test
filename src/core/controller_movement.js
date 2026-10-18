@@ -380,6 +380,13 @@ CharacterController.prototype._dariusWRangeBonusWorld = function() {
 
 CharacterController.prototype._tryEngageTarget = function() {
     if (!this.currentTarget || this.currentTarget.hp <= 0 || (typeof canRealmInteract === 'function' && !canRealmInteract(this, this.currentTarget))) { this.currentTarget = null; this.isChasing = false; return; }
+    // 38차: 람머스 대회전 중에는 평타 대신 대상에게 굴러간다(닿으면 rammus.js가 충돌 처리).
+    if (this.championId === 'rammus' && this._rammus && this._rammus.roll) {
+      this.targetPos = this.currentTarget.mesh.position.clone();
+      this.isChasing = true;
+      this.setState(STATE.MOVE);
+      return;
+    }
     const rangeBonus = this._settLeftHandRangeBonusWorld() + this._dariusWRangeBonusWorld();
     if (rangeBonus > 0) this.stats.attackRange += rangeBonus;
     const inRange = isInAttackRange(this, this.currentTarget);

@@ -226,7 +226,7 @@ function recomputeItemStats(ctrl) {
 // 뜸/매혹(이동 불가)을 거는 스킬 슬롯. 둔화만 거는 스킬은 포함하지 않는다.
 const IMMOBILIZING_SKILL_SLOTS = {
   ahri: ['E'], ashe: ['R'], chogath: ['Q'], leesin: ['R'], nautilus: ['Q', 'R'], nilah: ['R'],
-  renekton: ['W'], sett: ['E', 'R'], varus: ['R'], yasuo: ['Q'], yone: ['Q', 'R'],
+  renekton: ['W'], sett: ['E', 'R'], varus: ['R'], yasuo: ['Q'], yone: ['Q', 'R'], rammus: ['Q', 'E', 'R'],
 };
 function abilityHasteCooldown(ctrl, baseCd, slot) {
   // itemDynamicAbilityHaste - 끝없는 갈망(기아)처럼 추가 공격력에 비례해

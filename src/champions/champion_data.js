@@ -623,6 +623,46 @@ const CHAMPION_DATA = {
       damageType: 'MAGICAL',
     },
   },
+  rammus: {
+    displayName: '람머스',
+    // 38차. 수치 출처: 기본 스탯·재사용 대기시간·마나·사거리는 Data Dragon 16.20.1(GitHub 미러). 스킬 수치는 25.12 개편
+    // (+25.13) 패치 노트·위키 패치 기록 요약을 검색으로 교차 확인한 값. 확인하지 못한 값은 "추정"으로 표시했다.
+    stats: {
+      hp: 645, hpGrowth: 100, hpRegen: 8, hpRegenGrowth: 0.55,
+      ad: 65, adGrowth: 2.75, attackSpeed: 0.7, attackSpeedGrowthPercent: 2.215, // adGrowth: Data Dragon이 0으로 내보내는 알려진 문제 - 2.75는 추정
+      armor: 35, armorGrowth: 4.5, mr: 32, mrGrowth: 2.05,
+      range: 125, moveSpeed: 335, mana: 310, manaGrowth: 33, manaRegen: 7.85, manaRegenGrowth: 0.5,
+    },
+    passive: {
+      name: '가시박힌 껍질', desc: '총 방어력과 총 마법 저항력의 15%만큼 추가 공격력을 얻습니다.',
+      armorToAdPercent: 15, mrToAdPercent: 15, // 25.12: 평타 추가 마법 피해 → 총 방어력·마저 15% 추가 공격력
+    },
+    Q: {
+      name: '대회전', cooldown: [12, 10.5, 9, 7.5, 6], mana: 60, damageType: 'MAGICAL', // 재사용 대기시간은 구르기가 끝난 뒤부터 돈다
+      damageByLevel: [80, 120, 160, 200, 240], apRatio: 1.0, // 25.12: 80~200 → 80~240. AP 100%
+      rollDurationSec: 6, recastLockSec: 1, // 최대 6초, 1초 뒤부터 재사용으로 끝낼 수 있다
+      msPercentPerSecAt1: 25, msPercentPerSecAt18: 40.83, msPercentCapAt1: 150, msPercentCapAt18: 245, // 초당 이동 속도 증가율·최대치(레벨 비례)
+      impactRadius: 250, knockbackDistance: 125, knockbackSec: 0.15, stunSec: 0.4, // knockbackSec(밀려나는 시간)은 추정
+      slowPercentByLevel: [40, 50, 60, 70, 80], slowDurationSec: 1,
+    },
+    W: {
+      name: '몸 말아 웅크리기', cooldown: 7, mana: 40, durationSec: 7, recastLockSec: 0.5, // 25.12: 6 → 7초. recastLockSec는 추정
+      bonusArmorByLevel: [27, 32, 37, 42, 47], bonusMrByLevel: [27, 32, 37, 42, 47], // 25.13
+      armorPercentByLevel: [30, 37.5, 45, 52.5, 60], // 총 방어력 비례 추가 방어력 - 25.12 이전 기록 값(현재 값 추정)
+      returnDamageByLevel: [15, 25, 35, 45, 55], returnArmorRatio: 0.1, damageType: 'MAGICAL', // 반사 피해 - 추정(확인 못 함)
+    },
+    E: {
+      name: '광란의 도발', cooldown: 12, mana: 50, range: 325,
+      tauntDurationByLevel: [1.2, 1.4, 1.6, 1.8, 2.0], // 추정(25.12에서 없어진 공속 버프 지속시간과 같은 값)
+    },
+    R: {
+      name: '지진 폭격', cooldown: [120, 105, 90], mana: 100, damageType: 'MAGICAL',
+      damageByLevel: [150, 250, 350], apRatio: 0.6, structureDamageMultiplier: 2, // 25.12: 100~250 → 150~350. 구조물 2배(위키)
+      slowPercentByLevel: [30, 40, 50], slowDurationSec: 1.5, aftershockCount: 3, aftershockDurationSec: 3.5, // 여진은 둔화만(25.12에서 여진 피해 삭제)
+      powerballKnockupSec: 1, // 대회전 중 사용 시 중앙 적 공중에 뜸 + 대회전 피해(1초는 검색 자료 하나 - 추정)
+      radius: 300, centerRadius: 150, rangeBase: 800, rangeBonusMsRatio: 1.0, jumpSec: 0.75, // 추정: 범위·중앙 반경·사거리(기본 + 추가 이동 속도)·도약 시간
+    },
+  },
   masteryi: {
     displayName: '마스터 이',
     stats: {

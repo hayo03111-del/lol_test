@@ -29,7 +29,7 @@ function getTenacity(target) {
   }
   return 1 - keep;
 }
-const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM', 'FEAR']);
+const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_SHRED', 'KNOCKUP', 'SUPPRESSION', 'CHARM', 'FEAR', 'TAUNT']); // TAUNT: 도발(38차 람머스 E)
 function unitLabel(u) {
   if (typeof dummy !== 'undefined' && u === dummy) return '더미 타겟';
   if (typeof controller !== 'undefined' && u === controller) return controller.championId || '플레이어';
@@ -77,7 +77,7 @@ function applyStatus(target, effect) {
   const tenacity = getTenacity(target);
   // PC 위키(Tenacity): 에어본·수면·근시·경직(정지)·제압을 뺀 모든 군중 제어 지속시간을 줄인다 - 둔화 포함.
   // 예전엔 둔화가 빠져 있었다.
-  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR', 'SLOW'].includes(effect.type)) {
+  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR', 'SLOW', 'TAUNT'].includes(effect.type)) {
     effDuration = effDuration * (1 - tenacity);
   }
   if (target && target.itemSlowResistPercent > 0 && effect.type === 'SLOW') {
@@ -129,7 +129,7 @@ function applyStatus(target, effect) {
   // 않으므로 제외). target/effect.type을 함께 넘겨서, 제국의명령처럼
   // "이동 불가"만(둔화 제외) 가려 쓰거나 "걸린 대상"을 표식해야 하는
   // 패시브도 이 훅 하나로 처리한다.
-  if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM', 'FEAR'].includes(effect.type)
+  if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM', 'FEAR', 'TAUNT'].includes(effect.type)
       && typeof itemOnSlowOrImmobilize === 'function') {
     const attacker = effect.source || (typeof controller !== 'undefined' ? controller : null);
     if (attacker && attacker !== target) itemOnSlowOrImmobilize(attacker, target, effect.type);
