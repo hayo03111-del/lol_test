@@ -92,6 +92,15 @@ const startServer = require('./server.js');
   await reset(1500);
   await page.evaluate(() => window.controller.castAbility('Q')); await wait(900);
   r.qHold = await page.evaluate(() => { const c = window.controller, a = c.currentAction; return { clip: c.currentClipKey, paused: !!(a && a.paused), frac: a ? +(a.time / a.getClip().duration).toFixed(2) : null, spin: !!c._rammus.spin }; });
+  // 42차: Q·R을 쓰면 W가 끝나고, 구르는 중 기절이면 구르기가 끝난다(원작)
+  await reset(300);
+  r.qEndsW = await page.evaluate(() => { const c = window.controller; c.cooldowns.W = 0; c.cooldowns.Q = 0; c.mp = c.maxMp; c.castAbility('W'); const on = c._rammusWActive(); c.castAbility('Q'); return { wOnBefore: on, wAfterQ: c._rammusWActive(), rolling: c._rammusRolling() }; });
+  await page.evaluate(() => { const c = window.controller, E = window.__e2e; E.applyStatus(c, { id: 't_stun', type: 'STUN', duration: 0.3, value: 1 }); });
+  await wait(200);
+  r.ccEndsRoll = await page.evaluate(() => { const c = window.controller; return { rolling: c._rammusRolling(), qCd: c.cooldowns.Q > 0, spin: !!c._rammus.spin }; });
+  await reset(300);
+  r.rEndsW = await page.evaluate(() => { const c = window.controller, E = window.__e2e; c.cooldowns.W = 0; c.cooldowns.R = 0; c.mp = c.maxMp; c.castAbility('W'); c.castAbility('R', new E.THREE.Vector3(0, 0, -E.lolRangeToWorld(200))); return { wAfterR: c._rammusWActive(), jumping: !!c._rammus.jump }; });
+  await wait(1200);
   // 아이템: 가시 갑옷 + 악마사냥꾼의 화살(기지에서 구매)
   await reset(300);
   r.items = await page.evaluate(() => { const E = window.__e2e, c = window.controller; const sp = E.getTeamSpawnPosition(E.PLAYER_TEAM); c.root.position.set(sp.x, 0, sp.z); c.gold = 20000;
