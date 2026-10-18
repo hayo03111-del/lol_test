@@ -645,9 +645,10 @@ const CHAMPION_DATA = {
       msPercentPerSecAt1: 25, msPercentPerSecAt18: 40.83, msPercentCapAt1: 150, msPercentCapAt18: 245, // 초당 이동 속도 증가율·최대치(레벨 비례)
       impactRadius: 250, knockbackDistance: 125, knockbackSec: 0.15, stunSec: 0.4, // knockbackSec(밀려나는 시간)은 추정
       slowPercentByLevel: [40, 50, 60, 70, 80], slowDurationSec: 1,
-      // 공 회전 속도 - 수치 공개 없음(추정). 원작은 거리만큼 굴러가는 것보다 훨씬 빨리 돈다:
-      // 제자리에서도 초당 spinBaseRevPerSec 바퀴 + 실제 굴러간 거리 회전 × spinRollMult
-      spinBaseRevPerSec: 1.5, spinRollMult: 2.2,
+      // 공 회전 속도 - 수치 공개 없음(연출 추정). 원작은 람머스 모습이 안 보일 만큼 빨리 돈다(43차):
+      // 제자리에서도 초당 spinBaseRevPerSec 바퀴 + 실제 굴러간 거리 회전 × spinRollMult(시작 약 8 → 최고 약 13바퀴/초).
+      // 회전이 spinBlurFromRev~spinBlurFullRev 바퀴/초로 빨라지는 동안 번진 껍데기(모션 블러 대용)가 spinBlurMaxOpacity까지 덮는다.
+      spinBaseRevPerSec: 5, spinRollMult: 3, spinBlurFromRev: 2, spinBlurFullRev: 4.5, spinBlurMaxOpacity: 0.92,
     },
     W: {
       name: '몸 말아 웅크리기', cooldown: 7, mana: 40, durationSec: 7, recastLockSec: 0.5, // 25.12: 6 → 7초. recastLockSec는 추정

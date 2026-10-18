@@ -3084,9 +3084,10 @@ const CHAMPION_DATA = {
       msPercentPerSecAt1: 25, msPercentPerSecAt18: 40.83, msPercentCapAt1: 150, msPercentCapAt18: 245, // 초당 이동 속도 증가율·최대치(레벨 비례)
       impactRadius: 250, knockbackDistance: 125, knockbackSec: 0.15, stunSec: 0.4, // knockbackSec(밀려나는 시간)은 추정
       slowPercentByLevel: [40, 50, 60, 70, 80], slowDurationSec: 1,
-      // 공 회전 속도 - 수치 공개 없음(추정). 원작은 거리만큼 굴러가는 것보다 훨씬 빨리 돈다:
-      // 제자리에서도 초당 spinBaseRevPerSec 바퀴 + 실제 굴러간 거리 회전 × spinRollMult
-      spinBaseRevPerSec: 1.5, spinRollMult: 2.2,
+      // 공 회전 속도 - 수치 공개 없음(연출 추정). 원작은 람머스 모습이 안 보일 만큼 빨리 돈다(43차):
+      // 제자리에서도 초당 spinBaseRevPerSec 바퀴 + 실제 굴러간 거리 회전 × spinRollMult(시작 약 8 → 최고 약 13바퀴/초).
+      // 회전이 spinBlurFromRev~spinBlurFullRev 바퀴/초로 빨라지는 동안 번진 껍데기(모션 블러 대용)가 spinBlurMaxOpacity까지 덮는다.
+      spinBaseRevPerSec: 5, spinRollMult: 3, spinBlurFromRev: 2, spinBlurFullRev: 4.5, spinBlurMaxOpacity: 0.92,
     },
     W: {
       name: '몸 말아 웅크리기', cooldown: 7, mana: 40, durationSec: 7, recastLockSec: 0.5, // 25.12: 6 → 7초. recastLockSec는 추정
@@ -25872,7 +25873,72 @@ CharacterController.prototype._rammusCalibrateBallSpin = function() {
   const basePos = wrapper.position.clone();
   pivot.add(wrapper);
   wrapper.position.set(basePos.x - c.x, basePos.y - c.y, basePos.z - c.z);
-  r.spin = { pivot, wrapper, basePos, radius, lowest, angle: 0, yCur: c.y, last: this.root.position.clone() };
+  const blur = this._rammusMakeSpinBlur(radius);
+  pivot.add(blur);
+  r.spin = { pivot, wrapper, basePos, radius, lowest, angle: 0, yCur: c.y, last: this.root.position.clone(), blur, revPerSec: 0 };
+};
+// 43차: 원작 대회전은 람머스 모습이 안 보일 정도로 빨리 돈다. 초당 10바퀴가 넘으면 60fps 화면에서는 한 프레임에
+// 60도 넘게 돌아 오히려 천천히/거꾸로 도는 것처럼 보이므로(마차 바퀴 효과), 공 둘레에 회전 방향으로 번진 등껍질 색
+// 줄무늬 껍데기(모션 블러 대용)를 씌워 회전이 빨라질수록 진하게 덮는다. 색·투명도는 연출값.
+// 블러 텍스처 두 장(공용): inner = 등껍질(갈색)·배(녹색)·가시(금색)가 회전 방향(u)으로 번진 공 표면,
+// outer = 공 밖으로 튀어나온 가시 끝이 번진 금색 줄(나머지는 투명). 세로(v) = 회전축에서 본 위도.
+const RAMMUS_SPIN_BLUR_TEXTURES = {};
+function rammusSpinBlurTexture(kind) {
+  if (RAMMUS_SPIN_BLUR_TEXTURES[kind] || typeof document === 'undefined') return RAMMUS_SPIN_BLUR_TEXTURES[kind] || null;
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+  const g = cv.getContext('2d');
+  let seed = kind === 'inner' ? 7 : 13;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; // 매번 같은 무늬
+  const streak = (y, h, color, alpha) => {
+    const x = rnd() * cv.width, w = 60 + rnd() * 180;
+    const grad = g.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(0.5, color); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.globalAlpha = alpha; g.fillStyle = grad;
+    g.fillRect(x, y, w, h); g.fillRect(x - cv.width, y, w, h); // 가로로 이어지게
+  };
+  if (kind === 'inner') {
+    // 위도별 기본색: 양 극(옆면)은 어두운 갈색, 가운데(굴러가는 면)는 금색 가시와 녹색 배가 섞여 밝다.
+    for (let y = 0; y < cv.height; y++) {
+      const lat = Math.abs(y / (cv.height - 1) - 0.5) * 2; // 0 = 적도, 1 = 극
+      const r = Math.round(196 - 90 * lat + (rnd() - 0.5) * 30), gg = Math.round(150 - 70 * lat + (rnd() - 0.5) * 26), b = Math.round(84 - 32 * lat + (rnd() - 0.5) * 16);
+      g.globalAlpha = 1; g.fillStyle = `rgb(${r},${gg},${b})`; g.fillRect(0, y, cv.width, 1);
+    }
+    for (let i = 0; i < 160; i++) streak(rnd() * cv.height, 1 + rnd() * 3, rnd() < 0.55 ? '#e6c779' : (rnd() < 0.5 ? '#2f7a5c' : '#3a2616'), 0.35 + rnd() * 0.4);
+  } else {
+    g.clearRect(0, 0, cv.width, cv.height);
+    for (let i = 0; i < 70; i++) { const y = cv.height * (0.2 + 0.6 * rnd()); streak(y, 1 + rnd() * 2, '#f0d48a', 0.25 + rnd() * 0.45); }
+  }
+  g.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.RepeatWrapping;
+  if ('colorSpace' in tex && THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  RAMMUS_SPIN_BLUR_TEXTURES[kind] = tex;
+  return tex;
+}
+CharacterController.prototype._rammusMakeSpinBlur = function(radius) {
+  const group = new THREE.Group();
+  group.name = 'rammusSpinBlur';
+  const shell = (r, kind, maxOpacity) => {
+    const geo = new THREE.SphereGeometry(r, 32, 20);
+    geo.rotateZ(Math.PI / 2); // 극을 회전축(X)에 맞춘다 - 줄무늬가 회전 방향으로 놓인다
+    const mat = new THREE.MeshLambertMaterial({ map: rammusSpinBlurTexture(kind), transparent: true, opacity: 0, depthWrite: false, side: kind === 'outer' ? THREE.DoubleSide : THREE.FrontSide });
+    const m = new THREE.Mesh(geo, mat);
+    m.renderOrder = 2; m.userData.maxOpacity = maxOpacity;
+    group.add(m);
+  };
+  shell(radius * 1.04, 'inner', 1);
+  shell(radius * 1.28, 'outer', 0.85);
+  return group;
+};
+CharacterController.prototype._rammusSetSpinBlurOpacity = function(blur, t) {
+  if (blur) for (const m of blur.children) m.material.opacity = t * m.userData.maxOpacity;
+};
+// 회전 속도(초당 바퀴) → 블러 진하기(0~spinBlurMaxOpacity). spinBlurFromRev 바퀴부터 덮기 시작해 spinBlurFullRev에서 최대.
+CharacterController.prototype._rammusSpinBlurOpacity = function(revPerSec) {
+  const qd = (CHAMPION_DATA.rammus && CHAMPION_DATA.rammus.Q) || {};
+  const a = qd.spinBlurFromRev != null ? qd.spinBlurFromRev : 2, b = qd.spinBlurFullRev != null ? qd.spinBlurFullRev : 4.5;
+  const t = Math.max(0, Math.min(1, (revPerSec - a) / Math.max(1e-3, b - a)));
+  return t * (qd.spinBlurMaxOpacity != null ? qd.spinBlurMaxOpacity : 0.92);
 };
 CharacterController.prototype._rammusTickBallSpin = function(dt = 0) {
   const r = this._rammus;
@@ -25887,6 +25953,11 @@ CharacterController.prototype._rammusTickBallSpin = function(dt = 0) {
   if (moved > 0 && moved < sp.radius * 20) dAngle += (moved / sp.radius) * (qd.spinRollMult || 1); // 순간이동(점멸 등)은 굴리지 않는다
   sp.angle = (sp.angle + dAngle) % (Math.PI * 2);
   sp.pivot.rotation.x = sp.angle;
+  if (dt > 0) { // 프레임마다 튀지 않게 부드럽게 따라가는 회전 속도(초당 바퀴)
+    const rev = dAngle / (Math.PI * 2) / dt;
+    sp.revPerSec += (rev - sp.revPerSec) * Math.min(1, dt * 8);
+  }
+  this._rammusSetSpinBlurOpacity(sp.blur, this._rammusSpinBlurOpacity(sp.revPerSec));
   const f = (sp.angle / (Math.PI * 2)) * RAMMUS_SPIN_SAMPLES, k0 = Math.floor(f) % RAMMUS_SPIN_SAMPLES, k1 = (k0 + 1) % RAMMUS_SPIN_SAMPLES, t = f - Math.floor(f);
   const groundY = sp.lowest[k0] * (1 - t) + sp.lowest[k1] * t; // 가장 낮은 점이 지면에 닿는 높이
   // 몸을 말며 뛰어오른 높이에서 지면까지는 순간 이동 없이 내려앉게 한다.
@@ -25900,6 +25971,7 @@ CharacterController.prototype._rammusEndBallSpin = function() {
   this._rammus.spin = null;
   this.root.add(sp.wrapper);
   sp.wrapper.position.copy(sp.basePos);
+  if (sp.blur) for (const m of sp.blur.children) { m.geometry.dispose(); m.material.dispose(); } // 텍스처는 공용이라 남긴다
   if (sp.pivot.parent) sp.pivot.parent.remove(sp.pivot);
 };
 
