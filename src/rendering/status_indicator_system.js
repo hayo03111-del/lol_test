@@ -173,8 +173,8 @@ class StatusIndicatorSystem {
       #buffBar .buff .lbl { position:relative; z-index:1; letter-spacing:-.5px; }
       #buffBar .buff .stk { position:absolute; right:1px; bottom:0; z-index:2; font-size:11px; color:#fff; }
       #buffBar .buff .bar { position:absolute; left:0; bottom:0; height:3px; z-index:1; }
-      .skillSlot .slotState { position:absolute; left:0; right:0; top:13px; text-align:center; font-size:13px; line-height:1.05; font-weight:800; color:#ffe9a8; text-shadow:0 1px 2px #000; z-index:3; white-space:nowrap; }
-      .skillSlot .slotState small { display:block; font-size:9px; font-weight:700; }
+      .skillSlot .slotState { position:absolute; left:3px; bottom:13px; font-size:10px; line-height:1; font-weight:800; color:#ffe9a8; text-shadow:0 0 3px #000, 0 1px 2px #000; z-index:3; white-space:nowrap; }
+      .skillSlot .slotState small { display:none; } /* 51차: 단계 이름은 툴팁으로 - 칸 가운데 재사용 대기시간 숫자와 겹치지 않게 작은 "Q2/Q3" 꼬리표만 */
       .skillSlot.stateNext { border-color:#ffd36b; box-shadow:0 0 12px rgba(255,211,107,.75); }
       .skillSlot .slotTimer { position:absolute; inset:-1px; z-index:2; pointer-events:none;
         background:conic-gradient(#ffd36b var(--left), transparent 0); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; padding:2px; }
@@ -234,17 +234,13 @@ class StatusIndicatorSystem {
       const sig = st ? `${st.text}|${Math.round((st.remain || 0) * 10)}` : '';
       if (this._slotSig[key] === sig) continue;
       this._slotSig[key] = sig;
-      let lbl = slot.querySelector('.slotState'), tim = slot.querySelector('.slotTimer');
-      if (!st) { if (lbl) lbl.remove(); if (tim) tim.remove(); slot.classList.remove('stateNext'); continue; }
+      let lbl = slot.querySelector('.slotState');
+      const oldTimer = slot.querySelector('.slotTimer'); if (oldTimer) oldTimer.remove(); // 51차: 남은 시간 고리는 hud_stats_ui.js의 재시전 고리(.recastRing)로 통일
+      if (!st) { if (lbl) lbl.remove(); slot.classList.remove('stateNext'); continue; }
       if (!lbl) { lbl = document.createElement('div'); lbl.className = 'slotState'; slot.appendChild(lbl); }
-      if (!tim) { tim = document.createElement('div'); tim.className = 'slotTimer'; slot.appendChild(tim); }
       const [head, ...rest] = st.text.split(' ');
       lbl.innerHTML = `${head}<small>${rest.join(' ')}</small>`;
-      const prev = this._totals.get('slot' + key) || 0;
-      const total = st.remain > prev + 0.05 ? st.remain : prev;
-      this._totals.set('slot' + key, total);
-      tim.style.setProperty('--left', `${(total > 0 ? 360 * st.remain / total : 0).toFixed(0)}deg`);
-      slot.classList.add('stateNext');
+      lbl.title = st.text;
     }
   }
 

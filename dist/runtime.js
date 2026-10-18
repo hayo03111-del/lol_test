@@ -10225,8 +10225,8 @@ class StatusIndicatorSystem {
       #buffBar .buff .lbl { position:relative; z-index:1; letter-spacing:-.5px; }
       #buffBar .buff .stk { position:absolute; right:1px; bottom:0; z-index:2; font-size:11px; color:#fff; }
       #buffBar .buff .bar { position:absolute; left:0; bottom:0; height:3px; z-index:1; }
-      .skillSlot .slotState { position:absolute; left:0; right:0; top:13px; text-align:center; font-size:13px; line-height:1.05; font-weight:800; color:#ffe9a8; text-shadow:0 1px 2px #000; z-index:3; white-space:nowrap; }
-      .skillSlot .slotState small { display:block; font-size:9px; font-weight:700; }
+      .skillSlot .slotState { position:absolute; left:3px; bottom:13px; font-size:10px; line-height:1; font-weight:800; color:#ffe9a8; text-shadow:0 0 3px #000, 0 1px 2px #000; z-index:3; white-space:nowrap; }
+      .skillSlot .slotState small { display:none; } /* 51차: 단계 이름은 툴팁으로 - 칸 가운데 재사용 대기시간 숫자와 겹치지 않게 작은 "Q2/Q3" 꼬리표만 */
       .skillSlot.stateNext { border-color:#ffd36b; box-shadow:0 0 12px rgba(255,211,107,.75); }
       .skillSlot .slotTimer { position:absolute; inset:-1px; z-index:2; pointer-events:none;
         background:conic-gradient(#ffd36b var(--left), transparent 0); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; padding:2px; }
@@ -10286,17 +10286,13 @@ class StatusIndicatorSystem {
       const sig = st ? `${st.text}|${Math.round((st.remain || 0) * 10)}` : '';
       if (this._slotSig[key] === sig) continue;
       this._slotSig[key] = sig;
-      let lbl = slot.querySelector('.slotState'), tim = slot.querySelector('.slotTimer');
-      if (!st) { if (lbl) lbl.remove(); if (tim) tim.remove(); slot.classList.remove('stateNext'); continue; }
+      let lbl = slot.querySelector('.slotState');
+      const oldTimer = slot.querySelector('.slotTimer'); if (oldTimer) oldTimer.remove(); // 51차: 남은 시간 고리는 hud_stats_ui.js의 재시전 고리(.recastRing)로 통일
+      if (!st) { if (lbl) lbl.remove(); slot.classList.remove('stateNext'); continue; }
       if (!lbl) { lbl = document.createElement('div'); lbl.className = 'slotState'; slot.appendChild(lbl); }
-      if (!tim) { tim = document.createElement('div'); tim.className = 'slotTimer'; slot.appendChild(tim); }
       const [head, ...rest] = st.text.split(' ');
       lbl.innerHTML = `${head}<small>${rest.join(' ')}</small>`;
-      const prev = this._totals.get('slot' + key) || 0;
-      const total = st.remain > prev + 0.05 ? st.remain : prev;
-      this._totals.set('slot' + key, total);
-      tim.style.setProperty('--left', `${(total > 0 ? 360 * st.remain / total : 0).toFixed(0)}deg`);
-      slot.classList.add('stateNext');
+      lbl.title = st.text;
     }
   }
 
@@ -25886,7 +25882,7 @@ function updateSkillUI(cooldowns) {
       chargesEl.textContent = `${n.eCharges}/${maxCharges}`;
       if (n.eCharges < maxCharges && remaining > 0) {
         if (!cdEl) { cdEl = document.createElement('div'); cdEl.className = 'cd'; slot.appendChild(cdEl); }
-        cdEl.textContent = remaining >= 1 ? Math.ceil(remaining) : remaining.toFixed(1);
+        applySkillCooldownSweep(cdEl, 'E', remaining); // 51차: 원작처럼 시계 방향으로 걷히는 덮개
       } else if (cdEl) {
         cdEl.remove();
       }
@@ -25911,9 +25907,13 @@ function updateSkillUI(cooldowns) {
       continue;
     }
     const remaining = cooldowns[key];
-    if (remaining > 0) {
+    // 51차: 재시전 창(리 신 Q2·아리 R·럭스 E 등)이 열려 있으면 원작처럼 칸을 밝게(사용 가능) 두고 테두리 고리로 남은 시간을 보여 준다.
+    // 강화 단계(야스오·요네 Q3 - keepCd)는 재사용 대기시간 덮개를 그대로 보여 준다.
+    const recast = (typeof applySkillRecastUI === 'function' && typeof controller !== 'undefined' && controller) ? applySkillRecastUI(slot, key, controller) : null;
+    if (remaining > 0 && !(recast && !recast.keepCd)) {
       if (!cdEl) { cdEl = document.createElement('div'); cdEl.className = 'cd'; slot.appendChild(cdEl); }
-      cdEl.textContent = remaining >= 1 ? Math.ceil(remaining) : remaining.toFixed(1);
+      if (typeof applySkillCooldownSweep === 'function') applySkillCooldownSweep(cdEl, key, remaining);
+      else cdEl.textContent = remaining >= 1 ? Math.ceil(remaining) : remaining.toFixed(1);
       slot.classList.remove('ready');
     } else {
       if (cdEl) cdEl.remove();
@@ -32578,7 +32578,8 @@ const CHAMPION_ICON_META = {
    "W": "여우불",
    "E": "매혹",
    "R": "혼령 질주"
-  }
+  },
+  "recastIcons": []
  },
  "ashe": {
   "passiveName": "서리 화살",
@@ -32588,7 +32589,8 @@ const CHAMPION_ICON_META = {
    "W": "일제 사격",
    "E": "매 날리기",
    "R": "마법의 수정화살"
-  }
+  },
+  "recastIcons": []
  },
  "chogath": {
   "passiveName": "육식",
@@ -32598,7 +32600,8 @@ const CHAMPION_ICON_META = {
    "W": "흉포한 울부짖음",
    "E": "날카로운 가시",
    "R": "포식"
-  }
+  },
+  "recastIcons": []
  },
  "darius": {
   "passiveName": "과다출혈",
@@ -32608,7 +32611,8 @@ const CHAMPION_ICON_META = {
    "W": "마비의 일격",
    "E": "포획",
    "R": "녹서스의 단두대"
-  }
+  },
+  "recastIcons": []
  },
  "ezreal": {
   "passiveName": "끓어오르는 주문의 힘",
@@ -32618,7 +32622,8 @@ const CHAMPION_ICON_META = {
    "W": "정수의 흐름",
    "E": "비전 이동",
    "R": "정조준 일격"
-  }
+  },
+  "recastIcons": []
  },
  "garen": {
   "passiveName": "인내심",
@@ -32628,7 +32633,8 @@ const CHAMPION_ICON_META = {
    "W": "용기",
    "E": "심판",
    "R": "데마시아의 정의"
-  }
+  },
+  "recastIcons": []
  },
  "leesin": {
   "passiveName": "질풍격",
@@ -32638,7 +32644,8 @@ const CHAMPION_ICON_META = {
    "W": "방호 / 강철의 의지",
    "E": "폭풍/무력화",
    "R": "용의 분노"
-  }
+  },
+  "recastIcons": []
  },
  "lux": {
   "passiveName": "광채",
@@ -32648,7 +32655,8 @@ const CHAMPION_ICON_META = {
    "W": "프리즘 보호막",
    "E": "광휘의 특이점",
    "R": "최후의 섬광"
-  }
+  },
+  "recastIcons": []
  },
  "masteryi": {
   "passiveName": "2연속 공격",
@@ -32658,7 +32666,8 @@ const CHAMPION_ICON_META = {
    "W": "명상",
    "E": "우주류 검술",
    "R": "최후의 전사"
-  }
+  },
+  "recastIcons": []
  },
  "mordekaiser": {
   "passiveName": "암흑 탄생",
@@ -32668,7 +32677,8 @@ const CHAMPION_ICON_META = {
    "W": "불멸",
    "E": "죽음의 손아귀",
    "R": "죽음의 세계"
-  }
+  },
+  "recastIcons": []
  },
  "nautilus": {
   "passiveName": "강력한 일격",
@@ -32678,7 +32688,8 @@ const CHAMPION_ICON_META = {
    "W": "타이탄의 분노",
    "E": "역조",
    "R": "폭뢰"
-  }
+  },
+  "recastIcons": []
  },
  "nilah": {
   "passiveName": "영원한 기쁨",
@@ -32688,7 +32699,8 @@ const CHAMPION_ICON_META = {
    "W": "승리의 장막",
    "E": "급류",
    "R": "환희"
-  }
+  },
+  "recastIcons": []
  },
  "rammus": {
   "passiveName": "가시박힌 껍질",
@@ -32698,7 +32710,8 @@ const CHAMPION_ICON_META = {
    "W": "몸 말아 웅크리기",
    "E": "광란의 도발",
    "R": "지진 폭격"
-  }
+  },
+  "recastIcons": []
  },
  "renekton": {
   "passiveName": "분노의 지배",
@@ -32708,7 +32721,8 @@ const CHAMPION_ICON_META = {
    "W": "무자비한 포식자",
    "E": "자르고 토막내기",
    "R": "강신"
-  }
+  },
+  "recastIcons": []
  },
  "sett": {
   "passiveName": "투기장의 투지",
@@ -32718,7 +32732,8 @@ const CHAMPION_ICON_META = {
    "W": "강펀치",
    "E": "안면 강타",
    "R": "대미 장식"
-  }
+  },
+  "recastIcons": []
  },
  "varus": {
   "passiveName": "죽지 않는 복수심",
@@ -32728,7 +32743,8 @@ const CHAMPION_ICON_META = {
    "W": "역병 화살",
    "E": "퍼붓는 화살",
    "R": "부패의 사슬"
-  }
+  },
+  "recastIcons": []
  },
  "vex": {
   "passiveName": "파멸과 우울",
@@ -32738,7 +32754,8 @@ const CHAMPION_ICON_META = {
    "W": "거리 두기",
    "E": "커지는 어둠",
    "R": "그림자 파동"
-  }
+  },
+  "recastIcons": []
  },
  "yasuo": {
   "passiveName": "낭인의 길",
@@ -32748,7 +32765,8 @@ const CHAMPION_ICON_META = {
    "W": "바람 장막",
    "E": "질풍검",
    "R": "최후의 숨결"
-  }
+  },
+  "recastIcons": []
  },
  "yone": {
   "passiveName": "사냥꾼의 길",
@@ -32758,7 +32776,8 @@ const CHAMPION_ICON_META = {
    "W": "영혼 가르기",
    "E": "영혼해방",
    "R": "운명봉인"
-  }
+  },
+  "recastIcons": []
  }
 };
 
@@ -32898,6 +32917,86 @@ function setHudChampionIcons(championId) {
 if (typeof document !== 'undefined') {
   const hs = document.getElementById('hudStats');
   if (hs) hs.addEventListener('click', toggleHudStatsPage);
+}
+
+/* ---------------- 51차: 스킬 칸 재사용 대기시간 원작 표시 + 재시전 ---------------- */
+// 재사용 대기시간: 원작처럼 어두운 덮개가 12시 방향부터 시계 방향으로 걷히고 가운데에 남은 초(1초 미만은 소수 한 자리).
+// 전체 길이는 재사용 대기시간이 "늘어나는 순간"의 값을 기억해 쓴다(스킬 가속·초기화가 섞여도 덮개가 튀지 않게).
+const _skillCdTotals = {}, _skillCdLast = {};
+function applySkillCooldownSweep(cdEl, key, remaining) {
+  if (remaining > (_skillCdLast[key] || 0) + 0.05 || !_skillCdTotals[key]) _skillCdTotals[key] = remaining;
+  _skillCdLast[key] = remaining;
+  const total = Math.max(remaining, _skillCdTotals[key] || remaining, 1e-3);
+  const deg = Math.max(0, Math.min(360, (1 - remaining / total) * 360));
+  cdEl.style.background = `conic-gradient(rgba(0,0,0,0) 0deg ${deg}deg, rgba(4,6,10,0.8) ${deg}deg 360deg)`;
+  cdEl.textContent = remaining >= 1 ? Math.ceil(remaining) : remaining.toFixed(1);
+}
+function resetSkillCooldownSweep(key) { _skillCdLast[key] = 0; }
+
+// 재시전·강화 상태: { remaining, total(초), count?, keepCd? } | null.
+// keepCd: 강화 단계(야스오·요네 Q3)처럼 재사용 대기시간은 그대로 보여 주는 경우. 그 밖의 재시전은 창이 열려 있는 동안
+// 원작처럼 칸이 밝게(사용 가능) 보이고 테두리 고리가 남은 시간만큼 줄어든다.
+function getSkillRecastState(c, key) {
+  if (!c || !c.championId) return null;
+  const now = performance.now(), cd = typeof c._champData === 'function' ? c._champData() : null;
+  const win = (until, total, extra = {}) => (until > now ? { remaining: (until - now) / 1000, total: Math.max(total, (until - now) / 1000), ...extra } : null);
+  switch (c.championId) {
+    case 'leesin': {
+      const s = c._leesin; if (!s) return null;
+      if (key === 'Q' && s.qMarkTarget && s.qMarkTarget.hp > 0) return win(s.qMarkExpiresAt, cd.Q.markDuration || 3);
+      if (key === 'W') return win(s.wMarkReadyUntil, cd.W.markDuration || 3);
+      if (key === 'E' && s.eMarkHits && s.eMarkHits.length) return win(s.eMarkExpiresAt, cd.E.markDuration || 3);
+      return null;
+    }
+    case 'yasuo':
+      return key === 'Q' && c._yasuo && c._yasuo.qStacks >= 2 ? win(c._yasuo.qStackExpiresAt, cd.Q.stackDuration || 6, { keepCd: true }) : null;
+    case 'yone': {
+      const s = c._yone; if (!s) return null;
+      if (key === 'Q' && s.qStacks >= (cd.Q.maxStacks || 2)) return win(s.qStackExpiresAt, cd.Q.stackDuration || 6, { keepCd: true });
+      if (key === 'E' && s.eSpirit) return win(s.eSpirit.startedAt + s.eSpirit.duration * 1000, s.eSpirit.duration);
+      return null;
+    }
+    case 'ahri':
+      return key === 'R' && c._ahri && c._ahri.rCharges > 0 ? win(c._ahri.rReadyUntil, cd.R.recastWindow || 15, { count: c._ahri.rCharges }) : null;
+    case 'lux': {
+      const z = key === 'E' && c._lux && c._lux.zone; if (!z) return null;
+      return z.ready ? win(z.expiresAt, cd.E.zoneDurationSec || 5) : { remaining: cd.E.zoneDurationSec || 5, total: cd.E.zoneDurationSec || 5 };
+    }
+    case 'vex':
+      return key === 'R' && c._vex && c._vex.recastTarget ? win(c._vex.recastReadyUntil, 4) : null;
+    case 'rammus': {
+      const s = c._rammus; if (!s) return null;
+      if (key === 'Q' && s.roll) return { remaining: Math.max(0, cd.Q.rollDurationSec - s.roll.elapsed), total: cd.Q.rollDurationSec };
+      if (key === 'W' && s.wUntil) return win(s.wUntil, cd.W.durationSec || 7);
+      return null;
+    }
+    case 'renekton':
+      return key === 'E' && c._renekton ? win(c._renekton.eSecondReadyUntil || 0, 4) : null;
+    default: return null;
+  }
+}
+// 재시전 아이콘: assets/champion_icons/<id>/<칸>2.png가 있으면(meta.recastIcons) 그 그림으로 바꾸고, 없으면 같은 그림을
+// 금빛 테두리·밝게 처리한 "재시전" 모습으로 보여 준다(원작 재시전 그림은 Data Dragon·접근 가능한 미러에 없다).
+function applySkillRecastUI(slot, key, c) {
+  const st = getSkillRecastState(c, key);
+  let ring = slot.querySelector('.recastRing');
+  slot.classList.toggle('recast', !!st);
+  const meta = (typeof CHAMPION_ICON_META !== 'undefined' && c && c.championId) ? CHAMPION_ICON_META[c.championId] : null;
+  const altIcon = st && meta && meta.recastIcons && meta.recastIcons.includes(key);
+  const wantBg = meta ? `url("${HUD_ICON_DIR}${c.championId}/${key}${altIcon ? '2' : ''}.png")` : '';
+  if (meta && slot.dataset.bg !== wantBg) { slot.style.backgroundImage = wantBg; slot.dataset.bg = wantBg; }
+  if (!st) { if (ring) ring.remove(); const b = slot.querySelector('.recastCount'); if (b) b.remove(); return null; }
+  if (!ring) { ring = document.createElement('div'); ring.className = 'recastRing'; slot.appendChild(ring); }
+  const deg = Math.max(0, Math.min(360, (st.remaining / Math.max(1e-3, st.total)) * 360));
+  ring.style.background = `conic-gradient(#f3cf6b 0deg ${deg}deg, rgba(243,207,107,0.12) ${deg}deg 360deg)`;
+  // 남은 재시전 횟수(아리 R)가 있으면 그 숫자, 없으면 재시전 표시(↻). 강화 단계(keepCd)는 배지 없이 고리만.
+  let badge = slot.querySelector('.recastCount');
+  const text = st.count != null ? String(st.count) : (st.keepCd ? '' : '↻');
+  if (text) {
+    if (!badge) { badge = document.createElement('div'); badge.className = 'recastCount'; slot.appendChild(badge); }
+    if (badge.textContent !== text) badge.textContent = text;
+  } else if (badge) badge.remove();
+  return st;
 }
 
 /* ===== src/core/global_system_instances.js ===== */

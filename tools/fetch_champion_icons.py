@@ -45,8 +45,11 @@ def one(item):
     for slot, sp in zip('QWER', data['spells']):
         with open(os.path.join(d, f'{slot}.png'), 'wb') as f:
             f.write(fetch(f'{MIRROR}/img/spell/{sp["image"]["full"]}'))
+    # 51차: 재시전 그림 - assets/champion_icons/<id>/<칸>2.png를 직접 넣어 두면(원작 재시전 그림은 Data Dragon에 없다)
+    # HUD가 재시전 창이 열린 동안 그 그림으로 바꾼다. 이 스크립트는 그 파일을 지우거나 덮어쓰지 않는다.
+    recast = [s for s in 'QWER' if os.path.exists(os.path.join(d, f'{s}2.png'))]
     return cid, {'passiveName': data['passive']['name'], 'passiveDesc': clean(data['passive']['description']),
-                 'spellNames': {s: sp['name'] for s, sp in zip('QWER', data['spells'])}}
+                 'spellNames': {s: sp['name'] for s, sp in zip('QWER', data['spells'])}, 'recastIcons': recast}
 
 
 # 50차: 능력치 칸 아이콘 - 원작 능력치 아이콘(Data Dragon에는 없고 noxelisdev/LoL_DDragon의 extras/statistics에 있다)

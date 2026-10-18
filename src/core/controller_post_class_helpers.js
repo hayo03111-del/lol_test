@@ -170,7 +170,7 @@ function updateSkillUI(cooldowns) {
       chargesEl.textContent = `${n.eCharges}/${maxCharges}`;
       if (n.eCharges < maxCharges && remaining > 0) {
         if (!cdEl) { cdEl = document.createElement('div'); cdEl.className = 'cd'; slot.appendChild(cdEl); }
-        cdEl.textContent = remaining >= 1 ? Math.ceil(remaining) : remaining.toFixed(1);
+        applySkillCooldownSweep(cdEl, 'E', remaining); // 51차: 원작처럼 시계 방향으로 걷히는 덮개
       } else if (cdEl) {
         cdEl.remove();
       }
@@ -195,9 +195,13 @@ function updateSkillUI(cooldowns) {
       continue;
     }
     const remaining = cooldowns[key];
-    if (remaining > 0) {
+    // 51차: 재시전 창(리 신 Q2·아리 R·럭스 E 등)이 열려 있으면 원작처럼 칸을 밝게(사용 가능) 두고 테두리 고리로 남은 시간을 보여 준다.
+    // 강화 단계(야스오·요네 Q3 - keepCd)는 재사용 대기시간 덮개를 그대로 보여 준다.
+    const recast = (typeof applySkillRecastUI === 'function' && typeof controller !== 'undefined' && controller) ? applySkillRecastUI(slot, key, controller) : null;
+    if (remaining > 0 && !(recast && !recast.keepCd)) {
       if (!cdEl) { cdEl = document.createElement('div'); cdEl.className = 'cd'; slot.appendChild(cdEl); }
-      cdEl.textContent = remaining >= 1 ? Math.ceil(remaining) : remaining.toFixed(1);
+      if (typeof applySkillCooldownSweep === 'function') applySkillCooldownSweep(cdEl, key, remaining);
+      else cdEl.textContent = remaining >= 1 ? Math.ceil(remaining) : remaining.toFixed(1);
       slot.classList.remove('ready');
     } else {
       if (cdEl) cdEl.remove();
