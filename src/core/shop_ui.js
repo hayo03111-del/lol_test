@@ -16,7 +16,8 @@
    처리한다 - 이 파일은 그 함수들을 부르기만 한다. 다만 그 함수들은 실패를
    콘솔 경고로만 알리므로, 같은 조건을 미리 따져(shopBlockReason) 버튼에
    "왜 못 사는지"를 바로 보여준다.
-   아이템 그림 파일이 없어 아이콘은 이름 두 글자 + 주 능력치 색으로 그린다.
+   아이콘은 assets/items/<아이템 id>.png(원작 아이콘 - tools/fetch_item_icons.py로 받음)를 쓰고, 그림이 없으면
+   이름 두 글자 + 주 능력치 색 타일로 대신 그린다.
    ============================================================ */
 const ITEM_SLOT_KEYS = ['1', '2', '3', '5', '6', '7']; // 원작 키 배치 - 4는 장신구(와드)
 const SHOP_STAT_FILTERS = [
@@ -61,7 +62,8 @@ function _shopIconTone(item) {
   return hit ? hit.tone : '#7d8590';
 }
 function _shopIconHtml(item, cls) {
-  return `<div class="shop-icon bevel-s ${cls || ''}" style="--tone:${_shopIconTone(item)}">${_shopEsc(_shopIconText(item))}</div>`;
+  // 그림을 못 읽으면(파일 없음) img를 지워 아래 글자 타일이 보이게 한다.
+  return `<div class="shop-icon bevel-s ${cls || ''}" style="--tone:${_shopIconTone(item)}"><span>${_shopEsc(_shopIconText(item))}</span><img src="assets/items/${_shopEsc(item.id)}.png" alt="" draggable="false" onerror="this.remove()"></div>`;
 }
 function _shopInBase(ctrl) {
   if (!ctrl || !ctrl.root) return false;

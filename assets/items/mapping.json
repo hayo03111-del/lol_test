@@ -1,0 +1,626 @@
+{
+ "abyssalMask": {
+  "riotItemId": "6665",
+  "riotNameKo": "해신 작쇼"
+ },
+ "aetherialWisp": {
+  "riotItemId": "3113",
+  "riotNameKo": "에테르 환영"
+ },
+ "amplifyingTome": {
+  "riotItemId": "1052",
+  "riotNameKo": "증폭의 고서"
+ },
+ "archangelsStaff": {
+  "riotItemId": "3003",
+  "riotNameKo": "대천사의 지팡이"
+ },
+ "ascendedPauldrons": {
+  "riotItemId": "3066",
+  "riotNameKo": "비상의 월갑"
+ },
+ "bandlePipe": {
+  "riotItemId": "2524",
+  "riotNameKo": "밴들파이프"
+ },
+ "bandleglassMirror": {
+  "riotItemId": "4642",
+  "riotNameKo": "밴들유리 거울"
+ },
+ "banshees": {
+  "riotItemId": "3102",
+  "riotNameKo": "밴시의 장막"
+ },
+ "berserkersGreaves": {
+  "riotItemId": "3006",
+  "riotNameKo": "광전사의 군화"
+ },
+ "bfSword": {
+  "riotItemId": "1038",
+  "riotNameKo": "B.F. 대검"
+ },
+ "blackCleaver": {
+  "riotItemId": "3071",
+  "riotNameKo": "칠흑의 양날 도끼"
+ },
+ "blackfireTorch": {
+  "riotItemId": "2503",
+  "riotNameKo": "어둠불꽃 횃불"
+ },
+ "bladeOfTheRuinedKing": {
+  "riotItemId": "3153",
+  "riotNameKo": "몰락한 왕의 검"
+ },
+ "blastingWand": {
+  "riotItemId": "1026",
+  "riotNameKo": "방출의 마법봉"
+ },
+ "bloodsong": {
+  "riotItemId": "3877",
+  "riotNameKo": "피의 노래"
+ },
+ "bloodthirster": {
+  "riotItemId": "3072",
+  "riotNameKo": "피바라기"
+ },
+ "boots": {
+  "riotItemId": "1001",
+  "riotNameKo": "장화"
+ },
+ "bootsOfGreed": {
+  "riotItemId": "3008",
+  "riotNameKo": "탐욕의 군화"
+ },
+ "bootsOfSwiftness": {
+  "riotItemId": "3009",
+  "riotNameKo": "신속의 장화"
+ },
+ "bountyOfWorlds": {
+  "riotItemId": "3867",
+  "riotNameKo": "세계의 결실"
+ },
+ "brokenWristGuard": {
+  "riotItemId": "2421",
+  "riotNameKo": "부서진 팔목 보호대"
+ },
+ "catalystOfAeons": {
+  "riotItemId": "3803",
+  "riotNameKo": "억겁의 카탈리스트"
+ },
+ "caulfieldsWarhammer": {
+  "riotItemId": "3133",
+  "riotNameKo": "콜필드의 전투 망치"
+ },
+ "celestialOpposition": {
+  "riotItemId": "3869",
+  "riotNameKo": "천상의 이의"
+ },
+ "chainVest": {
+  "riotItemId": "1029",
+  "riotNameKo": "천 갑옷"
+ },
+ "chainmailVest": {
+  "riotItemId": "1031",
+  "riotNameKo": "쇠사슬 조끼"
+ },
+ "cloakOfAgility": {
+  "riotItemId": "1018",
+  "riotNameKo": "민첩성의 망토"
+ },
+ "collector": {
+  "riotItemId": "6676",
+  "riotNameKo": "징수의 총"
+ },
+ "controlWard": {
+  "riotItemId": "2055",
+  "riotNameKo": "제어 와드"
+ },
+ "cosmicDrive": {
+  "riotItemId": "4629",
+  "riotNameKo": "우주의 추진력"
+ },
+ "crystallineBracer": {
+  "riotItemId": "3801",
+  "riotNameKo": "수정 팔 보호구"
+ },
+ "cull": {
+  "riotItemId": "1083",
+  "riotNameKo": "수확의 낫"
+ },
+ "dagger": {
+  "riotItemId": "1042",
+  "riotNameKo": "단검"
+ },
+ "darkSeal": {
+  "riotItemId": "1082",
+  "riotNameKo": "암흑의 인장"
+ },
+ "deathsDance": {
+  "riotItemId": "6333",
+  "riotNameKo": "죽음의 무도"
+ },
+ "devourerAxe": {
+  "riotItemId": "3044",
+  "riotNameKo": "탐식의 망치"
+ },
+ "divineSunderer": {
+  "riotItemId": "6610",
+  "riotNameKo": "갈라진 하늘"
+ },
+ "doransBlade": {
+  "riotItemId": "1055",
+  "riotNameKo": "도란의 검"
+ },
+ "doransBow": {
+  "riotItemId": "1086",
+  "riotNameKo": "도란의 활"
+ },
+ "doransHelm": {
+  "riotItemId": "1120",
+  "riotNameKo": "도란의 투구"
+ },
+ "doransRing": {
+  "riotItemId": "1056",
+  "riotNameKo": "도란의 반지"
+ },
+ "doransShield": {
+  "riotItemId": "1054",
+  "riotNameKo": "도란의 방패"
+ },
+ "dreamMaker": {
+  "riotItemId": "3870",
+  "riotNameKo": "꿈 생성기"
+ },
+ "duskAndDawn": {
+  "riotItemId": "2510",
+  "riotNameKo": "황혼과 새벽"
+ },
+ "eclipse": {
+  "riotItemId": "6692",
+  "riotNameKo": "월식"
+ },
+ "elixirOfIron": {
+  "riotItemId": "2138",
+  "riotNameKo": "강철의 영약"
+ },
+ "elixirOfSorcery": {
+  "riotItemId": "2139",
+  "riotNameKo": "마법의 영약"
+ },
+ "elixirOfWrath": {
+  "riotItemId": "2140",
+  "riotNameKo": "분노의 영약"
+ },
+ "embersOfFate": {
+  "riotItemId": "2508",
+  "riotNameKo": "운명의 재"
+ },
+ "endlessDespair": {
+  "riotItemId": "2502",
+  "riotNameKo": "끝없는 절망"
+ },
+ "essenceReaver": {
+  "riotItemId": "3508",
+  "riotNameKo": "정수 약탈자"
+ },
+ "eternalThirst": {
+  "riotItemId": "2517",
+  "riotNameKo": "끝없는 갈망"
+ },
+ "executionersCalling": {
+  "riotItemId": "3123",
+  "riotNameKo": "처형인의 대검"
+ },
+ "faerieCharm": {
+  "riotItemId": "1004",
+  "riotNameKo": "요정의 부적"
+ },
+ "feralization": {
+  "riotItemId": "2020",
+  "riotNameKo": "야수화"
+ },
+ "fiendishCodex": {
+  "riotItemId": "3108",
+  "riotNameKo": "악마의 마법서"
+ },
+ "forbiddenIdol": {
+  "riotItemId": "3114",
+  "riotNameKo": "금지된 우상"
+ },
+ "fortressBreaker": {
+  "riotItemId": "2520",
+  "riotNameKo": "요새파괴자"
+ },
+ "ghostlyHood": {
+  "riotItemId": "3211",
+  "riotNameKo": "망령의 두건"
+ },
+ "giantsBelt": {
+  "riotItemId": "1011",
+  "riotNameKo": "거인의 허리띠"
+ },
+ "glowingMote": {
+  "riotItemId": "2022",
+  "riotNameKo": "빛나는 티끌"
+ },
+ "guardianAngel": {
+  "riotItemId": "3026",
+  "riotNameKo": "수호 천사"
+ },
+ "hauntingGuise": {
+  "riotItemId": "3147",
+  "riotNameKo": "기괴한 가면"
+ },
+ "healthPotion": {
+  "riotItemId": "2003",
+  "riotNameKo": "체력 물약"
+ },
+ "heartsteel": {
+  "riotItemId": "3084",
+  "riotNameKo": "강철심장"
+ },
+ "hextechAlternator": {
+  "riotItemId": "3145",
+  "riotNameKo": "마법공학 교류 발전기"
+ },
+ "hextechGunblade": {
+  "riotItemId": "3146",
+  "riotNameKo": "마법공학 총검"
+ },
+ "hextechRocketbelt": {
+  "riotItemId": "3152",
+  "riotNameKo": "마법공학 로켓 벨트"
+ },
+ "hubris": {
+  "riotItemId": "6697",
+  "riotNameKo": "오만"
+ },
+ "hullbreaker": {
+  "riotItemId": "3181",
+  "riotNameKo": "선체파괴자"
+ },
+ "hydraOfHeroism": {
+  "riotItemId": "6631",
+  "riotNameKo": "발걸음 분쇄기"
+ },
+ "immortalShieldbow": {
+  "riotItemId": "6673",
+  "riotNameKo": "불멸의 철갑궁"
+ },
+ "imperialMandate": {
+  "riotItemId": "4005",
+  "riotNameKo": "제국의 명령"
+ },
+ "infinityEdge": {
+  "riotItemId": "3031",
+  "riotNameKo": "무한의 대검"
+ },
+ "ionianBootsOfLucidity": {
+  "riotItemId": "3158",
+  "riotNameKo": "명석함의 아이오니아 장화"
+ },
+ "ironSeal": {
+  "riotItemId": "2019",
+  "riotNameKo": "강철 인장"
+ },
+ "ironSolariLocket": {
+  "riotItemId": "3190",
+  "riotNameKo": "강철의 솔라리 펜던트"
+ },
+ "kircheisShard": {
+  "riotItemId": "3067",
+  "riotNameKo": "점화석"
+ },
+ "krakenSlayer": {
+  "riotItemId": "6672",
+  "riotNameKo": "크라켄 학살자"
+ },
+ "lastWhisper": {
+  "riotItemId": "3035",
+  "riotNameKo": "최후의 속삭임"
+ },
+ "liandrysTorment": {
+  "riotItemId": "6653",
+  "riotNameKo": "리안드리의 고통"
+ },
+ "lichBane": {
+  "riotItemId": "3100",
+  "riotNameKo": "리치베인"
+ },
+ "longSword": {
+  "riotItemId": "1036",
+  "riotNameKo": "롱소드"
+ },
+ "lordDominiksRegards": {
+  "riotItemId": "3036",
+  "riotNameKo": "도미닉 경의 인사"
+ },
+ "lostChapter": {
+  "riotItemId": "3802",
+  "riotNameKo": "사라진 양피지"
+ },
+ "ludensEcho": {
+  "riotItemId": "6655",
+  "riotNameKo": "루덴의 메아리"
+ },
+ "magicOpticsC44": {
+  "riotItemId": "2523",
+  "riotNameKo": "마법광학 장치 C44"
+ },
+ "malignance": {
+  "riotItemId": "3118",
+  "riotNameKo": "악의"
+ },
+ "manamune": {
+  "riotItemId": "3004",
+  "riotNameKo": "마나무네"
+ },
+ "maw": {
+  "riotItemId": "3156",
+  "riotNameKo": "맬모셔스의 아귀"
+ },
+ "mejaisSoulstealer": {
+  "riotItemId": "3041",
+  "riotNameKo": "메자이의 영혼약탈자"
+ },
+ "mercurysTreads": {
+  "riotItemId": "3111",
+  "riotNameKo": "헤르메스의 발걸음"
+ },
+ "moonstoneRenewer": {
+  "riotItemId": "6617",
+  "riotNameKo": "월석 재생기"
+ },
+ "mortalReminder": {
+  "riotItemId": "3033",
+  "riotNameKo": "필멸자의 운명"
+ },
+ "muramana": {
+  "riotItemId": "3042",
+  "riotNameKo": "무라마나"
+ },
+ "naboriFlickerblade": {
+  "riotItemId": "6675",
+  "riotNameKo": "나보리 명멸검"
+ },
+ "nashorsTooth": {
+  "riotItemId": "3115",
+  "riotNameKo": "내셔의 이빨"
+ },
+ "needlesslyLargeRod": {
+  "riotItemId": "1058",
+  "riotNameKo": "쓸데없이 큰 지팡이"
+ },
+ "negatronCloak": {
+  "riotItemId": "1033",
+  "riotNameKo": "마법무효화의 망토"
+ },
+ "negatronMantle": {
+  "riotItemId": "1057",
+  "riotNameKo": "음전자 망토"
+ },
+ "overlordsBloodmail": {
+  "riotItemId": "2501",
+  "riotNameKo": "지배자의 피갑옷"
+ },
+ "peakArrow": {
+  "riotItemId": "6670",
+  "riotNameKo": "절정의 화살"
+ },
+ "phageAxe": {
+  "riotItemId": "3051",
+  "riotNameKo": "온기가 필요한 자의 도끼"
+ },
+ "phantomDancer": {
+  "riotItemId": "3046",
+  "riotNameKo": "유령 무희"
+ },
+ "pickaxe": {
+  "riotItemId": "1037",
+  "riotNameKo": "곡괭이"
+ },
+ "plagueGem": {
+  "riotItemId": "4630",
+  "riotNameKo": "역병의 보석"
+ },
+ "platedSteelcaps": {
+  "riotItemId": "3047",
+  "riotNameKo": "판금 장화"
+ },
+ "pursuerWristGuard": {
+  "riotItemId": "2420",
+  "riotNameKo": "추적자의 팔목 보호대"
+ },
+ "rabadonsDeathcap": {
+  "riotItemId": "3089",
+  "riotNameKo": "라바돈의 죽음모자"
+ },
+ "rageblade": {
+  "riotItemId": "3032",
+  "riotNameKo": "윤 탈 야생화살"
+ },
+ "rapidFireCannon": {
+  "riotItemId": "3094",
+  "riotNameKo": "고속 연사포"
+ },
+ "recurveBow": {
+  "riotItemId": "1043",
+  "riotNameKo": "곡궁"
+ },
+ "refillablePotion": {
+  "riotItemId": "2031",
+  "riotNameKo": "충전형 물약"
+ },
+ "rejuvenationBead": {
+  "riotItemId": "1006",
+  "riotNameKo": "원기 회복의 구슬"
+ },
+ "riftmaker": {
+  "riotItemId": "4633",
+  "riotNameKo": "균열 생성기"
+ },
+ "rodOfAges": {
+  "riotItemId": "6657",
+  "riotNameKo": "영겁의 지팡이"
+ },
+ "rubyCrystal": {
+  "riotItemId": "1028",
+  "riotNameKo": "루비 수정"
+ },
+ "runesteelSpaulders": {
+  "riotItemId": "3866",
+  "riotNameKo": "룬 나침반"
+ },
+ "rylaisCrystalScepter": {
+  "riotItemId": "3116",
+  "riotNameKo": "라일라이의 수정홀"
+ },
+ "sapphireCrystal": {
+  "riotItemId": "1027",
+  "riotNameKo": "사파이어 수정"
+ },
+ "scoutsSlingshot": {
+  "riotItemId": "3144",
+  "riotNameKo": "정찰병의 새총"
+ },
+ "seraphsEmbrace": {
+  "riotItemId": "3040",
+  "riotNameKo": "대천사의 포옹"
+ },
+ "serratedDirk": {
+  "riotItemId": "3134",
+  "riotNameKo": "톱날 단검"
+ },
+ "serylasGrudge": {
+  "riotItemId": "6694",
+  "riotNameKo": "세릴다의 원한"
+ },
+ "shadowflame": {
+  "riotItemId": "4645",
+  "riotNameKo": "그림자불꽃"
+ },
+ "sheen": {
+  "riotItemId": "3057",
+  "riotNameKo": "광휘의 검"
+ },
+ "shojinSpear": {
+  "riotItemId": "3161",
+  "riotNameKo": "쇼진의 창"
+ },
+ "shurelyasBattlesong": {
+  "riotItemId": "2065",
+  "riotNameKo": "슈렐리아의 군가"
+ },
+ "slightlyMagicalBoots": {
+  "riotItemId": "2422",
+  "riotNameKo": "약간 신비한 신발"
+ },
+ "solsticeSleigh": {
+  "riotItemId": "3876",
+  "riotNameKo": "태양의 썰매"
+ },
+ "sorcerersShoes": {
+  "riotItemId": "3020",
+  "riotNameKo": "마법사의 신발"
+ },
+ "spellbinder": {
+  "riotItemId": "3155",
+  "riotNameKo": "주문포식자"
+ },
+ "spiritVisage": {
+  "riotItemId": "3065",
+  "riotNameKo": "정령의 형상"
+ },
+ "stealthWard": {
+  "riotItemId": "3340",
+  "riotNameKo": "투명 와드"
+ },
+ "sterakssGage": {
+  "riotItemId": "3053",
+  "riotNameKo": "스테락의 도전"
+ },
+ "stormrazor": {
+  "riotItemId": "3095",
+  "riotNameKo": "폭풍갈퀴"
+ },
+ "stormsurge": {
+  "riotItemId": "6699",
+  "riotNameKo": "벼락폭풍검"
+ },
+ "tailFeather": {
+  "riotItemId": "6690",
+  "riotNameKo": "꽁지깃"
+ },
+ "tearOfGoddess": {
+  "riotItemId": "3070",
+  "riotNameKo": "여신의 눈물"
+ },
+ "tempestStaff": {
+  "riotItemId": "4646",
+  "riotNameKo": "폭풍 쇄도"
+ },
+ "tiamat": {
+  "riotItemId": "3077",
+  "riotNameKo": "티아맷"
+ },
+ "titanicHydra": {
+  "riotItemId": "3748",
+  "riotNameKo": "거대한 히드라"
+ },
+ "trinityForce": {
+  "riotItemId": "3078",
+  "riotNameKo": "삼위일체"
+ },
+ "tunnelers": {
+  "riotItemId": "2021",
+  "riotNameKo": "땅굴 채굴기"
+ },
+ "vampiricScepter": {
+  "riotItemId": "1053",
+  "riotNameKo": "흡혈의 낫"
+ },
+ "verdantBarrier": {
+  "riotItemId": "4632",
+  "riotNameKo": "신록의 장벽"
+ },
+ "vigilance": {
+  "riotItemId": "3302",
+  "riotNameKo": "경계"
+ },
+ "voidStaff": {
+  "riotItemId": "3135",
+  "riotNameKo": "공허의 지팡이"
+ },
+ "warmogsArmor": {
+  "riotItemId": "3083",
+  "riotNameKo": "워모그의 갑옷"
+ },
+ "witsEnd": {
+  "riotItemId": "3091",
+  "riotNameKo": "마법사의 최후"
+ },
+ "worldAtlas": {
+  "riotItemId": "3865",
+  "riotNameKo": "세계 지도집"
+ },
+ "wrathblade": {
+  "riotItemId": "3124",
+  "riotNameKo": "구인수의 격노검"
+ },
+ "youmuusGhostblade": {
+  "riotItemId": "3142",
+  "riotNameKo": "요우무의 유령검"
+ },
+ "zaZaksRealmspike": {
+  "riotItemId": "3871",
+  "riotNameKo": "자자크의 세계가시"
+ },
+ "zealSword": {
+  "riotItemId": "3086",
+  "riotNameKo": "열정의 검"
+ },
+ "zhonyasHourglass": {
+  "riotItemId": "3157",
+  "riotNameKo": "존야의 모래시계"
+ }
+}
