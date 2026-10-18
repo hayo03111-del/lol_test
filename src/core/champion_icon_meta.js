@@ -75,7 +75,11 @@ const CHAMPION_ICON_META = {
    "E": "폭풍/무력화",
    "R": "용의 분노"
   },
-  "iconVariants": []
+  "iconVariants": [
+   "E2",
+   "Q2",
+   "W2"
+  ]
  },
  "lux": {
   "passiveName": "광채",

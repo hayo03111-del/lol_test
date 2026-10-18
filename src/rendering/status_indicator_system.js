@@ -105,7 +105,7 @@ function championStatusEntries(c, now) {
 function championSlotStates(c, now) {
   const s = {}, sec = (ms) => Math.max(0, (ms - now) / 1000);
   // 52차: 야스오·요네 Q3는 글자 대신 칸 그림이 바뀐다(hud_stats_ui.js applySkillRecastUI - assets/champion_icons/<id>/Q2.png).
-  if (c.championId === 'leesin' && c._leesin && c._leesin.qMarkTarget && c._leesin.qMarkExpiresAt > now) s.Q = { text: 'Q2 공명', remain: sec(c._leesin.qMarkExpiresAt) };
+  // 55차: 리 신 Q2도 글자 대신 칸 그림(Q2.png - 사용자가 준 원작 그림)이 바뀐다.
   return s;
 }
 
