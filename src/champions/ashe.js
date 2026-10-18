@@ -229,7 +229,7 @@ CharacterController.prototype._asheCastE = function(mouseWorldPoint, free = fals
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
     : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
-  const rawDist = dir.length();
+  const rawDist = mouseWorldPoint ? dir.length() : 0; // 45차: 커서가 없으면 최대 사거리(예전엔 단위 벡터 길이 1 = 아주 짧은 거리)
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   // 충전 2회(재충전 90~50초, 하나씩) + 사용 간격 5초(PC 위키).

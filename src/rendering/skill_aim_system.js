@@ -40,10 +40,11 @@ const SKILL_AIM = {
   },
   renekton: {
     Q: { type: 'instant' }, W: { type: 'instant' }, R: { type: 'instant' },
-    E: { type: 'dash', range: (c, d) => d.range, width: (c) => 2 * (45 + (c._renekton && c._renekton.rActive ? 50 : 0)) }, // _renektonFindLineHits 반폭 45(+R 50)
+    E: { type: 'dash', range: (c, d) => d.range, width: (c, d) => 2 * ((d.halfWidth || 45) + (c._renekton && c._renekton.rActive ? (d.rHalfWidthBonus || 0) : 0)) }, // _renektonFindLineHits 반폭(데이터)
   },
   yasuo: {
-    Q: { type: 'line', range: (c, d) => (yasuoAimTornado(c) ? d.tornadoRange : d.range), width: (c, d) => (yasuoAimTornado(c) ? d.tornadoWidth : d.width) },
+    Q: { type: 'line', range: (c, d) => (yasuoAimTornado(c) ? d.tornadoRange : d.range), width: (c, d) => (yasuoAimTornado(c) ? d.tornadoWidth : d.width),
+      instantIf: (c) => c.currentActionKey === 'yasuoE' && c.currentPhase === 'ACTIVE' }, // 45차: E 돌진 중 Q(EQ)는 조준 없이 바로 - 돌진 끝에 주변 원형
     W: { type: 'wall', width: (c, d, lvl) => skillVal(d.width, lvl) },                              // 앞쪽 width*0.75 지점, 길이 width
     E: { type: 'unit', range: (c, d) => d.range },
     R: { type: 'unit', range: (c, d) => d.range, approach: false },                                  // 공중에 뜬 적(걸어가서 시전하지 않음 - 띄운 적이 사거리 안에 있을 때만)
@@ -56,7 +57,7 @@ const SKILL_AIM = {
     R: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
   },
   nilah: {
-    Q: { type: 'lineToPoint', range: (c, d) => d.range, width: (c, d) => d.impactRadius },          // 닐라 → 도착 지점 직선, 반폭 impactRadius/2
+    Q: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.impactRadius },                 // 45차: 원작처럼 고정 길이 600 직선(폭 impactRadius)
     W: { type: 'instant' }, R: { type: 'instant' },
     E: { type: 'unit', range: (c, d) => d.range },
   },
@@ -84,7 +85,7 @@ const SKILL_AIM = {
     R: { type: 'unit', range: (c, d) => d.rangeBase + d.rangePerStack * ((c._chogath && c._chogath.predationStacks) || 0) },
   },
   leesin: {
-    Q: { type: 'line', range: (c, d) => d.range1, widthWorld: BASE_UNIT * 1.2,                       // findFirstInLine 반폭 BASE_UNIT*0.6(월드)
+    Q: { type: 'line', range: (c, d) => d.range1, width: (c, d) => d.width,                            // 음파 폭(데이터) - 투사체 line 판정과 같다
       instantIf: (c) => !!(c._leesin && c._leesin.qMarkTarget && performance.now() < c._leesin.qMarkExpiresAt) },
     W: { type: 'ally', range: (c, d) => d.range1, pickLol: 150, instantIf: (c) => !!(c._leesin && performance.now() < c._leesin.wMarkReadyUntil) },
     E: { type: 'instant' },

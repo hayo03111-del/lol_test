@@ -568,6 +568,7 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   const dashDuration = Math.max(0.05, dashWorldDist / Math.max(0.01, dashWorldSpeed));
   const startPos = this.root.position.clone();
   const endPos = startPos.clone().addScaledVector(dir, dashWorldDist);
+  if (typeof constrainUnitPosition === 'function') constrainUnitPosition(this, endPos); // 45차: 맵 밖·지형 너머로 돌진하지 않게(이즈리얼 E와 같은 처리)
 
   this.playFirstAvailable(['Spell4'], { loop: THREE.LoopOnce, fade: 0.04, clampWhenFinished: true });
   vfx.spawn('r', startPos.clone());

@@ -65,6 +65,25 @@ const startServer = require('./server.js');
     m.mesh.position.x = tp.x + L(775) + rm * 0.5; // 중심은 775 밖, 가장자리는 안
     return { meleeHitsTurret, turretReachesEdge: E.isValidTurretTarget(t, m) };
   });
+  // 7) 45차: 직선 스킬샷은 피할 수 있다 - 가만히 있으면 맞고, 날아오는 동안 옆으로 비키면 안 맞는다.
+  const shot = async (champ, slot, distLol, dodge) => {
+    await pick(champ);
+    return page.evaluate(async ({ slot, distLol, dodge }) => {
+      const E = window.__e2e, c = window.controller, L = E.lolRangeToWorld, d = E.dummies[0];
+      c.root.position.set(0, 0, 0); c.targetPos = null; c.currentTarget = null; c.cooldowns[slot] = 0; c.mp = c.maxMp;
+      d.mesh.position.set(0, 0, -L(distLol)); d.hp = d.maxHp;
+      c.castAbility(slot, new E.THREE.Vector3(0, 0, -L(distLol)));
+      await new Promise((res) => setTimeout(res, 300)); // 시전 시간(0.25초) 뒤 발사 직후
+      if (dodge) d.mesh.position.set(L(400), 0, -L(distLol));
+      await new Promise((res) => setTimeout(res, 1500));
+      return Math.round(d.maxHp - d.hp);
+    }, { slot, distLol, dodge });
+  };
+  r.dodge = {
+    ezrealQHit: await shot('ezreal', 'Q', 900, false), ezrealQDodged: await shot('ezreal', 'Q', 900, true),
+    leeQHit: await shot('leesin', 'Q', 900, false), leeQDodged: await shot('leesin', 'Q', 900, true),
+    ezrealQOutOfRange: await shot('ezreal', 'Q', 1400, false),
+  };
   r.errors = errors;
   console.log(JSON.stringify(r, null, 1));
   await browser.close(); srv.close();

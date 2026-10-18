@@ -324,9 +324,11 @@ CharacterController.prototype._yoneTickEmpoweredQ = function(dt) {
     const p = getWorldPosition(u);
     const toUnit = new THREE.Vector3(p.x - travel.origin.x, 0, p.z - travel.origin.z);
     const along = toUnit.dot(travel.dir);
-    if (along < -1 || along > Math.max(bodyReach, missileHeadDist) + 1) continue;
+    const ur = getCollisionRadius(u) || 0;
+    // 45차: 길이 방향 여유는 대상 반경만큼(R과 같은 규칙). 예전엔 고정 1(월드 ≈ LoL 115)이라 뒤·끝 너머 115까지 맞았다.
+    if (along < -ur || along > Math.max(bodyReach, missileHeadDist) + ur) continue;
     // 본체 판정 폭 안이면 dashAoEWidth, 그 너머(돌풍만 도달한 구간)면 missileWidth 적용.
-    const halfWidth = along <= bodyReach + 1 ? bodyHalfWidth : missileHalfWidth;
+    const halfWidth = along <= bodyReach + ur ? bodyHalfWidth : missileHalfWidth;
     const lateral = Math.sqrt(Math.max(0, toUnit.lengthSq() - along * along));
     if (lateral > halfWidth + (getCollisionRadius(u) || 0)) continue;
     travel.hitSet.add(u);
@@ -729,7 +731,7 @@ CharacterController.prototype._yoneCastE = function(mouseWorldPoint, free = fals
     marks: new Map(),
     markTargets: new Map(),
     travelStart: bodyPos.clone(),
-    travelEnd: bodyPos.clone().addScaledVector(dir, dashDist),
+    travelEnd: (() => { const p = bodyPos.clone().addScaledVector(dir, dashDist); if (typeof constrainUnitPosition === 'function') constrainUnitPosition(this, p); return p; })(), // 45차: 맵 경계 안으로(R과 같음)
     travelElapsed: 0,
     travelDuration: dashDur,
     recastLockedUntil: performance.now() + (e.recastMinDelay || 0.5) * 1000,

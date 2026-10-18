@@ -130,17 +130,14 @@ CharacterController.prototype._dariusEOnCast = function(target) {
       // 버그 수정: 지금까지 슬로우/경직만 걸고 실제로는 대상을 전혀 끌어오지
       // 않았다 - "포획"은 도끼를 걸어 실제로 자신 쪽으로 당겨오는 스킬이다
       // (문서: "적을(넉백)끌어당기고"). Mordekaiser E와 동일한 방식으로 실제
-      // 좌표를 옮긴다. 정확한 이동 거리가 기획안에 없어 "충분히 끌려온다"는
-      // 서술을 60%/최대 300 근사치로 반영한다(임의 피해량이 아니라 연출용
-      // 거리이므로 섹션 18의 "피해량을 임의로 만들지 마라"에 해당하지 않음).
+      // 좌표를 옮긴다.
       const from = target.mesh.position.clone();
       const dir = new THREE.Vector3().subVectors(this.root.position, from); dir.y = 0;
       const gap = dir.length();
       if (gap > 0.05) {
-        // 최소/최대 거리를 LoL 단위(120~300)로 정하고 공통 변환 함수로
-        // world 거리로 바꾼다 - 스킬마다 다른 배율을 임의로 넣지 않는다.
-        const desired = THREE.MathUtils.clamp(gap * 0.6, lolRangeToWorld(120), lolRangeToWorld(300));
-        const pullDist = Math.min(desired, Math.max(0, gap - this.collisionRadius * 2));
+        // 45차: 원작처럼 다리우스 바로 앞(두 유닛이 맞닿는 거리)까지 끌어온다. 예전엔 "거리의 60%, 120~300" 근사치라
+        // 535 끝에서 맞은 대상이 다리우스에게서 235 넘게 떨어진 채 멈췄고, 맞닿는 거리도 자기 반경 x2로 계산했다.
+        const pullDist = Math.max(0, gap - (getCollisionRadius(this) + getCollisionRadius(target)));
         dir.normalize();
         const to = from.clone().addScaledVector(dir, pullDist);
         target._pullState = { from, to, duration: 0.3, elapsed: 0 };

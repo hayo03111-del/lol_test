@@ -194,17 +194,8 @@ CharacterController.prototype._varusReleaseQ = function(mouseWorldPoint = null) 
   const halfWidth = lolRangeToWorld(q.width || 75) * 0.5;
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   // 관통: 경로의 모든 적에게 피해, 맞힌 적마다 15%씩 감소(최소 33% - PC 위키 "적 수에 따라 0~67% 감소").
-  const lineHits = findEnemiesInLine(this.root.position, dir, lolRange, q.width || 75)
-    .map((u) => ({ u, d: getHorizontalDistance(getWorldPosition(u), this.root.position) }))
-    .sort((a, b) => a.d - b.d);
-  const hitUnit = lineHits.length ? lineHits[0].u : null;
+  // 45차: 화살이 실제로 날아가며 닿는 순서대로 맞힌다(피할 수 있음). 예전엔 발사 순간 직선 위 대상을 정해 두고 첫 대상을 따라갔다.
   const worldRange = lolRangeToWorld(lolRange);
-  let impactDistance = worldRange;
-  if (hitUnit) {
-    const hitPos = getWorldPosition(hitUnit);
-    if (hitPos) impactDistance = getHorizontalDistance(hitPos, this.root.position);
-  }
-  const targetPoint = origin.clone().addScaledVector(dir, worldRange);
 
   const lvl = Math.max(1, this.skillLevels.Q || 1);
   // 최대 피해 80~360 + 추가 AD 120%(PC 위키), 충전 0%면 2/3.
@@ -228,20 +219,14 @@ CharacterController.prototype._varusReleaseQ = function(mouseWorldPoint = null) 
     debugSkillHit('Varus Q', t, { chargeFraction: chargeFraction.toFixed(2), index, mult });
     this._varusDetonateBlight(t, { viaQ: true, chargeFraction });
   };
-  const speedWorld = lolRangeToWorld(q.missileSpeed || 1500);
-  lineHits.slice(1).forEach((h, k) => {
-    const t = this._champTimeout(() => resolveHit(h.u, k + 1), (h.d / Math.max(1e-6, speedWorld)) * 1000);
-    void t; // 발사된 화살은 바루스가 다른 행동을 해도 계속 날아가므로 _actionTimers에 넣지 않는다
-  });
-
+  // 발사된 화살은 바루스가 다른 행동을 해도 계속 날아간다(투사체 시스템이 처리).
   projectiles.spawn({
-    from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(q.missileSpeed || 1500), damage: 0,
+    from: origin, speed: lolRangeToWorld(q.missileSpeed || 1500), damage: 0,
     color: 0x8fd6ff, realmId: this.realmId,
-    onHit: (t) => {
-      resolveHit(t, 0);
-    },
+    line: { dir, maxDist: worldRange, halfWidth, pierce: true,
+      onMiss: () => debugSkillMiss('Varus Q', `no target in line (충전 ${(chargeFraction * 100).toFixed(0)}%, 사거리 ${lolRange.toFixed(0)})`) },
+    onHit: (t, index) => resolveHit(t, index),
   });
-  if (!hitUnit) debugSkillMiss('Varus Q', `no target in line (충전 ${(chargeFraction * 100).toFixed(0)}%, 사거리 ${impactDistance.toFixed(1)})`);
 
   this.playFirstAvailable(['Spell1_Fire', 'Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const clip = this.findAnimation('Spell1_Fire') || this.findAnimation('Spell1');
@@ -278,7 +263,7 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
     : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
-  const rawDist = dir.length();
+  const rawDist = mouseWorldPoint ? dir.length() : 0; // 45차: 커서가 없으면 최대 사거리(예전엔 단위 벡터 길이 1 = 아주 짧은 거리)
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('E', free)) return;
@@ -363,14 +348,13 @@ CharacterController.prototype._varusCastR = function(mouseWorldPoint, free = fal
     const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
     const halfWidth = lolRangeToWorld(r.width || 240) * 0.5;
     // 28차: 원작은 처음 맞힌 "적 챔피언"을 속박한다 - 미니언·몬스터는 통과(예전 findFirstInLine은 미니언에 막혔다).
-    const hitUnit = findFirstInLine(this.root.position, dir, r.range || 1370, halfWidth, (u) => !!u.isChampion);
-    const targetPoint = origin.clone().addScaledVector(dir, lolRangeToWorld(r.range || 1370));
+    // 45차: 피할 수 있는 직선 스킬샷(처음 닿는 적 챔피언).
     projectiles.spawn({
-      from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(r.missileSpeed || 1200), damage: 0,
+      from: origin, speed: lolRangeToWorld(r.missileSpeed || 1200), damage: 0,
       color: 0xb08cff, realmId: this.realmId,
+      line: { dir, maxDist: lolRangeToWorld(r.range || 1370), halfWidth, filter: (u) => !!u.isChampion, onMiss: () => debugSkillMiss('Varus R', 'no target in line') },
       onHit: (t) => this._varusRHit(t, dir),
     });
-    if (!hitUnit) debugSkillMiss('Varus R', 'no target in line');
   }, castTime * 1000);
   this._actionTimers.push(fireTimer);
 

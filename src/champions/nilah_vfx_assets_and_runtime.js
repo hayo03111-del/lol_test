@@ -331,6 +331,8 @@ class VFXSystem {
   // 리 신 Q(음파) 전용: 시전 위치에서 마우스 커서가 가리키는 지점을 향해
   // 실제로 이동하는 투사체처럼 보이게 한다. 판정은 _leesinCastQ에서 수행하고,
   // 이 함수는 시각 효과만 담당한다(스킬 판정과 렌더링을 분리).
+  // (45차 vfxFollowProjectile 참고) options.follow = projectiles.spawn()이 돌려준 직선 스킬샷 - 이펙트가 그 위치를 따라가다가
+  // 투사체가 맞거나 사라지면 그 자리에서 바로 사라진다(피할 수 있는 스킬샷이라 맞는 지점을 미리 모른다).
   _qProjectile(position, direction, options = {}) {
     const dir = (direction ? direction.clone() : new THREE.Vector3(0, 0, 1)).setY(0);
     if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1);
@@ -343,18 +345,20 @@ class VFXSystem {
     const start = position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));
     const sprite = this._makeSprite(VFX_TEXTURES.qPoint, 0x8fe3ff, 0.78, start);
     const total = travelDistance / speed;
-    this.active.push({
+    const fx = {
       sprite,
       life: total,
       maxLife: total,
       update: (t) => {
         const traveled = Math.min(travelDistance, speed * (total * t));
         sprite.position.copy(start).addScaledVector(dir, traveled);
+        vfxFollowProjectile(fx, options.follow, sprite.position, start.y);
         sprite.material.opacity = t < 0.85 ? 1 : (1 - t) / 0.15;
         sprite.scale.setScalar(0.78 + Math.sin(t * Math.PI) * 0.16);
       },
       dispose: () => this._releaseSprite(sprite)
-    });
+    };
+    this.active.push(fx);
   }
   // 이즈리얼 Q(신비의 사격) 전용 - 사용자가 올려준 실제 CommunityDragon
   // 원본 텍스처(trail/core)로 시전 지점에서 목표 지점까지 실제로 날아가는
@@ -385,13 +389,14 @@ class VFXSystem {
     const core = this._makeSprite(EZREAL_Q_TEX.qCore, 0xeaffff, 0.28, start.clone());
 
     const total = travelDistance / speed;
-    this.active.push({
+    const fx = {
       sprite: trail,
       life: total,
       maxLife: total,
       update: (t) => {
         const traveled = Math.min(travelDistance, speed * (total * t));
         const pos = start.clone().addScaledVector(dir, traveled);
+        vfxFollowProjectile(fx, options.follow, pos, start.y);
         trail.position.copy(pos);
         core.position.copy(pos);
         const fade = t < 0.8 ? 1 : (1 - t) / 0.2;
@@ -400,7 +405,8 @@ class VFXSystem {
         core.scale.setScalar(0.26 + Math.sin(t * Math.PI) * 0.07);
       },
       dispose: () => { this._releaseSprite(trail); this._releaseSprite(core); },
-    });
+    };
+    this.active.push(fx);
   }
   // 신비의 사격 적중 이펙트(실제 원본 spark 텍스처) - 일반 _hitBurst 대신
   // 전용 텍스처로 대체한다. 크기도 위 궤적과 동일한 기준(캐릭터 키 =
@@ -945,3 +951,12 @@ class VFXSystem {
   }
 }
 
+
+// 45차: 궤적 이펙트를 직선 스킬샷 투사체에 붙인다. 투사체가 살아 있으면 그 위치(높이는 이펙트 높이)를 쓰고,
+// 끝났으면(맞거나 사거리 끝) 마지막 위치에서 곧바로 사라지게 남은 수명을 줄인다.
+function vfxFollowProjectile(fx, follow, pos, y) {
+  if (!follow) return;
+  if (!follow.done) { fx._followLast = fx._followLast || new THREE.Vector3(); fx._followLast.set(follow.mesh.position.x, y, follow.mesh.position.z); }
+  else if (!fx._followEnded) { fx._followEnded = true; fx.life = Math.min(fx.life, 0.05); }
+  if (fx._followLast) pos.copy(fx._followLast);
+}

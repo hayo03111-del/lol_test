@@ -261,7 +261,7 @@ CharacterController.prototype._nilahOnBasicAttackHit = function(target, dealtDam
     // Q 강화 상태의 평타 추가 범위 공격: 주 대상 외의 원뿔 대상에게 총 공격력 100% 물리 피해.
     if (empowered && !target.isTurret && !target.isNexus && !target.isInhibitor) {
       const forward = getDirection(this, target);
-      const hits = findEnemiesInRadius(this.root.position, this.stats.attackRange ? worldDistanceToLol(this.stats.attackRange) : 350, { forward, maxAngleDeg: this._nilahData().Q.coneAngleDeg });
+      const hits = findEnemiesInRadius(this.root.position, this.stats.attackRange ? worldDistanceToLol(this.stats.attackRange) : 350, { forward, maxAngleDeg: this._nilahData().Q.coneAngleDeg / 2 }); // 45차: maxAngleDeg는 반각 - 예전엔 60을 그대로 넘겨 120° 부채꼴이었다
       // 요청("강화 평타 쓸 때 발밑에 반짝이 제거"): 여기 있던 원뿔 스윕
       // 이펙트가 캐릭터 발밑(this.root.position)에 생성되고 있었고,
       // 강화 상태(empowered)일 때만 나갔던 게 정확히 "발밑 반짝이"였다.
@@ -364,7 +364,7 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
     // 바라보는 게 자연스러우므로 preserveDash 여부와 상관없이 적용한다.
     this.faceDirectionInstant(dir);
     const maxWorld=lolRangeToWorld(q.range);
-    const dist=mouseWorldPoint ? Math.min(maxWorld, new THREE.Vector3().subVectors(mouseWorldPoint,this.root.position).setY(0).length()) : maxWorld;
+    const dist=maxWorld; // 45차: 원작 Q는 커서 거리와 무관한 고정 길이(600) 직선 - 예전엔 커서까지로 짧아졌다
     const impact=this.root.position.clone().addScaledVector(dir,dist);
 
     // 버그 수정(핵심 - "Q 쓸 때 가끔 멈춘다"): resolved가 원래 아래
@@ -567,6 +567,7 @@ CharacterController.prototype._nilahCastE = function(mouseWorldPoint, free=false
     if(this._nilah.eCharges<=0){showSkillToast('E - 충전 없음');return;}
     const target=this.currentTarget;
     if(!target || target.hp<=0){ showSkillToast('E - 대상 선택 필요'); return; }
+    if(!isInRange(this, target, e.range)){ debugSkillMiss('Nilah E', 'out of range'); return; } // 45차: 사거리 확인(예전엔 걸어가기 단계에만 맡겨 사거리 밖 대상에게도 돌진할 수 있었다)
     if(!free && this.cooldowns.E>0 && false) return; // E's nominal 0.5 is a cast timing value; charges govern availability.
     // 닐라 E는 기본 공격 모션을 취소하고 즉시 돌진하며, 돌진 종료 후 다음 평타를 즉시 준비한다.
     const wasBasicAttack = !!(this.currentActionKey && (this.currentActionKey.startsWith('attack') || this.currentActionKey === 'crit'));

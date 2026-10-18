@@ -51,7 +51,7 @@ const CHAMPION_DATA = {
       // 추가 공속 1%당 쿨다운 0.6%(최대 66.67%), 시전 시간 0.41667%(최대 50%) 감소.
       name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 475, width: 80,
       damageByLevel: [20,45,70,95,120], totalAdRatio: 1.05,
-      stackDuration: 6, knockupDuration: 1, tornadoRange: 1150, circleRadius: 375,
+      stackDuration: 6, knockupDuration: 1, tornadoRange: 1150, circleRadius: 215, // 45차: EQ 원형 반경 215(PC 효과 반경 - riftpatchnotes/WR 위키). 375는 초창기 값
       castTime: [0.35, 0.35, 0.35, 0.35, 0.35],
       cdReductionPerBonusAs: 0.6, cdReductionMax: 0.6667, castReductionPerBonusAs: 0.41667, castReductionMax: 0.5,
       tornadoWidth: 180, tornadoSpeed: 1200, // PC 위키 야스오 문서: 회오리 사거리 1150, 폭 180, 속도 1200
@@ -200,6 +200,7 @@ const CHAMPION_DATA = {
     passive: { name: '분노의 지배', rageMax: 100, empoweredThreshold: 50, lowHpThreshold: 0.5, lowHpMultiplier: 1.5, combatExitSec: 12, rageDecayInterval: 0.25, rageDecayAmount: 1 },
     Q: {
       name: '양떼 도륙', cooldown: 7, mana: 0, range: 325, damageByLevel: [60,90,120,150,180], bonusAdRatio: 1.0,
+      rRangeBonus: 50, // R(강신) 중 Q 반경 +50 - 출처 확인 못 함(추정, 45차에 코드에서 데이터로 옮김)
       healNonChampion: [2,3,4,5,6], healNonChampionAdRatio: 0.02,
       healChampion: [12,20,28,36,44], healChampionAdRatio: 0.17, healChampionCap: [50,75,100,125,150],
       empoweredDamageByLevel: [90,135,180,225,270], empoweredBonusAdRatio: 1.4, // PC 위키: 5레벨 270(예전 275)
@@ -217,6 +218,7 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '자르고 토막내기', cooldown: [16,14.5,13,11.5,10], mana: 0, range: 450, // Data Dragon: 돌진 450(예전 550)
+      halfWidth: 45, rHalfWidthBonus: 50, // 돌진 경로 판정 반폭, R 중 +50 - 출처 확인 못 함(추정, 45차에 코드에서 데이터로 옮김)
       damageByLevel: [40,70,100,130,160], bonusAdRatio: 0.9,
       empoweredDamageByLevel: [70,115,160,205,250], empoweredBonusAdRatio: 1.35,
       armorShredByLevel: [25,27.5,30,32.5,35], armorShredDuration: 4,
@@ -794,7 +796,7 @@ const CHAMPION_DATA = {
     },
     Q: {
       name: '음파/공명의 일격', cooldown: [10, 9, 8, 7, 6], energy1: 50, energy2: 25,
-      range1: 1100, range2: 1250, markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800,
+      range1: 1100, range2: 1250, markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800, width: 120, // 45차: 음파 폭 120(PC 위키) - 예전엔 코드에 월드 단위 1.2(≈139)로 박혀 있었다
       damageByLevel: [60, 90, 120, 150, 180], bonusAdRatio: 0.9,
       maxDamageByLevel: [120, 180, 240, 300, 360], maxBonusAdRatio: 1.8,
       damageType: 'PHYSICAL',
@@ -983,7 +985,7 @@ const CHAMPION_DATA = {
       // BaseDamage(index1~5)=[80,135,190,245,300] (+1.0 추가 공격력)
       // (+0.90 주문력) - 이 피해는 폭발(detonate) 시에만 들어간다.
       // DetonationTimeout(표식 지속시간)=4.
-      cooldown: 8, mana: 50, range: 1200, width: 60,
+      cooldown: 8, mana: 50, range: 1200, width: 160, missileSpeed: 1700, // 45차: PC 위키 폭 160·속도 1700(예전 폭 60·속도 2200은 근거 없음)
       damageByLevel: [80, 135, 190, 245, 300], bonusAdRatio: 1.0, apRatio: 0.9,
       markDuration: 4, manaRefundOnDetonate: 60,
       damageType: 'MAGICAL',

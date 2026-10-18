@@ -61,6 +61,7 @@ class ProjectileSystem {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
       if (proj.fromTurret) continue;
+      proj.done = true;
       this._releaseArrowMesh(proj._meshEntry);
       this.projectiles.splice(i, 1);
     }
@@ -69,14 +70,85 @@ class ProjectileSystem {
   // realmId(Phase 2 요청 17) - 발사한 쪽의 realmId를 스냅샷으로 저장해둔다.
   // 생략하면 기존과 동일하게 undefined → canRealmInteract()가 'main'으로
   // 취급하므로(기존 호출부는 아무것도 안 바꿔도 동작이 그대로 유지된다).
-  spawn({ from, target, targetPoint, speed = 26, damage = 0, color = 0xdff0ff, realmId, onHit, fromTurret = false }) {
+  // 45차: line = { dir, maxDist(world), halfWidth(world), filter?(unit), onMiss?() } 를 주면 "직선 스킬샷"이다 - 대상을 미리 정해
+  // 따라가지 않고 그 방향으로 maxDist까지 곧장 날아가며, 이번 프레임에 지나간 구간(폭 halfWidth)에 닿은 적 중 가장 앞의 대상을
+  // 맞힌다(노틸러스 Q와 같은 판정). 예전엔 발사 순간 직선 위의 대상을 골라 끝까지 따라가서 피할 수 없었고 사거리 밖까지 쫓아갔다.
+  // line.pierce: 관통 - 닿는 대상마다 onHit(unit, index)을 부르고 사거리 끝까지 계속 날아간다.
+  // hidden: 화살 모양을 그리지 않는다(자체 이펙트가 있는 스킬).
+  spawn({ from, target, targetPoint, speed = 26, damage = 0, color = 0xdff0ff, realmId, onHit, fromTurret = false, line = null, hidden = false }) {
     const entry = this._acquireArrowMesh(color);
     entry.group.position.copy(from);
-    this.scene.add(entry.group);
-    const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, life: 2.5, hasHit: false };
+    if (!hidden) this.scene.add(entry.group);
+    const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target: line ? null : target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, life: 2.5, hasHit: false, done: false };
+    if (line) {
+      const dir = line.dir.clone().setY(0).normalize();
+      proj.line = { dir, origin: from.clone(), maxDist: line.maxDist, halfWidth: line.halfWidth, filter: line.filter || null, onMiss: line.onMiss || null, traveled: 0, pierce: !!line.pierce, hitSet: new Set(), hits: 0 };
+      proj.targetPoint = from.clone().addScaledVector(dir, line.maxDist);
+      proj.life = line.maxDist / Math.max(1e-6, speed) + 0.5;
+    }
     this._orient(proj);
     this.projectiles.push(proj);
     return proj;
+  }
+  _remove(i, missed) {
+    const proj = this.projectiles[i];
+    if (missed) this.totalMisses++;
+    proj.done = true;
+    this._releaseArrowMesh(proj._meshEntry);
+    this.projectiles.splice(i, 1);
+  }
+  // 직선 스킬샷 한 프레임: 지나간 구간 [prev, cur]에 닿은 적 중 진행 방향으로 가장 먼저 닿는 대상.
+  _sweepLine(proj, prev, cur, all = false) {
+    const L = proj.line;
+    let best = null;
+    const found = [];
+    const units = typeof getAllEnemyUnits === 'function' ? getAllEnemyUnits() : []; // 날아가는 투사체는 안 보이는 대상도 맞힌다(노틸러스 Q와 같음)
+    for (const u of units) {
+      if (!u || u.hp <= 0 || u.isDead || u.destroyed || u.isUntargetable || u.isWard) continue;
+      if (L.filter && !L.filter(u)) continue;
+      if (L.hitSet.has(u)) continue;
+      if (!canRealmInteract({ realmId: proj.realmId }, u)) continue;
+      const up = getWorldPosition(u); if (!up) continue;
+      const r = getCollisionRadius(u);
+      const rx = up.x - L.origin.x, rz = up.z - L.origin.z;
+      const along = rx * L.dir.x + rz * L.dir.z;
+      if (along < -r || along < prev - r || along > cur + r) continue;
+      const lateral = Math.abs(rx * L.dir.z - rz * L.dir.x);
+      if (lateral > L.halfWidth + r) continue;
+      const contact = Math.max(0, along - r);
+      if (all) found.push({ u, contact });
+      else if (!best || contact < best.contact) best = { u, contact };
+    }
+    return all ? found.sort((a, b) => a.contact - b.contact) : best;
+  }
+  _updateLine(proj, i, dt) {
+    const L = proj.line;
+    const prev = L.traveled;
+    L.traveled = Math.min(L.maxDist, L.traveled + proj.speed * dt);
+    proj.mesh.position.copy(L.origin).addScaledVector(L.dir, L.traveled);
+    proj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), L.dir);
+    if (L.pierce) {
+      for (const h of this._sweepLine(proj, prev, L.traveled, true)) {
+        L.hitSet.add(h.u);
+        if (proj.onHit) proj.onHit(h.u, L.hits);
+        L.hits++; this.totalHits++;
+      }
+      if (L.traveled >= L.maxDist - 1e-6 || proj.life <= 0) { if (!L.hits && L.onMiss) L.onMiss(); this._remove(i, !L.hits); }
+      return;
+    }
+    const best = this._sweepLine(proj, prev, L.traveled);
+    if (best) {
+      proj.mesh.position.copy(L.origin).addScaledVector(L.dir, Math.min(L.traveled, best.contact));
+      if (proj.onHit) proj.onHit(best.u);
+      this.totalHits++;
+      this.vfx.spawn('hit', proj.mesh.position.clone(), new THREE.Vector3(), { color: proj.color });
+      this._remove(i, false);
+      return;
+    }
+    if (L.traveled >= L.maxDist - 1e-6 || proj.life <= 0) {
+      if (L.onMiss) L.onMiss();
+      this._remove(i, true);
+    }
   }
   _currentAimPoint(proj) {
     if (proj.target && proj.target.hp > 0 && !proj.target.isDead && !proj.target.destroyed) {
@@ -99,10 +171,11 @@ class ProjectileSystem {
       // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
       // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
       if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret) {
-        const wall=controller._yasuo.windwall, progress=Math.min(1,(performance.now()-wall.createdAt)/180), wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, wall.width*0.75*progress), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this.totalMisses++; this._releaseArrowMesh(proj._meshEntry); this.projectiles.splice(i,1); continue; }
+        const wall=controller._yasuo.windwall, progress=Math.min(1,(performance.now()-wall.createdAt)/180), wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, wall.width*0.75*progress), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this._remove(i, true); continue; }
       }
+      if (proj.line) { this._updateLine(proj, i, dt); continue; }
       const aim = this._currentAimPoint(proj);
-      if (!aim || proj.life <= 0) { this.totalMisses++; this._releaseArrowMesh(proj._meshEntry); this.projectiles.splice(i, 1); continue; }
+      if (!aim || proj.life <= 0) { this._remove(i, true); continue; }
       const toAim = new THREE.Vector3().subVectors(aim, proj.mesh.position);
       const dist = toAim.length();
       const step = proj.speed * dt;
@@ -115,6 +188,7 @@ class ProjectileSystem {
         if (proj.target && proj.target.hp > 0 && proj.onHit && realmOk) { proj.onHit(proj.target); this.totalHits++; }
         else this.totalMisses++;
         this.vfx.spawn('hit', proj.mesh.position.clone(), new THREE.Vector3(), { color: proj.color });
+        proj.done = true;
         this._releaseArrowMesh(proj._meshEntry);
         this.projectiles.splice(i, 1);
         continue;

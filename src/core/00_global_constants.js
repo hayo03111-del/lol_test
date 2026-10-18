@@ -380,7 +380,10 @@ function isInCone(target, origin, direction, range, angleDeg) {
   const toTarget = new THREE.Vector3(dx, 0, dz).normalize();
   const dir = (direction.clone ? direction.clone() : new THREE.Vector3(direction.x, 0, direction.z)).setY(0).normalize();
   const angle = Math.acos(THREE.MathUtils.clamp(dir.dot(toTarget), -1, 1)) * 180 / Math.PI;
-  return angle <= angleDeg;
+  // 45차: 부채꼴 옆 가장자리에 몸이 걸쳐도 맞는다(대상 반경만큼 각도 여유 - 다른 판정처럼 가장자리 기준).
+  const r = getCollisionRadius(target);
+  const slack = r > 0 ? Math.asin(Math.min(1, r / dist)) * 180 / Math.PI : 0;
+  return angle <= angleDeg + slack;
 }
 // Linear Skillshot 충돌 - 투사체 반경 + 대상 반경(요청 11).
 function isProjectileHit(projectilePos, projectileRadius, target) {

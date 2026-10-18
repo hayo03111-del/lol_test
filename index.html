@@ -1322,7 +1322,10 @@ function isInCone(target, origin, direction, range, angleDeg) {
   const toTarget = new THREE.Vector3(dx, 0, dz).normalize();
   const dir = (direction.clone ? direction.clone() : new THREE.Vector3(direction.x, 0, direction.z)).setY(0).normalize();
   const angle = Math.acos(THREE.MathUtils.clamp(dir.dot(toTarget), -1, 1)) * 180 / Math.PI;
-  return angle <= angleDeg;
+  // 45차: 부채꼴 옆 가장자리에 몸이 걸쳐도 맞는다(대상 반경만큼 각도 여유 - 다른 판정처럼 가장자리 기준).
+  const r = getCollisionRadius(target);
+  const slack = r > 0 ? Math.asin(Math.min(1, r / dist)) * 180 / Math.PI : 0;
+  return angle <= angleDeg + slack;
 }
 // Linear Skillshot 충돌 - 투사체 반경 + 대상 반경(요청 11).
 function isProjectileHit(projectilePos, projectileRadius, target) {
@@ -2504,7 +2507,7 @@ const CHAMPION_DATA = {
       // 추가 공속 1%당 쿨다운 0.6%(최대 66.67%), 시전 시간 0.41667%(최대 50%) 감소.
       name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 475, width: 80,
       damageByLevel: [20,45,70,95,120], totalAdRatio: 1.05,
-      stackDuration: 6, knockupDuration: 1, tornadoRange: 1150, circleRadius: 375,
+      stackDuration: 6, knockupDuration: 1, tornadoRange: 1150, circleRadius: 215, // 45차: EQ 원형 반경 215(PC 효과 반경 - riftpatchnotes/WR 위키). 375는 초창기 값
       castTime: [0.35, 0.35, 0.35, 0.35, 0.35],
       cdReductionPerBonusAs: 0.6, cdReductionMax: 0.6667, castReductionPerBonusAs: 0.41667, castReductionMax: 0.5,
       tornadoWidth: 180, tornadoSpeed: 1200, // PC 위키 야스오 문서: 회오리 사거리 1150, 폭 180, 속도 1200
@@ -2653,6 +2656,7 @@ const CHAMPION_DATA = {
     passive: { name: '분노의 지배', rageMax: 100, empoweredThreshold: 50, lowHpThreshold: 0.5, lowHpMultiplier: 1.5, combatExitSec: 12, rageDecayInterval: 0.25, rageDecayAmount: 1 },
     Q: {
       name: '양떼 도륙', cooldown: 7, mana: 0, range: 325, damageByLevel: [60,90,120,150,180], bonusAdRatio: 1.0,
+      rRangeBonus: 50, // R(강신) 중 Q 반경 +50 - 출처 확인 못 함(추정, 45차에 코드에서 데이터로 옮김)
       healNonChampion: [2,3,4,5,6], healNonChampionAdRatio: 0.02,
       healChampion: [12,20,28,36,44], healChampionAdRatio: 0.17, healChampionCap: [50,75,100,125,150],
       empoweredDamageByLevel: [90,135,180,225,270], empoweredBonusAdRatio: 1.4, // PC 위키: 5레벨 270(예전 275)
@@ -2670,6 +2674,7 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '자르고 토막내기', cooldown: [16,14.5,13,11.5,10], mana: 0, range: 450, // Data Dragon: 돌진 450(예전 550)
+      halfWidth: 45, rHalfWidthBonus: 50, // 돌진 경로 판정 반폭, R 중 +50 - 출처 확인 못 함(추정, 45차에 코드에서 데이터로 옮김)
       damageByLevel: [40,70,100,130,160], bonusAdRatio: 0.9,
       empoweredDamageByLevel: [70,115,160,205,250], empoweredBonusAdRatio: 1.35,
       armorShredByLevel: [25,27.5,30,32.5,35], armorShredDuration: 4,
@@ -3247,7 +3252,7 @@ const CHAMPION_DATA = {
     },
     Q: {
       name: '음파/공명의 일격', cooldown: [10, 9, 8, 7, 6], energy1: 50, energy2: 25,
-      range1: 1100, range2: 1250, markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800,
+      range1: 1100, range2: 1250, markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800, width: 120, // 45차: 음파 폭 120(PC 위키) - 예전엔 코드에 월드 단위 1.2(≈139)로 박혀 있었다
       damageByLevel: [60, 90, 120, 150, 180], bonusAdRatio: 0.9,
       maxDamageByLevel: [120, 180, 240, 300, 360], maxBonusAdRatio: 1.8,
       damageType: 'PHYSICAL',
@@ -3436,7 +3441,7 @@ const CHAMPION_DATA = {
       // BaseDamage(index1~5)=[80,135,190,245,300] (+1.0 추가 공격력)
       // (+0.90 주문력) - 이 피해는 폭발(detonate) 시에만 들어간다.
       // DetonationTimeout(표식 지속시간)=4.
-      cooldown: 8, mana: 50, range: 1200, width: 60,
+      cooldown: 8, mana: 50, range: 1200, width: 160, missileSpeed: 1700, // 45차: PC 위키 폭 160·속도 1700(예전 폭 60·속도 2200은 근거 없음)
       damageByLevel: [80, 135, 190, 245, 300], bonusAdRatio: 1.0, apRatio: 0.9,
       markDuration: 4, manaRefundOnDetonate: 60,
       damageType: 'MAGICAL',
@@ -8252,6 +8257,8 @@ class VFXSystem {
   // 리 신 Q(음파) 전용: 시전 위치에서 마우스 커서가 가리키는 지점을 향해
   // 실제로 이동하는 투사체처럼 보이게 한다. 판정은 _leesinCastQ에서 수행하고,
   // 이 함수는 시각 효과만 담당한다(스킬 판정과 렌더링을 분리).
+  // (45차 vfxFollowProjectile 참고) options.follow = projectiles.spawn()이 돌려준 직선 스킬샷 - 이펙트가 그 위치를 따라가다가
+  // 투사체가 맞거나 사라지면 그 자리에서 바로 사라진다(피할 수 있는 스킬샷이라 맞는 지점을 미리 모른다).
   _qProjectile(position, direction, options = {}) {
     const dir = (direction ? direction.clone() : new THREE.Vector3(0, 0, 1)).setY(0);
     if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1);
@@ -8264,18 +8271,20 @@ class VFXSystem {
     const start = position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));
     const sprite = this._makeSprite(VFX_TEXTURES.qPoint, 0x8fe3ff, 0.78, start);
     const total = travelDistance / speed;
-    this.active.push({
+    const fx = {
       sprite,
       life: total,
       maxLife: total,
       update: (t) => {
         const traveled = Math.min(travelDistance, speed * (total * t));
         sprite.position.copy(start).addScaledVector(dir, traveled);
+        vfxFollowProjectile(fx, options.follow, sprite.position, start.y);
         sprite.material.opacity = t < 0.85 ? 1 : (1 - t) / 0.15;
         sprite.scale.setScalar(0.78 + Math.sin(t * Math.PI) * 0.16);
       },
       dispose: () => this._releaseSprite(sprite)
-    });
+    };
+    this.active.push(fx);
   }
   // 이즈리얼 Q(신비의 사격) 전용 - 사용자가 올려준 실제 CommunityDragon
   // 원본 텍스처(trail/core)로 시전 지점에서 목표 지점까지 실제로 날아가는
@@ -8306,13 +8315,14 @@ class VFXSystem {
     const core = this._makeSprite(EZREAL_Q_TEX.qCore, 0xeaffff, 0.28, start.clone());
 
     const total = travelDistance / speed;
-    this.active.push({
+    const fx = {
       sprite: trail,
       life: total,
       maxLife: total,
       update: (t) => {
         const traveled = Math.min(travelDistance, speed * (total * t));
         const pos = start.clone().addScaledVector(dir, traveled);
+        vfxFollowProjectile(fx, options.follow, pos, start.y);
         trail.position.copy(pos);
         core.position.copy(pos);
         const fade = t < 0.8 ? 1 : (1 - t) / 0.2;
@@ -8321,7 +8331,8 @@ class VFXSystem {
         core.scale.setScalar(0.26 + Math.sin(t * Math.PI) * 0.07);
       },
       dispose: () => { this._releaseSprite(trail); this._releaseSprite(core); },
-    });
+    };
+    this.active.push(fx);
   }
   // 신비의 사격 적중 이펙트(실제 원본 spark 텍스처) - 일반 _hitBurst 대신
   // 전용 텍스처로 대체한다. 크기도 위 궤적과 동일한 기준(캐릭터 키 =
@@ -8866,6 +8877,15 @@ class VFXSystem {
   }
 }
 
+
+// 45차: 궤적 이펙트를 직선 스킬샷 투사체에 붙인다. 투사체가 살아 있으면 그 위치(높이는 이펙트 높이)를 쓰고,
+// 끝났으면(맞거나 사거리 끝) 마지막 위치에서 곧바로 사라지게 남은 수명을 줄인다.
+function vfxFollowProjectile(fx, follow, pos, y) {
+  if (!follow) return;
+  if (!follow.done) { fx._followLast = fx._followLast || new THREE.Vector3(); fx._followLast.set(follow.mesh.position.x, y, follow.mesh.position.z); }
+  else if (!fx._followEnded) { fx._followEnded = true; fx.life = Math.min(fx.life, 0.05); }
+  if (fx._followLast) pos.copy(fx._followLast);
+}
 
 /* ===== src/champions/nilah_vfx_v2.js ===== */
 /* nilah_vfx_v2.js
@@ -9443,6 +9463,7 @@ class ProjectileSystem {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
       if (proj.fromTurret) continue;
+      proj.done = true;
       this._releaseArrowMesh(proj._meshEntry);
       this.projectiles.splice(i, 1);
     }
@@ -9451,14 +9472,85 @@ class ProjectileSystem {
   // realmId(Phase 2 요청 17) - 발사한 쪽의 realmId를 스냅샷으로 저장해둔다.
   // 생략하면 기존과 동일하게 undefined → canRealmInteract()가 'main'으로
   // 취급하므로(기존 호출부는 아무것도 안 바꿔도 동작이 그대로 유지된다).
-  spawn({ from, target, targetPoint, speed = 26, damage = 0, color = 0xdff0ff, realmId, onHit, fromTurret = false }) {
+  // 45차: line = { dir, maxDist(world), halfWidth(world), filter?(unit), onMiss?() } 를 주면 "직선 스킬샷"이다 - 대상을 미리 정해
+  // 따라가지 않고 그 방향으로 maxDist까지 곧장 날아가며, 이번 프레임에 지나간 구간(폭 halfWidth)에 닿은 적 중 가장 앞의 대상을
+  // 맞힌다(노틸러스 Q와 같은 판정). 예전엔 발사 순간 직선 위의 대상을 골라 끝까지 따라가서 피할 수 없었고 사거리 밖까지 쫓아갔다.
+  // line.pierce: 관통 - 닿는 대상마다 onHit(unit, index)을 부르고 사거리 끝까지 계속 날아간다.
+  // hidden: 화살 모양을 그리지 않는다(자체 이펙트가 있는 스킬).
+  spawn({ from, target, targetPoint, speed = 26, damage = 0, color = 0xdff0ff, realmId, onHit, fromTurret = false, line = null, hidden = false }) {
     const entry = this._acquireArrowMesh(color);
     entry.group.position.copy(from);
-    this.scene.add(entry.group);
-    const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, life: 2.5, hasHit: false };
+    if (!hidden) this.scene.add(entry.group);
+    const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target: line ? null : target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, life: 2.5, hasHit: false, done: false };
+    if (line) {
+      const dir = line.dir.clone().setY(0).normalize();
+      proj.line = { dir, origin: from.clone(), maxDist: line.maxDist, halfWidth: line.halfWidth, filter: line.filter || null, onMiss: line.onMiss || null, traveled: 0, pierce: !!line.pierce, hitSet: new Set(), hits: 0 };
+      proj.targetPoint = from.clone().addScaledVector(dir, line.maxDist);
+      proj.life = line.maxDist / Math.max(1e-6, speed) + 0.5;
+    }
     this._orient(proj);
     this.projectiles.push(proj);
     return proj;
+  }
+  _remove(i, missed) {
+    const proj = this.projectiles[i];
+    if (missed) this.totalMisses++;
+    proj.done = true;
+    this._releaseArrowMesh(proj._meshEntry);
+    this.projectiles.splice(i, 1);
+  }
+  // 직선 스킬샷 한 프레임: 지나간 구간 [prev, cur]에 닿은 적 중 진행 방향으로 가장 먼저 닿는 대상.
+  _sweepLine(proj, prev, cur, all = false) {
+    const L = proj.line;
+    let best = null;
+    const found = [];
+    const units = typeof getAllEnemyUnits === 'function' ? getAllEnemyUnits() : []; // 날아가는 투사체는 안 보이는 대상도 맞힌다(노틸러스 Q와 같음)
+    for (const u of units) {
+      if (!u || u.hp <= 0 || u.isDead || u.destroyed || u.isUntargetable || u.isWard) continue;
+      if (L.filter && !L.filter(u)) continue;
+      if (L.hitSet.has(u)) continue;
+      if (!canRealmInteract({ realmId: proj.realmId }, u)) continue;
+      const up = getWorldPosition(u); if (!up) continue;
+      const r = getCollisionRadius(u);
+      const rx = up.x - L.origin.x, rz = up.z - L.origin.z;
+      const along = rx * L.dir.x + rz * L.dir.z;
+      if (along < -r || along < prev - r || along > cur + r) continue;
+      const lateral = Math.abs(rx * L.dir.z - rz * L.dir.x);
+      if (lateral > L.halfWidth + r) continue;
+      const contact = Math.max(0, along - r);
+      if (all) found.push({ u, contact });
+      else if (!best || contact < best.contact) best = { u, contact };
+    }
+    return all ? found.sort((a, b) => a.contact - b.contact) : best;
+  }
+  _updateLine(proj, i, dt) {
+    const L = proj.line;
+    const prev = L.traveled;
+    L.traveled = Math.min(L.maxDist, L.traveled + proj.speed * dt);
+    proj.mesh.position.copy(L.origin).addScaledVector(L.dir, L.traveled);
+    proj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), L.dir);
+    if (L.pierce) {
+      for (const h of this._sweepLine(proj, prev, L.traveled, true)) {
+        L.hitSet.add(h.u);
+        if (proj.onHit) proj.onHit(h.u, L.hits);
+        L.hits++; this.totalHits++;
+      }
+      if (L.traveled >= L.maxDist - 1e-6 || proj.life <= 0) { if (!L.hits && L.onMiss) L.onMiss(); this._remove(i, !L.hits); }
+      return;
+    }
+    const best = this._sweepLine(proj, prev, L.traveled);
+    if (best) {
+      proj.mesh.position.copy(L.origin).addScaledVector(L.dir, Math.min(L.traveled, best.contact));
+      if (proj.onHit) proj.onHit(best.u);
+      this.totalHits++;
+      this.vfx.spawn('hit', proj.mesh.position.clone(), new THREE.Vector3(), { color: proj.color });
+      this._remove(i, false);
+      return;
+    }
+    if (L.traveled >= L.maxDist - 1e-6 || proj.life <= 0) {
+      if (L.onMiss) L.onMiss();
+      this._remove(i, true);
+    }
   }
   _currentAimPoint(proj) {
     if (proj.target && proj.target.hp > 0 && !proj.target.isDead && !proj.target.destroyed) {
@@ -9481,10 +9573,11 @@ class ProjectileSystem {
       // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
       // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
       if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret) {
-        const wall=controller._yasuo.windwall, progress=Math.min(1,(performance.now()-wall.createdAt)/180), wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, wall.width*0.75*progress), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this.totalMisses++; this._releaseArrowMesh(proj._meshEntry); this.projectiles.splice(i,1); continue; }
+        const wall=controller._yasuo.windwall, progress=Math.min(1,(performance.now()-wall.createdAt)/180), wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, wall.width*0.75*progress), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this._remove(i, true); continue; }
       }
+      if (proj.line) { this._updateLine(proj, i, dt); continue; }
       const aim = this._currentAimPoint(proj);
-      if (!aim || proj.life <= 0) { this.totalMisses++; this._releaseArrowMesh(proj._meshEntry); this.projectiles.splice(i, 1); continue; }
+      if (!aim || proj.life <= 0) { this._remove(i, true); continue; }
       const toAim = new THREE.Vector3().subVectors(aim, proj.mesh.position);
       const dist = toAim.length();
       const step = proj.speed * dt;
@@ -9497,6 +9590,7 @@ class ProjectileSystem {
         if (proj.target && proj.target.hp > 0 && proj.onHit && realmOk) { proj.onHit(proj.target); this.totalHits++; }
         else this.totalMisses++;
         this.vfx.spawn('hit', proj.mesh.position.clone(), new THREE.Vector3(), { color: proj.color });
+        proj.done = true;
         this._releaseArrowMesh(proj._meshEntry);
         this.projectiles.splice(i, 1);
         continue;
@@ -10484,10 +10578,11 @@ const SKILL_AIM = {
   },
   renekton: {
     Q: { type: 'instant' }, W: { type: 'instant' }, R: { type: 'instant' },
-    E: { type: 'dash', range: (c, d) => d.range, width: (c) => 2 * (45 + (c._renekton && c._renekton.rActive ? 50 : 0)) }, // _renektonFindLineHits 반폭 45(+R 50)
+    E: { type: 'dash', range: (c, d) => d.range, width: (c, d) => 2 * ((d.halfWidth || 45) + (c._renekton && c._renekton.rActive ? (d.rHalfWidthBonus || 0) : 0)) }, // _renektonFindLineHits 반폭(데이터)
   },
   yasuo: {
-    Q: { type: 'line', range: (c, d) => (yasuoAimTornado(c) ? d.tornadoRange : d.range), width: (c, d) => (yasuoAimTornado(c) ? d.tornadoWidth : d.width) },
+    Q: { type: 'line', range: (c, d) => (yasuoAimTornado(c) ? d.tornadoRange : d.range), width: (c, d) => (yasuoAimTornado(c) ? d.tornadoWidth : d.width),
+      instantIf: (c) => c.currentActionKey === 'yasuoE' && c.currentPhase === 'ACTIVE' }, // 45차: E 돌진 중 Q(EQ)는 조준 없이 바로 - 돌진 끝에 주변 원형
     W: { type: 'wall', width: (c, d, lvl) => skillVal(d.width, lvl) },                              // 앞쪽 width*0.75 지점, 길이 width
     E: { type: 'unit', range: (c, d) => d.range },
     R: { type: 'unit', range: (c, d) => d.range, approach: false },                                  // 공중에 뜬 적(걸어가서 시전하지 않음 - 띄운 적이 사거리 안에 있을 때만)
@@ -10500,7 +10595,7 @@ const SKILL_AIM = {
     R: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
   },
   nilah: {
-    Q: { type: 'lineToPoint', range: (c, d) => d.range, width: (c, d) => d.impactRadius },          // 닐라 → 도착 지점 직선, 반폭 impactRadius/2
+    Q: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.impactRadius },                 // 45차: 원작처럼 고정 길이 600 직선(폭 impactRadius)
     W: { type: 'instant' }, R: { type: 'instant' },
     E: { type: 'unit', range: (c, d) => d.range },
   },
@@ -10528,7 +10623,7 @@ const SKILL_AIM = {
     R: { type: 'unit', range: (c, d) => d.rangeBase + d.rangePerStack * ((c._chogath && c._chogath.predationStacks) || 0) },
   },
   leesin: {
-    Q: { type: 'line', range: (c, d) => d.range1, widthWorld: BASE_UNIT * 1.2,                       // findFirstInLine 반폭 BASE_UNIT*0.6(월드)
+    Q: { type: 'line', range: (c, d) => d.range1, width: (c, d) => d.width,                            // 음파 폭(데이터) - 투사체 line 판정과 같다
       instantIf: (c) => !!(c._leesin && c._leesin.qMarkTarget && performance.now() < c._leesin.qMarkExpiresAt) },
     W: { type: 'ally', range: (c, d) => d.range1, pickLol: 150, instantIf: (c) => !!(c._leesin && performance.now() < c._leesin.wMarkReadyUntil) },
     E: { type: 'instant' },
@@ -11238,57 +11333,89 @@ function getAttackSequenceNames(championId) {
   return ATTACK_SEQUENCE_OVERRIDES[championId] || ['attack1', 'attack2', 'attack3'];
 }
 
+// 45차: 폭·각도는 하드코딩 대신 데이터에서 읽는다(widthField = LoL 전체 폭 필드, angleField = 부채꼴 전체 각도 필드).
+// 예전엔 바루스 R 폭 450(데이터 240), 애쉬 R 130(데이터 260), 애쉬 W 46°(레벨별 27.75~46.25°), 다리우스 E 직선(실제 50° 부채꼴),
+// 닐라 Q 60° 부채꼴(실제 직선) 등이 실제 판정과 달랐다.
 const SKILL_HITBOX_SHAPE = {
   garen: { E: { type: 'circle' } }, // 자기중심 회전 베기(findEnemiesInRadius)
   darius: {
     Q: { type: 'circle' }, // 자기중심 범위(findEnemiesInRadius)
-    E: { type: 'line', halfWidthWorld: BASE_UNIT * 0.6 }, // 직선 스킬샷(findFirstInLine)
+    E: { type: 'cone', angleField: 'coneAngleDeg' }, // 부채꼴 50°(findEnemiesInRadius maxAngleDeg = 절반)
   },
   sett: {
     E: { type: 'circle' }, // 좌우 판정용 범위 탐색(findEnemiesInRadius) - 형태 자체는 원
     W: { type: 'trapezoid' }, // isPointInsideSettWTrapezoid와 동일한 사다리꼴(centerHalfWidth/endHalfWidth는 CHAMPION_DATA에서 직접 읽음)
   },
-  mordekaiser: { Q: { type: 'circle' }, E: { type: 'circle' } }, // 지점형 범위(반경은 캐스트 가능 거리로 근사 표시)
+  mordekaiser: { Q: { type: 'line', widthField: 'width' }, E: { type: 'circle' } }, // Q 전방 직사각형, E 지점형(캐스트 가능 거리 원)
   chogath: {
     Q: { type: 'circle' }, // 지점형 범위
-    W: { type: 'cone' }, // 부채꼴(findEnemiesInRadius의 forward/maxAngleDeg)
+    W: { type: 'cone', angleField: 'coneAngleDeg' }, // 부채꼴(findEnemiesInRadius의 forward/maxAngleDeg)
   },
   leesin: {
-    Q: { type: 'line', halfWidthWorld: BASE_UNIT * 0.6 }, // 직선 스킬샷(findFirstInLine)
+    Q: { type: 'line', widthField: 'width' }, // 직선 스킬샷(투사체 line 판정)
     E: { type: 'circle' }, // 자기중심 범위
   },
   masteryi: { Q: { type: 'circle' } }, // 주변 탐색 범위(findEnemiesInRadius)
-  nilah: { Q: { type: 'cone' }, E: { type: 'line', halfWidthWorld: BASE_UNIT * 0.28 }, R: { type: 'circle' } },
-  // 바루스 Q(꿰뚫는 화살)/R(속박의 사슬)은 둘 다 직선 스킬샷이다 - 실제
-  // 판정 폭(mLineWidth, LoL 원본 단위)을 그대로 world로 변환해서 쓴다.
-  varus: {
-    Q: { type: 'line', halfWidthWorld: lolRangeToWorld(75) * 0.5 },
-    R: { type: 'line', halfWidthWorld: lolRangeToWorld(450) * 0.5 },
-  },
-  // 애쉬 W(일제 사격)는 부채꼴로 퍼지는 다중 화살이라 원이 아니라 콘(cone)
-  // 형태로 그린다(champion_data.js의 ashe.W.coneAngleDeg와 동일한 값).
-  // R(마법의 수정화살)은 화살이므로 직선(line) 실루엣으로 그린다 - 다만
-  // 사거리가 "글로벌"(20000)이라 그대로 그리면 지나치게 길어지므로, 아래
-  // RangeIndicatorSystem.update()의 애쉬 R 전용 분기가 표시용 사거리만
-  // 맵 크기에 맞춰 클램프한다(실제 판정 사거리 자체는 그대로 20000).
-  ashe: {
-    W: { type: 'cone', angleDeg: 46 },
-    R: { type: 'line', halfWidthWorld: lolRangeToWorld(130) * 0.5 },
-  },
-  // 노틸러스 Q(닻줄 견인) - 직선 스킬샷(champion_data.js의 nautilus.Q.width).
-  nautilus: {
-    Q: { type: 'line', halfWidthWorld: lolRangeToWorld(180) * 0.5 },
-  },
+  nilah: { Q: { type: 'line', widthField: 'impactRadius' }, E: { type: 'line', halfWidthField: 'pathHalfWidthWorld' }, R: { type: 'circle' } },
+  // 바루스 Q(꿰뚫는 화살)/R(속박의 사슬)은 둘 다 직선 스킬샷이다.
+  varus: { Q: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' } },
+  // 애쉬 W(일제 사격)는 부채꼴, R(마법의 수정화살)은 직선. R은 사거리가 글로벌이라 표시 길이만 SKILL_RING_RANGE에서 줄인다.
+  ashe: { W: { type: 'cone', angleByLevelField: 'coneAngleDegByLevel' }, R: { type: 'line', widthField: 'width' } },
+  nautilus: { Q: { type: 'line', widthField: 'width' } }, // 닻줄 견인 - 직선 스킬샷
+  ezreal: { Q: { type: 'line', widthField: 'width' }, W: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' } },
+  yasuo: { Q: { type: 'line', widthFn: (c, d) => (c._yasuo && c._yasuo.qStacks >= 2 ? d.tornadoWidth : d.width) } },
+  yone: { Q: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' }, W: { type: 'cone', angleField: 'angleDeg' } },
+  vex: { Q: { type: 'line', widthField: 'widthAfterAccel' }, R: { type: 'line', widthField: 'width' } },
+  ahri: { Q: { type: 'line', widthField: 'width' }, E: { type: 'line', widthField: 'width' } },
 };
-// 세트 W처럼 형태 자체가 챔피언 고유 파라미터(centerHalfWidth 등)를 쓰는
-// 경우, CHAMPION_DATA에서 직접 읽어와 shape 파라미터를 채운다.
-function resolveShapeParams(championId, slot, cd) {
+// 45차: 링 길이를 범용 필드(range/range1/radius…)로 못 맞추는 스킬. 숫자(LoL) = 그 길이, null = 표시 안 함(사거리가 없는 스킬).
+// 예전엔 실제로 쓰이지 않는 필드(야스오 W 400, 레넥톤 W 175, 초가스 E 500, 아리 W 600, 바루스 W 750)를 그리거나,
+// 반경을 사거리로 그리거나(람머스 R 300 - 실제 800+), 아예 안 그렸다(바루스 Q, 닐라 R, 아리 R).
+const SKILL_RING_RANGE = {
+  yasuo: { Q: (c, d) => (c._yasuo && c._yasuo.qStacks >= 2 ? d.tornadoRange : d.range), W: () => null },
+  yone: { Q: (c, d) => (c._yone && c._yone.qStacks >= (d.maxStacks || 2) ? d.missileRange : d.range) },
+  renekton: { Q: (c, d) => d.range + (c._renekton && c._renekton.rActive ? (d.rRangeBonus || 0) : 0), W: () => null },
+  chogath: { E: () => null },
+  rammus: { R: (c) => (typeof c._rammusRRangeLol === 'function' ? c._rammusRRangeLol() : null) },
+  nilah: { R: (c, d) => d.damageRadius },
+  varus: { Q: (c, d) => d.maxRange, W: () => null },
+  ahri: { W: (c, d) => d.acquisitionRange, R: (c, d) => d.dashDistance },
+  ashe: { R: (c, d) => Math.min(d.range || 20000, 12000) },
+  ezreal: { R: (c, d) => Math.min(d.range || 25000, 12000) },
+};
+// 링 길이(LoL): SKILL_RING_RANGE가 있으면 그 값(null이면 숨김), 없으면 range/range1/radius/rangeBase/rangeMax 순으로 해석.
+function resolveRingRangeLol(ctrl, slot, data) {
+  const fn = SKILL_RING_RANGE[ctrl.championId] && SKILL_RING_RANGE[ctrl.championId][slot];
+  if (fn) { const v = fn(ctrl, data); return v == null ? null : v; }
+  const lvl = Math.max(1, (ctrl.skillLevels && ctrl.skillLevels[slot]) || 1);
+  if (data.range != null) return skillVal(data.range, lvl);
+  if (data.range1 != null) return data.range1;
+  if (data.radius != null) return data.radius; // 자기중심 범위 스킬(노틸러스 E 등)
+  if (data.rangeBase != null) return data.rangeBase + (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0);
+  if (data.rangeMax != null) return data.rangeMax;
+  return null;
+}
+// 세트 W처럼 형태 자체가 챔피언 고유 파라미터(centerHalfWidth 등)를 쓰는 경우 + 데이터에서 폭·각도를 읽는 경우.
+function resolveShapeParams(championId, slot, cd, ctrl = null) {
   const shape = (SKILL_HITBOX_SHAPE[championId] && SKILL_HITBOX_SHAPE[championId][slot]) || { type: 'circle' };
-  if (championId === 'sett' && slot === 'W' && cd && cd.W) {
-    return { type: 'trapezoid', centerHalfWidth: cd.W.centerHalfWidth, endHalfWidth: cd.W.endHalfWidth };
+  const data = cd && cd[slot];
+  if (championId === 'sett' && slot === 'W' && data) {
+    return { type: 'trapezoid', centerHalfWidth: data.centerHalfWidth, endHalfWidth: data.endHalfWidth };
   }
-  if (championId === 'chogath' && slot === 'W' && cd && cd.W) {
-    return { type: 'cone', angleDeg: cd.W.coneAngleDeg };
+  if (!data) return shape;
+  if (shape.type === 'line') {
+    let hw = shape.halfWidthWorld;
+    if (shape.widthField && data[shape.widthField] != null) hw = lolRangeToWorld(data[shape.widthField]) * 0.5;
+    if (shape.halfWidthField && data[shape.halfWidthField] != null) hw = data[shape.halfWidthField]; // 이미 월드 단위 반폭
+    if (shape.widthFn) hw = lolRangeToWorld(shape.widthFn(ctrl || {}, data)) * 0.5;
+    return { type: 'line', halfWidthWorld: hw != null ? hw : BASE_UNIT * 0.5 };
+  }
+  if (shape.type === 'cone') {
+    const lvl = Math.max(1, (ctrl && ctrl.skillLevels && ctrl.skillLevels[slot]) || 1);
+    let angleDeg = shape.angleDeg;
+    if (shape.angleField && data[shape.angleField] != null) angleDeg = data[shape.angleField];
+    if (shape.angleByLevelField && data[shape.angleByLevelField]) angleDeg = skillVal(data[shape.angleByLevelField], lvl);
+    return { type: 'cone', angleDeg };
   }
   return shape;
 }
@@ -11403,25 +11530,9 @@ class RangeIndicatorSystem {
     const cd = ctrl._champData ? ctrl._champData() : null;
     this.centerLaneMesh.visible = false;
     for (const slot of ['Q', 'W', 'E', 'R']) {
-      let range = null;
-      if (ctrl.championId === 'ashe' && slot === 'R' && cd && cd.R) {
-        // 애쉬 R은 실제 사거리가 "글로벌"(20000)이라 그대로 표시하면 화면
-        // 밖까지 화살이 그려진다 - 판정용 사거리(cd.R.range)는 그대로 두고,
-        // 표시만 이 맵의 실제 이동 가능 거리에 맞춰 클램프한다.
-        range = Math.min(cd.R.range || 20000, 12000);
-      } else if (cd && cd[slot]) {
-        const data = cd[slot];
-        const lvl = Math.max(1, (ctrl.skillLevels && ctrl.skillLevels[slot]) || 1);
-        // range/range1/rangeBase(+rangePerStack) 등 챔피언마다 다른 필드명을
-        // 전부 최선을 다해 해석한다 - 못 찾으면 그냥 표시하지 않는다.
-        if (data.range != null) range = skillVal(data.range, lvl);
-        else if (data.range1 != null) range = data.range1;
-        else if (data.radius != null) range = data.radius; // 자기중심 범위 스킬(노틸러스 E 등)
-        else if (data.rangeBase != null) range = data.rangeBase + (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0);
-        else if (data.rangeMax != null) range = data.rangeMax;
-      }
+      const range = cd && cd[slot] ? resolveRingRangeLol(ctrl, slot, cd[slot]) : null;
       const worldRange = range == null ? null : lolRangeToWorld(range);
-      const shapeDesc = ctrl.championId ? resolveShapeParams(ctrl.championId, slot, cd) : { type: 'circle' };
+      const shapeDesc = ctrl.championId ? resolveShapeParams(ctrl.championId, slot, cd, ctrl) : { type: 'circle' };
       if (shapeDesc.type === 'circle') {
         setCircle(slot, worldRange);
         this.shapeMeshes[slot].visible = false;
@@ -17207,17 +17318,14 @@ CharacterController.prototype._dariusEOnCast = function(target) {
       // 버그 수정: 지금까지 슬로우/경직만 걸고 실제로는 대상을 전혀 끌어오지
       // 않았다 - "포획"은 도끼를 걸어 실제로 자신 쪽으로 당겨오는 스킬이다
       // (문서: "적을(넉백)끌어당기고"). Mordekaiser E와 동일한 방식으로 실제
-      // 좌표를 옮긴다. 정확한 이동 거리가 기획안에 없어 "충분히 끌려온다"는
-      // 서술을 60%/최대 300 근사치로 반영한다(임의 피해량이 아니라 연출용
-      // 거리이므로 섹션 18의 "피해량을 임의로 만들지 마라"에 해당하지 않음).
+      // 좌표를 옮긴다.
       const from = target.mesh.position.clone();
       const dir = new THREE.Vector3().subVectors(this.root.position, from); dir.y = 0;
       const gap = dir.length();
       if (gap > 0.05) {
-        // 최소/최대 거리를 LoL 단위(120~300)로 정하고 공통 변환 함수로
-        // world 거리로 바꾼다 - 스킬마다 다른 배율을 임의로 넣지 않는다.
-        const desired = THREE.MathUtils.clamp(gap * 0.6, lolRangeToWorld(120), lolRangeToWorld(300));
-        const pullDist = Math.min(desired, Math.max(0, gap - this.collisionRadius * 2));
+        // 45차: 원작처럼 다리우스 바로 앞(두 유닛이 맞닿는 거리)까지 끌어온다. 예전엔 "거리의 60%, 120~300" 근사치라
+        // 535 끝에서 맞은 대상이 다리우스에게서 235 넘게 떨어진 채 멈췄고, 맞닿는 거리도 자기 반경 x2로 계산했다.
+        const pullDist = Math.max(0, gap - (getCollisionRadius(this) + getCollisionRadius(target)));
         dir.normalize();
         const to = from.clone().addScaledVector(dir, pullDist);
         target._pullState = { from, to, duration: 0.3, elapsed: 0 };
@@ -18137,7 +18245,7 @@ CharacterController.prototype._renektonFindLineHits = function(origin, dest, ext
     if (len < 1e-6) return [];
     dir.normalize();
     const hits = [];
-    const halfWidth = lolRangeToWorld(45 + extraRange);
+    const halfWidth = lolRangeToWorld((CHAMPION_DATA.renekton.E.halfWidth || 45) + extraRange);
     for (const u of getAllEnemyUnits()) {
       const p = getWorldPosition(u);
       const r = getCollisionRadius(u);
@@ -18205,7 +18313,7 @@ CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=fa
     if (clip) { this._beginTransientMoveClip('Spell1'); this._champTimeout(() => this._endTransientMoveClip('Spell1'), dur * 1000); }
     const timer=this._champTimeout(()=>{
       if (this.championId!=='renekton') return;
-      const radius=q.range + (this._renekton.rActive ? 50 : 0);
+      const radius=q.range + (this._renekton.rActive ? (q.rRangeBonus || 0) : 0);
       const hits=findEnemiesInRadius(this.root.position,radius);
       const tracker={generated:0,champHeal:0};
       for(const h of hits) this._renektonApplyQHit(h.unit,empowered,tracker);
@@ -18326,7 +18434,7 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
     this._clearActionTimers(); this.currentActionKey=isSecond?'renektonE2':'renektonE1'; this.currentPhase='ACTIVE'; this.setState(STATE.E_CAST); this.phaseCancelable=false;
     this._renektonPlay('Spell3',{loop:THREE.LoopOnce,fade:0.03,clampWhenFinished:true});
     this._dashState={from:origin,to:dest,duration:0.28,elapsed:0,faceDir:dir};
-    const hits=this._renektonFindLineHits(origin,dest,this._renekton.rActive?50:0);
+    const hits=this._renektonFindLineHits(origin,dest,this._renekton.rActive?(CHAMPION_DATA.renekton.E.rHalfWidthBonus||0):0);
     const empowered=isSecond&&!free&&this._renekton.rage>=50;
     if(empowered)this._renekton.rage-=50;
     const timer=this._champTimeout(()=>{
@@ -19430,9 +19538,11 @@ CharacterController.prototype._yoneTickEmpoweredQ = function(dt) {
     const p = getWorldPosition(u);
     const toUnit = new THREE.Vector3(p.x - travel.origin.x, 0, p.z - travel.origin.z);
     const along = toUnit.dot(travel.dir);
-    if (along < -1 || along > Math.max(bodyReach, missileHeadDist) + 1) continue;
+    const ur = getCollisionRadius(u) || 0;
+    // 45차: 길이 방향 여유는 대상 반경만큼(R과 같은 규칙). 예전엔 고정 1(월드 ≈ LoL 115)이라 뒤·끝 너머 115까지 맞았다.
+    if (along < -ur || along > Math.max(bodyReach, missileHeadDist) + ur) continue;
     // 본체 판정 폭 안이면 dashAoEWidth, 그 너머(돌풍만 도달한 구간)면 missileWidth 적용.
-    const halfWidth = along <= bodyReach + 1 ? bodyHalfWidth : missileHalfWidth;
+    const halfWidth = along <= bodyReach + ur ? bodyHalfWidth : missileHalfWidth;
     const lateral = Math.sqrt(Math.max(0, toUnit.lengthSq() - along * along));
     if (lateral > halfWidth + (getCollisionRadius(u) || 0)) continue;
     travel.hitSet.add(u);
@@ -19835,7 +19945,7 @@ CharacterController.prototype._yoneCastE = function(mouseWorldPoint, free = fals
     marks: new Map(),
     markTargets: new Map(),
     travelStart: bodyPos.clone(),
-    travelEnd: bodyPos.clone().addScaledVector(dir, dashDist),
+    travelEnd: (() => { const p = bodyPos.clone().addScaledVector(dir, dashDist); if (typeof constrainUnitPosition === 'function') constrainUnitPosition(this, p); return p; })(), // 45차: 맵 경계 안으로(R과 같음)
     travelElapsed: 0,
     travelDuration: dashDur,
     recastLockedUntil: performance.now() + (e.recastMinDelay || 0.5) * 1000,
@@ -20336,7 +20446,7 @@ CharacterController.prototype._nilahOnBasicAttackHit = function(target, dealtDam
     // Q 강화 상태의 평타 추가 범위 공격: 주 대상 외의 원뿔 대상에게 총 공격력 100% 물리 피해.
     if (empowered && !target.isTurret && !target.isNexus && !target.isInhibitor) {
       const forward = getDirection(this, target);
-      const hits = findEnemiesInRadius(this.root.position, this.stats.attackRange ? worldDistanceToLol(this.stats.attackRange) : 350, { forward, maxAngleDeg: this._nilahData().Q.coneAngleDeg });
+      const hits = findEnemiesInRadius(this.root.position, this.stats.attackRange ? worldDistanceToLol(this.stats.attackRange) : 350, { forward, maxAngleDeg: this._nilahData().Q.coneAngleDeg / 2 }); // 45차: maxAngleDeg는 반각 - 예전엔 60을 그대로 넘겨 120° 부채꼴이었다
       // 요청("강화 평타 쓸 때 발밑에 반짝이 제거"): 여기 있던 원뿔 스윕
       // 이펙트가 캐릭터 발밑(this.root.position)에 생성되고 있었고,
       // 강화 상태(empowered)일 때만 나갔던 게 정확히 "발밑 반짝이"였다.
@@ -20439,7 +20549,7 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
     // 바라보는 게 자연스러우므로 preserveDash 여부와 상관없이 적용한다.
     this.faceDirectionInstant(dir);
     const maxWorld=lolRangeToWorld(q.range);
-    const dist=mouseWorldPoint ? Math.min(maxWorld, new THREE.Vector3().subVectors(mouseWorldPoint,this.root.position).setY(0).length()) : maxWorld;
+    const dist=maxWorld; // 45차: 원작 Q는 커서 거리와 무관한 고정 길이(600) 직선 - 예전엔 커서까지로 짧아졌다
     const impact=this.root.position.clone().addScaledVector(dir,dist);
 
     // 버그 수정(핵심 - "Q 쓸 때 가끔 멈춘다"): resolved가 원래 아래
@@ -20642,6 +20752,7 @@ CharacterController.prototype._nilahCastE = function(mouseWorldPoint, free=false
     if(this._nilah.eCharges<=0){showSkillToast('E - 충전 없음');return;}
     const target=this.currentTarget;
     if(!target || target.hp<=0){ showSkillToast('E - 대상 선택 필요'); return; }
+    if(!isInRange(this, target, e.range)){ debugSkillMiss('Nilah E', 'out of range'); return; } // 45차: 사거리 확인(예전엔 걸어가기 단계에만 맡겨 사거리 밖 대상에게도 돌진할 수 있었다)
     if(!free && this.cooldowns.E>0 && false) return; // E's nominal 0.5 is a cast timing value; charges govern availability.
     // 닐라 E는 기본 공격 모션을 취소하고 즉시 돌진하며, 돌진 종료 후 다음 평타를 즉시 준비한다.
     const wasBasicAttack = !!(this.currentActionKey && (this.currentActionKey.startsWith('attack') || this.currentActionKey === 'crit'));
@@ -22183,31 +22294,19 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
     this._leesinPlayCast({ actionKey: 'leesinQ', clips: ['Spell1'], lockSec: q.castTimeSec || 0.25, state: STATE.Q_CAST, exitIdle: ['Spell1_ToIdle'], onRelease: () => {
       const origin = this.root.position.clone();
     // Q 음파는 마우스 커서가 가리키는 방향으로 실제 투사체가 날아간다.
-    // 먼저 직선상 첫 적중 대상을 찾고, 대상이 있으면 그 대상까지의 거리만
-    // 투사체가 이동하도록 해서 관통하지 않고 적중 순간 사라지게 한다.
-    const hitUnit = findFirstInLine(origin, dir, q.range1, BASE_UNIT * 0.6);
-    // 버그 수정: 예전엔 LoL 단위 사거리(1200)를 VFX에 월드 거리로 그대로 넘기고 속도는
-    // 임의값 24를 써서, 빗나간 음파가 맵 밖까지 수십 초 동안 날아갔다. 사거리/속도
-    // 모두 월드 단위로 변환한다(원작 음파 투사체 속도 1800).
+    // 45차: 피할 수 있는 직선 스킬샷 - 날아가며 처음 닿는 적을 맞힌다(투사체 시스템 line 모드, 음파 이펙트는 그 투사체를 따라간다).
+    // 예전엔 발사 순간 직선 위 첫 대상을 정해 두고, 도착 시간 뒤 대상이 어디로 갔든 맞았다. 폭은 데이터(width, 원작 120).
+    // 버그 수정(예전): LoL 단위 사거리/속도를 월드 단위로 변환한다(원작 음파 투사체 속도 1800).
     const rangeWorld = lolRangeToWorld(q.range1);
     const speedWorld = lolRangeToWorld(q.missileSpeed || 1800);
-    let impactDistance = null;
-    if (hitUnit) {
-      const toHit = new THREE.Vector3().subVectors(hitUnit.mesh.position, origin);
-      toHit.y = 0;
-      impactDistance = Math.min(rangeWorld, toHit.dot(dir));
-    }
-    vfx.spawn('q', origin, dir, { projectile: true, range: rangeWorld, speed: speedWorld, impactDistance });
-    if (hitUnit) {
-      const lvl = Math.max(1, this.skillLevels.Q || 1);
-      const dmg = skillVal(q.damageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD();
-      // 화면의 음파가 대상까지 실제로 날아간 뒤에만 피해/표식을 적용한다.
-      // 기존에는 투사체 VFX를 생성한 직후 즉시 applyDamage()를 호출해서
-      // '아직 음파가 도착하지 않았는데 이미 피해를 받은' 판정 불일치가 있었다.
-      const travelDistance = Math.max(0.05, impactDistance ?? rangeWorld);
-      const travelTimeMs = (travelDistance / speedWorld) * 1000;
-      const impactTimer = this._champTimeout(() => {
+    const lvl = Math.max(1, this.skillLevels.Q || 1);
+    const qProj = projectiles.spawn({
+      from: origin.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)), speed: speedWorld, color: 0x8fe3ff, realmId: this.realmId, hidden: true,
+      line: { dir, maxDist: rangeWorld, halfWidth: lolRangeToWorld(q.width || 120) * 0.5, onMiss: () => debugSkillMiss('Lee Sin Q (음파)', 'no target in line') },
+      onHit: (hitUnit) => {
+        // 이미 발사된 음파는 리 신이 다른 행동을 해도 독립적으로 맞는다.
         if (this.championId !== 'leesin' || !hitUnit || hitUnit.hp <= 0 || hitUnit.destroyed || hitUnit.isDead) return;
+        const dmg = skillVal(q.damageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD();
         applyDamage(hitUnit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
         if (hitUnit.hp > 0) {
           this._leesinOnSkillUsed();
@@ -22215,12 +22314,9 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
           this._leesin.qMarkExpiresAt = performance.now() + q.markDuration * 1000;
           debugSkillHit('Lee Sin Q (음파)', hitUnit);
         }
-      }, travelTimeMs);
-      // 버그 수정: 예전엔 이 착탄 타이머를 _actionTimers에 넣어서, 음파가 날아가는
-      // 도중 리 신이 평타/이동 등 새 행동을 시작하면(_clearActionTimers) 착탄 판정
-      // 자체가 취소돼 피해/표식이 사라졌다. 이미 발사된 투사체는 독립적으로 맞아야 한다.
-      void impactTimer;
-    } else debugSkillMiss('Lee Sin Q (음파)', 'no target in line');
+      },
+    });
+    vfx.spawn('q', origin, dir, { projectile: true, range: rangeWorld, speed: speedWorld, follow: qProj });
     } });
   
 };
@@ -22320,8 +22416,9 @@ CharacterController.prototype._leesinPickWWard = function(mouseWorldPoint) {
     if (ward && ward.destroyed) continue;
     if (!ward || !ward.position || (ward.expiresAt && ward.expiresAt <= performance.now())) continue;
     const dMouse = getHorizontalDistance(ward.position, mouseWorldPoint);
-    if (dMouse > lolRangeToWorld(100)) continue;
-    if (getHorizontalDistance(ward.position, this.root.position) > lolRangeToWorld(w.range1) + this.collisionRadius) continue;
+    if (dMouse > lolRangeToWorld(150)) continue; // 45차: 아군 고르기와 같은 150
+    // 45차: 다른 대상 지정 스킬과 같은 규칙(내 중심 → 대상 가장자리). 예전엔 대상 대신 리 신 자신의 반경을 더했다.
+    if (getHorizontalDistance(ward.position, this.root.position) > lolRangeToWorld(w.range1) + getCollisionRadius(ward)) continue;
     if (dMouse < bestD) { best = ward; bestD = dMouse; }
   }
   return best;
@@ -22898,12 +22995,11 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
     const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'vexRCast') return;
     const from = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));
-    const target = this._vexFindRTarget(this.root.position, dir, range, lolRangeToWorld(rd.width || 260) * 0.5);
-    const targetPoint = from.clone().addScaledVector(dir, lolRangeToWorld(range));
+    // 45차: 피할 수 있는 직선 스킬샷(처음 닿는 적 챔피언) - 예전엔 발사 순간 대상을 정해 끝까지 따라갔다.
     projectiles.spawn({
       from,
-      target: target || null,
-      targetPoint,
+      line: { dir, maxDist: lolRangeToWorld(range), halfWidth: lolRangeToWorld(rd.width || 260) * 0.5, filter: (u) => !!u.isChampion,
+        onMiss: () => debugSkillMiss('Vex R', 'no champion in line') },
       speed: lolRangeToWorld(rd.missileSpeed || 1600),
       damage: 0,
       color: 0x8b5cf6,
@@ -22922,7 +23018,6 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
         }
       }
     });
-    if (!target) debugSkillMiss('Vex R', 'no champion in line');
     }, (rd.castTimeSec || 0.25) * 1000);
     this._actionTimers.push(fireTimer);
     // 버그 수정: GLB에 'Spell4' 클립이 없어 R 모션이 재생되지 않았다(실제 클립은 Spell4_Cast/Spell4_Dash/Spell4_Attack).
@@ -23199,22 +23294,6 @@ function vexNotifyEnemyDash(unit) {
 }
 
 // 28차: 벡스 R 직선 판정 - 경로상 처음 닿는(가장 가까운) 적 챔피언(미니언·몬스터는 통과).
-CharacterController.prototype._vexFindRTarget = function(origin, dir, lolRange, halfWidth) {
-  const range = lolRangeToWorld(lolRange);
-  let best = null, bestAlong = Infinity;
-  for (const u of getTargetableEnemyUnits()) {
-    if (!u || u.hp <= 0 || !u.isChampion) continue;
-    const p = getWorldPosition(u); if (!p) continue;
-    const r = getCollisionRadius(u);
-    const v = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
-    const along = v.dot(dir);
-    if (along < -r || along > range + r) continue;
-    const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
-    if (lateral > halfWidth + r) continue;
-    if (along < bestAlong) { bestAlong = along; best = u; }
-  }
-  return best;
-};
 
 /* ===== src/champions/ezreal.js ===== */
 /* ============================================================
@@ -23269,25 +23348,18 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
   const __fire = () => {
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(q.width || 60) * 0.5;
-  const hitUnit = findFirstInLine(this.root.position, dir, q.range, halfWidth);
   // 정정(사용자가 올려준 실제 CommunityDragon Q 텍스처 적용): 기존 단색
   // 원 플레이스홀더('q' 케이스) 대신, 실제 텍스처 기반 궤적 이펙트
   // ('ezrealQ' - _ezrealQTrail, nilah_vfx_assets_and_runtime.js)를 쓴다.
-  // 적중 대상이 있으면 그 거리까지만, 없으면 사거리 끝까지 날아간다.
+  // 45차: 피할 수 있는 직선 스킬샷 - 궤적은 투사체를 따라가다 맞거나 사거리 끝에서 사라진다.
   const worldRange = lolRangeToWorld(q.range);
-  let impactDistance = worldRange;
-  if (hitUnit) {
-    const hitPos = getWorldPosition(hitUnit);
-    if (hitPos) impactDistance = getHorizontalDistance(hitPos, this.root.position);
-  }
-  vfx.spawn('ezrealQ', this.root.position.clone(), dir, { range: worldRange, impactDistance, speed: lolRangeToWorld(q.missileSpeed || 2000) });
 
   const lvl = Math.max(1, this.skillLevels.Q || 1);
   const raw = skillVal(q.damageByLevel, lvl) + (q.totalAdRatio || 0) * this.stats.attackDamage + (q.apRatio || 0) * (this.stats.abilityPower || 0);
-  const targetPoint = origin.clone().addScaledVector(dir, lolRangeToWorld(q.range));
-  projectiles.spawn({
-    from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(q.missileSpeed || 2000), damage: 0,
+  const qProj = projectiles.spawn({
+    from: origin, speed: lolRangeToWorld(q.missileSpeed || 2000), damage: 0,
     color: 0x8fe3ff, realmId: this.realmId,
+    line: { dir, maxDist: worldRange, halfWidth, onMiss: () => debugSkillMiss('Ezreal Q', 'no target in line') },
     onHit: (t) => {
       applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
       vfx.spawn('ezrealQHit', getWorldPosition(t)?.clone() || t.mesh.position.clone());
@@ -23306,7 +23378,7 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
       }
     },
   });
-  if (!hitUnit) debugSkillMiss('Ezreal Q', 'no target in line');
+  vfx.spawn('ezrealQ', this.root.position.clone(), dir, { range: worldRange, speed: lolRangeToWorld(q.missileSpeed || 2000), follow: qProj });
 
   };
   const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealQ') { __fire(); if (this.currentActionKey === 'ezrealQ') { this.currentPhase = 'RECOVERY'; this.phaseCancelable = true; if (this.pendingMove || this.targetPos) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } } } }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000); // 28차: W와 같이 이동 중이면 발사 직후 이동 재개
@@ -23323,7 +23395,7 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
 
 // W(정수의 흐름): 직선으로 정수 구체를 발사한다. 챔피언·에픽 몬스터·포탑·
 // 억제기·넥서스에만 반응하고 미니언/일반 몬스터는 그냥 통과한다(그래서
-// 전용 타겟 탐색 함수 _ezrealFindWTarget을 쓴다 - 일반 findFirstInLine은
+// 전용 타겟 탐색 함수 _ezrealWCanHit 필터를 쓴다 - 일반 findFirstInLine은
 // 모든 유닛을 대상으로 하므로 그대로 쓰면 안 된다). 처음 맞은 대상에게는
 // 즉시 피해 없이 4초 표식만 남기고, 그 표식은 이후 기본 공격이나 다른
 // 스킬(Q/E/R)이 적중했을 때 폭발하며 실제 피해를 준다 - _ezrealDetonateMark
@@ -23347,17 +23419,18 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   const __fire = () => {
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(w.width || 60) * 0.5;
-  const hitUnit = this._ezrealFindWTarget(this.root.position, dir, w.range, halfWidth);
   // 정정(레퍼런스 영상 ability_0081_W1.webm 프레임 대조): 실제 정수의 흐름
   // 구체는 하늘색/시안 계열 광선이다(피격 지점에 남는 표식 링만 골드색 -
   // 아래 표식 vfx는 그대로 골드 유지). 예전엔 이 둘이 뒤바뀌어서 구체
   // 자체가 골드로 나가고 있었다.
   vfx.spawn('w', origin.clone().addScaledVector(dir, 1.0), dir);
 
-  const targetPoint = origin.clone().addScaledVector(dir, lolRangeToWorld(w.range));
+  // 45차: 피할 수 있는 직선 스킬샷 - 미니언 등은 통과하고 챔피언·구조물에만 반응(_ezrealWCanHit). 속도는 데이터(위키 1700).
   projectiles.spawn({
-    from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(2200), damage: 0,
+    from: origin, speed: lolRangeToWorld(w.missileSpeed || 1700), damage: 0,
     color: 0xbdf6ff, realmId: this.realmId,
+    line: { dir, maxDist: lolRangeToWorld(w.range), halfWidth, filter: (u) => this._ezrealWCanHit(u),
+      onMiss: () => debugSkillMiss('Ezreal W', 'no valid target in line (챔피언/포탑/억제기/넥서스만 반응)') },
     onHit: (t) => {
       // 표식만 남긴다 - 이 시점엔 피해가 없다(폭발은 _ezrealDetonateMark에서).
       // vfx 시스템엔 별도 'mark' 이펙트가 없으므로 W 고유 색상의 'hit'
@@ -23370,7 +23443,6 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
       this._ezreal.markWLevel = Math.max(1, this.skillLevels.W || 1);
     },
   });
-  if (!hitUnit) debugSkillMiss('Ezreal W', 'no valid target in line (챔피언/포탑/억제기/넥서스만 반응)');
 
   };
   // 28차(요청 "W 쓸 때 멈출 때가 있음"): 발사 뒤 남은 모션은 후딜이라, 이동 중에 썼거나 시전 중 이동 명령을 넣었으면
@@ -23387,28 +23459,10 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   this._actionTimers.push(recTimer);
 };
 
-// W 전용 직선 판정 - findFirstInLine(01_hit_detection.js)과 동일한 기하
-// 계산이지만, 실제 정수의 흐름 명세대로 미니언/일반 몬스터를 걸러내고
-// 챔피언(이 뷰어에선 더미)·포탑·억제기·넥서스에만 반응한다(에픽 몬스터는
-// 이 뷰어에 별도 시스템이 없어 대상에서 제외). 공용 판정 함수 자체를
-// 고치지 않고 이즈리얼 전용 파일 안에서만 분기한다(이 프로젝트의
-// "챔피언 전용 로직은 챔피언 파일에 격리" 원칙 그대로).
-CharacterController.prototype._ezrealFindWTarget = function(origin, dir, lolRange, halfWidth) {
-  const range = lolRangeToWorld(lolRange);
-  let best = null;
-  for (const u of getAllEnemyUnits()) {
-    if (u.isMinion) continue;
-    if (!(u.isChampion || u.isTurret || u.isInhibitor || u.isNexus)) continue;
-    const p = getWorldPosition(u);
-    const r = getCollisionRadius(u);
-    const toTarget = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
-    const along = toTarget.dot(dir);
-    if (along < -r || along > range + r) continue;
-    const lateralSq = Math.max(0, toTarget.lengthSq() - along * along);
-    if (Math.sqrt(lateralSq) > halfWidth + r) continue;
-    if (!best || along < best.along) best = { unit: u, along };
-  }
-  return best ? best.unit : null;
+// W가 반응하는 대상 - 원작 정수의 흐름처럼 미니언/일반 몬스터는 통과하고 챔피언(이 뷰어에선 더미)·포탑·억제기·넥서스에만
+// 반응한다(에픽 몬스터는 이 뷰어에 별도 시스템이 없어 제외). 직선 스킬샷 투사체의 filter로 쓴다(45차).
+CharacterController.prototype._ezrealWCanHit = function(u) {
+  return !!u && !u.isMinion && !!(u.isChampion || u.isTurret || u.isInhibitor || u.isNexus);
 };
 
 // W 표식 폭발. by: 'attack'(기본 공격) | 'ability'(Q/E/R). 스킬로 터뜨렸을
@@ -23444,7 +23498,7 @@ CharacterController.prototype._ezrealCastE = function(mouseWorldPoint, free = fa
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
     : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
-  const rawDist = dir.length();
+  const rawDist = mouseWorldPoint ? dir.length() : 0; // 45차: 커서가 없으면 최대 사거리(예전엔 단위 벡터 길이 1 = 아주 짧은 거리)
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('E', free)) return;
@@ -24206,6 +24260,7 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   const dashDuration = Math.max(0.05, dashWorldDist / Math.max(0.01, dashWorldSpeed));
   const startPos = this.root.position.clone();
   const endPos = startPos.clone().addScaledVector(dir, dashWorldDist);
+  if (typeof constrainUnitPosition === 'function') constrainUnitPosition(this, endPos); // 45차: 맵 밖·지형 너머로 돌진하지 않게(이즈리얼 E와 같은 처리)
 
   this.playFirstAvailable(['Spell4'], { loop: THREE.LoopOnce, fade: 0.04, clampWhenFinished: true });
   vfx.spawn('r', startPos.clone());
@@ -24485,17 +24540,8 @@ CharacterController.prototype._varusReleaseQ = function(mouseWorldPoint = null) 
   const halfWidth = lolRangeToWorld(q.width || 75) * 0.5;
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   // 관통: 경로의 모든 적에게 피해, 맞힌 적마다 15%씩 감소(최소 33% - PC 위키 "적 수에 따라 0~67% 감소").
-  const lineHits = findEnemiesInLine(this.root.position, dir, lolRange, q.width || 75)
-    .map((u) => ({ u, d: getHorizontalDistance(getWorldPosition(u), this.root.position) }))
-    .sort((a, b) => a.d - b.d);
-  const hitUnit = lineHits.length ? lineHits[0].u : null;
+  // 45차: 화살이 실제로 날아가며 닿는 순서대로 맞힌다(피할 수 있음). 예전엔 발사 순간 직선 위 대상을 정해 두고 첫 대상을 따라갔다.
   const worldRange = lolRangeToWorld(lolRange);
-  let impactDistance = worldRange;
-  if (hitUnit) {
-    const hitPos = getWorldPosition(hitUnit);
-    if (hitPos) impactDistance = getHorizontalDistance(hitPos, this.root.position);
-  }
-  const targetPoint = origin.clone().addScaledVector(dir, worldRange);
 
   const lvl = Math.max(1, this.skillLevels.Q || 1);
   // 최대 피해 80~360 + 추가 AD 120%(PC 위키), 충전 0%면 2/3.
@@ -24519,20 +24565,14 @@ CharacterController.prototype._varusReleaseQ = function(mouseWorldPoint = null) 
     debugSkillHit('Varus Q', t, { chargeFraction: chargeFraction.toFixed(2), index, mult });
     this._varusDetonateBlight(t, { viaQ: true, chargeFraction });
   };
-  const speedWorld = lolRangeToWorld(q.missileSpeed || 1500);
-  lineHits.slice(1).forEach((h, k) => {
-    const t = this._champTimeout(() => resolveHit(h.u, k + 1), (h.d / Math.max(1e-6, speedWorld)) * 1000);
-    void t; // 발사된 화살은 바루스가 다른 행동을 해도 계속 날아가므로 _actionTimers에 넣지 않는다
-  });
-
+  // 발사된 화살은 바루스가 다른 행동을 해도 계속 날아간다(투사체 시스템이 처리).
   projectiles.spawn({
-    from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(q.missileSpeed || 1500), damage: 0,
+    from: origin, speed: lolRangeToWorld(q.missileSpeed || 1500), damage: 0,
     color: 0x8fd6ff, realmId: this.realmId,
-    onHit: (t) => {
-      resolveHit(t, 0);
-    },
+    line: { dir, maxDist: worldRange, halfWidth, pierce: true,
+      onMiss: () => debugSkillMiss('Varus Q', `no target in line (충전 ${(chargeFraction * 100).toFixed(0)}%, 사거리 ${lolRange.toFixed(0)})`) },
+    onHit: (t, index) => resolveHit(t, index),
   });
-  if (!hitUnit) debugSkillMiss('Varus Q', `no target in line (충전 ${(chargeFraction * 100).toFixed(0)}%, 사거리 ${impactDistance.toFixed(1)})`);
 
   this.playFirstAvailable(['Spell1_Fire', 'Spell1'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
   const clip = this.findAnimation('Spell1_Fire') || this.findAnimation('Spell1');
@@ -24569,7 +24609,7 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
     : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
-  const rawDist = dir.length();
+  const rawDist = mouseWorldPoint ? dir.length() : 0; // 45차: 커서가 없으면 최대 사거리(예전엔 단위 벡터 길이 1 = 아주 짧은 거리)
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('E', free)) return;
@@ -24654,14 +24694,13 @@ CharacterController.prototype._varusCastR = function(mouseWorldPoint, free = fal
     const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
     const halfWidth = lolRangeToWorld(r.width || 240) * 0.5;
     // 28차: 원작은 처음 맞힌 "적 챔피언"을 속박한다 - 미니언·몬스터는 통과(예전 findFirstInLine은 미니언에 막혔다).
-    const hitUnit = findFirstInLine(this.root.position, dir, r.range || 1370, halfWidth, (u) => !!u.isChampion);
-    const targetPoint = origin.clone().addScaledVector(dir, lolRangeToWorld(r.range || 1370));
+    // 45차: 피할 수 있는 직선 스킬샷(처음 닿는 적 챔피언).
     projectiles.spawn({
-      from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(r.missileSpeed || 1200), damage: 0,
+      from: origin, speed: lolRangeToWorld(r.missileSpeed || 1200), damage: 0,
       color: 0xb08cff, realmId: this.realmId,
+      line: { dir, maxDist: lolRangeToWorld(r.range || 1370), halfWidth, filter: (u) => !!u.isChampion, onMiss: () => debugSkillMiss('Varus R', 'no target in line') },
       onHit: (t) => this._varusRHit(t, dir),
     });
-    if (!hitUnit) debugSkillMiss('Varus R', 'no target in line');
   }, castTime * 1000);
   this._actionTimers.push(fireTimer);
 
@@ -24967,7 +25006,7 @@ CharacterController.prototype._asheCastE = function(mouseWorldPoint, free = fals
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
     : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
-  const rawDist = dir.length();
+  const rawDist = mouseWorldPoint ? dir.length() : 0; // 45차: 커서가 없으면 최대 사거리(예전엔 단위 벡터 길이 1 = 아주 짧은 거리)
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   // 충전 2회(재충전 90~50초, 하나씩) + 사용 간격 5초(PC 위키).
@@ -32293,7 +32332,7 @@ function _summonerHeal(ctrl, d, mousePoint) {
     for (const a of placedAllies) {
       if (!a || a.hp <= 0) continue;
       const p = getWorldPosition(a);
-      if (getHorizontalDistance(p, ctrl.root.position) > lolRangeToWorld(d.range)) continue;
+      if (!isInRange(ctrl, a, d.range)) continue; // 45차: 대상 가장자리 기준(다른 대상 지정과 같은 규칙)
       const dd = getHorizontalDistance(p, ref);
       if (dd < bestD) { bestD = dd; best = a; }
     }
@@ -32339,32 +32378,34 @@ function _summonerClarity(ctrl, d) {
   if (typeof placedAllies !== 'undefined') {
     for (const a of placedAllies) {
       if (!a || a.hp <= 0 || !(a.maxMp > 0)) continue;
-      if (getHorizontalDistance(getWorldPosition(a), ctrl.root.position) <= lolRangeToWorld(d.range)) a.mp = Math.min(a.maxMp, (a.mp || 0) + a.maxMp * d.allyPercent);
+      if (isInRange(ctrl, a, d.range)) a.mp = Math.min(a.maxMp, (a.mp || 0) + a.maxMp * d.allyPercent);
     }
   }
   if (typeof vfx !== 'undefined') vfx.groundShockwave(ctrl.root.position.clone(), BASE_UNIT * 0.9, 0x6fb6ff, 0.45);
   return true;
 }
-// 표식 1: 눈덩이 - 시전 순간의 직선에서 처음 맞는 적을 고르고, 눈덩이가 그 거리를 날아간 뒤 판정한다
-// (이미 날아간 투사체라 그 사이 리 신 Q 음파처럼 대상이 움직여도 맞는다 - 이 엔진의 기존 직선 투사체 규칙).
+// 표식 1: 눈덩이 - 45차: 피할 수 있는 직선 스킬샷(투사체 시스템의 line 모드). 눈덩이 모양은 그 투사체를 따라간다.
+// 예전엔 던지는 순간 직선 위 첫 대상을 정해 두고, 눈덩이가 도착하면 대상이 어디로 갔든 맞았다.
 const _summonerSnowballs = [];
 function _summonerMarkThrow(ctrl, d, mousePoint) {
   const origin = ctrl.root.position.clone();
   const dir = mousePoint ? new THREE.Vector3(mousePoint.x - origin.x, 0, mousePoint.z - origin.z) : new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
   if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1).applyQuaternion(ctrl.root.quaternion); else dir.normalize();
   ctrl.faceDirectionInstant(dir);
-  const rangeW = lolRangeToWorld(d.range);
-  const hit = typeof findFirstInLine === 'function' ? findFirstInLine(origin, dir, d.range, lolRangeToWorld(d.halfWidth)) : null;
-  let travel = rangeW;
-  if (hit) { const p = getWorldPosition(hit); travel = Math.min(rangeW, Math.max(0.05, (p.x - origin.x) * dir.x + (p.z - origin.z) * dir.z)); }
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(BASE_UNIT * 0.14, 12, 10), new THREE.MeshBasicMaterial({ color: 0xf4fbff }));
   mesh.position.copy(origin).setY(origin.y + BASE_UNIT * 0.6);
   if (typeof scene !== 'undefined') scene.add(mesh);
-  _summonerSnowballs.push({ ctrl, d, mesh, origin, dir, travel, speed: lolRangeToWorld(d.missileSpeed), elapsed: 0, hit });
+  const b = { ctrl, d, mesh, proj: null };
+  b.proj = projectiles.spawn({
+    from: mesh.position.clone(), speed: lolRangeToWorld(d.missileSpeed), color: 0xf4fbff, realmId: ctrl.realmId, hidden: true,
+    line: { dir, maxDist: lolRangeToWorld(d.range), halfWidth: lolRangeToWorld(d.halfWidth), filter: (u) => !u.isStructure },
+    onHit: (u) => _summonerSnowballLand(b, u),
+  });
+  _summonerSnowballs.push(b);
   return true;
 }
-function _summonerSnowballLand(b) {
-  const { ctrl, d, hit } = b;
+function _summonerSnowballLand(b, hit) {
+  const { ctrl, d } = b;
   if (!hit || hit.hp <= 0 || hit.destroyed || hit.isDead) return;
   applyDamage(hit, { rawDamage: d.baseDamage + d.damagePerLevel * (ctrl.champLevel || 1), damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: ctrl });
   if (hit.hp <= 0) return;
@@ -32410,15 +32451,10 @@ function _summonerMarkDash(ctrl, d, slot) {
 function summonerSpellTick(dt) {
   for (let i = _summonerSnowballs.length - 1; i >= 0; i--) {
     const b = _summonerSnowballs[i];
-    b.elapsed += dt;
-    const along = Math.min(b.travel, b.speed * b.elapsed);
-    b.mesh.position.set(b.origin.x + b.dir.x * along, b.mesh.position.y, b.origin.z + b.dir.z * along);
-    if (along >= b.travel) {
-      if (b.mesh.parent) b.mesh.parent.remove(b.mesh);
-      b.mesh.geometry.dispose(); b.mesh.material.dispose();
-      _summonerSnowballs.splice(i, 1);
-      _summonerSnowballLand(b);
-    }
+    if (!b.proj.done) { b.mesh.position.set(b.proj.mesh.position.x, b.mesh.position.y, b.proj.mesh.position.z); continue; }
+    if (b.mesh.parent) b.mesh.parent.remove(b.mesh);
+    b.mesh.geometry.dispose(); b.mesh.material.dispose();
+    _summonerSnowballs.splice(i, 1);
   }
   const ctrl = typeof controller !== 'undefined' ? controller : null;
   if (ctrl && ctrl._summonerMark && (performance.now() >= ctrl._summonerMark.expiresAt || !(ctrl._summonerMark.target && ctrl._summonerMark.target.hp > 0))) {

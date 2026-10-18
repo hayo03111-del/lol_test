@@ -60,7 +60,7 @@ CharacterController.prototype._renektonFindLineHits = function(origin, dest, ext
     if (len < 1e-6) return [];
     dir.normalize();
     const hits = [];
-    const halfWidth = lolRangeToWorld(45 + extraRange);
+    const halfWidth = lolRangeToWorld((CHAMPION_DATA.renekton.E.halfWidth || 45) + extraRange);
     for (const u of getAllEnemyUnits()) {
       const p = getWorldPosition(u);
       const r = getCollisionRadius(u);
@@ -128,7 +128,7 @@ CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=fa
     if (clip) { this._beginTransientMoveClip('Spell1'); this._champTimeout(() => this._endTransientMoveClip('Spell1'), dur * 1000); }
     const timer=this._champTimeout(()=>{
       if (this.championId!=='renekton') return;
-      const radius=q.range + (this._renekton.rActive ? 50 : 0);
+      const radius=q.range + (this._renekton.rActive ? (q.rRangeBonus || 0) : 0);
       const hits=findEnemiesInRadius(this.root.position,radius);
       const tracker={generated:0,champHeal:0};
       for(const h of hits) this._renektonApplyQHit(h.unit,empowered,tracker);
@@ -249,7 +249,7 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
     this._clearActionTimers(); this.currentActionKey=isSecond?'renektonE2':'renektonE1'; this.currentPhase='ACTIVE'; this.setState(STATE.E_CAST); this.phaseCancelable=false;
     this._renektonPlay('Spell3',{loop:THREE.LoopOnce,fade:0.03,clampWhenFinished:true});
     this._dashState={from:origin,to:dest,duration:0.28,elapsed:0,faceDir:dir};
-    const hits=this._renektonFindLineHits(origin,dest,this._renekton.rActive?50:0);
+    const hits=this._renektonFindLineHits(origin,dest,this._renekton.rActive?(CHAMPION_DATA.renekton.E.rHalfWidthBonus||0):0);
     const empowered=isSecond&&!free&&this._renekton.rage>=50;
     if(empowered)this._renekton.rage-=50;
     const timer=this._champTimeout(()=>{

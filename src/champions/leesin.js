@@ -244,31 +244,19 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
     this._leesinPlayCast({ actionKey: 'leesinQ', clips: ['Spell1'], lockSec: q.castTimeSec || 0.25, state: STATE.Q_CAST, exitIdle: ['Spell1_ToIdle'], onRelease: () => {
       const origin = this.root.position.clone();
     // Q 음파는 마우스 커서가 가리키는 방향으로 실제 투사체가 날아간다.
-    // 먼저 직선상 첫 적중 대상을 찾고, 대상이 있으면 그 대상까지의 거리만
-    // 투사체가 이동하도록 해서 관통하지 않고 적중 순간 사라지게 한다.
-    const hitUnit = findFirstInLine(origin, dir, q.range1, BASE_UNIT * 0.6);
-    // 버그 수정: 예전엔 LoL 단위 사거리(1200)를 VFX에 월드 거리로 그대로 넘기고 속도는
-    // 임의값 24를 써서, 빗나간 음파가 맵 밖까지 수십 초 동안 날아갔다. 사거리/속도
-    // 모두 월드 단위로 변환한다(원작 음파 투사체 속도 1800).
+    // 45차: 피할 수 있는 직선 스킬샷 - 날아가며 처음 닿는 적을 맞힌다(투사체 시스템 line 모드, 음파 이펙트는 그 투사체를 따라간다).
+    // 예전엔 발사 순간 직선 위 첫 대상을 정해 두고, 도착 시간 뒤 대상이 어디로 갔든 맞았다. 폭은 데이터(width, 원작 120).
+    // 버그 수정(예전): LoL 단위 사거리/속도를 월드 단위로 변환한다(원작 음파 투사체 속도 1800).
     const rangeWorld = lolRangeToWorld(q.range1);
     const speedWorld = lolRangeToWorld(q.missileSpeed || 1800);
-    let impactDistance = null;
-    if (hitUnit) {
-      const toHit = new THREE.Vector3().subVectors(hitUnit.mesh.position, origin);
-      toHit.y = 0;
-      impactDistance = Math.min(rangeWorld, toHit.dot(dir));
-    }
-    vfx.spawn('q', origin, dir, { projectile: true, range: rangeWorld, speed: speedWorld, impactDistance });
-    if (hitUnit) {
-      const lvl = Math.max(1, this.skillLevels.Q || 1);
-      const dmg = skillVal(q.damageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD();
-      // 화면의 음파가 대상까지 실제로 날아간 뒤에만 피해/표식을 적용한다.
-      // 기존에는 투사체 VFX를 생성한 직후 즉시 applyDamage()를 호출해서
-      // '아직 음파가 도착하지 않았는데 이미 피해를 받은' 판정 불일치가 있었다.
-      const travelDistance = Math.max(0.05, impactDistance ?? rangeWorld);
-      const travelTimeMs = (travelDistance / speedWorld) * 1000;
-      const impactTimer = this._champTimeout(() => {
+    const lvl = Math.max(1, this.skillLevels.Q || 1);
+    const qProj = projectiles.spawn({
+      from: origin.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)), speed: speedWorld, color: 0x8fe3ff, realmId: this.realmId, hidden: true,
+      line: { dir, maxDist: rangeWorld, halfWidth: lolRangeToWorld(q.width || 120) * 0.5, onMiss: () => debugSkillMiss('Lee Sin Q (음파)', 'no target in line') },
+      onHit: (hitUnit) => {
+        // 이미 발사된 음파는 리 신이 다른 행동을 해도 독립적으로 맞는다.
         if (this.championId !== 'leesin' || !hitUnit || hitUnit.hp <= 0 || hitUnit.destroyed || hitUnit.isDead) return;
+        const dmg = skillVal(q.damageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD();
         applyDamage(hitUnit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
         if (hitUnit.hp > 0) {
           this._leesinOnSkillUsed();
@@ -276,12 +264,9 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
           this._leesin.qMarkExpiresAt = performance.now() + q.markDuration * 1000;
           debugSkillHit('Lee Sin Q (음파)', hitUnit);
         }
-      }, travelTimeMs);
-      // 버그 수정: 예전엔 이 착탄 타이머를 _actionTimers에 넣어서, 음파가 날아가는
-      // 도중 리 신이 평타/이동 등 새 행동을 시작하면(_clearActionTimers) 착탄 판정
-      // 자체가 취소돼 피해/표식이 사라졌다. 이미 발사된 투사체는 독립적으로 맞아야 한다.
-      void impactTimer;
-    } else debugSkillMiss('Lee Sin Q (음파)', 'no target in line');
+      },
+    });
+    vfx.spawn('q', origin, dir, { projectile: true, range: rangeWorld, speed: speedWorld, follow: qProj });
     } });
   
 };
@@ -381,8 +366,9 @@ CharacterController.prototype._leesinPickWWard = function(mouseWorldPoint) {
     if (ward && ward.destroyed) continue;
     if (!ward || !ward.position || (ward.expiresAt && ward.expiresAt <= performance.now())) continue;
     const dMouse = getHorizontalDistance(ward.position, mouseWorldPoint);
-    if (dMouse > lolRangeToWorld(100)) continue;
-    if (getHorizontalDistance(ward.position, this.root.position) > lolRangeToWorld(w.range1) + this.collisionRadius) continue;
+    if (dMouse > lolRangeToWorld(150)) continue; // 45차: 아군 고르기와 같은 150
+    // 45차: 다른 대상 지정 스킬과 같은 규칙(내 중심 → 대상 가장자리). 예전엔 대상 대신 리 신 자신의 반경을 더했다.
+    if (getHorizontalDistance(ward.position, this.root.position) > lolRangeToWorld(w.range1) + getCollisionRadius(ward)) continue;
     if (dMouse < bestD) { best = ward; bestD = dMouse; }
   }
   return best;

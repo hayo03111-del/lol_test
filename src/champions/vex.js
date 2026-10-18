@@ -87,12 +87,11 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
     const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'vexRCast') return;
     const from = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));
-    const target = this._vexFindRTarget(this.root.position, dir, range, lolRangeToWorld(rd.width || 260) * 0.5);
-    const targetPoint = from.clone().addScaledVector(dir, lolRangeToWorld(range));
+    // 45차: 피할 수 있는 직선 스킬샷(처음 닿는 적 챔피언) - 예전엔 발사 순간 대상을 정해 끝까지 따라갔다.
     projectiles.spawn({
       from,
-      target: target || null,
-      targetPoint,
+      line: { dir, maxDist: lolRangeToWorld(range), halfWidth: lolRangeToWorld(rd.width || 260) * 0.5, filter: (u) => !!u.isChampion,
+        onMiss: () => debugSkillMiss('Vex R', 'no champion in line') },
       speed: lolRangeToWorld(rd.missileSpeed || 1600),
       damage: 0,
       color: 0x8b5cf6,
@@ -111,7 +110,6 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
         }
       }
     });
-    if (!target) debugSkillMiss('Vex R', 'no champion in line');
     }, (rd.castTimeSec || 0.25) * 1000);
     this._actionTimers.push(fireTimer);
     // 버그 수정: GLB에 'Spell4' 클립이 없어 R 모션이 재생되지 않았다(실제 클립은 Spell4_Cast/Spell4_Dash/Spell4_Attack).
@@ -388,19 +386,3 @@ function vexNotifyEnemyDash(unit) {
 }
 
 // 28차: 벡스 R 직선 판정 - 경로상 처음 닿는(가장 가까운) 적 챔피언(미니언·몬스터는 통과).
-CharacterController.prototype._vexFindRTarget = function(origin, dir, lolRange, halfWidth) {
-  const range = lolRangeToWorld(lolRange);
-  let best = null, bestAlong = Infinity;
-  for (const u of getTargetableEnemyUnits()) {
-    if (!u || u.hp <= 0 || !u.isChampion) continue;
-    const p = getWorldPosition(u); if (!p) continue;
-    const r = getCollisionRadius(u);
-    const v = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
-    const along = v.dot(dir);
-    if (along < -r || along > range + r) continue;
-    const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
-    if (lateral > halfWidth + r) continue;
-    if (along < bestAlong) { bestAlong = along; best = u; }
-  }
-  return best;
-};

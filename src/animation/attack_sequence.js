@@ -95,57 +95,89 @@ function getAttackSequenceNames(championId) {
   return ATTACK_SEQUENCE_OVERRIDES[championId] || ['attack1', 'attack2', 'attack3'];
 }
 
+// 45차: 폭·각도는 하드코딩 대신 데이터에서 읽는다(widthField = LoL 전체 폭 필드, angleField = 부채꼴 전체 각도 필드).
+// 예전엔 바루스 R 폭 450(데이터 240), 애쉬 R 130(데이터 260), 애쉬 W 46°(레벨별 27.75~46.25°), 다리우스 E 직선(실제 50° 부채꼴),
+// 닐라 Q 60° 부채꼴(실제 직선) 등이 실제 판정과 달랐다.
 const SKILL_HITBOX_SHAPE = {
   garen: { E: { type: 'circle' } }, // 자기중심 회전 베기(findEnemiesInRadius)
   darius: {
     Q: { type: 'circle' }, // 자기중심 범위(findEnemiesInRadius)
-    E: { type: 'line', halfWidthWorld: BASE_UNIT * 0.6 }, // 직선 스킬샷(findFirstInLine)
+    E: { type: 'cone', angleField: 'coneAngleDeg' }, // 부채꼴 50°(findEnemiesInRadius maxAngleDeg = 절반)
   },
   sett: {
     E: { type: 'circle' }, // 좌우 판정용 범위 탐색(findEnemiesInRadius) - 형태 자체는 원
     W: { type: 'trapezoid' }, // isPointInsideSettWTrapezoid와 동일한 사다리꼴(centerHalfWidth/endHalfWidth는 CHAMPION_DATA에서 직접 읽음)
   },
-  mordekaiser: { Q: { type: 'circle' }, E: { type: 'circle' } }, // 지점형 범위(반경은 캐스트 가능 거리로 근사 표시)
+  mordekaiser: { Q: { type: 'line', widthField: 'width' }, E: { type: 'circle' } }, // Q 전방 직사각형, E 지점형(캐스트 가능 거리 원)
   chogath: {
     Q: { type: 'circle' }, // 지점형 범위
-    W: { type: 'cone' }, // 부채꼴(findEnemiesInRadius의 forward/maxAngleDeg)
+    W: { type: 'cone', angleField: 'coneAngleDeg' }, // 부채꼴(findEnemiesInRadius의 forward/maxAngleDeg)
   },
   leesin: {
-    Q: { type: 'line', halfWidthWorld: BASE_UNIT * 0.6 }, // 직선 스킬샷(findFirstInLine)
+    Q: { type: 'line', widthField: 'width' }, // 직선 스킬샷(투사체 line 판정)
     E: { type: 'circle' }, // 자기중심 범위
   },
   masteryi: { Q: { type: 'circle' } }, // 주변 탐색 범위(findEnemiesInRadius)
-  nilah: { Q: { type: 'cone' }, E: { type: 'line', halfWidthWorld: BASE_UNIT * 0.28 }, R: { type: 'circle' } },
-  // 바루스 Q(꿰뚫는 화살)/R(속박의 사슬)은 둘 다 직선 스킬샷이다 - 실제
-  // 판정 폭(mLineWidth, LoL 원본 단위)을 그대로 world로 변환해서 쓴다.
-  varus: {
-    Q: { type: 'line', halfWidthWorld: lolRangeToWorld(75) * 0.5 },
-    R: { type: 'line', halfWidthWorld: lolRangeToWorld(450) * 0.5 },
-  },
-  // 애쉬 W(일제 사격)는 부채꼴로 퍼지는 다중 화살이라 원이 아니라 콘(cone)
-  // 형태로 그린다(champion_data.js의 ashe.W.coneAngleDeg와 동일한 값).
-  // R(마법의 수정화살)은 화살이므로 직선(line) 실루엣으로 그린다 - 다만
-  // 사거리가 "글로벌"(20000)이라 그대로 그리면 지나치게 길어지므로, 아래
-  // RangeIndicatorSystem.update()의 애쉬 R 전용 분기가 표시용 사거리만
-  // 맵 크기에 맞춰 클램프한다(실제 판정 사거리 자체는 그대로 20000).
-  ashe: {
-    W: { type: 'cone', angleDeg: 46 },
-    R: { type: 'line', halfWidthWorld: lolRangeToWorld(130) * 0.5 },
-  },
-  // 노틸러스 Q(닻줄 견인) - 직선 스킬샷(champion_data.js의 nautilus.Q.width).
-  nautilus: {
-    Q: { type: 'line', halfWidthWorld: lolRangeToWorld(180) * 0.5 },
-  },
+  nilah: { Q: { type: 'line', widthField: 'impactRadius' }, E: { type: 'line', halfWidthField: 'pathHalfWidthWorld' }, R: { type: 'circle' } },
+  // 바루스 Q(꿰뚫는 화살)/R(속박의 사슬)은 둘 다 직선 스킬샷이다.
+  varus: { Q: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' } },
+  // 애쉬 W(일제 사격)는 부채꼴, R(마법의 수정화살)은 직선. R은 사거리가 글로벌이라 표시 길이만 SKILL_RING_RANGE에서 줄인다.
+  ashe: { W: { type: 'cone', angleByLevelField: 'coneAngleDegByLevel' }, R: { type: 'line', widthField: 'width' } },
+  nautilus: { Q: { type: 'line', widthField: 'width' } }, // 닻줄 견인 - 직선 스킬샷
+  ezreal: { Q: { type: 'line', widthField: 'width' }, W: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' } },
+  yasuo: { Q: { type: 'line', widthFn: (c, d) => (c._yasuo && c._yasuo.qStacks >= 2 ? d.tornadoWidth : d.width) } },
+  yone: { Q: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' }, W: { type: 'cone', angleField: 'angleDeg' } },
+  vex: { Q: { type: 'line', widthField: 'widthAfterAccel' }, R: { type: 'line', widthField: 'width' } },
+  ahri: { Q: { type: 'line', widthField: 'width' }, E: { type: 'line', widthField: 'width' } },
 };
-// 세트 W처럼 형태 자체가 챔피언 고유 파라미터(centerHalfWidth 등)를 쓰는
-// 경우, CHAMPION_DATA에서 직접 읽어와 shape 파라미터를 채운다.
-function resolveShapeParams(championId, slot, cd) {
+// 45차: 링 길이를 범용 필드(range/range1/radius…)로 못 맞추는 스킬. 숫자(LoL) = 그 길이, null = 표시 안 함(사거리가 없는 스킬).
+// 예전엔 실제로 쓰이지 않는 필드(야스오 W 400, 레넥톤 W 175, 초가스 E 500, 아리 W 600, 바루스 W 750)를 그리거나,
+// 반경을 사거리로 그리거나(람머스 R 300 - 실제 800+), 아예 안 그렸다(바루스 Q, 닐라 R, 아리 R).
+const SKILL_RING_RANGE = {
+  yasuo: { Q: (c, d) => (c._yasuo && c._yasuo.qStacks >= 2 ? d.tornadoRange : d.range), W: () => null },
+  yone: { Q: (c, d) => (c._yone && c._yone.qStacks >= (d.maxStacks || 2) ? d.missileRange : d.range) },
+  renekton: { Q: (c, d) => d.range + (c._renekton && c._renekton.rActive ? (d.rRangeBonus || 0) : 0), W: () => null },
+  chogath: { E: () => null },
+  rammus: { R: (c) => (typeof c._rammusRRangeLol === 'function' ? c._rammusRRangeLol() : null) },
+  nilah: { R: (c, d) => d.damageRadius },
+  varus: { Q: (c, d) => d.maxRange, W: () => null },
+  ahri: { W: (c, d) => d.acquisitionRange, R: (c, d) => d.dashDistance },
+  ashe: { R: (c, d) => Math.min(d.range || 20000, 12000) },
+  ezreal: { R: (c, d) => Math.min(d.range || 25000, 12000) },
+};
+// 링 길이(LoL): SKILL_RING_RANGE가 있으면 그 값(null이면 숨김), 없으면 range/range1/radius/rangeBase/rangeMax 순으로 해석.
+function resolveRingRangeLol(ctrl, slot, data) {
+  const fn = SKILL_RING_RANGE[ctrl.championId] && SKILL_RING_RANGE[ctrl.championId][slot];
+  if (fn) { const v = fn(ctrl, data); return v == null ? null : v; }
+  const lvl = Math.max(1, (ctrl.skillLevels && ctrl.skillLevels[slot]) || 1);
+  if (data.range != null) return skillVal(data.range, lvl);
+  if (data.range1 != null) return data.range1;
+  if (data.radius != null) return data.radius; // 자기중심 범위 스킬(노틸러스 E 등)
+  if (data.rangeBase != null) return data.rangeBase + (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0);
+  if (data.rangeMax != null) return data.rangeMax;
+  return null;
+}
+// 세트 W처럼 형태 자체가 챔피언 고유 파라미터(centerHalfWidth 등)를 쓰는 경우 + 데이터에서 폭·각도를 읽는 경우.
+function resolveShapeParams(championId, slot, cd, ctrl = null) {
   const shape = (SKILL_HITBOX_SHAPE[championId] && SKILL_HITBOX_SHAPE[championId][slot]) || { type: 'circle' };
-  if (championId === 'sett' && slot === 'W' && cd && cd.W) {
-    return { type: 'trapezoid', centerHalfWidth: cd.W.centerHalfWidth, endHalfWidth: cd.W.endHalfWidth };
+  const data = cd && cd[slot];
+  if (championId === 'sett' && slot === 'W' && data) {
+    return { type: 'trapezoid', centerHalfWidth: data.centerHalfWidth, endHalfWidth: data.endHalfWidth };
   }
-  if (championId === 'chogath' && slot === 'W' && cd && cd.W) {
-    return { type: 'cone', angleDeg: cd.W.coneAngleDeg };
+  if (!data) return shape;
+  if (shape.type === 'line') {
+    let hw = shape.halfWidthWorld;
+    if (shape.widthField && data[shape.widthField] != null) hw = lolRangeToWorld(data[shape.widthField]) * 0.5;
+    if (shape.halfWidthField && data[shape.halfWidthField] != null) hw = data[shape.halfWidthField]; // 이미 월드 단위 반폭
+    if (shape.widthFn) hw = lolRangeToWorld(shape.widthFn(ctrl || {}, data)) * 0.5;
+    return { type: 'line', halfWidthWorld: hw != null ? hw : BASE_UNIT * 0.5 };
+  }
+  if (shape.type === 'cone') {
+    const lvl = Math.max(1, (ctrl && ctrl.skillLevels && ctrl.skillLevels[slot]) || 1);
+    let angleDeg = shape.angleDeg;
+    if (shape.angleField && data[shape.angleField] != null) angleDeg = data[shape.angleField];
+    if (shape.angleByLevelField && data[shape.angleByLevelField]) angleDeg = skillVal(data[shape.angleByLevelField], lvl);
+    return { type: 'cone', angleDeg };
   }
   return shape;
 }
@@ -260,25 +292,9 @@ class RangeIndicatorSystem {
     const cd = ctrl._champData ? ctrl._champData() : null;
     this.centerLaneMesh.visible = false;
     for (const slot of ['Q', 'W', 'E', 'R']) {
-      let range = null;
-      if (ctrl.championId === 'ashe' && slot === 'R' && cd && cd.R) {
-        // 애쉬 R은 실제 사거리가 "글로벌"(20000)이라 그대로 표시하면 화면
-        // 밖까지 화살이 그려진다 - 판정용 사거리(cd.R.range)는 그대로 두고,
-        // 표시만 이 맵의 실제 이동 가능 거리에 맞춰 클램프한다.
-        range = Math.min(cd.R.range || 20000, 12000);
-      } else if (cd && cd[slot]) {
-        const data = cd[slot];
-        const lvl = Math.max(1, (ctrl.skillLevels && ctrl.skillLevels[slot]) || 1);
-        // range/range1/rangeBase(+rangePerStack) 등 챔피언마다 다른 필드명을
-        // 전부 최선을 다해 해석한다 - 못 찾으면 그냥 표시하지 않는다.
-        if (data.range != null) range = skillVal(data.range, lvl);
-        else if (data.range1 != null) range = data.range1;
-        else if (data.radius != null) range = data.radius; // 자기중심 범위 스킬(노틸러스 E 등)
-        else if (data.rangeBase != null) range = data.rangeBase + (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0);
-        else if (data.rangeMax != null) range = data.rangeMax;
-      }
+      const range = cd && cd[slot] ? resolveRingRangeLol(ctrl, slot, cd[slot]) : null;
       const worldRange = range == null ? null : lolRangeToWorld(range);
-      const shapeDesc = ctrl.championId ? resolveShapeParams(ctrl.championId, slot, cd) : { type: 'circle' };
+      const shapeDesc = ctrl.championId ? resolveShapeParams(ctrl.championId, slot, cd, ctrl) : { type: 'circle' };
       if (shapeDesc.type === 'circle') {
         setCircle(slot, worldRange);
         this.shapeMeshes[slot].visible = false;

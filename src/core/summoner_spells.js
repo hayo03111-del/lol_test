@@ -145,7 +145,7 @@ function _summonerHeal(ctrl, d, mousePoint) {
     for (const a of placedAllies) {
       if (!a || a.hp <= 0) continue;
       const p = getWorldPosition(a);
-      if (getHorizontalDistance(p, ctrl.root.position) > lolRangeToWorld(d.range)) continue;
+      if (!isInRange(ctrl, a, d.range)) continue; // 45차: 대상 가장자리 기준(다른 대상 지정과 같은 규칙)
       const dd = getHorizontalDistance(p, ref);
       if (dd < bestD) { bestD = dd; best = a; }
     }
@@ -191,32 +191,34 @@ function _summonerClarity(ctrl, d) {
   if (typeof placedAllies !== 'undefined') {
     for (const a of placedAllies) {
       if (!a || a.hp <= 0 || !(a.maxMp > 0)) continue;
-      if (getHorizontalDistance(getWorldPosition(a), ctrl.root.position) <= lolRangeToWorld(d.range)) a.mp = Math.min(a.maxMp, (a.mp || 0) + a.maxMp * d.allyPercent);
+      if (isInRange(ctrl, a, d.range)) a.mp = Math.min(a.maxMp, (a.mp || 0) + a.maxMp * d.allyPercent);
     }
   }
   if (typeof vfx !== 'undefined') vfx.groundShockwave(ctrl.root.position.clone(), BASE_UNIT * 0.9, 0x6fb6ff, 0.45);
   return true;
 }
-// 표식 1: 눈덩이 - 시전 순간의 직선에서 처음 맞는 적을 고르고, 눈덩이가 그 거리를 날아간 뒤 판정한다
-// (이미 날아간 투사체라 그 사이 리 신 Q 음파처럼 대상이 움직여도 맞는다 - 이 엔진의 기존 직선 투사체 규칙).
+// 표식 1: 눈덩이 - 45차: 피할 수 있는 직선 스킬샷(투사체 시스템의 line 모드). 눈덩이 모양은 그 투사체를 따라간다.
+// 예전엔 던지는 순간 직선 위 첫 대상을 정해 두고, 눈덩이가 도착하면 대상이 어디로 갔든 맞았다.
 const _summonerSnowballs = [];
 function _summonerMarkThrow(ctrl, d, mousePoint) {
   const origin = ctrl.root.position.clone();
   const dir = mousePoint ? new THREE.Vector3(mousePoint.x - origin.x, 0, mousePoint.z - origin.z) : new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
   if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1).applyQuaternion(ctrl.root.quaternion); else dir.normalize();
   ctrl.faceDirectionInstant(dir);
-  const rangeW = lolRangeToWorld(d.range);
-  const hit = typeof findFirstInLine === 'function' ? findFirstInLine(origin, dir, d.range, lolRangeToWorld(d.halfWidth)) : null;
-  let travel = rangeW;
-  if (hit) { const p = getWorldPosition(hit); travel = Math.min(rangeW, Math.max(0.05, (p.x - origin.x) * dir.x + (p.z - origin.z) * dir.z)); }
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(BASE_UNIT * 0.14, 12, 10), new THREE.MeshBasicMaterial({ color: 0xf4fbff }));
   mesh.position.copy(origin).setY(origin.y + BASE_UNIT * 0.6);
   if (typeof scene !== 'undefined') scene.add(mesh);
-  _summonerSnowballs.push({ ctrl, d, mesh, origin, dir, travel, speed: lolRangeToWorld(d.missileSpeed), elapsed: 0, hit });
+  const b = { ctrl, d, mesh, proj: null };
+  b.proj = projectiles.spawn({
+    from: mesh.position.clone(), speed: lolRangeToWorld(d.missileSpeed), color: 0xf4fbff, realmId: ctrl.realmId, hidden: true,
+    line: { dir, maxDist: lolRangeToWorld(d.range), halfWidth: lolRangeToWorld(d.halfWidth), filter: (u) => !u.isStructure },
+    onHit: (u) => _summonerSnowballLand(b, u),
+  });
+  _summonerSnowballs.push(b);
   return true;
 }
-function _summonerSnowballLand(b) {
-  const { ctrl, d, hit } = b;
+function _summonerSnowballLand(b, hit) {
+  const { ctrl, d } = b;
   if (!hit || hit.hp <= 0 || hit.destroyed || hit.isDead) return;
   applyDamage(hit, { rawDamage: d.baseDamage + d.damagePerLevel * (ctrl.champLevel || 1), damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: ctrl });
   if (hit.hp <= 0) return;
@@ -262,15 +264,10 @@ function _summonerMarkDash(ctrl, d, slot) {
 function summonerSpellTick(dt) {
   for (let i = _summonerSnowballs.length - 1; i >= 0; i--) {
     const b = _summonerSnowballs[i];
-    b.elapsed += dt;
-    const along = Math.min(b.travel, b.speed * b.elapsed);
-    b.mesh.position.set(b.origin.x + b.dir.x * along, b.mesh.position.y, b.origin.z + b.dir.z * along);
-    if (along >= b.travel) {
-      if (b.mesh.parent) b.mesh.parent.remove(b.mesh);
-      b.mesh.geometry.dispose(); b.mesh.material.dispose();
-      _summonerSnowballs.splice(i, 1);
-      _summonerSnowballLand(b);
-    }
+    if (!b.proj.done) { b.mesh.position.set(b.proj.mesh.position.x, b.mesh.position.y, b.proj.mesh.position.z); continue; }
+    if (b.mesh.parent) b.mesh.parent.remove(b.mesh);
+    b.mesh.geometry.dispose(); b.mesh.material.dispose();
+    _summonerSnowballs.splice(i, 1);
   }
   const ctrl = typeof controller !== 'undefined' ? controller : null;
   if (ctrl && ctrl._summonerMark && (performance.now() >= ctrl._summonerMark.expiresAt || !(ctrl._summonerMark.target && ctrl._summonerMark.target.hp > 0))) {

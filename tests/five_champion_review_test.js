@@ -65,6 +65,7 @@ const stubs = {
   },
   placedDummies: [],
   vfx: { spawn: () => {} },
+  projectiles: { spawn: () => ({ done: false, mesh: { position: new Vector3() } }) }, // 45차: 직선 스킬샷은 투사체 시스템(line 모드)이 맞힌다
   document: { getElementById: () => null },
   window: {},
   THREE: { Vector3, LoopOnce: 2200, LoopRepeat: 2201, MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } },

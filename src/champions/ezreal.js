@@ -50,25 +50,18 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
   const __fire = () => {
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(q.width || 60) * 0.5;
-  const hitUnit = findFirstInLine(this.root.position, dir, q.range, halfWidth);
   // 정정(사용자가 올려준 실제 CommunityDragon Q 텍스처 적용): 기존 단색
   // 원 플레이스홀더('q' 케이스) 대신, 실제 텍스처 기반 궤적 이펙트
   // ('ezrealQ' - _ezrealQTrail, nilah_vfx_assets_and_runtime.js)를 쓴다.
-  // 적중 대상이 있으면 그 거리까지만, 없으면 사거리 끝까지 날아간다.
+  // 45차: 피할 수 있는 직선 스킬샷 - 궤적은 투사체를 따라가다 맞거나 사거리 끝에서 사라진다.
   const worldRange = lolRangeToWorld(q.range);
-  let impactDistance = worldRange;
-  if (hitUnit) {
-    const hitPos = getWorldPosition(hitUnit);
-    if (hitPos) impactDistance = getHorizontalDistance(hitPos, this.root.position);
-  }
-  vfx.spawn('ezrealQ', this.root.position.clone(), dir, { range: worldRange, impactDistance, speed: lolRangeToWorld(q.missileSpeed || 2000) });
 
   const lvl = Math.max(1, this.skillLevels.Q || 1);
   const raw = skillVal(q.damageByLevel, lvl) + (q.totalAdRatio || 0) * this.stats.attackDamage + (q.apRatio || 0) * (this.stats.abilityPower || 0);
-  const targetPoint = origin.clone().addScaledVector(dir, lolRangeToWorld(q.range));
-  projectiles.spawn({
-    from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(q.missileSpeed || 2000), damage: 0,
+  const qProj = projectiles.spawn({
+    from: origin, speed: lolRangeToWorld(q.missileSpeed || 2000), damage: 0,
     color: 0x8fe3ff, realmId: this.realmId,
+    line: { dir, maxDist: worldRange, halfWidth, onMiss: () => debugSkillMiss('Ezreal Q', 'no target in line') },
     onHit: (t) => {
       applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
       vfx.spawn('ezrealQHit', getWorldPosition(t)?.clone() || t.mesh.position.clone());
@@ -87,7 +80,7 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
       }
     },
   });
-  if (!hitUnit) debugSkillMiss('Ezreal Q', 'no target in line');
+  vfx.spawn('ezrealQ', this.root.position.clone(), dir, { range: worldRange, speed: lolRangeToWorld(q.missileSpeed || 2000), follow: qProj });
 
   };
   const __castTimer = this._champTimeout(() => { if (this.currentActionKey === 'ezrealQ') { __fire(); if (this.currentActionKey === 'ezrealQ') { this.currentPhase = 'RECOVERY'; this.phaseCancelable = true; if (this.pendingMove || this.targetPos) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); } } } }, (q.castTimeSec != null ? q.castTimeSec : 0.25) * 1000); // 28차: W와 같이 이동 중이면 발사 직후 이동 재개
@@ -104,7 +97,7 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
 
 // W(정수의 흐름): 직선으로 정수 구체를 발사한다. 챔피언·에픽 몬스터·포탑·
 // 억제기·넥서스에만 반응하고 미니언/일반 몬스터는 그냥 통과한다(그래서
-// 전용 타겟 탐색 함수 _ezrealFindWTarget을 쓴다 - 일반 findFirstInLine은
+// 전용 타겟 탐색 함수 _ezrealWCanHit 필터를 쓴다 - 일반 findFirstInLine은
 // 모든 유닛을 대상으로 하므로 그대로 쓰면 안 된다). 처음 맞은 대상에게는
 // 즉시 피해 없이 4초 표식만 남기고, 그 표식은 이후 기본 공격이나 다른
 // 스킬(Q/E/R)이 적중했을 때 폭발하며 실제 피해를 준다 - _ezrealDetonateMark
@@ -128,17 +121,18 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   const __fire = () => {
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(w.width || 60) * 0.5;
-  const hitUnit = this._ezrealFindWTarget(this.root.position, dir, w.range, halfWidth);
   // 정정(레퍼런스 영상 ability_0081_W1.webm 프레임 대조): 실제 정수의 흐름
   // 구체는 하늘색/시안 계열 광선이다(피격 지점에 남는 표식 링만 골드색 -
   // 아래 표식 vfx는 그대로 골드 유지). 예전엔 이 둘이 뒤바뀌어서 구체
   // 자체가 골드로 나가고 있었다.
   vfx.spawn('w', origin.clone().addScaledVector(dir, 1.0), dir);
 
-  const targetPoint = origin.clone().addScaledVector(dir, lolRangeToWorld(w.range));
+  // 45차: 피할 수 있는 직선 스킬샷 - 미니언 등은 통과하고 챔피언·구조물에만 반응(_ezrealWCanHit). 속도는 데이터(위키 1700).
   projectiles.spawn({
-    from: origin, target: hitUnit || null, targetPoint, speed: lolRangeToWorld(2200), damage: 0,
+    from: origin, speed: lolRangeToWorld(w.missileSpeed || 1700), damage: 0,
     color: 0xbdf6ff, realmId: this.realmId,
+    line: { dir, maxDist: lolRangeToWorld(w.range), halfWidth, filter: (u) => this._ezrealWCanHit(u),
+      onMiss: () => debugSkillMiss('Ezreal W', 'no valid target in line (챔피언/포탑/억제기/넥서스만 반응)') },
     onHit: (t) => {
       // 표식만 남긴다 - 이 시점엔 피해가 없다(폭발은 _ezrealDetonateMark에서).
       // vfx 시스템엔 별도 'mark' 이펙트가 없으므로 W 고유 색상의 'hit'
@@ -151,7 +145,6 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
       this._ezreal.markWLevel = Math.max(1, this.skillLevels.W || 1);
     },
   });
-  if (!hitUnit) debugSkillMiss('Ezreal W', 'no valid target in line (챔피언/포탑/억제기/넥서스만 반응)');
 
   };
   // 28차(요청 "W 쓸 때 멈출 때가 있음"): 발사 뒤 남은 모션은 후딜이라, 이동 중에 썼거나 시전 중 이동 명령을 넣었으면
@@ -168,28 +161,10 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   this._actionTimers.push(recTimer);
 };
 
-// W 전용 직선 판정 - findFirstInLine(01_hit_detection.js)과 동일한 기하
-// 계산이지만, 실제 정수의 흐름 명세대로 미니언/일반 몬스터를 걸러내고
-// 챔피언(이 뷰어에선 더미)·포탑·억제기·넥서스에만 반응한다(에픽 몬스터는
-// 이 뷰어에 별도 시스템이 없어 대상에서 제외). 공용 판정 함수 자체를
-// 고치지 않고 이즈리얼 전용 파일 안에서만 분기한다(이 프로젝트의
-// "챔피언 전용 로직은 챔피언 파일에 격리" 원칙 그대로).
-CharacterController.prototype._ezrealFindWTarget = function(origin, dir, lolRange, halfWidth) {
-  const range = lolRangeToWorld(lolRange);
-  let best = null;
-  for (const u of getAllEnemyUnits()) {
-    if (u.isMinion) continue;
-    if (!(u.isChampion || u.isTurret || u.isInhibitor || u.isNexus)) continue;
-    const p = getWorldPosition(u);
-    const r = getCollisionRadius(u);
-    const toTarget = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
-    const along = toTarget.dot(dir);
-    if (along < -r || along > range + r) continue;
-    const lateralSq = Math.max(0, toTarget.lengthSq() - along * along);
-    if (Math.sqrt(lateralSq) > halfWidth + r) continue;
-    if (!best || along < best.along) best = { unit: u, along };
-  }
-  return best ? best.unit : null;
+// W가 반응하는 대상 - 원작 정수의 흐름처럼 미니언/일반 몬스터는 통과하고 챔피언(이 뷰어에선 더미)·포탑·억제기·넥서스에만
+// 반응한다(에픽 몬스터는 이 뷰어에 별도 시스템이 없어 제외). 직선 스킬샷 투사체의 filter로 쓴다(45차).
+CharacterController.prototype._ezrealWCanHit = function(u) {
+  return !!u && !u.isMinion && !!(u.isChampion || u.isTurret || u.isInhibitor || u.isNexus);
 };
 
 // W 표식 폭발. by: 'attack'(기본 공격) | 'ability'(Q/E/R). 스킬로 터뜨렸을
@@ -225,7 +200,7 @@ CharacterController.prototype._ezrealCastE = function(mouseWorldPoint, free = fa
   const dir = mouseWorldPoint
     ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
     : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
-  const rawDist = dir.length();
+  const rawDist = mouseWorldPoint ? dir.length() : 0; // 45차: 커서가 없으면 최대 사거리(예전엔 단위 벡터 길이 1 = 아주 짧은 거리)
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('E', free)) return;
