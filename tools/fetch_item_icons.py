@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""아이템 아이콘 받기(35차) - assets/items/<아이템 id>.png
+"""아이템 아이콘 받기(35차) - assets/items/<아이템 id>.png  (+36차: 소환사 주문 assets/spells/<주문 id>.png)
 
 ITEM_DATA(src/champions/item_data.js)의 한글 이름을 라이엇 Data Dragon(ko_KR item.json)의 이름과 맞춰
 원작 아이템 번호를 찾고, 그 번호의 아이콘(64x64 png)을 받는다. 같은 이름이 여러 번호로 있으면
@@ -32,6 +32,14 @@ MANUAL = {
     'banshees': '3102',           # 밴시의 장막
     'ironSolariLocket': '3190',   # 강철의 솔라리 펜던트
     'chainVest': '1029',          # 천 갑옷(이 프로젝트 id는 chainVest지만 능력치·이름은 천 갑옷)
+}
+
+
+# 36차: 소환사 주문(src/core/summoner_spells.js의 id → Data Dragon 이름).
+SPELLS = {
+    'flash': 'SummonerFlash', 'heal': 'SummonerHeal', 'ghost': 'SummonerHaste', 'barrier': 'SummonerBarrier',
+    'exhaust': 'SummonerExhaust', 'ignite': 'SummonerDot', 'cleanse': 'SummonerBoost', 'clarity': 'SummonerMana',
+    'mark': 'SummonerSnowball',
 }
 
 
@@ -91,6 +99,12 @@ def main():
     with open(os.path.join(OUT, 'mapping.json'), 'w', encoding='utf8') as f:
         json.dump({k: {'riotItemId': v, 'riotNameKo': ko[v]['name']} for k, v in sorted(mapping.items())}, f, ensure_ascii=False, indent=1)
     print(f'{len(results)}개 저장 (직접 준 그림 {sum(1 for _, s in results if s == "user")}개)')
+    spell_dir = os.path.join(ROOT, 'assets', 'spells')
+    os.makedirs(spell_dir, exist_ok=True)
+    for sid, dd in SPELLS.items():
+        with open(os.path.join(spell_dir, f'{sid}.png'), 'wb') as f:
+            f.write(fetch(f'{MIRROR}/img/spell/{dd}.png'))
+    print(f'소환사 주문 아이콘 {len(SPELLS)}개 저장')
     if missing:
         print('이름을 못 맞춘 아이템(MANUAL에 추가 필요):', ', '.join(missing))
         sys.exit(1)

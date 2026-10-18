@@ -55,12 +55,18 @@ function _sbItemsHtml(ctrl) {
   if (b) html += `<div class="sb-item boots" title="${_sbEsc(b.nameKo)}">${_shopIconHtml(b)}</div>`;
   return `<div class="sb-items">${html}</div>`;
 }
+// 36차: 소환사 주문 두 칸(D/F) - 원작 스코어보드처럼 이름 앞에 작게.
+function _sbSpellsHtml(ctrl) {
+  if (typeof ensureSummoners !== 'function' || typeof _summonerIconHtml !== 'function') return '';
+  const s = ensureSummoners(ctrl);
+  return `<div class="sb-spells">${SUMMONER_SLOTS.map((k) => _summonerIconHtml(s[k].id)).join('')}</div>`;
+}
 function _sbPlayerRow(ctrl) {
   const s = ensureScore(ctrl);
   const champ = _sbChampName(ctrl.championId);
   return `<div class="sb-row me">
     <div class="sb-portrait bevel-s">${_sbEsc(String(ctrl.championId || '-').slice(0, 2).toUpperCase())}<span class="sb-lv">${ctrl.champLevel || 1}</span></div>
-    <div class="sb-name"><b>${_sbEsc(champ)}</b><small>플레이어 (나)</small></div>
+    <div class="sb-name-wrap">${_sbSpellsHtml(ctrl)}<div class="sb-name"><b>${_sbEsc(champ)}</b><small>플레이어 (나)</small></div></div>
     ${_sbItemsHtml(ctrl)}
     <div class="sb-kda">${s.kills} / ${s.deaths} / ${s.assists}</div>
     <div class="sb-cs">${s.cs}</div>

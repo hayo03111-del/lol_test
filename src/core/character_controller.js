@@ -162,6 +162,7 @@ class CharacterController {
     // 칼바람 포탑 시스템(destroyTurret 참고) - 팀/골드 시스템이 따로
     // 없어 "아군 전원에게 지급"을 지금은 플레이어 자신의 누적치로 대신한다.
     this.gold = 0;
+    this.summoners = { D: { id: 'flash', readyAt: 0 }, F: { id: 'heal', readyAt: 0 } }; // 36차 소환사 주문(summoner_spells.js) - 챔피언을 바꿔도 유지
     this.score = { kills: 0, deaths: 0, assists: 0, cs: 0 }; // 34차 스코어보드(K/D/A·CS) - 골드처럼 챔피언을 바꿔도 유지
     // 아이템 시스템(item_system.js) - 장착한 아이템 슬롯 배열(최대 6칸, 실제
     // LoL 인벤토리와 동일). 각 슬롯은 {id, count, charges?} 형태다 - count는

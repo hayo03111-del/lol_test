@@ -651,6 +651,9 @@ window.addEventListener('keydown', (e) => {
     // (R도 Q/W/E와 같은 조준 경로 - onSkillKeyDown)
     case 'KeyR': onSkillKeyDown('R', e.code, mousePoint); break;
     case 'KeyB': controller.startRecall(); break;
+    // 36차: 소환사 주문(원작 기본 키 D/F).
+    case 'KeyD': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'D', mousePoint, lastPointerClient); break;
+    case 'KeyF': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'F', mousePoint, lastPointerClient); break;
     // 정지(원작 기본 키 S) - 이동·공격 명령을 멈추고 그 자리에 선다(제자리로 이동 = 정지, _commitMove 참고).
     case 'KeyS': controller.moveTo(controller.root.position.clone()); break;
     // 아이템 사용 - 원작 키 배치(1·2·3·5·6·7 = 인벤토리 6칸, 4 = 장신구). 사용 불가 아이템(스탯

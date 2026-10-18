@@ -604,6 +604,8 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   // 기준 증폭(itemSpellDamageAmpPercent, 위)과 반대로 "대상"이 받는 모든
   // 피해(물리/마법/고정 전부)에 적용되는 VULNERABLE 상태이상이다.
   if (typeof getVulnerablePercent === 'function') dmg *= (1 + getVulnerablePercent(target));
+  // 36차: 소환사 주문 탈진 - 탈진에 걸린 공격자가 입히는 모든 피해 감소(summoner_spells.js).
+  if (typeof getOutgoingDamageReductionPercent === 'function') dmg *= 1 - getOutgoingDamageReductionPercent(ampSource);
   return dmg;
 }
 
