@@ -1,0 +1,26 @@
+# 작업 브랜치(claude/*)에 푸시하면 main을 그 커밋으로 맞춰 GitHub Pages(main에서 서비스)에 바로 반영한다.
+# main이 작업 브랜치의 조상이 아니면(다른 곳에서 main만 바뀐 경우) 덮어쓰지 않고 실패로 알린다.
+name: Sync main for Pages
+on:
+  push:
+    branches: ['claude/**']
+permissions:
+  contents: write
+concurrency:
+  group: sync-main
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fast-forward main
+        run: |
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            git push origin HEAD:refs/heads/main
+          else
+            echo "::error::main has commits not in ${GITHUB_REF_NAME}; not overwriting main" && exit 1
+          fi
