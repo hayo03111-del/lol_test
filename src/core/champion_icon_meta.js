@@ -196,7 +196,9 @@ const CHAMPION_ICON_META = {
    "E": "질풍검",
    "R": "최후의 숨결"
   },
-  "recastIcons": []
+  "recastIcons": [
+   "Q"
+  ]
  },
  "yone": {
   "passiveName": "사냥꾼의 길",
@@ -207,6 +209,8 @@ const CHAMPION_ICON_META = {
    "E": "영혼해방",
    "R": "운명봉인"
   },
-  "recastIcons": []
+  "recastIcons": [
+   "Q"
+  ]
  }
 };

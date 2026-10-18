@@ -71,6 +71,8 @@
     "src/core/shop_ui.js",
     "src/core/scoreboard_ui.js",
     "src/core/champion_icon_meta.js",
+    "src/core/rune_meta.js",
+    "src/core/rune_system.js",
     "src/core/hud_stats_ui.js",
     "src/core/global_system_instances.js",
     "src/loader/champion_glb_loader.js"

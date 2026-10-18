@@ -186,6 +186,10 @@ function getSkillRecastState(c, key) {
       if (key === 'W' && s.wUntil) return win(s.wUntil, cd.W.durationSec || 7);
       return null;
     }
+    case 'mordekaiser': { // 52차: W(불굴) - 보호막이 있는 동안 다시 써서 남은 보호막을 회복으로 바꾼다
+      const m = c._morde; if (key !== 'W' || !m) return null;
+      return win(m.wShieldActiveUntil || 0, (cd.W && cd.W.shieldDecayDuration) || 4);
+    }
     case 'renekton':
       return key === 'E' && c._renekton ? win(c._renekton.eSecondReadyUntil || 0, 4) : null;
     default: return null;

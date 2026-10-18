@@ -22,7 +22,7 @@
 // 동일한 성격(강인함 지속시간 감소 대상에는 포함 안 됨)의 마법저항력 버전.
 function getTenacity(target) {
   if (!target) return 0;
-  let keep = 1 - Math.max(0, Math.min(1, target.itemTenacityPercent || 0));
+  let keep = (1 - Math.max(0, Math.min(1, target.itemTenacityPercent || 0))) * (1 - Math.max(0, Math.min(1, target.runeTenacity || 0))); // 52차: 룬(강인함 파편·불굴의 의지)
   const now = performance.now();
   for (const e of (target.statusEffects || [])) {
     if (e.type === 'TENACITY' && (!e.expiresAt || e.expiresAt > now)) keep *= 1 - Math.max(0, Math.min(1, e.value || 0));

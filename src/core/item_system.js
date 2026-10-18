@@ -233,8 +233,8 @@ function abilityHasteCooldown(ctrl, baseCd, slot) {
   // 매 순간 바뀌는 스킬 가속(itemSystemTick에서 매 프레임 재계산 - 지배자의
   // 피갑옷의 itemDynamicBonusAD와 동일한 패턴). 정적인 itemBonusAbilityHaste
   // (구매/판매 시에만 재계산)와 별도 필드로 둔다.
-  let ah = (ctrl && ((ctrl.itemBonusAbilityHaste || 0) + (ctrl.itemDynamicAbilityHaste || 0))) || 0;
-  if (slot === 'R') ah += (ctrl && ctrl.itemBonusUltimateHaste) || 0;
+  let ah = (ctrl && ((ctrl.itemBonusAbilityHaste || 0) + (ctrl.itemDynamicAbilityHaste || 0) + (ctrl.runeAbilityHaste || 0))) || 0; // 52차: 룬 스킬 가속
+  if (slot === 'R') ah += (ctrl && ((ctrl.itemBonusUltimateHaste || 0) + (ctrl.runeUltimateHaste || 0))) || 0;
   if (ctrl && ctrl.itemImmobilizeSkillHaste > 0 && slot && (IMMOBILIZING_SKILL_SLOTS[ctrl.championId] || []).includes(slot)) ah += ctrl.itemImmobilizeSkillHaste;
   if (ah <= 0) return baseCd;
   return baseCd * (100 / (100 + ah));
@@ -819,6 +819,7 @@ function _itemTickTearRecharge(ctrl, item, dt) {
 // 비용이 0이다.
 function itemSystemTick(ctrl, dt) {
   if (!ctrl) return;
+  if (typeof runeTick === 'function') runeTick(ctrl, dt); // 52차: 룬(같은 훅을 쓴다)
   _itemTickActiveHeals(ctrl, dt);
   _itemTickActiveManaRestores(ctrl, dt);
   _itemTickTrinketRecharge(ctrl, dt);
@@ -1309,12 +1310,13 @@ function applyItemVamp(source, finalDmg) {
 // (다리우스 Q/가렌 E/야스오 Q 등). 기본 공격이면 피해 종류와 무관(요네 아자카나 평타의
 // 마법 절반 포함).
 function applyItemPhysicalVamp(source, finalDmg, damageType, isBasicAttack = false) {
-  if (!source || !(source.itemPhysicalVampPercent > 0) || !(finalDmg > 0)) return;
+  const vampPct = (source && ((source.itemPhysicalVampPercent || 0) + (source.runePhysicalVamp || 0))) || 0; // 52차: 전설: 핏빛 길
+  if (!source || !(vampPct > 0) || !(finalDmg > 0)) return;
   if (!isBasicAttack) return;
   if (typeof source.hp !== 'number' || typeof source.maxHp !== 'number') return;
   // 정령의형상(무한한 활력). 그리버스 치유 감소도 같은 지점에 곱한다
   // (applyItemVamp와 동일한 이유 - 생명력 흡수도 그리버스의 직접 적용 대상).
-  const healAmt = finalDmg * source.itemPhysicalVampPercent * getHealReceivedMultiplier(source);
+  const healAmt = finalDmg * vampPct * getHealReceivedMultiplier(source);
   // 피바라기(영액의 보호막) - 생명력 흡수 전용 아이템이라 생명력 회복
   // (physicalVampPercent)은 흡혈의 낫 등과 공용 필드를 그대로 쓰지만,
   // "최대 체력을 초과하는 회복분을 보호막으로 전환"하는 건 피바라기만의
@@ -1389,6 +1391,7 @@ function itemBarrageTakeSwing(ctrl) {
 function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null) {
   if (!ctrl) return incomingDamage;
   let remaining = incomingDamage;
+  if (typeof runeOnTakeDamage === 'function') remaining = runeOnTakeDamage(ctrl, remaining, damageType, source, meta); // 52차: 뼈 방패 등
   const now = performance.now();
   _itemThornsOnStruck(ctrl, source, meta);
 
@@ -1568,6 +1571,7 @@ function _itemIsAbilityDamage(meta) {
 }
 
 function itemOnDamageDealt(ctrl, target, finalDmg, damageType, meta = null) {
+  if (typeof runeOnDamageDealt === 'function') runeOnDamageDealt(ctrl, target, finalDmg, damageType, meta);
   const isAbility = _itemIsAbilityDamage(meta);
   // 처형인의 대검 - 챔피언 대상 물리 피해에 그리버스(고통스러운 상처)를 건다.
   if (target.isChampion && damageType === DAMAGE_TYPE.PHYSICAL && ctrl.itemGrievousOnHitPercent > 0 && typeof applyStatus === 'function') {
@@ -2004,6 +2008,7 @@ function itemOnDamageDealtToTurret(ctrl, turret, finalDmg) {
 
 // 수확의 낫 - 플레이어가 마지막으로 때린 미니언이 죽을 때 killMinion()이 호출.
 function itemOnMinionKillByPlayer(ctrl) {
+  if (typeof runeOnMinionKill === 'function') runeOnMinionKill(ctrl);
   const slot = (ctrl.items || []).find((s) => s.id === 'cull');
   if (!slot) return;
   const p = ITEM_DATA.cull.harvestPassive;
@@ -2071,6 +2076,7 @@ function itemOnLevelUp(ctrl) {
 // 안 넘기면 기존처럼 태양의 썰매만 동작 - 하위 호환).
 function itemOnSlowOrImmobilize(ctrl, target, effectType) {
   if (!ctrl) return;
+  if (typeof runeOnImpair === 'function') runeOnImpair(ctrl, target, effectType);
   const sleighSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].ccTriggerPassive);
   if (sleighSlot) {
     const p = ITEM_DATA[sleighSlot.id].ccTriggerPassive;
@@ -2164,6 +2170,7 @@ function itemOnAllyHealOrShield(source, target, kind, amount, opts = {}) {
 // "아군 챔피언" 개념이 없는 이 데모 구조상 구현하지 않는다(item_data.js 주석 참고).
 function itemOnChampionTakedown(ctrl) {
   if (!ctrl) return;
+  if (typeof runeOnTakedown === 'function') runeOnTakedown(ctrl);
   let changed = false;
   // 버그 수정(메자이의 영혼약탈자 추가 전 QA): 이 블록이 'darkSeal' id로
   // 하드코딩돼 있었다 - 암흑의 인장을 메자이의 영혼약탈자로 조합(업그레이드)한
@@ -2576,6 +2583,7 @@ function _itemCleaveOnHit(ctrl, target) {
 // 원작 규칙상 이 경우 주문검(Sheen류) 발동은 막힌다(위키 Sheen: "적중 시 효과를 적용하는
 // 스킬로는 발동하지 않음") - 나머지 적중 시 효과는 그대로 적용된다.
 function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
+  if (typeof runeOnBasicAttackHit === 'function' && !opts.fromAbility) runeOnBasicAttackHit(ctrl, target);
   // 세계지도집/룬 나침반(재물 공유 - 미니언 처형) - "일정 체력(근거리
   // 챔피언은 50%, 원거리 챔피언은 30%) 이하인 미니언을 평타로 치면 스택을
   // 하나 소모하여 골드를 같이 받는다"(원문 93~95줄). 위 itemOnDamageDealt()의

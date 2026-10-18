@@ -104,8 +104,7 @@ function championStatusEntries(c, now) {
 // 스킬 칸 바뀜(원작: 같은 키의 다음 단계 스킬로 아이콘이 바뀐다)
 function championSlotStates(c, now) {
   const s = {}, sec = (ms) => Math.max(0, (ms - now) / 1000);
-  if (c.championId === 'yasuo' && c._yasuo && c._yasuo.qStacks >= 2 && c._yasuo.qStackExpiresAt > now) s.Q = { text: 'Q3 회오리', remain: sec(c._yasuo.qStackExpiresAt) };
-  if (c.championId === 'yone' && c._yone && c._yone.qStacks >= 2 && c._yone.qStackExpiresAt > now) s.Q = { text: 'Q3 돌진', remain: sec(c._yone.qStackExpiresAt) };
+  // 52차: 야스오·요네 Q3는 글자 대신 칸 그림이 바뀐다(hud_stats_ui.js applySkillRecastUI - assets/champion_icons/<id>/Q2.png).
   if (c.championId === 'leesin' && c._leesin && c._leesin.qMarkTarget && c._leesin.qMarkExpiresAt > now) s.Q = { text: 'Q2 공명', remain: sec(c._leesin.qMarkExpiresAt) };
   return s;
 }

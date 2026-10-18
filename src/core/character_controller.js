@@ -455,6 +455,8 @@ class CharacterController {
     this.armorPenPercent = 0;
     this.championId = championId || null;
     if (!this.championId || !CHAMPION_DATA[this.championId]) return;
+    // 52차: 룬 페이지(챔피언마다 저장 - 없으면 역할별 기본). 로비에서 고른 페이지가 있으면 그것.
+    if (typeof runePageFor === 'function') { this.runePage = runePageFor(this.championId); runeResetState(this); }
     this.champLevel = 1;
     this.currentExp = 0; // 요청("LoL 경험치 및 레벨 시스템") - 챔피언 교체 시 경험치도 함께 초기화
     this.skillPoints = 0;
@@ -500,21 +502,22 @@ class CharacterController {
       // 다리우스 Q 과다출혈, 모데카이저 R 보호막 등)와는 완전히 분리된 별도
       // 필드라서, 챔피언을 바꾸거나 임시 버프가 만료될 때 저 필드들을 0으로
       // 되돌려도 아이템으로 산 영구 스탯은 전혀 영향을 받지 않는다.
-      this.maxHp = base.maxHp + (this.bonusMaxHp || 0) + (this.itemBonusMaxHp || 0);
-      this.maxMp = base.maxMp + (this.itemBonusMana || 0);
+      if (typeof runeComputeStatic === 'function') runeComputeStatic(this); // 52차: 룬(능력치 파편·전설·여진 등) → rune* 필드
+      this.maxHp = base.maxHp + (this.bonusMaxHp || 0) + (this.itemBonusMaxHp || 0) + (this.runeMaxHp || 0);
+      this.maxMp = base.maxMp + (this.itemBonusMana || 0) + (this.runeMana || 0);
       this.hpRegen = base.hpRegen; this.mpRegen = base.mpRegen;
-      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0) + (this.itemDynamicBonusAD || 0) + (this.itemTempADBonus || 0);
+      this.stats.attackDamage = base.attackDamage + (this.bonusAD || 0) + (this.itemBonusAD || 0) + (this.itemDynamicBonusAD || 0) + (this.itemTempADBonus || 0) + (this.runeAD || 0);
       // 어둠불꽃횃불(어둠불꽃)/(향후) 라바돈의 죽음모자 - "총 주문력 N%
       // 증가" 계열은 itemBonusAP 합연산 전부가 끝난 뒤 곱하는 배율이다.
-      this.stats.abilityPower = ((this.itemBonusAP || 0) + (this.bonusAP || 0)) * (1 + (this.itemTotalApMultiplierBonus || 0)); // bonusAP: 챔피언 임시 주문력(모데카이저 R 강탈)
+      this.stats.abilityPower = ((this.itemBonusAP || 0) + (this.bonusAP || 0) + (this.runeAP || 0)) * (1 + (this.itemTotalApMultiplierBonus || 0)); // bonusAP: 챔피언 임시 주문력(모데카이저 R 강탈)
       this.stats.baseAttackSpeed = base.baseAttackSpeed;
       this.stats.levelBonusAttackSpeed = base.levelBonusAttackSpeed || 0;
       this.stats.windupPercent = base.windupPercent != null ? base.windupPercent : 0.4;
       this.stats.windupModifier = base.windupModifier != null ? base.windupModifier : 1;
       this.stats.attackSpeedRatio = base.attackSpeedRatio || base.baseAttackSpeed;
-      this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0);
+      this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0) + (this.runeArmor || 0);
       this.stats.baseArmor = base.armor;
-      this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0) + (this.itemTempMrBonus || 0);
+      this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0) + (this.itemTempMrBonus || 0) + (this.runeMr || 0);
       // 민첩성의 망토(치명타확률 15%) 등 - 이 프로젝트의 기본 챔피언 스탯에는
       // 애초에 크리티컬 확률이 없고(요네/야스오만 자체 패시브로 매 프레임
       // stats.critChance를 1로 강제 재설정 - _yoneTick/_yasuoTick 참고),
@@ -1410,12 +1413,12 @@ class CharacterController {
       const movingTowardEnemy = this.isChasing && this.currentTarget && this.currentTarget.hp > 0;
       if (!movingTowardEnemy) msBuff = Math.max(0, msBuff - (settQms.value || 0));
     }
-    this.stats.percentMoveSpeedBonus = msBuff + (this.itemBonusMoveSpeedPercent || 0);
+    this.stats.percentMoveSpeedBonus = msBuff + (this.itemBonusMoveSpeedPercent || 0) + (typeof runeMoveSpeedBonus === 'function' ? runeMoveSpeedBonus(this) : 0);
     this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? getFlatMoveSpeedBuff(this) : 0;
     // 레넥톤 R(강신): 지속 중 사거리 +25(PC 위키).
     const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
     this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange);
-    this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0)
+    this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0) + (typeof runeAttackSpeedBonus === 'function' ? runeAttackSpeedBonus(this) : 0)
       + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
     if (this.championId === 'mordekaiser' && this._morde) this.stats.bonusAttackSpeedPercent += this._morde.rStolenAsBonus || 0; // R로 훔친 공격 속도
