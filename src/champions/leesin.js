@@ -12,6 +12,7 @@
 // 잡지 않고, 정지/이동에 따라 전용 클립(Spell2b_Idle/Run, Spell3_b_idle/moving)만
 // 얹는다(평타 중이면 평타 모션을 끊지 않는다).
 const LEESIN_LOCK_KEYS = ['leesinQ', 'leesinQ2', 'leesinW', 'leesinE', 'leesinR'];
+const LEESIN_Q2_MAX_DASH_SEC = 2; // 35차: 따라가는 Q2의 안전 상한(이 안에 못 닿으면 그 자리에서 끝낸다 - 연출값)
 CharacterController.prototype._isLeeSinCastLock = function() {
     return this.championId === 'leesin' && LEESIN_LOCK_KEYS.includes(this.currentActionKey);
 };
@@ -45,6 +46,7 @@ CharacterController.prototype._leesinPlayCast = function(opts) {
     const clip = this._leesinFirstClip(opts.clips);
     const lockSec = Math.max(0, opts.lockSec || 0);
     const serial = this._actionSerial;
+    const startedAt = performance.now();
     if (lockSec > 0) {
       this.currentActionKey = opts.actionKey;
       this.currentPhase = 'ACTIVE';
@@ -54,6 +56,7 @@ CharacterController.prototype._leesinPlayCast = function(opts) {
     if (clip) this.playFirstAvailable([clip.name], { loop: THREE.LoopOnce, clampWhenFinished: false, fade: 0.08 });
     const release = () => {
       if (this.championId !== 'leesin') return;
+      if (this._leesinCastRelease === release) this._leesinCastRelease = null;
       if (lockSec > 0) {
         if (this.currentActionKey !== opts.actionKey || this._actionSerial !== serial) return; // 다른 행동으로 이미 넘어감
         this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
@@ -65,9 +68,12 @@ CharacterController.prototype._leesinPlayCast = function(opts) {
       const busy = this.pendingCast || this.pendingMove || this.targetPos || (this.currentTarget && this.currentTarget.hp > 0);
       if (busy || !clip) { this._resumeAfterAction(); return; }
       this.setState(STATE.IDLE);
-      this._leesinQueueTail(clip, lockSec, opts.exitIdle);
+      this._leesinQueueTail(clip, Math.min(lockSec, (performance.now() - startedAt) / 1000), opts.exitIdle);
     };
     if (lockSec > 0) {
+      // 35차: 잠금 시간보다 일찍 끝내야 하는 시전(따라가는 Q2 - 대상에 닿는 순간)은 이 함수로 바로 끝낸다.
+      // 이미 끝났거나 다른 행동으로 넘어갔으면 release 안의 확인에서 그냥 돌아간다.
+      this._leesinCastRelease = release;
       const t = this._champTimeout(release, lockSec * 1000);
       this._actionTimers.push(t);
     } else {
@@ -178,17 +184,31 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
       const lvl = Math.max(1, this.skillLevels.Q || 1);
       this._leesin.qMarkTarget = null;
       this._leesinOnSkillUsed();
-      // 대상 위치로 실제 돌진(공용 _dashState 트윈). 버그 수정: 예전엔 돌진을
+      // 대상 위치로 실제 돌진(공용 _dashState). 버그 수정: 예전엔 돌진을
       // "시작"하는 순간 피해가 들어갔다 - 이제 도착(돌진 종료) 시점에 판정하고,
       // 잃은 체력 비례 증폭도 그 순간의 체력으로 계산한다.
+      // 35차 버그 수정("R로 날아가는 대상에게 Q2를 쓰면 리 신이 공중에 떠 있고 끝까지 안 쫓아간다"):
+      // (1) 목적지를 시전 순간의 대상 위치로 고정해서, 넉백으로 날아가는 대상을 따라가지 못하고 옛 자리에서 멈췄다.
+      //     원작 Q2는 대상에게 닿을 때까지 따라간다 - 매 프레임 대상의 현재 위치로 다시 겨눈다(follow).
+      // (2) 목적지 높이에 공중에 뜬 대상의 y를 그대로 복사해, 리 신이 공중으로 돌진한 뒤 다음 이동 전까지 떠 있었다.
+      //     돌진은 항상 리 신의 지면 높이에서 한다.
+      // 속도: 멈춰 있는 대상까지는 예전과 같은 0.35초(같은 속도). 대상이 멀어지면 그 프레임에 대상이 움직인 거리만큼
+      // 더 가서, 날아가는 대상에게도 같은 속도로 따라붙는다. 피해·잠금 해제는 닿는 순간(_leesinCastRelease).
       const dir = new THREE.Vector3().subVectors(target.mesh.position, this.root.position); dir.y = 0;
       let dashSec = 0.05;
       if (dir.length() > 0.05) {
+        const stopDist = this.collisionRadius * 2;
+        const speed = Math.max(dir.length() - stopDist, 0.05) / 0.35;
         dir.normalize();
         this.faceDirectionInstant(dir); // 29차: rotation.y만 바꾸면 직전 회전이 180°일 때 정반대를 봤다(쿼터니언으로 설정)
-        const to = target.mesh.position.clone().addScaledVector(dir, -this.collisionRadius * 2);
-        dashSec = 0.35;
-        this._dashState = { from: this.root.position.clone(), to, duration: dashSec, elapsed: 0, faceDir: dir.clone() };
+        const from = this.root.position.clone();
+        const to = target.mesh.position.clone().addScaledVector(dir, -stopDist); to.y = from.y;
+        dashSec = LEESIN_Q2_MAX_DASH_SEC;
+        this._dashState = {
+          from, to, duration: dashSec, elapsed: 0, faceDir: dir.clone(),
+          follow: { target, speed, stopDist, lastTargetPos: target.mesh.position.clone() },
+          onArrive: () => { if (this._leesinCastRelease) this._leesinCastRelease(); },
+        };
       }
       this._clearActionTimers();
       this._leesinPlayCast({

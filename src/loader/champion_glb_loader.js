@@ -1527,14 +1527,37 @@ function tickPullEffects(dt) {
   if (typeof controller !== 'undefined' && controller && controller._dashState) {
     const p = controller._dashState;
     p.elapsed += dt;
-    const t = Math.min(1, p.elapsed / p.duration);
-    controller.root.position.lerpVectors(p.from, p.to, t);
+    let t = Math.min(1, p.elapsed / p.duration);
+    if (p.follow) {
+      // 35차: 대상을 따라가는 돌진(리 신 Q2) - 매 프레임 대상의 현재 지면 위치로 다시 겨누고, 그 프레임에 대상이
+      // 움직인 거리만큼 더 간다(날아가는 대상에게도 따라붙는다). 높이는 출발 높이(지면) 그대로.
+      const f = p.follow, tg = f.target, pos = controller.root.position;
+      const alive = tg && tg.hp > 0 && !tg.destroyed && !tg.isDead && tg.mesh;
+      if (alive) {
+        const tp = tg.mesh.position;
+        const moved = Math.hypot(tp.x - f.lastTargetPos.x, tp.z - f.lastTargetPos.z);
+        f.lastTargetPos.copy(tp);
+        const to = new THREE.Vector3(tp.x - pos.x, 0, tp.z - pos.z);
+        const dist = to.length();
+        const step = f.speed * dt + moved;
+        if (dist <= f.stopDist + step) {
+          if (dist > f.stopDist) pos.addScaledVector(to.normalize(), dist - f.stopDist);
+          t = 1;
+        } else {
+          to.normalize();
+          pos.addScaledVector(to, step);
+          p.faceDir = to;
+        }
+      } else t = 1; // 대상이 죽거나 사라지면 그 자리에서 끝
+      pos.y = p.from.y;
+      p.to.copy(pos);
+    } else controller.root.position.lerpVectors(p.from, p.to, t);
     if (p.faceDir && p.faceDir.lengthSq() > 1e-8) {
       // 29차(요청 "리 신 Q2로 날아갈 때 날아가는 방향을 안 봄"): 예전엔 root.rotation.y(오일러)만 덮어썼다. 직전에
       // faceDirectionInstant(쿼터니언)로 180° 돌아 있으면 오일러가 (π, 0, π)로 남아 있어, y만 바꾸면 정반대를 봤다.
       controller.faceDirectionInstant(p.faceDir);
     }
-    if (t >= 1) controller._dashState = null;
+    if (t >= 1) { controller._dashState = null; if (p.onArrive) p.onArrive(); }
   }
 }
 

@@ -356,9 +356,15 @@ const LEE_CLIPS = [
   const c2 = makeChamp('leesin', LEE_CLIPS);
   const m = makeEnemy(0, 4, { hp: 1000, maxHp: 2000 });
   c2._leesin.qMarkTarget = m; c2._leesin.qMarkExpiresAt = now + 3000;
+  m.mesh.position.y = 1.2; // 공중에 뜬 대상(리 신 R 등) - 35차
   c2._leesinCastQ(null, true);
   assert(m.hp === 1000, '리 신 Q2: 돌진 시작 순간엔 아직 피해 없음');
+  // 35차: 돌진은 대상을 따라가고(follow), 높이는 공중에 뜬 대상이 아니라 리 신의 지면 높이다.
+  assert(c2._dashState && c2._dashState.follow && c2._dashState.follow.target === m, '리 신 Q2: 대상을 따라가는 돌진(follow)');
+  assert(c2._dashState.to.y === c2.root.position.y, '리 신 Q2: 돌진 높이는 지면(공중에 뜬 대상의 y를 복사하지 않음)');
   advance(400);
+  assert(m.hp === 1000, '리 신 Q2: 닿기 전(정해진 시간이 지나도)에는 피해 없음 - 닿는 순간 판정');
+  c2._dashState.onArrive(); // 렌더 루프의 돌진 갱신이 대상에 닿았을 때 부르는 것과 같다
   const Q = CHAMPION_DATA.leesin.Q;
   const expect = Q.damageByLevel[0] + (Q.maxDamageByLevel[0] - Q.damageByLevel[0]) * 0.5;
   assert(near(1000 - m.hp, expect), '리 신 Q2: 도착 시점에 잃은 체력(50%) 비례 피해');
