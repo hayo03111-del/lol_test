@@ -1130,3 +1130,10 @@ Data Dragon 사거리와 대조하고, 스킬마다 "데이터 값 / 조준 표�
 - 아이콘: `tools/fetch_champion_icons.py`가 Data Dragon 미러에서 19명분을 `assets/champion_icons/<id>/{icon,P,Q,W,E,R}.png`로 받고,
   한글 패시브 이름·설명·스킬 이름을 `src/core/champion_icon_meta.js`로 만든다(파일로 바로 열어도 동작).
 - 코드: `src/core/hud_stats_ui.js`. 1280px 폭에서도 잘리지 않게 좁은 화면 배치 조정.
+
+## 49차: 능력치 칸 아이콘을 실제 그림으로
+- 직접 그린 SVG 대신 실제 그림: 방어력·마법 저항력·공격 속도·스킬 가속·이동 속도·강인함은 룬 능력치 파편 그림
+  (Data Dragon `perk-images/StatMods` → `assets/stat_icons/`, `tools/fetch_champion_icons.py`가 함께 받음), 파편 그림이 따로 없는
+  공격력·주문력·치명타·관통력·흡혈·재생은 대표 기본 아이템 그림(롱소드·증폭의 고서·민첩성의 망토·톱날 단검·마법사의 신발·
+  흡혈의 낫·균열 생성기·원기 회복의 구슬·요정의 부적). 사거리만 SVG 그대로.
+- 19명 전원 하단 HUD(능력치·초상화·패시브·스킬 아이콘)를 화면으로 확인.

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """챔피언 패시브·스킬 아이콘 받기(48차) - assets/champion_icons/<챔피언 id>/{icon,P,Q,W,E,R}.png + meta.json
+(+ 49차: 능력치 칸 아이콘 assets/stat_icons/<이름>.png - 룬 능력치 파편 그림)
 
 Data Dragon GitHub 미러(InFinity54/LoL_DDragon, latest)의 champion/<Key>.json(ko_KR)에서 패시브·스킬 그림 파일명과
 한글 패시브 이름·설명을 읽어 아이콘(64x64 png)을 받는다. meta.json에는 패시브 이름·설명(HUD 툴팁용)을 적는다.
@@ -48,8 +49,20 @@ def one(item):
                  'spellNames': {s: sp['name'] for s, sp in zip('QWER', data['spells'])}}
 
 
+# 능력치 칸 아이콘(룬 능력치 파편 그림 - 원작 능력치 창과 같은 계열) → assets/stat_icons/<이름>.png
+STAT_MODS = {
+    'armor': 'StatModsArmorIcon', 'mr': 'StatModsMagicResIcon', 'as': 'StatModsAttackSpeedIcon', 'ah': 'StatModsCDRScalingIcon',
+    'ms': 'StatModsMovementSpeedIcon', 'ten': 'StatModsTenacityIcon', 'adaptive': 'StatModsAdaptiveForceIcon', 'hp': 'StatModsHealthScalingIcon',
+}
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
+    stat_dir = os.path.join(ROOT, 'assets', 'stat_icons')
+    os.makedirs(stat_dir, exist_ok=True)
+    for name, file in STAT_MODS.items():
+        with open(os.path.join(stat_dir, f'{name}.png'), 'wb') as f:
+            f.write(fetch(f'{MIRROR.rsplit("/", 1)[0]}/img/perk-images/StatMods/{file}.png'))
     with ThreadPoolExecutor(6) as ex:
         meta = dict(ex.map(one, sorted(CHAMPS.items())))
     with open(os.path.join(OUT, 'meta.json'), 'w', encoding='utf8') as f:

@@ -81,6 +81,8 @@
   #hudStats .hs-cell{ display:flex; align-items:center; gap:4px; min-width:0; font-family:var(--font-num); font-size:11px; color:var(--text-0); white-space:nowrap; }
   #hudStats .hs-icon{ width:13px; height:13px; flex:none; display:inline-flex; }
   #hudStats .hs-icon svg{ width:13px; height:13px; }
+  #hudStats .hs-icon img{ width:15px; height:15px; border-radius:2px; }
+  #hudStats .hs-icon{ width:15px; height:15px; align-items:center; justify-content:center; }
   #hudStats .hs-val{ white-space:nowrap; }
   #hudStats .hs-page{ grid-column:span 2; text-align:right; font-size:8px; color:var(--text-2); letter-spacing:0.08em; }
   #hudPortrait .portrait-box.has-icon{ background:var(--bg-3) center/cover no-repeat; }
@@ -33717,14 +33719,23 @@ const CHAMPION_ICON_META = {
 /* ============================================================
    하단 HUD 능력치 칸 + 패시브 칸 + 스킬·초상화 아이콘 - 48차
    ------------------------------------------------------------
-   - 능력치 칸(#hudStats): 원작 왼쪽 아래 능력치 창처럼 8개(공격력·주문력·방어력·마법 저항력·공격 속도·스킬 가속·
+   - 능력치 칸(#hudStats, 49차: 아이콘 그림 - HUD_STAT_IMAGES): 원작 왼쪽 아래 능력치 창처럼 8개(공격력·주문력·방어력·마법 저항력·공격 속도·스킬 가속·
      치명타 확률·이동 속도). 칸을 누르면 두 번째 쪽(방어구 관통·마법 관통·생명력 흡수·모든 피해 흡혈·사거리·강인함·
      체력 재생·마나 재생)으로 바뀐다. 값은 0.15초마다 갱신(updateCooldowns가 매 프레임 부르지만 DOM은 바뀔 때만 고친다).
    - 패시브 칸(#slotP): Q 앞. 챔피언 패시브 아이콘, 마우스를 올리면 이름·설명(CHAMPION_DATA 설명 우선, 없으면 Data Dragon 한글).
    - 스킬 칸 Q/W/E/R과 초상화에 Data Dragon 아이콘(assets/champion_icons/<id>/ - tools/fetch_champion_icons.py).
    ============================================================ */
 const HUD_ICON_DIR = 'assets/champion_icons/';
-// 능력치 아이콘(간단한 SVG - 원작 능력치 아이콘 그림은 Data Dragon 미러에 없어 직접 그렸다)
+// 49차: 능력치 아이콘 그림 - 룬 능력치 파편(Data Dragon perk-images/StatMods → assets/stat_icons)이 있는 것은 그것을,
+// 공격력·주문력 등 파편 그림이 따로 없는 것은 그 능력치의 대표 기본 아이템 그림을 쓴다(원작 능력치 창 그림은 받을 곳이 없다).
+// 그림이 없는 것(사거리)만 아래 SVG.
+const HUD_STAT_IMAGES = {
+  ad: 'assets/items/longSword.png', ap: 'assets/items/amplifyingTome.png',
+  armor: 'assets/stat_icons/armor.png', mr: 'assets/stat_icons/mr.png', as: 'assets/stat_icons/as.png', ah: 'assets/stat_icons/ah.png',
+  crit: 'assets/items/cloakOfAgility.png', ms: 'assets/stat_icons/ms.png',
+  arpen: 'assets/items/serratedDirk.png', mpen: 'assets/items/sorcerersShoes.png', ls: 'assets/items/vampiricScepter.png',
+  vamp: 'assets/items/riftmaker.png', ten: 'assets/stat_icons/ten.png', hp5: 'assets/items/rejuvenationBead.png', mp5: 'assets/items/faerieCharm.png',
+};
 const HUD_STAT_ICONS = {
   ad: '<svg viewBox="0 0 16 16"><path d="M3 13l7-7 1-3 2-1-1 2-3 1-7 7z" fill="#e8a33d"/><path d="M2 12l2 2" stroke="#e8a33d" stroke-width="1.6"/></svg>',
   ap: '<svg viewBox="0 0 16 16"><path d="M8 1l2 5 5 .5-4 3.5 1.3 5L8 12.3 3.7 15 5 10 1 6.5 6 6z" fill="#b57ce8"/></svg>',
@@ -33774,7 +33785,8 @@ function _hudBuildStatCells() {
     const cell = document.createElement('div');
     cell.className = 'hs-cell';
     cell.title = label;
-    cell.innerHTML = `<span class="hs-icon">${HUD_STAT_ICONS[icon] || ''}</span><span class="hs-val">-</span>`;
+    const img = HUD_STAT_IMAGES[icon];
+    cell.innerHTML = `<span class="hs-icon">${img ? `<img src="${img}" alt="">` : (HUD_STAT_ICONS[icon] || '')}</span><span class="hs-val">-</span>`;
     box.appendChild(cell);
     return cell.querySelector('.hs-val');
   });
