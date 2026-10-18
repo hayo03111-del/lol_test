@@ -3013,9 +3013,9 @@ const ITEM_DATA = {
   sapphireCrystal: { id: 'sapphireCrystal', nameKo: '사파이어 수정', cost: 300, stats: { mana: 300 } },
   needlesslyLargeRod: { id: 'needlesslyLargeRod', nameKo: '쓸데없이 큰 지팡이', cost: 1200, stats: { abilityPower: 65 } },
   faerieCharm: { id: 'faerieCharm', nameKo: '요정의 부적', cost: 200, stats: { mpRegenPercent: 0.5 } },
-  rejuvenationBead: { id: 'rejuvenationBead', nameKo: '원기 회복의 구슬', cost: 150, stats: { hpRegenPercent: 1.0 }, priceGuessed: true }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  rejuvenationBead: { id: 'rejuvenationBead', nameKo: '원기 회복의 구슬', cost: 300, stats: { hpRegenPercent: 1.0 }, priceGuessed: true }, // 가격 원문 누락 - 실제 LoL 가격 사용(35차: 150은 잘못된 값이었다 - Data Dragon 1006번 300)
   amplifyingTome: { id: 'amplifyingTome', nameKo: '증폭의 고사', cost: 400, stats: { abilityPower: 20 } },
-  chainVest: { id: 'chainVest', nameKo: '천갑옷', cost: 800, stats: { armor: 15 }, priceGuessed: true }, // 가격 원문 누락 - 실제 LoL 가격 사용
+  chainVest: { id: 'chainVest', nameKo: '천갑옷', cost: 300, stats: { armor: 15 }, priceGuessed: true }, // 가격 원문 누락 - 실제 LoL 가격 사용(35차: 800은 쇠사슬 조끼 가격이었다 - 천 갑옷은 Data Dragon 1029번 300. id 이름만 chainVest)
   bfSword: { id: 'bfSword', nameKo: 'B.F. 대검', cost: 1300, stats: { attackDamage: 40 }, priceGuessed: true }, // 가격 원문 누락 - 실제 LoL 가격 사용
 
   // [신발] - "신발은 하나밖에 사지 못한다"(원문) - 6칸 인벤토리와 완전히
@@ -3073,14 +3073,11 @@ const ITEM_DATA = {
   // 여기 따로 적지 않는다.
   //
   // 강철인장 - QA 재확인 결과 재반영. 원문 가격은 1100원이고 하위템은
-  // 롱소드+천갑옷 2개인데, 천갑옷 가격(800원)이 원문에 없어 실제 LoL
-  // 가격을 썼더니(priceGuessed) 하위템 합(350+800+800=1950원)이 완제품
-  // 가격보다 커지는 모순이 생긴다. 하지만 이 모순은 "천갑옷 쪽의 추측
-  // 가격"에서 비롯된 것이지 강철인장 자신의 가격(1100원은 원문 값 그대로)이
-  // 틀린 게 아니다 - 두 값 중 하나를 지어내 맞추는 대신 그대로 두고,
-  // combineCost()가 이미 0 밑으로 안 내려가게 막아뒀으므로(실제로는 "거의
-  // 공짜로 조합되는" 결과가 된다) 안전하게 반영할 수 있다. 죽음의무도/
-  // 수호천사가 하위템으로 참조하므로 이 아이템 자체도 반드시 있어야 한다.
+  // 롱소드+천갑옷 2개다. 예전엔 천갑옷 가격을 800원(쇠사슬 조끼 가격)으로
+  // 잘못 넣어 하위템 합(1950원)이 완제품보다 비싼 모순이 있었다 - 35차에
+  // 천갑옷을 원작 가격 300원으로 바로잡아 하위템 합은 950원, 조합 비용은
+  // 150원이다. 죽음의무도/수호천사가 하위템으로 참조하므로 이 아이템 자체도
+  // 반드시 있어야 한다.
   ironSeal: {
     id: 'ironSeal', nameKo: '강철인장', cost: 1100, recipe: ['longSword', 'chainVest', 'chainVest'],
     stats: { attackDamage: 15, armor: 30 },

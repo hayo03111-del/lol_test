@@ -98,9 +98,8 @@ function makeFakeCtrl(overrides = {}) {
   const goldBefore = ctrl.gold;
   assert(buildOrBuyItem(ctrl, 'ironSeal') === true, '강철인장: 하위템 보유 시 조합 성공');
   assert(ctrl.items.length === 1 && ctrl.items[0].id === 'ironSeal', '강철인장: 조합 후 하위템이 소모되고 완제품만 남는다');
-  // 하위템 가격 합(1950, chainVest는 추측 가격)이 완제품(1100)보다 커서
-  // combineCost()가 0으로 클램프된다 - 크래시나 음수 비용 없이 안전하게 처리됨을 확인.
-  assert(ctrl.gold === goldBefore, '강철인장: 하위템 합이 완제품보다 비싸 조합 비용이 0으로 클램프됨(골드 추가 차감 없음)');
+  // 35차: 천갑옷을 원작 가격(300)으로 바로잡아 하위템 합 950, 조합 비용 = 1100 - 950 = 150.
+  assert(ctrl.gold === goldBefore - 150, '강철인장: 조합 비용은 차액 150(1100 - 롱소드 350 - 천갑옷 300 x 2)');
 
   const ctrl2 = makeFakeCtrl();
   buyItem(ctrl2, 'ironSeal');
