@@ -1414,7 +1414,9 @@ class CharacterController {
       if (!movingTowardEnemy) msBuff = Math.max(0, msBuff - (settQms.value || 0));
     }
     this.stats.percentMoveSpeedBonus = msBuff + (this.itemBonusMoveSpeedPercent || 0) + (typeof runeMoveSpeedBonus === 'function' ? runeMoveSpeedBonus(this) : 0);
-    this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? getFlatMoveSpeedBuff(this) : 0;
+    // 58차 버그 수정: 고정 이동 속도 버프(MS_BUFF_FLAT - 요우무 유령검 +20, 칠흑의 양날도끼 열정 등)는 LoL 단위인데 world 단위
+    // 기본 이동 속도에 그대로 더해, +20이 LoL 약 2300으로 들어가 이동 속도가 1000 넘게 치솟았다. world로 바꿔 더한다.
+    this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? lolRangeToWorld(getFlatMoveSpeedBuff(this)) : 0;
     // 레넥톤 R(강신): 지속 중 사거리 +25(PC 위키).
     const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
     this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange);
