@@ -252,7 +252,7 @@ function _updateSkillLevelUpButtons(champion) {
     if (!btn) {
       btn = document.createElement('button');
       btn.className = 'lvlUp';
-      btn.textContent = '▲ 레벨 업';
+      btn.textContent = '+'; // 56차: 원작처럼 칸 위의 작은 + 표시(예전 '▲ 레벨 업' 띠는 아이콘을 가렸다)
       btn.title = `Ctrl+${key}: ${key} 스킬 레벨 업`;
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
