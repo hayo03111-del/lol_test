@@ -65,6 +65,7 @@
     "src/world/minion_system.js",
     "src/core/exp_level_system.js",
     "src/core/item_system.js",
+    "src/core/shop_ui.js",
     "src/core/global_system_instances.js",
     "src/loader/champion_glb_loader.js"
   ]

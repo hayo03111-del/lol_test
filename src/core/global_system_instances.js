@@ -273,238 +273,68 @@ function _itemStatsSummary(item) {
   return parts.join(' · ');
 }
 
-let _shopActiveCategory = (typeof ITEM_CATEGORIES !== 'undefined' && ITEM_CATEGORIES[0]) ? ITEM_CATEGORIES[0].id : null;
-// 요청("상점에 아이템 선택하면 오른쪽에 띄워주는 상점 시스템") - 실제 LoL
-// 상점처럼 아이템 이름을 클릭하면 #shopDetailPanel(오른쪽 패널)에 전체
-// 효과 설명 + 조합 재료/상위 아이템 경로를 보여준다. 선택 상태는 다른
-// 탭으로 옮겨도 그대로 유지된다(골드가 바뀌어 renderShopPanel()이 다시
-// 그려질 때도 마찬가지) - 하위템/상위템 링크를 눌러 다른 탭의 아이템으로
-// 자연스럽게 넘어갈 수 있어야 하므로, 탭 전환만으로 선택을 지우지 않는다.
-let _shopSelectedItemId = null;
-function _showItemDetail(itemId) {
-  const item = typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[itemId] : null;
-  const panel = document.getElementById('shopDetailPanel');
-  if (!item || !panel) return;
-  _shopSelectedItemId = itemId;
-  if (typeof renderShopPanel === 'function') renderShopPanel(); // 선택한 행에 'selected' 강조 반영
-  panel.classList.add('show');
-  const canBuild = item.recipe && item.recipe.length && controller && typeof hasComponents === 'function' && hasComponents(controller, item.recipe);
-  const payCost = canBuild ? combineCost(item) : item.cost;
-  document.getElementById('shopDetailTitle').textContent = item.nameKo;
-  document.getElementById('shopDetailCost').textContent = item.trinket
-    ? '기본 장착 (구매 불필요)'
-    : `${canBuild ? '조합 ' : ''}${payCost}원${item.priceGuessed ? ' * (가격은 원문 누락으로 실제 LoL 가격 사용)' : ''}`;
-  document.getElementById('shopDetailDesc').textContent = _itemStatsSummary(item) || '(추가 효과 없음)';
-
-  const recipeSection = document.getElementById('shopDetailRecipeSection');
-  const recipeList = document.getElementById('shopDetailRecipeList');
-  recipeList.innerHTML = '';
-  if (item.recipe && item.recipe.length) {
-    recipeSection.style.display = '';
-    const counts = {};
-    for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
-    for (const [id, n] of Object.entries(counts)) {
-      const comp = ITEM_DATA[id];
-      if (!comp) continue;
-      const row = document.createElement('div');
-      const link = document.createElement('span');
-      link.className = 'detailLink';
-      link.textContent = `${comp.nameKo}${n > 1 ? ' x' + n : ''} (${comp.cost}원)`;
-      link.addEventListener('click', () => _showItemDetail(id));
-      row.appendChild(link);
-      recipeList.appendChild(row);
-    }
-  } else {
-    recipeSection.style.display = 'none';
-  }
-
-  // 역방향 조회("이 아이템을 하위템으로 쓰는 상위 아이템") - ITEM_DATA를
-  // 매번 스캔하지만(추가 자료구조 없음) 42종 규모에서는 비용이 무시할
-  // 수준이고, 아이템이 늘어도 자동으로 정확하다(수동 목록을 따로 관리할
-  // 필요가 없다).
-  const buildsSection = document.getElementById('shopDetailBuildsIntoSection');
-  const buildsList = document.getElementById('shopDetailBuildsIntoList');
-  buildsList.innerHTML = '';
-  const buildsInto = (typeof ITEM_ORDER !== 'undefined' ? ITEM_ORDER : Object.keys(ITEM_DATA))
-    .filter((id) => ITEM_DATA[id].recipe && ITEM_DATA[id].recipe.includes(itemId));
-  if (buildsInto.length) {
-    buildsSection.style.display = '';
-    for (const id of buildsInto) {
-      const d = ITEM_DATA[id];
-      const row = document.createElement('div');
-      const link = document.createElement('span');
-      link.className = 'detailLink';
-      link.textContent = `${d.nameKo} (${d.cost}원)`;
-      link.addEventListener('click', () => _showItemDetail(id));
-      row.appendChild(link);
-      buildsList.appendChild(row);
-    }
-  } else {
-    buildsSection.style.display = 'none';
-  }
+// 33차: 상점 창(목록·상세·구매)은 shop_ui.js로 옮겼다. 여기는 하단 HUD의 보유 아이템 칸만 그린다.
+// 사용 가능한 아이템인지 - useItem()이 실제로 분기하는 필드 전부를 확인한다(하나라도 빠지면 클릭 시 사용 대신 판매되는 버그).
+function _itemIsUsable(data) {
+  const usable = !!(
+    data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect
+    || data.empoweredCleaveActive || data.shockwaveActive || data.ghostStepActive
+    || data.rocketbeltActive || data.teamMoveSpeedActive || data.noxiousBladeActive || data.stasisActive || data.devotionActive
+  );
+  return usable;
 }
-function renderShopPanel() {
-  const tabsEl = document.getElementById('shopCategoryTabs');
-  const listEl = document.getElementById('shopItemList');
-  if (!tabsEl || !listEl || typeof ITEM_CATEGORIES === 'undefined') return;
-  tabsEl.innerHTML = '';
-  for (const cat of ITEM_CATEGORIES) {
-    const btn = document.createElement('button');
-    btn.textContent = cat.nameKo;
-    btn.classList.toggle('active', cat.id === _shopActiveCategory);
-    btn.addEventListener('click', () => { _shopActiveCategory = cat.id; renderShopPanel(); });
-    tabsEl.appendChild(btn);
-  }
-  listEl.innerHTML = '';
-  const cat = ITEM_CATEGORIES.find((c) => c.id === _shopActiveCategory) || ITEM_CATEGORIES[0];
-  if (!cat) return;
-  for (const itemId of cat.items) {
-    const item = ITEM_DATA[itemId];
-    if (!item) continue;
-    // 조합(하위템을 전부 갖고 있으면 그 차액만, 아니면 완제품 전체 가격)
-    // - 버튼 라벨/가격 표시를 실제 지불할 금액 기준으로 보여준다.
-    const canBuild = item.recipe && item.recipe.length && controller && typeof hasComponents === 'function' && hasComponents(controller, item.recipe);
-    const payCost = canBuild ? combineCost(item) : item.cost;
-    const row = document.createElement('div');
-    row.className = 'shopItemRow';
-    if (controller && (controller.gold || 0) < payCost) row.classList.add('unaffordable');
-    if (itemId === _shopSelectedItemId) row.classList.add('selected');
-    const nameEl = document.createElement('span');
-    nameEl.className = 'shopItemName clickable';
-    nameEl.textContent = `${item.nameKo} (${canBuild ? '조합 ' : ''}${payCost}${item.priceGuessed ? '*' : ''})`;
-    nameEl.title = _itemStatsSummary(item) + (item.priceGuessed ? ' · *가격은 원문 누락으로 실제 LoL 가격 사용' : '');
-    nameEl.addEventListener('click', () => _showItemDetail(itemId));
-    const btn = document.createElement('button');
-    const alreadyWorn = item.isBoots && controller && controller.boots && controller.boots.id === itemId;
-    // 버그 수정(QA 요청): "unaffordable"(이름 회색 처리)만 하고 버튼 자체는
-    // 계속 눌러지는 상태였다 - 클릭해도 buyItem()이 조용히 console.warn만
-    // 찍고 아무 일도 안 일어나니 "눌렀는데 효과가 안 적용된다"로 보일 수
-    // 있었다. 골드가 부족하면 버튼도 함께 비활성화해서 클릭 가능 여부와
-    // 회색 표시가 항상 일치하게 한다.
-    const cannotAfford = controller && (controller.gold || 0) < payCost;
-    btn.textContent = alreadyWorn ? '장착됨' : canBuild ? '조합' : (item.isBoots ? '착용' : '구매');
-    btn.disabled = !!alreadyWorn || !!cannotAfford;
-    btn.title = nameEl.title;
-    btn.addEventListener('click', () => { if (typeof buildOrBuyItem === 'function' && controller) buildOrBuyItem(controller, itemId); });
-    row.appendChild(nameEl);
-    row.appendChild(btn);
-    listEl.appendChild(row);
-  }
-}
-renderShopPanel();
-// 인벤토리 슬롯 표시 - buyItem/sellItem/useItem이 아이템을 바꿀 때마다
-// 호출하는 이벤트 기반 갱신 함수(updateGoldDisplay()와 동일한 원칙, 매
-// 프레임 아님). 소비 아이템(체력/충전형 물약)은 클릭하면 판매 대신
-// 사용되고, 중첩/충전 수를 작은 배지로 함께 표시한다.
+// 하단 HUD 아이템 칸 - buyItem/sellItem/useItem이 아이템을 바꿀 때마다 호출하는 이벤트 기반 갱신 함수
+// (updateGoldDisplay()와 같은 원칙, 매 프레임 아님). 칸 배치는 원작과 같다: 1·2·3 / 5·6·7 + 장신구(4).
+// 사용 아이템은 클릭(또는 숫자키)으로 사용하고, 나머지는 클릭하면 상점이 열리며 그 칸이 선택된다(판매는 상점에서).
 function updateItemUI(ctrl) {
-  _updateTrinketUI(ctrl);
-  _updateBootsUI(ctrl);
-  if (typeof renderShopPanel === 'function') renderShopPanel(); // 골드/보유 신발이 바뀌면 상점의 "구매 가능 여부" 표시도 함께 갱신
-  const row = document.getElementById('inventoryRow');
-  if (!row) return;
-  row.innerHTML = '';
+  if (typeof renderShopPanel === 'function') renderShopPanel(); // 골드/보유 아이템이 바뀌면 상점 창도 함께 갱신
+  const box = document.getElementById('hudItems');
+  if (!box || typeof ITEM_DATA === 'undefined') return;
   const items = (ctrl && ctrl.items) || [];
+  const slotHtml = (key, data, badge, extraCls) => `<div class="hud-item${data ? '' : ' empty'}${extraCls || ''}"><span class="key">${key}</span>${data ? _shopIconHtml(data) : ''}${badge !== '' && badge != null ? `<span class="badge">${badge}</span>` : ''}</div>`;
+  let grid = '';
   for (let i = 0; i < 6; i++) {
-    const el = document.createElement('div');
     const slot = items[i];
-    const data = slot && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[slot.id] : null;
-    if (data) {
-      // 버그 수정(QA - "하위/상위 아이템 시스템 점검" 중 발견): 이 플래그가
-      // true일 때만 클릭이 useItem()으로 가고, false면 대신 sellItem()이
-      // 호출된다(아래 클릭 핸들러 참고) - 그런데 useItem() 자신의 분기
-      // 목록(거대한 초승달/파괴의 충격파/망령의 발걸음/초음속/번개 화살/
-      // 시간 정지 등)에 있는 액티브 아이템 다수가 이 목록에서 빠져 있어서,
-      // 그런 아이템을 인벤토리에서 "클릭"하면 사용이 아니라 판매가 되는
-      // 잠재 버그였다(숫자 단축키로는 정상적으로 useItem()이 호출돼
-      // 지금까지 드러나지 않았다). useItem()이 실제로 분기하는 필드
-      // 전부를 여기서도 동일하게 확인한다.
-      const usable = !!(
-        data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect
-        || data.empoweredCleaveActive || data.shockwaveActive || data.ghostStepActive
-        || data.rocketbeltActive || data.teamMoveSpeedActive || data.noxiousBladeActive || data.stasisActive || data.devotionActive
-      );
-      el.className = 'invSlot' + (usable ? ' usable' : '');
-      el.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
-      const badgeValue = typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '');
-      if (badgeValue) {
-        const badge = document.createElement('span');
-        badge.className = 'invBadge';
-        badge.textContent = badgeValue;
-        el.appendChild(badge);
-      }
-      el.title = usable
-        ? `${data.nameKo} (${i + 1}번 키 또는 클릭: 사용)`
-        : `${data.nameKo} (클릭: 판매, 구매가의 70% 환급)`;
-      el.addEventListener('click', () => {
-        if (usable) { if (typeof useItem === 'function') useItem(ctrl, i); }
-        else if (typeof sellItem === 'function') sellItem(ctrl, i);
-      });
-    } else {
-      el.className = 'invSlot empty';
-    }
-    row.appendChild(el);
+    const data = slot ? ITEM_DATA[slot.id] : null;
+    const badge = data ? (typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '')) : '';
+    grid += slotHtml(ITEM_SLOT_KEYS[i], data, badge, data && _itemIsUsable(data) ? ' usable' : '');
   }
-}
-// 트린켓(투명 와드) 전용 슬롯 - 6칸 인벤토리와 별개로 표시한다. 클릭으로도
-// 설치할 수 있게 해뒀다(실제로는 T키로 마우스 위치에 바로 꽂는 쪽이
-// 기본 조작법이지만, 클릭 한 번으로도 되게 해 UI만 보고도 쓸 수 있게 함 -
-// 이 경우 현재 조준 중인 지면 좌표가 없으므로 플레이어 바로 앞에 꽂는다).
-function _updateTrinketUI(ctrl) {
-  const row = document.getElementById('trinketSlotRow');
-  if (!row) return;
-  row.innerHTML = '';
   const trinket = ctrl && ctrl.trinket;
-  const data = trinket && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[trinket.id] : null;
-  if (!data) return;
-  const el = document.createElement('div');
-  el.className = 'invSlot usable';
-  el.textContent = data.nameKo.slice(-2);
-  const badge = document.createElement('span');
-  badge.className = 'invBadge';
-  badge.textContent = `${trinket.charges}/${data.maxCharges}`;
-  el.appendChild(badge);
-  el.title = `${data.nameKo} (T키: 마우스 위치에 설치)`;
-  el.addEventListener('click', () => {
-    if (typeof placeWard !== 'function' || !ctrl) return;
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
-    placeWard(ctrl, ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300))));
+  const tData = trinket ? ITEM_DATA[trinket.id] : null;
+  const bData = ctrl && ctrl.boots ? ITEM_DATA[ctrl.boots.id] : null;
+  box.innerHTML = `<div class="hud-item-grid">${grid}</div>`
+    + `<div class="hud-item-side">${slotHtml('4', tData, tData ? `${trinket.charges}/${tData.maxCharges}` : '', ' usable trinket')}${slotHtml('신발', bData, '', ' boots')}</div>`;
+  const cells = box.querySelectorAll('.hud-item-grid .hud-item');
+  cells.forEach((el, i) => {
+    const slot = items[i];
+    const data = slot ? ITEM_DATA[slot.id] : null;
+    if (!data) return;
+    const usable = _itemIsUsable(data);
+    el.title = usable ? `${data.nameKo} (${ITEM_SLOT_KEYS[i]}키 또는 클릭: 사용)` : `${data.nameKo} (클릭: 상점에서 보기·판매)`;
+    el.addEventListener('click', () => {
+      if (usable) { if (typeof useItem === 'function') useItem(ctrl, i); return; }
+      if (typeof setShopOpen === 'function') { setShopOpen(true); _shopSelectedSlot = i; _shopSelectedItemId = slot.id; renderShopPanel(true); }
+    });
   });
-  row.appendChild(el);
-  const label = document.createElement('span');
-  label.style.fontSize = '10px'; label.style.color = '#999';
-  label.textContent = data.nameKo;
-  row.appendChild(label);
-}
-// 신발 전용 슬롯 - 트린켓과 동일한 구조(6칸 인벤토리와 별개). 클릭하면
-// 판매(70%)된다 - 다른 신발로 "교체"하고 싶을 때는 상점 신발 탭에서
-// 원하는 신발의 "착용" 버튼을 바로 누르면 된다(buyBoots가 기존 신발을
-// 자동으로 전액 환급 처리).
-function _updateBootsUI(ctrl) {
-  const row = document.getElementById('bootsSlotRow');
-  if (!row) return;
-  row.innerHTML = '';
-  const boots = ctrl && ctrl.boots;
-  const data = boots && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[boots.id] : null;
-  if (!data) {
-    const empty = document.createElement('div');
-    empty.className = 'invSlot empty';
-    row.appendChild(empty);
-    const label = document.createElement('span');
-    label.style.fontSize = '10px'; label.style.color = '#999';
-    label.textContent = '미착용';
-    row.appendChild(label);
-    return;
+  // 장신구(투명 와드): 클릭으로도 설치 - 조준 중인 지면 좌표가 없으므로 플레이어 바로 앞에 놓는다(기본 조작은 4키 = 마우스 위치).
+  const tEl = box.querySelector('.hud-item.trinket');
+  if (tEl && tData) {
+    tEl.title = `${tData.nameKo} (4키: 마우스 위치에 설치 · 클릭: 앞에 설치)`;
+    tEl.addEventListener('click', () => {
+      if (typeof placeWard !== 'function' || !ctrl) return;
+      const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
+      placeWard(ctrl, ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300))));
+    });
   }
-  const el = document.createElement('div');
-  el.className = 'invSlot';
-  el.textContent = data.nameKo.slice(-2);
-  el.title = `${data.nameKo} (클릭: 판매, 구매가의 70% 환급)`;
-  el.addEventListener('click', () => { if (typeof sellBoots === 'function') sellBoots(ctrl); });
-  row.appendChild(el);
-  const label = document.createElement('span');
-  label.style.fontSize = '10px'; label.style.color = '#999';
-  label.textContent = data.nameKo;
-  row.appendChild(label);
+  const bEl = box.querySelector('.hud-item.boots');
+  if (bEl) {
+    bEl.title = bData ? `${bData.nameKo} (클릭: 상점에서 보기·판매)` : '신발 칸 (상점 신발 분류에서 구매)';
+    bEl.addEventListener('click', () => {
+      if (typeof setShopOpen !== 'function') return;
+      setShopOpen(true);
+      if (bData) { _shopSelectedSlot = 'boots'; _shopSelectedItemId = ctrl.boots.id; renderShopPanel(true); }
+    });
+  }
 }
 var controller = null;
 let championRoot = null;
@@ -754,6 +584,12 @@ renderer.domElement.addEventListener('pointermove', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  // 33차: 상점 검색칸 등 입력칸에 타이핑하는 중에는 게임 단축키를 쓰지 않는다(Esc만 상점을 닫는다).
+  const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
+  if (typing) { if (e.code === 'Escape' && typeof isShopOpen === 'function' && isShopOpen()) setShopOpen(false); return; }
+  // 상점(P - 원작 기본 키)은 챔피언을 불러오기 전에도 열어 볼 수 있다.
+  if (e.code === 'KeyP' && !e.repeat) { if (typeof toggleShop === 'function') toggleShop(); return; }
+  if (e.code === 'Escape' && typeof isShopOpen === 'function' && isShopOpen()) { setShopOpen(false); return; }
   if (!controller) return;
   // 버그 수정("스킬 쓰면 마우스 커서가 사라진다"): 이 앱 자체는 커서를
   // 숨기는 코드가 없다 - 이건 브라우저가 키보드 입력이 들어오면 마우스
@@ -770,7 +606,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') { if (skillAim.aiming) { skillAim.cancel(); return; } togglePause(); return; }
   if (e.code === 'F1') { e.preventDefault(); debugPanelVisible = !debugPanelVisible; return; }
   if (e.code === 'KeyV') { rangeIndicators.toggle(); const cb = document.getElementById('rangeIndicatorCheckbox'); if (cb) cb.checked = rangeIndicators.visible; return; }
-  if (e.code === 'KeyP') { if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
+  if (e.code === 'KeyJ') { if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
   if (e.code === 'KeyO') { setAllyPlaceMode(!allyPlaceMode); return; }
   if (e.code === 'KeyN') { setBrushPlaceMode(!brushPlaceMode); return; }
   if (paused) return;
@@ -802,18 +638,16 @@ window.addEventListener('keydown', (e) => {
     case 'KeyR': onSkillKeyDown('R', e.code, mousePoint); break;
     case 'KeyB': controller.startRecall(); break;
     case 'Space': if (dummy && dummy.hp > 0) controller.selectTarget(dummy); break;
-    // 아이템 사용(실제 LoL과 동일한 숫자키 1~6 인벤토리 단축키) - 사용
-    // 불가 아이템(스탯 아이템)이면 useItem() 내부에서 콘솔 경고만 내고
-    // 조용히 무시된다.
+    // 아이템 사용 - 원작 키 배치(1·2·3·5·6·7 = 인벤토리 6칸, 4 = 장신구). 사용 불가 아이템(스탯
+    // 아이템)이면 useItem() 내부에서 콘솔 경고만 내고 조용히 무시된다.
     case 'Digit1': if (typeof useItem === 'function') useItem(controller, 0); break;
     case 'Digit2': if (typeof useItem === 'function') useItem(controller, 1); break;
     case 'Digit3': if (typeof useItem === 'function') useItem(controller, 2); break;
-    case 'Digit4': if (typeof useItem === 'function') useItem(controller, 3); break;
-    case 'Digit5': if (typeof useItem === 'function') useItem(controller, 4); break;
-    case 'Digit6': if (typeof useItem === 'function') useItem(controller, 5); break;
-    // 트린켓(투명 와드) - 원작 기본 키는 4지만 이 프로젝트는 숫자키 1~6을 인벤토리 6칸에 쓰므로 T를 쓴다.
-    // 현재 마우스 위치에 놓는다(설치 사거리 밖이면 사거리까지 걸어가서 놓는다 - 원작).
-    case 'KeyT': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
+    case 'Digit5': if (typeof useItem === 'function') useItem(controller, 3); break;
+    case 'Digit6': if (typeof useItem === 'function') useItem(controller, 4); break;
+    case 'Digit7': if (typeof useItem === 'function') useItem(controller, 5); break;
+    // 장신구(투명 와드) - 원작 기본 키 4. 현재 마우스 위치에 놓는다(설치 사거리 밖이면 사거리까지 걸어가서 놓는다 - 원작).
+    case 'Digit4': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
   }
 });
 

@@ -63,6 +63,7 @@ function snapCameraTo(targetPos) {
 }
 
 window.addEventListener('wheel', (e) => {
+  if (e.target && e.target.closest && e.target.closest('#shopWindow')) return; // 33차: 상점 창 안에서 굴리면 목록만 스크롤한다
   cameraRig.distance = THREE.MathUtils.clamp(
     cameraRig.distance + Math.sign(e.deltaY) * 2.0,
     cameraRig.minDistance, cameraRig.maxDistance

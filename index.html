@@ -148,7 +148,7 @@
   #skillToast {
     position:fixed; top:48px; left:50%; transform:translateX(-50%);
     display:flex; flex-direction:column; gap:4px; align-items:center;
-    z-index:15; pointer-events:none;
+    z-index:60; pointer-events:none;
   }
   #skillToast .toastMsg {
     background:rgba(30,10,10,0.85); border:1px solid #e84057; color:#ffb3b3;
@@ -185,67 +185,146 @@
   #rangeIndicatorToggle button:hover { background:#3a3a45; }
   #rangeIndicatorToggle.collapsed .panelBody { display:none; }
 
-  /* 요청("아이템을 추가할거야") - 상점/인벤토리 패널. #hud(하단 바, 118px)와
-     겹치지 않도록 화면 좌측 하단에 띄운다. buyItem()은 기지 구역
-     (isPositionInBaseZone) 안에서만 실제로 구매를 허용하므로, 이 패널 자체는
-     항상 보이되 범위 밖에서 누르면 콘솔 경고와 함께 조용히 실패한다. */
-  #shopPanel {
-    position:fixed; left:14px; bottom:128px; z-index:10; color:#bbb; font-size:11px;
-    background:rgba(10,10,15,0.55); padding:6px 12px; border-radius:6px;
-    border:1px solid #2a2a35; user-select:none; width:220px;
-    max-height:60vh; display:flex; flex-direction:column;
+  /* ============================================================
+     33차: 상점 창 + 하단 HUD 아이템 칸 - moba_ui_system 디자인(베벨 패널, 청동 강조색,
+     왼쪽 분류 / 가운데 격자 / 오른쪽 상세) 그대로. 로직은 src/core/shop_ui.js.
+     창 바깥은 클릭이 맵으로 그대로 지나간다(#shopOverlay는 pointer-events:none).
+     ============================================================ */
+  #shopOverlay{
+    position:fixed; left:0; right:0; top:0; bottom:118px; z-index:30;
+    display:none; align-items:center; justify-content:center; padding:16px; pointer-events:none;
   }
-  #shopPanel .panelBody { overflow-y:auto; }
-  #shopPanel.collapsed .panelBody { display:none; }
-  #shopPanel .shopItemRow { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:4px; }
-  #shopPanel .shopItemName { flex:1; }
-  #shopPanel .shopItemRow button {
-    background:#2a2a35; color:#ccc; border:1px solid #3a3a45; border-radius:4px;
-    padding:3px 8px; font-size:10px; cursor:pointer; white-space:nowrap;
+  #shopOverlay.show{ display:flex; }
+  #shopWindow{
+    pointer-events:auto; width:min(1240px,100%); height:min(720px,100%);
+    display:flex; flex-direction:column; background:var(--bg-1); border:1px solid var(--line);
+    color:var(--text-1); font-size:12px; user-select:none;
+    box-shadow:0 18px 60px rgba(0,0,0,0.6);
   }
-  #shopPanel .shopItemRow button:hover { background:#3a3a45; }
-  #shopPanel .shopItemRow.unaffordable .shopItemName { color:#777; }
-  #shopPanel .shopItemRow.selected { background:rgba(200,170,110,0.14); border-radius:4px; }
-  #shopPanel .shopItemName.clickable { cursor:pointer; }
-  #shopPanel .shopItemName.clickable:hover { color:#c8aa6e; }
-  /* 요청("상점에 아이템 선택하면 오른쪽에 띄워주는 상점 시스템") - 실제 LoL
-     상점처럼 아이템 이름을 클릭하면 상세 정보(전체 효과 설명 + 조합
-     재료/상위 아이템 경로)를 옆 패널에 띄운다. #shopPanel 바로 오른쪽에
-     동일한 스타일로 붙인다 - 아무것도 선택 안 했을 때는 숨겨둔다(.show일 때만 표시). */
-  #shopDetailPanel {
-    position:fixed; left:244px; bottom:128px; z-index:10; color:#bbb; font-size:11px;
-    background:rgba(10,10,15,0.55); padding:8px 12px; border-radius:6px;
-    border:1px solid #2a2a35; user-select:none; width:230px;
-    max-height:60vh; overflow-y:auto; display:none;
+  .uc{ text-transform:uppercase; letter-spacing:0.08em; }
+  .shop-head{ display:flex; align-items:center; gap:14px; height:52px; flex:none; padding:0 14px 0 18px; background:var(--bg-2); border-bottom:1px solid var(--line); }
+  .shop-title{ font-weight:800; font-size:13px; letter-spacing:0.24em; color:var(--accent); white-space:nowrap; }
+  .shop-title span{ margin-left:8px; font-size:11px; letter-spacing:0.08em; color:var(--text-2); font-weight:600; }
+  #shopSearch{
+    flex:1; max-width:320px; min-width:120px; height:30px; padding:0 10px; background:var(--bg-0); color:var(--text-0);
+    border:1px solid var(--line); outline:none; font-size:12px; font-family:inherit;
   }
-  #shopDetailPanel.show { display:block; }
-  #shopDetailPanel .detailTitle { color:#c8aa6e; font-weight:bold; font-size:12px; }
-  #shopDetailPanel .detailCost { color:#e8d8b0; margin-top:3px; }
-  #shopDetailPanel .detailDesc { margin-top:6px; line-height:1.5; color:#ccc; }
-  #shopDetailPanel .detailSection { margin-top:8px; padding-top:6px; border-top:1px solid #2a2a35; }
-  #shopDetailPanel .detailSection .label { color:#999; font-size:10px; margin-bottom:3px; }
-  #shopDetailPanel .detailLink { color:#8fc7ff; cursor:pointer; text-decoration:underline; }
-  #shopDetailPanel .detailLink:hover { color:#bcdcff; }
-  .shopTabs { display:flex; flex-wrap:wrap; gap:4px; }
-  .shopTabs button {
-    background:#1b1b22; color:#999; border:1px solid #3a3a45; border-radius:4px;
-    padding:3px 6px; font-size:10px; cursor:pointer;
+  #shopSearch:focus{ border-color:var(--accent-dim); }
+  .shop-zone{ font-size:11px; white-space:nowrap; }
+  .shop-zone .zone-on{ color:var(--good); }
+  .shop-zone .zone-off{ color:var(--warn); }
+  .shop-gold{ margin-left:auto; display:flex; align-items:baseline; gap:6px; }
+  .shop-gold #shopGold{ font-family:var(--font-num); font-size:17px; color:var(--accent); }
+  .shop-gold small{ font-size:9px; color:var(--text-2); letter-spacing:0.12em; }
+  .shop-close{ width:32px; height:32px; background:none; border:1px solid var(--line); color:var(--text-2); font-size:14px; cursor:pointer; }
+  .shop-close:hover{ color:var(--accent); border-color:var(--accent-dim); }
+
+  .shop-body{ flex:1; min-height:0; display:flex; }
+  .shop-cats{ width:170px; flex:none; overflow-y:auto; padding:8px 0 12px; border-right:1px solid var(--line-soft); }
+  .shop-nav-label{ font-size:9.5px; color:var(--text-2); padding:10px 16px 6px; }
+  .shop-cat{ display:block; width:100%; text-align:left; padding:8px 16px; font-size:12px; color:var(--text-1); background:none; border:none; border-left:2px solid transparent; cursor:pointer; font-family:inherit; }
+  .shop-cat:hover{ color:var(--text-0); background:var(--bg-2); }
+  .shop-cat.active{ color:var(--accent); background:var(--bg-2); border-left-color:var(--accent); }
+  .shop-filters{ display:flex; flex-wrap:wrap; gap:4px; padding:0 12px; }
+  .shop-filter{ padding:5px 8px; font-size:10.5px; color:var(--text-1); background:var(--bg-2); border:1px solid var(--line); cursor:pointer; font-family:inherit; }
+  .shop-filter:hover{ color:var(--text-0); }
+  .shop-filter.on{ color:var(--bg-0); background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .shop-reset{ margin:10px 12px 0; padding:5px 8px; font-size:10.5px; color:var(--text-2); background:none; border:1px dashed var(--line); cursor:pointer; font-family:inherit; }
+  .shop-reset:hover{ color:var(--accent); border-color:var(--accent-dim); }
+
+  #shopGrid{ flex:1; min-width:0; overflow-y:auto; padding:6px 16px 16px; }
+  .shop-section-head{ display:flex; align-items:center; gap:8px; font-size:10px; color:var(--text-2); padding:12px 0 8px; position:sticky; top:-6px; background:var(--bg-1); z-index:1; }
+  .shop-section-head span{ font-family:var(--font-num); color:var(--text-disabled); }
+  .shop-tiles{ display:grid; grid-template-columns:repeat(auto-fill,minmax(74px,1fr)); gap:6px; }
+  .shop-tile{ position:relative; display:flex; flex-direction:column; align-items:center; gap:4px; padding:7px 4px 6px; background:var(--bg-2); border:1px solid var(--line-soft); cursor:pointer; }
+  .shop-tile:hover{ border-color:var(--accent-dim); background:var(--bg-3); }
+  .shop-tile.selected{ border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent), 0 0 10px var(--accent-glow); }
+  .shop-tile .st-name{ width:100%; font-size:9.5px; line-height:1.25; color:var(--text-1); text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .shop-tile .st-cost{ font-family:var(--font-num); font-size:11px; color:var(--accent); }
+  .shop-tile.buildable .st-cost{ color:var(--good); }
+  .shop-tile.poor .st-cost{ color:var(--danger); }
+  .shop-tile.blocked .shop-icon{ filter:saturate(0.35) brightness(0.7); }
+  .shop-tile.owned::after{ content:'보유'; position:absolute; top:3px; right:3px; font-size:8.5px; padding:1px 3px; color:var(--bg-0); background:var(--accent); }
+  .shop-tile.bought{ animation:shopBought .45s ease-out; }
+  @keyframes shopBought{ 0%{ box-shadow:0 0 0 0 rgba(200,169,104,0.9);} 100%{ box-shadow:0 0 0 10px rgba(200,169,104,0);} }
+  .shop-empty{ padding:40px 0; text-align:center; color:var(--text-2); }
+
+  .shop-icon{
+    width:44px; height:44px; flex:none; display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:13px; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.8);
+    background:linear-gradient(145deg, color-mix(in srgb, var(--tone) 78%, #fff 6%), color-mix(in srgb, var(--tone) 45%, #000));
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.12);
   }
-  .shopTabs button.active { background:#2a2a35; color:#c8aa6e; border-color:#4a4a58; }
-  .shopTabs button:hover { background:#2a2a35; }
-  #inventoryRow, #bootsSlotRow { display:flex; gap:4px; margin-top:8px; padding-top:8px; border-top:1px solid #2a2a35; flex-wrap:wrap; }
-  #bootsSlotRow { align-items:center; }
-  .invSlot {
-    position:relative; width:28px; height:28px; background:#1b1b22; border:1px solid #3a3a45; border-radius:4px;
-    display:flex; align-items:center; justify-content:center; font-size:9px; color:#ccc; cursor:pointer;
+  .shop-icon.big{ width:64px; height:64px; font-size:18px; }
+
+  .shop-detail{ width:300px; flex:none; display:flex; flex-direction:column; border-left:1px solid var(--line-soft); background:var(--bg-0); }
+  .sd-scroll{ flex:1; min-height:0; overflow-y:auto; padding:16px; }
+  .sd-empty{ margin:auto; padding:40px 20px; text-align:center; color:var(--text-2); line-height:1.8; }
+  .sd-empty small{ color:var(--text-disabled); }
+  .sd-head{ display:flex; gap:12px; align-items:center; }
+  .sd-name{ font-size:15px; font-weight:700; color:var(--text-0); }
+  .sd-cost{ margin-top:3px; font-family:var(--font-num); font-size:13px; color:var(--accent); }
+  .sd-cost s{ color:var(--text-2); font-size:11px; margin-left:4px; }
+  .sd-tags{ display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+  .sd-tags span{ font-size:9.5px; padding:1px 6px; border:1px solid var(--line); color:var(--text-1); }
+  .sd-tags span.good{ border-color:var(--good); color:var(--good); }
+  .sd-stats{ list-style:none; margin-top:14px; padding:10px 12px; background:var(--bg-2); border:1px solid var(--line-soft); }
+  .sd-stats li{ font-size:12px; color:var(--text-0); line-height:1.7; }
+  .sd-passives{ margin-top:10px; }
+  .sd-passives p{ font-size:11px; line-height:1.6; color:var(--text-1); margin-bottom:6px; }
+  .sd-note{ font-size:10px; color:var(--text-2); margin-top:4px; }
+  .sd-label{ font-size:9.5px; color:var(--text-2); margin:16px 0 8px; padding-top:12px; border-top:1px solid var(--line-soft); }
+  .sd-tree{ display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .sd-tree-row{ display:flex; flex-wrap:wrap; justify-content:center; gap:8px; position:relative; padding-top:10px; border-top:1px solid var(--line); }
+  .sd-tree-node{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .sd-tree-sub{ display:flex; gap:4px; }
+  .sd-tree-sub .shop-icon{ width:30px; height:30px; font-size:10px; }
+  .sd-into{ display:flex; flex-wrap:wrap; gap:6px; }
+  .shop-mini{ display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; padding:3px; border:1px solid transparent; }
+  .shop-mini:hover{ border-color:var(--accent-dim); }
+  .shop-mini .shop-icon{ width:38px; height:38px; font-size:11px; }
+  .shop-mini span{ font-family:var(--font-num); font-size:9.5px; color:var(--accent); }
+  .shop-mini.owned{ border-color:var(--good); background:rgba(95,168,118,0.12); }
+  .shop-mini.owned span{ color:var(--good); }
+  .sd-buy{
+    flex:none; margin:12px 16px 16px; height:42px; border:1px solid var(--accent); background:var(--accent-dim);
+    color:var(--text-0); font-weight:700; font-size:13px; letter-spacing:0.04em; cursor:pointer; font-family:inherit;
   }
-  .invSlot:hover { background:#2a2a35; }
-  .invSlot.empty { cursor:default; }
-  .invSlot.usable { border-color:#4a7a4a; }
-  .invBadge {
-    position:absolute; right:-2px; bottom:-2px; background:#111; color:#e8c87a; border:1px solid #4a4a58;
-    border-radius:3px; font-size:8px; line-height:1; padding:1px 2px; pointer-events:none;
-  }
+  .sd-buy:hover{ background:var(--accent); color:var(--bg-0); }
+  .sd-buy.blocked{ background:var(--bg-2); border-color:var(--line); color:var(--text-2); font-weight:600; font-size:12px; }
+  .sd-buy.blocked:hover{ background:var(--bg-2); color:var(--text-2); }
+
+  .shop-foot{ flex:none; display:flex; align-items:center; gap:16px; height:68px; padding:0 18px; background:var(--bg-2); border-top:1px solid var(--line); }
+  #shopInv{ display:flex; align-items:center; gap:5px; }
+  .shop-inv-gap{ width:8px; }
+  .shop-inv-slot{ position:relative; width:46px; height:46px; display:flex; align-items:center; justify-content:center; background:var(--bg-0); border:1px solid var(--line); cursor:pointer; }
+  .shop-inv-slot .shop-icon{ width:40px; height:40px; font-size:12px; }
+  .shop-inv-slot.empty{ border-style:dashed; cursor:default; }
+  .shop-inv-slot.selected{ border-color:var(--accent); box-shadow:0 0 8px var(--accent-glow); }
+  .shop-inv-slot.trinket{ cursor:default; border-color:var(--accent-dim); }
+  .shop-inv-slot .key, .hud-item .key{ position:absolute; left:2px; top:1px; z-index:2; font-size:8.5px; color:var(--accent); text-shadow:0 1px 2px #000; }
+  .shop-inv-slot .badge, .hud-item .badge{ position:absolute; right:1px; bottom:1px; z-index:2; font-family:var(--font-num); font-size:9px; color:var(--text-0); background:rgba(0,0,0,0.75); padding:0 2px; }
+  .shop-foot-actions{ display:flex; align-items:center; gap:10px; margin-left:auto; }
+  #shopSlotInfo{ font-size:11px; color:var(--text-2); max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #shopSellBtn{ height:34px; padding:0 16px; border:1px solid var(--enemy); background:var(--enemy-dim); color:var(--text-0); font-weight:700; font-size:12px; cursor:pointer; font-family:inherit; }
+  #shopSellBtn:disabled{ border-color:var(--line); background:var(--bg-1); color:var(--text-disabled); cursor:default; }
+  .shop-hint{ font-size:10px; color:var(--text-2); white-space:nowrap; }
+  @media (max-width:900px){ .shop-detail{ width:240px; } .shop-cats{ width:130px; } .shop-hint, .shop-zone{ display:none; } }
+
+  /* 하단 HUD 아이템 칸(원작 배치: 1·2·3 / 5·6·7 + 장신구 4 + 신발) */
+  #hudItems{ display:flex; align-items:center; gap:6px; padding:0 14px; border-right:1px solid var(--line-soft); pointer-events:auto; }
+  .hud-item-grid{ display:grid; grid-template-columns:repeat(3,42px); grid-template-rows:repeat(2,42px); gap:4px; }
+  .hud-item-side{ display:grid; grid-template-rows:repeat(2,42px); gap:4px; }
+  .hud-item{ position:relative; width:42px; height:42px; display:flex; align-items:center; justify-content:center; background:var(--bg-2); border:1px solid var(--line); cursor:pointer; }
+  .hud-item .shop-icon{ width:36px; height:36px; font-size:11px; }
+  .hud-item.empty{ border-style:dashed; }
+  .hud-item.empty:hover, .hud-item:hover{ border-color:var(--accent-dim); }
+  .hud-item.usable:not(.empty){ border-color:#4a7a4a; }
+  .hud-item.trinket{ border-color:var(--accent-dim); }
+  #hudGold{ pointer-events:auto; margin-left:0; align-items:flex-start; } /* 오른쪽 끝은 챔피언 패널에 가려지므로 아이템 칸 바로 옆에 둔다(원작도 아이템 칸 옆) */
+  #hudShopBtn{ margin-top:6px; padding:4px 12px; border:1px solid var(--accent-dim); background:var(--bg-2); color:var(--accent); font-size:11px; font-weight:700; letter-spacing:0.06em; cursor:pointer; font-family:inherit; }
+  #hudShopBtn:hover{ background:var(--accent-dim); color:var(--text-0); }
+  #hudShopBtn small{ color:var(--text-2); font-weight:400; margin-left:4px; }
 
   /* 요청("상태창들 싹다 접을 수 있게") - helpBox/rangeIndicatorToggle
      공용 접기 헤더. 제목 줄만 항상 보이고, 클릭하면 나머지 내용이
@@ -523,8 +602,9 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
     <div><b>좌클릭 (적 클릭)</b>: 대상 선택 + 공격</div>
     <div><b>Q/W/E/R</b>: 스킬(조준 방식은 설정의 "스킬 시전 방식" - 일반이면 좌클릭 시전·우클릭 취소)</div>
     <div><b>B</b>: 귀환</div>
-    <div><b>1~6</b>: 인벤토리 아이템 사용(물약)</div>
-    <div><b>T</b>: 투명 와드 설치</div>
+    <div><b>P</b>: 상점 열기/닫기</div>
+    <div><b>1·2·3·5·6·7</b>: 인벤토리 아이템 사용(물약)</div>
+    <div><b>4</b>: 투명 와드 설치(마우스 위치)</div>
     <div><b>Space</b>: 대상 강제 공격(테스트)</div>
     <div><b>ESC</b>: 조준 취소 / 일시정지</div>
     <div><b>F1</b>: 디버그 패널 토글</div>
@@ -540,7 +620,7 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
   <label style="margin-top:4px;display:block;">스킬 시전 방식<select id="castModeSelect" style="display:block;width:100%;max-width:100%;margin-top:2px;font-size:11px;"><option value="normal">일반 (키 → 좌클릭)</option><option value="indicator">표시기 빠른 (떼면 시전)</option><option value="quick">빠른 (즉시)</option></select></label>
   <label style="margin-top:4px;"><input type="checkbox" id="visionSystemCheckbox" checked> 시야 시스템(전장의 안개)</label>
   <label style="margin-top:4px;"><input type="checkbox" id="enemyVisionViewCheckbox"> 적 팀 시야로 보기</label>
-  <label style="margin-top:4px;"><input type="checkbox" id="dummyPlaceCheckbox"> 더미 설치 모드 (P)</label>
+  <label style="margin-top:4px;"><input type="checkbox" id="dummyPlaceCheckbox"> 더미 설치 모드 (J)</label>
   <button id="clearDummiesBtn" style="margin-top:4px;width:100%;">설치한 허수아비 전부 제거</button>
   <label style="margin-top:4px;"><input type="checkbox" id="allyPlaceCheckbox"> 아군 더미 설치 모드 (O)</label>
   <label style="margin-top:4px;"><input type="checkbox" id="brushPlaceCheckbox"> 부쉬 설치 모드 (N)</label>
@@ -573,33 +653,26 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
   </div>
 </div>
 
-<div id="shopPanel">
-  <div class="panelHeader"><b>상점 (기지 구역 안에서만 구매)</b><span class="panelCollapseBtn">─</span></div>
-  <div class="panelBody">
-    <div id="shopCategoryTabs" class="shopTabs"></div>
-    <div id="shopItemList"></div>
-    <div style="font-size:9px;color:#888;margin-top:4px;">* 원문에 가격이 없어 실제 LoL 가격을 사용</div>
-    <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">트린켓(기본 장착, 구매 불필요)</div>
-    <div id="trinketSlotRow" style="display:flex;align-items:center;gap:8px;"></div>
-    <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">신발(한 켤레만 착용 가능)</div>
-    <div id="bootsSlotRow" style="display:flex;align-items:center;gap:8px;"></div>
-    <div style="font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">인벤토리</div>
-    <div id="inventoryRow"></div>
-    <div style="font-size:9px;color:#888;margin-top:4px;">숫자키 1~6: 해당 칸 아이템 사용(물약) · 슬롯 클릭: 사용/판매(70%) · T: 투명 와드 설치</div>
-  </div>
-</div>
-
-<div id="shopDetailPanel">
-  <div class="detailTitle" id="shopDetailTitle">아이템을 선택하세요</div>
-  <div class="detailCost" id="shopDetailCost"></div>
-  <div class="detailDesc" id="shopDetailDesc">상점 목록에서 아이템 이름을 클릭하면 여기에 가격/효과/조합 경로가 표시됩니다.</div>
-  <div class="detailSection" id="shopDetailRecipeSection" style="display:none;">
-    <div class="label">하위템(조합 재료)</div>
-    <div id="shopDetailRecipeList"></div>
-  </div>
-  <div class="detailSection" id="shopDetailBuildsIntoSection" style="display:none;">
-    <div class="label">이 아이템으로 조합 가능</div>
-    <div id="shopDetailBuildsIntoList"></div>
+<!-- 33차: 상점 창(src/core/shop_ui.js가 내용을 채운다) -->
+<div id="shopOverlay">
+  <div id="shopWindow" class="bevel">
+    <div class="shop-head">
+      <div class="shop-title uc">Item Shop<span>상점</span></div>
+      <input id="shopSearch" type="text" placeholder="아이템 이름 검색" autocomplete="off">
+      <div class="shop-zone" id="shopZoneChip"></div>
+      <div class="shop-gold"><span id="shopGold">0</span><small>GOLD</small></div>
+      <button class="shop-close" id="shopCloseBtn" title="닫기 (P / Esc)">✕</button>
+    </div>
+    <div class="shop-body">
+      <nav class="shop-cats" id="shopCats"></nav>
+      <div id="shopGrid"></div>
+      <aside class="shop-detail" id="shopDetail"></aside>
+    </div>
+    <div class="shop-foot">
+      <div id="shopInv"></div>
+      <div class="shop-foot-actions"><span id="shopSlotInfo"></span><button id="shopSellBtn" disabled>판매</button></div>
+      <div class="shop-hint">클릭: 정보 · 우클릭: 바로 구매 · P/Esc: 닫기</div>
+    </div>
   </div>
 </div>
 
@@ -618,7 +691,8 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
     <div class="skillSlot ready" id="slotE"><span class="label">E</span><span class="name">E</span></div>
     <div class="skillSlot yasuo-r-disabled" id="slotR"><span class="label">R</span><span class="name">R</span></div>
   </div>
-  <div id="hudGold"><div class="g-amount" id="goldAmount">0</div><div class="g-label">GOLD</div></div>
+  <div id="hudItems"></div>
+  <div id="hudGold"><div class="g-amount" id="goldAmount">0</div><div class="g-label">GOLD</div><button id="hudShopBtn" title="상점 열기/닫기 (P)">상점<small>P</small></button></div>
 </div>
 <div id="levelUpFx"></div>
 
@@ -6495,6 +6569,7 @@ function snapCameraTo(targetPos) {
 }
 
 window.addEventListener('wheel', (e) => {
+  if (e.target && e.target.closest && e.target.closest('#shopWindow')) return; // 33차: 상점 창 안에서 굴리면 목록만 스크롤한다
   cameraRig.distance = THREE.MathUtils.clamp(
     cameraRig.distance + Math.sign(e.deltaY) * 2.0,
     cameraRig.minDistance, cameraRig.maxDistance
@@ -31156,6 +31231,378 @@ function _itemMuramanaShockOnHit(ctrl, target, isBasicAttack) {
   }
 }
 
+/* ===== src/core/shop_ui.js ===== */
+/* ============================================================
+   SHOP UI (상점 창 - 33차)
+   ------------------------------------------------------------
+   요청("제대로 된 ui를 갖춘 상점을 만들어줘") - 화면 왼쪽 아래의 작은 목록
+   패널(#shopPanel)을 업로드된 moba_ui_system 디자인(베벨 패널·청동 강조색·
+   왼쪽 분류/가운데 아이템 격자/오른쪽 상세)의 상점 창으로 바꾼다.
+
+   - P키(원작 기본 키) 또는 하단 HUD의 상점 버튼으로 연다. P/Esc/✕로 닫는다.
+     창을 열어 둔 동안에도 게임은 계속 돌아가고, 창 바깥의 맵은 그대로 클릭된다(원작과 같다).
+   - 왼쪽: 분류(ITEM_CATEGORIES + 전체) + 능력치 필터(여러 개 동시 선택 = 모두 만족).
+   - 가운데: 아이템 격자. 클릭 = 선택, 우클릭 = 바로 구매(원작 조작).
+   - 오른쪽: 선택한 아이템의 가격·효과·조합 경로(하위템/상위템)와 구매 버튼.
+   - 아래: 보유 아이템 6칸 + 신발 + 장신구. 칸을 고르면 판매 버튼이 뜬다.
+
+   구매/조합/판매 자체는 전부 item_system.js(buildOrBuyItem/sellItem/sellBoots)가
+   처리한다 - 이 파일은 그 함수들을 부르기만 한다. 다만 그 함수들은 실패를
+   콘솔 경고로만 알리므로, 같은 조건을 미리 따져(shopBlockReason) 버튼에
+   "왜 못 사는지"를 바로 보여준다.
+   아이템 그림 파일이 없어 아이콘은 이름 두 글자 + 주 능력치 색으로 그린다.
+   ============================================================ */
+const ITEM_SLOT_KEYS = ['1', '2', '3', '5', '6', '7']; // 원작 키 배치 - 4는 장신구(와드)
+const SHOP_STAT_FILTERS = [
+  { id: 'ad', nameKo: '공격력', test: (it, s) => s.attackDamage },
+  { id: 'as', nameKo: '공격 속도', test: (it, s) => s.attackSpeedPercent },
+  { id: 'crit', nameKo: '치명타', test: (it, s) => s.critChance || it.critDamagePercent },
+  { id: 'vamp', nameKo: '생명력 흡수', test: (it) => it.physicalVampPercent || it.allDamageVampPercent },
+  { id: 'pen', nameKo: '관통력', test: (it) => it.armorPenFlat || it.armorPenPercent || it.magicPenPercent },
+  { id: 'ap', nameKo: '주문력', test: (it, s) => s.abilityPower },
+  { id: 'mana', nameKo: '마나·마나 재생', test: (it, s) => s.mana || s.mpRegenPercent },
+  { id: 'haste', nameKo: '스킬 가속', test: (it, s) => s.abilityHaste },
+  { id: 'hp', nameKo: '체력·체력 재생', test: (it, s) => s.maxHp || s.hpRegenPercent },
+  { id: 'armor', nameKo: '방어력', test: (it, s) => s.armor },
+  { id: 'mr', nameKo: '마법 저항력', test: (it, s) => s.magicResist },
+  { id: 'ms', nameKo: '이동 속도', test: (it, s) => s.moveSpeed || it.isBoots },
+];
+// 아이콘 색(주 능력치 순서대로 처음 맞는 것).
+const SHOP_ICON_TONES = [
+  { test: (it) => it.consumable || it.elixirEffect || it.wardPlacement, tone: '#c9a94f' },
+  { test: (it) => it.isBoots, tone: '#b08a5a' },
+  { test: (it, s) => s.abilityPower, tone: '#9a6fd0' },
+  { test: (it, s) => s.attackDamage || s.critChance || s.attackSpeedPercent, tone: '#c9774a' },
+  { test: (it, s) => s.armor || s.magicResist || s.maxHp, tone: '#5fa876' },
+  { test: (it, s) => s.mana || s.mpRegenPercent, tone: '#4d84c4' },
+];
+
+let _shopOpen = false;
+let _shopCat = 'all';
+const _shopStatFilters = new Set();
+let _shopSearch = '';
+let _shopSelectedItemId = null;
+let _shopSelectedSlot = null; // 인벤토리 칸 번호(0~5) 또는 'boots'
+let _shopStateSig = '';
+let _shopTicker = null;
+
+function _shopEl(id) { return document.getElementById(id); }
+function _shopEsc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function _shopIconText(item) { return item.nameKo.replace(/\s+/g, '').slice(0, 2); }
+function _shopIconTone(item) {
+  const s = item.stats || {};
+  const hit = SHOP_ICON_TONES.find((t) => t.test(item, s));
+  return hit ? hit.tone : '#7d8590';
+}
+function _shopIconHtml(item, cls) {
+  return `<div class="shop-icon bevel-s ${cls || ''}" style="--tone:${_shopIconTone(item)}">${_shopEsc(_shopIconText(item))}</div>`;
+}
+function _shopInBase(ctrl) {
+  if (!ctrl || !ctrl.root) return false;
+  return typeof isPositionInBaseZone !== 'function' || isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM);
+}
+function _shopCanBuild(ctrl, item) {
+  return !!(ctrl && item.recipe && item.recipe.length && typeof hasComponents === 'function' && hasComponents(ctrl, item.recipe));
+}
+function _shopPayCost(ctrl, item) {
+  return _shopCanBuild(ctrl, item) ? combineCost(item) : item.cost;
+}
+// buyItem()/buildOrBuyItem()이 거절하는 조건을 같은 순서로 미리 따진다. null이면 살 수 있다.
+function shopBlockReason(ctrl, itemId) {
+  const item = typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[itemId] : null;
+  if (!ctrl) return '챔피언을 먼저 불러오세요';
+  if (!item) return '알 수 없는 아이템';
+  if (item.trinket) return '기본 장착(구매 불필요)';
+  if (!_shopInBase(ctrl)) return '기지 안에서만 구매 가능';
+  const build = _shopCanBuild(ctrl, item);
+  if (typeof _itemUniqueGroupConflict === 'function' && _itemUniqueGroupConflict(ctrl, item, build ? new Set(item.recipe) : null)) return '같은 계열 유일 아이템 보유 중';
+  if (item.isBoots && ctrl.boots && ctrl.boots.id === itemId) return '이미 착용 중';
+  const cost = _shopPayCost(ctrl, item);
+  const gold = Math.floor(ctrl.gold || 0);
+  if (gold < cost) return `골드 부족 (${(cost - gold).toLocaleString()} 더 필요)`;
+  if (!build && !item.isBoots) {
+    const items = ctrl.items || [];
+    if (item.maxStack) {
+      const held = items.filter((s) => s.id === itemId).reduce((sum, s) => sum + (s.count || 1), 0);
+      if (held >= item.maxStack) return `최대 ${item.maxStack}개까지 보유 가능`;
+      if (!items.some((s) => s.id === itemId) && items.length >= 6) return '인벤토리가 가득 참';
+    } else if (items.length >= 6) return '인벤토리가 가득 참';
+  }
+  return null;
+}
+function _shopBuy(itemId) {
+  const reason = shopBlockReason(controller, itemId);
+  if (reason) { if (typeof showSkillToast === 'function') showSkillToast(reason); return false; }
+  const ok = typeof buildOrBuyItem === 'function' && buildOrBuyItem(controller, itemId);
+  if (ok) {
+    const tile = document.querySelector(`#shopGrid .shop-tile[data-id="${itemId}"]`);
+    if (tile) { tile.classList.remove('bought'); void tile.offsetWidth; tile.classList.add('bought'); }
+  }
+  return ok;
+}
+function _shopSell() {
+  if (!controller || _shopSelectedSlot == null) return;
+  if (_shopSelectedSlot === 'boots') { if (typeof sellBoots === 'function') sellBoots(controller); }
+  else if (typeof sellItem === 'function') sellItem(controller, _shopSelectedSlot);
+  _shopSelectedSlot = null;
+  renderShopPanel(true);
+}
+
+function _shopVisibleIds(cat) {
+  const q = _shopSearch.trim().replace(/\s+/g, '');
+  return cat.items.filter((id) => {
+    const item = ITEM_DATA[id];
+    if (!item || item.hiddenFromShop) return false;
+    if (q && !item.nameKo.replace(/\s+/g, '').includes(q)) return false;
+    const s = item.stats || {};
+    for (const fid of _shopStatFilters) {
+      const f = SHOP_STAT_FILTERS.find((x) => x.id === fid);
+      if (f && !f.test(item, s)) return false;
+    }
+    return true;
+  });
+}
+function _shopRenderCats() {
+  const nav = _shopEl('shopCats');
+  if (!nav) return;
+  const cats = [{ id: 'all', nameKo: '전체 아이템' }].concat(ITEM_CATEGORIES);
+  let html = '<div class="shop-nav-label uc">분류</div>';
+  for (const c of cats) html += `<button class="shop-cat${c.id === _shopCat ? ' active' : ''}" data-cat="${c.id}">${_shopEsc(c.nameKo)}</button>`;
+  html += '<div class="shop-nav-label uc">능력치</div><div class="shop-filters">';
+  for (const f of SHOP_STAT_FILTERS) html += `<button class="shop-filter bevel-s${_shopStatFilters.has(f.id) ? ' on' : ''}" data-filter="${f.id}">${_shopEsc(f.nameKo)}</button>`;
+  html += '</div>';
+  if (_shopStatFilters.size || _shopSearch) html += '<button class="shop-reset" data-reset="1">필터 초기화</button>';
+  nav.innerHTML = html;
+}
+function _shopRenderGrid() {
+  const grid = _shopEl('shopGrid');
+  if (!grid) return;
+  const cats = _shopCat === 'all' ? ITEM_CATEGORIES : ITEM_CATEGORIES.filter((c) => c.id === _shopCat);
+  let html = '';
+  for (const cat of cats) {
+    const ids = _shopVisibleIds(cat);
+    if (!ids.length) continue;
+    html += `<div class="shop-section"><div class="shop-section-head uc">${_shopEsc(cat.nameKo)}<span>${ids.length}</span></div><div class="shop-tiles">`;
+    for (const id of ids) {
+      const item = ITEM_DATA[id];
+      html += `<div class="shop-tile" data-id="${id}" title="${_shopEsc(item.nameKo)}">${_shopIconHtml(item)}<div class="st-name">${_shopEsc(item.nameKo)}</div><div class="st-cost"></div></div>`;
+    }
+    html += '</div></div>';
+  }
+  grid.innerHTML = html || '<div class="shop-empty">조건에 맞는 아이템이 없습니다.</div>';
+  _shopStateSig = '';
+  renderShopPanel(true);
+}
+// 격자 타일의 상태(가격·구매 가능·보유·선택)만 다시 칠한다 - 격자 전체를 다시 만들지 않는다.
+function _shopPaintTiles() {
+  const ctrl = controller;
+  const ownedCount = {};
+  if (ctrl) {
+    for (const s of ctrl.items || []) ownedCount[s.id] = (ownedCount[s.id] || 0) + (s.count || 1);
+    if (ctrl.boots) ownedCount[ctrl.boots.id] = 1;
+  }
+  document.querySelectorAll('#shopGrid .shop-tile').forEach((tile) => {
+    const id = tile.dataset.id;
+    const item = ITEM_DATA[id];
+    const build = _shopCanBuild(ctrl, item);
+    const cost = _shopPayCost(ctrl, item);
+    const reason = shopBlockReason(ctrl, id);
+    tile.classList.toggle('selected', id === _shopSelectedItemId);
+    tile.classList.toggle('blocked', !!reason);
+    tile.classList.toggle('poor', !!ctrl && Math.floor(ctrl.gold || 0) < cost);
+    tile.classList.toggle('buildable', build);
+    tile.classList.toggle('owned', !!ownedCount[id]);
+    tile.querySelector('.st-cost').textContent = `${cost.toLocaleString()}${item.priceGuessed ? '*' : ''}`;
+  });
+}
+function _shopZoneHtml(ctrl) {
+  if (!ctrl) return '<span class="zone-off">챔피언 없음</span>';
+  return _shopInBase(ctrl)
+    ? '<span class="zone-on">● 기지 안 - 구매 가능</span>'
+    : '<span class="zone-off">● 기지 밖 - 구매 불가 (B: 귀환)</span>';
+}
+function _shopTileMini(id, ownedSet) {
+  const item = ITEM_DATA[id];
+  if (!item) return '';
+  const owned = ownedSet && ownedSet.has(id);
+  return `<div class="shop-mini${owned ? ' owned' : ''}" data-id="${id}" title="${_shopEsc(item.nameKo)} (${item.cost.toLocaleString()})">${_shopIconHtml(item)}<span>${item.cost.toLocaleString()}</span></div>`;
+}
+// 조합 경로: 하위템과 그 하위템의 하위템(2단계)까지. 보유 중인 하위템은 표시한다(개수만큼만).
+function _shopRecipeHtml(item, ctrl) {
+  if (!item.recipe || !item.recipe.length) return '';
+  const pool = ((ctrl && ctrl.items) || []).map((s) => s.id);
+  const take = (id) => { const i = pool.indexOf(id); if (i < 0) return false; pool.splice(i, 1); return true; };
+  let html = `<div class="sd-label uc">조합 경로</div><div class="sd-tree"><div class="sd-tree-top">${_shopTileMini(item.id)}</div><div class="sd-tree-row">`;
+  for (const cid of item.recipe) {
+    const comp = ITEM_DATA[cid];
+    if (!comp) continue;
+    const owned = take(cid);
+    html += `<div class="sd-tree-node">${_shopTileMini(cid, owned ? new Set([cid]) : null)}`;
+    if (!owned && comp.recipe && comp.recipe.length) {
+      html += '<div class="sd-tree-sub">';
+      for (const gid of comp.recipe) html += _shopTileMini(gid, take(gid) ? new Set([gid]) : null);
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  return html + '</div></div>';
+}
+function _shopDescHtml(item) {
+  const lines = (typeof _itemStatsSummary === 'function' ? _itemStatsSummary(item) : '').split(' · ').filter((l) => l && !l.startsWith('하위템:'));
+  const statRe = /^[^(:]{1,14} \+[\d.]+%?$/;
+  const stats = lines.filter((l) => statRe.test(l));
+  const rest = lines.filter((l) => !statRe.test(l));
+  let html = '';
+  if (stats.length) html += `<ul class="sd-stats">${stats.map((l) => `<li>${_shopEsc(l)}</li>`).join('')}</ul>`;
+  if (rest.length) html += `<div class="sd-passives">${rest.map((l) => `<p>${_shopEsc(l)}</p>`).join('')}</div>`;
+  return html || '<div class="sd-passives"><p>추가 효과 없음</p></div>';
+}
+function _shopRenderDetail() {
+  const box = _shopEl('shopDetail');
+  if (!box) return;
+  const ctrl = controller;
+  const item = _shopSelectedItemId ? ITEM_DATA[_shopSelectedItemId] : null;
+  if (!item) {
+    box.innerHTML = '<div class="sd-empty">아이템을 선택하세요.<br><small>클릭: 정보 보기 · 우클릭: 바로 구매</small></div>';
+    return;
+  }
+  const build = _shopCanBuild(ctrl, item);
+  const cost = _shopPayCost(ctrl, item);
+  const reason = shopBlockReason(ctrl, item.id);
+  const catName = (ITEM_CATEGORIES.find((c) => c.items.includes(item.id)) || {}).nameKo;
+  const buildsInto = (typeof ITEM_ORDER !== 'undefined' ? ITEM_ORDER : Object.keys(ITEM_DATA))
+    .filter((id) => ITEM_DATA[id] && !ITEM_DATA[id].hiddenFromShop && ITEM_DATA[id].recipe && ITEM_DATA[id].recipe.includes(item.id));
+  let html = `<div class="sd-head">${_shopIconHtml(item, 'big')}<div><div class="sd-name">${_shopEsc(item.nameKo)}</div>`;
+  html += `<div class="sd-cost">${item.trinket ? '기본 장착' : `${cost.toLocaleString()} GOLD`}${build && cost !== item.cost ? ` <s>${item.cost.toLocaleString()}</s>` : ''}</div>`;
+  html += '<div class="sd-tags">';
+  if (catName) html += `<span>${_shopEsc(catName)}</span>`;
+  if (build) html += '<span class="good">조합 가능</span>';
+  if (item.uniqueGroup) html += '<span>유일</span>';
+  html += '</div></div></div>';
+  html += _shopDescHtml(item);
+  if (item.priceGuessed) html += '<div class="sd-note">* 원문에 가격이 없어 실제 LoL 가격을 사용</div>';
+  html += _shopRecipeHtml(item, ctrl);
+  if (buildsInto.length) {
+    html += `<div class="sd-label uc">상위 아이템</div><div class="sd-into">${buildsInto.map((id) => _shopTileMini(id)).join('')}</div>`;
+  }
+  box.innerHTML = `<div class="sd-scroll">${html}</div>`
+    + `<button class="sd-buy bevel-s${reason ? ' blocked' : ''}" data-buy="${item.id}">${reason ? _shopEsc(reason) : `${build ? '조합' : item.isBoots && ctrl && ctrl.boots ? '교체' : '구매'} · ${cost.toLocaleString()}`}</button>`;
+}
+function _shopRenderInventory() {
+  const box = _shopEl('shopInv');
+  if (!box) return;
+  const ctrl = controller;
+  const items = (ctrl && ctrl.items) || [];
+  let html = '';
+  for (let i = 0; i < 6; i++) {
+    const slot = items[i];
+    const data = slot ? ITEM_DATA[slot.id] : null;
+    const badge = data ? (typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '')) : '';
+    html += `<div class="shop-inv-slot${data ? '' : ' empty'}${_shopSelectedSlot === i ? ' selected' : ''}" data-slot="${i}" title="${data ? _shopEsc(data.nameKo) : '빈 칸'}"><span class="key">${ITEM_SLOT_KEYS[i]}</span>${data ? _shopIconHtml(data) : ''}${badge !== '' ? `<span class="badge">${badge}</span>` : ''}</div>`;
+  }
+  const boots = ctrl && ctrl.boots ? ITEM_DATA[ctrl.boots.id] : null;
+  html += `<div class="shop-inv-gap"></div><div class="shop-inv-slot${boots ? '' : ' empty'}${_shopSelectedSlot === 'boots' ? ' selected' : ''}" data-slot="boots" title="${boots ? _shopEsc(boots.nameKo) : '신발 칸'}"><span class="key">신발</span>${boots ? _shopIconHtml(boots) : ''}</div>`;
+  const trinket = ctrl && ctrl.trinket ? ITEM_DATA[ctrl.trinket.id] : null;
+  html += `<div class="shop-inv-slot trinket${trinket ? '' : ' empty'}" title="${trinket ? _shopEsc(trinket.nameKo) + ' (4키: 설치)' : '장신구'}"><span class="key">4</span>${trinket ? _shopIconHtml(trinket) : ''}${trinket ? `<span class="badge">${ctrl.trinket.charges}/${trinket.maxCharges}</span>` : ''}</div>`;
+  box.innerHTML = html;
+  // 판매 버튼
+  const sellBtn = _shopEl('shopSellBtn');
+  const info = _shopEl('shopSlotInfo');
+  let sel = null, price = 0;
+  if (ctrl && _shopSelectedSlot === 'boots' && boots) { sel = boots; price = Math.floor(boots.cost * 0.7); }
+  else if (ctrl && typeof _shopSelectedSlot === 'number' && items[_shopSelectedSlot]) {
+    const s = items[_shopSelectedSlot];
+    sel = ITEM_DATA[s.id];
+    price = sel ? Math.floor((sel.cost || 0) * (s.count || 1) * 0.7) : 0;
+  } else _shopSelectedSlot = null;
+  if (sellBtn) { sellBtn.disabled = !sel; sellBtn.textContent = sel ? `판매 +${price.toLocaleString()}` : '판매'; }
+  if (info) info.textContent = sel ? sel.nameKo : '보유 아이템을 고르면 판매할 수 있습니다';
+}
+// 골드·보유 아이템·위치(기지 안/밖)가 바뀌면 다시 칠한다. 닫혀 있으면 아무것도 안 한다
+// (updateGoldDisplay()/updateItemUI()가 자주 불러도 비용이 없다).
+function renderShopPanel(force) {
+  if (!_shopOpen || typeof ITEM_DATA === 'undefined') return;
+  const ctrl = controller;
+  const sig = ctrl
+    ? [Math.floor(ctrl.gold || 0), _shopInBase(ctrl), (ctrl.items || []).map((s) => `${s.id}:${s.count}:${s.charges}`).join(','), ctrl.boots && ctrl.boots.id, ctrl.trinket && ctrl.trinket.charges, _shopSelectedItemId, _shopSelectedSlot].join('|')
+    : 'none';
+  if (!force && sig === _shopStateSig) return;
+  _shopStateSig = sig;
+  const goldEl = _shopEl('shopGold');
+  if (goldEl) goldEl.textContent = ctrl ? Math.floor(ctrl.gold || 0).toLocaleString() : '0';
+  const zone = _shopEl('shopZoneChip');
+  if (zone) zone.innerHTML = _shopZoneHtml(ctrl);
+  _shopPaintTiles();
+  _shopRenderDetail();
+  _shopRenderInventory();
+}
+function _shopSelectItem(id) {
+  if (!ITEM_DATA[id]) return;
+  _shopSelectedItemId = id;
+  renderShopPanel(true);
+}
+function setShopOpen(open) {
+  const overlay = _shopEl('shopOverlay');
+  if (!overlay) return;
+  _shopOpen = !!open;
+  overlay.classList.toggle('show', _shopOpen);
+  clearInterval(_shopTicker);
+  _shopTicker = null;
+  if (_shopOpen) {
+    _shopRenderCats();
+    _shopRenderGrid();
+    // 걸어서 기지에 들어가고 나가는 것은 이벤트가 없으니 열려 있는 동안만 가볍게 확인한다.
+    _shopTicker = setInterval(() => renderShopPanel(false), 250);
+  } else {
+    const search = _shopEl('shopSearch');
+    if (search && document.activeElement === search) search.blur();
+  }
+}
+function toggleShop() { setShopOpen(!_shopOpen); }
+function isShopOpen() { return _shopOpen; }
+
+(function initShopUi() {
+  const overlay = _shopEl('shopOverlay');
+  if (!overlay) return;
+  _shopEl('shopCloseBtn').addEventListener('click', () => setShopOpen(false));
+  _shopEl('shopSellBtn').addEventListener('click', _shopSell);
+  const search = _shopEl('shopSearch');
+  search.addEventListener('input', () => { _shopSearch = search.value; _shopRenderCats(); _shopRenderGrid(); });
+  _shopEl('shopCats').addEventListener('click', (e) => {
+    const cat = e.target.closest('[data-cat]');
+    const filter = e.target.closest('[data-filter]');
+    if (cat) _shopCat = cat.dataset.cat;
+    else if (filter) { const id = filter.dataset.filter; if (_shopStatFilters.has(id)) _shopStatFilters.delete(id); else _shopStatFilters.add(id); }
+    else if (e.target.closest('[data-reset]')) { _shopStatFilters.clear(); _shopSearch = ''; search.value = ''; }
+    else return;
+    _shopRenderCats();
+    _shopRenderGrid();
+  });
+  // 격자·조합 경로·상위 아이템의 타일: 클릭 = 선택, 우클릭 = 바로 구매.
+  const pick = (e) => e.target.closest('.shop-tile[data-id], .shop-mini[data-id]');
+  overlay.addEventListener('click', (e) => {
+    const buy = e.target.closest('[data-buy]');
+    if (buy) { _shopBuy(buy.dataset.buy); return; }
+    const t = pick(e);
+    if (t) { _shopSelectItem(t.dataset.id); return; }
+    const slot = e.target.closest('.shop-inv-slot[data-slot]');
+    if (slot && !slot.classList.contains('empty')) {
+      const v = slot.dataset.slot === 'boots' ? 'boots' : Number(slot.dataset.slot);
+      _shopSelectedSlot = _shopSelectedSlot === v ? null : v;
+      const ctrl = controller;
+      const id = v === 'boots' ? ctrl && ctrl.boots && ctrl.boots.id : ctrl && ctrl.items[v] && ctrl.items[v].id;
+      if (_shopSelectedSlot != null && id) _shopSelectedItemId = id;
+      renderShopPanel(true);
+    }
+  });
+  overlay.addEventListener('contextmenu', (e) => {
+    const t = pick(e);
+    if (t) { e.preventDefault(); _shopSelectedItemId = t.dataset.id; _shopBuy(t.dataset.id); renderShopPanel(true); }
+  });
+  const hudBtn = _shopEl('hudShopBtn');
+  if (hudBtn) hudBtn.addEventListener('click', toggleShop);
+})();
+
 /* ===== src/core/global_system_instances.js ===== */
 /* ============================================================
    4. GLOBAL SYSTEM INSTANCES
@@ -31432,238 +31879,68 @@ function _itemStatsSummary(item) {
   return parts.join(' · ');
 }
 
-let _shopActiveCategory = (typeof ITEM_CATEGORIES !== 'undefined' && ITEM_CATEGORIES[0]) ? ITEM_CATEGORIES[0].id : null;
-// 요청("상점에 아이템 선택하면 오른쪽에 띄워주는 상점 시스템") - 실제 LoL
-// 상점처럼 아이템 이름을 클릭하면 #shopDetailPanel(오른쪽 패널)에 전체
-// 효과 설명 + 조합 재료/상위 아이템 경로를 보여준다. 선택 상태는 다른
-// 탭으로 옮겨도 그대로 유지된다(골드가 바뀌어 renderShopPanel()이 다시
-// 그려질 때도 마찬가지) - 하위템/상위템 링크를 눌러 다른 탭의 아이템으로
-// 자연스럽게 넘어갈 수 있어야 하므로, 탭 전환만으로 선택을 지우지 않는다.
-let _shopSelectedItemId = null;
-function _showItemDetail(itemId) {
-  const item = typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[itemId] : null;
-  const panel = document.getElementById('shopDetailPanel');
-  if (!item || !panel) return;
-  _shopSelectedItemId = itemId;
-  if (typeof renderShopPanel === 'function') renderShopPanel(); // 선택한 행에 'selected' 강조 반영
-  panel.classList.add('show');
-  const canBuild = item.recipe && item.recipe.length && controller && typeof hasComponents === 'function' && hasComponents(controller, item.recipe);
-  const payCost = canBuild ? combineCost(item) : item.cost;
-  document.getElementById('shopDetailTitle').textContent = item.nameKo;
-  document.getElementById('shopDetailCost').textContent = item.trinket
-    ? '기본 장착 (구매 불필요)'
-    : `${canBuild ? '조합 ' : ''}${payCost}원${item.priceGuessed ? ' * (가격은 원문 누락으로 실제 LoL 가격 사용)' : ''}`;
-  document.getElementById('shopDetailDesc').textContent = _itemStatsSummary(item) || '(추가 효과 없음)';
-
-  const recipeSection = document.getElementById('shopDetailRecipeSection');
-  const recipeList = document.getElementById('shopDetailRecipeList');
-  recipeList.innerHTML = '';
-  if (item.recipe && item.recipe.length) {
-    recipeSection.style.display = '';
-    const counts = {};
-    for (const id of item.recipe) counts[id] = (counts[id] || 0) + 1;
-    for (const [id, n] of Object.entries(counts)) {
-      const comp = ITEM_DATA[id];
-      if (!comp) continue;
-      const row = document.createElement('div');
-      const link = document.createElement('span');
-      link.className = 'detailLink';
-      link.textContent = `${comp.nameKo}${n > 1 ? ' x' + n : ''} (${comp.cost}원)`;
-      link.addEventListener('click', () => _showItemDetail(id));
-      row.appendChild(link);
-      recipeList.appendChild(row);
-    }
-  } else {
-    recipeSection.style.display = 'none';
-  }
-
-  // 역방향 조회("이 아이템을 하위템으로 쓰는 상위 아이템") - ITEM_DATA를
-  // 매번 스캔하지만(추가 자료구조 없음) 42종 규모에서는 비용이 무시할
-  // 수준이고, 아이템이 늘어도 자동으로 정확하다(수동 목록을 따로 관리할
-  // 필요가 없다).
-  const buildsSection = document.getElementById('shopDetailBuildsIntoSection');
-  const buildsList = document.getElementById('shopDetailBuildsIntoList');
-  buildsList.innerHTML = '';
-  const buildsInto = (typeof ITEM_ORDER !== 'undefined' ? ITEM_ORDER : Object.keys(ITEM_DATA))
-    .filter((id) => ITEM_DATA[id].recipe && ITEM_DATA[id].recipe.includes(itemId));
-  if (buildsInto.length) {
-    buildsSection.style.display = '';
-    for (const id of buildsInto) {
-      const d = ITEM_DATA[id];
-      const row = document.createElement('div');
-      const link = document.createElement('span');
-      link.className = 'detailLink';
-      link.textContent = `${d.nameKo} (${d.cost}원)`;
-      link.addEventListener('click', () => _showItemDetail(id));
-      row.appendChild(link);
-      buildsList.appendChild(row);
-    }
-  } else {
-    buildsSection.style.display = 'none';
-  }
+// 33차: 상점 창(목록·상세·구매)은 shop_ui.js로 옮겼다. 여기는 하단 HUD의 보유 아이템 칸만 그린다.
+// 사용 가능한 아이템인지 - useItem()이 실제로 분기하는 필드 전부를 확인한다(하나라도 빠지면 클릭 시 사용 대신 판매되는 버그).
+function _itemIsUsable(data) {
+  const usable = !!(
+    data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect
+    || data.empoweredCleaveActive || data.shockwaveActive || data.ghostStepActive
+    || data.rocketbeltActive || data.teamMoveSpeedActive || data.noxiousBladeActive || data.stasisActive || data.devotionActive
+  );
+  return usable;
 }
-function renderShopPanel() {
-  const tabsEl = document.getElementById('shopCategoryTabs');
-  const listEl = document.getElementById('shopItemList');
-  if (!tabsEl || !listEl || typeof ITEM_CATEGORIES === 'undefined') return;
-  tabsEl.innerHTML = '';
-  for (const cat of ITEM_CATEGORIES) {
-    const btn = document.createElement('button');
-    btn.textContent = cat.nameKo;
-    btn.classList.toggle('active', cat.id === _shopActiveCategory);
-    btn.addEventListener('click', () => { _shopActiveCategory = cat.id; renderShopPanel(); });
-    tabsEl.appendChild(btn);
-  }
-  listEl.innerHTML = '';
-  const cat = ITEM_CATEGORIES.find((c) => c.id === _shopActiveCategory) || ITEM_CATEGORIES[0];
-  if (!cat) return;
-  for (const itemId of cat.items) {
-    const item = ITEM_DATA[itemId];
-    if (!item) continue;
-    // 조합(하위템을 전부 갖고 있으면 그 차액만, 아니면 완제품 전체 가격)
-    // - 버튼 라벨/가격 표시를 실제 지불할 금액 기준으로 보여준다.
-    const canBuild = item.recipe && item.recipe.length && controller && typeof hasComponents === 'function' && hasComponents(controller, item.recipe);
-    const payCost = canBuild ? combineCost(item) : item.cost;
-    const row = document.createElement('div');
-    row.className = 'shopItemRow';
-    if (controller && (controller.gold || 0) < payCost) row.classList.add('unaffordable');
-    if (itemId === _shopSelectedItemId) row.classList.add('selected');
-    const nameEl = document.createElement('span');
-    nameEl.className = 'shopItemName clickable';
-    nameEl.textContent = `${item.nameKo} (${canBuild ? '조합 ' : ''}${payCost}${item.priceGuessed ? '*' : ''})`;
-    nameEl.title = _itemStatsSummary(item) + (item.priceGuessed ? ' · *가격은 원문 누락으로 실제 LoL 가격 사용' : '');
-    nameEl.addEventListener('click', () => _showItemDetail(itemId));
-    const btn = document.createElement('button');
-    const alreadyWorn = item.isBoots && controller && controller.boots && controller.boots.id === itemId;
-    // 버그 수정(QA 요청): "unaffordable"(이름 회색 처리)만 하고 버튼 자체는
-    // 계속 눌러지는 상태였다 - 클릭해도 buyItem()이 조용히 console.warn만
-    // 찍고 아무 일도 안 일어나니 "눌렀는데 효과가 안 적용된다"로 보일 수
-    // 있었다. 골드가 부족하면 버튼도 함께 비활성화해서 클릭 가능 여부와
-    // 회색 표시가 항상 일치하게 한다.
-    const cannotAfford = controller && (controller.gold || 0) < payCost;
-    btn.textContent = alreadyWorn ? '장착됨' : canBuild ? '조합' : (item.isBoots ? '착용' : '구매');
-    btn.disabled = !!alreadyWorn || !!cannotAfford;
-    btn.title = nameEl.title;
-    btn.addEventListener('click', () => { if (typeof buildOrBuyItem === 'function' && controller) buildOrBuyItem(controller, itemId); });
-    row.appendChild(nameEl);
-    row.appendChild(btn);
-    listEl.appendChild(row);
-  }
-}
-renderShopPanel();
-// 인벤토리 슬롯 표시 - buyItem/sellItem/useItem이 아이템을 바꿀 때마다
-// 호출하는 이벤트 기반 갱신 함수(updateGoldDisplay()와 동일한 원칙, 매
-// 프레임 아님). 소비 아이템(체력/충전형 물약)은 클릭하면 판매 대신
-// 사용되고, 중첩/충전 수를 작은 배지로 함께 표시한다.
+// 하단 HUD 아이템 칸 - buyItem/sellItem/useItem이 아이템을 바꿀 때마다 호출하는 이벤트 기반 갱신 함수
+// (updateGoldDisplay()와 같은 원칙, 매 프레임 아님). 칸 배치는 원작과 같다: 1·2·3 / 5·6·7 + 장신구(4).
+// 사용 아이템은 클릭(또는 숫자키)으로 사용하고, 나머지는 클릭하면 상점이 열리며 그 칸이 선택된다(판매는 상점에서).
 function updateItemUI(ctrl) {
-  _updateTrinketUI(ctrl);
-  _updateBootsUI(ctrl);
-  if (typeof renderShopPanel === 'function') renderShopPanel(); // 골드/보유 신발이 바뀌면 상점의 "구매 가능 여부" 표시도 함께 갱신
-  const row = document.getElementById('inventoryRow');
-  if (!row) return;
-  row.innerHTML = '';
+  if (typeof renderShopPanel === 'function') renderShopPanel(); // 골드/보유 아이템이 바뀌면 상점 창도 함께 갱신
+  const box = document.getElementById('hudItems');
+  if (!box || typeof ITEM_DATA === 'undefined') return;
   const items = (ctrl && ctrl.items) || [];
+  const slotHtml = (key, data, badge, extraCls) => `<div class="hud-item${data ? '' : ' empty'}${extraCls || ''}"><span class="key">${key}</span>${data ? _shopIconHtml(data) : ''}${badge !== '' && badge != null ? `<span class="badge">${badge}</span>` : ''}</div>`;
+  let grid = '';
   for (let i = 0; i < 6; i++) {
-    const el = document.createElement('div');
     const slot = items[i];
-    const data = slot && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[slot.id] : null;
-    if (data) {
-      // 버그 수정(QA - "하위/상위 아이템 시스템 점검" 중 발견): 이 플래그가
-      // true일 때만 클릭이 useItem()으로 가고, false면 대신 sellItem()이
-      // 호출된다(아래 클릭 핸들러 참고) - 그런데 useItem() 자신의 분기
-      // 목록(거대한 초승달/파괴의 충격파/망령의 발걸음/초음속/번개 화살/
-      // 시간 정지 등)에 있는 액티브 아이템 다수가 이 목록에서 빠져 있어서,
-      // 그런 아이템을 인벤토리에서 "클릭"하면 사용이 아니라 판매가 되는
-      // 잠재 버그였다(숫자 단축키로는 정상적으로 useItem()이 호출돼
-      // 지금까지 드러나지 않았다). useItem()이 실제로 분기하는 필드
-      // 전부를 여기서도 동일하게 확인한다.
-      const usable = !!(
-        data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect
-        || data.empoweredCleaveActive || data.shockwaveActive || data.ghostStepActive
-        || data.rocketbeltActive || data.teamMoveSpeedActive || data.noxiousBladeActive || data.stasisActive || data.devotionActive
-      );
-      el.className = 'invSlot' + (usable ? ' usable' : '');
-      el.textContent = data.nameKo.slice(-2); // "도란의 검" -> "검"처럼 구분 글자만 표시
-      const badgeValue = typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '');
-      if (badgeValue) {
-        const badge = document.createElement('span');
-        badge.className = 'invBadge';
-        badge.textContent = badgeValue;
-        el.appendChild(badge);
-      }
-      el.title = usable
-        ? `${data.nameKo} (${i + 1}번 키 또는 클릭: 사용)`
-        : `${data.nameKo} (클릭: 판매, 구매가의 70% 환급)`;
-      el.addEventListener('click', () => {
-        if (usable) { if (typeof useItem === 'function') useItem(ctrl, i); }
-        else if (typeof sellItem === 'function') sellItem(ctrl, i);
-      });
-    } else {
-      el.className = 'invSlot empty';
-    }
-    row.appendChild(el);
+    const data = slot ? ITEM_DATA[slot.id] : null;
+    const badge = data ? (typeof slot.charges === 'number' ? `${slot.charges}/${data.maxCharges}` : (slot.count > 1 ? slot.count : '')) : '';
+    grid += slotHtml(ITEM_SLOT_KEYS[i], data, badge, data && _itemIsUsable(data) ? ' usable' : '');
   }
-}
-// 트린켓(투명 와드) 전용 슬롯 - 6칸 인벤토리와 별개로 표시한다. 클릭으로도
-// 설치할 수 있게 해뒀다(실제로는 T키로 마우스 위치에 바로 꽂는 쪽이
-// 기본 조작법이지만, 클릭 한 번으로도 되게 해 UI만 보고도 쓸 수 있게 함 -
-// 이 경우 현재 조준 중인 지면 좌표가 없으므로 플레이어 바로 앞에 꽂는다).
-function _updateTrinketUI(ctrl) {
-  const row = document.getElementById('trinketSlotRow');
-  if (!row) return;
-  row.innerHTML = '';
   const trinket = ctrl && ctrl.trinket;
-  const data = trinket && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[trinket.id] : null;
-  if (!data) return;
-  const el = document.createElement('div');
-  el.className = 'invSlot usable';
-  el.textContent = data.nameKo.slice(-2);
-  const badge = document.createElement('span');
-  badge.className = 'invBadge';
-  badge.textContent = `${trinket.charges}/${data.maxCharges}`;
-  el.appendChild(badge);
-  el.title = `${data.nameKo} (T키: 마우스 위치에 설치)`;
-  el.addEventListener('click', () => {
-    if (typeof placeWard !== 'function' || !ctrl) return;
-    const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
-    placeWard(ctrl, ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300))));
+  const tData = trinket ? ITEM_DATA[trinket.id] : null;
+  const bData = ctrl && ctrl.boots ? ITEM_DATA[ctrl.boots.id] : null;
+  box.innerHTML = `<div class="hud-item-grid">${grid}</div>`
+    + `<div class="hud-item-side">${slotHtml('4', tData, tData ? `${trinket.charges}/${tData.maxCharges}` : '', ' usable trinket')}${slotHtml('신발', bData, '', ' boots')}</div>`;
+  const cells = box.querySelectorAll('.hud-item-grid .hud-item');
+  cells.forEach((el, i) => {
+    const slot = items[i];
+    const data = slot ? ITEM_DATA[slot.id] : null;
+    if (!data) return;
+    const usable = _itemIsUsable(data);
+    el.title = usable ? `${data.nameKo} (${ITEM_SLOT_KEYS[i]}키 또는 클릭: 사용)` : `${data.nameKo} (클릭: 상점에서 보기·판매)`;
+    el.addEventListener('click', () => {
+      if (usable) { if (typeof useItem === 'function') useItem(ctrl, i); return; }
+      if (typeof setShopOpen === 'function') { setShopOpen(true); _shopSelectedSlot = i; _shopSelectedItemId = slot.id; renderShopPanel(true); }
+    });
   });
-  row.appendChild(el);
-  const label = document.createElement('span');
-  label.style.fontSize = '10px'; label.style.color = '#999';
-  label.textContent = data.nameKo;
-  row.appendChild(label);
-}
-// 신발 전용 슬롯 - 트린켓과 동일한 구조(6칸 인벤토리와 별개). 클릭하면
-// 판매(70%)된다 - 다른 신발로 "교체"하고 싶을 때는 상점 신발 탭에서
-// 원하는 신발의 "착용" 버튼을 바로 누르면 된다(buyBoots가 기존 신발을
-// 자동으로 전액 환급 처리).
-function _updateBootsUI(ctrl) {
-  const row = document.getElementById('bootsSlotRow');
-  if (!row) return;
-  row.innerHTML = '';
-  const boots = ctrl && ctrl.boots;
-  const data = boots && typeof ITEM_DATA !== 'undefined' ? ITEM_DATA[boots.id] : null;
-  if (!data) {
-    const empty = document.createElement('div');
-    empty.className = 'invSlot empty';
-    row.appendChild(empty);
-    const label = document.createElement('span');
-    label.style.fontSize = '10px'; label.style.color = '#999';
-    label.textContent = '미착용';
-    row.appendChild(label);
-    return;
+  // 장신구(투명 와드): 클릭으로도 설치 - 조준 중인 지면 좌표가 없으므로 플레이어 바로 앞에 놓는다(기본 조작은 4키 = 마우스 위치).
+  const tEl = box.querySelector('.hud-item.trinket');
+  if (tEl && tData) {
+    tEl.title = `${tData.nameKo} (4키: 마우스 위치에 설치 · 클릭: 앞에 설치)`;
+    tEl.addEventListener('click', () => {
+      if (typeof placeWard !== 'function' || !ctrl) return;
+      const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
+      placeWard(ctrl, ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300))));
+    });
   }
-  const el = document.createElement('div');
-  el.className = 'invSlot';
-  el.textContent = data.nameKo.slice(-2);
-  el.title = `${data.nameKo} (클릭: 판매, 구매가의 70% 환급)`;
-  el.addEventListener('click', () => { if (typeof sellBoots === 'function') sellBoots(ctrl); });
-  row.appendChild(el);
-  const label = document.createElement('span');
-  label.style.fontSize = '10px'; label.style.color = '#999';
-  label.textContent = data.nameKo;
-  row.appendChild(label);
+  const bEl = box.querySelector('.hud-item.boots');
+  if (bEl) {
+    bEl.title = bData ? `${bData.nameKo} (클릭: 상점에서 보기·판매)` : '신발 칸 (상점 신발 분류에서 구매)';
+    bEl.addEventListener('click', () => {
+      if (typeof setShopOpen !== 'function') return;
+      setShopOpen(true);
+      if (bData) { _shopSelectedSlot = 'boots'; _shopSelectedItemId = ctrl.boots.id; renderShopPanel(true); }
+    });
+  }
 }
 var controller = null;
 let championRoot = null;
@@ -31913,6 +32190,12 @@ renderer.domElement.addEventListener('pointermove', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  // 33차: 상점 검색칸 등 입력칸에 타이핑하는 중에는 게임 단축키를 쓰지 않는다(Esc만 상점을 닫는다).
+  const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
+  if (typing) { if (e.code === 'Escape' && typeof isShopOpen === 'function' && isShopOpen()) setShopOpen(false); return; }
+  // 상점(P - 원작 기본 키)은 챔피언을 불러오기 전에도 열어 볼 수 있다.
+  if (e.code === 'KeyP' && !e.repeat) { if (typeof toggleShop === 'function') toggleShop(); return; }
+  if (e.code === 'Escape' && typeof isShopOpen === 'function' && isShopOpen()) { setShopOpen(false); return; }
   if (!controller) return;
   // 버그 수정("스킬 쓰면 마우스 커서가 사라진다"): 이 앱 자체는 커서를
   // 숨기는 코드가 없다 - 이건 브라우저가 키보드 입력이 들어오면 마우스
@@ -31929,7 +32212,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') { if (skillAim.aiming) { skillAim.cancel(); return; } togglePause(); return; }
   if (e.code === 'F1') { e.preventDefault(); debugPanelVisible = !debugPanelVisible; return; }
   if (e.code === 'KeyV') { rangeIndicators.toggle(); const cb = document.getElementById('rangeIndicatorCheckbox'); if (cb) cb.checked = rangeIndicators.visible; return; }
-  if (e.code === 'KeyP') { if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
+  if (e.code === 'KeyJ') { if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
   if (e.code === 'KeyO') { setAllyPlaceMode(!allyPlaceMode); return; }
   if (e.code === 'KeyN') { setBrushPlaceMode(!brushPlaceMode); return; }
   if (paused) return;
@@ -31961,18 +32244,16 @@ window.addEventListener('keydown', (e) => {
     case 'KeyR': onSkillKeyDown('R', e.code, mousePoint); break;
     case 'KeyB': controller.startRecall(); break;
     case 'Space': if (dummy && dummy.hp > 0) controller.selectTarget(dummy); break;
-    // 아이템 사용(실제 LoL과 동일한 숫자키 1~6 인벤토리 단축키) - 사용
-    // 불가 아이템(스탯 아이템)이면 useItem() 내부에서 콘솔 경고만 내고
-    // 조용히 무시된다.
+    // 아이템 사용 - 원작 키 배치(1·2·3·5·6·7 = 인벤토리 6칸, 4 = 장신구). 사용 불가 아이템(스탯
+    // 아이템)이면 useItem() 내부에서 콘솔 경고만 내고 조용히 무시된다.
     case 'Digit1': if (typeof useItem === 'function') useItem(controller, 0); break;
     case 'Digit2': if (typeof useItem === 'function') useItem(controller, 1); break;
     case 'Digit3': if (typeof useItem === 'function') useItem(controller, 2); break;
-    case 'Digit4': if (typeof useItem === 'function') useItem(controller, 3); break;
-    case 'Digit5': if (typeof useItem === 'function') useItem(controller, 4); break;
-    case 'Digit6': if (typeof useItem === 'function') useItem(controller, 5); break;
-    // 트린켓(투명 와드) - 원작 기본 키는 4지만 이 프로젝트는 숫자키 1~6을 인벤토리 6칸에 쓰므로 T를 쓴다.
-    // 현재 마우스 위치에 놓는다(설치 사거리 밖이면 사거리까지 걸어가서 놓는다 - 원작).
-    case 'KeyT': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
+    case 'Digit5': if (typeof useItem === 'function') useItem(controller, 3); break;
+    case 'Digit6': if (typeof useItem === 'function') useItem(controller, 4); break;
+    case 'Digit7': if (typeof useItem === 'function') useItem(controller, 5); break;
+    // 장신구(투명 와드) - 원작 기본 키 4. 현재 마우스 위치에 놓는다(설치 사거리 밖이면 사거리까지 걸어가서 놓는다 - 원작).
+    case 'Digit4': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
   }
 });
 
@@ -33139,8 +33420,8 @@ document.getElementById('championPanelToggle').addEventListener('click', () => {
 
 // 요청("상태창들 싹다 접을 수 있게") - helpBox/rangeIndicatorToggle는
 // championPanel과 동일한 .collapsed 토글 패턴을 그대로 재사용한다.
-document.querySelectorAll('#helpBox .panelHeader, #rangeIndicatorToggle .panelHeader, #shopPanel .panelHeader').forEach((header) => {
-  header.addEventListener('click', () => header.closest('#helpBox, #rangeIndicatorToggle, #shopPanel').classList.toggle('collapsed'));
+document.querySelectorAll('#helpBox .panelHeader, #rangeIndicatorToggle .panelHeader').forEach((header) => {
+  header.addEventListener('click', () => header.closest('#helpBox, #rangeIndicatorToggle').classList.toggle('collapsed'));
 });
 // debugPanel은 매 프레임 내용이 통째로 다시 그려지므로(updateDebugPanel),
 // 버튼을 그 안에 두지 않고 별도 요소로 만들어 기존 F1 토글과 같은

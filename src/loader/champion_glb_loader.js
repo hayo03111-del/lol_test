@@ -1114,8 +1114,8 @@ document.getElementById('championPanelToggle').addEventListener('click', () => {
 
 // 요청("상태창들 싹다 접을 수 있게") - helpBox/rangeIndicatorToggle는
 // championPanel과 동일한 .collapsed 토글 패턴을 그대로 재사용한다.
-document.querySelectorAll('#helpBox .panelHeader, #rangeIndicatorToggle .panelHeader, #shopPanel .panelHeader').forEach((header) => {
-  header.addEventListener('click', () => header.closest('#helpBox, #rangeIndicatorToggle, #shopPanel').classList.toggle('collapsed'));
+document.querySelectorAll('#helpBox .panelHeader, #rangeIndicatorToggle .panelHeader').forEach((header) => {
+  header.addEventListener('click', () => header.closest('#helpBox, #rangeIndicatorToggle').classList.toggle('collapsed'));
 });
 // debugPanel은 매 프레임 내용이 통째로 다시 그려지므로(updateDebugPanel),
 // 버튼을 그 안에 두지 않고 별도 요소로 만들어 기존 F1 토글과 같은
