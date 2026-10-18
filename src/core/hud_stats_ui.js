@@ -195,10 +195,11 @@ function getSkillRecastState(c, key) {
       return null;
     }
     case 'yasuo':
-      return key === 'Q' && c._yasuo && c._yasuo.qStacks >= 2 ? win(c._yasuo.qStackExpiresAt, cd.Q.stackDuration || 6, { keepCd: true }) : null;
+      // 54차: 중첩 1개(Q2)부터 남은 중첩 시간 고리 - 원작처럼 Q2·Q3 단계 내내 칸 둘레 고리가 줄어든다
+      return key === 'Q' && c._yasuo && c._yasuo.qStacks >= 1 ? win(c._yasuo.qStackExpiresAt, cd.Q.stackDuration || 6, { keepCd: true }) : null;
     case 'yone': {
       const s = c._yone; if (!s) return null;
-      if (key === 'Q' && s.qStacks >= (cd.Q.maxStacks || 2)) return win(s.qStackExpiresAt, cd.Q.stackDuration || 6, { keepCd: true });
+      if (key === 'Q' && s.qStacks >= 1) return win(s.qStackExpiresAt, cd.Q.stackDuration || 6, { keepCd: true }); // 54차: 중첩 1개부터 고리
       if (key === 'E' && s.eSpirit) return win(s.eSpirit.startedAt + s.eSpirit.duration * 1000, s.eSpirit.duration);
       return null;
     }

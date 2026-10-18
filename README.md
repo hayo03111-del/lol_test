@@ -1174,3 +1174,8 @@ Data Dragon 사거리와 대조하고, 스킬마다 "데이터 값 / 조준 표�
 - 사용자가 준 원작 그림: `assets/champion_icons/yasuo/Q2.png`(Q 중첩 1), `yasuo/Q3.png`(중첩 2 - 회오리), `yone/Q3.png`. 52차의 회오리 대체 그림·생성 도구는 지웠다.
 - 칸 그림 단계(`getSkillIconStage`): 야스오 Q 중첩 1 → Q2, 2 → Q3, 요네 Q 중첩 2 → Q3. 그 밖의 재시전은 `<칸>2.png`가 있으면 그것.
   `tools/fetch_champion_icons.py`가 `<칸><숫자>.png` 파일을 찾아 `meta.iconVariants`에 적는다(같은 방식으로 리 신 Q2 등도 그림만 넣으면 바뀜).
+
+## 54차: 야스오·요네 Q 중첩 고리
+- 야스오·요네 Q는 중첩 1개(Q2 단계)부터 칸 둘레 금빛 고리가 남은 중첩 시간(6초)만큼 줄어든다(예전엔 Q3 단계에서만). 재사용 대기시간 덮개는 그대로.
+- 리 신 Q2(공명의 일격) 원작 그림은 접근 가능한 곳에 없어(찾은 저장소의 "Resonating Strike" 그림은 Q1과 같은 그림) 아직 그대로 -
+  `assets/champion_icons/leesin/Q2.png`를 넣고 `python3 tools/fetch_champion_icons.py`를 돌리면 Q2 창이 열린 동안 바뀐다.
