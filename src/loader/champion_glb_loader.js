@@ -311,6 +311,8 @@ async function bootstrapChampion(gltf, fileName) {
   renderAbilityMappingPanel();
   renderMappingPanel();
   updateAbilitySlotNames();
+  if (typeof setHudChampionIcons === 'function') setHudChampionIcons(championId); // 48차: 초상화·패시브·스킬 아이콘
+  if (typeof updateHudStats === 'function') updateHudStats(controller, true);
 
   // 요청: 중앙에 연습용 허수아비 3개를 다시 기본 배치한다.
   // 기존 수동 설치 시스템(placeDummyAt/placedDummies)은 그대로 유지하고,

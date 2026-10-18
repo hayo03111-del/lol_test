@@ -1100,6 +1100,7 @@ CharacterController.prototype.consumeHoneyFruit = function() {
 CharacterController.prototype.updateCooldowns = function(dt) {
     for (const k of Object.keys(this.cooldowns)) if (this.cooldowns[k] > 0) this.cooldowns[k] = Math.max(0, this.cooldowns[k] - dt);
     updateSkillUI(this.cooldowns);
+    if (typeof updateHudStats === 'function') updateHudStats(this); // 48차: 하단 능력치 칸(0.15초마다)
 };
 CharacterController.prototype.regen = function(dt) {
     // 버그 수정(전 챔피언 공통 - 닐라 실제 bin 데이터로 발견): hpRegen/mpRegen은

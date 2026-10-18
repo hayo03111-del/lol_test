@@ -127,7 +127,7 @@ else:
     elif '"three"' not in html:
         warn('import map에 "three" 매핑이 보이지 않습니다(이름이 바뀌었을 수 있음)')
 
-    required_containers = ["canvas-container", "shopOverlay", "shopGrid", "shopDetail", "hudItems", "scoreboardOverlay", "scoreboardPanel", "spellBar", "spellPicker", "hud"]
+    required_containers = ["canvas-container", "shopOverlay", "shopGrid", "shopDetail", "hudItems", "scoreboardOverlay", "scoreboardPanel", "spellBar", "spellPicker", "hud", "hudStats", "slotP"]
     for cid in required_containers:
         if f'id="{cid}"' not in html:
             fail(f"index.html에 필수 DOM 컨테이너가 없습니다: #{cid}")

@@ -74,6 +74,20 @@
     background:var(--bg-1); border-top:1px solid var(--line);
     pointer-events:none;
   }
+  /* 48차: 능력치 칸(원작 왼쪽 아래 능력치 창 - 2열 4줄, 누르면 2쪽) */
+  #hudStats{ width:150px; display:grid; grid-template-columns:1fr 1fr; gap:3px 8px; align-content:center; padding:0 10px;
+    border-right:1px solid var(--line-soft); pointer-events:auto; cursor:pointer; user-select:none; }
+  #hudStats:hover{ background:var(--bg-2); }
+  #hudStats .hs-cell{ display:flex; align-items:center; gap:4px; min-width:0; font-family:var(--font-num); font-size:11px; color:var(--text-0); white-space:nowrap; }
+  #hudStats .hs-icon{ width:13px; height:13px; flex:none; display:inline-flex; }
+  #hudStats .hs-icon svg{ width:13px; height:13px; }
+  #hudStats .hs-val{ white-space:nowrap; }
+  #hudStats .hs-page{ grid-column:span 2; text-align:right; font-size:8px; color:var(--text-2); letter-spacing:0.08em; }
+  #hudPortrait .portrait-box.has-icon{ background:var(--bg-3) center/cover no-repeat; }
+  /* 48차: 패시브 칸(Q 앞, 조금 작게) + 아이콘이 있으면 스킬 칸 이름 글자 숨김 */
+  .skillSlot.passiveSlot{ width:42px; height:42px; align-self:center; pointer-events:auto; }
+  .skillSlot.passiveSlot .label{ color:var(--text-1); }
+  .skillSlot.has-icon .name, .skillSlot.passiveSlot[style*="url"] .name{ display:none; }
   #hudPortrait{ width:96px; display:flex; align-items:center; justify-content:center; border-right:1px solid var(--line-soft); }
   #hudPortrait .portrait-box{ width:64px; height:64px; background:var(--bg-3); border:1px solid var(--accent-dim); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; color:var(--accent); text-align:center; line-height:1.2; }
   #bars {
@@ -562,7 +576,7 @@
      패널이 열려 있으면 HUD를 패널 왼쪽 끝까지만 쓰고, 패널 토글 버튼은 HUD 바 위로 올린다. 좁은 화면에선 게이지를 줄인다. */
   #championPanelToggle { bottom:128px; }
   body:has(#championPanel:not(.collapsed)) #hud { right:280px; }
-  @media (max-width:1500px){ #bars{ width:220px; } #hudPortrait{ width:80px; } #skillBar, #hudItems{ padding:0 10px; } }
+  @media (max-width:1500px){ #bars{ width:180px; } #hudPortrait{ width:76px; } #hudStats{ width:146px; padding:0 6px; gap:3px 6px; } #hudStats .hs-cell{ font-size:10.5px; } #hudGold{ padding:0 10px; } #hudShopBtn{ white-space:nowrap; } #skillBar, #hudItems{ padding:0 10px; } }
   #championPanelBody { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:14px; }
   #championPanelBody h3 { color:#c8aa6e; font-size:12px; letter-spacing:0.5px; margin-bottom:6px; border-bottom:1px solid #2a2a35; padding-bottom:4px; }
   #swapGlbBtn {
@@ -785,6 +799,7 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
 <div id="pauseOverlay">일시정지 (ESC)</div>
 
 <div id="hud">
+  <div id="hudStats" title="능력치 (누르면 다음 쪽)"></div>
   <div id="hudPortrait"><div class="portrait-box" id="portraitBox">-</div></div>
   <div id="bars">
     <div class="barRow"><div id="hpFill" class="barFill"></div><div id="shieldFill" class="barFill"></div><div id="hpText" class="barText">100/100</div></div>
@@ -792,6 +807,7 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
     <div class="level-row"><span id="levelText">Lv.1</span><div class="xp-bar"><div class="fill" id="xpFill"></div></div><span id="skillPointText"></span></div>
   </div>
   <div id="skillBar">
+    <div class="skillSlot passiveSlot" id="slotP"><span class="label">P</span><span class="name"></span></div>
     <div class="skillSlot ready" id="slotQ"><span class="label">Q</span><span class="name">Q</span></div>
     <div class="skillSlot ready" id="slotW"><span class="label">W</span><span class="name">W</span></div>
     <div class="skillSlot ready" id="slotE"><span class="label">E</span><span class="name">E</span></div>
@@ -14974,6 +14990,7 @@ CharacterController.prototype.consumeHoneyFruit = function() {
 CharacterController.prototype.updateCooldowns = function(dt) {
     for (const k of Object.keys(this.cooldowns)) if (this.cooldowns[k] > 0) this.cooldowns[k] = Math.max(0, this.cooldowns[k] - dt);
     updateSkillUI(this.cooldowns);
+    if (typeof updateHudStats === 'function') updateHudStats(this); // 48차: 하단 능력치 칸(0.15초마다)
 };
 CharacterController.prototype.regen = function(dt) {
     // 버그 수정(전 챔피언 공통 - 닐라 실제 bin 데이터로 발견): hpRegen/mpRegen은
@@ -33501,6 +33518,328 @@ function isScoreboardOpen() { return _scoreboardHeld || _scoreboardToggled; }
 // 창이 포커스를 잃으면(Alt+Tab 등) Tab 떼는 신호가 안 올 수 있다 - 누르고 있던 상태를 푼다.
 window.addEventListener('blur', () => setScoreboardHeld(false));
 
+/* ===== src/core/champion_icon_meta.js ===== */
+// 자동 생성(tools/fetch_champion_icons.py) - Data Dragon ko_KR 패시브 이름·설명, 스킬 이름. 아이콘: assets/champion_icons/<id>/{P,Q,W,E,R}.png
+const CHAMPION_ICON_META = {
+ "ahri": {
+  "passiveName": "정기 흡수",
+  "passiveDesc": "아리가 미니언 또는 몬스터를 9마리 처치하면 체력을 회복합니다. 아리가 적 챔피언 처치에 관여하면 더 많은 체력을 회복합니다.",
+  "spellNames": {
+   "Q": "현혹의 구슬",
+   "W": "여우불",
+   "E": "매혹",
+   "R": "혼령 질주"
+  }
+ },
+ "ashe": {
+  "passiveName": "서리 화살",
+  "passiveDesc": "애쉬의 공격을 받은 대상이 느려지며, 이 대상에 대한 애쉬의 공격력이 상승합니다. 애쉬의 치명타는 추가 피해를 가하지 않는 대신, 대상에게 더 강력한 둔화를 적용합니다.",
+  "spellNames": {
+   "Q": "궁사의 집중",
+   "W": "일제 사격",
+   "E": "매 날리기",
+   "R": "마법의 수정화살"
+  }
+ },
+ "chogath": {
+  "passiveName": "육식",
+  "passiveDesc": "초가스는 유닛을 죽이면 체력과 마나를 회복합니다. 회복량은 초가스의 레벨이 높아질수록 증가합니다.",
+  "spellNames": {
+   "Q": "파열",
+   "W": "흉포한 울부짖음",
+   "E": "날카로운 가시",
+   "R": "포식"
+  }
+ },
+ "darius": {
+  "passiveName": "과다출혈",
+  "passiveDesc": "다리우스의 기본 공격과 스킬 공격은 적에게 출혈을 일으켜 5초 동안 물리 피해를 입힙니다. 최대 5회까지 중첩됩니다. 최대 중첩 시 다리우스가 분노하며 공격력이 크게 증가합니다.",
+  "spellNames": {
+   "Q": "학살",
+   "W": "마비의 일격",
+   "E": "포획",
+   "R": "녹서스의 단두대"
+  }
+ },
+ "ezreal": {
+  "passiveName": "끓어오르는 주문의 힘",
+  "passiveDesc": "이즈리얼이 스킬을 적중시킬 때마다 공격 속도가 증가합니다. (최대 5회 중첩)",
+  "spellNames": {
+   "Q": "신비한 화살",
+   "W": "정수의 흐름",
+   "E": "비전 이동",
+   "R": "정조준 일격"
+  }
+ },
+ "garen": {
+  "passiveName": "인내심",
+  "passiveDesc": "가렌이 잠시 적의 기본 공격 및 스킬 공격에 맞지 않으면 1초마다 총 체력의 일정 비율씩 회복됩니다.",
+  "spellNames": {
+   "Q": "결정타",
+   "W": "용기",
+   "E": "심판",
+   "R": "데마시아의 정의"
+  }
+ },
+ "leesin": {
+  "passiveName": "질풍격",
+  "passiveDesc": "리 신이 스킬을 사용하면 다음 두 번의 기본 공격 속도가 증가하며 기력을 회복합니다.",
+  "spellNames": {
+   "Q": "음파 / 공명의 일격",
+   "W": "방호 / 강철의 의지",
+   "E": "폭풍/무력화",
+   "R": "용의 분노"
+  }
+ },
+ "lux": {
+  "passiveName": "광채",
+  "passiveDesc": "럭스의 공격 스킬은 몇 초 동안 적을 빛의 에너지로 가득 채웁니다. 럭스의 기본 공격으로 이 에너지를 불태우면 적은 럭스의 레벨에 비례하는 추가 마법 피해를 받습니다.",
+  "spellNames": {
+   "Q": "빛의 속박",
+   "W": "프리즘 보호막",
+   "E": "광휘의 특이점",
+   "R": "최후의 섬광"
+  }
+ },
+ "masteryi": {
+  "passiveName": "2연속 공격",
+  "passiveDesc": "마스터 이는 몇 차례 연속으로 기본 공격을 한 이후에 2번 연속 공격합니다.",
+  "spellNames": {
+   "Q": "일격 필살",
+   "W": "명상",
+   "E": "우주류 검술",
+   "R": "최후의 전사"
+  }
+ },
+ "mordekaiser": {
+  "passiveName": "암흑 탄생",
+  "passiveDesc": "모데카이저가 적 챔피언이나 몬스터에게 공격 또는 스킬을 3회 적중시키면 강력한 피해를 입히는 오라를 얻고 이동 속도가 증가합니다.",
+  "spellNames": {
+   "Q": "말살",
+   "W": "불멸",
+   "E": "죽음의 손아귀",
+   "R": "죽음의 세계"
+  }
+ },
+ "nautilus": {
+  "passiveName": "강력한 일격",
+  "passiveDesc": "노틸러스가 대상에 대한 첫 기본 공격 시 추가 물리 피해를 입히고 잠시 속박합니다.",
+  "spellNames": {
+   "Q": "닻줄 견인",
+   "W": "타이탄의 분노",
+   "E": "역조",
+   "R": "폭뢰"
+  }
+ },
+ "nilah": {
+  "passiveName": "영원한 기쁨",
+  "passiveDesc": "미니언에게 최후의 일격을 가하면 경험치를 추가로 획득하며, 주변 아군이 부여하는 체력 회복 및 보호막 효과를 강화하고 공유합니다.",
+  "spellNames": {
+   "Q": "무형의 검",
+   "W": "승리의 장막",
+   "E": "급류",
+   "R": "환희"
+  }
+ },
+ "rammus": {
+  "passiveName": "가시박힌 껍질",
+  "passiveDesc": "람머스가 방어력 및 마법 저항력에 비례해 추가 공격력을 얻습니다.",
+  "spellNames": {
+   "Q": "대회전",
+   "W": "몸 말아 웅크리기",
+   "E": "광란의 도발",
+   "R": "지진 폭격"
+  }
+ },
+ "renekton": {
+  "passiveName": "분노의 지배",
+  "passiveDesc": "레넥톤이 기본 공격 시 분노를 생성합니다. 레넥톤의 체력이 낮으면 생성되는 분노가 증가합니다. 분노는 레넥톤의 스킬을 강화시키며 추가 효과를 줍니다.",
+  "spellNames": {
+   "Q": "양떼 도륙",
+   "W": "무자비한 포식자",
+   "E": "자르고 토막내기",
+   "R": "강신"
+  }
+ },
+ "sett": {
+  "passiveName": "투기장의 투지",
+  "passiveDesc": "세트는 기본 공격 시 양 주먹을 번갈아 사용합니다. 오른쪽 주먹이 약간 더 강하고 빠릅니다. 또한 세트는 불굴의 의지로 잃은 체력에 비례해 추가로 체력을 회복합니다.",
+  "spellNames": {
+   "Q": "주먹다짐",
+   "W": "강펀치",
+   "E": "안면 강타",
+   "R": "대미 장식"
+  }
+ },
+ "varus": {
+  "passiveName": "죽지 않는 복수심",
+  "passiveDesc": "적을 처치하거나 어시스트를 올리면 잠시 바루스의 공격력과 주문력이 상승합니다. 대상이 챔피언인 경우 공격력과 주문력이 더 큰 폭으로 상승합니다.",
+  "spellNames": {
+   "Q": "꿰뚫는 화살",
+   "W": "역병 화살",
+   "E": "퍼붓는 화살",
+   "R": "부패의 사슬"
+  }
+ },
+ "vex": {
+  "passiveName": "파멸과 우울",
+  "passiveDesc": "벡스가 주기적으로 강화 상태가 되어 다음 기본 스킬로 적 챔피언을 공포에 빠뜨리고 돌진을 방해합니다. 주변 적이 돌진할 때마다 벡스가 적에게 표식을 남깁니다. 표식을 소모해 추가 피해를 입힐 수 있으며 강화 상태의 재사용 대기시간이 감소합니다.",
+  "spellNames": {
+   "Q": "안개 화살",
+   "W": "거리 두기",
+   "E": "커지는 어둠",
+   "R": "그림자 파동"
+  }
+ },
+ "yasuo": {
+  "passiveName": "낭인의 길",
+  "passiveDesc": "야스오의 치명타 확률이 증가합니다. 또한, 야스오는 이동할 때마다 보호막이 충전되며, 챔피언이나 몬스터로부터 피해를 입으면 보호막이 발동됩니다.",
+  "spellNames": {
+   "Q": "강철 폭풍",
+   "W": "바람 장막",
+   "E": "질풍검",
+   "R": "최후의 숨결"
+  }
+ },
+ "yone": {
+  "passiveName": "사냥꾼의 길",
+  "passiveDesc": "요네가 두 번째 공격을 할 때마다 마법 피해를 입힙니다. 또한 요네의 치명타 확률이 증가합니다.",
+  "spellNames": {
+   "Q": "필멸의 검",
+   "W": "영혼 가르기",
+   "E": "영혼해방",
+   "R": "운명봉인"
+  }
+ }
+};
+
+/* ===== src/core/hud_stats_ui.js ===== */
+/* ============================================================
+   하단 HUD 능력치 칸 + 패시브 칸 + 스킬·초상화 아이콘 - 48차
+   ------------------------------------------------------------
+   - 능력치 칸(#hudStats): 원작 왼쪽 아래 능력치 창처럼 8개(공격력·주문력·방어력·마법 저항력·공격 속도·스킬 가속·
+     치명타 확률·이동 속도). 칸을 누르면 두 번째 쪽(방어구 관통·마법 관통·생명력 흡수·모든 피해 흡혈·사거리·강인함·
+     체력 재생·마나 재생)으로 바뀐다. 값은 0.15초마다 갱신(updateCooldowns가 매 프레임 부르지만 DOM은 바뀔 때만 고친다).
+   - 패시브 칸(#slotP): Q 앞. 챔피언 패시브 아이콘, 마우스를 올리면 이름·설명(CHAMPION_DATA 설명 우선, 없으면 Data Dragon 한글).
+   - 스킬 칸 Q/W/E/R과 초상화에 Data Dragon 아이콘(assets/champion_icons/<id>/ - tools/fetch_champion_icons.py).
+   ============================================================ */
+const HUD_ICON_DIR = 'assets/champion_icons/';
+// 능력치 아이콘(간단한 SVG - 원작 능력치 아이콘 그림은 Data Dragon 미러에 없어 직접 그렸다)
+const HUD_STAT_ICONS = {
+  ad: '<svg viewBox="0 0 16 16"><path d="M3 13l7-7 1-3 2-1-1 2-3 1-7 7z" fill="#e8a33d"/><path d="M2 12l2 2" stroke="#e8a33d" stroke-width="1.6"/></svg>',
+  ap: '<svg viewBox="0 0 16 16"><path d="M8 1l2 5 5 .5-4 3.5 1.3 5L8 12.3 3.7 15 5 10 1 6.5 6 6z" fill="#b57ce8"/></svg>',
+  armor: '<svg viewBox="0 0 16 16"><path d="M8 1l6 2.5v4C14 11 11.5 13.8 8 15 4.5 13.8 2 11 2 7.5v-4z" fill="#e0b25c"/></svg>',
+  mr: '<svg viewBox="0 0 16 16"><path d="M8 1l6 2.5v4C14 11 11.5 13.8 8 15 4.5 13.8 2 11 2 7.5v-4z" fill="#6fb2e8"/><circle cx="8" cy="7.5" r="2.4" fill="#16324a"/></svg>',
+  as: '<svg viewBox="0 0 16 16"><path d="M2 14L13 3M9 3h4v4" stroke="#e8d25c" stroke-width="1.8" fill="none"/><path d="M2 9l3 3" stroke="#e8d25c" stroke-width="1.4"/></svg>',
+  ah: '<svg viewBox="0 0 16 16"><path d="M4 1h8v2L9 8l3 5v2H4v-2l3-5-3-5z" fill="#c9d0db"/></svg>',
+  crit: '<svg viewBox="0 0 16 16"><path d="M8 1l1.6 4.6L14 4l-2.6 4L15 9.5l-4.6.8L11 15l-3-3.6L5 15l.6-4.7L1 9.5 4.6 8 2 4l4.4 1.6z" fill="#e85c5c"/></svg>',
+  ms: '<svg viewBox="0 0 16 16"><path d="M3 12h7l3-3V5l-3 1-2 3H4z" fill="#d6dbe3"/><path d="M1 7h3M1 10h2" stroke="#d6dbe3" stroke-width="1.2"/></svg>',
+  arpen: '<svg viewBox="0 0 16 16"><path d="M2 14l9-9M8 3l5 5" stroke="#e8a33d" stroke-width="1.8"/></svg>',
+  mpen: '<svg viewBox="0 0 16 16"><path d="M2 14l9-9M8 3l5 5" stroke="#b57ce8" stroke-width="1.8"/></svg>',
+  ls: '<svg viewBox="0 0 16 16"><path d="M8 2C6 5 4 7.5 4 10a4 4 0 008 0c0-2.5-2-5-4-8z" fill="#d94a4a"/></svg>',
+  vamp: '<svg viewBox="0 0 16 16"><path d="M8 2C6 5 4 7.5 4 10a4 4 0 008 0c0-2.5-2-5-4-8z" fill="#9b4ad9"/></svg>',
+  range: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" stroke="#c9d0db" stroke-width="1.4" fill="none"/><circle cx="8" cy="8" r="1.6" fill="#c9d0db"/></svg>',
+  ten: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#6fae7c"/><path d="M5 8h6M8 5v6" stroke="#123" stroke-width="1.6"/></svg>',
+  hp5: '<svg viewBox="0 0 16 16"><path d="M6 2h4v4h4v4h-4v4H6v-4H2V6h4z" fill="#5fa876"/></svg>',
+  mp5: '<svg viewBox="0 0 16 16"><path d="M8 2C6 5 4 7.5 4 10a4 4 0 008 0c0-2.5-2-5-4-8z" fill="#4d84c4"/></svg>',
+};
+const HUD_STAT_PAGES = [
+  [
+    ['ad', '공격력', (c) => Math.round(c.stats.attackDamage || 0)],
+    ['ap', '주문력', (c) => Math.round(c.stats.abilityPower || 0)],
+    ['armor', '방어력', (c) => Math.round(c.stats.armor || 0)],
+    ['mr', '마법 저항력', (c) => Math.round(c.stats.magicResist || 0)],
+    ['as', '공격 속도', (c) => (typeof getFinalAttackSpeed === 'function' ? getFinalAttackSpeed(c.stats) : 0).toFixed(2)],
+    ['ah', '스킬 가속', (c) => Math.round((c.itemBonusAbilityHaste || 0) + (c.itemDynamicAbilityHaste || 0))],
+    ['crit', '치명타 확률', (c) => `${Math.round((c.stats.critChance || 0) * 100)}%`],
+    ['ms', '이동 속도', (c) => Math.round(typeof getFinalMoveSpeed === 'function' ? worldDistanceToLol(getFinalMoveSpeed(c.stats)) : 0)],
+  ],
+  [
+    ['arpen', '방어구 관통력(물리 관통 | %)', (c) => `${Math.round(c.itemBonusArmorPenFlat || 0)} | ${Math.round((1 - (c.itemBonusArmorPenMultiplier == null ? 1 : c.itemBonusArmorPenMultiplier) + (c.armorPenPercent || 0)) * 100)}%`],
+    ['mpen', '마법 관통력(고정 | %)', (c) => `${Math.round(c.itemBonusMagicPenFlat || 0)} | ${Math.round((1 - (c.itemBonusMagicPenMultiplier == null ? 1 : c.itemBonusMagicPenMultiplier)) * 100)}%`],
+    ['ls', '생명력 흡수', (c) => `${Math.round((c.itemPhysicalVampPercent || 0) * 100)}%`],
+    ['vamp', '모든 피해 흡혈', (c) => `${Math.round((c.itemAllDamageVampPercent || 0) * 100)}%`],
+    ['range', '사거리', (c) => Math.round(worldDistanceToLol(c.stats.attackRange || 0))],
+    ['ten', '강인함', (c) => `${Math.round((typeof getTenacity === 'function' ? getTenacity(c) : 0) * 100)}%`],
+    ['hp5', '체력 재생(5초당)', (c) => (c.hpRegen || 0).toFixed(1)],
+    ['mp5', '마나 재생(5초당)', (c) => (c.mpRegen || 0).toFixed(1)],
+  ],
+];
+const hudStatsState = { page: 0, lastAt: 0, cells: null, builtPage: -1 };
+function _hudBuildStatCells() {
+  const box = document.getElementById('hudStats');
+  if (!box) return null;
+  box.innerHTML = '';
+  hudStatsState.cells = HUD_STAT_PAGES[hudStatsState.page].map(([icon, label]) => {
+    const cell = document.createElement('div');
+    cell.className = 'hs-cell';
+    cell.title = label;
+    cell.innerHTML = `<span class="hs-icon">${HUD_STAT_ICONS[icon] || ''}</span><span class="hs-val">-</span>`;
+    box.appendChild(cell);
+    return cell.querySelector('.hs-val');
+  });
+  const pager = document.createElement('div');
+  pager.className = 'hs-page';
+  pager.textContent = `${hudStatsState.page + 1}/${HUD_STAT_PAGES.length}`;
+  box.appendChild(pager);
+  hudStatsState.builtPage = hudStatsState.page;
+  return hudStatsState.cells;
+}
+function updateHudStats(ctrl, force = false) {
+  if (!ctrl || !ctrl.stats || typeof document === 'undefined') return;
+  const now = performance.now();
+  if (!force && now - hudStatsState.lastAt < 150) return;
+  hudStatsState.lastAt = now;
+  if (!hudStatsState.cells || hudStatsState.builtPage !== hudStatsState.page) _hudBuildStatCells();
+  if (!hudStatsState.cells) return;
+  HUD_STAT_PAGES[hudStatsState.page].forEach(([, , fn], i) => {
+    let v;
+    try { v = String(fn(ctrl)); } catch (e) { v = '-'; }
+    const el = hudStatsState.cells[i];
+    if (el && el.textContent !== v) el.textContent = v;
+  });
+}
+function toggleHudStatsPage() {
+  hudStatsState.page = (hudStatsState.page + 1) % HUD_STAT_PAGES.length;
+  if (typeof controller !== 'undefined' && controller) updateHudStats(controller, true);
+}
+
+// 챔피언을 불러올 때: 초상화·패시브·스킬 칸 아이콘과 툴팁.
+function setHudChampionIcons(championId) {
+  if (typeof document === 'undefined') return;
+  const meta = (typeof CHAMPION_ICON_META !== 'undefined' && championId) ? CHAMPION_ICON_META[championId] : null;
+  const cd = championId && typeof CHAMPION_DATA !== 'undefined' ? CHAMPION_DATA[championId] : null;
+  const url = (f) => `url("${HUD_ICON_DIR}${championId}/${f}.png")`;
+  const portrait = document.getElementById('portraitBox');
+  if (portrait) {
+    portrait.style.backgroundImage = meta ? url('icon') : '';
+    portrait.classList.toggle('has-icon', !!meta);
+    portrait.textContent = meta ? '' : (championId ? championId.slice(0, 2).toUpperCase() : '-');
+  }
+  const passive = document.getElementById('slotP');
+  if (passive) {
+    passive.style.backgroundImage = meta ? url('P') : '';
+    const name = (cd && cd.passive && cd.passive.name) || (meta && meta.passiveName) || '패시브';
+    const desc = (cd && cd.passive && cd.passive.desc) || (meta && meta.passiveDesc) || '';
+    passive.title = desc ? `${name}\n${desc}` : name;
+    const nameEl = passive.querySelector('.name');
+    if (nameEl) nameEl.textContent = meta ? '' : name.slice(0, 6);
+  }
+  for (const slot of ['Q', 'W', 'E', 'R']) {
+    const el = document.getElementById('slot' + slot);
+    if (!el) continue;
+    el.style.backgroundImage = meta ? url(slot) : '';
+    el.classList.toggle('has-icon', !!meta);
+    const spellName = (cd && cd[slot] && cd[slot].name) || (meta && meta.spellNames && meta.spellNames[slot]) || '';
+    el.title = spellName ? `${slot} - ${spellName}` : slot;
+  }
+}
+
+if (typeof document !== 'undefined') {
+  const hs = document.getElementById('hudStats');
+  if (hs) hs.addEventListener('click', toggleHudStatsPage);
+}
+
 /* ===== src/core/global_system_instances.js ===== */
 /* ============================================================
    4. GLOBAL SYSTEM INSTANCES
@@ -34543,6 +34882,8 @@ async function bootstrapChampion(gltf, fileName) {
   renderAbilityMappingPanel();
   renderMappingPanel();
   updateAbilitySlotNames();
+  if (typeof setHudChampionIcons === 'function') setHudChampionIcons(championId); // 48차: 초상화·패시브·스킬 아이콘
+  if (typeof updateHudStats === 'function') updateHudStats(controller, true);
 
   // 요청: 중앙에 연습용 허수아비 3개를 다시 기본 배치한다.
   // 기존 수동 설치 시스템(placeDummyAt/placedDummies)은 그대로 유지하고,
