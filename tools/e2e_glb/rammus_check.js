@@ -40,11 +40,14 @@ const startServer = require('./server.js');
   const qStart = await page.evaluate(() => { const E = window.__e2e, c = window.controller, d = E.dummies[0]; window.__hp0 = d.hp; window.__dz0 = d.mesh.position.z;
     c.castAbility('Q'); c.moveTo(new E.THREE.Vector3(0, 0, d.mesh.position.z)); return { rolling: !!c._rammus.roll, cdWhileRolling: c.cooldowns.Q }; });
   let msSamples = [];
-  for (let i = 0; i < 40; i++) { const s = await page.evaluate(() => { const c = window.controller; const st = c.statusEffects.find((e) => e.id === 'rammusQ_ms'); return { rolling: !!c._rammus.roll, ms: st ? +st.value.toFixed(3) : null, clip: c.currentClipKey }; }); msSamples.push(s); if (!s.rolling) break; await wait(60); }
+  for (let i = 0; i < 40; i++) { const s = await page.evaluate(() => { const c = window.controller; const st = c.statusEffects.find((e) => e.id === 'rammusQ_ms'); return { rolling: !!c._rammus.roll, ms: st ? +st.value.toFixed(3) : null, clip: c.currentClipKey, spin: c._rammus.spin ? +c._rammus.spin.angle.toFixed(2) : null }; }); msSamples.push(s); if (!s.rolling) break; await wait(60); }
   await wait(250);
   r.q = await page.evaluate(() => { const E = window.__e2e, c = window.controller, d = E.dummies[0];
     return { dmg: Math.round(window.__hp0 - d.hp), knockbackLol: Math.round(E.worldDistanceToLol(Math.abs(d.mesh.position.z - window.__dz0))), statuses: (d.statusEffects || []).map((e) => e.type), cdAfter: +c.cooldowns.Q.toFixed(1), rolling: !!c._rammus.roll }; });
   r.q.start = qStart; r.q.maxMs = Math.max(...msSamples.map((s) => s.ms || 0)); r.q.rollClip = msSamples.find((s) => s.rolling)?.clip;
+  r.q.ballSpun = msSamples.some((s) => s.spin > 0.5); // 39차: 공이 실제로 굴렀는지
+  r.q.hierarchyRestored = await page.evaluate(() => { const c = window.controller; return c.model.parent.parent === c.root && !c._rammus.spin; });
+  r.modelScale = await page.evaluate(() => +(window.controller.model.parent.scale.x / window.__e2e.lolRangeToWorld(100)).toFixed(2)); // 39차: 원작 SkinScale 1.5
 
   // Q 재사용으로 끝내기(1초 뒤), W가 Q를 끝냄
   await reset(1500);

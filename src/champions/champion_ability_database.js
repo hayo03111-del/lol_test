@@ -246,13 +246,16 @@ const championAbilityDatabase = {
   // "패시브가 W보다 우선" 규칙이 그대로 성립한다.
   // 실제 노틸러스.glb(28클립) 확인: 평타 Attack1~3, W 강화 평타 Attack4,
   // Q는 Spell1(던지기) → Spell1_Idle(닻이 날아가는 동안) → Spell1_Dash(끌려감).
-  // 38차: 실제 람머스.glb(18클립) - 평타 Attack1·2(+Crit), Q 구르기는 Spell1 반복(전용 굴림 클립 없음),
-  // R은 Spell4_Jump.anm(2초 도약 전체) 우선, 없으면 Spell4.
+  // 38차: 실제 람머스.glb(18클립) - 평타 Attack1·2(+Crit), R은 Spell4_Jump.anm(2초 도약 전체) 우선, 없으면 Spell4.
+  // 39차: Q 구르기 - Spell1은 "서 있다 → 웅크림 → 뛰어오르며 뒤집기 시작" 한 번짜리 모션이라 반복하면 0.65초마다 다시
+  // 뛰어오르며 뒤집혔다(요청 "Q 구를 때 모션 이상"). 굴림 반복 클립이 GLB에 없어서, 몸을 만 공 자세 Channel_Wndup을 반복하고
+  // 공 전체를 이동 거리만큼 코드로 굴린다(rammus.js _rammusTickBallSpin). rollPivot*: Channel_Wndup 자세의 공 중심 높이·반지름(GLB 단위,
+  // 실제 메시 범위 -0.15~0.794에서 계산).
   rammus: {
     idleAnimationNames: ['Idle1'],
     moveAnimationNames: ['Run'],
     attackAnimationNames: ['Attack1', 'Attack2'],
-    Q: { animationNames: ['Spell1'], animationPatterns: [/^spell1/i, /powerball/i] },
+    Q: { animationNames: ['Spell1'], animationPatterns: [/^spell1/i, /powerball/i], rollClip: 'Channel_Wndup', rollPivotCenter: 0.322, rollPivotRadius: 0.472 },
     W: { animationNames: ['Spell2'], animationPatterns: [/^spell2/i] },
     E: { animationNames: ['Spell3'], animationPatterns: [/^spell3/i] },
     R: { animationNames: ['Spell4'], animationPatterns: [/^spell4/i], jumpClip: 'Spell4_Jump.anm' },

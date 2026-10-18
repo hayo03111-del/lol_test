@@ -102,6 +102,9 @@ const CHAMPION_UNIT_SIZE_LOL = {
   masteryi:    { pathing: 35, selection: 125, skinScale: 1.55, verified: true },
   leesin:      { pathing: 35, selection: 102.7778 },
   nautilus:    { gameplay: 80, pathing: 50, selection: 125, skinScale: 1.1, verified: true },
+  // 39차: LeagueSandbox-Default Stats/Rammus.json(4.20) - SkinScale 1.5·SelectionRadius 120·Pathfinding 35. 이 GLB(키 0.856)
+  // × 100 × 1.5 = 128로 같은 파일의 SelectionHeight 130과 맞는다. 예전엔 등록이 없어 기본 1.0(원작의 2/3 크기)이었다.
+  rammus:      { pathing: 35, selection: 120, skinScale: 1.5, verified: true },
   yasuo:       { pathing: 32, selection: 75, skinScale: 0.93, verified: true },
   mordekaiser: {},
   renekton:    { gameplay: 80, pathing: 50, selection: 125 },

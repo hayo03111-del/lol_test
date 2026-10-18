@@ -632,6 +632,7 @@ const CHAMPION_DATA = {
       ad: 65, adGrowth: 2.75, attackSpeed: 0.7, attackSpeedGrowthPercent: 2.215, // adGrowth: Data Dragon이 0으로 내보내는 알려진 문제 - 2.75는 추정
       armor: 35, armorGrowth: 4.5, mr: 32, mrGrowth: 2.05,
       range: 125, moveSpeed: 335, mana: 310, manaGrowth: 33, manaRegen: 7.85, manaRegenGrowth: 0.5,
+      windupPercent: 0.2292, // 39차: LeagueSandbox Rammus.json(4.20) AttackDelayCastOffsetPercent -0.0708 → 0.3 - 0.0708
     },
     passive: {
       name: '가시박힌 껍질', desc: '총 방어력과 총 마법 저항력의 15%만큼 추가 공격력을 얻습니다.',
