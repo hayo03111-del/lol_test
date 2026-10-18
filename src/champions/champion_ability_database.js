@@ -251,6 +251,16 @@ const championAbilityDatabase = {
   // 뛰어오르며 뒤집혔다(요청 "Q 구를 때 모션 이상"). 굴림 반복 클립이 GLB에 없어 공 자세를 코드로 굴린다(rammus.js _rammusTickBallSpin).
   // 40차: 39차의 Channel_Wndup(웅크린 자세)은 팔·머리가 밖으로 나와 공이 아니었다 - Spell1을 한 번 재생해 몸을 마는 모습을 보여 준 뒤
   // 팔다리를 다 집어넣은 0.8 지점(rollHoldAt)에서 멈춰 그 공 자세를 굴린다.
+  // 47차: 럭스 GLB(사용자 제공) - Attack1/2·Crit, Spell1~4(Spell4 2초), Idle1~4, Run.
+  lux: {
+    idleAnimationNames: ['Idle1'],
+    moveAnimationNames: ['Run'],
+    attackAnimationNames: ['Attack1', 'Attack2'],
+    Q: { animationNames: ['Spell1'], animationPatterns: [/^spell1/i] },
+    W: { animationNames: ['Spell2'], animationPatterns: [/^spell2/i] },
+    E: { animationNames: ['Spell3'], animationPatterns: [/^spell3/i] },
+    R: { animationNames: ['Spell4'], animationPatterns: [/^spell4/i] },
+  },
   rammus: {
     idleAnimationNames: ['Idle1'],
     moveAnimationNames: ['Run'],

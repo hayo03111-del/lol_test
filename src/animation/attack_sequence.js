@@ -57,6 +57,7 @@ const ATTACK_SEQUENCE_OVERRIDES = {
   ashe: ['attack1', 'attack2'],
   nautilus: ['attack1', 'attack2', 'attack3'],
   rammus: ['attack1', 'attack2'], // 38차: 실제 GLB 평타 2개(+Crit)
+  lux: ['attack1', 'attack2'], // 47차: 실제 GLB 평타 2개(+Crit)
 };
 // 시퀀스 배열에서의 위치를 챔피언 고유의 "손/방향" 의미로 변환한다.
 // 새 챔피언이 추가되면 이 매핑만 확장하면 된다 - 애니메이션 선택 로직
@@ -129,6 +130,7 @@ const SKILL_HITBOX_SHAPE = {
   yone: { Q: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' }, W: { type: 'cone', angleField: 'angleDeg' } },
   vex: { Q: { type: 'line', widthField: 'widthAfterAccel' }, R: { type: 'line', widthField: 'width' } },
   ahri: { Q: { type: 'line', widthField: 'width' }, E: { type: 'line', widthField: 'width' } },
+  lux: { Q: { type: 'line', widthField: 'width' }, W: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' } },
 };
 // 45차: 링 길이를 범용 필드(range/range1/radius…)로 못 맞추는 스킬. 숫자(LoL) = 그 길이, null = 표시 안 함(사거리가 없는 스킬).
 // 예전엔 실제로 쓰이지 않는 필드(야스오 W 400, 레넥톤 W 175, 초가스 E 500, 아리 W 600, 바루스 W 750)를 그리거나,

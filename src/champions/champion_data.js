@@ -670,6 +670,39 @@ const CHAMPION_DATA = {
       radius: 300, centerRadius: 150, rangeBase: 800, rangeBonusMsRatio: 1.0, jumpSec: 0.75, // 추정: 범위·중앙 반경·사거리(기본 + 추가 이동 속도)·도약 시간
     },
   },
+  lux: {
+    displayName: '럭스',
+    // 47차(사용자가 만든 럭스 확장을 저장소 구조로 옮김). 기본 스탯·재사용 대기시간·마나·사거리는 Data Dragon 16.20.1.
+    // 피해·보호막·둔화 수치는 사용자 확장 값(위키 일부 대조 - 패치마다 달라 "추정"으로 본다).
+    stats: {
+      hp: 580, hpGrowth: 99, hpRegen: 5.5, hpRegenGrowth: 0.55,
+      ad: 54, adGrowth: 3.3, attackSpeed: 0.669, attackSpeedGrowthPercent: 3, // adGrowth: Data Dragon이 0으로 내보내는 알려진 문제 - 3.3은 추정
+      armor: 21, armorGrowth: 5.2, mr: 30, mrGrowth: 1.3,
+      range: 550, moveSpeed: 330, mana: 440, manaGrowth: 23.5, manaRegen: 9, manaRegenGrowth: 0.8,
+      windupPercent: 0.15625, attackSpeedRatio: 0.625, // LeagueSandbox Lux.json AttackDelayCastOffsetPercent -0.14375 → 0.3 - 0.14375
+    },
+    passive: {
+      name: '광채', desc: '공격 스킬에 맞은 적에게 6초간 빛을 남기고, 기본 공격이나 최후의 섬광으로 터뜨려 추가 마법 피해를 줍니다.',
+      durationSec: 6, base: 20, perLevel: 10, apRatio: 0.3, // 레벨 1~18: 30~200(+AP 30%) - 위키 값과 같은 범위
+    },
+    Q: {
+      name: '빛의 속박', cooldown: 10, mana: 50, range: 1175, width: 140, missileSpeed: 1200, castTimeSec: 0.25, maxTargets: 2, // 폭·속도: PC 위키
+      damageByLevel: [80, 120, 160, 200, 240], apRatio: 0.6, rootDurationSec: 2, damageType: 'MAGICAL', // 처음 맞은 둘 모두 피해·속박
+    },
+    W: {
+      name: '프리즘 보호막', cooldown: [12, 11.5, 11, 10.5, 10], mana: [60, 65, 70, 75, 80], range: 1150, width: 220, missileSpeed: 2400, castTimeSec: 0.25,
+      shieldByLevel: [40, 55, 70, 85, 100], shieldApRatio: 0.35, shieldDurationSec: 2.5, // 나갈 때·돌아올 때 각각 보호막(같은 양) - 폭은 추정(위키 반경 110)
+    },
+    E: {
+      name: '광휘의 특이점', cooldown: [10, 9.5, 9, 8.5, 8], mana: [70, 80, 90, 100, 110], range: 1100, radius: 310, missileSpeed: 1200, castTimeSec: 0.25,
+      zoneDurationSec: 5, damageByLevel: [65, 115, 165, 215, 265], apRatio: 0.8, damageType: 'MAGICAL',
+      slowPercentByLevel: [25, 30, 35, 40, 45], slowLingerSec: 1, // 영역 안 둔화, 터진 뒤 1초 더(Data Dragon 툴팁)
+    },
+    R: {
+      name: '최후의 섬광', cooldown: [60, 50, 40], mana: 100, range: 3340, width: 200, castTimeSec: 1, revealSec: 1.5,
+      damageByLevel: [300, 400, 500], apRatio: 1.2, damageType: 'MAGICAL', // 위키: 300/400/500(+AP 120%), 맞은 적 1.5초 드러남
+    },
+  },
   masteryi: {
     displayName: '마스터 이',
     stats: {

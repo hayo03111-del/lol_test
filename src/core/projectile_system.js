@@ -73,7 +73,7 @@ class ProjectileSystem {
   // 45차: line = { dir, maxDist(world), halfWidth(world), filter?(unit), onMiss?() } 를 주면 "직선 스킬샷"이다 - 대상을 미리 정해
   // 따라가지 않고 그 방향으로 maxDist까지 곧장 날아가며, 이번 프레임에 지나간 구간(폭 halfWidth)에 닿은 적 중 가장 앞의 대상을
   // 맞힌다(노틸러스 Q와 같은 판정). 예전엔 발사 순간 직선 위의 대상을 골라 끝까지 따라가서 피할 수 없었고 사거리 밖까지 쫓아갔다.
-  // line.pierce: 관통 - 닿는 대상마다 onHit(unit, index)을 부르고 사거리 끝까지 계속 날아간다.
+  // line.pierce: 관통 - 닿는 대상마다 onHit(unit, index)을 부르고 사거리 끝까지 계속 날아간다. line.maxHits(>1): 그만큼 맞히면 사라진다(럭스 Q - 처음 둘).
   // hidden: 화살 모양을 그리지 않는다(자체 이펙트가 있는 스킬).
   spawn({ from, target, targetPoint, speed = 26, damage = 0, color = 0xdff0ff, realmId, onHit, fromTurret = false, line = null, hidden = false }) {
     const entry = this._acquireArrowMesh(color);
@@ -82,7 +82,7 @@ class ProjectileSystem {
     const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target: line ? null : target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, life: 2.5, hasHit: false, done: false };
     if (line) {
       const dir = line.dir.clone().setY(0).normalize();
-      proj.line = { dir, origin: from.clone(), maxDist: line.maxDist, halfWidth: line.halfWidth, filter: line.filter || null, onMiss: line.onMiss || null, traveled: 0, pierce: !!line.pierce, hitSet: new Set(), hits: 0 };
+      proj.line = { dir, origin: from.clone(), maxDist: line.maxDist, halfWidth: line.halfWidth, filter: line.filter || null, onMiss: line.onMiss || null, traveled: 0, pierce: !!line.pierce || line.maxHits > 1, maxHits: line.maxHits || 0, hitSet: new Set(), hits: 0 };
       proj.targetPoint = from.clone().addScaledVector(dir, line.maxDist);
       proj.life = line.maxDist / Math.max(1e-6, speed) + 0.5;
     }
@@ -132,8 +132,9 @@ class ProjectileSystem {
         L.hitSet.add(h.u);
         if (proj.onHit) proj.onHit(h.u, L.hits);
         L.hits++; this.totalHits++;
+        if (L.maxHits && L.hits >= L.maxHits) break;
       }
-      if (L.traveled >= L.maxDist - 1e-6 || proj.life <= 0) { if (!L.hits && L.onMiss) L.onMiss(); this._remove(i, !L.hits); }
+      if ((L.maxHits && L.hits >= L.maxHits) || L.traveled >= L.maxDist - 1e-6 || proj.life <= 0) { if (!L.hits && L.onMiss) L.onMiss(); this._remove(i, !L.hits); }
       return;
     }
     const best = this._sweepLine(proj, prev, L.traveled);

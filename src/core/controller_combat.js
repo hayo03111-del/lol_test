@@ -144,6 +144,7 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
     if (this.championId === 'nautilus') this._nautilusOnBasicAttackHit(target);
     if (this.championId === 'nilah') this._nilahOnBasicAttackHit(target, target._lastDamageTakenAmount || 0, wouldKill);
     if (this.championId === 'renekton') this._renektonOnBasicAttackHit(target);
+    if (this.championId === 'lux') this._luxOnBasicAttackHit(target); // 47차: 광채 표식 터뜨리기
     // 아리: 여우불의 "아리가 공격한 적" 우선순위 판정에 쓸 마지막 평타
     // 대상/시각을 기록한다(공식 설명 "3초 내 마지막 평타 대상"과 동일).
     if (this.championId === 'ahri' && this._ahri) { this._ahri.lastAttackTarget = target; this._ahri.lastAttackAt = performance.now(); }

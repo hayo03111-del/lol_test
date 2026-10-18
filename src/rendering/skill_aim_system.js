@@ -73,6 +73,12 @@ const SKILL_AIM = {
     R: { type: 'unit', range: (c, d) => d.range },
   },
   masteryi: { Q: { type: 'unit', range: (c, d) => d.range }, W: { type: 'instant' }, E: { type: 'instant' }, R: { type: 'instant' } },
+  lux: { // 47차 - 범위·폭은 데이터(함수로 읽는다 - 사용자 확장은 숫자를 넣어 표시가 데이터와 따로 놀았다)
+    Q: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
+    W: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
+    E: { type: 'circleAt', range: (c, d) => d.range, radius: (c, d) => d.radius, path: true, instantIf: (c) => !!(c._lux && c._lux.zone) }, // 재사용은 바로 터뜨림
+    R: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
+  },
   rammus: { // 38차
     Q: { type: 'instant' }, W: { type: 'instant' },
     E: { type: 'unit', range: (c, d) => d.range },

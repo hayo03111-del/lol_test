@@ -80,6 +80,10 @@ const SKILL_TIMING_DATABASE = {
   rammus: {
     R: { eventTime: 0, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
   },
+  // 47차: 럭스 GLB에도 Channel 클립이 있지만 R은 1초 시전 뒤 섬광(채널형 아님) - 실제 시전은 lux.js.
+  lux: {
+    R: { eventTime: 1, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+  },
   ashe: {
     W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },

@@ -36,6 +36,10 @@ const CHAMPION_DIRECT_CASTS = {
     Q: (c, m, f) => c._nautilusCastQ(m, f), W: (c, m, f) => c._nautilusCastW(f),
     E: (c, m, f) => c._nautilusCastE(f), R: (c, m, f) => c._nautilusCastR(f),
   },
+  lux: { // 47차
+    Q: (c, m, f) => c._luxCastQ(m, f), W: (c, m, f) => c._luxCastW(m, f),
+    E: (c, m, f) => c._luxCastE(m, f), R: (c, m, f) => c._luxCastR(m, f),
+  },
   rammus: {
     Q: (c, m, f) => c._rammusCastQ(m, f), W: (c, m, f) => c._rammusCastW(f),
     E: (c, m, f) => c._rammusCastE(f), R: (c, m, f) => c._rammusCastR(m, f),
@@ -369,6 +373,11 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
     }
     // 38차: 람머스 Q(대회전 - 구르기 시작·재사용 종료)와 W(웅크리기 - 즉시 버프)도 시전 모션 없이 상태만 바꾼다 - 평타 중에도 바로.
     if (this.championId === 'rammus' && (slot === 'Q' || slot === 'W')) {
+      this._dispatchCast(slot, mouseWorldPoint, false);
+      return;
+    }
+    // 47차: 럭스 E 재사용(특이점 터뜨리기)은 비용·시전 모션 없이 바로 - 재사용 대기시간·행동 게이트에 막히지 않게.
+    if (this.championId === 'lux' && slot === 'E' && this._lux && this._lux.zone) {
       this._dispatchCast(slot, mouseWorldPoint, false);
       return;
     }

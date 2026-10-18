@@ -105,6 +105,7 @@ const CHAMPION_UNIT_SIZE_LOL = {
   // 39차: LeagueSandbox-Default Stats/Rammus.json(4.20) - SkinScale 1.5·SelectionRadius 120·Pathfinding 35. 이 GLB(키 0.856)
   // × 100 × 1.5 = 128로 같은 파일의 SelectionHeight 130과 맞는다. 예전엔 등록이 없어 기본 1.0(원작의 2/3 크기)이었다.
   rammus:      { pathing: 35, selection: 120, skinScale: 1.5, verified: true },
+  lux:         { pathing: 35, selection: 100, skinScale: 1.5, verified: true }, // 47차: LeagueSandbox Lux.json SkinScale 1.5(기본 1.0이라 작아 보였다)
   yasuo:       { pathing: 32, selection: 75, skinScale: 0.93, verified: true },
   mordekaiser: {},
   renekton:    { gameplay: 80, pathing: 50, selection: 125 },
@@ -451,7 +452,7 @@ function isRangedAttacker(unit) {
   return lol > 300;
 }
 // 평타 투사체 속도(LoL 단위/초 - 위키 기본 공격 미사일 속도). 목록에 없으면 2000.
-const BASIC_ATTACK_MISSILE_SPEED_LOL = { ashe: 2000, varus: 2000, ezreal: 2000, ahri: 1750, vex: 1600 };
+const BASIC_ATTACK_MISSILE_SPEED_LOL = { ashe: 2000, varus: 2000, ezreal: 2000, ahri: 1750, vex: 1600, lux: 1400 }; // 럭스 1400은 추정
 function basicAttackMissileSpeedWorld(unit) {
   return lolRangeToWorld(BASIC_ATTACK_MISSILE_SPEED_LOL[unit && unit.championId] || 2000);
 }

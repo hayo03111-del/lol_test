@@ -58,6 +58,7 @@
     "src/champions/ashe.js",
     "src/champions/nautilus.js",
     "src/champions/rammus.js",
+    "src/champions/lux.js",
     "src/core/controller_post_class_helpers.js",
     "src/world/dummy_enemy.js",
     "src/world/ally_dummy.js",

@@ -175,6 +175,7 @@ CharacterController.prototype._die = function() {
     }
     if (this.championId === 'nautilus' && typeof this._nautilusReset === 'function') this._nautilusReset();
     if (this.championId === 'rammus' && typeof this._rammusReset === 'function') this._rammusReset();
+    if (this.championId === 'lux' && typeof this._luxReset === 'function') this._luxReset();
     // 세트 R 도중 사망: 위 _clearActionTimers()가 시퀀스를 끊으면 잡힌 대상의 제압(isGrabbedBySett)이
     // 풀리지 않고 영구히 남았다 - 정상 종료 함수로 대상을 먼저 풀어준다.
     if (this._sett?.rSeq) { this.pendingMove = null; this.pendingCast = null; this.currentTarget = null; this._settEndR(this._sett.rSeq, true); }

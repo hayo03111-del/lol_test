@@ -302,6 +302,7 @@ class CharacterController {
     };
     if (this._rammus && this._rammus.spin && typeof this._rammusEndBallSpin === 'function') this._rammusEndBallSpin(); // 굴리던 공의 회전축 정리(39차)
     this._rammus = { roll: null, wUntil: 0, wStartedAt: 0, wArmor: 0, wMr: 0, jump: null, aftershocks: null, spin: null }; // 38차 람머스(rammus.js)
+    if (typeof this._luxReset === 'function') this._luxReset(); else this._lux = null; // 47차 럭스(lux.js) - 남은 구체·영역 메시 정리
     this._nautilus = {
       passiveReadyAt: new Map(),
       qPending: null, qTravel: null, qPull: null,
@@ -1453,6 +1454,7 @@ class CharacterController {
     this._asheUpdate(dt);
     if (typeof this._nautilusUpdate === 'function') this._nautilusUpdate(dt);
     if (typeof this._rammusUpdate === 'function') this._rammusUpdate(dt);
+    if (typeof this._luxUpdate === 'function') this._luxUpdate(dt);
     if (typeof itemSystemTick === 'function') itemSystemTick(this, dt);
   }
 }

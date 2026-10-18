@@ -1047,6 +1047,7 @@ const CHAMPION_UNIT_SIZE_LOL = {
   // 39차: LeagueSandbox-Default Stats/Rammus.json(4.20) - SkinScale 1.5·SelectionRadius 120·Pathfinding 35. 이 GLB(키 0.856)
   // × 100 × 1.5 = 128로 같은 파일의 SelectionHeight 130과 맞는다. 예전엔 등록이 없어 기본 1.0(원작의 2/3 크기)이었다.
   rammus:      { pathing: 35, selection: 120, skinScale: 1.5, verified: true },
+  lux:         { pathing: 35, selection: 100, skinScale: 1.5, verified: true }, // 47차: LeagueSandbox Lux.json SkinScale 1.5(기본 1.0이라 작아 보였다)
   yasuo:       { pathing: 32, selection: 75, skinScale: 0.93, verified: true },
   mordekaiser: {},
   renekton:    { gameplay: 80, pathing: 50, selection: 125 },
@@ -1393,7 +1394,7 @@ function isRangedAttacker(unit) {
   return lol > 300;
 }
 // 평타 투사체 속도(LoL 단위/초 - 위키 기본 공격 미사일 속도). 목록에 없으면 2000.
-const BASIC_ATTACK_MISSILE_SPEED_LOL = { ashe: 2000, varus: 2000, ezreal: 2000, ahri: 1750, vex: 1600 };
+const BASIC_ATTACK_MISSILE_SPEED_LOL = { ashe: 2000, varus: 2000, ezreal: 2000, ahri: 1750, vex: 1600, lux: 1400 }; // 럭스 1400은 추정
 function basicAttackMissileSpeedWorld(unit) {
   return lolRangeToWorld(BASIC_ATTACK_MISSILE_SPEED_LOL[unit && unit.championId] || 2000);
 }
@@ -3124,6 +3125,39 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [30, 40, 50], slowDurationSec: 1.5, aftershockCount: 3, aftershockDurationSec: 3.5, // 여진은 둔화만(25.12에서 여진 피해 삭제)
       powerballKnockupSec: 1, // 대회전 중 사용 시 중앙 적 공중에 뜸 + 대회전 피해(1초는 검색 자료 하나 - 추정)
       radius: 300, centerRadius: 150, rangeBase: 800, rangeBonusMsRatio: 1.0, jumpSec: 0.75, // 추정: 범위·중앙 반경·사거리(기본 + 추가 이동 속도)·도약 시간
+    },
+  },
+  lux: {
+    displayName: '럭스',
+    // 47차(사용자가 만든 럭스 확장을 저장소 구조로 옮김). 기본 스탯·재사용 대기시간·마나·사거리는 Data Dragon 16.20.1.
+    // 피해·보호막·둔화 수치는 사용자 확장 값(위키 일부 대조 - 패치마다 달라 "추정"으로 본다).
+    stats: {
+      hp: 580, hpGrowth: 99, hpRegen: 5.5, hpRegenGrowth: 0.55,
+      ad: 54, adGrowth: 3.3, attackSpeed: 0.669, attackSpeedGrowthPercent: 3, // adGrowth: Data Dragon이 0으로 내보내는 알려진 문제 - 3.3은 추정
+      armor: 21, armorGrowth: 5.2, mr: 30, mrGrowth: 1.3,
+      range: 550, moveSpeed: 330, mana: 440, manaGrowth: 23.5, manaRegen: 9, manaRegenGrowth: 0.8,
+      windupPercent: 0.15625, attackSpeedRatio: 0.625, // LeagueSandbox Lux.json AttackDelayCastOffsetPercent -0.14375 → 0.3 - 0.14375
+    },
+    passive: {
+      name: '광채', desc: '공격 스킬에 맞은 적에게 6초간 빛을 남기고, 기본 공격이나 최후의 섬광으로 터뜨려 추가 마법 피해를 줍니다.',
+      durationSec: 6, base: 20, perLevel: 10, apRatio: 0.3, // 레벨 1~18: 30~200(+AP 30%) - 위키 값과 같은 범위
+    },
+    Q: {
+      name: '빛의 속박', cooldown: 10, mana: 50, range: 1175, width: 140, missileSpeed: 1200, castTimeSec: 0.25, maxTargets: 2, // 폭·속도: PC 위키
+      damageByLevel: [80, 120, 160, 200, 240], apRatio: 0.6, rootDurationSec: 2, damageType: 'MAGICAL', // 처음 맞은 둘 모두 피해·속박
+    },
+    W: {
+      name: '프리즘 보호막', cooldown: [12, 11.5, 11, 10.5, 10], mana: [60, 65, 70, 75, 80], range: 1150, width: 220, missileSpeed: 2400, castTimeSec: 0.25,
+      shieldByLevel: [40, 55, 70, 85, 100], shieldApRatio: 0.35, shieldDurationSec: 2.5, // 나갈 때·돌아올 때 각각 보호막(같은 양) - 폭은 추정(위키 반경 110)
+    },
+    E: {
+      name: '광휘의 특이점', cooldown: [10, 9.5, 9, 8.5, 8], mana: [70, 80, 90, 100, 110], range: 1100, radius: 310, missileSpeed: 1200, castTimeSec: 0.25,
+      zoneDurationSec: 5, damageByLevel: [65, 115, 165, 215, 265], apRatio: 0.8, damageType: 'MAGICAL',
+      slowPercentByLevel: [25, 30, 35, 40, 45], slowLingerSec: 1, // 영역 안 둔화, 터진 뒤 1초 더(Data Dragon 툴팁)
+    },
+    R: {
+      name: '최후의 섬광', cooldown: [60, 50, 40], mana: 100, range: 3340, width: 200, castTimeSec: 1, revealSec: 1.5,
+      damageByLevel: [300, 400, 500], apRatio: 1.2, damageType: 'MAGICAL', // 위키: 300/400/500(+AP 120%), 맞은 적 1.5초 드러남
     },
   },
   masteryi: {
@@ -5807,6 +5841,16 @@ const championAbilityDatabase = {
   // 뛰어오르며 뒤집혔다(요청 "Q 구를 때 모션 이상"). 굴림 반복 클립이 GLB에 없어 공 자세를 코드로 굴린다(rammus.js _rammusTickBallSpin).
   // 40차: 39차의 Channel_Wndup(웅크린 자세)은 팔·머리가 밖으로 나와 공이 아니었다 - Spell1을 한 번 재생해 몸을 마는 모습을 보여 준 뒤
   // 팔다리를 다 집어넣은 0.8 지점(rollHoldAt)에서 멈춰 그 공 자세를 굴린다.
+  // 47차: 럭스 GLB(사용자 제공) - Attack1/2·Crit, Spell1~4(Spell4 2초), Idle1~4, Run.
+  lux: {
+    idleAnimationNames: ['Idle1'],
+    moveAnimationNames: ['Run'],
+    attackAnimationNames: ['Attack1', 'Attack2'],
+    Q: { animationNames: ['Spell1'], animationPatterns: [/^spell1/i] },
+    W: { animationNames: ['Spell2'], animationPatterns: [/^spell2/i] },
+    E: { animationNames: ['Spell3'], animationPatterns: [/^spell3/i] },
+    R: { animationNames: ['Spell4'], animationPatterns: [/^spell4/i] },
+  },
   rammus: {
     idleAnimationNames: ['Idle1'],
     moveAnimationNames: ['Run'],
@@ -6097,6 +6141,10 @@ const SKILL_TIMING_DATABASE = {
   // 실제 시전은 rammus.js가 직접 처리한다(아래 값은 공용 경로용 기록 - 시전 시간 미확인, 즉시 도약으로 처리).
   rammus: {
     R: { eventTime: 0, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+  },
+  // 47차: 럭스 GLB에도 Channel 클립이 있지만 R은 1초 시전 뒤 섬광(채널형 아님) - 실제 시전은 lux.js.
+  lux: {
+    R: { eventTime: 1, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
   },
   ashe: {
     W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
@@ -9483,7 +9531,7 @@ class ProjectileSystem {
   // 45차: line = { dir, maxDist(world), halfWidth(world), filter?(unit), onMiss?() } 를 주면 "직선 스킬샷"이다 - 대상을 미리 정해
   // 따라가지 않고 그 방향으로 maxDist까지 곧장 날아가며, 이번 프레임에 지나간 구간(폭 halfWidth)에 닿은 적 중 가장 앞의 대상을
   // 맞힌다(노틸러스 Q와 같은 판정). 예전엔 발사 순간 직선 위의 대상을 골라 끝까지 따라가서 피할 수 없었고 사거리 밖까지 쫓아갔다.
-  // line.pierce: 관통 - 닿는 대상마다 onHit(unit, index)을 부르고 사거리 끝까지 계속 날아간다.
+  // line.pierce: 관통 - 닿는 대상마다 onHit(unit, index)을 부르고 사거리 끝까지 계속 날아간다. line.maxHits(>1): 그만큼 맞히면 사라진다(럭스 Q - 처음 둘).
   // hidden: 화살 모양을 그리지 않는다(자체 이펙트가 있는 스킬).
   spawn({ from, target, targetPoint, speed = 26, damage = 0, color = 0xdff0ff, realmId, onHit, fromTurret = false, line = null, hidden = false }) {
     const entry = this._acquireArrowMesh(color);
@@ -9492,7 +9540,7 @@ class ProjectileSystem {
     const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target: line ? null : target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, life: 2.5, hasHit: false, done: false };
     if (line) {
       const dir = line.dir.clone().setY(0).normalize();
-      proj.line = { dir, origin: from.clone(), maxDist: line.maxDist, halfWidth: line.halfWidth, filter: line.filter || null, onMiss: line.onMiss || null, traveled: 0, pierce: !!line.pierce, hitSet: new Set(), hits: 0 };
+      proj.line = { dir, origin: from.clone(), maxDist: line.maxDist, halfWidth: line.halfWidth, filter: line.filter || null, onMiss: line.onMiss || null, traveled: 0, pierce: !!line.pierce || line.maxHits > 1, maxHits: line.maxHits || 0, hitSet: new Set(), hits: 0 };
       proj.targetPoint = from.clone().addScaledVector(dir, line.maxDist);
       proj.life = line.maxDist / Math.max(1e-6, speed) + 0.5;
     }
@@ -9542,8 +9590,9 @@ class ProjectileSystem {
         L.hitSet.add(h.u);
         if (proj.onHit) proj.onHit(h.u, L.hits);
         L.hits++; this.totalHits++;
+        if (L.maxHits && L.hits >= L.maxHits) break;
       }
-      if (L.traveled >= L.maxDist - 1e-6 || proj.life <= 0) { if (!L.hits && L.onMiss) L.onMiss(); this._remove(i, !L.hits); }
+      if ((L.maxHits && L.hits >= L.maxHits) || L.traveled >= L.maxDist - 1e-6 || proj.life <= 0) { if (!L.hits && L.onMiss) L.onMiss(); this._remove(i, !L.hits); }
       return;
     }
     const best = this._sweepLine(proj, prev, L.traveled);
@@ -10619,6 +10668,12 @@ const SKILL_AIM = {
     R: { type: 'unit', range: (c, d) => d.range },
   },
   masteryi: { Q: { type: 'unit', range: (c, d) => d.range }, W: { type: 'instant' }, E: { type: 'instant' }, R: { type: 'instant' } },
+  lux: { // 47차 - 범위·폭은 데이터(함수로 읽는다 - 사용자 확장은 숫자를 넣어 표시가 데이터와 따로 놀았다)
+    Q: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
+    W: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
+    E: { type: 'circleAt', range: (c, d) => d.range, radius: (c, d) => d.radius, path: true, instantIf: (c) => !!(c._lux && c._lux.zone) }, // 재사용은 바로 터뜨림
+    R: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
+  },
   rammus: { // 38차
     Q: { type: 'instant' }, W: { type: 'instant' },
     E: { type: 'unit', range: (c, d) => d.range },
@@ -11303,6 +11358,7 @@ const ATTACK_SEQUENCE_OVERRIDES = {
   ashe: ['attack1', 'attack2'],
   nautilus: ['attack1', 'attack2', 'attack3'],
   rammus: ['attack1', 'attack2'], // 38차: 실제 GLB 평타 2개(+Crit)
+  lux: ['attack1', 'attack2'], // 47차: 실제 GLB 평타 2개(+Crit)
 };
 // 시퀀스 배열에서의 위치를 챔피언 고유의 "손/방향" 의미로 변환한다.
 // 새 챔피언이 추가되면 이 매핑만 확장하면 된다 - 애니메이션 선택 로직
@@ -11375,6 +11431,7 @@ const SKILL_HITBOX_SHAPE = {
   yone: { Q: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' }, W: { type: 'cone', angleField: 'angleDeg' } },
   vex: { Q: { type: 'line', widthField: 'widthAfterAccel' }, R: { type: 'line', widthField: 'width' } },
   ahri: { Q: { type: 'line', widthField: 'width' }, E: { type: 'line', widthField: 'width' } },
+  lux: { Q: { type: 'line', widthField: 'width' }, W: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' } },
 };
 // 45차: 링 길이를 범용 필드(range/range1/radius…)로 못 맞추는 스킬. 숫자(LoL) = 그 길이, null = 표시 안 함(사거리가 없는 스킬).
 // 예전엔 실제로 쓰이지 않는 필드(야스오 W 400, 레넥톤 W 175, 초가스 E 500, 아리 W 600, 바루스 W 750)를 그리거나,
@@ -12204,6 +12261,7 @@ class CharacterController {
     };
     if (this._rammus && this._rammus.spin && typeof this._rammusEndBallSpin === 'function') this._rammusEndBallSpin(); // 굴리던 공의 회전축 정리(39차)
     this._rammus = { roll: null, wUntil: 0, wStartedAt: 0, wArmor: 0, wMr: 0, jump: null, aftershocks: null, spin: null }; // 38차 람머스(rammus.js)
+    if (typeof this._luxReset === 'function') this._luxReset(); else this._lux = null; // 47차 럭스(lux.js) - 남은 구체·영역 메시 정리
     this._nautilus = {
       passiveReadyAt: new Map(),
       qPending: null, qTravel: null, qPull: null,
@@ -13355,6 +13413,7 @@ class CharacterController {
     this._asheUpdate(dt);
     if (typeof this._nautilusUpdate === 'function') this._nautilusUpdate(dt);
     if (typeof this._rammusUpdate === 'function') this._rammusUpdate(dt);
+    if (typeof this._luxUpdate === 'function') this._luxUpdate(dt);
     if (typeof itemSystemTick === 'function') itemSystemTick(this, dt);
   }
 }
@@ -13959,6 +14018,7 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
     if (this.championId === 'nautilus') this._nautilusOnBasicAttackHit(target);
     if (this.championId === 'nilah') this._nilahOnBasicAttackHit(target, target._lastDamageTakenAmount || 0, wouldKill);
     if (this.championId === 'renekton') this._renektonOnBasicAttackHit(target);
+    if (this.championId === 'lux') this._luxOnBasicAttackHit(target); // 47차: 광채 표식 터뜨리기
     // 아리: 여우불의 "아리가 공격한 적" 우선순위 판정에 쓸 마지막 평타
     // 대상/시각을 기록한다(공식 설명 "3초 내 마지막 평타 대상"과 동일).
     if (this.championId === 'ahri' && this._ahri) { this._ahri.lastAttackTarget = target; this._ahri.lastAttackAt = performance.now(); }
@@ -14974,6 +15034,10 @@ const CHAMPION_DIRECT_CASTS = {
     Q: (c, m, f) => c._nautilusCastQ(m, f), W: (c, m, f) => c._nautilusCastW(f),
     E: (c, m, f) => c._nautilusCastE(f), R: (c, m, f) => c._nautilusCastR(f),
   },
+  lux: { // 47차
+    Q: (c, m, f) => c._luxCastQ(m, f), W: (c, m, f) => c._luxCastW(m, f),
+    E: (c, m, f) => c._luxCastE(m, f), R: (c, m, f) => c._luxCastR(m, f),
+  },
   rammus: {
     Q: (c, m, f) => c._rammusCastQ(m, f), W: (c, m, f) => c._rammusCastW(f),
     E: (c, m, f) => c._rammusCastE(f), R: (c, m, f) => c._rammusCastR(m, f),
@@ -15307,6 +15371,11 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
     }
     // 38차: 람머스 Q(대회전 - 구르기 시작·재사용 종료)와 W(웅크리기 - 즉시 버프)도 시전 모션 없이 상태만 바꾼다 - 평타 중에도 바로.
     if (this.championId === 'rammus' && (slot === 'Q' || slot === 'W')) {
+      this._dispatchCast(slot, mouseWorldPoint, false);
+      return;
+    }
+    // 47차: 럭스 E 재사용(특이점 터뜨리기)은 비용·시전 모션 없이 바로 - 재사용 대기시간·행동 게이트에 막히지 않게.
+    if (this.championId === 'lux' && slot === 'E' && this._lux && this._lux.zone) {
       this._dispatchCast(slot, mouseWorldPoint, false);
       return;
     }
@@ -17027,6 +17096,7 @@ CharacterController.prototype._die = function() {
     }
     if (this.championId === 'nautilus' && typeof this._nautilusReset === 'function') this._nautilusReset();
     if (this.championId === 'rammus' && typeof this._rammusReset === 'function') this._rammusReset();
+    if (this.championId === 'lux' && typeof this._luxReset === 'function') this._luxReset();
     // 세트 R 도중 사망: 위 _clearActionTimers()가 시퀀스를 끊으면 잡힌 대상의 제압(isGrabbedBySett)이
     // 풀리지 않고 영구히 남았다 - 정상 종료 함수로 대상을 먼저 풀어준다.
     if (this._sett?.rSeq) { this.pendingMove = null; this.pendingCast = null; this.currentTarget = null; this._settEndR(this._sett.rSeq, true); }
@@ -26262,6 +26332,321 @@ CharacterController.prototype._rammusReset = function() {
   this._rammus = { roll: null, wUntil: 0, wStartedAt: 0, wArmor: 0, wMr: 0, jump: null, aftershocks: null, spin: null };
 };
 
+/* ===== src/champions/lux.js ===== */
+/* ============================================================
+   럭스(Lux) 전투 로직 - 47차
+   ------------------------------------------------------------
+   사용자가 만든 럭스 확장(별도 HTML에 붙여 넣은 코드 + 임베드 GLB)을 저장소 구조로 옮기며 다시 짰다. 수치는 전부
+   champion_data.js의 lux 항목(출처·추정 표시도 그쪽 주석).
+
+   - 패시브(광채): 공격 스킬에 맞은 적에게 6초 표식. 기본 공격·R이 표식을 터뜨려 추가 마법 피해.
+   - Q(빛의 속박): 피할 수 있는 직선 스킬샷(투사체 line 모드, maxHits 2) - 처음 맞은 둘에게 피해 + 속박.
+   - W(프리즘 보호막): 지팡이가 사거리 끝까지 갔다가 럭스에게 돌아온다. 지나가며 닿은 아군(과 럭스)에게 갈 때·올 때 각각 보호막.
+   - E(광휘의 특이점): 지정 위치(최대 1100)로 날아가 반경 310 영역을 만든다 - 안의 적 둔화. 다시 누르거나 5초가 지나면 터져
+     피해 + 1초 추가 둔화. 날아가는 중에 다시 누르면 도착하자마자 터진다.
+     (사용자 확장의 E 문제: 매 프레임 바닥 원을 새로 만들어 깜빡이고 무거웠다, 조준 표시 값이 함수가 아닌 숫자라 표시가 안 맞았다,
+      재사용이 시전 게이트·마나 검사에 막힐 수 있었다 - 영역·투사체 메시를 하나씩 만들어 옮기고, 재사용은 게이트 없이 바로 처리한다.)
+   - R(최후의 섬광): 1초 시전 뒤 3340 직선 전체에 피해. 맞은 적의 표식을 먼저 터뜨리고 새 표식을 남긴다.
+   ============================================================ */
+
+CharacterController.prototype._luxIsAlive = function() {
+  return this.hp > 0 && this.state !== STATE.DEAD && this.state !== STATE.RESPAWN;
+};
+CharacterController.prototype._luxAimDir = function(mouseWorldPoint) {
+  const dir = mouseWorldPoint
+    ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
+    : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
+  if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1).applyQuaternion(this.root.quaternion);
+  return dir.setY(0).normalize();
+};
+CharacterController.prototype._luxSpellDamage = function(u, raw) {
+  if (!u || u.hp <= 0 || u.isStructure) return 0;
+  return applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
+};
+
+/* ---------------- 패시브 - 광채 ---------------- */
+CharacterController.prototype._luxMark = function(u) {
+  if (!u || u.hp <= 0 || u.isStructure) return;
+  this._lux.marks.set(u, performance.now() + this._champData().passive.durationSec * 1000);
+};
+// 표식이 있으면 터뜨린다(추가 마법 피해). 기본 공격 적중과 R에서 부른다.
+CharacterController.prototype._luxDetonateMark = function(u) {
+  const until = this._lux.marks.get(u);
+  if (until == null) return false;
+  this._lux.marks.delete(u);
+  if (until <= performance.now() || !u || u.hp <= 0) return false;
+  const p = this._champData().passive;
+  const lvl = Math.max(1, Math.min(18, this.champLevel || 1));
+  this._luxSpellDamage(u, p.base + p.perLevel * lvl + p.apRatio * (this.stats.abilityPower || 0));
+  if (typeof vfx !== 'undefined') vfx.spawn('hit', getWorldPosition(u).clone().add(new THREE.Vector3(0, BASE_UNIT * 0.8, 0)), undefined, { color: 0xfff1a8 });
+  return true;
+};
+CharacterController.prototype._luxOnBasicAttackHit = function(target) { this._luxDetonateMark(target); };
+
+/* ---------------- 시전 공통 ---------------- */
+// 시전 시간 동안 잠그고(clip 재생) fire()를 부른 뒤, 남은 모션은 이동으로 끊을 수 있는 후딜(이즈리얼과 같은 처리).
+CharacterController.prototype._luxBeginCast = function(slot, dir, castTimeSec, fire) {
+  const key = 'lux' + slot;
+  this.faceDirectionInstant(dir);
+  this._clearActionTimers();
+  this.targetPos = null; this.isChasing = false;
+  this.currentActionKey = key; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
+  this.setState(STATE[slot + '_CAST']);
+  const clipName = 'Spell' + { Q: 1, W: 2, E: 3, R: 4 }[slot];
+  const clip = this.findAnimation(clipName);
+  this.playFirstAvailable([clipName], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
+  const fireTimer = this._champTimeout(() => {
+    if (this.currentActionKey !== key || !this._luxIsAlive()) return;
+    this.currentPhase = 'ACTIVE';
+    fire();
+    if (this.currentActionKey !== key) return;
+    this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
+    if (this.pendingMove || this.pendingCast) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+  }, castTimeSec * 1000);
+  this._actionTimers.push(fireTimer);
+  const doneTimer = this._champTimeout(() => {
+    if (this.currentActionKey === key) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+  }, Math.max(castTimeSec + 0.05, clip ? clip.duration : castTimeSec + 0.3) * 1000);
+  this._actionTimers.push(doneTimer);
+};
+CharacterController.prototype._luxCastGate = function(slot) {
+  return this._luxIsAlive() && !isSilenced(this) && !isCrowdControlled(this);
+};
+// 빛 구체 메시(Q 구체·W 지팡이·E 특이점) - 하나 만들어 옮기고 끝나면 지운다.
+CharacterController.prototype._luxMakeOrb = function(color, size) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(BASE_UNIT * size, 14, 10), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+  if (typeof scene !== 'undefined') scene.add(m);
+  return m;
+};
+CharacterController.prototype._luxDisposeMesh = function(m) {
+  if (!m) return;
+  if (m.parent) m.parent.remove(m);
+  m.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+};
+
+/* ---------------- Q - 빛의 속박 ---------------- */
+CharacterController.prototype._luxCastQ = function(mouseWorldPoint, free = false) {
+  if (!this._luxCastGate('Q')) return;
+  const q = this._champData().Q;
+  const dir = this._luxAimDir(mouseWorldPoint);
+  if (!this._payCost('Q', free)) return;
+  const lvl = Math.max(1, this.skillLevels.Q || 1);
+  this._luxBeginCast('Q', dir, q.castTimeSec, () => {
+    const from = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.7, 0));
+    const raw = skillVal(q.damageByLevel, lvl) + q.apRatio * (this.stats.abilityPower || 0);
+    const orb = this._luxMakeOrb(0xfff0a0, 0.16);
+    const proj = projectiles.spawn({
+      from, speed: lolRangeToWorld(q.missileSpeed), color: 0xfff0a0, realmId: this.realmId, hidden: true,
+      line: { dir, maxDist: lolRangeToWorld(q.range), halfWidth: lolRangeToWorld(q.width) * 0.5, maxHits: q.maxTargets || 2,
+        filter: (u) => !u.isStructure, onMiss: () => debugSkillMiss('Lux Q(빛의 속박)', '맞은 대상 없음') },
+      onHit: (u) => {
+        if (this.championId !== 'lux') return;
+        this._luxSpellDamage(u, raw);
+        if (u.hp > 0) {
+          applyStatus(u, { id: 'luxQ_root', type: 'ROOT', duration: q.rootDurationSec, value: 1, source: this });
+          this._luxMark(u);
+        }
+        debugSkillHit('Lux Q(빛의 속박)', u);
+      },
+    });
+    this._lux.orbs.push({ mesh: orb, proj });
+  });
+};
+
+/* ---------------- W - 프리즘 보호막 ---------------- */
+CharacterController.prototype._luxCastW = function(mouseWorldPoint, free = false) {
+  if (!this._luxCastGate('W')) return;
+  const w = this._champData().W;
+  const dir = this._luxAimDir(mouseWorldPoint);
+  if (!this._payCost('W', free)) return;
+  const lvl = Math.max(1, this.skillLevels.W || 1);
+  this._luxBeginCast('W', dir, w.castTimeSec, () => {
+    const origin = this.root.position.clone();
+    const id = ++this._lux.serial;
+    const wand = { id, lvl, origin, dir: dir.clone(), pos: origin.clone(), leg: 0, hit: new Set(), maxDist: lolRangeToWorld(w.range), mesh: this._luxMakeOrb(0xa8f0ff, 0.13) };
+    this._luxShieldUnit(this, wand); // 던지는 순간 럭스 자신도 받는다
+    wand.hit.add(this);
+    this._lux.wands.push(wand);
+  });
+};
+CharacterController.prototype._luxShieldUnit = function(u, wand) {
+  const w = this._champData().W;
+  const amount = (skillVal(w.shieldByLevel, wand.lvl) + w.shieldApRatio * (this.stats.abilityPower || 0)) * getShieldReceivedMultiplier(u);
+  addShield(u, `luxW:${wand.id}:${wand.leg}`, amount, w.shieldDurationSec); // 갈 때·올 때 보호막은 따로 쌓인다
+  updateBars(u);
+  if (typeof vfx !== 'undefined') vfx.spawn('hit', getWorldPosition(u).clone().add(new THREE.Vector3(0, BASE_UNIT * 0.9, 0)), undefined, { color: 0xbff4ff });
+};
+CharacterController.prototype._luxTickWands = function(dt) {
+  const w = this._champData().W;
+  const speed = lolRangeToWorld(w.missileSpeed), halfW = lolRangeToWorld(w.width) * 0.5;
+  for (let i = this._lux.wands.length - 1; i >= 0; i--) {
+    const wand = this._lux.wands[i];
+    const prev = wand.pos.clone();
+    if (wand.leg === 0) {
+      const traveled = Math.min(wand.maxDist, prev.distanceTo(wand.origin) + speed * dt);
+      wand.pos.copy(wand.origin).addScaledVector(wand.dir, traveled);
+      if (traveled >= wand.maxDist - 1e-6) { wand.leg = 1; wand.hit.clear(); }
+    } else {
+      const to = this.root.position.clone().setY(prev.y);
+      const d = to.clone().sub(prev); const len = d.length();
+      if (len <= speed * dt + 1e-6) wand.pos.copy(to); else wand.pos.addScaledVector(d.divideScalar(len), speed * dt);
+    }
+    // 이번 프레임에 지나간 선분에 닿은 아군(죽음의 세계 등 상호작용 불가 대상 제외 - getAllyChampions가 걸러 줌)
+    const seg = wand.pos.clone().sub(prev).setY(0); const segLen = seg.length(); if (segLen > 0) seg.divideScalar(segLen);
+    for (const a of [this, ...getAllyChampions(this)]) {
+      if (!a || a.hp <= 0 || wand.hit.has(a)) continue;
+      const p = getWorldPosition(a); if (!p) continue;
+      const v = new THREE.Vector3(p.x - prev.x, 0, p.z - prev.z);
+      const along = segLen > 0 ? Math.max(0, Math.min(segLen, v.dot(seg))) : 0;
+      const dist = v.addScaledVector(seg, -along).length();
+      if (dist > halfW + getCollisionRadius(a)) continue;
+      wand.hit.add(a);
+      this._luxShieldUnit(a, wand);
+    }
+    wand.mesh.position.set(wand.pos.x, BASE_UNIT * 0.8, wand.pos.z);
+    if (wand.leg === 1 && wand.pos.distanceTo(this.root.position.clone().setY(wand.pos.y)) < 1e-4) {
+      if (!wand.hit.has(this)) this._luxShieldUnit(this, wand); // 돌아와 럭스에게 닿으면 한 번 더
+      this._luxDisposeMesh(wand.mesh);
+      this._lux.wands.splice(i, 1);
+    }
+  }
+};
+
+/* ---------------- E - 광휘의 특이점 ---------------- */
+CharacterController.prototype._luxCastE = function(mouseWorldPoint, free = false) {
+  const z = this._lux.zone;
+  if (z) { // 재사용: 비용·시전 시간 없이 터뜨린다(날아가는 중이면 도착하자마자)
+    if (z.ready) this._luxDetonateE(); else z.detonateOnArrival = true;
+    return;
+  }
+  if (!this._luxCastGate('E')) return;
+  const e = this._champData().E;
+  const dir = this._luxAimDir(mouseWorldPoint);
+  const maxW = lolRangeToWorld(e.range);
+  const dist = mouseWorldPoint ? Math.min(maxW, new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0).length()) : maxW;
+  if (!this._payCost('E', free)) return;
+  const lvl = Math.max(1, this.skillLevels.E || 1);
+  this._luxBeginCast('E', dir, e.castTimeSec, () => {
+    const from = this.root.position.clone();
+    const end = from.clone().addScaledVector(dir, dist);
+    if (typeof constrainUnitPosition === 'function') constrainUnitPosition(this, end);
+    this._lux.zone = {
+      from, end, pos: from.clone(), lvl, ap: this.stats.abilityPower || 0, ready: false, expiresAt: Infinity, detonateOnArrival: false,
+      orb: this._luxMakeOrb(0xffe58a, 0.2), area: null,
+    };
+  });
+};
+CharacterController.prototype._luxMakeZoneMesh = function(center, radiusWorld) {
+  const g = new THREE.Group();
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(radiusWorld, 48), new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(radiusWorld * 0.94, radiusWorld, 64), new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  disc.rotation.x = ring.rotation.x = -Math.PI / 2;
+  g.add(disc, ring);
+  g.position.set(center.x, 0.06, center.z);
+  if (typeof scene !== 'undefined') scene.add(g);
+  return g;
+};
+CharacterController.prototype._luxTickZone = function(dt) {
+  const z = this._lux.zone;
+  if (!z) return;
+  const e = this._champData().E;
+  if (!z.ready) {
+    const total = z.from.distanceTo(z.end);
+    const traveled = Math.min(total, z.pos.distanceTo(z.from) + lolRangeToWorld(e.missileSpeed) * dt);
+    if (total > 1e-6) z.pos.copy(z.from).lerp(z.end, traveled / total); else z.pos.copy(z.end);
+    z.orb.position.set(z.pos.x, BASE_UNIT * 0.6, z.pos.z);
+    if (traveled >= total - 1e-6) {
+      z.ready = true;
+      z.expiresAt = performance.now() + e.zoneDurationSec * 1000;
+      z.area = this._luxMakeZoneMesh(z.end, lolRangeToWorld(e.radius));
+      z.orb.position.set(z.end.x, BASE_UNIT * 0.35, z.end.z);
+      if (z.detonateOnArrival) { this._luxDetonateE(); return; }
+    }
+    return;
+  }
+  // 영역 안 적 둔화(머무는 동안 갱신) - 원작처럼 영역 크기는 일정, 테두리만 살짝 숨쉬듯 밝기 변화
+  const slow = skillVal(e.slowPercentByLevel, z.lvl) / 100;
+  for (const { unit } of findEnemiesInRadius(z.end, e.radius)) {
+    if (!unit || unit.isStructure || !canRealmInteract(this, unit)) continue;
+    applyStatus(unit, { id: 'luxE_slow', type: 'SLOW', duration: 0.25, value: slow, source: this });
+  }
+  if (z.area) z.area.children[1].material.opacity = 0.55 + 0.2 * Math.sin(performance.now() / 160);
+  if (performance.now() >= z.expiresAt) this._luxDetonateE();
+};
+CharacterController.prototype._luxDetonateE = function() {
+  const z = this._lux.zone;
+  if (!z || !z.ready) return;
+  this._lux.zone = null;
+  const e = this._champData().E;
+  const raw = skillVal(e.damageByLevel, z.lvl) + e.apRatio * z.ap;
+  const slow = skillVal(e.slowPercentByLevel, z.lvl) / 100;
+  let hits = 0;
+  for (const { unit } of findEnemiesInRadius(z.end, e.radius)) {
+    if (!unit || unit.isStructure || !canRealmInteract(this, unit)) continue;
+    this._luxSpellDamage(unit, raw);
+    if (unit.hp > 0) {
+      applyStatus(unit, { id: 'luxE_slow', type: 'SLOW', duration: e.slowLingerSec, value: slow, source: this });
+      this._luxMark(unit);
+    }
+    hits++;
+  }
+  this._luxDisposeMesh(z.orb); this._luxDisposeMesh(z.area);
+  if (typeof vfx !== 'undefined') vfx.groundShockwave(z.end.clone(), lolRangeToWorld(e.radius), 0xffe066, 0.4);
+  debugSkillHit('Lux E(광휘의 특이점) 폭발', this, { hits });
+};
+
+/* ---------------- R - 최후의 섬광 ---------------- */
+CharacterController.prototype._luxCastR = function(mouseWorldPoint, free = false) {
+  if (!this._luxCastGate('R')) return;
+  const r = this._champData().R;
+  const dir = this._luxAimDir(mouseWorldPoint);
+  if (!this._payCost('R', free)) return;
+  const lvl = Math.max(1, this.skillLevels.R || 1);
+  const lenW = lolRangeToWorld(r.range), widthW = lolRangeToWorld(r.width);
+  // 1초 동안 발사 예고(얇은 선) - 끝나면 굵은 섬광
+  if (typeof vfx !== 'undefined' && vfx.groundShapeFlash) vfx.groundShapeFlash(this.root.position.clone(), dir, { kind: 'line', length: lenW, width: widthW * 0.35, opacity: 0.35, hold: true }, 0xffc86b, r.castTimeSec);
+  this._luxBeginCast('R', dir, r.castTimeSec, () => {
+    const origin = this.root.position.clone();
+    const raw = skillVal(r.damageByLevel, lvl) + r.apRatio * (this.stats.abilityPower || 0);
+    const hits = typeof findEnemiesInLine === 'function' ? findEnemiesInLine(origin, dir, r.range, r.width) : [];
+    for (const u of hits) {
+      if (!u || u.hp <= 0 || u.isStructure || !canRealmInteract(this, u)) continue;
+      this._luxDetonateMark(u); // 이전 표식을 먼저 터뜨리고
+      this._luxSpellDamage(u, raw);
+      if (u.hp > 0) {
+        this._luxMark(u); // 새 표식을 남긴다
+        if (typeof visionSystem !== 'undefined' && visionSystem && visionSystem.revealUnit) visionSystem.revealUnit(u, r.revealSec, this.team);
+      }
+    }
+    if (typeof vfx !== 'undefined' && vfx.groundShapeFlash) vfx.groundShapeFlash(origin, dir, { kind: 'line', length: lenW, width: widthW }, 0xfff1b8, 0.4);
+    debugSkillHit('Lux R(최후의 섬광)', this, { hits: hits.length });
+  });
+};
+
+/* ---------------- 매 프레임 / 정리 ---------------- */
+CharacterController.prototype._luxUpdate = function(dt) {
+  if (this.championId !== 'lux' || !this._lux) return;
+  const now = performance.now();
+  for (const [u, t] of this._lux.marks) if (t <= now || !u || u.hp <= 0) this._lux.marks.delete(u);
+  // Q 구체 모양: 투사체(line)를 따라가다 끝나면 지운다
+  for (let i = this._lux.orbs.length - 1; i >= 0; i--) {
+    const o = this._lux.orbs[i];
+    if (!o.proj.done) { o.mesh.position.copy(o.proj.mesh.position); continue; }
+    this._luxDisposeMesh(o.mesh); this._lux.orbs.splice(i, 1);
+  }
+  this._luxTickWands(dt);
+  this._luxTickZone(dt);
+};
+CharacterController.prototype._luxReset = function() {
+  const s = this._lux;
+  if (s) {
+    for (const o of s.orbs || []) this._luxDisposeMesh(o.mesh);
+    for (const w of s.wands || []) this._luxDisposeMesh(w.mesh);
+    if (s.zone) { this._luxDisposeMesh(s.zone.orb); this._luxDisposeMesh(s.zone.area); }
+  }
+  this._lux = { marks: new Map(), orbs: [], wands: [], zone: null, serial: 0 };
+};
+
 /* ===== src/core/controller_post_class_helpers.js ===== */
 /* ============================================================
    2. UI HELPERS
@@ -29364,7 +29749,7 @@ function recomputeItemStats(ctrl) {
 // 뜸/매혹(이동 불가)을 거는 스킬 슬롯. 둔화만 거는 스킬은 포함하지 않는다.
 const IMMOBILIZING_SKILL_SLOTS = {
   ahri: ['E'], ashe: ['R'], chogath: ['Q'], leesin: ['R'], nautilus: ['Q', 'R'], nilah: ['R'],
-  renekton: ['W'], sett: ['E', 'R'], varus: ['R'], yasuo: ['Q'], yone: ['Q', 'R'], rammus: ['Q', 'E', 'R'],
+  renekton: ['W'], sett: ['E', 'R'], varus: ['R'], yasuo: ['Q'], yone: ['Q', 'R'], rammus: ['Q', 'E', 'R'], lux: ['Q'],
 };
 function abilityHasteCooldown(ctrl, baseCd, slot) {
   // itemDynamicAbilityHaste - 끝없는 갈망(기아)처럼 추가 공격력에 비례해
@@ -34236,7 +34621,7 @@ document.getElementById('swapGlbBtn').addEventListener('click', () => glbFileInp
 const CHAMPION_MODEL_LIBRARY = [
   ['garen', '가렌'], ['darius', '다리우스'], ['masteryi', '마스터 이'], ['leesin', '리 신'], ['nautilus', '노틸러스'], ['yasuo', '야스오'],
   ['yone', '요네'], ['sett', '세트'], ['mordekaiser', '모데카이저'], ['renekton', '레넥톤'], ['nilah', '닐라'], ['chogath', '초가스'],
-  ['ezreal', '이즈리얼'], ['ashe', '애쉬'], ['varus', '바루스'], ['ahri', '아리'], ['vex', '벡스'], ['rammus', '람머스'],
+  ['ezreal', '이즈리얼'], ['ashe', '애쉬'], ['varus', '바루스'], ['ahri', '아리'], ['vex', '벡스'], ['rammus', '람머스'], ['lux', '럭스'],
 ];
 const CHAMPION_MODEL_DIR = 'assets/champions/';
 function loadChampionFromLibrary(id) {
