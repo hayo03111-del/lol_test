@@ -1591,7 +1591,8 @@ const CHAMPION_DATA = {
       // 요네.bin YoneQ 수치와 champion_data 요네 주석 참고). 예전 [4,3.33,…,1.33]/
       // [0.4,…,0.13]은 "추가 공속에 따라 줄어드는 범위"를 레벨별 값으로 잘못 옮긴 것이었다.
       // 추가 공속 1%당 쿨다운 0.6%(최대 66.67%), 시전 시간 0.41667%(최대 50%) 감소.
-      name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 475, width: 80,
+      // 75차: 사거리 475 → 450(PC 위키 Template:Data Yasuo/Steel Tempest "Edge range 450", 폭 80 / 회오리 1150·180).
+      name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 450, width: 80,
       damageByLevel: [20,45,70,95,120], totalAdRatio: 1.05,
       stackDuration: 6, knockupDuration: 1, tornadoRange: 1150, circleRadius: 215, // 45차: EQ 원형 반경 215(PC 효과 반경 - riftpatchnotes/WR 위키). 375는 초창기 값
       castTime: [0.35, 0.35, 0.35, 0.35, 0.35],
@@ -1676,7 +1677,8 @@ const CHAMPION_DATA = {
       // 적을 판정한다(YoneQ3Missile.castRange=950) - 즉 본체 돌진 거리(450)와
       // 돌풍 판정 사거리(950)가 서로 다르다(이전 구현은 이 둘을 혼동해서
       // 본체까지 950 이동시켰다 - bin 데이터로 수정).
-      dashRange: 450, missileRange: 950, dashAoEWidth: 100, missileWidth: 80,
+      // 75차: 돌풍 폭 80 → 160(PC 위키 Template:Data Yone/Mortal Steel "WIDTH: Edge range 80 / 160" - 3타 돌풍이 160).
+      dashRange: 450, missileRange: 950, dashAoEWidth: 100, missileWidth: 160,
       dashSpeed: 1500,
       damageByLevel: [25,50,75,100,125], totalAdRatio: 1.10,
       stackDuration: 6, maxStacks: 2, knockupDuration: 0.75,
@@ -2773,12 +2775,13 @@ const CHAMPION_DATA = {
       name: '꿰뚫는 화살',
       desc: '충전할수록 사거리(1.5초)와 피해량(1.25초)이 늘어나는 관통 화살을 발사한다. 충전 중에는 20% 느려진 채 움직일 수 있고, 4초 안에 다시 누르지 않으면 취소되며 마나 절반을 돌려받는다. 오한(블라이트) 표식이 있는 대상을 맞히면 표식을 함께 터뜨리며, 이때는 잃은 체력 비례 추가 마법 피해와 재사용 대기시간 감소가 충전량에 비례해 더 크게 붙는다.',
       cooldown: [16, 15, 14, 13, 12], mana: [50, 55, 60, 65, 70],
-      minRange: 925, maxRange: 1600, chargeDuration: 1.25, minChargeDamageRatio: 0.667,
+      // 75차: 사거리 925~1600 → 895~1595, 폭 75 → 140(PC 위키 Template:Data Varus/Piercing Arrow "895 – 1595", "Width 140").
+      minRange: 895, maxRange: 1595, chargeDuration: 1.25, minChargeDamageRatio: 0.667,
       // PC 위키: 충전 중 20% 둔화, 최대 4초 유지(넘기면 취소되고 마나 50% 환급), 사거리는 처음 1.5초·효과는 처음 1.25초 동안 증가.
       rangeChargeDuration: 1.5, maxHoldSec: 4, holdTimeoutManaRefundPercent: 50, chargeSelfSlowPercent: 20,
       // V26.05: 최대 기본 피해 80/150/220/290/360, 현재 최대 계수 추가 AD 120%(PC 위키). 예전 값은 총 AD 130~170%.
       damageMaxByLevel: [80, 150, 220, 290, 360], bonusAdRatioMax: 1.2,
-      missileSpeed: 1500, width: 75, damageType: 'PHYSICAL',
+      missileSpeed: 1500, width: 140, damageType: 'PHYSICAL',
     },
     W: {
       name: '오한의 화살통',
@@ -15003,7 +15006,8 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
         // 실제로는 world 단위 16.5가 LoL 사거리인 것처럼 처리되고 있었다).
         const cd = this._champData();
         const range = (cd && cd.Q && cd.Q.range) || 450;
-        const hitUnit = findFirstInLine(this.root.position, dir, range, BASE_UNIT * 0.6);
+        // 75차: 폭도 데이터(LoL 전체 폭 → 반폭)로. 예전엔 BASE_UNIT*0.6으로 박혀 있었다. 데이터가 없으면 원작 흔한 직선 스킬 폭 120.
+        const hitUnit = findFirstInLine(this.root.position, dir, range, lolRangeToWorld((cd && cd.Q && cd.Q.width) || 120) * 0.5);
         if (hitUnit) {
           applyDamage(hitUnit, { rawDamage: this.actionData[key].dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
           debugSkillHit('Q (skillshot)', hitUnit);
@@ -18601,7 +18605,7 @@ CharacterController.prototype._yoneTickEmpoweredQ = function(dt) {
   const missileHeadDist = travel.missileDist * mt;
   const q = this._champData().Q;
   const bodyHalfWidth = lolRangeToWorld(q.dashAoEWidth || 100) * 0.5;
-  const missileHalfWidth = lolRangeToWorld(q.missileWidth || 80) * 0.5;
+  const missileHalfWidth = lolRangeToWorld(q.missileWidth || 160) * 0.5;
   const bodyReach = travel.bodyElapsed / travel.bodyDuration * lolRangeToWorld(q.dashRange || 450);
   for (const u of getAllEnemyUnits()) {
     if (!u || u.hp <= 0 || travel.hitSet.has(u)) continue;
@@ -23630,9 +23634,9 @@ CharacterController.prototype._varusReleaseQ = function(mouseWorldPoint = null) 
   this._clearActionTimers();
   this.currentActionKey = 'varusQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
 
-  const lolRange = (q.minRange || 925) + ((q.maxRange || 1600) - (q.minRange || 925)) * rangeFraction;
+  const lolRange = (q.minRange || 895) + ((q.maxRange || 1595) - (q.minRange || 895)) * rangeFraction;
   const chargeDamageMult = (q.minChargeDamageRatio || 0.667) + (1 - (q.minChargeDamageRatio || 0.667)) * chargeFraction;
-  const halfWidth = lolRangeToWorld(q.width || 75) * 0.5;
+  const halfWidth = lolRangeToWorld(q.width || 140) * 0.5;
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   // 관통: 경로의 모든 적에게 피해, 맞힌 적마다 15%씩 감소(최소 33% - PC 위키 "적 수에 따라 0~67% 감소").
   // 45차: 화살이 실제로 날아가며 닿는 순서대로 맞힌다(피할 수 있음). 예전엔 발사 순간 직선 위 대상을 정해 두고 첫 대상을 따라갔다.
@@ -26664,9 +26668,11 @@ function updateTurretRegeneration(turret, dt) {
 
 // 66차 원작식 구조물 체력바: 이름 글자 없이(원작은 포탑·억제기·넥서스 위에 이름을 띄우지 않는다) 굵은 바 하나 - 내 팀 파랑,
 // 적 빨강, 검은 테두리, 깎인 만큼 밝은 잔상. 바 아래에 포탑 특성 배지(59차)가 붙는다. 부서지면 바를 숨긴다.
-// 72차 원작식 구조물 체력바: 금테 두른 굵은 바 + 체력 1000마다 눈금 + 위쪽 광택. 무적(앞 포탑·억제기가 살아 있음)이거나
-// 바가 회색 빗금으로 바뀐다(syncStructBarState). 요새화(피해 감소)는 바에 표시하지 않는다(원작). 예전 글자 배지(요새화·방패·가열 등)는 설정 창
+// 72차 원작식 구조물 체력바(75차에 다시 만듦 - 장식 없는 굵은 바 + 체력 1000마다 눈금 + 피해 잔상, 무적이어도 모양은 같다). 예전 글자 배지(요새화·방패·가열 등)는 설정 창
 // "포탑 상태 글자"를 켰을 때만 보인다(원작에는 없다).
+// 75차: 바를 모델 꼭대기에서 이만큼(LoL) 위에 띄운다. CSS2D 기준점은 바 아래쪽 가운데(placeStructLabel).
+const STRUCT_BAR_RAISE_LOL = 70;
+function placeStructLabel(s) { if (!s || !s.label) return; if (s.label.center) s.label.center.set(0.5, 1); s.label.position.set(0, (s.labelHeight || 0) + lolRangeToWorld(STRUCT_BAR_RAISE_LOL), 0); }
 function structBarHtml(team, extra = '', maxHp = 0) {
   const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM;
   const tick = maxHp > 0 ? ` style="--tk:${(100000 / maxHp).toFixed(3)}%"` : '';
@@ -26676,8 +26682,9 @@ function syncStructBarState(s) {
   if (!s || !s.labelDiv) return;
   const bar = s._structBarEl || (s._structBarEl = s.labelDiv.querySelector('.structBar'));
   if (!bar) return;
+  // 75차: 원작은 무적이어도 바 모양이 같다 - 표시 없이 상태만 기록(점검·다른 UI용)
   const inv = !s.destroyed && isStructureProtected(s);
-  if (bar._inv !== inv) { bar.classList.toggle('invuln', inv); bar._inv = inv; }
+  if (bar._inv !== inv) { bar.dataset.invuln = inv ? '1' : ''; bar._inv = inv; }
 }
 function setStructBar(labelDiv, ratio) {
   if (!labelDiv) return;
@@ -26927,7 +26934,7 @@ function updateTurretCombat(turret, dt) {
   // 요청("챔피언과 포탑,억제기,넥서스도 [체력바를] 고정") - 다른 무언가가
   // 실수로 건드리거나 부동소수점 오차가 쌓여도 항상 제자리를 유지하도록
   // 매 프레임 다시 못박는다(미니언 체력바와 동일한 원칙).
-  if (turret.label) turret.label.position.set(0, turret.labelHeight, 0);
+  placeStructLabel(turret); // 75차: 바 아래 가장자리가 모델 위로
   const data = TURRET_DATA[turret.type];
   if (turret.maxHp !== data.maxHp && Number.isFinite(data.maxHp)) turret.maxHp = data.maxHp;
   if (turret.usingRealModel && turret.mesh) turret.mesh.visible = true;
@@ -27203,7 +27210,7 @@ function destroyNexus(nexus) {
 function updateNexusBuildingAnim(dt) {
   for (const n of nexusBuildings) {
     if (n.mixer) safeMixerUpdate(n.mixer, dt, `nexus:${n.team}`);
-    if (n.label) n.label.position.set(0, n.labelHeight, 0); // 요청("고정") - 매 프레임 제자리 재확인
+    placeStructLabel(n); // 요청("고정") - 매 프레임 제자리 재확인(75차: 바 아래 가장자리가 모델 위로)
     syncStructBarState(n);
   }
 }
@@ -27369,7 +27376,7 @@ function updateInhibitorBuildingAnim(dt) {
       }
     }
     if (i.mixer) safeMixerUpdate(i.mixer, dt, `inhibitor:${i.team}`);
-    if (i.label) i.label.position.set(0, i.labelHeight, 0); // 요청("고정") - 매 프레임 제자리 재확인
+    placeStructLabel(i); // 요청("고정") - 매 프레임 제자리 재확인(75차: 바 아래 가장자리가 모델 위로)
     syncStructBarState(i);
   }
 }
@@ -35955,7 +35962,8 @@ window.addEventListener('pointermove', (e) => { lastPointerClient = { x: e.clien
 // - 조준이 필요 없는 스킬(자기 강화 등)과 빠른 시전은 키를 누르는 즉시 시전한다.
 // - 바루스 Q(충전)는 방식과 무관하게 누르면 충전 시작, 떼면 발사(원작 "누르고 있다가 놓으면 발사").
 // - 표시기 사용 빠른 시전: 누르는 동안 조준, 떼면 시전(onSkillKeyUp).
-// - 일반 시전: 누르면 조준, 좌클릭으로 시전(pointerdown), 우클릭·Esc 취소. 다른 스킬 키를 누르면 그 스킬로 조준을 바꾼다.
+// - 일반 시전: 논타겟 스킬은 누르는 즉시 커서 방향으로(75차). 대상 지정 스킬은 커서 아래 대상이 있으면 바로, 없으면 조준 →
+//   좌클릭으로 시전(pointerdown), 우클릭·Esc 취소. 다른 스킬 키를 누르면 그 스킬로 조준을 바꾼다.
 function onSkillKeyDown(slot, code, mousePoint) {
   const spec = skillAimSpec(controller.championId, slot);
   if (spec && spec.type === 'charge' && !skillAimIsInstant(controller, slot)) {
@@ -35964,7 +35972,11 @@ function onSkillKeyDown(slot, code, mousePoint) {
     if (!charging && controller._varus && controller._varus.qCharge) skillAim.begin(slot, code, controller); else skillAim.cancel();
     return;
   }
-  if (skillAim.mode === 'quick' || skillAimIsInstant(controller, slot)) {
+  // 75차: 일반 시전에서도 논타겟 스킬(직선·지점·범위·돌진 등 - 대상 지정이 아닌 모든 스킬)은 클릭 없이 키를 누르는 즉시 커서 방향으로
+  // 나간다(사용자 요청). 대상 지정 스킬은 커서 아래에 대상이 있으면 바로, 없으면 지금처럼 조준 표시 → 대상 클릭.
+  const targeted = spec && (spec.type === 'unit' || spec.type === 'ally');
+  const targetUnderCursor = targeted && skillAim.pickUnit(controller, slot, mousePoint, lastPointerClient);
+  if (skillAim.mode === 'quick' || skillAimIsInstant(controller, slot) || (skillAim.mode === 'normal' && (!targeted || targetUnderCursor))) {
     if (skillAim.aiming && skillAim.mode === 'normal') skillAim.cancel();
     skillAim.cast(controller, slot, mousePoint, lastPointerClient);
     return;
@@ -38148,7 +38160,7 @@ function _optBodyHtml() {
   switch (_optTab) {
     case 'game':
       return `<h3>조작</h3>`
-        + _optRow('스킬 시전 방식', _optSelect('castMode', [['normal', '일반 (키 → 좌클릭)'], ['indicator', '표시기 사용 빠른 시전 (떼면 시전)'], ['quick', '빠른 시전 (즉시)']]))
+        + _optRow('스킬 시전 방식', _optSelect('castMode', [['normal', '일반 (논타겟 즉시 · 대상 지정은 대상 클릭)'], ['indicator', '표시기 사용 빠른 시전 (떼면 시전)'], ['quick', '빠른 시전 (모두 즉시)']]))
         + _optRow('공격 사거리 표시', _optCheck('rangeIndicator'), 'V')
         + `<h3>카메라</h3>`
         + _optRow('카메라 고정', _optCheck('cameraLocked'), 'Y - 끄면 화면 가장자리로 카메라 이동')

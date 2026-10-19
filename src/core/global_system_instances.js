@@ -773,7 +773,8 @@ window.addEventListener('pointermove', (e) => { lastPointerClient = { x: e.clien
 // - 조준이 필요 없는 스킬(자기 강화 등)과 빠른 시전은 키를 누르는 즉시 시전한다.
 // - 바루스 Q(충전)는 방식과 무관하게 누르면 충전 시작, 떼면 발사(원작 "누르고 있다가 놓으면 발사").
 // - 표시기 사용 빠른 시전: 누르는 동안 조준, 떼면 시전(onSkillKeyUp).
-// - 일반 시전: 누르면 조준, 좌클릭으로 시전(pointerdown), 우클릭·Esc 취소. 다른 스킬 키를 누르면 그 스킬로 조준을 바꾼다.
+// - 일반 시전: 논타겟 스킬은 누르는 즉시 커서 방향으로(75차). 대상 지정 스킬은 커서 아래 대상이 있으면 바로, 없으면 조준 →
+//   좌클릭으로 시전(pointerdown), 우클릭·Esc 취소. 다른 스킬 키를 누르면 그 스킬로 조준을 바꾼다.
 function onSkillKeyDown(slot, code, mousePoint) {
   const spec = skillAimSpec(controller.championId, slot);
   if (spec && spec.type === 'charge' && !skillAimIsInstant(controller, slot)) {
@@ -782,7 +783,11 @@ function onSkillKeyDown(slot, code, mousePoint) {
     if (!charging && controller._varus && controller._varus.qCharge) skillAim.begin(slot, code, controller); else skillAim.cancel();
     return;
   }
-  if (skillAim.mode === 'quick' || skillAimIsInstant(controller, slot)) {
+  // 75차: 일반 시전에서도 논타겟 스킬(직선·지점·범위·돌진 등 - 대상 지정이 아닌 모든 스킬)은 클릭 없이 키를 누르는 즉시 커서 방향으로
+  // 나간다(사용자 요청). 대상 지정 스킬은 커서 아래에 대상이 있으면 바로, 없으면 지금처럼 조준 표시 → 대상 클릭.
+  const targeted = spec && (spec.type === 'unit' || spec.type === 'ally');
+  const targetUnderCursor = targeted && skillAim.pickUnit(controller, slot, mousePoint, lastPointerClient);
+  if (skillAim.mode === 'quick' || skillAimIsInstant(controller, slot) || (skillAim.mode === 'normal' && (!targeted || targetUnderCursor))) {
     if (skillAim.aiming && skillAim.mode === 'normal') skillAim.cancel();
     skillAim.cast(controller, slot, mousePoint, lastPointerClient);
     return;

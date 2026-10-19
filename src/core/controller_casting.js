@@ -1013,7 +1013,8 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
         // 실제로는 world 단위 16.5가 LoL 사거리인 것처럼 처리되고 있었다).
         const cd = this._champData();
         const range = (cd && cd.Q && cd.Q.range) || 450;
-        const hitUnit = findFirstInLine(this.root.position, dir, range, BASE_UNIT * 0.6);
+        // 75차: 폭도 데이터(LoL 전체 폭 → 반폭)로. 예전엔 BASE_UNIT*0.6으로 박혀 있었다. 데이터가 없으면 원작 흔한 직선 스킬 폭 120.
+        const hitUnit = findFirstInLine(this.root.position, dir, range, lolRangeToWorld((cd && cd.Q && cd.Q.width) || 120) * 0.5);
         if (hitUnit) {
           applyDamage(hitUnit, { rawDamage: this.actionData[key].dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1 });
           debugSkillHit('Q (skillshot)', hitUnit);

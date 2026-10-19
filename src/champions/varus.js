@@ -189,9 +189,9 @@ CharacterController.prototype._varusReleaseQ = function(mouseWorldPoint = null) 
   this._clearActionTimers();
   this.currentActionKey = 'varusQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
 
-  const lolRange = (q.minRange || 925) + ((q.maxRange || 1600) - (q.minRange || 925)) * rangeFraction;
+  const lolRange = (q.minRange || 895) + ((q.maxRange || 1595) - (q.minRange || 895)) * rangeFraction;
   const chargeDamageMult = (q.minChargeDamageRatio || 0.667) + (1 - (q.minChargeDamageRatio || 0.667)) * chargeFraction;
-  const halfWidth = lolRangeToWorld(q.width || 75) * 0.5;
+  const halfWidth = lolRangeToWorld(q.width || 140) * 0.5;
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   // 관통: 경로의 모든 적에게 피해, 맞힌 적마다 15%씩 감소(최소 33% - PC 위키 "적 수에 따라 0~67% 감소").
   // 45차: 화살이 실제로 날아가며 닿는 순서대로 맞힌다(피할 수 있음). 예전엔 발사 순간 직선 위 대상을 정해 두고 첫 대상을 따라갔다.

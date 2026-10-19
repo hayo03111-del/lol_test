@@ -423,9 +423,11 @@ function updateTurretRegeneration(turret, dt) {
 
 // 66차 원작식 구조물 체력바: 이름 글자 없이(원작은 포탑·억제기·넥서스 위에 이름을 띄우지 않는다) 굵은 바 하나 - 내 팀 파랑,
 // 적 빨강, 검은 테두리, 깎인 만큼 밝은 잔상. 바 아래에 포탑 특성 배지(59차)가 붙는다. 부서지면 바를 숨긴다.
-// 72차 원작식 구조물 체력바: 금테 두른 굵은 바 + 체력 1000마다 눈금 + 위쪽 광택. 무적(앞 포탑·억제기가 살아 있음)이거나
-// 바가 회색 빗금으로 바뀐다(syncStructBarState). 요새화(피해 감소)는 바에 표시하지 않는다(원작). 예전 글자 배지(요새화·방패·가열 등)는 설정 창
+// 72차 원작식 구조물 체력바(75차에 다시 만듦 - 장식 없는 굵은 바 + 체력 1000마다 눈금 + 피해 잔상, 무적이어도 모양은 같다). 예전 글자 배지(요새화·방패·가열 등)는 설정 창
 // "포탑 상태 글자"를 켰을 때만 보인다(원작에는 없다).
+// 75차: 바를 모델 꼭대기에서 이만큼(LoL) 위에 띄운다. CSS2D 기준점은 바 아래쪽 가운데(placeStructLabel).
+const STRUCT_BAR_RAISE_LOL = 70;
+function placeStructLabel(s) { if (!s || !s.label) return; if (s.label.center) s.label.center.set(0.5, 1); s.label.position.set(0, (s.labelHeight || 0) + lolRangeToWorld(STRUCT_BAR_RAISE_LOL), 0); }
 function structBarHtml(team, extra = '', maxHp = 0) {
   const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM;
   const tick = maxHp > 0 ? ` style="--tk:${(100000 / maxHp).toFixed(3)}%"` : '';
@@ -435,8 +437,9 @@ function syncStructBarState(s) {
   if (!s || !s.labelDiv) return;
   const bar = s._structBarEl || (s._structBarEl = s.labelDiv.querySelector('.structBar'));
   if (!bar) return;
+  // 75차: 원작은 무적이어도 바 모양이 같다 - 표시 없이 상태만 기록(점검·다른 UI용)
   const inv = !s.destroyed && isStructureProtected(s);
-  if (bar._inv !== inv) { bar.classList.toggle('invuln', inv); bar._inv = inv; }
+  if (bar._inv !== inv) { bar.dataset.invuln = inv ? '1' : ''; bar._inv = inv; }
 }
 function setStructBar(labelDiv, ratio) {
   if (!labelDiv) return;
@@ -686,7 +689,7 @@ function updateTurretCombat(turret, dt) {
   // 요청("챔피언과 포탑,억제기,넥서스도 [체력바를] 고정") - 다른 무언가가
   // 실수로 건드리거나 부동소수점 오차가 쌓여도 항상 제자리를 유지하도록
   // 매 프레임 다시 못박는다(미니언 체력바와 동일한 원칙).
-  if (turret.label) turret.label.position.set(0, turret.labelHeight, 0);
+  placeStructLabel(turret); // 75차: 바 아래 가장자리가 모델 위로
   const data = TURRET_DATA[turret.type];
   if (turret.maxHp !== data.maxHp && Number.isFinite(data.maxHp)) turret.maxHp = data.maxHp;
   if (turret.usingRealModel && turret.mesh) turret.mesh.visible = true;
@@ -962,7 +965,7 @@ function destroyNexus(nexus) {
 function updateNexusBuildingAnim(dt) {
   for (const n of nexusBuildings) {
     if (n.mixer) safeMixerUpdate(n.mixer, dt, `nexus:${n.team}`);
-    if (n.label) n.label.position.set(0, n.labelHeight, 0); // 요청("고정") - 매 프레임 제자리 재확인
+    placeStructLabel(n); // 요청("고정") - 매 프레임 제자리 재확인(75차: 바 아래 가장자리가 모델 위로)
     syncStructBarState(n);
   }
 }
@@ -1128,7 +1131,7 @@ function updateInhibitorBuildingAnim(dt) {
       }
     }
     if (i.mixer) safeMixerUpdate(i.mixer, dt, `inhibitor:${i.team}`);
-    if (i.label) i.label.position.set(0, i.labelHeight, 0); // 요청("고정") - 매 프레임 제자리 재확인
+    placeStructLabel(i); // 요청("고정") - 매 프레임 제자리 재확인(75차: 바 아래 가장자리가 모델 위로)
     syncStructBarState(i);
   }
 }

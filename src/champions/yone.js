@@ -317,7 +317,7 @@ CharacterController.prototype._yoneTickEmpoweredQ = function(dt) {
   const missileHeadDist = travel.missileDist * mt;
   const q = this._champData().Q;
   const bodyHalfWidth = lolRangeToWorld(q.dashAoEWidth || 100) * 0.5;
-  const missileHalfWidth = lolRangeToWorld(q.missileWidth || 80) * 0.5;
+  const missileHalfWidth = lolRangeToWorld(q.missileWidth || 160) * 0.5;
   const bodyReach = travel.bodyElapsed / travel.bodyDuration * lolRangeToWorld(q.dashRange || 450);
   for (const u of getAllEnemyUnits()) {
     if (!u || u.hp <= 0 || travel.hitSet.has(u)) continue;

@@ -79,10 +79,10 @@ for (const id of Object.keys(CD)) {
 {
   const y1 = computeSkillAim(champ('yasuo', { _yasuo: { qStacks: 0 } }), 'Q', at(300));
   const y3 = computeSkillAim(champ('yasuo', { _yasuo: { qStacks: 2 } }), 'Q', at(300));
-  assert(near(y1.segments[0].len, W(475)) && near(y1.segments[0].width, W(80)), '야스오 Q 1·2타 475 x 80');
+  assert(near(y1.segments[0].len, W(450)) && near(y1.segments[0].width, W(80)), '야스오 Q 1·2타 450 x 80(75차: PC 위키 Edge range 450)');
   assert(near(y3.segments[0].len, W(1150)) && near(y3.segments[0].width, W(180)), '야스오 Q 3타 회오리 1150 x 180');
   const yo = computeSkillAim(champ('yone', { _yone: { qStacks: 2 } }), 'Q', at(300));
-  assert(yo.segments.length === 2 && near(yo.segments[0].len, W(450)) && near(yo.segments[0].width, W(100)) && near(yo.segments[1].len, W(500)) && near(yo.segments[1].width, W(80)), '요네 Q 강화: 450 x 100 + 500 x 80');
+  assert(yo.segments.length === 2 && near(yo.segments[0].len, W(450)) && near(yo.segments[0].width, W(100)) && near(yo.segments[1].len, W(500)) && near(yo.segments[1].width, W(160)), '요네 Q 강화: 450 x 100 + 500 x 160(75차: 돌풍 폭 160)');
 }
 // 8) 리 신 Q 폭은 데이터 width(120) - 투사체 line 판정 반폭 W(120)/2와 같다(45차).
 assert(near(computeSkillAim(champ('leesin'), 'Q', at(300)).segments[0].width, W(120)), '리 신 Q 폭 = 데이터 120');
@@ -91,10 +91,10 @@ assert(near(computeSkillAim(champ('leesin'), 'Q', at(300)).segments[0].width, W(
   const a = computeSkillAim(champ('yasuo'), 'W', at(300));
   assert(near(a.wall.dist, W(320) * 0.75) && near(a.wall.length, W(320)), '야스오 W: 320*0.75 지점, 길이 320');
 }
-// 10) 바루스 Q 충전: 0초 925, 0.75초 1262.5, 1.5초 이상 1600.
+// 10) 바루스 Q 충전(75차: PC 위키 895~1595): 0초 895, 0.75초 1245, 1.5초 이상 1595.
 {
   const len = (ms) => computeSkillAim(champ('varus', { _varus: { qCharge: { startedAt: now - ms } } }), 'Q', at(300)).segments[0].len;
-  assert(near(len(0), W(925)) && near(len(750), W(1262.5)) && near(len(3000), W(1600)), '바루스 Q 충전 사거리 925 → 1600 (1.5초)');
+  assert(near(len(0), W(895)) && near(len(750), W(1245)) && near(len(3000), W(1595)), '바루스 Q 충전 사거리 895 → 1595 (1.5초)');
   assert(computeSkillAim(champ('varus', { _varus: { qCharge: null } }), 'Q', at(300)).charging === false, '바루스 Q 충전 아님이면 charging=false');
 }
 // 11) 즉시 시전: 자기 강화는 항상, 재시전 창은 그 동안만.

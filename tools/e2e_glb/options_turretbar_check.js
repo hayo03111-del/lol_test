@@ -65,7 +65,7 @@ const startServer = require('./server.js');
     const inner = E.turrets.find((t) => t.team === 'RED' && t.type === 'inhibitor' && t.labelDiv);
     return { w: Math.round(rc.width), h: Math.round(rc.height), tick: bar.querySelector('.sbar-ticks').style.getPropertyValue('--tk'), fill: bar.querySelector('.fill').style.width,
       traitsShown: getComputedStyle(outer.labelDiv.querySelector('.turretTraits')).display !== 'none',
-      innerInvuln: inner ? inner.labelDiv.querySelector('.structBar').classList.contains('invuln') : null, outerInvuln: bar.classList.contains('invuln') };
+      innerInvuln: inner ? inner.labelDiv.querySelector('.structBar').dataset.invuln === '1' : null, outerInvuln: bar.dataset.invuln === '1', barAboveModel: rc.bottom <= outer.labelDiv.getBoundingClientRect().bottom + 0.5 };
   });
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(shotDir, 'turretbar_after.png') });

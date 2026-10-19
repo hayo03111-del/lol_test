@@ -72,7 +72,7 @@ function _optBodyHtml() {
   switch (_optTab) {
     case 'game':
       return `<h3>조작</h3>`
-        + _optRow('스킬 시전 방식', _optSelect('castMode', [['normal', '일반 (키 → 좌클릭)'], ['indicator', '표시기 사용 빠른 시전 (떼면 시전)'], ['quick', '빠른 시전 (즉시)']]))
+        + _optRow('스킬 시전 방식', _optSelect('castMode', [['normal', '일반 (논타겟 즉시 · 대상 지정은 대상 클릭)'], ['indicator', '표시기 사용 빠른 시전 (떼면 시전)'], ['quick', '빠른 시전 (모두 즉시)']]))
         + _optRow('공격 사거리 표시', _optCheck('rangeIndicator'), 'V')
         + `<h3>카메라</h3>`
         + _optRow('카메라 고정', _optCheck('cameraLocked'), 'Y - 끄면 화면 가장자리로 카메라 이동')

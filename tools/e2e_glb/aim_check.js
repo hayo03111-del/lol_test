@@ -35,22 +35,13 @@ const startServer = require('./server.js');
   r.indicatorHeld = await state();
   await page.keyboard.up('KeyQ'); await wait(300);
   r.indicatorReleased = await state();
-  // 2) 일반 시전: 키 → 조준, 좌클릭 → 시전 / 우클릭 → 취소 / Esc → 취소(일시정지 아님)
+  // 2) 일반 시전(75차): 논타겟 스킬은 클릭 없이 누르는 즉시 커서 방향으로 시전
   await reset(); await setMode('normal');
-  await page.keyboard.press('KeyW'); await wait(300);
-  r.normalAfterKey = await state();
-  pt = await screenOf(500, -150); await page.mouse.move(pt.x, pt.y); await wait(150); await page.mouse.click(pt.x, pt.y, { button: 'left' }); await wait(300);
-  r.normalAfterClick = await state();
-  await page.keyboard.press('KeyE'); await wait(200);
-  await page.mouse.click(pt.x, pt.y, { button: 'right' }); await wait(300);
-  r.normalAfterRightClick = await state();
-  await page.keyboard.press('KeyR'); await wait(200);
-  await page.keyboard.press('Escape'); await wait(300);
-  r.normalAfterEsc = await state();
-  // 다른 스킬 키를 누르면 조준이 그 스킬로 바뀐다
-  await page.keyboard.press('KeyQ'); await wait(150); await page.keyboard.press('KeyE'); await wait(200);
-  r.normalSwitch = await state();
-  await page.keyboard.press('Escape'); await wait(150);
+  pt = await screenOf(500, -150); await page.mouse.move(pt.x, pt.y); await wait(200);
+  await page.keyboard.press('KeyW'); await wait(400);
+  r.normalNonTargetInstant = await state();
+  await page.keyboard.press('KeyQ'); await wait(400);
+  r.normalNonTargetInstantQ = await state();
   // 3) 빠른 시전: 누르는 즉시 시전
   await reset(); await setMode('quick');
   await page.keyboard.press('KeyE'); await wait(300);
@@ -64,12 +55,23 @@ const startServer = require('./server.js');
   r.garenR = await page.evaluate(() => { const E = window.__e2e, c = window.controller, [d0, d1] = E.dummies; d1.hp = d1.maxHp = 3000; d0.mesh.position.set(-30, 0, -30); d1.mesh.position.set(0, 0, -E.lolRangeToWorld(300)); c.root.position.set(0, 0, 0); return { before: c.currentTarget === d1 }; });
   await wait(900); // 카메라가 플레이어를 따라온 뒤에 화면 좌표를 잰다
   const d1s = await page.evaluate(() => { const E = window.__e2e, p = E.getWorldPosition(E.dummies[1]); const v = new E.THREE.Vector3(p.x, 0.8, p.z).project(E.camera); const r = document.querySelector('canvas').getBoundingClientRect(); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; });
-  await page.mouse.move(d1s.x, d1s.y); await wait(200);
+  // 대상 지정 스킬: 커서 아래 대상이 없으면 조준 → Esc 취소 / 대상을 클릭하면 시전
+  const emptyAt = await screenOf(-250, 250); await page.mouse.move(emptyAt.x, emptyAt.y); await wait(200);
   await page.keyboard.press('KeyR'); await wait(300);
+  r.garenRNoTargetAims = await state();
+  await page.keyboard.press('Escape'); await wait(200);
+  r.garenRAfterEsc = await page.evaluate(() => ({ aiming: window.__e2e.skillAim.aiming, optionsOpen: typeof isOptionsOpen === 'function' ? isOptionsOpen() : null }));
+  await page.keyboard.press('KeyR'); await wait(300);
+  await page.mouse.move(d1s.x, d1s.y); await wait(200);
   r.garenRAim = await page.evaluate(() => { const A = window.__e2e.skillAim; return { aiming: A.aiming, type: A.lastAim && A.lastAim.type, hoverIsDummy1: A.hoverUnit === window.__e2e.dummies[1] }; });
   if (process.argv[2]) await page.screenshot({ path: process.argv[2] + '_garenR.png' });
   await page.mouse.click(d1s.x, d1s.y, { button: 'left' }); await wait(2500);
   r.garenRCast = await page.evaluate(() => { const E = window.__e2e, c = window.controller, d1 = E.dummies[1]; return { targetIsDummy1: c.currentTarget === d1, cdR: +c.cooldowns.R.toFixed(1), dummy1Damaged: d1.hp < d1.maxHp }; });
+  // 커서가 대상 위에 있으면 대상 지정 스킬도 바로 시전
+  await reset(); await page.evaluate(() => { const d1 = window.__e2e.dummies[1]; d1.hp = d1.maxHp; });
+  await page.mouse.move(d1s.x, d1s.y); await wait(300);
+  await page.keyboard.press('KeyR'); await wait(2500);
+  r.garenRHoverInstant = await page.evaluate(() => { const E = window.__e2e, c = window.controller, d1 = E.dummies[1]; return { aiming: E.skillAim.aiming, cdR: +c.cooldowns.R.toFixed(1), dummy1Damaged: d1.hp < d1.maxHp }; });
 
   // 5) 바루스 Q: 누르고 있다가(충전) 놓으면, 놓는 순간의 커서 방향으로 발사
   await load('varus', '바루스');

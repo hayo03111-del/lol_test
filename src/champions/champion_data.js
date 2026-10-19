@@ -49,7 +49,8 @@ const CHAMPION_DATA = {
       // 요네.bin YoneQ 수치와 champion_data 요네 주석 참고). 예전 [4,3.33,…,1.33]/
       // [0.4,…,0.13]은 "추가 공속에 따라 줄어드는 범위"를 레벨별 값으로 잘못 옮긴 것이었다.
       // 추가 공속 1%당 쿨다운 0.6%(최대 66.67%), 시전 시간 0.41667%(최대 50%) 감소.
-      name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 475, width: 80,
+      // 75차: 사거리 475 → 450(PC 위키 Template:Data Yasuo/Steel Tempest "Edge range 450", 폭 80 / 회오리 1150·180).
+      name: '강철 폭풍', cooldown: [4, 4, 4, 4, 4], range: 450, width: 80,
       damageByLevel: [20,45,70,95,120], totalAdRatio: 1.05,
       stackDuration: 6, knockupDuration: 1, tornadoRange: 1150, circleRadius: 215, // 45차: EQ 원형 반경 215(PC 효과 반경 - riftpatchnotes/WR 위키). 375는 초창기 값
       castTime: [0.35, 0.35, 0.35, 0.35, 0.35],
@@ -134,7 +135,8 @@ const CHAMPION_DATA = {
       // 적을 판정한다(YoneQ3Missile.castRange=950) - 즉 본체 돌진 거리(450)와
       // 돌풍 판정 사거리(950)가 서로 다르다(이전 구현은 이 둘을 혼동해서
       // 본체까지 950 이동시켰다 - bin 데이터로 수정).
-      dashRange: 450, missileRange: 950, dashAoEWidth: 100, missileWidth: 80,
+      // 75차: 돌풍 폭 80 → 160(PC 위키 Template:Data Yone/Mortal Steel "WIDTH: Edge range 80 / 160" - 3타 돌풍이 160).
+      dashRange: 450, missileRange: 950, dashAoEWidth: 100, missileWidth: 160,
       dashSpeed: 1500,
       damageByLevel: [25,50,75,100,125], totalAdRatio: 1.10,
       stackDuration: 6, maxStacks: 2, knockupDuration: 0.75,
@@ -1231,12 +1233,13 @@ const CHAMPION_DATA = {
       name: '꿰뚫는 화살',
       desc: '충전할수록 사거리(1.5초)와 피해량(1.25초)이 늘어나는 관통 화살을 발사한다. 충전 중에는 20% 느려진 채 움직일 수 있고, 4초 안에 다시 누르지 않으면 취소되며 마나 절반을 돌려받는다. 오한(블라이트) 표식이 있는 대상을 맞히면 표식을 함께 터뜨리며, 이때는 잃은 체력 비례 추가 마법 피해와 재사용 대기시간 감소가 충전량에 비례해 더 크게 붙는다.',
       cooldown: [16, 15, 14, 13, 12], mana: [50, 55, 60, 65, 70],
-      minRange: 925, maxRange: 1600, chargeDuration: 1.25, minChargeDamageRatio: 0.667,
+      // 75차: 사거리 925~1600 → 895~1595, 폭 75 → 140(PC 위키 Template:Data Varus/Piercing Arrow "895 – 1595", "Width 140").
+      minRange: 895, maxRange: 1595, chargeDuration: 1.25, minChargeDamageRatio: 0.667,
       // PC 위키: 충전 중 20% 둔화, 최대 4초 유지(넘기면 취소되고 마나 50% 환급), 사거리는 처음 1.5초·효과는 처음 1.25초 동안 증가.
       rangeChargeDuration: 1.5, maxHoldSec: 4, holdTimeoutManaRefundPercent: 50, chargeSelfSlowPercent: 20,
       // V26.05: 최대 기본 피해 80/150/220/290/360, 현재 최대 계수 추가 AD 120%(PC 위키). 예전 값은 총 AD 130~170%.
       damageMaxByLevel: [80, 150, 220, 290, 360], bonusAdRatioMax: 1.2,
-      missileSpeed: 1500, width: 75, damageType: 'PHYSICAL',
+      missileSpeed: 1500, width: 140, damageType: 'PHYSICAL',
     },
     W: {
       name: '오한의 화살통',
