@@ -292,6 +292,41 @@ function _itemIsUsable(data) {
   );
   return usable;
 }
+// 63차: 숫자키·HUD 클릭·상점 더블클릭 공용 - 언제나 "지금" 조작 중인 챔피언(controller)으로 쓰고, 성공하면 그 칸을 번쩍인다.
+function useItemFromInput(slotIndex, opts = {}) {
+  if (!controller || typeof useItem !== 'function') return false;
+  const ok = useItem(controller, slotIndex, opts);
+  if (ok) {
+    const el = document.querySelectorAll('#hudItems .hud-item-grid .hud-item')[slotIndex];
+    if (el) { el.classList.remove('used'); void el.offsetWidth; el.classList.add('used'); }
+  }
+  return ok;
+}
+// 63차: 액티브 아이템 재사용 대기 - HUD 칸 위에 스킬 칸과 같은 회전 그림자 + 남은 초. 매 프레임 불리지만 바뀐 칸만 건드린다.
+function _itemCooldownTotalSec(item) {
+  for (const k in item) { const v = item[k]; if (v && typeof v === 'object' && typeof v.cooldownSec === 'number') return v.cooldownSec; }
+  return null;
+}
+function tickHudItemCooldowns(ctrl) {
+  if (!ctrl || typeof ITEM_DATA === 'undefined') return;
+  const cells = document.querySelectorAll('#hudItems .hud-item-grid .hud-item');
+  const until = ctrl._itemActiveCooldownUntil || {};
+  const now = performance.now();
+  cells.forEach((el, i) => {
+    const slot = ctrl.items && ctrl.items[i];
+    const item = slot && ITEM_DATA[slot.id];
+    const readyAt = item ? (until[item.id] || 0) : 0;
+    let cd = el.querySelector('.item-cd');
+    if (!item || readyAt <= now) { if (cd) cd.remove(); return; }
+    const total = (_itemCooldownTotalSec(item) || 1) * 1000;
+    const frac = Math.max(0, Math.min(1, (readyAt - now) / total));
+    if (!cd) { cd = document.createElement('div'); cd.className = 'item-cd'; el.appendChild(cd); }
+    cd.style.background = `conic-gradient(rgba(0,0,0,0.72) ${frac * 360}deg, transparent 0)`;
+    const sec = (readyAt - now) / 1000;
+    const txt = sec >= 1 ? String(Math.ceil(sec)) : sec.toFixed(1);
+    if (cd.textContent !== txt) cd.textContent = txt;
+  });
+}
 // 하단 HUD 아이템 칸 - buyItem/sellItem/useItem이 아이템을 바꿀 때마다 호출하는 이벤트 기반 갱신 함수
 // (updateGoldDisplay()와 같은 원칙, 매 프레임 아님). 칸 배치는 원작과 같다: 1·2·3 / 5·6·7 + 장신구(4).
 // 사용 아이템은 클릭(또는 숫자키)으로 사용하고, 나머지는 클릭하면 상점이 열리며 그 칸이 선택된다(판매는 상점에서).
@@ -321,7 +356,7 @@ function updateItemUI(ctrl) {
     const usable = _itemIsUsable(data);
     el.title = usable ? `${data.nameKo} (${ITEM_SLOT_KEYS[i]}키 또는 클릭: 사용)` : `${data.nameKo} (클릭: 상점에서 보기·판매)`;
     el.addEventListener('click', () => {
-      if (usable) { if (typeof useItem === 'function') useItem(ctrl, i); return; }
+      if (usable) { useItemFromInput(i, { placeAhead: true }); return; }
       if (typeof setShopOpen === 'function') { setShopOpen(true); _shopSelectedSlot = i; _shopSelectedItemId = slot.id; renderShopPanel(true); }
     });
   });
@@ -667,12 +702,14 @@ window.addEventListener('keydown', (e) => {
     case 'KeyS': controller.moveTo(controller.root.position.clone()); break;
     // 아이템 사용 - 원작 키 배치(1·2·3·5·6·7 = 인벤토리 6칸, 4 = 장신구). 사용 불가 아이템(스탯
     // 아이템)이면 useItem() 내부에서 콘솔 경고만 내고 조용히 무시된다.
-    case 'Digit1': if (typeof useItem === 'function') useItem(controller, 0); break;
-    case 'Digit2': if (typeof useItem === 'function') useItem(controller, 1); break;
-    case 'Digit3': if (typeof useItem === 'function') useItem(controller, 2); break;
-    case 'Digit5': if (typeof useItem === 'function') useItem(controller, 3); break;
-    case 'Digit6': if (typeof useItem === 'function') useItem(controller, 4); break;
-    case 'Digit7': if (typeof useItem === 'function') useItem(controller, 5); break;
+    // 63차: 숫자패드(Numpad1~7)도 같은 칸 - 예전엔 위쪽 숫자 줄(Digit)만 받아서 숫자패드로는 아이템이 쓰이지 않았다.
+    case 'Digit1': case 'Numpad1': useItemFromInput(0); break;
+    case 'Digit2': case 'Numpad2': useItemFromInput(1); break;
+    case 'Digit3': case 'Numpad3': useItemFromInput(2); break;
+    case 'Digit5': case 'Numpad5': useItemFromInput(3); break;
+    case 'Digit6': case 'Numpad6': useItemFromInput(4); break;
+    case 'Digit7': case 'Numpad7': useItemFromInput(5); break;
+    case 'Numpad4':
     // 장신구(투명 와드) - 원작 기본 키 4. 현재 마우스 위치에 놓는다(설치 사거리 밖이면 사거리까지 걸어가서 놓는다 - 원작).
     case 'Digit4': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
   }

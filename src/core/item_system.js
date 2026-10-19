@@ -10,6 +10,12 @@
 // - charges: "상점에 들르면 충전되는" 단일 아이템(충전형 물약)의 남은
 //   사용 횟수. count와 별개 축이다(충전형 물약은 count:1 고정, charges만 줄어든다).
 
+// 63차: 아이템 사용·구매 실패 사유를 콘솔뿐 아니라 화면 토스트로도 보여준다 - 예전엔 재사용 대기·충전 없음·사용 불가 아이템을
+// 눌러도 화면에 아무 반응이 없어 "아이템이 사용되지 않는다"처럼 보였다.
+function itemWarn(msg) {
+  console.warn(`[ITEM] ${msg}`);
+  if (typeof showSkillToast === 'function') showSkillToast(msg);
+}
 function recomputeItemStats(ctrl) {
   if (!ctrl) return;
   ctrl.itemBonusAD = 0; ctrl.itemBonusAP = 0; ctrl.itemBonusMaxHp = 0; ctrl.itemBonusMana = 0;
@@ -267,27 +273,27 @@ function buyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
   if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
-    console.warn('[ITEM] 기지(상점 구역) 안에서만 구매할 수 있습니다.');
+    itemWarn('기지(상점 구역) 안에서만 구매할 수 있습니다.');
     return false;
   }
   // 유일 아이템(티아맷/히드라류, 여신의 눈물/마나무네/무라마나 등) - 같은
   // 계열을 이미 들고 있으면 직접 구매 자체를 막는다(QA 요청 - 원문에
   // "유일 아이템" 표현은 없지만 실제 LoL 규칙을 그대로 반영).
   if (_itemUniqueGroupConflict(ctrl, item, null)) {
-    console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
+    itemWarn(`${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
   // 37차: 서포터 업그레이드(세계의 결실 → 5종)는 직접 살 수 없다 - 세계의 결실을 들고 있으면 buildOrBuyItem()의 조합 경로로만.
-  if (item.upgradeOnly) { console.warn(`[ITEM] ${item.nameKo}: 세계의 결실을 업그레이드해서만 얻을 수 있습니다.`); return false; }
-  if (_itemLegendaryDuplicate(ctrl, item)) { console.warn(`[ITEM] ${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
+  if (item.upgradeOnly) { itemWarn(`${item.nameKo}: 세계의 결실을 업그레이드해서만 얻을 수 있습니다.`); return false; }
+  if (_itemLegendaryDuplicate(ctrl, item)) { itemWarn(`${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
   // 신발은 "하나밖에 사지 못한다"(원문) - 6칸 인벤토리가 아니라 전용
   // boots 슬롯으로 간다(buyBoots()가 기존 신발 교체/환급까지 처리).
   if (item.isBoots) return _buyBoots(ctrl, item);
   // 트린켓(투명 와드)은 상점에서 구매하는 게 아니라 기본 장착이다 -
   // 방어적 가드(ITEM_CATEGORIES에서 이미 제외했지만, 실수로 다시
   // 노출되더라도 6칸 인벤토리를 공짜로 채우는 경로로 새지 않게 막는다).
-  if (item.trinket) { console.warn('[ITEM] 트린켓은 상점에서 구매하지 않습니다(기본 장착).'); return false; }
-  if ((ctrl.gold || 0) < item.cost) { console.warn('[ITEM] 골드가 부족합니다.'); return false; }
+  if (item.trinket) { itemWarn('트린켓은 상점에서 구매하지 않습니다(기본 장착).'); return false; }
+  if ((ctrl.gold || 0) < item.cost) { itemWarn('골드가 부족합니다.'); return false; }
   ctrl.items = ctrl.items || [];
   if (item.maxStack) {
     // 쌓이는 소비 아이템 - "최대로 보유할 수 있는 수"는 슬롯 하나의 중첩
@@ -297,18 +303,18 @@ function buyItem(ctrl, itemId) {
     // 동작이었다 - 전체 보유량을 먼저 확인해 한도 도달 시 구매 자체를 막는다.
     const totalHeld = ctrl.items.filter((s) => s.id === itemId).reduce((sum, s) => sum + s.count, 0);
     if (totalHeld >= item.maxStack) {
-      console.warn(`[ITEM] 최대로 보유할 수 있는 수를 초과했습니다(최대 ${item.maxStack}개).`);
+      itemWarn(`최대로 보유할 수 있는 수를 초과했습니다(최대 ${item.maxStack}개).`);
       return false;
     }
     const existing = ctrl.items.find((s) => s.id === itemId);
     if (existing) {
       existing.count += 1;
     } else {
-      if (ctrl.items.length >= 6) { console.warn('[ITEM] 인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
+      if (ctrl.items.length >= 6) { itemWarn('인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
       ctrl.items.push({ id: itemId, count: 1 });
     }
   } else {
-    if (ctrl.items.length >= 6) { console.warn('[ITEM] 인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
+    if (ctrl.items.length >= 6) { itemWarn('인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
     const slot = { id: itemId, count: 1 };
     if (item.maxCharges) slot.charges = item.maxCharges;
     ctrl.items.push(slot);
@@ -361,19 +367,19 @@ function buildOrBuyItem(ctrl, itemId) {
     return buyItem(ctrl, itemId);
   }
   if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
-    console.warn('[ITEM] 기지(상점 구역) 안에서만 조합할 수 있습니다.');
+    itemWarn('기지(상점 구역) 안에서만 조합할 수 있습니다.');
     return false;
   }
   // 유일 아이템 검사 - 이번 조합이 소모할 하위템(item.recipe)은 충돌
   // 판정에서 제외한다(예: 티아맷을 소모해 거대한히드라가 되는 건 "같은
   // 계열을 이미 들고 있다"고 막으면 안 된다 - 자연스러운 업그레이드이므로).
   if (_itemUniqueGroupConflict(ctrl, item, new Set(item.recipe))) {
-    console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
+    itemWarn(`${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
-  if (_itemLegendaryDuplicate(ctrl, item)) { console.warn(`[ITEM] ${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
+  if (_itemLegendaryDuplicate(ctrl, item)) { itemWarn(`${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
   const cost = combineCost(item);
-  if ((ctrl.gold || 0) < cost) { console.warn('[ITEM] 골드가 부족합니다(조합 비용).'); return false; }
+  if ((ctrl.gold || 0) < cost) { itemWarn('골드가 부족합니다(조합 비용).'); return false; }
   // 하위템 소모 - 개수만큼 각 id의 슬롯을 하나씩 제거한다. 소모(N개) 후
   // 완제품(1개)을 더하므로 칸 수는 절대 늘지 않는다(N>=1) - 인벤토리
   // 한도를 별도로 확인할 필요가 없다.
@@ -412,8 +418,8 @@ function sellItem(ctrl, slotIndex) {
 // 신발을 신고 있으면 "교체"로 취급해 기존 신발 가격을 전액 환급한다
 // (판매가 아니라 업그레이드 개념이므로 70%가 아니라 100%).
 function _buyBoots(ctrl, item) {
-  if (ctrl.boots && ctrl.boots.id === item.id) { console.warn('[ITEM] 이미 장착 중인 신발입니다.'); return false; }
-  if ((ctrl.gold || 0) < item.cost) { console.warn('[ITEM] 골드가 부족합니다.'); return false; }
+  if (ctrl.boots && ctrl.boots.id === item.id) { itemWarn('이미 장착 중인 신발입니다.'); return false; }
+  if ((ctrl.gold || 0) < item.cost) { itemWarn('골드가 부족합니다.'); return false; }
   if (ctrl.boots) {
     const old = ITEM_DATA[ctrl.boots.id];
     ctrl.gold += (old && old.cost) || 0;
@@ -450,7 +456,7 @@ function sellBoots(ctrl) {
 // 클릭으로 호출된다. 중첩/충전 소모 로직만 여기서 처리하고, 실제 회복은
 // 공용 지속 회복(HoT) 목록(_itemActiveHeals)에 등록해 itemSystemTick이
 // 매 프레임 진행한다.
-function useItem(ctrl, slotIndex) {
+function useItem(ctrl, slotIndex, opts = {}) {
   if (!ctrl) return false;
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot) return false;
@@ -484,13 +490,13 @@ function useItem(ctrl, slotIndex) {
   // 제어 와드 - 인벤토리 중첩 소모형이지만 회복이 아니라 와드 설치가
   // 목적이라 별도 함수로 분리한다(투명 와드의 placeWard()와 유사한 구조,
   // 다만 트린켓 전용 슬롯이 아니라 6칸 인벤토리를 쓴다).
-  if (item.wardPlacement) return _useControlWard(ctrl, slotIndex, item);
+  if (item.wardPlacement) return _useControlWard(ctrl, slotIndex, item, opts);
   // 영약(강철/마법/분노) - 중첩/충전이 아니라 "마시면 바로 소모"되는
   // 1회성 아이템. 상호 배타적 지속 버프라 별도 상태(_itemActiveElixir)로 관리한다.
   if (item.elixirEffect) return _useElixir(ctrl, slotIndex, item);
-  if (!item.consumable) { console.warn('[ITEM] 사용할 수 없는 아이템입니다.'); return false; }
+  if (!item.consumable) { itemWarn('사용할 수 없는 아이템입니다.'); return false; }
   if (item.maxCharges) {
-    if (!(slot.charges > 0)) { console.warn('[ITEM] 충전량이 없습니다.'); return false; }
+    if (!(slot.charges > 0)) { itemWarn('충전량이 없습니다.'); return false; }
     slot.charges -= 1;
   } else if (item.maxStack) {
     if (!(slot.count > 0)) return false;
@@ -513,7 +519,7 @@ function _useActiveAbilityItem(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   ctrl._itemActiveCooldownUntil[item.id] = now + item.activeAbility.cooldownSec * 1000;
   const raw = item.activeAbility.percentAD * (ctrl.stats.attackDamage || 0);
   if (raw > 0 && typeof findEnemiesInRadius === 'function') {
@@ -534,7 +540,7 @@ function _useEmpoweredCleaveActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   ctrl._itemActiveCooldownUntil[item.id] = now + item.empoweredCleaveActive.cooldownSec * 1000;
   ctrl._itemEmpoweredCleaveArmed = true;
   console.log(`[ITEM] ${item.nameKo}(${item.empoweredCleaveActive.nameKo}) 무장`);
@@ -548,7 +554,7 @@ function _useShockwaveActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const p = item.shockwaveActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const isMelee = _itemIsMelee(ctrl);
@@ -578,7 +584,7 @@ function _useGhostStepActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const p = item.ghostStepActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const isMelee = _itemIsMelee(ctrl);
@@ -595,7 +601,7 @@ function _useTeamMoveSpeedActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const p = item.teamMoveSpeedActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   if (typeof applyStatus === 'function') {
@@ -617,7 +623,7 @@ function _useDevotionActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const p = item.devotionActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const selfAmt = _itemScaleByLevel(ctrl, p.shieldMin, p.shieldMax, p.levelMin, p.levelMax) * (typeof getShieldReceivedMultiplier === 'function' ? getShieldReceivedMultiplier(ctrl) : 1);
@@ -643,7 +649,7 @@ function _useRocketbeltActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const p = item.rocketbeltActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
@@ -673,9 +679,9 @@ function _useNoxiousBladeActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const target = ctrl.currentTarget;
-  if (!target || target.hp <= 0 || !target.isChampion) { console.warn(`[ITEM] ${item.nameKo}: 적 챔피언을 먼저 선택해야 합니다.`); return false; }
+  if (!target || target.hp <= 0 || !target.isChampion) { itemWarn(`${item.nameKo}: 적 챔피언을 먼저 선택해야 합니다.`); return false; }
   const p = item.noxiousBladeActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
@@ -701,12 +707,12 @@ function _useStasisActive(ctrl, item) {
   if (p.maxUses) {
     ctrl._itemStasisUsesLeft = ctrl._itemStasisUsesLeft || {};
     const used = ctrl._itemStasisUsesLeft[item.id] || 0;
-    if (used >= p.maxUses) { console.warn(`[ITEM] ${item.nameKo}: 더 이상 사용할 수 없습니다(1회 한정).`); return false; }
+    if (used >= p.maxUses) { itemWarn(`${item.nameKo}: 더 이상 사용할 수 없습니다(1회 한정).`); return false; }
     ctrl._itemStasisUsesLeft[item.id] = used + 1;
   } else {
     ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
     const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-    if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+    if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
     ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   }
   ctrl.isUntargetable = true;
@@ -2397,14 +2403,15 @@ function placeWard(ctrl, worldPoint) {
 // 마우스 위치를 모르면(인벤토리 클릭 등) 캐릭터 정면 300에 놓는다.
 // 소모 방식: 제어 와드는 소지 개수(slot.count, 다 쓰면 칸에서 사라짐), 서포터 아이템 계열은 충전량(maxCharges).
 // 시간 제한 와드(durationSec이 유한 - 서포터 아이템)는 투명 와드, 영구 와드는 제어 와드로 놓는다.
-function _useControlWard(ctrl, slotIndex, item) {
+function _useControlWard(ctrl, slotIndex, item, opts = {}) {
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot || slot.id !== item.id) return false;
-  if (item.maxCharges && !(slot.charges > 0)) { console.warn('[ITEM] 충전량이 없습니다.'); return false; }
+  if (item.maxCharges && !(slot.charges > 0)) { itemWarn('충전량이 없습니다.'); return false; }
   if (typeof wardSystem === 'undefined' || !wardSystem) return false;
   const p = item.wardPlacement;
   const timed = Number.isFinite(p.durationSec) && p.durationSec < 9999;
-  let targetPoint = (typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : null;
+  // 63차: HUD 칸을 클릭해 쓰면 커서가 HUD 위라 그 아래 땅(화면 맨 아래)으로 걸어가 설치했다 - 그때는 챔피언 바로 앞에 놓는다(장신구 클릭과 같음).
+  let targetPoint = (!opts.placeAhead && typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : null;
   if (!targetPoint) {
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
     targetPoint = ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)));

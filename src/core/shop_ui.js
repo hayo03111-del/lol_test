@@ -102,10 +102,40 @@ function shopBlockReason(ctrl, itemId) {
   }
   return null;
 }
+// 63차 되돌리기(원작 상점의 Undo): 기지 안에서 한 구매·판매를 순서대로 되돌린다. 거래 직전의 골드·인벤토리·신발을 통째로
+// 저장해 두었다가 복원한다(조합으로 사라진 재료도 그대로 돌아온다). 기지를 벗어나거나 챔피언이 바뀌면 기록을 비운다.
+let _shopUndoStack = [];
+let _shopLastInvClick = null;
+function _shopSnapshot(label) {
+  const c = controller;
+  if (!c) return;
+  _shopUndoStack.push({
+    ctrl: c, label, gold: c.gold || 0,
+    items: (c.items || []).map((s) => ({ ...s })),
+    boots: c.boots ? { ...c.boots } : null,
+    bootsExtra: c._itemBootsExtraMoveSpeedLol || 0,
+  });
+  if (_shopUndoStack.length > 20) _shopUndoStack.shift();
+}
+function shopUndo() {
+  const snap = _shopUndoStack.pop();
+  if (!snap || snap.ctrl !== controller) { _shopUndoStack = []; renderShopPanel(true); return false; }
+  const c = controller;
+  c.gold = snap.gold; c.items = snap.items; c.boots = snap.boots; c._itemBootsExtraMoveSpeedLol = snap.bootsExtra;
+  if (typeof recomputeItemStats === 'function') recomputeItemStats(c);
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (typeof updateItemUI === 'function') updateItemUI(c);
+  _shopSelectedSlot = null;
+  renderShopPanel(true);
+  if (typeof showSkillToast === 'function') showSkillToast(`되돌리기: ${snap.label}`);
+  return true;
+}
 function _shopBuy(itemId) {
   const reason = shopBlockReason(controller, itemId);
   if (reason) { if (typeof showSkillToast === 'function') showSkillToast(reason); return false; }
+  _shopSnapshot(`${(ITEM_DATA[itemId] || {}).nameKo || itemId} 구매`);
   const ok = typeof buildOrBuyItem === 'function' && buildOrBuyItem(controller, itemId);
+  if (!ok) _shopUndoStack.pop();
   if (ok) {
     const tile = document.querySelector(`#shopGrid .shop-tile[data-id="${itemId}"]`);
     if (tile) { tile.classList.remove('bought'); void tile.offsetWidth; tile.classList.add('bought'); }
@@ -114,8 +144,12 @@ function _shopBuy(itemId) {
 }
 function _shopSell() {
   if (!controller || _shopSelectedSlot == null) return;
-  if (_shopSelectedSlot === 'boots') { if (typeof sellBoots === 'function') sellBoots(controller); }
-  else if (typeof sellItem === 'function') sellItem(controller, _shopSelectedSlot);
+  const sel = _shopSelectedSlot === 'boots' ? controller.boots : controller.items[_shopSelectedSlot];
+  if (!sel) { _shopSelectedSlot = null; renderShopPanel(true); return; }
+  _shopSnapshot(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
+  const ok = _shopSelectedSlot === 'boots' ? (typeof sellBoots === 'function' && sellBoots(controller)) : (typeof sellItem === 'function' && sellItem(controller, _shopSelectedSlot));
+  if (!ok) _shopUndoStack.pop();
+  else if (typeof showSkillToast === 'function') showSkillToast(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
   _shopSelectedSlot = null;
   renderShopPanel(true);
 }
@@ -293,6 +327,12 @@ function _shopRenderInventory() {
     price = sel ? Math.floor((sel.cost || 0) * (s.count || 1) * 0.7) : 0;
   } else _shopSelectedSlot = null;
   if (sellBtn) { sellBtn.disabled = !sel; sellBtn.textContent = sel ? `판매 +${price.toLocaleString()}` : '판매'; }
+  const undoBtn = _shopEl('shopUndoBtn');
+  if (undoBtn) {
+    if (_shopUndoStack.length && _shopUndoStack[_shopUndoStack.length - 1].ctrl !== ctrl) _shopUndoStack = [];
+    undoBtn.disabled = !_shopUndoStack.length;
+    undoBtn.title = _shopUndoStack.length ? `되돌리기: ${_shopUndoStack[_shopUndoStack.length - 1].label}` : '되돌릴 거래가 없습니다';
+  }
   if (info) info.textContent = sel ? sel.nameKo : '보유 아이템을 고르면 판매할 수 있습니다';
 }
 // 골드·보유 아이템·위치(기지 안/밖)가 바뀌면 다시 칠한다. 닫혀 있으면 아무것도 안 한다
@@ -305,6 +345,7 @@ function renderShopPanel(force) {
     : 'none';
   if (!force && sig === _shopStateSig) return;
   _shopStateSig = sig;
+  if (ctrl && !_shopInBase(ctrl) && _shopUndoStack.length) _shopUndoStack = []; // 63차: 기지를 벗어나면 되돌리기 기록을 비운다(원작)
   if (_shopOwnsBounty() !== _shopHadBounty) { _shopRenderGrid(); return; } // 세계의 결실을 얻거나 업그레이드하면 업그레이드 줄을 다시 그린다
   const goldEl = _shopEl('shopGold');
   if (goldEl) goldEl.textContent = ctrl ? Math.floor(ctrl.gold || 0).toLocaleString() : '0';
@@ -344,6 +385,17 @@ function isShopOpen() { return _shopOpen; }
   if (!overlay) return;
   _shopEl('shopCloseBtn').addEventListener('click', () => setShopOpen(false));
   _shopEl('shopSellBtn').addEventListener('click', _shopSell);
+  const undoBtn = _shopEl('shopUndoBtn');
+  if (undoBtn) undoBtn.addEventListener('click', shopUndo);
+  // 63차: 인벤토리 칸 우클릭 = 바로 판매, 더블클릭 = 사용(사용 아이템). 상점이 열려 있어도 숫자키로 쓸 수 있다.
+  _shopEl('shopInv').addEventListener('contextmenu', (e) => {
+    const slot = e.target.closest('.shop-inv-slot[data-slot]');
+    if (!slot || slot.classList.contains('empty')) return;
+    e.preventDefault();
+    _shopSelectedSlot = slot.dataset.slot === 'boots' ? 'boots' : Number(slot.dataset.slot);
+    _shopSell();
+  });
+
   const search = _shopEl('shopSearch');
   search.addEventListener('input', () => { _shopSearch = search.value; _shopRenderCats(); _shopRenderGrid(); });
   _shopEl('shopCats').addEventListener('click', (e) => {
@@ -366,6 +418,17 @@ function isShopOpen() { return _shopOpen; }
     const slot = e.target.closest('.shop-inv-slot[data-slot]');
     if (slot && !slot.classList.contains('empty')) {
       const v = slot.dataset.slot === 'boots' ? 'boots' : Number(slot.dataset.slot);
+      // 63차 더블클릭 = 사용: 첫 클릭이 칸을 선택하며 인벤토리를 다시 그려서 브라우저 dblclick이 같은 칸으로 묶이지 않는다 -
+      // 같은 칸을 0.35초 안에 다시 누르면 직접 더블클릭으로 본다.
+      const now = performance.now();
+      if (_shopLastInvClick && _shopLastInvClick.v === v && now - _shopLastInvClick.t < 350 && v !== 'boots') {
+        _shopLastInvClick = null;
+        if (typeof useItemFromInput === 'function') useItemFromInput(v, { placeAhead: true });
+        _shopSelectedSlot = null;
+        renderShopPanel(true);
+        return;
+      }
+      _shopLastInvClick = { v, t: now };
       _shopSelectedSlot = _shopSelectedSlot === v ? null : v;
       const ctrl = controller;
       const id = v === 'boots' ? ctrl && ctrl.boots && ctrl.boots.id : ctrl && ctrl.items[v] && ctrl.items[v].id;

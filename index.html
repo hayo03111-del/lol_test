@@ -278,7 +278,7 @@
     position:fixed; left:0; right:0; top:0; bottom:118px; z-index:30;
     display:none; align-items:center; justify-content:center; padding:16px; pointer-events:none;
   }
-  #shopOverlay.show{ display:flex; }
+  #shopOverlay.show{ display:flex; background:rgba(4,6,10,0.62); } /* 63차: 뒤 화면(디버그·챔피언 패널)을 어둡게 눌러 상점에 집중 */
   #shopWindow{
     pointer-events:auto; width:min(1240px,100%); height:min(720px,100%);
     display:flex; flex-direction:column; background:var(--bg-1); border:1px solid var(--line);
@@ -394,7 +394,16 @@
   #shopSlotInfo{ font-size:11px; color:var(--text-2); max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #shopSellBtn{ height:34px; padding:0 16px; border:1px solid var(--enemy); background:var(--enemy-dim); color:var(--text-0); font-weight:700; font-size:12px; cursor:pointer; font-family:inherit; }
   #shopSellBtn:disabled{ border-color:var(--line); background:var(--bg-1); color:var(--text-disabled); cursor:default; }
-  .shop-hint{ font-size:10px; color:var(--text-2); white-space:nowrap; }
+  .shop-hint{ font-size:10px; line-height:1.5; color:var(--text-2); white-space:nowrap; text-align:right; }
+  #shopUndoBtn{ height:34px; padding:0 12px; border:1px solid var(--line); background:var(--bg-1); color:var(--text-1); font-size:12px; cursor:pointer; font-family:inherit; }
+  #shopUndoBtn:hover:not(:disabled){ border-color:var(--accent-dim); color:var(--accent); }
+  #shopUndoBtn:disabled{ color:var(--text-disabled); cursor:default; }
+  .shop-inv-slot:not(.empty):hover{ border-color:var(--accent-dim); }
+  /* 63차: HUD 아이템 재사용 대기(회전 그림자 + 남은 초)와 사용 순간 번쩍임 */
+  .hud-item{ position:relative; }
+  .hud-item .item-cd{ position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center; font-family:var(--font-num); font-size:12px; font-weight:700; color:#fff; text-shadow:0 1px 2px #000; pointer-events:none; }
+  .hud-item.used{ animation:hudItemUsed .35s ease-out; }
+  @keyframes hudItemUsed{ 0%{ box-shadow:0 0 0 0 rgba(255,214,120,0.95);} 100%{ box-shadow:0 0 0 9px rgba(255,214,120,0);} }
   @media (max-width:900px){ .shop-detail{ width:240px; } .shop-cats{ width:130px; } .shop-hint, .shop-zone{ display:none; } }
 
   /* ============================================================
@@ -877,8 +886,8 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
     </div>
     <div class="shop-foot">
       <div id="shopInv"></div>
-      <div class="shop-foot-actions"><span id="shopSlotInfo"></span><button id="shopSellBtn" disabled>판매</button></div>
-      <div class="shop-hint">클릭: 정보 · 우클릭: 바로 구매 · P/Esc: 닫기</div>
+      <div class="shop-foot-actions"><span id="shopSlotInfo"></span><button id="shopUndoBtn" disabled>↶ 되돌리기</button><button id="shopSellBtn" disabled>판매</button></div>
+      <div class="shop-hint">아이템: 클릭 정보 · 우클릭 구매<br>내 칸: 우클릭 판매 · 더블클릭 사용 · P/Esc 닫기</div>
     </div>
   </div>
 </div>
@@ -30142,6 +30151,12 @@ function showRewardBanner(text) {
 // - charges: "상점에 들르면 충전되는" 단일 아이템(충전형 물약)의 남은
 //   사용 횟수. count와 별개 축이다(충전형 물약은 count:1 고정, charges만 줄어든다).
 
+// 63차: 아이템 사용·구매 실패 사유를 콘솔뿐 아니라 화면 토스트로도 보여준다 - 예전엔 재사용 대기·충전 없음·사용 불가 아이템을
+// 눌러도 화면에 아무 반응이 없어 "아이템이 사용되지 않는다"처럼 보였다.
+function itemWarn(msg) {
+  console.warn(`[ITEM] ${msg}`);
+  if (typeof showSkillToast === 'function') showSkillToast(msg);
+}
 function recomputeItemStats(ctrl) {
   if (!ctrl) return;
   ctrl.itemBonusAD = 0; ctrl.itemBonusAP = 0; ctrl.itemBonusMaxHp = 0; ctrl.itemBonusMana = 0;
@@ -30399,27 +30414,27 @@ function buyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
   if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
-    console.warn('[ITEM] 기지(상점 구역) 안에서만 구매할 수 있습니다.');
+    itemWarn('기지(상점 구역) 안에서만 구매할 수 있습니다.');
     return false;
   }
   // 유일 아이템(티아맷/히드라류, 여신의 눈물/마나무네/무라마나 등) - 같은
   // 계열을 이미 들고 있으면 직접 구매 자체를 막는다(QA 요청 - 원문에
   // "유일 아이템" 표현은 없지만 실제 LoL 규칙을 그대로 반영).
   if (_itemUniqueGroupConflict(ctrl, item, null)) {
-    console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
+    itemWarn(`${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
   // 37차: 서포터 업그레이드(세계의 결실 → 5종)는 직접 살 수 없다 - 세계의 결실을 들고 있으면 buildOrBuyItem()의 조합 경로로만.
-  if (item.upgradeOnly) { console.warn(`[ITEM] ${item.nameKo}: 세계의 결실을 업그레이드해서만 얻을 수 있습니다.`); return false; }
-  if (_itemLegendaryDuplicate(ctrl, item)) { console.warn(`[ITEM] ${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
+  if (item.upgradeOnly) { itemWarn(`${item.nameKo}: 세계의 결실을 업그레이드해서만 얻을 수 있습니다.`); return false; }
+  if (_itemLegendaryDuplicate(ctrl, item)) { itemWarn(`${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
   // 신발은 "하나밖에 사지 못한다"(원문) - 6칸 인벤토리가 아니라 전용
   // boots 슬롯으로 간다(buyBoots()가 기존 신발 교체/환급까지 처리).
   if (item.isBoots) return _buyBoots(ctrl, item);
   // 트린켓(투명 와드)은 상점에서 구매하는 게 아니라 기본 장착이다 -
   // 방어적 가드(ITEM_CATEGORIES에서 이미 제외했지만, 실수로 다시
   // 노출되더라도 6칸 인벤토리를 공짜로 채우는 경로로 새지 않게 막는다).
-  if (item.trinket) { console.warn('[ITEM] 트린켓은 상점에서 구매하지 않습니다(기본 장착).'); return false; }
-  if ((ctrl.gold || 0) < item.cost) { console.warn('[ITEM] 골드가 부족합니다.'); return false; }
+  if (item.trinket) { itemWarn('트린켓은 상점에서 구매하지 않습니다(기본 장착).'); return false; }
+  if ((ctrl.gold || 0) < item.cost) { itemWarn('골드가 부족합니다.'); return false; }
   ctrl.items = ctrl.items || [];
   if (item.maxStack) {
     // 쌓이는 소비 아이템 - "최대로 보유할 수 있는 수"는 슬롯 하나의 중첩
@@ -30429,18 +30444,18 @@ function buyItem(ctrl, itemId) {
     // 동작이었다 - 전체 보유량을 먼저 확인해 한도 도달 시 구매 자체를 막는다.
     const totalHeld = ctrl.items.filter((s) => s.id === itemId).reduce((sum, s) => sum + s.count, 0);
     if (totalHeld >= item.maxStack) {
-      console.warn(`[ITEM] 최대로 보유할 수 있는 수를 초과했습니다(최대 ${item.maxStack}개).`);
+      itemWarn(`최대로 보유할 수 있는 수를 초과했습니다(최대 ${item.maxStack}개).`);
       return false;
     }
     const existing = ctrl.items.find((s) => s.id === itemId);
     if (existing) {
       existing.count += 1;
     } else {
-      if (ctrl.items.length >= 6) { console.warn('[ITEM] 인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
+      if (ctrl.items.length >= 6) { itemWarn('인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
       ctrl.items.push({ id: itemId, count: 1 });
     }
   } else {
-    if (ctrl.items.length >= 6) { console.warn('[ITEM] 인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
+    if (ctrl.items.length >= 6) { itemWarn('인벤토리가 가득 찼습니다(최대 6칸).'); return false; }
     const slot = { id: itemId, count: 1 };
     if (item.maxCharges) slot.charges = item.maxCharges;
     ctrl.items.push(slot);
@@ -30493,19 +30508,19 @@ function buildOrBuyItem(ctrl, itemId) {
     return buyItem(ctrl, itemId);
   }
   if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
-    console.warn('[ITEM] 기지(상점 구역) 안에서만 조합할 수 있습니다.');
+    itemWarn('기지(상점 구역) 안에서만 조합할 수 있습니다.');
     return false;
   }
   // 유일 아이템 검사 - 이번 조합이 소모할 하위템(item.recipe)은 충돌
   // 판정에서 제외한다(예: 티아맷을 소모해 거대한히드라가 되는 건 "같은
   // 계열을 이미 들고 있다"고 막으면 안 된다 - 자연스러운 업그레이드이므로).
   if (_itemUniqueGroupConflict(ctrl, item, new Set(item.recipe))) {
-    console.warn(`[ITEM] ${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
+    itemWarn(`${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
-  if (_itemLegendaryDuplicate(ctrl, item)) { console.warn(`[ITEM] ${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
+  if (_itemLegendaryDuplicate(ctrl, item)) { itemWarn(`${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
   const cost = combineCost(item);
-  if ((ctrl.gold || 0) < cost) { console.warn('[ITEM] 골드가 부족합니다(조합 비용).'); return false; }
+  if ((ctrl.gold || 0) < cost) { itemWarn('골드가 부족합니다(조합 비용).'); return false; }
   // 하위템 소모 - 개수만큼 각 id의 슬롯을 하나씩 제거한다. 소모(N개) 후
   // 완제품(1개)을 더하므로 칸 수는 절대 늘지 않는다(N>=1) - 인벤토리
   // 한도를 별도로 확인할 필요가 없다.
@@ -30544,8 +30559,8 @@ function sellItem(ctrl, slotIndex) {
 // 신발을 신고 있으면 "교체"로 취급해 기존 신발 가격을 전액 환급한다
 // (판매가 아니라 업그레이드 개념이므로 70%가 아니라 100%).
 function _buyBoots(ctrl, item) {
-  if (ctrl.boots && ctrl.boots.id === item.id) { console.warn('[ITEM] 이미 장착 중인 신발입니다.'); return false; }
-  if ((ctrl.gold || 0) < item.cost) { console.warn('[ITEM] 골드가 부족합니다.'); return false; }
+  if (ctrl.boots && ctrl.boots.id === item.id) { itemWarn('이미 장착 중인 신발입니다.'); return false; }
+  if ((ctrl.gold || 0) < item.cost) { itemWarn('골드가 부족합니다.'); return false; }
   if (ctrl.boots) {
     const old = ITEM_DATA[ctrl.boots.id];
     ctrl.gold += (old && old.cost) || 0;
@@ -30582,7 +30597,7 @@ function sellBoots(ctrl) {
 // 클릭으로 호출된다. 중첩/충전 소모 로직만 여기서 처리하고, 실제 회복은
 // 공용 지속 회복(HoT) 목록(_itemActiveHeals)에 등록해 itemSystemTick이
 // 매 프레임 진행한다.
-function useItem(ctrl, slotIndex) {
+function useItem(ctrl, slotIndex, opts = {}) {
   if (!ctrl) return false;
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot) return false;
@@ -30616,13 +30631,13 @@ function useItem(ctrl, slotIndex) {
   // 제어 와드 - 인벤토리 중첩 소모형이지만 회복이 아니라 와드 설치가
   // 목적이라 별도 함수로 분리한다(투명 와드의 placeWard()와 유사한 구조,
   // 다만 트린켓 전용 슬롯이 아니라 6칸 인벤토리를 쓴다).
-  if (item.wardPlacement) return _useControlWard(ctrl, slotIndex, item);
+  if (item.wardPlacement) return _useControlWard(ctrl, slotIndex, item, opts);
   // 영약(강철/마법/분노) - 중첩/충전이 아니라 "마시면 바로 소모"되는
   // 1회성 아이템. 상호 배타적 지속 버프라 별도 상태(_itemActiveElixir)로 관리한다.
   if (item.elixirEffect) return _useElixir(ctrl, slotIndex, item);
-  if (!item.consumable) { console.warn('[ITEM] 사용할 수 없는 아이템입니다.'); return false; }
+  if (!item.consumable) { itemWarn('사용할 수 없는 아이템입니다.'); return false; }
   if (item.maxCharges) {
-    if (!(slot.charges > 0)) { console.warn('[ITEM] 충전량이 없습니다.'); return false; }
+    if (!(slot.charges > 0)) { itemWarn('충전량이 없습니다.'); return false; }
     slot.charges -= 1;
   } else if (item.maxStack) {
     if (!(slot.count > 0)) return false;
@@ -30645,7 +30660,7 @@ function _useActiveAbilityItem(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   ctrl._itemActiveCooldownUntil[item.id] = now + item.activeAbility.cooldownSec * 1000;
   const raw = item.activeAbility.percentAD * (ctrl.stats.attackDamage || 0);
   if (raw > 0 && typeof findEnemiesInRadius === 'function') {
@@ -30666,7 +30681,7 @@ function _useEmpoweredCleaveActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   ctrl._itemActiveCooldownUntil[item.id] = now + item.empoweredCleaveActive.cooldownSec * 1000;
   ctrl._itemEmpoweredCleaveArmed = true;
   console.log(`[ITEM] ${item.nameKo}(${item.empoweredCleaveActive.nameKo}) 무장`);
@@ -30680,7 +30695,7 @@ function _useShockwaveActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const p = item.shockwaveActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const isMelee = _itemIsMelee(ctrl);
@@ -30710,7 +30725,7 @@ function _useGhostStepActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const p = item.ghostStepActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const isMelee = _itemIsMelee(ctrl);
@@ -30727,7 +30742,7 @@ function _useTeamMoveSpeedActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const p = item.teamMoveSpeedActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   if (typeof applyStatus === 'function') {
@@ -30749,7 +30764,7 @@ function _useDevotionActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const p = item.devotionActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const selfAmt = _itemScaleByLevel(ctrl, p.shieldMin, p.shieldMax, p.levelMin, p.levelMax) * (typeof getShieldReceivedMultiplier === 'function' ? getShieldReceivedMultiplier(ctrl) : 1);
@@ -30775,7 +30790,7 @@ function _useRocketbeltActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const p = item.rocketbeltActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
@@ -30805,9 +30820,9 @@ function _useNoxiousBladeActive(ctrl, item) {
   const now = performance.now();
   ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-  if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   const target = ctrl.currentTarget;
-  if (!target || target.hp <= 0 || !target.isChampion) { console.warn(`[ITEM] ${item.nameKo}: 적 챔피언을 먼저 선택해야 합니다.`); return false; }
+  if (!target || target.hp <= 0 || !target.isChampion) { itemWarn(`${item.nameKo}: 적 챔피언을 먼저 선택해야 합니다.`); return false; }
   const p = item.noxiousBladeActive;
   ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   const ap = (ctrl.stats && ctrl.stats.abilityPower) || 0;
@@ -30833,12 +30848,12 @@ function _useStasisActive(ctrl, item) {
   if (p.maxUses) {
     ctrl._itemStasisUsesLeft = ctrl._itemStasisUsesLeft || {};
     const used = ctrl._itemStasisUsesLeft[item.id] || 0;
-    if (used >= p.maxUses) { console.warn(`[ITEM] ${item.nameKo}: 더 이상 사용할 수 없습니다(1회 한정).`); return false; }
+    if (used >= p.maxUses) { itemWarn(`${item.nameKo}: 더 이상 사용할 수 없습니다(1회 한정).`); return false; }
     ctrl._itemStasisUsesLeft[item.id] = used + 1;
   } else {
     ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
     const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
-    if (now < readyAt) { console.warn(`[ITEM] ${item.nameKo} 재사용 대기시간 중입니다.`); return false; }
+    if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
     ctrl._itemActiveCooldownUntil[item.id] = now + p.cooldownSec * 1000;
   }
   ctrl.isUntargetable = true;
@@ -32529,14 +32544,15 @@ function placeWard(ctrl, worldPoint) {
 // 마우스 위치를 모르면(인벤토리 클릭 등) 캐릭터 정면 300에 놓는다.
 // 소모 방식: 제어 와드는 소지 개수(slot.count, 다 쓰면 칸에서 사라짐), 서포터 아이템 계열은 충전량(maxCharges).
 // 시간 제한 와드(durationSec이 유한 - 서포터 아이템)는 투명 와드, 영구 와드는 제어 와드로 놓는다.
-function _useControlWard(ctrl, slotIndex, item) {
+function _useControlWard(ctrl, slotIndex, item, opts = {}) {
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot || slot.id !== item.id) return false;
-  if (item.maxCharges && !(slot.charges > 0)) { console.warn('[ITEM] 충전량이 없습니다.'); return false; }
+  if (item.maxCharges && !(slot.charges > 0)) { itemWarn('충전량이 없습니다.'); return false; }
   if (typeof wardSystem === 'undefined' || !wardSystem) return false;
   const p = item.wardPlacement;
   const timed = Number.isFinite(p.durationSec) && p.durationSec < 9999;
-  let targetPoint = (typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : null;
+  // 63차: HUD 칸을 클릭해 쓰면 커서가 HUD 위라 그 아래 땅(화면 맨 아래)으로 걸어가 설치했다 - 그때는 챔피언 바로 앞에 놓는다(장신구 클릭과 같음).
+  let targetPoint = (!opts.placeAhead && typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : null;
   if (!targetPoint) {
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
     targetPoint = ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)));
@@ -33702,10 +33718,40 @@ function shopBlockReason(ctrl, itemId) {
   }
   return null;
 }
+// 63차 되돌리기(원작 상점의 Undo): 기지 안에서 한 구매·판매를 순서대로 되돌린다. 거래 직전의 골드·인벤토리·신발을 통째로
+// 저장해 두었다가 복원한다(조합으로 사라진 재료도 그대로 돌아온다). 기지를 벗어나거나 챔피언이 바뀌면 기록을 비운다.
+let _shopUndoStack = [];
+let _shopLastInvClick = null;
+function _shopSnapshot(label) {
+  const c = controller;
+  if (!c) return;
+  _shopUndoStack.push({
+    ctrl: c, label, gold: c.gold || 0,
+    items: (c.items || []).map((s) => ({ ...s })),
+    boots: c.boots ? { ...c.boots } : null,
+    bootsExtra: c._itemBootsExtraMoveSpeedLol || 0,
+  });
+  if (_shopUndoStack.length > 20) _shopUndoStack.shift();
+}
+function shopUndo() {
+  const snap = _shopUndoStack.pop();
+  if (!snap || snap.ctrl !== controller) { _shopUndoStack = []; renderShopPanel(true); return false; }
+  const c = controller;
+  c.gold = snap.gold; c.items = snap.items; c.boots = snap.boots; c._itemBootsExtraMoveSpeedLol = snap.bootsExtra;
+  if (typeof recomputeItemStats === 'function') recomputeItemStats(c);
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (typeof updateItemUI === 'function') updateItemUI(c);
+  _shopSelectedSlot = null;
+  renderShopPanel(true);
+  if (typeof showSkillToast === 'function') showSkillToast(`되돌리기: ${snap.label}`);
+  return true;
+}
 function _shopBuy(itemId) {
   const reason = shopBlockReason(controller, itemId);
   if (reason) { if (typeof showSkillToast === 'function') showSkillToast(reason); return false; }
+  _shopSnapshot(`${(ITEM_DATA[itemId] || {}).nameKo || itemId} 구매`);
   const ok = typeof buildOrBuyItem === 'function' && buildOrBuyItem(controller, itemId);
+  if (!ok) _shopUndoStack.pop();
   if (ok) {
     const tile = document.querySelector(`#shopGrid .shop-tile[data-id="${itemId}"]`);
     if (tile) { tile.classList.remove('bought'); void tile.offsetWidth; tile.classList.add('bought'); }
@@ -33714,8 +33760,12 @@ function _shopBuy(itemId) {
 }
 function _shopSell() {
   if (!controller || _shopSelectedSlot == null) return;
-  if (_shopSelectedSlot === 'boots') { if (typeof sellBoots === 'function') sellBoots(controller); }
-  else if (typeof sellItem === 'function') sellItem(controller, _shopSelectedSlot);
+  const sel = _shopSelectedSlot === 'boots' ? controller.boots : controller.items[_shopSelectedSlot];
+  if (!sel) { _shopSelectedSlot = null; renderShopPanel(true); return; }
+  _shopSnapshot(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
+  const ok = _shopSelectedSlot === 'boots' ? (typeof sellBoots === 'function' && sellBoots(controller)) : (typeof sellItem === 'function' && sellItem(controller, _shopSelectedSlot));
+  if (!ok) _shopUndoStack.pop();
+  else if (typeof showSkillToast === 'function') showSkillToast(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
   _shopSelectedSlot = null;
   renderShopPanel(true);
 }
@@ -33893,6 +33943,12 @@ function _shopRenderInventory() {
     price = sel ? Math.floor((sel.cost || 0) * (s.count || 1) * 0.7) : 0;
   } else _shopSelectedSlot = null;
   if (sellBtn) { sellBtn.disabled = !sel; sellBtn.textContent = sel ? `판매 +${price.toLocaleString()}` : '판매'; }
+  const undoBtn = _shopEl('shopUndoBtn');
+  if (undoBtn) {
+    if (_shopUndoStack.length && _shopUndoStack[_shopUndoStack.length - 1].ctrl !== ctrl) _shopUndoStack = [];
+    undoBtn.disabled = !_shopUndoStack.length;
+    undoBtn.title = _shopUndoStack.length ? `되돌리기: ${_shopUndoStack[_shopUndoStack.length - 1].label}` : '되돌릴 거래가 없습니다';
+  }
   if (info) info.textContent = sel ? sel.nameKo : '보유 아이템을 고르면 판매할 수 있습니다';
 }
 // 골드·보유 아이템·위치(기지 안/밖)가 바뀌면 다시 칠한다. 닫혀 있으면 아무것도 안 한다
@@ -33905,6 +33961,7 @@ function renderShopPanel(force) {
     : 'none';
   if (!force && sig === _shopStateSig) return;
   _shopStateSig = sig;
+  if (ctrl && !_shopInBase(ctrl) && _shopUndoStack.length) _shopUndoStack = []; // 63차: 기지를 벗어나면 되돌리기 기록을 비운다(원작)
   if (_shopOwnsBounty() !== _shopHadBounty) { _shopRenderGrid(); return; } // 세계의 결실을 얻거나 업그레이드하면 업그레이드 줄을 다시 그린다
   const goldEl = _shopEl('shopGold');
   if (goldEl) goldEl.textContent = ctrl ? Math.floor(ctrl.gold || 0).toLocaleString() : '0';
@@ -33944,6 +34001,17 @@ function isShopOpen() { return _shopOpen; }
   if (!overlay) return;
   _shopEl('shopCloseBtn').addEventListener('click', () => setShopOpen(false));
   _shopEl('shopSellBtn').addEventListener('click', _shopSell);
+  const undoBtn = _shopEl('shopUndoBtn');
+  if (undoBtn) undoBtn.addEventListener('click', shopUndo);
+  // 63차: 인벤토리 칸 우클릭 = 바로 판매, 더블클릭 = 사용(사용 아이템). 상점이 열려 있어도 숫자키로 쓸 수 있다.
+  _shopEl('shopInv').addEventListener('contextmenu', (e) => {
+    const slot = e.target.closest('.shop-inv-slot[data-slot]');
+    if (!slot || slot.classList.contains('empty')) return;
+    e.preventDefault();
+    _shopSelectedSlot = slot.dataset.slot === 'boots' ? 'boots' : Number(slot.dataset.slot);
+    _shopSell();
+  });
+
   const search = _shopEl('shopSearch');
   search.addEventListener('input', () => { _shopSearch = search.value; _shopRenderCats(); _shopRenderGrid(); });
   _shopEl('shopCats').addEventListener('click', (e) => {
@@ -33966,6 +34034,17 @@ function isShopOpen() { return _shopOpen; }
     const slot = e.target.closest('.shop-inv-slot[data-slot]');
     if (slot && !slot.classList.contains('empty')) {
       const v = slot.dataset.slot === 'boots' ? 'boots' : Number(slot.dataset.slot);
+      // 63차 더블클릭 = 사용: 첫 클릭이 칸을 선택하며 인벤토리를 다시 그려서 브라우저 dblclick이 같은 칸으로 묶이지 않는다 -
+      // 같은 칸을 0.35초 안에 다시 누르면 직접 더블클릭으로 본다.
+      const now = performance.now();
+      if (_shopLastInvClick && _shopLastInvClick.v === v && now - _shopLastInvClick.t < 350 && v !== 'boots') {
+        _shopLastInvClick = null;
+        if (typeof useItemFromInput === 'function') useItemFromInput(v, { placeAhead: true });
+        _shopSelectedSlot = null;
+        renderShopPanel(true);
+        return;
+      }
+      _shopLastInvClick = { v, t: now };
       _shopSelectedSlot = _shopSelectedSlot === v ? null : v;
       const ctrl = controller;
       const id = v === 'boots' ? ctrl && ctrl.boots && ctrl.boots.id : ctrl && ctrl.items[v] && ctrl.items[v].id;
@@ -35754,6 +35833,41 @@ function _itemIsUsable(data) {
   );
   return usable;
 }
+// 63차: 숫자키·HUD 클릭·상점 더블클릭 공용 - 언제나 "지금" 조작 중인 챔피언(controller)으로 쓰고, 성공하면 그 칸을 번쩍인다.
+function useItemFromInput(slotIndex, opts = {}) {
+  if (!controller || typeof useItem !== 'function') return false;
+  const ok = useItem(controller, slotIndex, opts);
+  if (ok) {
+    const el = document.querySelectorAll('#hudItems .hud-item-grid .hud-item')[slotIndex];
+    if (el) { el.classList.remove('used'); void el.offsetWidth; el.classList.add('used'); }
+  }
+  return ok;
+}
+// 63차: 액티브 아이템 재사용 대기 - HUD 칸 위에 스킬 칸과 같은 회전 그림자 + 남은 초. 매 프레임 불리지만 바뀐 칸만 건드린다.
+function _itemCooldownTotalSec(item) {
+  for (const k in item) { const v = item[k]; if (v && typeof v === 'object' && typeof v.cooldownSec === 'number') return v.cooldownSec; }
+  return null;
+}
+function tickHudItemCooldowns(ctrl) {
+  if (!ctrl || typeof ITEM_DATA === 'undefined') return;
+  const cells = document.querySelectorAll('#hudItems .hud-item-grid .hud-item');
+  const until = ctrl._itemActiveCooldownUntil || {};
+  const now = performance.now();
+  cells.forEach((el, i) => {
+    const slot = ctrl.items && ctrl.items[i];
+    const item = slot && ITEM_DATA[slot.id];
+    const readyAt = item ? (until[item.id] || 0) : 0;
+    let cd = el.querySelector('.item-cd');
+    if (!item || readyAt <= now) { if (cd) cd.remove(); return; }
+    const total = (_itemCooldownTotalSec(item) || 1) * 1000;
+    const frac = Math.max(0, Math.min(1, (readyAt - now) / total));
+    if (!cd) { cd = document.createElement('div'); cd.className = 'item-cd'; el.appendChild(cd); }
+    cd.style.background = `conic-gradient(rgba(0,0,0,0.72) ${frac * 360}deg, transparent 0)`;
+    const sec = (readyAt - now) / 1000;
+    const txt = sec >= 1 ? String(Math.ceil(sec)) : sec.toFixed(1);
+    if (cd.textContent !== txt) cd.textContent = txt;
+  });
+}
 // 하단 HUD 아이템 칸 - buyItem/sellItem/useItem이 아이템을 바꿀 때마다 호출하는 이벤트 기반 갱신 함수
 // (updateGoldDisplay()와 같은 원칙, 매 프레임 아님). 칸 배치는 원작과 같다: 1·2·3 / 5·6·7 + 장신구(4).
 // 사용 아이템은 클릭(또는 숫자키)으로 사용하고, 나머지는 클릭하면 상점이 열리며 그 칸이 선택된다(판매는 상점에서).
@@ -35783,7 +35897,7 @@ function updateItemUI(ctrl) {
     const usable = _itemIsUsable(data);
     el.title = usable ? `${data.nameKo} (${ITEM_SLOT_KEYS[i]}키 또는 클릭: 사용)` : `${data.nameKo} (클릭: 상점에서 보기·판매)`;
     el.addEventListener('click', () => {
-      if (usable) { if (typeof useItem === 'function') useItem(ctrl, i); return; }
+      if (usable) { useItemFromInput(i, { placeAhead: true }); return; }
       if (typeof setShopOpen === 'function') { setShopOpen(true); _shopSelectedSlot = i; _shopSelectedItemId = slot.id; renderShopPanel(true); }
     });
   });
@@ -36129,12 +36243,14 @@ window.addEventListener('keydown', (e) => {
     case 'KeyS': controller.moveTo(controller.root.position.clone()); break;
     // 아이템 사용 - 원작 키 배치(1·2·3·5·6·7 = 인벤토리 6칸, 4 = 장신구). 사용 불가 아이템(스탯
     // 아이템)이면 useItem() 내부에서 콘솔 경고만 내고 조용히 무시된다.
-    case 'Digit1': if (typeof useItem === 'function') useItem(controller, 0); break;
-    case 'Digit2': if (typeof useItem === 'function') useItem(controller, 1); break;
-    case 'Digit3': if (typeof useItem === 'function') useItem(controller, 2); break;
-    case 'Digit5': if (typeof useItem === 'function') useItem(controller, 3); break;
-    case 'Digit6': if (typeof useItem === 'function') useItem(controller, 4); break;
-    case 'Digit7': if (typeof useItem === 'function') useItem(controller, 5); break;
+    // 63차: 숫자패드(Numpad1~7)도 같은 칸 - 예전엔 위쪽 숫자 줄(Digit)만 받아서 숫자패드로는 아이템이 쓰이지 않았다.
+    case 'Digit1': case 'Numpad1': useItemFromInput(0); break;
+    case 'Digit2': case 'Numpad2': useItemFromInput(1); break;
+    case 'Digit3': case 'Numpad3': useItemFromInput(2); break;
+    case 'Digit5': case 'Numpad5': useItemFromInput(3); break;
+    case 'Digit6': case 'Numpad6': useItemFromInput(4); break;
+    case 'Digit7': case 'Numpad7': useItemFromInput(5); break;
+    case 'Numpad4':
     // 장신구(투명 와드) - 원작 기본 키 4. 현재 마우스 위치에 놓는다(설치 사거리 밖이면 사거리까지 걸어가서 놓는다 - 원작).
     case 'Digit4': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
   }
@@ -37829,7 +37945,8 @@ function animate() {
     updateDummyAI(dt);
     updateDyingMinions(dt);
     if (typeof updateMinions === 'function') updateMinions(dt);
-    if (typeof rewardTick === 'function') rewardTick(dt); // 62차: 기본 골드 수급·떠오르는 골드 숫자 // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
+    if (typeof rewardTick === 'function') rewardTick(dt);
+    if (typeof tickHudItemCooldowns === 'function') tickHudItemCooldowns(controller); // 63차: HUD 아이템 재사용 대기 표시 // 62차: 기본 골드 수급·떠오르는 골드 숫자 // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
     updateInhibitorBuildingAnim(dt);
     updateTurrets(dt); // 20차: 원작 위치에 배치한 포탑(공격·우물 회복/피해)
     updateNexusBuildingAnim(dt);
