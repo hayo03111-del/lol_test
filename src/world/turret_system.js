@@ -29,7 +29,11 @@ const TURRET_ATTACK_RANGE_LOL = 775;
 // 주석)의 적용 대상이 아니다 - 실제 LoL 포탑 사거리(775) 기준으로도
 // 비행시간이 약 0.14초 이내가 되도록 챔피언 평타 투사체 기본값(30)보다
 // 빠르게 잡아서, 기존처럼 "즉시 명중"에 가깝게 느껴지되 눈에는 보이도록 했다.
-const TURRET_PROJECTILE_SPEED = 55;
+// 61차: 원작 포탑 탄속 1200(LeagueSandbox-Default Spells/SRUAP_Turret_Order1BasicAttack MissileSpeed). 예전 55 world/초는
+// LoL 약 6,360으로 5배 넘게 빨라 거의 즉시 맞았다.
+const TURRET_PROJECTILE_SPEED = lolRangeToWorld(1200);
+// 탄이 나가는 높이 - 포탑 모델 키의 85%(꼭대기 크리스탈). 모델이 없으면 예전 높이.
+function getTurretMuzzleY(turret) { return turret && turret.labelHeight ? Math.max(BASE_UNIT * 1.6, (turret.labelHeight - 0.2) * 0.85) : BASE_UNIT * 1.6; }
 const TURRET_ARMOR_PEN_PERCENT = 0.30; // 요청 12
 // 59차 가열(충전): 원작 - 같은 챔피언을 연속으로 맞힐 때마다 +40%, 3단계(+120%)까지. 대상이 바뀌거나 5초 동안 챔피언을
 // 맞히지 않으면 처음(0단계)부터 다시 쌓는다. 예전엔 플레이어 챔피언에 isChampion 표시가 없어 포탑이 플레이어를 챔피언으로
@@ -398,7 +402,7 @@ function destroyTurret(turret) {
   if (turret.labelDiv) turret.labelDiv.style.opacity = '0.25';
   turret._turretVisualState = 'DESTROYING';
   turret._turretDestroyElapsed = 0;
-  turret._turretDestroyDuration = 0.38;
+  turret._turretDestroyDuration = 1.1; // 61차: 무너지는 시간(원작 포탑 붕괴처럼 내려앉아 잔해가 된다)
   turret._turretDestroyStartPos = turret.mesh ? turret.mesh.position.clone() : null;
   turret._turretDestroyStartScale = turret.mesh ? turret.mesh.scale.clone() : null;
   turret._turretDestroyStartRotation = turret.mesh ? turret.mesh.rotation.clone() : null;
@@ -512,7 +516,7 @@ function createTurret(type, position, team = 'RED') {
   let group, body, mixer = null, actions = null, usingRealModel = false;
   if (asset) {
     // 요청("포탑을 1.2배만 키우고") - BASE_UNIT의 3.0배 → 3.6배로 확대.
-    const inst = instantiateMinionBuildingAsset(assetKey, BASE_UNIT * 3.6, true);
+    const inst = instantiateMinionBuildingAsset(assetKey, null, true, STRUCTURE_MINION_GLB_SCALE()); // 61차: 원작 크기(키 약 539 LoL)
     group = inst.root; body = inst.body; mixer = inst.mixer; actions = inst.actions;
     usingRealModel = true;
     // 버그 수정: 이름표/HP 바(labelDiv)를 이 아래에서 예전 임시 도형용
@@ -620,7 +624,7 @@ function updateTurretAggroBeam(turret, target) {
     turret._aggroBeam.frustumCulled = false; turret._aggroBeam.renderOrder = 5;
     scene.add(turret._aggroBeam);
   }
-  const a = getWorldPosition(turret).clone().add(new THREE.Vector3(0, BASE_UNIT * 1.6, 0));
+  const a = getWorldPosition(turret).clone().add(new THREE.Vector3(0, getTurretMuzzleY(turret), 0));
   const b = getWorldPosition(target).clone().add(new THREE.Vector3(0, 0.9, 0));
   const pos = turret._aggroBeam.geometry.attributes.position;
   pos.setXYZ(0, a.x, a.y, a.z); pos.setXYZ(1, b.x, b.y, b.z); pos.needsUpdate = true;
@@ -679,8 +683,13 @@ function updateTurretCombat(turret, dt) {
         turret._turretDestroyElapsed = Math.min(turret._turretDestroyDuration || 0.38, (turret._turretDestroyElapsed || 0) + dt);
         const p = Math.min(1, turret._turretDestroyElapsed / (turret._turretDestroyDuration || 0.38));
         if (turret._turretDestroyStartScale) {
-          const k = 1 - 0.08 * p;
-          turret.mesh.scale.copy(turret._turretDestroyStartScale).multiplyScalar(k);
+          // 61차: 예전엔 8%만 줄고 살짝 기울어 멀쩡히 서 있었다 - 이제 높이를 28%까지 눌러 잔해처럼 주저앉히고 어둡게 한다.
+          const e = p * p * (3 - 2 * p);
+          turret.mesh.scale.set(turret._turretDestroyStartScale.x * (1 - 0.06 * e), turret._turretDestroyStartScale.y * (1 - 0.72 * e), turret._turretDestroyStartScale.z * (1 - 0.06 * e));
+          if (p >= 1 && !turret._rubbleDarkened) {
+            turret._rubbleDarkened = true;
+            turret.mesh.traverse((o) => { if (o.isMesh && o.material && o.material.color) o.material.color.multiplyScalar(0.45); });
+          }
         }
         if (turret._turretDestroyStartRotation) {
           turret.mesh.rotation.copy(turret._turretDestroyStartRotation);
@@ -725,7 +734,7 @@ function updateTurretCombat(turret, dt) {
   if (!target || turret.attackCooldown > 0) return;
   turret.attackCooldown = 1 / data.attackSpeed; // 요청 7: 포탑 자신의 Attack Speed 사용 - Phase 2에서도 절대 변경하지 않음
   const result = getTurretDamage(turret, target);
-  const origin = getWorldPosition(turret).clone().add(new THREE.Vector3(0, BASE_UNIT * 1.6, 0));
+  const origin = getWorldPosition(turret).clone().add(new THREE.Vector3(0, getTurretMuzzleY(turret), 0));
   vfx.spawn('basicAttack', origin, new THREE.Vector3().subVectors(getWorldPosition(target), origin).normalize());
   // 요청 11(유지): 이미 발사된 공격은 대상이 바뀌어도 그대로 완료한다 -
   // target을 이 시점에 값으로 캡처해서 넘기므로(클로저), 다음 공격부터만
@@ -850,14 +859,16 @@ function createNexusBuilding(position, team = 'RED', radiusWorld = null) {
   const assetKey = team.toLowerCase() + 'Nexus';
   const asset = minionBuildingAssets[assetKey];
   let group, body, mixer = null, actions = null, usingRealModel = false;
-  let nexusRadius = radiusWorld || BASE_UNIT * 4.5; // GLB가 로드되면 아래에서 실측값으로 교체된다
+  let nexusRadius = radiusWorld || BASE_UNIT * 4.5;
+  let nexusModelHeight = null; // GLB가 로드되면 아래에서 실측값으로 교체된다
   if (asset) {
     // 버그 수정("GLB 적용해도 미니언 이외는 적용 안 됨"): 원본 GLB 크기
     // 그대로 쓰지 않고 BASE_UNIT 기준으로 정규화한다(기존 장식 넥서스
     // placeholder 크기(반지름 1.1*BASE_UNIT)와 비슷한 체감으로 맞춤).
     // 요청("넥서스와 억제기도 크기를 키워줘") - 2.2배 → 6배로 확대.
     // 요청("넥서스를 1.5배 키워줘") - 6배 → 9배로 추가 확대.
-    const inst = instantiateMinionBuildingAsset(assetKey, BASE_UNIT * 9.0, true);
+    const inst = instantiateMinionBuildingAsset(assetKey, null, true, STRUCTURE_MINION_GLB_SCALE()); // 61차: 원작 크기(지름 약 637 LoL)
+    nexusModelHeight = inst.height;
     group = inst.root; body = inst.body; mixer = inst.mixer; actions = inst.actions;
     usingRealModel = true;
     // 요청("glb크기까지 계산해서 못 뚫고 다니게") - 충돌 반경도 추정치
@@ -887,7 +898,7 @@ function createNexusBuilding(position, team = 'RED', radiusWorld = null) {
   const labelDiv = document.createElement('div');
   labelDiv.id = 'enemyLabel';
   labelDiv.innerHTML = `${team} 넥서스<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div>`;
-  const labelHeight = BASE_UNIT * 9.0 + 0.2;
+  const labelHeight = nexusModelHeight != null ? nexusModelHeight + 0.4 : BASE_UNIT * 9.0 + 0.2;
   const label3d = new CSS2DObject(labelDiv);
   label3d.position.set(0, labelHeight, 0);
   group.add(label3d);
@@ -952,13 +963,15 @@ function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
   const assetKey = team.toLowerCase() + 'Inhibitor';
   const asset = minionBuildingAssets[assetKey];
   let group, body, mixer = null, actions = null, usingRealModel = false;
-  let inhibRadius = radiusWorld || BASE_UNIT * 2.4; // GLB가 로드되면 아래에서 실측값으로 교체된다
+  let inhibRadius = radiusWorld || BASE_UNIT * 2.4;
+  let inhibModelHeight = null; // GLB가 로드되면 아래에서 실측값으로 교체된다
   if (asset) {
     // 버그 수정("GLB 적용해도 미니언 이외는 적용 안 됨"): 원본 GLB 크기
     // 그대로 쓰지 않고 BASE_UNIT 기준으로 정규화한다(기존 억제기
     // placeholder 크기(반지름 0.85*BASE_UNIT)와 비슷한 체감으로 맞춤).
     // 요청("넥서스와 억제기도 크기를 키워줘") - 1.8배 → 5배로 확대.
-    const inst = instantiateMinionBuildingAsset(assetKey, BASE_UNIT * 5.0, true);
+    const inst = instantiateMinionBuildingAsset(assetKey, null, true, STRUCTURE_MINION_GLB_SCALE()); // 61차: 원작 크기(지름 약 380 LoL)
+    inhibModelHeight = inst.height;
     group = inst.root; body = inst.body; mixer = inst.mixer; actions = inst.actions;
     usingRealModel = true;
     // 요청("glb크기까지 계산해서 못 뚫고 다니게") - 충돌 반경도 추정치
@@ -985,8 +998,7 @@ function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
   // 살짝 옆으로 밀려 보인다. "살짝만" 요청대로 작은 보정값만 더한다 -
   // RED는 180도 회전돼 있어 로컬 X가 뒤집히므로 부호를 반대로 적용한다.
   // (GLB 모델 보정이라 임시 도형에는 적용하지 않는다 - 원작 좌표에서 0.5만큼 밀려 버린다.)
-  const INHIBITOR_CRYSTAL_OFFSET = 0.5;
-  if (usingRealModel) group.position.x += (team === 'RED' ? 1 : -1) * INHIBITOR_CRYSTAL_OFFSET;
+  // 61차: 원본 원점(크리스탈 중심)을 그대로 쓰므로 예전의 0.5 옆 보정은 필요 없다.
   // 버그 수정(사용자 지적 "억제기가 살짝 옆쪽으로 치우쳐져있고") - 포탑엔
   // 이미 팀별 회전을 줬는데(아래팀=RED만 180도) 억제기/넥서스에는 회전을
   // 아예 준 적이 없었다 - 그래서 좌우 비대칭인 모델이 한쪽 팀에서는 항상
@@ -1003,11 +1015,12 @@ function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
   labelDiv.innerHTML = `${team} 억제기<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div>`;
   const label3d = new CSS2DObject(labelDiv);
-  label3d.position.set(0, BASE_UNIT * 5.5, 0);
+  const inhibLabelHeight = inhibModelHeight != null ? inhibModelHeight + 0.4 : BASE_UNIT * 5.5;
+  label3d.position.set(0, inhibLabelHeight, 0);
   group.add(label3d);
   const labelKey = `${team} inhibitor`;
   const inhibitor = {
-    mesh: group, body: body || group, labelDiv, label: label3d, labelHeight: BASE_UNIT * 5.5, mixer, actions, currentAction: null, currentClipName: null, usingRealModel,
+    mesh: group, body: body || group, labelDiv, label: label3d, labelHeight: inhibLabelHeight, mixer, actions, currentAction: null, currentClipName: null, usingRealModel,
     type: 'inhibitor', team, hp: INHIBITOR_MAX_HP, maxHp: INHIBITOR_MAX_HP, armor: INHIBITOR_ARMOR, magicResist: 0,
     radius: inhibRadius, collisionRadius: inhibRadius,
     isInhibitor: true, isStructure: true, isChampion: false, isMonster: true, isTurret: false, isMinion: false,
@@ -1050,18 +1063,24 @@ function destroyInhibitor(inhibitor) {
   console.log(`[INHIBITOR] ${inhibitor.team} 억제기 파괴! ${INHIBITOR_RESPAWN_SEC}초 후 재생성`);
   const labelKey = `${inhibitor.team} inhibitor`;
   if (inhibitor.labelDiv) inhibitor.labelDiv.style.opacity = '0.25';
-  if (inhibitor.usingRealModel) playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.death, { fade: 0.3, loopOnce: true });
-  else if (inhibitor.body && inhibitor.body.material) inhibitor.body.material.color = new THREE.Color(0x222222);
-  setTimeout(() => respawnInhibitor(inhibitor), INHIBITOR_RESPAWN_SEC * 1000);
+  if (inhibitor.usingRealModel) {
+    // 61차: 파괴 동작이 끝나면 부서진 채 대기하는 원작 클립(Inhibitor_idle_dead)으로 넘긴다 - 예전엔 마지막 프레임에 멈춰 있었다.
+    const a = playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.death, { fade: 0.3, loopOnce: true });
+    inhibitor._deadIdleAt = getTurretGameTimeSec() + (a ? a.getClip().duration : 1);
+  } else if (inhibitor.body && inhibitor.body.material) inhibitor.body.material.color = new THREE.Color(0x222222);
+  // 61차: 재생성까지 남은 시간을 포탑과 같은 게임 시계로 재서 이름표에 보인다.
+  inhibitor._respawnAt = getTurretGameTimeSec() + INHIBITOR_RESPAWN_SEC;
 }
 function respawnInhibitor(inhibitor) {
   inhibitor.destroyed = false;
+  inhibitor._respawnAt = null; inhibitor._deadIdleAt = null;
+  if (inhibitor.labelDiv) { const t = inhibitor.labelDiv.querySelector('.inhibTimer'); if (t) t.textContent = ''; }
   inhibitor.hp = inhibitor.maxHp;
   updateInhibitorVisual(inhibitor);
   if (inhibitor.labelDiv) inhibitor.labelDiv.style.opacity = '1';
   const labelKey = `${inhibitor.team} inhibitor`;
   if (inhibitor.usingRealModel) {
-    const spawnAction = playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.spawn, { fade: 0.2, loopOnce: true });
+    const spawnAction = playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.respawn || INHIBITOR_MODEL_CLIPS.spawn, { fade: 0.2, loopOnce: true }); // 61차: 원작 재생성 클립
     if (spawnAction) {
       const dur = (spawnAction.getClip().duration / (spawnAction.timeScale || 1)) * 1000;
       setTimeout(() => playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.idle), dur);
@@ -1077,7 +1096,19 @@ function isTeamInhibitorDestroyed(team) {
   return inhibitorBuildings.some((i) => i.team === team && i.destroyed);
 }
 function updateInhibitorBuildingAnim(dt) {
+  const now = getTurretGameTimeSec();
   for (const i of inhibitorBuildings) {
+    if (i.destroyed && i._deadIdleAt != null && now >= i._deadIdleAt) { i._deadIdleAt = null; if (i.usingRealModel) playAssetClip(i, `${i.team} inhibitor`, INHIBITOR_MODEL_CLIPS.deadIdle, { fade: 0.2 }); }
+    if (i.destroyed && i._respawnAt != null) {
+      const left = i._respawnAt - now;
+      if (left <= 0) respawnInhibitor(i);
+      else if (i.labelDiv) {
+        let t = i.labelDiv.querySelector('.inhibTimer');
+        if (!t) { t = document.createElement('div'); t.className = 'inhibTimer'; t.style.cssText = 'font-size:10px;color:#ffd27a'; i.labelDiv.appendChild(t); }
+        const txt = `재생성 ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
+        if (t.textContent !== txt) t.textContent = txt;
+      }
+    }
     if (i.mixer) safeMixerUpdate(i.mixer, dt, `inhibitor:${i.team}`);
     if (i.label) i.label.position.set(0, i.labelHeight, 0); // 요청("고정") - 매 프레임 제자리 재확인
   }

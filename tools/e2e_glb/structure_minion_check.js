@@ -128,14 +128,14 @@ const startServer = require('./server.js');
     const E = window.__e2e, c = window.controller, L = E.lolRangeToWorld, V = (x, z) => new E.THREE.Vector3(x, 0, z);
     window.__clearMinions();
     const rc = E.createMinion('caster', V(0, 0), E.getTurretGameTimeSec(), 'RED'); E.minions.push(rc);
-    window.__resetPlayer(V(0, -L(900))); await new Promise((res) => setTimeout(res, 400));
-    const far = rc.attackTarget === c;
+    window.__resetPlayer(V(0, -L(1100))); await new Promise((res) => setTimeout(res, 400));
+    const far = rc.attackTarget === c; // 61차: 원거리 인식 범위 700(원작)
     window.__resetPlayer(V(0, -L(480))); await new Promise((res) => setTimeout(res, 400));
     const near = rc.attackTarget === c;
     const hp0 = c.hp; await new Promise((res) => setTimeout(res, 2500));
     const tookDamage = c.hp < hp0;
     window.__clearMinions(); window.__resetPlayer(E.getTeamSpawnPosition('BLUE'));
-    return { targetsPlayerAt900: far, targetsPlayerAt480: near, tookDamage };
+    return { targetsPlayerAt1100: far, targetsPlayerAt480: near, tookDamage };
   });
 
   // 5) 막타 골드: 플레이어 막타만 골드, 아군 미니언 막타는 0
@@ -201,6 +201,44 @@ const startServer = require('./server.js');
     const outer = T('outer1'); outer.hp = 1; E.applyDamageToTurret(outer, { rawDamage: 1e4, damageType: 'TRUE', isCritical: false, critMultiplier: 1, isBasicAttack: true }, { source: c });
     const after = { outerDestroyed: outer.destroyed, inhibTurret: Math.round(hit(T('inhibitor'))), inhibitor: hit(inh), nexus: hit(nx) };
     return { before, after };
+  });
+  // 9) 61차: 원작 크기(LoL 단위 키), 포탑 탄속·발사 높이
+  r.sizes = await page.evaluate(() => {
+    const E = window.__e2e, c = window.controller, L = E.worldDistanceToLol, V = (x, z) => new E.THREE.Vector3(x, 0, z);
+    const h = (o) => { const b = new E.THREE.Box3().setFromObject(o); return Math.round(L(b.max.y - Math.max(0, b.min.y))); };
+    const out = { garen: h(c.model) };
+    for (const t of ['melee', 'caster', 'siege', 'super']) { const m = E.createMinion(t, V(30, 30), 0, 'RED'); out[t] = h(m.body); out[t + 'Radius'] = Math.round(L(m.collisionRadius)); m.isDead = true; E.scene.remove(m.mesh); }
+    const t = E.turrets.find((t) => t.isStructure); out.turret = h(t.mesh); out.inhibitor = h(E.inhibitorBuildings[0].mesh); out.nexus = h(E.nexusBuildings[0].mesh);
+    return out;
+  });
+  // 10) 61차: 플레이어와 미니언 몸 충돌, 기절 동작
+  r.bodyBlock = await page.evaluate(async () => {
+    const E = window.__e2e, c = window.controller, L = E.lolRangeToWorld, V = (x, z) => new E.THREE.Vector3(x, 0, z);
+    window.__clearMinions(); window.__resetPlayer(V(0, -2));
+    const m = E.createMinion('melee', V(0, -2.05), E.getTurretGameTimeSec(), 'BLUE'); E.minions.push(m);
+    await new Promise((res) => setTimeout(res, 500));
+    const gap = Math.round(E.worldDistanceToLol(Math.hypot(c.root.position.x - m.mesh.position.x, c.root.position.z - m.mesh.position.z)));
+    E.applyStatus(m, { id: 'test_stun', type: 'STUN', duration: 2, source: c });
+    await new Promise((res) => setTimeout(res, 400));
+    const clip = m.currentClipName;
+    window.__clearMinions(); window.__resetPlayer(E.getTeamSpawnPosition('BLUE'));
+    return { gapLolAfterOverlap: gap, stunnedClip: clip };
+  });
+  r.turretMissile = await page.evaluate(() => {
+    const E = window.__e2e; const t = E.turrets.find((t) => t.team === 'RED' && t.type === 'nexusTwin');
+    return { speedLol: Math.round(E.worldDistanceToLol(E.TURRET_PROJECTILE_SPEED || 0)) };
+  });
+  // 11) 61차: 파괴된 포탑은 잔해로 주저앉고, 억제기는 재생성까지 남은 시간이 보인다
+  r.rubbleAndInhib = await page.evaluate(async () => {
+    const E = window.__e2e, c = window.controller;
+    const outer = E.turrets.find((t) => t.team === 'RED' && t.type === 'outer1');
+    await new Promise((res) => setTimeout(res, 2500));
+    const scaleY = +(outer.mesh.scale.y / outer._turretDestroyStartScale.y).toFixed(2);
+    const it = E.turrets.find((t) => t.team === 'RED' && t.type === 'inhibitor'); it.hp = 1; E.applyDamageToTurret(it, { rawDamage: 1e4, damageType: 'TRUE', isCritical: false, critMultiplier: 1, isBasicAttack: true }, { source: c });
+    const inh = E.inhibitorBuildings.find((i) => i.team === 'RED'); inh.hp = 1; E.applyDamage(inh, { rawDamage: 1e4, damageType: 'TRUE', isCritical: false, critMultiplier: 1, isBasicAttack: true, source: c });
+    await new Promise((res) => setTimeout(res, 2500));
+    const timer = (inh.labelDiv.querySelector('.inhibTimer') || {}).textContent || '';
+    return { outerRubbleScaleY: scaleY, inhibDestroyed: inh.destroyed, inhibTimer: timer, inhibClip: inh.currentClipName };
   });
   r.errors = errors;
   console.log(JSON.stringify(r, null, 1));

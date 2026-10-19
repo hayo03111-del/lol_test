@@ -12728,6 +12728,8 @@ CharacterController.prototype.updateMovement = function(dt) {
     // 겹침을 즉시 풀어준다(가만히 서 있다가 미니언에 밀려 구조물 안으로
     // 들어가는 경우도 막기 위함) - MOVE 상태 조기 return보다 먼저 실행.
     if (typeof resolvePlayerStructureCollisions === 'function') resolvePlayerStructureCollisions(this);
+    if (typeof resolvePlayerMinionCollisions === 'function') resolvePlayerMinionCollisions(this); // 61차: 미니언과 몸 충돌
+    if (typeof resolvePlayerStructureCollisions === 'function') resolvePlayerStructureCollisions(this); // 미니언에 밀려 구조물 안으로 들어가지 않게 한 번 더
     if (this.state !== STATE.MOVE || !this.targetPos) return;
     const pos = this.root.position;
     const toTarget = new THREE.Vector3().subVectors(this.targetPos, pos);
@@ -26417,7 +26419,11 @@ const TURRET_ATTACK_RANGE_LOL = 775;
 // 주석)의 적용 대상이 아니다 - 실제 LoL 포탑 사거리(775) 기준으로도
 // 비행시간이 약 0.14초 이내가 되도록 챔피언 평타 투사체 기본값(30)보다
 // 빠르게 잡아서, 기존처럼 "즉시 명중"에 가깝게 느껴지되 눈에는 보이도록 했다.
-const TURRET_PROJECTILE_SPEED = 55;
+// 61차: 원작 포탑 탄속 1200(LeagueSandbox-Default Spells/SRUAP_Turret_Order1BasicAttack MissileSpeed). 예전 55 world/초는
+// LoL 약 6,360으로 5배 넘게 빨라 거의 즉시 맞았다.
+const TURRET_PROJECTILE_SPEED = lolRangeToWorld(1200);
+// 탄이 나가는 높이 - 포탑 모델 키의 85%(꼭대기 크리스탈). 모델이 없으면 예전 높이.
+function getTurretMuzzleY(turret) { return turret && turret.labelHeight ? Math.max(BASE_UNIT * 1.6, (turret.labelHeight - 0.2) * 0.85) : BASE_UNIT * 1.6; }
 const TURRET_ARMOR_PEN_PERCENT = 0.30; // 요청 12
 // 59차 가열(충전): 원작 - 같은 챔피언을 연속으로 맞힐 때마다 +40%, 3단계(+120%)까지. 대상이 바뀌거나 5초 동안 챔피언을
 // 맞히지 않으면 처음(0단계)부터 다시 쌓는다. 예전엔 플레이어 챔피언에 isChampion 표시가 없어 포탑이 플레이어를 챔피언으로
@@ -26786,7 +26792,7 @@ function destroyTurret(turret) {
   if (turret.labelDiv) turret.labelDiv.style.opacity = '0.25';
   turret._turretVisualState = 'DESTROYING';
   turret._turretDestroyElapsed = 0;
-  turret._turretDestroyDuration = 0.38;
+  turret._turretDestroyDuration = 1.1; // 61차: 무너지는 시간(원작 포탑 붕괴처럼 내려앉아 잔해가 된다)
   turret._turretDestroyStartPos = turret.mesh ? turret.mesh.position.clone() : null;
   turret._turretDestroyStartScale = turret.mesh ? turret.mesh.scale.clone() : null;
   turret._turretDestroyStartRotation = turret.mesh ? turret.mesh.rotation.clone() : null;
@@ -26900,7 +26906,7 @@ function createTurret(type, position, team = 'RED') {
   let group, body, mixer = null, actions = null, usingRealModel = false;
   if (asset) {
     // 요청("포탑을 1.2배만 키우고") - BASE_UNIT의 3.0배 → 3.6배로 확대.
-    const inst = instantiateMinionBuildingAsset(assetKey, BASE_UNIT * 3.6, true);
+    const inst = instantiateMinionBuildingAsset(assetKey, null, true, STRUCTURE_MINION_GLB_SCALE()); // 61차: 원작 크기(키 약 539 LoL)
     group = inst.root; body = inst.body; mixer = inst.mixer; actions = inst.actions;
     usingRealModel = true;
     // 버그 수정: 이름표/HP 바(labelDiv)를 이 아래에서 예전 임시 도형용
@@ -27008,7 +27014,7 @@ function updateTurretAggroBeam(turret, target) {
     turret._aggroBeam.frustumCulled = false; turret._aggroBeam.renderOrder = 5;
     scene.add(turret._aggroBeam);
   }
-  const a = getWorldPosition(turret).clone().add(new THREE.Vector3(0, BASE_UNIT * 1.6, 0));
+  const a = getWorldPosition(turret).clone().add(new THREE.Vector3(0, getTurretMuzzleY(turret), 0));
   const b = getWorldPosition(target).clone().add(new THREE.Vector3(0, 0.9, 0));
   const pos = turret._aggroBeam.geometry.attributes.position;
   pos.setXYZ(0, a.x, a.y, a.z); pos.setXYZ(1, b.x, b.y, b.z); pos.needsUpdate = true;
@@ -27067,8 +27073,13 @@ function updateTurretCombat(turret, dt) {
         turret._turretDestroyElapsed = Math.min(turret._turretDestroyDuration || 0.38, (turret._turretDestroyElapsed || 0) + dt);
         const p = Math.min(1, turret._turretDestroyElapsed / (turret._turretDestroyDuration || 0.38));
         if (turret._turretDestroyStartScale) {
-          const k = 1 - 0.08 * p;
-          turret.mesh.scale.copy(turret._turretDestroyStartScale).multiplyScalar(k);
+          // 61차: 예전엔 8%만 줄고 살짝 기울어 멀쩡히 서 있었다 - 이제 높이를 28%까지 눌러 잔해처럼 주저앉히고 어둡게 한다.
+          const e = p * p * (3 - 2 * p);
+          turret.mesh.scale.set(turret._turretDestroyStartScale.x * (1 - 0.06 * e), turret._turretDestroyStartScale.y * (1 - 0.72 * e), turret._turretDestroyStartScale.z * (1 - 0.06 * e));
+          if (p >= 1 && !turret._rubbleDarkened) {
+            turret._rubbleDarkened = true;
+            turret.mesh.traverse((o) => { if (o.isMesh && o.material && o.material.color) o.material.color.multiplyScalar(0.45); });
+          }
         }
         if (turret._turretDestroyStartRotation) {
           turret.mesh.rotation.copy(turret._turretDestroyStartRotation);
@@ -27113,7 +27124,7 @@ function updateTurretCombat(turret, dt) {
   if (!target || turret.attackCooldown > 0) return;
   turret.attackCooldown = 1 / data.attackSpeed; // 요청 7: 포탑 자신의 Attack Speed 사용 - Phase 2에서도 절대 변경하지 않음
   const result = getTurretDamage(turret, target);
-  const origin = getWorldPosition(turret).clone().add(new THREE.Vector3(0, BASE_UNIT * 1.6, 0));
+  const origin = getWorldPosition(turret).clone().add(new THREE.Vector3(0, getTurretMuzzleY(turret), 0));
   vfx.spawn('basicAttack', origin, new THREE.Vector3().subVectors(getWorldPosition(target), origin).normalize());
   // 요청 11(유지): 이미 발사된 공격은 대상이 바뀌어도 그대로 완료한다 -
   // target을 이 시점에 값으로 캡처해서 넘기므로(클로저), 다음 공격부터만
@@ -27238,14 +27249,16 @@ function createNexusBuilding(position, team = 'RED', radiusWorld = null) {
   const assetKey = team.toLowerCase() + 'Nexus';
   const asset = minionBuildingAssets[assetKey];
   let group, body, mixer = null, actions = null, usingRealModel = false;
-  let nexusRadius = radiusWorld || BASE_UNIT * 4.5; // GLB가 로드되면 아래에서 실측값으로 교체된다
+  let nexusRadius = radiusWorld || BASE_UNIT * 4.5;
+  let nexusModelHeight = null; // GLB가 로드되면 아래에서 실측값으로 교체된다
   if (asset) {
     // 버그 수정("GLB 적용해도 미니언 이외는 적용 안 됨"): 원본 GLB 크기
     // 그대로 쓰지 않고 BASE_UNIT 기준으로 정규화한다(기존 장식 넥서스
     // placeholder 크기(반지름 1.1*BASE_UNIT)와 비슷한 체감으로 맞춤).
     // 요청("넥서스와 억제기도 크기를 키워줘") - 2.2배 → 6배로 확대.
     // 요청("넥서스를 1.5배 키워줘") - 6배 → 9배로 추가 확대.
-    const inst = instantiateMinionBuildingAsset(assetKey, BASE_UNIT * 9.0, true);
+    const inst = instantiateMinionBuildingAsset(assetKey, null, true, STRUCTURE_MINION_GLB_SCALE()); // 61차: 원작 크기(지름 약 637 LoL)
+    nexusModelHeight = inst.height;
     group = inst.root; body = inst.body; mixer = inst.mixer; actions = inst.actions;
     usingRealModel = true;
     // 요청("glb크기까지 계산해서 못 뚫고 다니게") - 충돌 반경도 추정치
@@ -27275,7 +27288,7 @@ function createNexusBuilding(position, team = 'RED', radiusWorld = null) {
   const labelDiv = document.createElement('div');
   labelDiv.id = 'enemyLabel';
   labelDiv.innerHTML = `${team} 넥서스<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div>`;
-  const labelHeight = BASE_UNIT * 9.0 + 0.2;
+  const labelHeight = nexusModelHeight != null ? nexusModelHeight + 0.4 : BASE_UNIT * 9.0 + 0.2;
   const label3d = new CSS2DObject(labelDiv);
   label3d.position.set(0, labelHeight, 0);
   group.add(label3d);
@@ -27340,13 +27353,15 @@ function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
   const assetKey = team.toLowerCase() + 'Inhibitor';
   const asset = minionBuildingAssets[assetKey];
   let group, body, mixer = null, actions = null, usingRealModel = false;
-  let inhibRadius = radiusWorld || BASE_UNIT * 2.4; // GLB가 로드되면 아래에서 실측값으로 교체된다
+  let inhibRadius = radiusWorld || BASE_UNIT * 2.4;
+  let inhibModelHeight = null; // GLB가 로드되면 아래에서 실측값으로 교체된다
   if (asset) {
     // 버그 수정("GLB 적용해도 미니언 이외는 적용 안 됨"): 원본 GLB 크기
     // 그대로 쓰지 않고 BASE_UNIT 기준으로 정규화한다(기존 억제기
     // placeholder 크기(반지름 0.85*BASE_UNIT)와 비슷한 체감으로 맞춤).
     // 요청("넥서스와 억제기도 크기를 키워줘") - 1.8배 → 5배로 확대.
-    const inst = instantiateMinionBuildingAsset(assetKey, BASE_UNIT * 5.0, true);
+    const inst = instantiateMinionBuildingAsset(assetKey, null, true, STRUCTURE_MINION_GLB_SCALE()); // 61차: 원작 크기(지름 약 380 LoL)
+    inhibModelHeight = inst.height;
     group = inst.root; body = inst.body; mixer = inst.mixer; actions = inst.actions;
     usingRealModel = true;
     // 요청("glb크기까지 계산해서 못 뚫고 다니게") - 충돌 반경도 추정치
@@ -27373,8 +27388,7 @@ function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
   // 살짝 옆으로 밀려 보인다. "살짝만" 요청대로 작은 보정값만 더한다 -
   // RED는 180도 회전돼 있어 로컬 X가 뒤집히므로 부호를 반대로 적용한다.
   // (GLB 모델 보정이라 임시 도형에는 적용하지 않는다 - 원작 좌표에서 0.5만큼 밀려 버린다.)
-  const INHIBITOR_CRYSTAL_OFFSET = 0.5;
-  if (usingRealModel) group.position.x += (team === 'RED' ? 1 : -1) * INHIBITOR_CRYSTAL_OFFSET;
+  // 61차: 원본 원점(크리스탈 중심)을 그대로 쓰므로 예전의 0.5 옆 보정은 필요 없다.
   // 버그 수정(사용자 지적 "억제기가 살짝 옆쪽으로 치우쳐져있고") - 포탑엔
   // 이미 팀별 회전을 줬는데(아래팀=RED만 180도) 억제기/넥서스에는 회전을
   // 아예 준 적이 없었다 - 그래서 좌우 비대칭인 모델이 한쪽 팀에서는 항상
@@ -27391,11 +27405,12 @@ function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
   labelDiv.innerHTML = `${team} 억제기<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div>`;
   const label3d = new CSS2DObject(labelDiv);
-  label3d.position.set(0, BASE_UNIT * 5.5, 0);
+  const inhibLabelHeight = inhibModelHeight != null ? inhibModelHeight + 0.4 : BASE_UNIT * 5.5;
+  label3d.position.set(0, inhibLabelHeight, 0);
   group.add(label3d);
   const labelKey = `${team} inhibitor`;
   const inhibitor = {
-    mesh: group, body: body || group, labelDiv, label: label3d, labelHeight: BASE_UNIT * 5.5, mixer, actions, currentAction: null, currentClipName: null, usingRealModel,
+    mesh: group, body: body || group, labelDiv, label: label3d, labelHeight: inhibLabelHeight, mixer, actions, currentAction: null, currentClipName: null, usingRealModel,
     type: 'inhibitor', team, hp: INHIBITOR_MAX_HP, maxHp: INHIBITOR_MAX_HP, armor: INHIBITOR_ARMOR, magicResist: 0,
     radius: inhibRadius, collisionRadius: inhibRadius,
     isInhibitor: true, isStructure: true, isChampion: false, isMonster: true, isTurret: false, isMinion: false,
@@ -27438,18 +27453,24 @@ function destroyInhibitor(inhibitor) {
   console.log(`[INHIBITOR] ${inhibitor.team} 억제기 파괴! ${INHIBITOR_RESPAWN_SEC}초 후 재생성`);
   const labelKey = `${inhibitor.team} inhibitor`;
   if (inhibitor.labelDiv) inhibitor.labelDiv.style.opacity = '0.25';
-  if (inhibitor.usingRealModel) playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.death, { fade: 0.3, loopOnce: true });
-  else if (inhibitor.body && inhibitor.body.material) inhibitor.body.material.color = new THREE.Color(0x222222);
-  setTimeout(() => respawnInhibitor(inhibitor), INHIBITOR_RESPAWN_SEC * 1000);
+  if (inhibitor.usingRealModel) {
+    // 61차: 파괴 동작이 끝나면 부서진 채 대기하는 원작 클립(Inhibitor_idle_dead)으로 넘긴다 - 예전엔 마지막 프레임에 멈춰 있었다.
+    const a = playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.death, { fade: 0.3, loopOnce: true });
+    inhibitor._deadIdleAt = getTurretGameTimeSec() + (a ? a.getClip().duration : 1);
+  } else if (inhibitor.body && inhibitor.body.material) inhibitor.body.material.color = new THREE.Color(0x222222);
+  // 61차: 재생성까지 남은 시간을 포탑과 같은 게임 시계로 재서 이름표에 보인다.
+  inhibitor._respawnAt = getTurretGameTimeSec() + INHIBITOR_RESPAWN_SEC;
 }
 function respawnInhibitor(inhibitor) {
   inhibitor.destroyed = false;
+  inhibitor._respawnAt = null; inhibitor._deadIdleAt = null;
+  if (inhibitor.labelDiv) { const t = inhibitor.labelDiv.querySelector('.inhibTimer'); if (t) t.textContent = ''; }
   inhibitor.hp = inhibitor.maxHp;
   updateInhibitorVisual(inhibitor);
   if (inhibitor.labelDiv) inhibitor.labelDiv.style.opacity = '1';
   const labelKey = `${inhibitor.team} inhibitor`;
   if (inhibitor.usingRealModel) {
-    const spawnAction = playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.spawn, { fade: 0.2, loopOnce: true });
+    const spawnAction = playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.respawn || INHIBITOR_MODEL_CLIPS.spawn, { fade: 0.2, loopOnce: true }); // 61차: 원작 재생성 클립
     if (spawnAction) {
       const dur = (spawnAction.getClip().duration / (spawnAction.timeScale || 1)) * 1000;
       setTimeout(() => playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.idle), dur);
@@ -27465,7 +27486,19 @@ function isTeamInhibitorDestroyed(team) {
   return inhibitorBuildings.some((i) => i.team === team && i.destroyed);
 }
 function updateInhibitorBuildingAnim(dt) {
+  const now = getTurretGameTimeSec();
   for (const i of inhibitorBuildings) {
+    if (i.destroyed && i._deadIdleAt != null && now >= i._deadIdleAt) { i._deadIdleAt = null; if (i.usingRealModel) playAssetClip(i, `${i.team} inhibitor`, INHIBITOR_MODEL_CLIPS.deadIdle, { fade: 0.2 }); }
+    if (i.destroyed && i._respawnAt != null) {
+      const left = i._respawnAt - now;
+      if (left <= 0) respawnInhibitor(i);
+      else if (i.labelDiv) {
+        let t = i.labelDiv.querySelector('.inhibTimer');
+        if (!t) { t = document.createElement('div'); t.className = 'inhibTimer'; t.style.cssText = 'font-size:10px;color:#ffd27a'; i.labelDiv.appendChild(t); }
+        const txt = `재생성 ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
+        if (t.textContent !== txt) t.textContent = txt;
+      }
+    }
     if (i.mixer) safeMixerUpdate(i.mixer, dt, `inhibitor:${i.team}`);
     if (i.label) i.label.position.set(0, i.labelHeight, 0); // 요청("고정") - 매 프레임 제자리 재확인
   }
@@ -28110,13 +28143,16 @@ function spawnMinionWave(team, gameTimeSec) {
 // 표시한다(이름표 없음, 테두리 선명하게).
 // 59차: 사용자 제공 미니언 GLB 크기 - 가렌(키 약 206 LoL)을 기준으로 원작 비율에 맞춘 월드 키(그룹 배율 1.82를 나누기 전).
 // 근거리·원거리는 챔피언 키의 절반 남짓, 대포는 조금 크고, 슈퍼는 챔피언과 비슷하다. 체력바는 그 머리 위에 붙는다.
-const MINION_MODEL_HEIGHT_WORLD = { melee: 1.0, caster: 0.95, siege: 1.2, super: 1.8 };
-const MINION_GROUP_SCALE = 1.82;
-const MINION_HEAD_HEIGHT = Object.fromEntries(Object.entries(MINION_MODEL_HEIGHT_WORLD).map(([k, h]) => [k, h / MINION_GROUP_SCALE]));
+// 61차: 위 표 대신 원작 크기 규칙(원본 × LoL 100)으로 바뀌었다 - 실제 키(LoL): 근거리 88~105, 원거리 79~82, 대포 113~114,
+// 슈퍼 132~140(가렌 208). 아래 표는 모델이 없을 때(임시 도형)와 투사체 높이에만 쓴다.
+const MINION_MODEL_HEIGHT_WORLD = { melee: 0.8, caster: 0.7, siege: 1.0, super: 1.18 };
 // 원작 충돌 반경(LoL): 근거리·원거리 48, 대포·슈퍼 65.
 const MINION_GAMEPLAY_RADIUS_LOL = { melee: 48, caster: 48, siege: 65, super: 65 };
 // 원작 원거리 미니언 투사체 속도(LoL/초): 원거리 650, 대포 1200.
 const MINION_MISSILE_SPEED_LOL = { caster: 650, siege: 1200 };
+// 61차: 원작 기본 공격 시전 시점(LeagueSandbox Spells SRU_OrderMinion*BasicAttack CastFrame / 30fps) - 원거리 14.1 → 0.47초,
+// 대포 9 → 0.30초. 근거리·슈퍼는 데이터가 없어 클립 중간 지점.
+const MINION_CAST_TIME_SEC = { caster: 14.1 / 30, siege: 9 / 30 };
 const MINION_HEALTHBAR_CANVAS_W = 64, MINION_HEALTHBAR_CANVAS_H = 8;
 const MINION_HEALTHBAR_NEAR_DIST = 14;   // 이 거리 안 - 100% 표시(요청 21-F)
 const MINION_HEALTHBAR_MID_DIST = 26;    // 중간 거리 - 70~80%
@@ -28180,9 +28216,10 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
   const stats = getMinionStats(type, gameTimeSec);
   const assetKey = team.toLowerCase() + type[0].toUpperCase() + type.slice(1);
   const asset = minionBuildingAssets[assetKey];
-  let group, body, mixer = null, actions = null, usingRealModel = false;
+  let group, body, mixer = null, actions = null, usingRealModel = false, modelHeight = null;
   if (asset) {
-    const inst = instantiateMinionBuildingAsset(assetKey, MINION_HEAD_HEIGHT[type]); // 59차: 종류별 원작 비율 키로 맞춘다
+    const inst = instantiateMinionBuildingAsset(assetKey, null, true, STRUCTURE_MINION_GLB_SCALE()); // 61차: 원작 크기(원본 × LoL 100, SkinScale 1)
+    modelHeight = inst.height;
     // 59차: inst.root(키를 맞춘 배율이 걸린 모델)를 회전 전용 자식으로 두고, 바깥 group에는 위치·공통 배율·체력바만
     // 준다. 예전엔 group = inst.root라 아래 group.scale(1.82)이 키 맞춤 배율을 덮어썼고, 방향 전환(lookAt)도 스킨 메시
     // 자체에 걸려(스킨 메시는 뼈대가 그리므로) 실제로는 돌지 않았다.
@@ -28197,6 +28234,7 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
     body = new THREE.Mesh(shape, mat);
     body.position.y = 0.5; body.castShadow = true;
+    body.scale.setScalar(0.55); body.position.y *= 0.55; // 61차: 그룹 배율(예전 1.82)을 없앤 만큼 임시 도형만 원작 크기 근처로
     group = new THREE.Group(); group.add(body);
   }
   // 버그 수정("hp바가 제자리에서 벗어나는 버그... 아예 지정대상한테
@@ -28205,21 +28243,21 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
   // 측정되면 실제 Idle/Walk 포즈의 실루엣과 달라 체력바가 살짝 어긋나
   // 보였다. 미니언 종류별 고정 높이표(MINION_HEAD_HEIGHT)를 쓰는 걸로
   // 바꿔서 절대 흔들리지 않게 했다.
-  const headY = (MINION_HEAD_HEIGHT[type] || 0.55) + 0.08;
+  const headY = (modelHeight || MINION_MODEL_HEIGHT_WORLD[type] || 0.8) + 0.12; // 61차: 실제 모델 키 바로 위
   group.position.copy(position);
   scene.add(group);
   group.add(createBlobShadow(0.32)); // 최적화(문서 4-7절): 실시간 그림자 대신 값싼 blob 그림자
-  const healthBar = createMinionHealthBar(group, type === 'super' ? 0.21 : (type === 'siege' ? 0.18 : 0.15), headY); // 59차: 몸 폭에 맞춘 얇은 바
+  const healthBar = createMinionHealthBar(group, type === 'super' ? 0.38 : (type === 'siege' ? 0.32 : 0.27), headY); // 61차: 원작 비율 모델 폭에 맞춘 얇은 바
   // 요청("미니언 크기를 1.4배 키워줘") - 몸체/체력바/그림자를 전부 만든
   // "뒤에" group 전체를 균일 확대한다. 먼저 스케일부터 걸면 자식으로
   // 추가되는 체력바/그림자까지 부모 스케일과 이중으로 곱해져서 위치와
   // 크기가 어긋난다 - 순서를 반드시 이렇게 지켜야 한다.
   // 요청("미니언 1.3배정도 크기를 키워줘") - 기존 1.4배에 추가로 1.3배 더 확대(1.4*1.3=1.82).
-  const MINION_SCALE = MINION_GROUP_SCALE;
+  const MINION_SCALE = 1; // 61차: 모델이 이미 원작 크기 - 그룹 배율 없음
   group.scale.setScalar(MINION_SCALE);
   const minion = {
     mesh: group, body, type, minionType: type, team,
-    mixer, actions, currentAction: null, currentClipName: null, usingRealModel,
+    mixer, actions, currentAction: null, currentClipName: null, usingRealModel, modelHeight,
     attackClipSequence: (MINION_ATTACK_CLIPS[type] && MINION_ATTACK_CLIPS[type][team]) || [], attackClipIndex: 0,
     isMinion: true, isChampion: false, isMonster: true, isTrainingDummy: false, isTurret: false,
     hp: stats.hp, maxHp: stats.maxHp, armor: stats.armor, magicResist: stats.magicResist,
@@ -28329,11 +28367,13 @@ function isValidChampionTarget(minion, champion) {
 //   그다음 구조물(포탑 → 억제기 → 넥서스, 원작처럼 공격 사거리 안일 때).
 // 허수아비(연습용 표적)는 RED 챔피언으로서 도움 요청을 받지만, BLUE 미니언이 스스로 때리러 가지는 않는다(연습 표적이 웨이브에
 // 녹아 버리지 않게).
+// 61차: 원작 데이터(LeagueSandbox-Default Stats SRU_*Minion*의 AcquisitionRange) - 원거리 700, 슈퍼 600, 나머지는 500.
 const MINION_ACQUISITION_RANGE_LOL = 500;
+const MINION_ACQUISITION_BY_TYPE_LOL = { caster: 700, super: 600 };
 const MINION_CALL_FOR_HELP_MS = 3000;
 const MINION_CHAMPION_ATTACKED_MINION_MS = 2000;
 function minionAcquireRangeWorld(minion, target) {
-  return lolRangeToWorld(Math.max(MINION_ACQUISITION_RANGE_LOL, minion.attackRange || 0)) + getCollisionRadius(minion) + getCollisionRadius(target);
+  return lolRangeToWorld(Math.max(MINION_ACQUISITION_BY_TYPE_LOL[minion.type] || MINION_ACQUISITION_RANGE_LOL, minion.attackRange || 0)) + getCollisionRadius(minion) + getCollisionRadius(target);
 }
 function isAliveEnemyForMinion(minion, target) {
   if (!target || target.isTrainingDummy || target.hp <= 0 || target.isDead || target.destroyed || target.isUntargetable) return false;
@@ -28439,6 +28479,27 @@ function resolvePlayerStructureCollisions(ctrl) {
     pos.z += (dz / dist) * push;
   }
 }
+// 61차: 챔피언과 미니언 몸 충돌(원작은 서로 길을 막는다). 예전엔 플레이어가 미니언을 그대로 통과했다. 원작 길찾기 반경
+// (플레이어 pathingRadius, 미니언 근거리·원거리 35.7 / 대포·슈퍼 55.7)이 겹친 만큼 둘이 반씩 밀려난다 - 한쪽만 밀면 웨이브
+// 속에서 플레이어가 갇히거나 미니언이 구조물로 밀려 들어간다. 유체화(닐라 W 등)·돌진 중에는 통과한다.
+const MINION_PATHING_RADIUS_LOL = { melee: 35.7, caster: 35.7, siege: 55.7, super: 55.5 };
+function resolvePlayerMinionCollisions(ctrl) {
+  if (typeof minions === 'undefined' || !minions.length || isGhosted(ctrl) || ctrl._dashState || ctrl.state === STATE.DEAD) return;
+  const pos = ctrl.root.position;
+  const pr = ctrl.pathingRadius != null ? ctrl.pathingRadius : ctrl.collisionRadius;
+  for (const m of minions) {
+    if (m.isDead) continue;
+    const mp = m.mesh.position;
+    let dx = pos.x - mp.x, dz = pos.z - mp.z;
+    const minDist = pr + lolRangeToWorld(MINION_PATHING_RADIUS_LOL[m.type] || 35.7);
+    let d = Math.hypot(dx, dz);
+    if (d >= minDist) continue;
+    if (d < 1e-4) { dx = 1; dz = 0; d = 1; }
+    const push = (minDist - d) * 0.5;
+    pos.x += (dx / d) * push; pos.z += (dz / d) * push;
+    mp.x -= (dx / d) * push; mp.z -= (dz / d) * push;
+  }
+}
 function resolveMinionStructureCollisions(minion) {
   const pos = minion.mesh.position;
   const structures = [...turrets, ...inhibitorBuildings, ...nexusBuildings].filter((s) => s.isStructure);
@@ -28480,11 +28541,13 @@ const MINION_SEPARATION_WEIGHT = 0.55; // 목표 방향 대비 분리력의 비�
 function computeFriendlySeparation(minion) {
   let fx = 0, fz = 0;
   for (const m of minions) {
-    if (m === minion || m.isDead || m.team !== minion.team) continue;
+    if (m === minion || m.isDead) continue;
     const dx = minion.mesh.position.x - m.mesh.position.x;
     const dz = minion.mesh.position.z - m.mesh.position.z;
     const distSq = dx * dx + dz * dz;
-    const minDist = minion.collisionRadius + m.collisionRadius + MINION_SEPARATION_RADIUS;
+    // 61차: 적 미니언과도 몸이 겹치지 않게 한다(예전엔 아군끼리만 떨어져 적 웨이브와 한 덩어리로 겹쳤다). 적과는 몸 크기만큼만
+    // 떨어지고(아군 간격 여유 없음), 아군끼리는 예전대로 여유를 둔다.
+    const minDist = minion.collisionRadius + m.collisionRadius + (m.team === minion.team ? MINION_SEPARATION_RADIUS : 0);
     if (distSq < 1e-6 || distSq > minDist * minDist) continue;
     const dist = Math.sqrt(distSq);
     const closeness = 1 - dist / minDist;
@@ -28620,7 +28683,7 @@ function updateMinionAttack(minion, dt) {
     const action = playAssetClip(minion, label, clipName, { fade: 0.06, loopOnce: true });
     if (action) {
       const clipDur = action.getClip().duration / (action.timeScale || 1);
-      hitDelaySec = Math.min(clipDur * 0.5, cycleTime * 0.85); // 요청 16: 실제 타격 프레임 근사(클립 중간 지점) - 공격 주기를 넘지 않게 clamp
+      hitDelaySec = Math.min(MINION_CAST_TIME_SEC[minion.type] != null ? MINION_CAST_TIME_SEC[minion.type] : clipDur * 0.5, cycleTime * 0.85); // 요청 16 + 61차: 원작 시전 프레임이 있으면 그 시점
     }
   }
   const applyHit = (target) => {
@@ -28658,7 +28721,7 @@ function updateMinionAttack(minion, dt) {
     const missileSpeedLol = MINION_MISSILE_SPEED_LOL[minion.type];
     if (!missileSpeedLol || typeof projectiles === 'undefined') { applyHit(target); return; }
     // 59차: 원거리·대포 미니언은 투사체를 쏜다(원작 속도 650/1200) - 날아가는 동안 대상이 죽으면 사라진다.
-    const from = minion.mesh.position.clone().add(new THREE.Vector3(0, (MINION_MODEL_HEIGHT_WORLD[minion.type] || 1) * 0.6, 0));
+    const from = minion.mesh.position.clone().add(new THREE.Vector3(0, (minion.modelHeight || MINION_MODEL_HEIGHT_WORLD[minion.type] || 1) * 0.6, 0));
     projectiles.spawn({ from, target, speed: lolRangeToWorld(missileSpeedLol), color: minion.team === 'BLUE' ? 0x9fd0ff : 0xffb08f,
       realmId: minion.realmId, team: minion.team, scale: minion.type === 'siege' ? 1.4 : 0.8, onHit: (t) => applyHit(t) });
   };
@@ -28760,7 +28823,18 @@ function updateMinionCombat(minion, dt) {
   // 버그 수정(기존 한계 "미니언은 CC에 반응하지 않음" 해소): 기절/공중에 뜸/제압/매혹 중에는
   // 이동·공격 모두 불가, 속박 중에는 이동만 불가(공격은 가능) - 챔피언과 같은 규칙.
   // 노틸러스 패시브/E, 리 신 R 충돌, 야스오 Q3, 요네 R 등으로 미니언이 실제로 멈춘다.
+  // 61차: 게임이 끝나면(넥서스 파괴) 미니언은 멈추고 이긴 팀은 Win, 진 팀은 Lose 동작을 한다.
+  if (gameEnded) {
+    if (minion.usingRealModel && !minion._endPlayed) {
+      const winner = nexusBuildings.some((n) => n.destroyed && n.team !== minion.team);
+      playAssetClip(minion, `${minion.team} ${minion.type} minion`, winner ? 'Win1' : 'Lose1', { fade: 0.2, loopOnce: true });
+      minion._endPlayed = true;
+    }
+    return;
+  }
   const minionStunned = typeof isStunned === 'function' && isStunned(minion);
+  // 61차: 기절·공중에 뜸 동안 Stunned 동작(원작 클립) - 예전엔 대기 자세로 서 있었다.
+  if (minionStunned && minion.usingRealModel && minion.actions) playAssetClip(minion, `${minion.team} ${minion.type} minion`, minion.actions.Stunned ? 'Stunned' : MINION_IDLE_CLIP, { fade: 0.1 }); // 클립이 없는 모델(블루 근거리 등)은 대기 자세
   const minionRooted = typeof isRooted === 'function' && isRooted(minion);
   if (!minionStunned && !minionRooted && !minion._pullState) updateMinionMovement(minion, dt);
   // 60차: 미니언도 챔피언처럼 맵 이동 범위 안에 묶는다 - 예전엔 챔피언을 쫓거나 밀려나다 다리 밖(허공)으로 걸어 나갈 수 있었다.
@@ -36261,7 +36335,12 @@ document.getElementById('minionAssetDropZone').addEventListener('drop', (e) => {
 // 감싸서, 월드 좌표는 그 바깥 컨테이너에만 준다) - 여기서도 똑같이 inner
 // (정렬 보정이 적용된 실제 GLB 루트)를 outer(월드 배치 전용 빈 그룹)로
 // 한 번 더 감싼다.
-function instantiateMinionBuildingAsset(assetKey, targetHeight = null, keepNativeGroundY = false) {
+// 61차: 원작 크기 규칙 - 사용자 제공 GLB는 챔피언과 같은 내보내기 규격(원본 1 = LoL 100)이다(가렌 원본 키 2.08 → 208, 원작
+// 데이터 189~206). 원작 데이터(LeagueSandbox-Default Stats: SRU_*Minion*, SRUAP_Turret_*, SRUAP_*Nexus/Inhibitor)에 SkinScale
+// 항목이 없어 기본값 1.0 - 그래서 미니언·포탑·억제기·넥서스 모두 원본 × lolRangeToWorld(100) 하나로 맞추면 챔피언과 원작 비율이 된다.
+// 예전엔 종류마다 임의의 목표 높이(포탑 3.6, 넥서스 9, 억제기 5, 미니언 표)로 늘리고 줄였다.
+const STRUCTURE_MINION_GLB_SCALE = () => lolRangeToWorld(100);
+function instantiateMinionBuildingAsset(assetKey, targetHeight = null, keepNativeGroundY = false, fixedScale = null) {
   const asset = minionBuildingAssets[assetKey];
   if (!asset) return null;
   const inner = cloneSkeleton(asset.gltf.scene);
@@ -36276,10 +36355,14 @@ function instantiateMinionBuildingAsset(assetKey, targetHeight = null, keepNativ
     // 그 파묻힐 부분까지 통째로 땅 위로 끌어올렸었다 - 그래서 받침대가
     // 그대로 노출되어 보였다. 여기서는 X/Z 중심만 맞추고 Y는 원본 그대로
     // 둬서(원점이 곧 지면) 받침대가 자동으로 땅속에 묻히게 한다.
-    const box0 = new THREE.Box3().setFromObject(inner);
-    const center0 = new THREE.Vector3(); box0.getCenter(center0);
-    inner.position.x -= center0.x;
-    inner.position.z -= center0.z;
+    // 61차: 원본 원점이 원작 배치 기준점(구조물 중심)이라 X/Z도 그대로 둔다 - 예전엔 bbox 중심으로 옮겨, 장식이 한쪽으로
+    // 치우친 억제기는 크리스탈이 옆으로 밀려 보였다(그래서 0.5 보정값을 따로 더하고 있었다).
+    if (fixedScale == null) {
+      const box0 = new THREE.Box3().setFromObject(inner);
+      const center0 = new THREE.Vector3(); box0.getCenter(center0);
+      inner.position.x -= center0.x;
+      inner.position.z -= center0.z;
+    }
     inner.updateMatrixWorld(true);
   } else {
     alignModelOrigin(inner); // inner.position을 발밑=Y0, X/Z 중심=0으로 보정
@@ -36328,7 +36411,10 @@ function instantiateMinionBuildingAsset(assetKey, targetHeight = null, keepNativ
   // 보이는 원인이다. targetHeight가 주어지면 실제 bounding box 높이를
   // 기준으로 outer 하나에만 균일 배율을 곱해 정확히 그 높이로 맞춘다
   // (outer의 원점이 곧 발밑이라 스케일을 줘도 땅에서 들뜨지 않는다).
-  if (targetHeight != null && height > 0.0001) {
+  if (fixedScale != null) {
+    outer.scale.setScalar(fixedScale);
+    height *= fixedScale; footprintRadius *= fixedScale;
+  } else if (targetHeight != null && height > 0.0001) {
     const scaleFactor = targetHeight / height;
     outer.scale.setScalar(scaleFactor);
     height = targetHeight;

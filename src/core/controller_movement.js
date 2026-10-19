@@ -184,6 +184,8 @@ CharacterController.prototype.updateMovement = function(dt) {
     // 겹침을 즉시 풀어준다(가만히 서 있다가 미니언에 밀려 구조물 안으로
     // 들어가는 경우도 막기 위함) - MOVE 상태 조기 return보다 먼저 실행.
     if (typeof resolvePlayerStructureCollisions === 'function') resolvePlayerStructureCollisions(this);
+    if (typeof resolvePlayerMinionCollisions === 'function') resolvePlayerMinionCollisions(this); // 61차: 미니언과 몸 충돌
+    if (typeof resolvePlayerStructureCollisions === 'function') resolvePlayerStructureCollisions(this); // 미니언에 밀려 구조물 안으로 들어가지 않게 한 번 더
     if (this.state !== STATE.MOVE || !this.targetPos) return;
     const pos = this.root.position;
     const toTarget = new THREE.Vector3().subVectors(this.targetPos, pos);

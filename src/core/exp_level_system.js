@@ -202,13 +202,16 @@ function spawnMinionWave(team, gameTimeSec) {
 // 표시한다(이름표 없음, 테두리 선명하게).
 // 59차: 사용자 제공 미니언 GLB 크기 - 가렌(키 약 206 LoL)을 기준으로 원작 비율에 맞춘 월드 키(그룹 배율 1.82를 나누기 전).
 // 근거리·원거리는 챔피언 키의 절반 남짓, 대포는 조금 크고, 슈퍼는 챔피언과 비슷하다. 체력바는 그 머리 위에 붙는다.
-const MINION_MODEL_HEIGHT_WORLD = { melee: 1.0, caster: 0.95, siege: 1.2, super: 1.8 };
-const MINION_GROUP_SCALE = 1.82;
-const MINION_HEAD_HEIGHT = Object.fromEntries(Object.entries(MINION_MODEL_HEIGHT_WORLD).map(([k, h]) => [k, h / MINION_GROUP_SCALE]));
+// 61차: 위 표 대신 원작 크기 규칙(원본 × LoL 100)으로 바뀌었다 - 실제 키(LoL): 근거리 88~105, 원거리 79~82, 대포 113~114,
+// 슈퍼 132~140(가렌 208). 아래 표는 모델이 없을 때(임시 도형)와 투사체 높이에만 쓴다.
+const MINION_MODEL_HEIGHT_WORLD = { melee: 0.8, caster: 0.7, siege: 1.0, super: 1.18 };
 // 원작 충돌 반경(LoL): 근거리·원거리 48, 대포·슈퍼 65.
 const MINION_GAMEPLAY_RADIUS_LOL = { melee: 48, caster: 48, siege: 65, super: 65 };
 // 원작 원거리 미니언 투사체 속도(LoL/초): 원거리 650, 대포 1200.
 const MINION_MISSILE_SPEED_LOL = { caster: 650, siege: 1200 };
+// 61차: 원작 기본 공격 시전 시점(LeagueSandbox Spells SRU_OrderMinion*BasicAttack CastFrame / 30fps) - 원거리 14.1 → 0.47초,
+// 대포 9 → 0.30초. 근거리·슈퍼는 데이터가 없어 클립 중간 지점.
+const MINION_CAST_TIME_SEC = { caster: 14.1 / 30, siege: 9 / 30 };
 const MINION_HEALTHBAR_CANVAS_W = 64, MINION_HEALTHBAR_CANVAS_H = 8;
 const MINION_HEALTHBAR_NEAR_DIST = 14;   // 이 거리 안 - 100% 표시(요청 21-F)
 const MINION_HEALTHBAR_MID_DIST = 26;    // 중간 거리 - 70~80%
@@ -272,9 +275,10 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
   const stats = getMinionStats(type, gameTimeSec);
   const assetKey = team.toLowerCase() + type[0].toUpperCase() + type.slice(1);
   const asset = minionBuildingAssets[assetKey];
-  let group, body, mixer = null, actions = null, usingRealModel = false;
+  let group, body, mixer = null, actions = null, usingRealModel = false, modelHeight = null;
   if (asset) {
-    const inst = instantiateMinionBuildingAsset(assetKey, MINION_HEAD_HEIGHT[type]); // 59차: 종류별 원작 비율 키로 맞춘다
+    const inst = instantiateMinionBuildingAsset(assetKey, null, true, STRUCTURE_MINION_GLB_SCALE()); // 61차: 원작 크기(원본 × LoL 100, SkinScale 1)
+    modelHeight = inst.height;
     // 59차: inst.root(키를 맞춘 배율이 걸린 모델)를 회전 전용 자식으로 두고, 바깥 group에는 위치·공통 배율·체력바만
     // 준다. 예전엔 group = inst.root라 아래 group.scale(1.82)이 키 맞춤 배율을 덮어썼고, 방향 전환(lookAt)도 스킨 메시
     // 자체에 걸려(스킨 메시는 뼈대가 그리므로) 실제로는 돌지 않았다.
@@ -289,6 +293,7 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
     body = new THREE.Mesh(shape, mat);
     body.position.y = 0.5; body.castShadow = true;
+    body.scale.setScalar(0.55); body.position.y *= 0.55; // 61차: 그룹 배율(예전 1.82)을 없앤 만큼 임시 도형만 원작 크기 근처로
     group = new THREE.Group(); group.add(body);
   }
   // 버그 수정("hp바가 제자리에서 벗어나는 버그... 아예 지정대상한테
@@ -297,21 +302,21 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
   // 측정되면 실제 Idle/Walk 포즈의 실루엣과 달라 체력바가 살짝 어긋나
   // 보였다. 미니언 종류별 고정 높이표(MINION_HEAD_HEIGHT)를 쓰는 걸로
   // 바꿔서 절대 흔들리지 않게 했다.
-  const headY = (MINION_HEAD_HEIGHT[type] || 0.55) + 0.08;
+  const headY = (modelHeight || MINION_MODEL_HEIGHT_WORLD[type] || 0.8) + 0.12; // 61차: 실제 모델 키 바로 위
   group.position.copy(position);
   scene.add(group);
   group.add(createBlobShadow(0.32)); // 최적화(문서 4-7절): 실시간 그림자 대신 값싼 blob 그림자
-  const healthBar = createMinionHealthBar(group, type === 'super' ? 0.21 : (type === 'siege' ? 0.18 : 0.15), headY); // 59차: 몸 폭에 맞춘 얇은 바
+  const healthBar = createMinionHealthBar(group, type === 'super' ? 0.38 : (type === 'siege' ? 0.32 : 0.27), headY); // 61차: 원작 비율 모델 폭에 맞춘 얇은 바
   // 요청("미니언 크기를 1.4배 키워줘") - 몸체/체력바/그림자를 전부 만든
   // "뒤에" group 전체를 균일 확대한다. 먼저 스케일부터 걸면 자식으로
   // 추가되는 체력바/그림자까지 부모 스케일과 이중으로 곱해져서 위치와
   // 크기가 어긋난다 - 순서를 반드시 이렇게 지켜야 한다.
   // 요청("미니언 1.3배정도 크기를 키워줘") - 기존 1.4배에 추가로 1.3배 더 확대(1.4*1.3=1.82).
-  const MINION_SCALE = MINION_GROUP_SCALE;
+  const MINION_SCALE = 1; // 61차: 모델이 이미 원작 크기 - 그룹 배율 없음
   group.scale.setScalar(MINION_SCALE);
   const minion = {
     mesh: group, body, type, minionType: type, team,
-    mixer, actions, currentAction: null, currentClipName: null, usingRealModel,
+    mixer, actions, currentAction: null, currentClipName: null, usingRealModel, modelHeight,
     attackClipSequence: (MINION_ATTACK_CLIPS[type] && MINION_ATTACK_CLIPS[type][team]) || [], attackClipIndex: 0,
     isMinion: true, isChampion: false, isMonster: true, isTrainingDummy: false, isTurret: false,
     hp: stats.hp, maxHp: stats.maxHp, armor: stats.armor, magicResist: stats.magicResist,
@@ -421,11 +426,13 @@ function isValidChampionTarget(minion, champion) {
 //   그다음 구조물(포탑 → 억제기 → 넥서스, 원작처럼 공격 사거리 안일 때).
 // 허수아비(연습용 표적)는 RED 챔피언으로서 도움 요청을 받지만, BLUE 미니언이 스스로 때리러 가지는 않는다(연습 표적이 웨이브에
 // 녹아 버리지 않게).
+// 61차: 원작 데이터(LeagueSandbox-Default Stats SRU_*Minion*의 AcquisitionRange) - 원거리 700, 슈퍼 600, 나머지는 500.
 const MINION_ACQUISITION_RANGE_LOL = 500;
+const MINION_ACQUISITION_BY_TYPE_LOL = { caster: 700, super: 600 };
 const MINION_CALL_FOR_HELP_MS = 3000;
 const MINION_CHAMPION_ATTACKED_MINION_MS = 2000;
 function minionAcquireRangeWorld(minion, target) {
-  return lolRangeToWorld(Math.max(MINION_ACQUISITION_RANGE_LOL, minion.attackRange || 0)) + getCollisionRadius(minion) + getCollisionRadius(target);
+  return lolRangeToWorld(Math.max(MINION_ACQUISITION_BY_TYPE_LOL[minion.type] || MINION_ACQUISITION_RANGE_LOL, minion.attackRange || 0)) + getCollisionRadius(minion) + getCollisionRadius(target);
 }
 function isAliveEnemyForMinion(minion, target) {
   if (!target || target.isTrainingDummy || target.hp <= 0 || target.isDead || target.destroyed || target.isUntargetable) return false;
@@ -531,6 +538,27 @@ function resolvePlayerStructureCollisions(ctrl) {
     pos.z += (dz / dist) * push;
   }
 }
+// 61차: 챔피언과 미니언 몸 충돌(원작은 서로 길을 막는다). 예전엔 플레이어가 미니언을 그대로 통과했다. 원작 길찾기 반경
+// (플레이어 pathingRadius, 미니언 근거리·원거리 35.7 / 대포·슈퍼 55.7)이 겹친 만큼 둘이 반씩 밀려난다 - 한쪽만 밀면 웨이브
+// 속에서 플레이어가 갇히거나 미니언이 구조물로 밀려 들어간다. 유체화(닐라 W 등)·돌진 중에는 통과한다.
+const MINION_PATHING_RADIUS_LOL = { melee: 35.7, caster: 35.7, siege: 55.7, super: 55.5 };
+function resolvePlayerMinionCollisions(ctrl) {
+  if (typeof minions === 'undefined' || !minions.length || isGhosted(ctrl) || ctrl._dashState || ctrl.state === STATE.DEAD) return;
+  const pos = ctrl.root.position;
+  const pr = ctrl.pathingRadius != null ? ctrl.pathingRadius : ctrl.collisionRadius;
+  for (const m of minions) {
+    if (m.isDead) continue;
+    const mp = m.mesh.position;
+    let dx = pos.x - mp.x, dz = pos.z - mp.z;
+    const minDist = pr + lolRangeToWorld(MINION_PATHING_RADIUS_LOL[m.type] || 35.7);
+    let d = Math.hypot(dx, dz);
+    if (d >= minDist) continue;
+    if (d < 1e-4) { dx = 1; dz = 0; d = 1; }
+    const push = (minDist - d) * 0.5;
+    pos.x += (dx / d) * push; pos.z += (dz / d) * push;
+    mp.x -= (dx / d) * push; mp.z -= (dz / d) * push;
+  }
+}
 function resolveMinionStructureCollisions(minion) {
   const pos = minion.mesh.position;
   const structures = [...turrets, ...inhibitorBuildings, ...nexusBuildings].filter((s) => s.isStructure);
@@ -572,11 +600,13 @@ const MINION_SEPARATION_WEIGHT = 0.55; // 목표 방향 대비 분리력의 비�
 function computeFriendlySeparation(minion) {
   let fx = 0, fz = 0;
   for (const m of minions) {
-    if (m === minion || m.isDead || m.team !== minion.team) continue;
+    if (m === minion || m.isDead) continue;
     const dx = minion.mesh.position.x - m.mesh.position.x;
     const dz = minion.mesh.position.z - m.mesh.position.z;
     const distSq = dx * dx + dz * dz;
-    const minDist = minion.collisionRadius + m.collisionRadius + MINION_SEPARATION_RADIUS;
+    // 61차: 적 미니언과도 몸이 겹치지 않게 한다(예전엔 아군끼리만 떨어져 적 웨이브와 한 덩어리로 겹쳤다). 적과는 몸 크기만큼만
+    // 떨어지고(아군 간격 여유 없음), 아군끼리는 예전대로 여유를 둔다.
+    const minDist = minion.collisionRadius + m.collisionRadius + (m.team === minion.team ? MINION_SEPARATION_RADIUS : 0);
     if (distSq < 1e-6 || distSq > minDist * minDist) continue;
     const dist = Math.sqrt(distSq);
     const closeness = 1 - dist / minDist;
@@ -712,7 +742,7 @@ function updateMinionAttack(minion, dt) {
     const action = playAssetClip(minion, label, clipName, { fade: 0.06, loopOnce: true });
     if (action) {
       const clipDur = action.getClip().duration / (action.timeScale || 1);
-      hitDelaySec = Math.min(clipDur * 0.5, cycleTime * 0.85); // 요청 16: 실제 타격 프레임 근사(클립 중간 지점) - 공격 주기를 넘지 않게 clamp
+      hitDelaySec = Math.min(MINION_CAST_TIME_SEC[minion.type] != null ? MINION_CAST_TIME_SEC[minion.type] : clipDur * 0.5, cycleTime * 0.85); // 요청 16 + 61차: 원작 시전 프레임이 있으면 그 시점
     }
   }
   const applyHit = (target) => {
@@ -750,7 +780,7 @@ function updateMinionAttack(minion, dt) {
     const missileSpeedLol = MINION_MISSILE_SPEED_LOL[minion.type];
     if (!missileSpeedLol || typeof projectiles === 'undefined') { applyHit(target); return; }
     // 59차: 원거리·대포 미니언은 투사체를 쏜다(원작 속도 650/1200) - 날아가는 동안 대상이 죽으면 사라진다.
-    const from = minion.mesh.position.clone().add(new THREE.Vector3(0, (MINION_MODEL_HEIGHT_WORLD[minion.type] || 1) * 0.6, 0));
+    const from = minion.mesh.position.clone().add(new THREE.Vector3(0, (minion.modelHeight || MINION_MODEL_HEIGHT_WORLD[minion.type] || 1) * 0.6, 0));
     projectiles.spawn({ from, target, speed: lolRangeToWorld(missileSpeedLol), color: minion.team === 'BLUE' ? 0x9fd0ff : 0xffb08f,
       realmId: minion.realmId, team: minion.team, scale: minion.type === 'siege' ? 1.4 : 0.8, onHit: (t) => applyHit(t) });
   };
@@ -852,7 +882,18 @@ function updateMinionCombat(minion, dt) {
   // 버그 수정(기존 한계 "미니언은 CC에 반응하지 않음" 해소): 기절/공중에 뜸/제압/매혹 중에는
   // 이동·공격 모두 불가, 속박 중에는 이동만 불가(공격은 가능) - 챔피언과 같은 규칙.
   // 노틸러스 패시브/E, 리 신 R 충돌, 야스오 Q3, 요네 R 등으로 미니언이 실제로 멈춘다.
+  // 61차: 게임이 끝나면(넥서스 파괴) 미니언은 멈추고 이긴 팀은 Win, 진 팀은 Lose 동작을 한다.
+  if (gameEnded) {
+    if (minion.usingRealModel && !minion._endPlayed) {
+      const winner = nexusBuildings.some((n) => n.destroyed && n.team !== minion.team);
+      playAssetClip(minion, `${minion.team} ${minion.type} minion`, winner ? 'Win1' : 'Lose1', { fade: 0.2, loopOnce: true });
+      minion._endPlayed = true;
+    }
+    return;
+  }
   const minionStunned = typeof isStunned === 'function' && isStunned(minion);
+  // 61차: 기절·공중에 뜸 동안 Stunned 동작(원작 클립) - 예전엔 대기 자세로 서 있었다.
+  if (minionStunned && minion.usingRealModel && minion.actions) playAssetClip(minion, `${minion.team} ${minion.type} minion`, minion.actions.Stunned ? 'Stunned' : MINION_IDLE_CLIP, { fade: 0.1 }); // 클립이 없는 모델(블루 근거리 등)은 대기 자세
   const minionRooted = typeof isRooted === 'function' && isRooted(minion);
   if (!minionStunned && !minionRooted && !minion._pullState) updateMinionMovement(minion, dt);
   // 60차: 미니언도 챔피언처럼 맵 이동 범위 안에 묶는다 - 예전엔 챔피언을 쫓거나 밀려나다 다리 밖(허공)으로 걸어 나갈 수 있었다.

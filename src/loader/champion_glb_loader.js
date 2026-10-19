@@ -1324,7 +1324,12 @@ document.getElementById('minionAssetDropZone').addEventListener('drop', (e) => {
 // 감싸서, 월드 좌표는 그 바깥 컨테이너에만 준다) - 여기서도 똑같이 inner
 // (정렬 보정이 적용된 실제 GLB 루트)를 outer(월드 배치 전용 빈 그룹)로
 // 한 번 더 감싼다.
-function instantiateMinionBuildingAsset(assetKey, targetHeight = null, keepNativeGroundY = false) {
+// 61차: 원작 크기 규칙 - 사용자 제공 GLB는 챔피언과 같은 내보내기 규격(원본 1 = LoL 100)이다(가렌 원본 키 2.08 → 208, 원작
+// 데이터 189~206). 원작 데이터(LeagueSandbox-Default Stats: SRU_*Minion*, SRUAP_Turret_*, SRUAP_*Nexus/Inhibitor)에 SkinScale
+// 항목이 없어 기본값 1.0 - 그래서 미니언·포탑·억제기·넥서스 모두 원본 × lolRangeToWorld(100) 하나로 맞추면 챔피언과 원작 비율이 된다.
+// 예전엔 종류마다 임의의 목표 높이(포탑 3.6, 넥서스 9, 억제기 5, 미니언 표)로 늘리고 줄였다.
+const STRUCTURE_MINION_GLB_SCALE = () => lolRangeToWorld(100);
+function instantiateMinionBuildingAsset(assetKey, targetHeight = null, keepNativeGroundY = false, fixedScale = null) {
   const asset = minionBuildingAssets[assetKey];
   if (!asset) return null;
   const inner = cloneSkeleton(asset.gltf.scene);
@@ -1339,10 +1344,14 @@ function instantiateMinionBuildingAsset(assetKey, targetHeight = null, keepNativ
     // 그 파묻힐 부분까지 통째로 땅 위로 끌어올렸었다 - 그래서 받침대가
     // 그대로 노출되어 보였다. 여기서는 X/Z 중심만 맞추고 Y는 원본 그대로
     // 둬서(원점이 곧 지면) 받침대가 자동으로 땅속에 묻히게 한다.
-    const box0 = new THREE.Box3().setFromObject(inner);
-    const center0 = new THREE.Vector3(); box0.getCenter(center0);
-    inner.position.x -= center0.x;
-    inner.position.z -= center0.z;
+    // 61차: 원본 원점이 원작 배치 기준점(구조물 중심)이라 X/Z도 그대로 둔다 - 예전엔 bbox 중심으로 옮겨, 장식이 한쪽으로
+    // 치우친 억제기는 크리스탈이 옆으로 밀려 보였다(그래서 0.5 보정값을 따로 더하고 있었다).
+    if (fixedScale == null) {
+      const box0 = new THREE.Box3().setFromObject(inner);
+      const center0 = new THREE.Vector3(); box0.getCenter(center0);
+      inner.position.x -= center0.x;
+      inner.position.z -= center0.z;
+    }
     inner.updateMatrixWorld(true);
   } else {
     alignModelOrigin(inner); // inner.position을 발밑=Y0, X/Z 중심=0으로 보정
@@ -1391,7 +1400,10 @@ function instantiateMinionBuildingAsset(assetKey, targetHeight = null, keepNativ
   // 보이는 원인이다. targetHeight가 주어지면 실제 bounding box 높이를
   // 기준으로 outer 하나에만 균일 배율을 곱해 정확히 그 높이로 맞춘다
   // (outer의 원점이 곧 발밑이라 스케일을 줘도 땅에서 들뜨지 않는다).
-  if (targetHeight != null && height > 0.0001) {
+  if (fixedScale != null) {
+    outer.scale.setScalar(fixedScale);
+    height *= fixedScale; footprintRadius *= fixedScale;
+  } else if (targetHeight != null && height > 0.0001) {
     const scaleFactor = targetHeight / height;
     outer.scale.setScalar(scaleFactor);
     height = targetHeight;
