@@ -32,6 +32,7 @@
     "src/rendering/skill_telegraph_system.js",
     "src/rendering/skill_aim_system.js",
     "src/rendering/status_indicator_system.js",
+    "src/rendering/champion_healthbar.js",
     "src/animation/attack_sequence.js",
     "src/animation/attack_impact.js",
     "src/animation/animation_sequence_player.js",

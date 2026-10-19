@@ -10375,6 +10375,79 @@ class StatusIndicatorSystem {
 }
 const statusIndicators = new StatusIndicatorSystem();
 
+/* ===== src/rendering/champion_healthbar.js ===== */
+/* ============================================================
+   67차 원작식 챔피언 체력바(내 챔피언·허수아비·아군 허수아비 공용)
+   ------------------------------------------------------------
+   예전엔 세 곳이 각자 다른 바를 그렸고, 체력이 줄면 초록→노랑→빨강으로 색이 바뀌었다(원작은 바뀌지 않는다). 원작처럼:
+   - 색은 "누구 것인가"로만 정한다: 내 챔피언 초록, 아군 파랑, 적 빨강.
+   - 왼쪽 레벨 칸, 체력 칸에 100마다 얇은 눈금·1000마다 굵은 눈금(최대 체력 + 보호막 기준 - 체력이 늘면 눈금이 촘촘해진다),
+     보호막은 체력 뒤에 흰 구간으로 이어 붙이고(체력+보호막이 최대 체력을 넘으면 바 전체가 그 합 기준), 맞으면 깎인 만큼 밝은
+     잔상이 잠깐 남는다. 아래에 자원 바(마나 파랑 / 분노 빨강 / 기류·투지 흰색, 자원이 없으면 숨김).
+   - 화면 크기 고정(CSS2D) - 확대·축소해도 같은 픽셀.
+   ============================================================ */
+const CHAMP_BAR_HP_WIDTH_PX = 104;
+function makeChampBarDiv(kind, name = '') {
+  const div = document.createElement('div');
+  div.className = `champBar ${kind}`;
+  div.innerHTML = `${name ? `<div class="cb-name">${name}</div>` : ''}`
+    + '<div class="cb-row"><div class="cb-lvl hpLevelBadge">1</div><div class="cb-main">'
+    + '<div class="cb-hp"><div class="cb-trail"></div><div class="cb-fill hpBarInner"></div><div class="cb-shield hpBarShield"></div><div class="cb-ticks"></div></div>'
+    + '<div class="cb-res champResourceBar"><div class="cb-resfill champResourceFill"></div></div>'
+    + '</div></div>';
+  return div;
+}
+// 값이 바뀐 것만 DOM에 쓴다(매 프레임 불러도 싸다).
+function updateChampBar(div, { hp, maxHp, shield = 0, level = null, resPct = null, resMode = 'hidden' }) {
+  if (!div) return;
+  const c = div._cb || (div._cb = {
+    fill: div.querySelector('.cb-fill'), trail: div.querySelector('.cb-trail'), shield: div.querySelector('.cb-shield'),
+    ticks: div.querySelector('.cb-ticks'), lvl: div.querySelector('.cb-lvl'), res: div.querySelector('.cb-res'), resFill: div.querySelector('.cb-resfill'),
+    hpPct: -1, shPct: -1, total: -1, level: null, resPct: null, resMode: null,
+  });
+  if (!c.fill) return;
+  const sh = Math.max(0, shield || 0);
+  const total = Math.max(maxHp || 0, (hp || 0) + sh) || 1;
+  const hpPct = Math.max(0, Math.min(100, (hp / total) * 100));
+  const shPct = Math.max(0, Math.min(100 - hpPct, (sh / total) * 100));
+  if (Math.abs(hpPct - c.hpPct) > 0.05) {
+    c.fill.style.width = `${hpPct}%`;
+    // 잔상: 줄어들 때만 늦게 따라온다(회복·리스폰은 즉시)
+    c.trail.style.transition = hpPct < c.hpPct ? '' : 'none';
+    c.trail.style.width = `${hpPct + shPct}%`;
+    c.hpPct = hpPct;
+  }
+  if (Math.abs(shPct - c.shPct) > 0.05) {
+    c.shield.style.left = `${hpPct}%`; c.shield.style.width = `${shPct}%`; c.shield.style.display = shPct > 0.05 ? '' : 'none';
+    c.shPct = shPct;
+  } else if (shPct > 0.05) c.shield.style.left = `${hpPct}%`;
+  const roundedTotal = Math.round(total);
+  if (roundedTotal !== c.total) {
+    const minor = CHAMP_BAR_HP_WIDTH_PX * 100 / total, major = CHAMP_BAR_HP_WIDTH_PX * 1000 / total;
+    c.ticks.style.setProperty('--tm', `${minor}px`); c.ticks.style.setProperty('--tM', `${major}px`);
+    c.ticks.classList.toggle('no-minor', minor < 3); c.ticks.classList.toggle('no-major', major < 4);
+    c.total = roundedTotal;
+  }
+  if (level != null && level !== c.level) { c.lvl.textContent = String(level); c.level = level; }
+  if (resMode !== c.resMode) {
+    c.res.style.display = resMode === 'hidden' ? 'none' : '';
+    c.resFill.className = `cb-resfill champResourceFill ${resMode}`;
+    c.resMode = resMode;
+  }
+  if (resPct != null && resPct !== c.resPct) { c.resFill.style.width = `${Math.max(0, Math.min(100, resPct))}%`; c.resPct = resPct; }
+}
+// 허수아비·아군 허수아비는 피해를 받을 때만 그리면 회복·보호막·리스폰이 바에 늦게 반영된다 - 매 프레임 확인한다(바뀐 것만 씀).
+function tickChampionBars() {
+  const list = [];
+  if (typeof dummy !== 'undefined' && dummy) list.push(dummy);
+  if (typeof placedDummies !== 'undefined') list.push(...placedDummies);
+  if (typeof placedAllies !== 'undefined') list.push(...placedAllies);
+  for (const d of list) {
+    if (!d || !d.labelDiv || !d.labelDiv._cb && !d.labelDiv.classList.contains('champBar')) continue;
+    updateChampBar(d.labelDiv, { hp: d.hp, maxHp: d.maxHp, shield: d.shield || 0, level: d.champLevel || 1 });
+  }
+}
+
 /* ===== src/animation/attack_sequence.js ===== */
 /* ============================================================
    0-A1c. ATTACK SEQUENCE (요청: 평타 모션 순서를 별도 데이터로 관리)
@@ -25760,76 +25833,24 @@ function updateBars(ch) {
   // HUD와 동시에 갱신한다. 실제 LoL처럼 체력 비율에 따라 초록→노랑→빨강.
   // 요청 21/22(문서 4절) 원칙 그대로: 값이 실제로 바뀌었을 때만 DOM에 쓴다.
   if (ch.healthBarLabelDiv) {
-    // 28차: 머리 위 체력 바에 보호막을 원작처럼 체력 뒤 흰 구간으로 붙인다. 체력+보호막이 최대 체력을 넘으면
-    // 바 전체가 (체력+보호막) 기준이 된다. 숫자는 머리 위 바에 쓰지 않는다(아래 HUD에만 표시).
-    const shield = Math.max(0, ch.shield || 0);
-    const total = Math.max(ch.maxHp || 0, (ch.hp || 0) + shield) || 1;
-    const pctNum = ch.maxHp ? Math.max(0, (ch.hp / ch.maxHp) * 100) : 0;
-    const barPct = Math.max(0, (ch.hp / total) * 100);
-    const worldHpPct = `${barPct}%|${shield}`;
-    if (_hudLast.worldHpPct !== worldHpPct) {
-      const bar = ch.healthBarLabelDiv.querySelector('.hpBarInner');
-      const shieldBar = ch.healthBarLabelDiv.querySelector('.hpBarShield');
-      if (shieldBar) { shieldBar.style.left = `${barPct}%`; shieldBar.style.width = `${(shield / total) * 100}%`; }
-      if (bar) {
-        bar.style.width = `${barPct}%`;
-        bar.style.background = pctNum > 50
-          ? 'linear-gradient(180deg,#70e35e 0%,#36b934 55%,#16851d 100%)'
-          : pctNum > 25
-            ? 'linear-gradient(180deg,#e0d35f 0%,#b89a2f 100%)'
-            : 'linear-gradient(180deg,#e0605f 0%,#9e2f2f 100%)';
-      }
-      _hudLast.worldHpPct = worldHpPct;
+    // 67차: 머리 위 바는 원작식 공용 바(champion_healthbar.js)가 그린다 - 체력 색은 바뀌지 않고(내 챔피언 초록), 보호막 흰 구간·
+    // 100/1000 눈금·피해 잔상·레벨 칸·자원 바. 자원: 마나 챔피언은 MP, 마나가 없는 챔피언은 특수 자원(레넥톤 분노 / 세트 투지 /
+    // 야스오 기류), 둘 다 없으면 숨김.
+    let resourcePct = 0, resourceMode = 'hidden';
+    if (ch.championId === 'renekton') {
+      resourcePct = Math.max(0, Math.min(100, ch._renekton?.rage || 0)); resourceMode = 'rage';
+    } else if (ch.championId === 'sett') {
+      const cd = ch._champData ? ch._champData() : null;
+      const maxFlow = cd ? ch.maxHp * (cd.W.gritMaxHpPercent / 100) : 0;
+      const flow = (ch._sett && ch._sett.grit) || 0;
+      resourcePct = maxFlow ? Math.max(0, Math.min(100, flow / maxFlow * 100)) : 0;
+      resourceMode = maxFlow > 0 ? 'flow' : 'hidden';
+    } else if (ch.championId === 'yasuo') {
+      resourcePct = Math.max(0, Math.min(100, ch._yasuo ? ch._yasuo.flow : 0)); resourceMode = 'flow';
+    } else if (Number(ch.maxMp) > 0) {
+      resourcePct = Math.max(0, Math.min(100, (ch.mp / ch.maxMp) * 100)); resourceMode = 'mana';
     }
-    const levelEl = ch.healthBarLabelDiv.querySelector('.hpLevelBadge');
-    if (levelEl) levelEl.textContent = String(ch.champLevel ?? ch.level ?? 18);
-
-    // 머리 위 체력바 바로 아래의 두 번째 바는 실제 챔피언 자원과 연동한다.
-    // 마나 챔피언은 현재 MP / 최대 MP 비율을 그대로 표시하고, 마나가 없는
-    // 챔피언은 기존 특수 자원(레넥톤 분노 / 세트 투지 / 야스오 기류)을
-    // 같은 위치에 표시한다. 숫자 텍스트는 표시하지 않는다.
-    // 버그 수정: 예전에는 이 자리가 yasuoFlowBar/yasuoFlowFill로 야스오
-    // 전용이라 다른 챔피언(마나 챔피언, 레넥톤/세트)은 머리 위에 두 번째
-    // 바가 아예 표시되지 않았다 - 범용 champResourceBar/champResourceFill로
-    // 교체해 모든 챔피언에서 동작하게 했다.
-    const resourceBar = ch.healthBarLabelDiv.querySelector('.champResourceBar');
-    const resourceFill = ch.healthBarLabelDiv.querySelector('.champResourceFill');
-    if (resourceBar && resourceFill) {
-      let resourcePct = 0;
-      let resourceMode = 'hidden';
-      if (ch.championId === 'renekton') {
-        resourcePct = Math.max(0, Math.min(100, ch._renekton?.rage || 0));
-        resourceMode = 'rage';
-      } else if (ch.championId === 'sett') {
-        const cd = ch._champData ? ch._champData() : null;
-        const maxFlow = cd ? ch.maxHp * (cd.W.gritMaxHpPercent / 100) : 0;
-        const flow = (ch._sett && ch._sett.grit) || 0;
-        resourcePct = maxFlow ? Math.max(0, Math.min(100, flow / maxFlow * 100)) : 0;
-        resourceMode = maxFlow > 0 ? 'flow' : 'hidden';
-      } else if (ch.championId === 'yasuo') {
-        const flow = ch._yasuo ? ch._yasuo.flow : 0;
-        resourcePct = Math.max(0, Math.min(100, flow));
-        resourceMode = 'flow';
-      } else if (Number(ch.maxMp) > 0) {
-        resourcePct = Math.max(0, Math.min(100, (ch.mp / ch.maxMp) * 100));
-        resourceMode = 'mana';
-      }
-
-      const resourceWidth = `${resourcePct}%`;
-      const resourceDisplay = resourceMode === 'hidden' ? 'none' : 'block';
-      if (_hudLast.worldResourceMode !== resourceMode) {
-        resourceFill.className = 'champResourceFill' + (resourceMode === 'mana' ? ' mana' : resourceMode === 'rage' ? ' rage' : resourceMode === 'flow' ? ' flow' : '');
-        _hudLast.worldResourceMode = resourceMode;
-      }
-      if (_hudLast.worldResourceWidth !== resourceWidth) {
-        resourceFill.style.width = resourceWidth;
-        _hudLast.worldResourceWidth = resourceWidth;
-      }
-      if (_hudLast.worldResourceDisplay !== resourceDisplay) {
-        resourceBar.style.display = resourceDisplay;
-        _hudLast.worldResourceDisplay = resourceDisplay;
-      }
-    }
+    updateChampBar(ch.healthBarLabelDiv, { hp: ch.hp, maxHp: ch.maxHp, shield: Math.max(0, ch.shield || 0), level: ch.champLevel ?? ch.level ?? 1, resPct: Math.round(resourcePct * 10) / 10, resMode: resourceMode });
   }
   // 요청: 보호막이 계산은 정상인데 화면에 아무 표시가 없어 "작동 안 하는
   // 것처럼" 보였다 - HP 바 뒤에 이어 붙는 빗금 무늬 세그먼트로 실제 보호막
@@ -26235,10 +26256,7 @@ function createDummyEnemy(position) {
   scene.add(group);
   group.add(createBlobShadow(bodyRadius * 2.2)); // 최적화(문서 4-7절): 실시간 그림자 대신 값싼 blob 그림자
 
-  const labelDiv = document.createElement('div');
-  labelDiv.id = 'enemyLabel';
-  labelDiv.className = 'champion'; // 요청("챔피언 체력바도 실제 롤 형식으로") - 미니언/포탑과 다른 챔피언 전용 스타일 적용
-  labelDiv.innerHTML = `<div class="champName">더미 타겟</div><div class="hpBarOuter"><div class="hpBarInner"></div></div>`;
+  const labelDiv = typeof makeChampBarDiv === 'function' ? makeChampBarDiv('enemy', '허수아비') : document.createElement('div'); // 67차: 원작식 공용 챔피언 바(적 = 빨강)
   const label = new CSS2DObject(labelDiv);
   label.position.set(0, dummyHeight + 0.15, 0); // 커진 키(dummyHeight)에 맞춰 자동으로 더 위로 올라감
   group.add(label);
@@ -26291,16 +26309,8 @@ function damageEnemy(enemy, dmg, result = null) {
   // 없고, 매번 다시 테스트할 수 있게 hp만 바닥에서 멈춘다.
   const minHp = enemy.isTrainingDummy ? Math.max(1, Math.round(enemy.maxHp * 0.02)) : 0;
   enemy.hp = Math.max(minHp, enemy.hp - dmg);
-  const pct = (enemy.hp / enemy.maxHp) * 100;
-  const hpBarInner = enemy.labelDiv.querySelector('.hpBarInner');
-  hpBarInner.style.width = pct + '%';
-  // 요청("챔피언 체력바도 실제 롤 형식으로") - 실제 LoL처럼 체력이 낮을수록
-  // 초록 → 노랑 → 빨강으로 바뀐다(챔피언 전용 스타일에만 적용).
-  if (enemy.labelDiv.classList.contains('champion')) {
-    hpBarInner.style.background = pct > 50 ? 'linear-gradient(180deg,#6fe06a,#2f9e2f)'
-      : pct > 25 ? 'linear-gradient(180deg,#e0d35f,#b89a2f)'
-      : 'linear-gradient(180deg,#e0605f,#9e2f2f)';
-  }
+  // 67차: 원작은 체력이 줄어도 바 색이 바뀌지 않는다 - 공용 바가 폭·잔상만 갱신한다.
+  if (typeof updateChampBar === 'function') updateChampBar(enemy.labelDiv, { hp: enemy.hp, maxHp: enemy.maxHp, shield: enemy.shield || 0, level: enemy.champLevel || 1 });
   enemy.body.material.emissive = new THREE.Color(0xff3333);
   enemy.body.material.emissiveIntensity = 0.8;
   setTimeout(() => { if (enemy.body.material) enemy.body.material.emissiveIntensity = 0; }, 120);
@@ -26310,9 +26320,7 @@ function damageEnemy(enemy, dmg, result = null) {
     if (controller && controller.currentTarget === enemy) { controller.currentTarget = null; targetRing.clear(); }
     setTimeout(() => {
       enemy.hp = enemy.maxHp; enemy.labelDiv.style.opacity = '1';
-      const bar = enemy.labelDiv.querySelector('.hpBarInner');
-      bar.style.width = '100%';
-      if (enemy.labelDiv.classList.contains('champion')) bar.style.background = 'linear-gradient(180deg,#6fe06a,#2f9e2f)';
+      if (typeof updateChampBar === 'function') updateChampBar(enemy.labelDiv, { hp: enemy.hp, maxHp: enemy.maxHp, level: enemy.champLevel || 1 });
     }, 4000);
   }
 }
@@ -26341,9 +26349,7 @@ function createAllyDummy(position) {
   scene.add(group);
   group.add(createBlobShadow(bodyRadius * 2.2));
 
-  const labelDiv = document.createElement('div');
-  labelDiv.className = 'champion';
-  labelDiv.innerHTML = `<div class="champName">아군 더미</div><div class="hpBarOuter" style="position:relative;"><div class="hpBarInner"></div><div class="hpBarShield" style="position:absolute;top:0;height:100%;background:#e8e8e8;opacity:0.85;"></div></div>`;
+  const labelDiv = typeof makeChampBarDiv === 'function' ? makeChampBarDiv('ally', '아군 더미') : document.createElement('div'); // 67차: 원작식 공용 챔피언 바(아군 = 파랑)
   const label = new CSS2DObject(labelDiv);
   label.position.set(0, dummyHeight + 0.15, 0);
   group.add(label);
@@ -26366,11 +26372,7 @@ function createAllyDummy(position) {
 
 function updateAllyDummyLabel(a) {
   if (!a || !a.labelDiv) return;
-  const total = Math.max(a.maxHp, a.hp + (a.shield || 0));
-  const hpBar = a.labelDiv.querySelector('.hpBarInner');
-  const shieldBar = a.labelDiv.querySelector('.hpBarShield');
-  if (hpBar) { hpBar.style.width = (a.hp / total * 100) + '%'; hpBar.style.background = 'linear-gradient(180deg,#6fb7ff,#2f6fbe)'; }
-  if (shieldBar) { shieldBar.style.left = (a.hp / total * 100) + '%'; shieldBar.style.width = ((a.shield || 0) / total * 100) + '%'; }
+  if (typeof updateChampBar === 'function') updateChampBar(a.labelDiv, { hp: a.hp, maxHp: a.maxHp, shield: a.shield || 0, level: a.champLevel || 1 });
 }
 
 function placeAllyAt(point) {
@@ -35122,11 +35124,7 @@ if (healDummyBtnEl) {
     if (!target) { console.log('[더미 회복] 대상 없음'); return; }
     target.hp = target.maxHp;
     if (target.labelDiv) {
-      const bar = target.labelDiv.querySelector('.hpBarInner');
-      if (bar) {
-        bar.style.width = '100%';
-        if (target.labelDiv.classList.contains('champion')) bar.style.background = 'linear-gradient(180deg,#6fe06a,#2f9e2f)';
-      }
+      if (typeof updateChampBar === 'function' && target.labelDiv.classList.contains('champBar')) updateChampBar(target.labelDiv, { hp: target.hp, maxHp: target.maxHp, shield: target.shield || 0, level: target.champLevel || 1 });
       target.labelDiv.style.opacity = '1';
     }
     console.log(`[더미 회복] ${unitLabel(target)} 체력을 ${target.maxHp}으로 전부 회복`);
@@ -35607,10 +35605,8 @@ async function bootstrapChampion(gltf, fileName) {
   // 초록/노랑/빨강)을 플레이어 자신의 머리 위에도 그대로 재사용한다.
   // 높이는 매 프레임 다시 재는 대신(미니언 드리프트 버그와 동일한 이유로
   // 위험) 모델 로드 직후 이 한 번만 측정한 bounding box를 그대로 쓴다.
-  const hpLabelDiv = document.createElement('div');
-  hpLabelDiv.id = 'enemyLabel';
-  hpLabelDiv.className = 'champion';
-  hpLabelDiv.innerHTML = `<div class="hpLevelBadge">18</div><div><div class="hpBarOuter" style="position:relative;"><div class="hpBarInner" style="background:linear-gradient(180deg,#70e35e 0%,#36b934 55%,#16851d 100%)"></div><div class="hpBarShield" style="position:absolute;top:0;left:0;width:0;height:100%;background:#e8e8e8;opacity:0.85;"></div></div><div class="champResourceBar"><div class="champResourceFill"></div></div></div>`;
+  // 67차: 원작식 공용 챔피언 바(champion_healthbar.js) - 내 챔피언은 초록.
+  const hpLabelDiv = makeChampBarDiv('self');
   const hpLabel3d = new CSS2DObject(hpLabelDiv);
   // 요청("챔피언 머리위 hp바가 챔피언을 너무 가려 좀더 위로") - 여유값을
   // 기존 위치에서 1.5만큼 더 올려 챔피언 머리 위에 확실히 표시한다.
@@ -37002,7 +36998,8 @@ function animate() {
     updateDyingMinions(dt);
     if (typeof updateMinions === 'function') updateMinions(dt);
     if (typeof rewardTick === 'function') rewardTick(dt);
-    if (typeof tickHudItemCooldowns === 'function') tickHudItemCooldowns(controller); // 63차: HUD 아이템 재사용 대기 표시 // 62차: 기본 골드 수급·떠오르는 골드 숫자 // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
+    if (typeof tickHudItemCooldowns === 'function') tickHudItemCooldowns(controller); // 63차: HUD 아이템 재사용 대기 표시
+    if (typeof tickChampionBars === 'function') tickChampionBars(); // 67차: 허수아비 체력바(회복·보호막·리스폰 즉시 반영) // 62차: 기본 골드 수급·떠오르는 골드 숫자 // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
     updateInhibitorBuildingAnim(dt);
     updateTurrets(dt); // 20차: 원작 위치에 배치한 포탑(공격·우물 회복/피해)
     updateNexusBuildingAnim(dt);

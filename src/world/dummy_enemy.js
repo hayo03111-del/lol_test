@@ -24,10 +24,7 @@ function createDummyEnemy(position) {
   scene.add(group);
   group.add(createBlobShadow(bodyRadius * 2.2)); // 최적화(문서 4-7절): 실시간 그림자 대신 값싼 blob 그림자
 
-  const labelDiv = document.createElement('div');
-  labelDiv.id = 'enemyLabel';
-  labelDiv.className = 'champion'; // 요청("챔피언 체력바도 실제 롤 형식으로") - 미니언/포탑과 다른 챔피언 전용 스타일 적용
-  labelDiv.innerHTML = `<div class="champName">더미 타겟</div><div class="hpBarOuter"><div class="hpBarInner"></div></div>`;
+  const labelDiv = typeof makeChampBarDiv === 'function' ? makeChampBarDiv('enemy', '허수아비') : document.createElement('div'); // 67차: 원작식 공용 챔피언 바(적 = 빨강)
   const label = new CSS2DObject(labelDiv);
   label.position.set(0, dummyHeight + 0.15, 0); // 커진 키(dummyHeight)에 맞춰 자동으로 더 위로 올라감
   group.add(label);
@@ -80,16 +77,8 @@ function damageEnemy(enemy, dmg, result = null) {
   // 없고, 매번 다시 테스트할 수 있게 hp만 바닥에서 멈춘다.
   const minHp = enemy.isTrainingDummy ? Math.max(1, Math.round(enemy.maxHp * 0.02)) : 0;
   enemy.hp = Math.max(minHp, enemy.hp - dmg);
-  const pct = (enemy.hp / enemy.maxHp) * 100;
-  const hpBarInner = enemy.labelDiv.querySelector('.hpBarInner');
-  hpBarInner.style.width = pct + '%';
-  // 요청("챔피언 체력바도 실제 롤 형식으로") - 실제 LoL처럼 체력이 낮을수록
-  // 초록 → 노랑 → 빨강으로 바뀐다(챔피언 전용 스타일에만 적용).
-  if (enemy.labelDiv.classList.contains('champion')) {
-    hpBarInner.style.background = pct > 50 ? 'linear-gradient(180deg,#6fe06a,#2f9e2f)'
-      : pct > 25 ? 'linear-gradient(180deg,#e0d35f,#b89a2f)'
-      : 'linear-gradient(180deg,#e0605f,#9e2f2f)';
-  }
+  // 67차: 원작은 체력이 줄어도 바 색이 바뀌지 않는다 - 공용 바가 폭·잔상만 갱신한다.
+  if (typeof updateChampBar === 'function') updateChampBar(enemy.labelDiv, { hp: enemy.hp, maxHp: enemy.maxHp, shield: enemy.shield || 0, level: enemy.champLevel || 1 });
   enemy.body.material.emissive = new THREE.Color(0xff3333);
   enemy.body.material.emissiveIntensity = 0.8;
   setTimeout(() => { if (enemy.body.material) enemy.body.material.emissiveIntensity = 0; }, 120);
@@ -99,9 +88,7 @@ function damageEnemy(enemy, dmg, result = null) {
     if (controller && controller.currentTarget === enemy) { controller.currentTarget = null; targetRing.clear(); }
     setTimeout(() => {
       enemy.hp = enemy.maxHp; enemy.labelDiv.style.opacity = '1';
-      const bar = enemy.labelDiv.querySelector('.hpBarInner');
-      bar.style.width = '100%';
-      if (enemy.labelDiv.classList.contains('champion')) bar.style.background = 'linear-gradient(180deg,#6fe06a,#2f9e2f)';
+      if (typeof updateChampBar === 'function') updateChampBar(enemy.labelDiv, { hp: enemy.hp, maxHp: enemy.maxHp, level: enemy.champLevel || 1 });
     }, 4000);
   }
 }

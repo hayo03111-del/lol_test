@@ -20,9 +20,7 @@ function createAllyDummy(position) {
   scene.add(group);
   group.add(createBlobShadow(bodyRadius * 2.2));
 
-  const labelDiv = document.createElement('div');
-  labelDiv.className = 'champion';
-  labelDiv.innerHTML = `<div class="champName">아군 더미</div><div class="hpBarOuter" style="position:relative;"><div class="hpBarInner"></div><div class="hpBarShield" style="position:absolute;top:0;height:100%;background:#e8e8e8;opacity:0.85;"></div></div>`;
+  const labelDiv = typeof makeChampBarDiv === 'function' ? makeChampBarDiv('ally', '아군 더미') : document.createElement('div'); // 67차: 원작식 공용 챔피언 바(아군 = 파랑)
   const label = new CSS2DObject(labelDiv);
   label.position.set(0, dummyHeight + 0.15, 0);
   group.add(label);
@@ -45,11 +43,7 @@ function createAllyDummy(position) {
 
 function updateAllyDummyLabel(a) {
   if (!a || !a.labelDiv) return;
-  const total = Math.max(a.maxHp, a.hp + (a.shield || 0));
-  const hpBar = a.labelDiv.querySelector('.hpBarInner');
-  const shieldBar = a.labelDiv.querySelector('.hpBarShield');
-  if (hpBar) { hpBar.style.width = (a.hp / total * 100) + '%'; hpBar.style.background = 'linear-gradient(180deg,#6fb7ff,#2f6fbe)'; }
-  if (shieldBar) { shieldBar.style.left = (a.hp / total * 100) + '%'; shieldBar.style.width = ((a.shield || 0) / total * 100) + '%'; }
+  if (typeof updateChampBar === 'function') updateChampBar(a.labelDiv, { hp: a.hp, maxHp: a.maxHp, shield: a.shield || 0, level: a.champLevel || 1 });
 }
 
 function placeAllyAt(point) {

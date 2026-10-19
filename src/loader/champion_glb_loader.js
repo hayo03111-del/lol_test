@@ -242,10 +242,8 @@ async function bootstrapChampion(gltf, fileName) {
   // 초록/노랑/빨강)을 플레이어 자신의 머리 위에도 그대로 재사용한다.
   // 높이는 매 프레임 다시 재는 대신(미니언 드리프트 버그와 동일한 이유로
   // 위험) 모델 로드 직후 이 한 번만 측정한 bounding box를 그대로 쓴다.
-  const hpLabelDiv = document.createElement('div');
-  hpLabelDiv.id = 'enemyLabel';
-  hpLabelDiv.className = 'champion';
-  hpLabelDiv.innerHTML = `<div class="hpLevelBadge">18</div><div><div class="hpBarOuter" style="position:relative;"><div class="hpBarInner" style="background:linear-gradient(180deg,#70e35e 0%,#36b934 55%,#16851d 100%)"></div><div class="hpBarShield" style="position:absolute;top:0;left:0;width:0;height:100%;background:#e8e8e8;opacity:0.85;"></div></div><div class="champResourceBar"><div class="champResourceFill"></div></div></div>`;
+  // 67차: 원작식 공용 챔피언 바(champion_healthbar.js) - 내 챔피언은 초록.
+  const hpLabelDiv = makeChampBarDiv('self');
   const hpLabel3d = new CSS2DObject(hpLabelDiv);
   // 요청("챔피언 머리위 hp바가 챔피언을 너무 가려 좀더 위로") - 여유값을
   // 기존 위치에서 1.5만큼 더 올려 챔피언 머리 위에 확실히 표시한다.
@@ -1637,7 +1635,8 @@ function animate() {
     updateDyingMinions(dt);
     if (typeof updateMinions === 'function') updateMinions(dt);
     if (typeof rewardTick === 'function') rewardTick(dt);
-    if (typeof tickHudItemCooldowns === 'function') tickHudItemCooldowns(controller); // 63차: HUD 아이템 재사용 대기 표시 // 62차: 기본 골드 수급·떠오르는 골드 숫자 // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
+    if (typeof tickHudItemCooldowns === 'function') tickHudItemCooldowns(controller); // 63차: HUD 아이템 재사용 대기 표시
+    if (typeof tickChampionBars === 'function') tickChampionBars(); // 67차: 허수아비 체력바(회복·보호막·리스폰 즉시 반영) // 62차: 기본 골드 수급·떠오르는 골드 숫자 // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
     updateInhibitorBuildingAnim(dt);
     updateTurrets(dt); // 20차: 원작 위치에 배치한 포탑(공격·우물 회복/피해)
     updateNexusBuildingAnim(dt);

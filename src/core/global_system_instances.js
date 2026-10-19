@@ -573,11 +573,7 @@ if (healDummyBtnEl) {
     if (!target) { console.log('[더미 회복] 대상 없음'); return; }
     target.hp = target.maxHp;
     if (target.labelDiv) {
-      const bar = target.labelDiv.querySelector('.hpBarInner');
-      if (bar) {
-        bar.style.width = '100%';
-        if (target.labelDiv.classList.contains('champion')) bar.style.background = 'linear-gradient(180deg,#6fe06a,#2f9e2f)';
-      }
+      if (typeof updateChampBar === 'function' && target.labelDiv.classList.contains('champBar')) updateChampBar(target.labelDiv, { hp: target.hp, maxHp: target.maxHp, shield: target.shield || 0, level: target.champLevel || 1 });
       target.labelDiv.style.opacity = '1';
     }
     console.log(`[더미 회복] ${unitLabel(target)} 체력을 ${target.maxHp}으로 전부 회복`);
