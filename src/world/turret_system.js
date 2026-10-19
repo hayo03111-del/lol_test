@@ -172,7 +172,7 @@ function isTurretChampionUnit(u) { return !!(u && (u.isChampion || typeof u.cham
 // 적 챔피언을 노린다 - 미니언을 치던 중이어도 바꾼다. 4초 동안 유지(그 사이 사거리 밖으로 나가면 풀린다).
 const TURRET_CALL_FOR_HELP_SEC = 4;
 function notifyTurretsChampionAttacked(attacker, victim) {
-  if (!attacker || !victim || !attacker.team || !victim.team || attacker.team === victim.team) return;
+  if (!attacker || attacker.isTrainingDummy || !victim || !attacker.team || !victim.team || attacker.team === victim.team) return;
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
   for (const t of turrets) {
     if (t.team !== victim.team || t.destroyed || !t.isStructure) continue;
@@ -187,8 +187,27 @@ function notifyChampionAttackedChampion(attacker, victim) {
   notifyTurretsChampionAttacked(attacker, victim);
   if (typeof notifyMinionsChampionAttacked === 'function') notifyMinionsChampionAttacked(attacker, victim);
 }
+// 60차 구조물 보호(원작): 라인 순서대로 앞 구조물이 깨져야 다음 구조물을 공격할 수 있다 - 외곽 포탑 → 억제기 포탑 →
+// 억제기 → 넥서스 포탑 2개 → 넥서스. 보호 중인 구조물은 피해를 받지 않고, 미니언·포탑의 공격 대상도 아니다. 예전엔 처음부터
+// 넥서스까지 바로 때릴 수 있었다. 억제기가 다시 살아나면 넥서스 포탑도 다시 보호된다.
+function isStructureProtected(s) {
+  if (!s || !s.team || s.destroyed) return false;
+  const team = s.team;
+  const alive = (pred) => turrets.some((t) => t.team === team && !t.destroyed && pred(t));
+  const inhibAlive = inhibitorBuildings.some((i) => i.team === team && !i.destroyed);
+  if (s.isTurret) {
+    if (s.type === TURRET_TYPE.OUTER1 || s.type === TURRET_TYPE.NEXUS_WELL) return false;
+    if (s.type === TURRET_TYPE.INHIBITOR) return alive((t) => t.type === TURRET_TYPE.OUTER1);
+    if (s.type === TURRET_TYPE.NEXUS_TWIN) return alive((t) => t.type === TURRET_TYPE.OUTER1 || t.type === TURRET_TYPE.INHIBITOR) || inhibAlive;
+    return false;
+  }
+  if (s.isInhibitor) return alive((t) => t.type === TURRET_TYPE.OUTER1 || t.type === TURRET_TYPE.INHIBITOR);
+  if (s.isNexus) return alive((t) => t.type !== TURRET_TYPE.NEXUS_WELL); // 넥서스 포탑까지 다 깨지면(그 뒤 억제기가 살아나도) 공격 가능
+  return false;
+}
 function isValidTurretTarget(turret, target) {
   if (!target || target.hp <= 0 || target.isDead || target.destroyed || target.state === STATE.DEAD) return false;
+  if (target.isTrainingDummy) return false; // 60차: 허수아비(연습 표적)는 포탑도 노리지 않는다
   if (target.isUntargetable) return false; // 무적/대상 지정 불가(요청 13 단서, 22 단서)
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
   return getHorizontalDistance(getWorldPosition(turret), getWorldPosition(target)) <= range + getCollisionRadius(target);
@@ -320,6 +339,7 @@ function getTurretDamage(turret, target) {
 function applyDamageToTurret(turret, result, sourceInfo = {}) {
   const data = TURRET_DATA[turret.type];
   if (!turret || turret.destroyed || data.indestructible) return 0;
+  if (isStructureProtected(turret)) return 0; // 60차: 앞 구조물이 살아 있으면 무적
   // 죽음의 세계 격리(명세 9절 "포탑 생성/영향 금지"의 반대 방향 - 죽음의
   // 세계 안에 있는 챔피언도 메인 월드 포탑에 피해를 줄 수 없다): 실제로는
   // 플레이어가 이미 멀리 떨어진 죽음의 세계 구역으로 이동해 있어 사거리
@@ -622,6 +642,7 @@ function updateTurretTraitBadges(turret, dt) {
   const now = getTurretGameTimeSec();
   const badges = [];
   const fmt = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+  if (isStructureProtected(turret)) badges.push(['#c9c9c9', '무적(앞 포탑 생존)']);
   if (isFortificationActive(turret, now)) badges.push(['#d9b15a', `요새화 ${fmt(data.fortificationEndSec - now)}`]);
   if (data.hasShield && isShieldActive(turret)) badges.push(['#7fb3e6', '방패']);
   if (turret.bastionEndsAt && now < turret.bastionEndsAt) badges.push(['#a98be0', `방벽 ${Math.ceil(turret.bastionEndsAt - now)}초`]);
@@ -891,6 +912,7 @@ function createNexusBuilding(position, team = 'RED', radiusWorld = null) {
 }
 function applyDamageToNexus(nexus, result) {
   if (!nexus || nexus.destroyed) return 0;
+  if (isStructureProtected(nexus)) return 0; // 60차: 넥서스 포탑·억제기가 남아 있으면 무적
   const finalDmg = calculateDamage({ ...result, target: nexus });
   nexus.hp = Math.max(0, nexus.hp - finalDmg);
   if (nexus.labelDiv) {
@@ -1011,6 +1033,7 @@ function updateInhibitorVisual(inhibitor) {
 }
 function applyDamageToInhibitor(inhibitor, result) {
   if (!inhibitor || inhibitor.destroyed) return 0;
+  if (isStructureProtected(inhibitor)) return 0; // 60차: 억제기 포탑이 남아 있으면 무적
   // 요청("방어력이 제대로 작동하게") - 실제 LoL 위키: "방어구 관통은
   // 억제기의 방어력에 영향을 주지 않는다." 공격자가 armorPenPercent를
   // 실어 보내도(방어구 관통 아이템/스킬) 여기서 강제로 0으로 덮어써서

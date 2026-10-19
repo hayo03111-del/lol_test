@@ -1,7 +1,7 @@
 // 59차 포탑·미니언·챔피언 상호작용 점검(헤드리스 Chromium + 저장소 모델): 구조물·미니언 GLB 14개 로드, 스킬 피해는 포탑에
 // 안 들어감(평타는 들어감), 포탑 가열(+40%씩 3단계, 대상 바뀌면 초기화)과 실제 연속 사격 피해 증가, 30% 관통, 미니언 %피해,
 // 도움 요청(허수아비를 때리면 포탑·적 미니언이 플레이어로 돌아섬), 미니언끼리 교전·원거리 투사체, 미니언 어그로(인식 범위),
-// 막타 골드 규칙, 웨이브 경로, 특성 배지, 콘솔 오류.
+// 막타 골드 규칙, 웨이브 경로, 특성 배지, (60차) 허수아비 무시·구조물 보호 순서, 콘솔 오류.
 // 사용법: THREE_DIR=<three package> E2E_HIDE_MAP=1 node tools/e2e_glb/structure_minion_check.js [스크린샷 폴더]
 const path = require('path');
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
@@ -175,6 +175,33 @@ const startServer = require('./server.js');
   await page.evaluate(() => { const E = window.__e2e, c = window.controller, t = window.__redOuter(); window.__clearMinions(); c.root.position.copy(E.getWorldPosition(t)).add(new E.THREE.Vector3(0, 0, -E.lolRangeToWorld(650))); E.cameraRig.distance = 14; });
   await sleep(3500);
   await page.screenshot({ path: path.join(shotDir, 'turret_heat.png') });
+  // 7) 60차: 허수아비는 어느 팀 미니언·포탑도 노리지 않는다
+  r.dummyIgnored = await page.evaluate(async () => {
+    const E = window.__e2e, c = window.controller, V = (x, z) => new E.THREE.Vector3(x, 0, z);
+    window.__clearMinions(); window.__resetPlayer(E.getTeamSpawnPosition('BLUE'));
+    const d = E.dummies[0]; d.hp = d.maxHp = 1e5; d.mesh.position.set(0, 0, 0);
+    const now = E.getTurretGameTimeSec();
+    const ms = [E.createMinion('melee', V(0.8, 0.6), now, 'BLUE'), E.createMinion('caster', V(-0.8, -1.5), now, 'BLUE'), E.createMinion('melee', V(-0.8, 0.6), now, 'RED'), E.createMinion('caster', V(0.8, 1.5), now, 'RED')];
+    // 서로 싸우지 않게 같은 팀끼리만 둔 상태를 각각 확인
+    E.minions.push(ms[0], ms[1]); await new Promise((res) => setTimeout(res, 1500));
+    const blueTargets = ms.slice(0, 2).map((m) => m.attackTarget && m.attackTarget.isTrainingDummy);
+    window.__clearMinions(); E.minions.push(ms[2], ms[3]); ms[2].isDead = ms[3].isDead = false; await new Promise((res) => setTimeout(res, 1500));
+    const redTargets = ms.slice(2).map((m) => m.attackTarget && m.attackTarget.isTrainingDummy);
+    const out = { blueTargetsDummy: blueTargets, redTargetsDummy: redTargets, dummyDamage: Math.round(1e5 - d.hp), validForMinion: E.isValidMinionTarget(ms[0], d), validForTurret: E.isValidTurretTarget(E.turrets.find((t) => t.team === 'BLUE' && t.type === 'outer1'), d) };
+    window.__clearMinions(); d.mesh.position.set(40, 0, 40);
+    return out;
+  });
+  // 8) 60차 구조물 보호: 외곽 포탑이 살아 있으면 억제기 포탑·억제기·넥서스 포탑·넥서스는 무적, 외곽이 깨지면 억제기 포탑부터 공격 가능
+  r.protection = await page.evaluate(() => {
+    const E = window.__e2e, c = window.controller;
+    const T = (type) => E.turrets.find((t) => t.team === 'RED' && t.type === type);
+    const hit = (u) => E.applyDamage(u, { rawDamage: 300, damageType: 'PHYSICAL', isCritical: false, critMultiplier: 1, isBasicAttack: true, source: c });
+    const inh = E.inhibitorBuildings.find((i) => i.team === 'RED'), nx = E.nexusBuildings.find((n) => n.team === 'RED');
+    const before = { inhibTurret: hit(T('inhibitor')), inhibitor: hit(inh), nexusTurret: hit(T('nexusTwin')), nexus: hit(nx), badge: T('inhibitor').traitsDiv ? T('inhibitor').traitsDiv.textContent : '' };
+    const outer = T('outer1'); outer.hp = 1; E.applyDamageToTurret(outer, { rawDamage: 1e4, damageType: 'TRUE', isCritical: false, critMultiplier: 1, isBasicAttack: true }, { source: c });
+    const after = { outerDestroyed: outer.destroyed, inhibTurret: Math.round(hit(T('inhibitor'))), inhibitor: hit(inh), nexus: hit(nx) };
+    return { before, after };
+  });
   r.errors = errors;
   console.log(JSON.stringify(r, null, 1));
   await browser.close(); srv.close();

@@ -163,6 +163,10 @@ function shouldSpawnSuperMinion(team) {
 // 스폰한다. 좌표는 그 팀의 실제 웨이포인트 진행 방향(전진 방향 단위벡터)을
 // 그대로 읽어서 자동으로 결정한다(하드코딩 금지 - 요청 8-D 단서).
 const MINION_SPAWN_STAGGER_MS = 650;
+// 60차: 미니언 소환 간격·공격 타격 시점을 실제 시간(setTimeout)이 아니라 게임 루프 시간(minionSimTime, dt 누적)으로 잰다.
+// 예전엔 일시정지 중에도 미니언이 나오고 예약된 타격이 들어갔으며, 공격 도중 죽은 미니언의 타격도 그대로 들어갔다.
+let minionSimTime = 0;
+let pendingMinionSpawns = [];
 function spawnMinionWave(team, gameTimeSec) {
   const waveIndex = team === 'RED' ? ++redMinionWaveCounter : ++minionWaveCounter;
   const spawnPoint = getMinionSpawnPoint(team);
@@ -182,7 +186,7 @@ function spawnMinionWave(team, gameTimeSec) {
     // 일렬로 겹쳐 생겨서 넥서스 충돌 원 안에서 튕겨 나왔다.
     const lateral = new THREE.Vector3(-forward.z, 0, forward.x).multiplyScalar((idx % 2 === 0 ? -1 : 1) * 0.25);
     const pos = spawnPoint.clone().add(lateral);
-    setTimeout(() => { if (!gameEnded) minions.push(createMinion(type, pos, gameTimeSec, team)); }, idx * MINION_SPAWN_STAGGER_MS);
+    pendingMinionSpawns.push({ at: minionSimTime + idx * MINION_SPAWN_STAGGER_MS / 1000, type, pos, gameTimeSec, team }); // 60차: 게임 시간 기준(일시정지 중엔 안 나온다)
   });
   console.log(`[MINION] ${team} Wave ${waveIndex} (t=${gameTimeSec.toFixed(0)}s):`, composition.join(', '));
 }
@@ -335,6 +339,8 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
 function isValidMinionTarget(minion, target) {
   if (!target || target.hp <= 0 || target.isDead || target.destroyed) return false;
   if (target.isUntargetable) return false;
+  if (target.isTrainingDummy) return false; // 60차: 허수아비(연습 표적)는 어느 팀 미니언도 때리지 않는다
+  if (target.isStructure && typeof isStructureProtected === 'function' && isStructureProtected(target)) return false; // 60차: 무적 구조물은 지나친다
   // team 필드가 있는 대상(미니언/포탑/억제기/넥서스)은 반드시 서로 다른 팀이어야
   // 유효한 적이다 - 같은 편은 아예 공격 후보에서 제외한다(요청 10).
   if (target.team && target.team === minion.team) return false;
@@ -422,7 +428,7 @@ function minionAcquireRangeWorld(minion, target) {
   return lolRangeToWorld(Math.max(MINION_ACQUISITION_RANGE_LOL, minion.attackRange || 0)) + getCollisionRadius(minion) + getCollisionRadius(target);
 }
 function isAliveEnemyForMinion(minion, target) {
-  if (!target || target.hp <= 0 || target.isDead || target.destroyed || target.isUntargetable) return false;
+  if (!target || target.isTrainingDummy || target.hp <= 0 || target.isDead || target.destroyed || target.isUntargetable) return false;
   if (target.state === STATE.DEAD) return false;
   if (!target.team || target.team === minion.team) return false;
   return canRealmInteract(minion, target);
@@ -479,7 +485,7 @@ function getMinionAttackTarget(minion) {
 // 59차 도움 요청: 적 챔피언(attacker)이 아군 챔피언(victim)에게 피해를 주면, victim 팀 미니언 중 attacker가 인식 범위 안에
 // 있는 미니언들이 3초 동안 attacker를 최우선으로 노린다(포탑 쪽은 notifyTurretsChampionAttacked가 맡는다).
 function notifyMinionsChampionAttacked(attacker, victim) {
-  if (!attacker || !victim || !attacker.team || attacker.team === victim.team) return;
+  if (!attacker || attacker.isTrainingDummy || !victim || !attacker.team || attacker.team === victim.team) return;
   const until = performance.now() + MINION_CALL_FOR_HELP_MS;
   for (const m of minions) {
     if (m.isDead || m.team !== victim.team) continue;
@@ -588,6 +594,31 @@ function faceMinionToward(minion, dx, dz) {
   minion.mesh.updateMatrixWorld(true);
   minion.body.lookAt(p.x + dx, minion.body.getWorldPosition(new THREE.Vector3()).y, p.z + dz);
 }
+// 60차: 구조물 돌아가기. 칼바람 포탑은 라인 한가운데 서 있어 웨이포인트로 곧장 걸으면 경로가 포탑 중심을 지난다. 예전엔
+// "앞으로 당기는 힘"과 "충돌로 밀어내는 힘"이 맞서 포탑 바로 앞(뒤)에서 멈춰 섰다(장시간 점검에서 레드 원거리 미니언이 억제기
+// 포탑 뒤에 계속 서 있었다). 앞쪽 가까이에 구조물이 있으면 그 둘레를 따라 옆으로 비켜 가는 힘을 더한다.
+function computeStructureAvoidance(minion, dirX, dirZ) {
+  const p = minion.mesh.position;
+  let ax = 0, az = 0;
+  for (const s of [...turrets, ...inhibitorBuildings, ...nexusBuildings]) {
+    if (!s.isStructure) continue;
+    if (minion.attackTarget === s) continue; // 때리러 가는 구조물은 피하지 않는다
+    const sp = getWorldPosition(s);
+    const vx = sp.x - p.x, vz = sp.z - p.z, d = Math.hypot(vx, vz);
+    const R = (s.collisionRadius || s.radius || 0) + minion.collisionRadius;
+    const margin = 1.6;
+    if (d < 1e-4 || d > R + margin) continue;
+    const along = (vx * dirX + vz * dirZ) / d; // 1 = 구조물 정면으로 향함
+    if (along <= 0.05) continue;
+    // 진행 방향에 더 가까운 접선 쪽으로 돈다(정면이면 팀마다 정해진 쪽 - 같은 팀은 같은 쪽으로 흘러 줄이 엉키지 않는다).
+    let tx = -vz / d, tz = vx / d;
+    const dot = tx * dirX + tz * dirZ;
+    if (Math.abs(dot) < 0.05 ? minion.team === 'RED' : dot < 0) { tx = -tx; tz = -tz; }
+    const w = along * (1 - Math.max(0, d - R) / margin) * 2.2;
+    ax += tx * w; az += tz * w;
+  }
+  return { x: ax, z: az };
+}
 function updateMinionMovement(minion, dt) {
   if (minion.isDead) return;
   resolveMinionStructureCollisions(minion); // 이동 여부와 상관없이 매 프레임 겹침을 즉시 풀어준다
@@ -630,6 +661,8 @@ function updateMinionMovement(minion, dt) {
   // 요청 문서 6/23절 "최종 이동 = 목표 방향 + 아군 Separation" - 목표
   // 방향에 분리력을 섞고 다시 정규화한다.
   let mx = dirX, mz = dirZ;
+  const avoid = computeStructureAvoidance(minion, dirX, dirZ);
+  if (avoid.x || avoid.z) { mx += avoid.x; mz += avoid.z; const l = Math.hypot(mx, mz); if (l > 1e-4) { mx /= l; mz /= l; } }
   if (sepLen > 0.01) {
     mx += (sep.x / sepLen) * MINION_SEPARATION_WEIGHT;
     mz += (sep.z / sepLen) * MINION_SEPARATION_WEIGHT;
@@ -658,6 +691,7 @@ function updateMinionMovement(minion, dt) {
 const MINION_CHAMPION_DAMAGE_PERCENT = 0.60;
 function updateMinionAttack(minion, dt) {
   if (minion.isDead) return;
+  if (minion._pendingHit && minionSimTime >= minion._pendingHit.at) { const h = minion._pendingHit; minion._pendingHit = null; h.fn(); }
   minion.attackCooldown = Math.max(0, minion.attackCooldown - dt);
   const target = getMinionAttackTarget(minion);
   minion.attackTarget = target;
@@ -720,7 +754,7 @@ function updateMinionAttack(minion, dt) {
     projectiles.spawn({ from, target, speed: lolRangeToWorld(missileSpeedLol), color: minion.team === 'BLUE' ? 0x9fd0ff : 0xffb08f,
       realmId: minion.realmId, team: minion.team, scale: minion.type === 'siege' ? 1.4 : 0.8, onHit: (t) => applyHit(t) });
   };
-  if (hitDelaySec > 0) setTimeout(dealHit, hitDelaySec * 1000);
+  if (hitDelaySec > 0) minion._pendingHit = { at: minionSimTime + hitDelaySec, fn: dealHit }; // 60차: 게임 시간 기준, 죽으면 취소
   else dealHit(); // 모델 미로딩(폴백 도형) 시에는 기존처럼 즉시 적용 - 회귀 없음
 }
 function updateMinionRegeneration(minion, dt) {
@@ -821,6 +855,9 @@ function updateMinionCombat(minion, dt) {
   const minionStunned = typeof isStunned === 'function' && isStunned(minion);
   const minionRooted = typeof isRooted === 'function' && isRooted(minion);
   if (!minionStunned && !minionRooted && !minion._pullState) updateMinionMovement(minion, dt);
+  // 60차: 미니언도 챔피언처럼 맵 이동 범위 안에 묶는다 - 예전엔 챔피언을 쫓거나 밀려나다 다리 밖(허공)으로 걸어 나갈 수 있었다.
+  if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap && howlingAbyssMap.group && typeof howlingAbyssMap.clampPosition === 'function') howlingAbyssMap.clampPosition(minion.mesh.position);
+  resolveMinionStructureCollisions(minion); // 60차: 이번 프레임 이동 "뒤"에도 구조물 겹침을 푼다(예전엔 이동 전에만 풀어 한 프레임 이동분만큼 파고들었다)
   if (!minionStunned) updateMinionAttack(minion, dt);
   updateMinionRegeneration(minion, dt);
 }
@@ -910,6 +947,14 @@ function updateMinionWaveSpawner(gameTimeSec) {
   }
 }
 function updateMinions(dt) {
+  minionSimTime += dt;
+  if (pendingMinionSpawns.length) {
+    const due = pendingMinionSpawns.filter((p) => minionSimTime >= p.at);
+    if (due.length) {
+      pendingMinionSpawns = pendingMinionSpawns.filter((p) => minionSimTime < p.at);
+      for (const p of due) if (!gameEnded) minions.push(createMinion(p.type, p.pos, p.gameTimeSec, p.team));
+    }
+  }
   const gameTimeSec = getTurretGameTimeSec();
   updateMinionWaveSpawner(gameTimeSec);
   for (const m of [...minions]) updateMinionCombat(m, dt);
