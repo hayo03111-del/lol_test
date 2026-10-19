@@ -438,7 +438,7 @@ CharacterController.prototype._rammusLand = function(j) {
   const units = getTargetableEnemyUnits().filter((u) => u && u.hp > 0 && !u.isWard && isInCircle(u, center, lolRangeToWorld(rd.radius)));
   for (const u of units) {
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
-    applyDamage(u, { rawDamage: raw * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    applyDamage(u, { rawDamage: raw * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
     if (u.isStructure || u.hp <= 0) continue;
     applyStatus(u, { id: 'rammusR_slow', type: 'SLOW', duration: rd.slowDurationSec, value: slow, source: this });
     if (j.powerball && isInCircle(u, center, lolRangeToWorld(rd.centerRadius))) {

@@ -340,9 +340,8 @@ async function bootstrapChampion(gltf, fileName) {
   // 좌표가 필요 없다 - 실제 넥서스 GLB 자체에 이미 포함돼 있다고 보고
   // 별도 오브젝트를 새로 만들지 않는다(요청 6절 - 중복 생성 금지 원칙).
   // 20차: 칼바람 나락 맵이 있으면 원작 좌표에 포탑·억제기·넥서스·분수를 만든다(첫 로드 때 한 번만 - 챔피언을
-  // 바꿔도 구조물은 유지). 맵이 없으면 예전처럼 구조물 없는 연습 공간이다. 미니언은 여전히 만들지 않는다.
+  // 바꿔도 구조물은 유지). 맵이 없으면 예전처럼 구조물 없는 연습 공간이다. 59차: 미니언도 챔피언을 바꿔도 그대로 둔다.
   if (typeof spawnHowlingAbyssStructures === 'function') spawnHowlingAbyssStructures();
-  minions.length = 0;
 
   // 요청("게임을 시작하면 자기 진영 우물에서 시작하게") - 실제 LoL처럼
   // 챔피언은 자기 팀 기지의 우물(분수)에서 스폰한다. 플레이어는 기존
@@ -1182,8 +1181,9 @@ const TURRET_MODEL_CLIPS = {
   destroyed: 'Destroyed',
   respawn: 'Respawn', // 문서의 "Respown"은 오타 - 실제 clip은 정상 철자
 };
-const INHIBITOR_MODEL_CLIPS = {}; // 억제기 GLB 제거됨
-const NEXUS_MODEL_CLIPS = {}; // 넥서스 GLB 제거됨
+// 59차: 사용자 제공 억제기/넥서스 GLB(assets/structures)의 실제 클립 이름.
+const INHIBITOR_MODEL_CLIPS = { spawn: 'Inhibitor_spawn.anm', idle: 'Idle_Normal1', death: 'Death_Base', deadIdle: 'Inhibitor_idle_dead.anm', respawn: 'Respawn_Base' };
+const NEXUS_MODEL_CLIPS = { spawn: 'Nexus_spawn.anm', idle: 'Idle1_Base', death: 'Death' };
 
 const minionBuildingAssets = {}; // slotKey -> { gltf, clipNames:Set<string> }
 // 요청("그냥 이름에 포탑 들어가있으면 다 포탑glb가 적용되게 해줘") - 예전엔
@@ -1268,7 +1268,31 @@ function loadEmbeddedBuildingAssets() {
       (err) => { console.error(`[MODEL LOAD ERROR] ${filename} (내장):`, err); resolve(); });
   })));
 }
-const embeddedBuildingAssetsReady = loadEmbeddedBuildingAssets();
+// 59차: 사용자 제공 미니언 4종·포탑·억제기·넥서스 GLB(블루/레드)를 저장소 파일(assets/minions, assets/structures)로 둔다 -
+// 챔피언 모델과 같은 방식으로 페이지가 열리면 바로 내려받아 minionBuildingAssets에 등록한다. 한 파일이 실패해도 나머지는
+// 그대로 쓰고(그 종류만 임시 도형), 전체가 오래 걸려도 20초 뒤에는 구조물 생성을 막지 않는다.
+const BUNDLED_BUILDING_GLBS = {
+  blueMelee: 'assets/minions/melee_blue.glb', redMelee: 'assets/minions/melee_red.glb',
+  blueCaster: 'assets/minions/caster_blue.glb', redCaster: 'assets/minions/caster_red.glb',
+  blueSiege: 'assets/minions/siege_blue.glb', redSiege: 'assets/minions/siege_red.glb',
+  blueSuper: 'assets/minions/super_blue.glb', redSuper: 'assets/minions/super_red.glb',
+  blueTurret: 'assets/structures/turret_blue.glb', redTurret: 'assets/structures/turret_red.glb',
+  blueInhibitor: 'assets/structures/inhibitor_blue.glb', redInhibitor: 'assets/structures/inhibitor_red.glb',
+  blueNexus: 'assets/structures/nexus_blue.glb', redNexus: 'assets/structures/nexus_red.glb',
+};
+function loadBundledBuildingAssets() {
+  return Promise.all(Object.entries(BUNDLED_BUILDING_GLBS).map(([key, url]) => new Promise((resolve) => {
+    if (minionBuildingAssets[key]) { resolve(); return; } // 직접 올린 파일이 이미 있으면 그쪽을 쓴다
+    new GLTFLoader().load(url, (gltf) => {
+      minionBuildingAssets[key] = { gltf, clipNames: new Set(gltf.animations.map((a) => a.name)), slot: { key } };
+      renderMinionAssetStatus(); resolve();
+    }, undefined, (err) => { console.warn(`[MODEL LOAD ERROR] ${url}:`, err && err.message ? err.message : err); resolve(); });
+  })));
+}
+const embeddedBuildingAssetsReady = Promise.race([
+  Promise.all([loadEmbeddedBuildingAssets(), loadBundledBuildingAssets()]),
+  new Promise((resolve) => setTimeout(resolve, 20000)),
+]);
 function renderMinionAssetStatus() {
   const el = document.getElementById('minionAssetStatus');
   if (!el) return;
@@ -1598,6 +1622,7 @@ function animate() {
     updateMarkers(dt);
     updateDummyAI(dt);
     updateDyingMinions(dt);
+    if (typeof updateMinions === 'function') updateMinions(dt); // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
     updateInhibitorBuildingAnim(dt);
     updateTurrets(dt); // 20차: 원작 위치에 배치한 포탑(공격·우물 회복/피해)
     updateNexusBuildingAnim(dt);

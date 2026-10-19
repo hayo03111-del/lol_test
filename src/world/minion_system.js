@@ -42,7 +42,8 @@ const MINION_SPAWN_POINT_BLUE_FALLBACK = new THREE.Vector3(0, 0, -45);
 const MINION_SPAWN_POINT_RED_FALLBACK = new THREE.Vector3(0, 0, 45);
 function getMinionSpawnPoint(team) {
   const nexus = getTeamNexus(team);
-  if (nexus) return getWorldPosition(nexus).clone();
+  // 59차: 넥서스 중심은 충돌 원 안이라 거기서 나오면 밀려나며 튄다 - 상대 진영 쪽 넥서스 가장자리 바로 앞에서 나온다.
+  if (nexus) return getWorldPosition(nexus).clone().add(new THREE.Vector3(0, 0, (team === 'RED' ? -1 : 1) * ((nexus.collisionRadius || 0) + 0.6)));
   return team === 'RED' ? MINION_SPAWN_POINT_RED_FALLBACK : MINION_SPAWN_POINT_BLUE_FALLBACK;
 }
 const MINION_SPAWN_POINT = MINION_SPAWN_POINT_BLUE_FALLBACK; // 하위 호환(기존 코드가 참조하던 이름 그대로 유지)
@@ -65,7 +66,32 @@ const MINION_LANE_WAYPOINTS_BLUE = [
 // 임의로 새로 만들지 말고 기존 좌표계를 기준으로 대칭시켜라).
 const MINION_LANE_WAYPOINTS_RED = MINION_LANE_WAYPOINTS_BLUE.map((wp) => new THREE.Vector3(wp.x, wp.y, -wp.z));
 const MINION_LANE_WAYPOINTS = MINION_LANE_WAYPOINTS_BLUE; // 하위 호환(기존 코드가 참조하던 이름 그대로 유지)
-function getMinionLaneWaypoints(team) { return team === 'RED' ? MINION_LANE_WAYPOINTS_RED : MINION_LANE_WAYPOINTS_BLUE; }
+// 59차: 칼바람 나락 맵이 있으면 원작 구조물 좌표(HA_STRUCTURES_LOL)로 라인 경로를 만든다. 예전 고정 좌표(-15~94.5)는
+// 이 맵(넥서스 z 약 ±55)보다 훨씬 길어서 미니언이 상대 넥서스를 지나 맵 끝으로 걸어가려 했다. 웨이포인트는 구조물
+// "사이" 한가운데(구조물 중심은 충돌 때문에 닿을 수 없다) - 내 넥서스 포탑 → 억제기 → 억제기 포탑 → 외곽 포탑 → 다리
+// 가운데 → 상대 쪽 같은 순서 → 상대 넥서스.
+let _haLaneWaypointsCache = null;
+function buildHowlingAbyssLaneWaypoints() {
+  if (typeof HA_STRUCTURES_LOL === 'undefined' || typeof haLolToWorld !== 'function') return null;
+  if (typeof howlingAbyssMap === 'undefined' || !howlingAbyssMap || !howlingAbyssMap.group) return null;
+  const zOf = (xz) => haLolToWorld(xz).z;
+  const side = (team) => {
+    const t = HA_STRUCTURES_LOL[team];
+    const ntz = (zOf(t.nexusTurrets[0]) + zOf(t.nexusTurrets[1])) / 2;
+    return [zOf(t.nexus), ntz, zOf(t.inhibitor), zOf(t.inhibTurret), zOf(t.outer)];
+  };
+  const b = side('BLUE'), r = side('RED');
+  const mids = (arr) => arr.slice(1).map((z, i) => (arr[i] + z) / 2);
+  // BLUE 기준 z 순서(넥서스 → 바깥): 사이사이 + 가운데 0 + 레드 쪽 사이사이(바깥 → 넥서스) + 레드 넥서스.
+  const blueZ = [...mids(b), 0, ...mids(r).reverse(), r[0]];
+  const redZ = [...mids(r), 0, ...mids(b).reverse(), b[0]];
+  return { BLUE: blueZ.map((z) => new THREE.Vector3(0, 0, z)), RED: redZ.map((z) => new THREE.Vector3(0, 0, z)) };
+}
+function getMinionLaneWaypoints(team) {
+  if (!_haLaneWaypointsCache) _haLaneWaypointsCache = buildHowlingAbyssLaneWaypoints();
+  if (_haLaneWaypointsCache) return _haLaneWaypointsCache[team === 'RED' ? 'RED' : 'BLUE'];
+  return team === 'RED' ? MINION_LANE_WAYPOINTS_RED : MINION_LANE_WAYPOINTS_BLUE;
+}
 
 // 하나의 중앙 데이터 정의(요청 38 MINION_STATS). 시간 성장 관련 필드는
 // 타입마다 실제로 주어진 형태가 달라서(전사 HP는 "가속 등차수열"까지

@@ -43,6 +43,9 @@ if (clearWardsBtnEl) clearWardsBtnEl.addEventListener('click', () => wardSystem.
 // 37차: 연습용 골드 지급(설정 패널) - 누를 때마다 골드 +10000.
 const addGoldBtnEl = document.getElementById('addGoldBtn');
 if (addGoldBtnEl) addGoldBtnEl.addEventListener('click', () => { if (!controller) return; controller.gold = (controller.gold || 0) + 10000; updateGoldDisplay(); });
+// 59차: 첫 웨이브(1:05)를 기다리지 않고 양 팀 웨이브를 바로 부른다(연습용). 정기 웨이브 시계는 그대로 간다.
+const spawnWaveBtnEl = document.getElementById('spawnWaveBtn');
+if (spawnWaveBtnEl) spawnWaveBtnEl.addEventListener('click', () => { if (typeof howlingAbyssStructuresSpawned !== 'undefined' && !howlingAbyssStructuresSpawned) return; const t = getTurretGameTimeSec(); spawnMinionWave('BLUE', t); spawnMinionWave('RED', t); });
 function placeEnemyWardAt(point) {
   const type = enemyWardTypeSelectEl && enemyWardTypeSelectEl.value === 'control' ? 'control' : 'stealth';
   const data = type === 'stealth' ? ITEM_DATA.stealthWard : null;

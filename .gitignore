@@ -3,4 +3,7 @@
 *.glb
 *.gltf
 !assets/champions/*.glb
+# 59차: 사용자 제공 미니언·구조물 모델(게임이 이 경로에서 불러온다)
+!assets/minions/*.glb
+!assets/structures/*.glb
 node_modules/

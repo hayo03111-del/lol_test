@@ -844,6 +844,7 @@ let howlingAbyssStructuresSpawned = false;
 function spawnHowlingAbyssStructures() {
   if (howlingAbyssStructuresSpawned || !howlingAbyssMap || !howlingAbyssMap.group) return false;
   howlingAbyssStructuresSpawned = true;
+  if (typeof resetTurretGameClock === 'function') resetTurretGameClock();
   const R = HA_STRUCTURE_RADIUS_LOL;
   const asTurret = (t) => { t.radius = t.collisionRadius = lolRangeToWorld(R.turret); t.selectionRadius = t.radius * 1.3; return t; };
   for (const team of ['BLUE', 'RED']) {

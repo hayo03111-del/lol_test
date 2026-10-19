@@ -31,9 +31,12 @@ const TURRET_ATTACK_RANGE_LOL = 775;
 // 빠르게 잡아서, 기존처럼 "즉시 명중"에 가깝게 느껴지되 눈에는 보이도록 했다.
 const TURRET_PROJECTILE_SPEED = 55;
 const TURRET_ARMOR_PEN_PERCENT = 0.30; // 요청 12
+// 59차 가열(충전): 원작 - 같은 챔피언을 연속으로 맞힐 때마다 +40%, 3단계(+120%)까지. 대상이 바뀌거나 5초 동안 챔피언을
+// 맞히지 않으면 처음(0단계)부터 다시 쌓는다. 예전엔 플레이어 챔피언에 isChampion 표시가 없어 포탑이 플레이어를 챔피언으로
+// 보지 않았다 - 가열과 30% 방어구 관통이 한 번도 적용되지 않아 "포탑 딜이 계속 약한" 원인이었다.
 const TURRET_HEAT_RESET_SEC = 5;       // 요청 16
-const TURRET_HEAT_STEP = 0.5;          // 요청 14
-const TURRET_HEAT_MAX_STACKS = 3;      // +50%*3 = +150% 상한(요청 14)
+const TURRET_HEAT_STEP = 0.4;
+const TURRET_HEAT_MAX_STACKS = 3;      // +40%*3 = +120% 상한
 const TURRET_BASTION_DURATION_SEC = 20;      // 요청 28
 const TURRET_BASTION_ARMOR_PER_ENEMY = 20;   // 요청 26
 // 명세에 "방패가 정확히 언제 파괴되는가"의 수치(예: 몇 대 맞으면
@@ -43,7 +46,7 @@ const TURRET_BASTION_ARMOR_PER_ENEMY = 20;   // 요청 26
 const TURRET_SHIELD_BREAK_HP_PERCENT = 0.30;
 // 요청 31/32 - 미니언 %HP 피해 표준화 공식(미니언 타입이 실제로
 // 생기면 target.minionType가 아래 키 중 하나와 일치해야 한다).
-const TURRET_MINION_DAMAGE_PERCENT = { melee: 0.45, caster: 0.70, siege: 0.14, super: 0.05 };
+const TURRET_MINION_DAMAGE_PERCENT = { melee: 0.45, caster: 0.70, siege: 0.14, super: 0.07 }; // 59차: 슈퍼 7%(MINION_STATS와 일치)
 
 // A. 포탑 능력치 - 하나의 데이터 정의(요청 47), 하드코딩 여러 곳에
 // 흩어놓지 않는다. destroyGoldOverride: 사용자가 이번에 추가로 지시한
@@ -100,8 +103,11 @@ const TURRET_DATA = {
 // 기준"). 이 데모에는 아직 "매치 시작" 개념이 없어 이 모듈이 로드된
 // 시점을 0초로 삼는다 - 나중에 실제 라운드/매치 시스템이 생기면 이
 // 함수 하나만 그 타이머를 참조하도록 바꾸면 된다.
-const TURRET_GAME_START_MS = performance.now();
+let TURRET_GAME_START_MS = performance.now();
 function getTurretGameTimeSec() { return (performance.now() - TURRET_GAME_START_MS) / 1000; }
+// 59차: 게임 시계는 구조물이 생기는 순간(로비에서 시작을 누른 뒤 첫 챔피언 로드)부터 0초로 센다 - 로비에 머문 시간이
+// 요새화(5분)·미니언 첫 웨이브·성장 시간을 깎아먹지 않게.
+function resetTurretGameClock() { TURRET_GAME_START_MS = performance.now(); }
 
 // B. 게임 시간 기반 능력치 증가 - A(포탑 능력치)와 분리된 별도 함수지만,
 // 최종 사용값은 이 함수 하나로 중앙화한다(요청 47 getTurretStats).
@@ -160,8 +166,29 @@ function findEnemyChampionsNear(turret) {
   const dist = getHorizontalDistance(getWorldPosition(turret), getWorldPosition(controller));
   return dist <= range + getCollisionRadius(controller) ? [controller] : []; // 44차: 원작 - 포탑 중심에서 대상 가장자리까지
 }
+// 59차: 챔피언 판정 - 플레이어 컨트롤러(championId)와 허수아비(isChampion) 모두.
+function isTurretChampionUnit(u) { return !!(u && (u.isChampion || typeof u.championId === 'string')); }
+// 59차 도움 요청(원작): 포탑 사거리 안에서 적 챔피언이 아군 챔피언에게 피해를 주면, 그 포탑은 곧바로(다음 발사부터) 그
+// 적 챔피언을 노린다 - 미니언을 치던 중이어도 바꾼다. 4초 동안 유지(그 사이 사거리 밖으로 나가면 풀린다).
+const TURRET_CALL_FOR_HELP_SEC = 4;
+function notifyTurretsChampionAttacked(attacker, victim) {
+  if (!attacker || !victim || !attacker.team || !victim.team || attacker.team === victim.team) return;
+  const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
+  for (const t of turrets) {
+    if (t.team !== victim.team || t.destroyed || !t.isStructure) continue;
+    const tp = getWorldPosition(t);
+    if (getHorizontalDistance(tp, getWorldPosition(victim)) > range + getCollisionRadius(victim)) continue; // 아군이 포탑 사거리 안
+    if (!isValidTurretTarget(t, attacker) || !canRealmInteract(t, attacker)) continue; // 공격자도 사거리 안
+    t._callForHelp = { target: attacker, until: getTurretGameTimeSec() + TURRET_CALL_FOR_HELP_SEC };
+    if (t.attackTarget !== attacker) t.attackTarget = attacker;
+  }
+}
+function notifyChampionAttackedChampion(attacker, victim) {
+  notifyTurretsChampionAttacked(attacker, victim);
+  if (typeof notifyMinionsChampionAttacked === 'function') notifyMinionsChampionAttacked(attacker, victim);
+}
 function isValidTurretTarget(turret, target) {
-  if (!target || target.hp <= 0) return false;
+  if (!target || target.hp <= 0 || target.isDead || target.destroyed || target.state === STATE.DEAD) return false;
   if (target.isUntargetable) return false; // 무적/대상 지정 불가(요청 13 단서, 22 단서)
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
   return getHorizontalDistance(getWorldPosition(turret), getWorldPosition(target)) <= range + getCollisionRadius(target);
@@ -169,6 +196,8 @@ function isValidTurretTarget(turret, target) {
 // 요청 8/9 - 8단계 우선순위를 순서대로 확인하고, 요청 10(현재 대상
 // 유지) - 이미 있던 대상이 여전히 유효하면 재계산 없이 그대로 둔다.
 function getTurretAttackTarget(turret) {
+  const cfh = turret._callForHelp;
+  if (cfh && getTurretGameTimeSec() < cfh.until && isValidTurretTarget(turret, cfh.target) && canRealmInteract(turret, cfh.target)) return cfh.target;
   if (turret.attackTarget && isValidTurretTarget(turret, turret.attackTarget)) return turret.attackTarget;
   const priorityGroups = [
     findShacoBoxesNear(turret), findChampionSummonsNear(turret),
@@ -249,9 +278,10 @@ function getBastionBonus(turret) {
 // 함수 자체에 챔피언 판정을 넣지 않아, 나중에 실제로 미니언 대상
 // 호출 경로가 생겨도 실수로 여기서 걸러지길 기대하지 않고 호출부
 // 책임을 명확히 한다).
-function getTurretHeatMultiplierAndRegister(turret) {
+function getTurretHeatMultiplierAndRegister(turret, target = null) {
   const now = performance.now();
-  if (!turret.heatStacks || (now - (turret.lastChampionHitAt || 0)) / 1000 > TURRET_HEAT_RESET_SEC) turret.heatStacks = 0;
+  if (!turret.heatStacks || (now - (turret.lastChampionHitAt || 0)) / 1000 > TURRET_HEAT_RESET_SEC || (target && turret._heatTarget && turret._heatTarget !== target)) turret.heatStacks = 0;
+  if (target) turret._heatTarget = target;
   const multiplier = 1 + Math.min(turret.heatStacks, TURRET_HEAT_MAX_STACKS) * TURRET_HEAT_STEP;
   turret.heatStacks = Math.min(turret.heatStacks + 1, TURRET_HEAT_MAX_STACKS);
   turret.lastChampionHitAt = now;
@@ -265,15 +295,16 @@ function getTurretHeatMultiplierAndRegister(turret) {
 // getTurretDamage(turret, target) - 포탑이 주는 피해 계산 하나로 통합(요청 47).
 function getTurretDamage(turret, target) {
   const stats = getTurretStats(turret);
-  const isChamp = !!target.isChampion;
+  const isChamp = isTurretChampionUnit(target);
   if (!isChamp && target.minionType && TURRET_MINION_DAMAGE_PERCENT[target.minionType] != null) {
     // 요청 31~33: 미니언 %HP 피해는 방어구/관통 계산을 전혀 적용하지
     // 않는다 - TRUE로 취급해서 calculateDamage()의 armor 분기를 타지
     // 않게 한다(챔피언용 AD/관통/Armor 계산과 완전히 분리).
     return { rawDamage: (target.maxHp || 0) * TURRET_MINION_DAMAGE_PERCENT[target.minionType], damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 };
   }
-  const heatMultiplier = isChamp ? getTurretHeatMultiplierAndRegister(turret) : 1; // 요청 17: 챔피언 대상일 때만 가열 중 적용/증가
+  const heatMultiplier = isChamp ? getTurretHeatMultiplierAndRegister(turret, target) : 1; // 요청 17: 챔피언 대상일 때만 가열 중 적용/증가
   return {
+    heatMultiplier,
     rawDamage: stats.attackDamage * heatMultiplier,
     damageType: DAMAGE_TYPE.PHYSICAL,
     isCritical: false, critMultiplier: 1,
@@ -387,7 +418,10 @@ function updateTurretVisual(turret) {
     // 다시 예약한다. 파괴 연출(Destroyed 재생) 도중에 뒤늦게 발화해
     // emissiveIntensity를 건드리지 않도록 turret.destroyed도 재확인한다.
     clearTimeout(turret._hitFlashTimerId);
-    turret.body.material.emissive = new THREE.Color(0xff3333);
+    // 59차: 발광 속성이 없는 재질(GLB unlit = MeshBasicMaterial)에 emissive를 새로 만들어 넣으면 three.js가 그 재질을 그릴 때
+    // uniforms.emissive가 없어 매 프레임 예외를 던졌다 - 원래 발광을 지원하는 재질에서만 번쩍인다.
+    if (!turret.body.material.emissive || !turret.body.material.emissive.isColor) return;
+    turret.body.material.emissive.setHex(0xff3333);
     turret.body.material.emissiveIntensity = 0.8;
     // 재검증(2차) 수정: 콜백은 "끄기"만 하므로 destroyed 여부와 무관하게
     // 항상 0으로 되돌려야 한다 - 직전 수정에서 !turret.destroyed 가드를
@@ -501,7 +535,7 @@ function createTurret(type, position, team = 'RED') {
   // 항상 빨강으로 고정돼 있어서 BLUE 포탑도 체력바가 빨갛게 보였다.
   // 진영 색을 인라인 스타일로 직접 지정해 덮어쓴다.
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
-  labelDiv.innerHTML = `${data.name}<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div>`;
+  labelDiv.innerHTML = `${data.name}<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div><div class="turretTraits"></div>`;
   const label = new CSS2DObject(labelDiv);
   label.position.set(0, height + 0.2, 0);
   group.add(label);
@@ -514,7 +548,7 @@ function createTurret(type, position, team = 'RED') {
     radius, collisionRadius: radius, selectionRadius: radius * 1.3,
     attackCooldown: 0, attackTarget: null,
     isTurret: true, isStructure: true, isChampion: false, isMonster: true, isTrainingDummy: false, destroyed: false,
-    isUntargetable: false,
+    isUntargetable: false, traitsDiv: labelDiv.querySelector('.turretTraits'),
   };
   if (usingRealModel) {
     turret._shieldStageIndex = 0;
@@ -555,6 +589,49 @@ function updateTurretShieldStageVisual(turret) {
 }
 
 
+// 59차: 포탑이 플레이어를 노리는 동안 포탑 꼭대기에서 플레이어까지 붉은 조준선을 그린다(원작의 포탑 어그로 표시).
+// 가열 단계가 오를수록 진해진다. 아군 포탑이 적 미니언을 노릴 때는 그리지 않는다(원작도 내 챔피언을 노릴 때만 보인다).
+function updateTurretAggroBeam(turret, target) {
+  const show = !!(target && typeof controller !== 'undefined' && target === controller && !turret.destroyed);
+  if (!show) { if (turret._aggroBeam) turret._aggroBeam.visible = false; return; }
+  if (!turret._aggroBeam) {
+    const geo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+    turret._aggroBeam = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: 0.55, depthWrite: false }));
+    turret._aggroBeam.frustumCulled = false; turret._aggroBeam.renderOrder = 5;
+    scene.add(turret._aggroBeam);
+  }
+  const a = getWorldPosition(turret).clone().add(new THREE.Vector3(0, BASE_UNIT * 1.6, 0));
+  const b = getWorldPosition(target).clone().add(new THREE.Vector3(0, 0.9, 0));
+  const pos = turret._aggroBeam.geometry.attributes.position;
+  pos.setXYZ(0, a.x, a.y, a.z); pos.setXYZ(1, b.x, b.y, b.z); pos.needsUpdate = true;
+  const recent = (performance.now() - (turret.lastChampionHitAt || 0)) / 1000 <= TURRET_HEAT_RESET_SEC && turret._heatTarget === target;
+  const stacks = recent ? (turret.heatStacks || 0) : 0;
+  turret._aggroBeam.material.opacity = 0.45 + 0.17 * stacks;
+  turret._aggroBeam.material.color.setHex([0xff3a2a, 0xff5a1a, 0xff7a10, 0xffa000][Math.min(3, stacks)]);
+  turret._aggroBeam.visible = true;
+}
+// 59차 포탑 특성 표시(원작 포탑 위 버프 아이콘 자리) - 이름표 아래에 지금 걸려 있는 특성을 글자 배지로 보여준다:
+// 요새화(남은 시간) / 방패(원거리 피해 17% 감소) / 방벽(남은 시간) / 백도어 보호(주변에 적 미니언이 없으면 받는 피해 80% 감소) /
+// 가열 n단계(+40%씩). 0.25초마다만 갱신한다.
+function updateTurretTraitBadges(turret, dt) {
+  if (!turret.traitsDiv) return;
+  turret._traitAccum = (turret._traitAccum || 0) + (dt || 0);
+  if (turret._traitAccum < 0.25 && turret._traitHtml != null) return;
+  turret._traitAccum = 0;
+  const data = TURRET_DATA[turret.type];
+  const now = getTurretGameTimeSec();
+  const badges = [];
+  const fmt = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+  if (isFortificationActive(turret, now)) badges.push(['#d9b15a', `요새화 ${fmt(data.fortificationEndSec - now)}`]);
+  if (data.hasShield && isShieldActive(turret)) badges.push(['#7fb3e6', '방패']);
+  if (turret.bastionEndsAt && now < turret.bastionEndsAt) badges.push(['#a98be0', `방벽 ${Math.ceil(turret.bastionEndsAt - now)}초`]);
+  if (isDoubleArmorActive(turret)) badges.push(['#9aa4ad', '백도어 보호']);
+  const recent = (performance.now() - (turret.lastChampionHitAt || 0)) / 1000 <= TURRET_HEAT_RESET_SEC;
+  if (recent && turret.heatStacks > 0) badges.push(['#ff7a3a', `가열 ${turret.heatStacks}단계 +${Math.round(turret.heatStacks * TURRET_HEAT_STEP * 100)}%`]);
+  const html = badges.map(([c, t]) => `<span style="display:inline-block;margin:1px 2px 0;padding:0 4px;border-radius:3px;font-size:9px;line-height:13px;color:#111;background:${c}">${t}</span>`).join('');
+  if (html !== turret._traitHtml) { turret.traitsDiv.innerHTML = html; turret._traitHtml = html; }
+}
+
 // 버그 수정("포탑 공격 시 GLB 투명화") - 이 자리에 있던 updateTurretRenderSafety()
 // 함수를 완전히 제거했다(아래 updateTurretCombat 안의 상세 설명 참고).
 // 카메라가 포탑 가까이 갈 때마다 그 포탑 material의 depthWrite를 매 프레임
@@ -571,6 +648,8 @@ function updateTurretCombat(turret, dt) {
   if (turret.usingRealModel && turret.mesh) turret.mesh.visible = true;
   if (data.indestructible) { if (turret.mixer) safeMixerUpdate(turret.mixer, dt, `well:${turret.team}`); updateNexusWell(turret, dt); return; } // 우물은 완전히 별도 로직(요청 6) - 항상 매 프레임 그대로 유지
   if (turret.destroyed) {
+    updateTurretAggroBeam(turret, null);
+    if (turret.traitsDiv) turret.traitsDiv.innerHTML = '';
     // 파괴 순간/이후도 게임 오브젝트와 모델 가시성을 완전히 분리한다.
     if (turret.usingRealModel && turret.mesh) {
       turret.mesh.visible = true;
@@ -620,6 +699,8 @@ function updateTurretCombat(turret, dt) {
   turret.attackCooldown = Math.max(0, turret.attackCooldown - dt);
   const target = getTurretAttackTarget(turret);
   turret.attackTarget = target;
+  updateTurretAggroBeam(turret, target);
+  updateTurretTraitBadges(turret, dt);
   if (!target || turret.attackCooldown > 0) return;
   turret.attackCooldown = 1 / data.attackSpeed; // 요청 7: 포탑 자신의 Attack Speed 사용 - Phase 2에서도 절대 변경하지 않음
   const result = getTurretDamage(turret, target);
@@ -642,11 +723,13 @@ function updateTurretCombat(turret, dt) {
   // 사라지고 골드/경험치를 지급해야 하는 killMinion() 흐름과 충돌한다.
   projectiles.spawn({
     from: origin, target, speed: TURRET_PROJECTILE_SPEED,
-    color: turret.team === 'BLUE' ? 0x8fc7ff : 0xff8f8f,
+    // 59차: 가열 단계가 오를수록 탄이 굵고 뜨거운 색이 된다(원작 포탑 광선이 점점 달아오르는 연출).
+    color: (result.heatMultiplier || 1) > 1 ? [0xffd27a, 0xff9a3c, 0xff4a1c][Math.min(2, Math.round(((result.heatMultiplier || 1) - 1) / TURRET_HEAT_STEP) - 1)] : (turret.team === 'BLUE' ? 0x8fc7ff : 0xff8f8f),
+    scale: 1.6 + ((result.heatMultiplier || 1) - 1) * 1.6,
     realmId: turret.realmId, // Phase 2 요청 17 - 발사 시점 realm 스냅샷(포탑은 realmId가 바뀌지 않지만 대칭성을 위해 항상 넘긴다)
     fromTurret: true, // 버그 수정(요청 27): 야스오 바람 장막은 포탑 공격/광선을 막지 않는다 -
     // ProjectileSystem.update()의 windwall 충돌 검사가 이 플래그를 보고 포탑 발사체는 건너뛴다.
-    onHit: (t) => { if (t.isMinion) applyDamageToMinion(t, result); else applyDamage(t, { ...result, isBasicAttack: true, source: turret }); },
+    onHit: (t) => { if (t.isMinion) applyDamageToMinion(t, { ...result, source: turret }); else applyDamage(t, { ...result, isBasicAttack: true, source: turret }); },
   });
 }
 // O. 우물(기지) - 요청 6/43: 일반 포탑 전투 시스템을

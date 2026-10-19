@@ -633,6 +633,13 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
 // 데미지 적용 공통 진입점: CharacterController(플레이어)든 더미든 동일하게
 // 이 함수 하나로 처리한다. 플레이어는 takeDamage()가, 더미는 damageEnemy()가
 // 실제 HP 차감을 담당하고, 이 함수는 그 앞단의 "얼마나 깎일지" 계산만 맡는다.
+function canDamageStructuresWith(result) {
+  if (!result) return false;
+  if (result.isBasicAttack || result.canDamageStructures || result.isItemEffect) return true;
+  const src = result.source;
+  if (src && typeof src.championId !== 'string' && !src.isChampion) return true; // 포탑·미니언 등 챔피언이 아닌 공격자
+  return false;
+}
 function applyDamage(target, result) {
   if (!target) return 0;
   if (target.isWard) return 0; // 32차: 와드는 스킬 피해를 받지 않는다 - 기본 공격만 wardSystem.hitWard()로 체력 1씩(원작)
@@ -644,6 +651,11 @@ function applyDamage(target, result) {
   // 모든 스킬(직선/범위/AOE)에 새 대상 종류가 자동으로 적용된다 - 개별
   // 스킬 코드를 하나도 건드릴 필요가 없다(요청 20-C와 동일한 원칙).
   if (target.isMinion) return applyDamageToMinion(target, result, true); // applyDamage()는 항상 챔피언(플레이어) 스킬/공격 경로에서만 호출됨
+  // 59차: 원작처럼 챔피언 스킬 피해는 구조물(포탑·억제기·넥서스)에 들어가지 않는다 - 기본 공격(과 그 적중 효과)만 들어간다.
+  // 예전엔 범위 스킬이 전부 이 공용 진입점을 거쳐 포탑까지 깎았다. 예외는 피해 정보에 canDamageStructures를 붙인 효과
+  // (람머스 R처럼 원작에서도 구조물을 치는 스킬, 기본 공격에 붙는 마스터 이 E 고정 피해 등)와 아이템 효과, 챔피언이 아닌
+  // 공격자(포탑·미니언)다.
+  if ((target.isTurret || target.isInhibitor || target.isNexus) && !canDamageStructuresWith(result)) return 0;
   if (target.isTurret) {
     const turretDmgSource = resolveDamageSource(result.source, target);
     const turretFinalDmg = applyDamageToTurret(target, result, { source: turretDmgSource });
@@ -681,6 +693,9 @@ function applyDamage(target, result) {
   // 대체한다(미니언 경로의 `applyDamageToMinion()`이 이미 쓰던 것과 동일한
   // 원칙 - killMinion()의 전역 controller 참조 참고).
   const dmgSource = resolveDamageSource(result.source, target);
+  // 59차 도움 요청: 적 챔피언이 아군 챔피언(허수아비 포함)에게 피해를 주면 근처 포탑·미니언이 그 챔피언을 노린다.
+  if (target.isChampion && dmgSource && dmgSource !== target && (dmgSource.isChampion || typeof dmgSource.championId === 'string')
+      && typeof notifyChampionAttackedChampion === 'function') notifyChampionAttackedChampion(dmgSource, target);
   if (dmgSource && typeof dmgSource.championId === 'string') {
     if (typeof applyItemVamp === 'function') applyItemVamp(dmgSource, finalDmg);
     const dealtDamageType = result.damageType || DAMAGE_TYPE.PHYSICAL; // calculateDamage()의 기본값과 동일하게 맞춘다

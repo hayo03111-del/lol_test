@@ -825,6 +825,7 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
   <label style="margin-top:4px;"><input type="checkbox" id="enemyWardPlaceCheckbox"> 적 와드 설치 모드 <select id="enemyWardTypeSelect" style="font-size:11px;"><option value="stealth">투명 와드</option><option value="control">제어 와드</option></select></label>
   <button id="clearWardsBtn" style="margin-top:4px;width:100%;">와드 전부 제거</button>
   <button id="addGoldBtn" style="margin-top:4px;width:100%;">골드 +10,000</button>
+  <button id="spawnWaveBtn" style="margin-top:4px;width:100%;">미니언 웨이브 바로 소환</button>
   <button id="openLobbyBtn" style="margin-top:4px;width:100%;">로비 (챔피언·룬·주문 선택)</button>
   <button id="clearBrushesBtn" style="margin-top:4px;">부쉬 전부 제거</button>
   <button id="clearAlliesBtn" style="margin-top:4px;width:100%;">아군 더미 전부 제거</button>
@@ -1677,6 +1678,13 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
 // 데미지 적용 공통 진입점: CharacterController(플레이어)든 더미든 동일하게
 // 이 함수 하나로 처리한다. 플레이어는 takeDamage()가, 더미는 damageEnemy()가
 // 실제 HP 차감을 담당하고, 이 함수는 그 앞단의 "얼마나 깎일지" 계산만 맡는다.
+function canDamageStructuresWith(result) {
+  if (!result) return false;
+  if (result.isBasicAttack || result.canDamageStructures || result.isItemEffect) return true;
+  const src = result.source;
+  if (src && typeof src.championId !== 'string' && !src.isChampion) return true; // 포탑·미니언 등 챔피언이 아닌 공격자
+  return false;
+}
 function applyDamage(target, result) {
   if (!target) return 0;
   if (target.isWard) return 0; // 32차: 와드는 스킬 피해를 받지 않는다 - 기본 공격만 wardSystem.hitWard()로 체력 1씩(원작)
@@ -1688,6 +1696,11 @@ function applyDamage(target, result) {
   // 모든 스킬(직선/범위/AOE)에 새 대상 종류가 자동으로 적용된다 - 개별
   // 스킬 코드를 하나도 건드릴 필요가 없다(요청 20-C와 동일한 원칙).
   if (target.isMinion) return applyDamageToMinion(target, result, true); // applyDamage()는 항상 챔피언(플레이어) 스킬/공격 경로에서만 호출됨
+  // 59차: 원작처럼 챔피언 스킬 피해는 구조물(포탑·억제기·넥서스)에 들어가지 않는다 - 기본 공격(과 그 적중 효과)만 들어간다.
+  // 예전엔 범위 스킬이 전부 이 공용 진입점을 거쳐 포탑까지 깎았다. 예외는 피해 정보에 canDamageStructures를 붙인 효과
+  // (람머스 R처럼 원작에서도 구조물을 치는 스킬, 기본 공격에 붙는 마스터 이 E 고정 피해 등)와 아이템 효과, 챔피언이 아닌
+  // 공격자(포탑·미니언)다.
+  if ((target.isTurret || target.isInhibitor || target.isNexus) && !canDamageStructuresWith(result)) return 0;
   if (target.isTurret) {
     const turretDmgSource = resolveDamageSource(result.source, target);
     const turretFinalDmg = applyDamageToTurret(target, result, { source: turretDmgSource });
@@ -1725,6 +1738,9 @@ function applyDamage(target, result) {
   // 대체한다(미니언 경로의 `applyDamageToMinion()`이 이미 쓰던 것과 동일한
   // 원칙 - killMinion()의 전역 controller 참조 참고).
   const dmgSource = resolveDamageSource(result.source, target);
+  // 59차 도움 요청: 적 챔피언이 아군 챔피언(허수아비 포함)에게 피해를 주면 근처 포탑·미니언이 그 챔피언을 노린다.
+  if (target.isChampion && dmgSource && dmgSource !== target && (dmgSource.isChampion || typeof dmgSource.championId === 'string')
+      && typeof notifyChampionAttackedChampion === 'function') notifyChampionAttackedChampion(dmgSource, target);
   if (dmgSource && typeof dmgSource.championId === 'string') {
     if (typeof applyItemVamp === 'function') applyItemVamp(dmgSource, finalDmg);
     const dealtDamageType = result.damageType || DAMAGE_TYPE.PHYSICAL; // calculateDamage()의 기본값과 동일하게 맞춘다
@@ -7924,6 +7940,7 @@ let howlingAbyssStructuresSpawned = false;
 function spawnHowlingAbyssStructures() {
   if (howlingAbyssStructuresSpawned || !howlingAbyssMap || !howlingAbyssMap.group) return false;
   howlingAbyssStructuresSpawned = true;
+  if (typeof resetTurretGameClock === 'function') resetTurretGameClock();
   const R = HA_STRUCTURE_RADIUS_LOL;
   const asTurret = (t) => { t.radius = t.collisionRadius = lolRangeToWorld(R.turret); t.selectionRadius = t.radius * 1.3; return t; };
   for (const team of ['BLUE', 'RED']) {
@@ -9635,11 +9652,12 @@ class ProjectileSystem {
   // 맞힌다(노틸러스 Q와 같은 판정). 예전엔 발사 순간 직선 위의 대상을 골라 끝까지 따라가서 피할 수 없었고 사거리 밖까지 쫓아갔다.
   // line.pierce: 관통 - 닿는 대상마다 onHit(unit, index)을 부르고 사거리 끝까지 계속 날아간다. line.maxHits(>1): 그만큼 맞히면 사라진다(럭스 Q - 처음 둘).
   // hidden: 화살 모양을 그리지 않는다(자체 이펙트가 있는 스킬).
-  spawn({ from, target, targetPoint, speed = 26, damage = 0, color = 0xdff0ff, realmId, onHit, fromTurret = false, line = null, hidden = false }) {
+  spawn({ from, target, targetPoint, speed = 26, damage = 0, color = 0xdff0ff, realmId, onHit, fromTurret = false, line = null, hidden = false, scale = 1, team = null }) {
     const entry = this._acquireArrowMesh(color);
     entry.group.position.copy(from);
+    entry.group.scale.setScalar(scale); // 59차: 포탑 가열 단계마다 탄이 굵어진다(풀에서 다시 쓸 때도 매번 새로 맞춘다)
     if (!hidden) this.scene.add(entry.group);
-    const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target: line ? null : target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, life: 2.5, hasHit: false, done: false };
+    const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target: line ? null : target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, team, life: 2.5, hasHit: false, done: false };
     if (line) {
       const dir = line.dir.clone().setY(0).normalize();
       proj.line = { dir, origin: from.clone(), maxDist: line.maxDist, halfWidth: line.halfWidth, filter: line.filter || null, onMiss: line.onMiss || null, traveled: 0, pierce: !!line.pierce || line.maxHits > 1, maxHits: line.maxHits || 0, hitSet: new Set(), hits: 0 };
@@ -9731,7 +9749,7 @@ class ProjectileSystem {
       // 버그 수정(요청 27): 포탑 공격/광선은 막지 않는다 - fromTurret 발사체는
       // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
       // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
-      if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret) {
+      if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret && !(proj.team && proj.team === controller.team)) { // 59차: 아군 미니언 투사체는 통과
         const wall=controller._yasuo.windwall, progress=Math.min(1,(performance.now()-wall.createdAt)/180), wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, wall.width*0.75*progress), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this._remove(i, true); continue; }
       }
       if (proj.line) { this._updateLine(proj, i, dt); continue; }
@@ -12070,6 +12088,7 @@ class CharacterController {
     // 전용 효과(서포터 아이템/어시스트 등)를 만들 때 이 필드를 generic하게
     // 참조할 수 있다.
     this.team = PLAYER_TEAM;
+    this.isChampion = true; // 59차: 포탑 가열·관통, 미니언/포탑 도움 요청이 플레이어를 챔피언으로 알아보게
     this.model = animationRoot; // 실제 GLB Scene/Skeleton/Bone이 들어있는 객체
     this.mixer = new THREE.AnimationMixer(animationRoot);
     this.clips = resolver.clips;
@@ -21269,7 +21288,7 @@ CharacterController.prototype._masteryiApplyWujuTrueDamage = function(target) {
     const lvl = Math.max(1, this.skillLevels.E || 1);
     const trueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * this._getBonusAD();
     const wouldKill = target.hp > 0 && target.hp <= trueDmg;
-    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, canDamageStructures: true }); // 기본 공격 적중 효과 - 구조물에도 들어간다
     if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
 };
 
@@ -25190,10 +25209,8 @@ CharacterController.prototype._asheResolveWImpact = function(p) {
   const raw = skillVal(w.damageByLevel, p.lvl) + (w.bonusAdRatio || 0) * this._getBonusAD();
   for (const { unit } of hits) {
     if (!unit || unit.hp <= 0) continue;
-    if (unit.isTurret) { applyDamageToTurret(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, { isRanged: true, source: this }); continue; }
+    if (unit.isStructure) continue; // 59차: 원작 - 일제 사격(스킬)은 구조물에 피해를 주지 않는다
     if (unit.isMinion) { applyDamageToMinion(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true); this._asheApplyFrostShot(unit, false); continue; }
-    if (unit.isInhibitor) { applyDamageToInhibitor(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); continue; }
-    if (unit.isNexus) { applyDamageToNexus(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); continue; }
     applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
     this._asheApplyFrostShot(unit, false);
     vfx.spawn('hit', getWorldPosition(unit)?.clone() || unit.mesh.position.clone(), undefined, { color: 0xbfe8ff });
@@ -26384,7 +26401,7 @@ CharacterController.prototype._rammusLand = function(j) {
   const units = getTargetableEnemyUnits().filter((u) => u && u.hp > 0 && !u.isWard && isInCircle(u, center, lolRangeToWorld(rd.radius)));
   for (const u of units) {
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
-    applyDamage(u, { rawDamage: raw * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    applyDamage(u, { rawDamage: raw * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
     if (u.isStructure || u.hp <= 0) continue;
     applyStatus(u, { id: 'rammusR_slow', type: 'SLOW', duration: rd.slowDurationSec, value: slow, source: this });
     if (j.powerball && isInCircle(u, center, lolRangeToWorld(rd.centerRadius))) {
@@ -27440,9 +27457,12 @@ const TURRET_ATTACK_RANGE_LOL = 775;
 // 빠르게 잡아서, 기존처럼 "즉시 명중"에 가깝게 느껴지되 눈에는 보이도록 했다.
 const TURRET_PROJECTILE_SPEED = 55;
 const TURRET_ARMOR_PEN_PERCENT = 0.30; // 요청 12
+// 59차 가열(충전): 원작 - 같은 챔피언을 연속으로 맞힐 때마다 +40%, 3단계(+120%)까지. 대상이 바뀌거나 5초 동안 챔피언을
+// 맞히지 않으면 처음(0단계)부터 다시 쌓는다. 예전엔 플레이어 챔피언에 isChampion 표시가 없어 포탑이 플레이어를 챔피언으로
+// 보지 않았다 - 가열과 30% 방어구 관통이 한 번도 적용되지 않아 "포탑 딜이 계속 약한" 원인이었다.
 const TURRET_HEAT_RESET_SEC = 5;       // 요청 16
-const TURRET_HEAT_STEP = 0.5;          // 요청 14
-const TURRET_HEAT_MAX_STACKS = 3;      // +50%*3 = +150% 상한(요청 14)
+const TURRET_HEAT_STEP = 0.4;
+const TURRET_HEAT_MAX_STACKS = 3;      // +40%*3 = +120% 상한
 const TURRET_BASTION_DURATION_SEC = 20;      // 요청 28
 const TURRET_BASTION_ARMOR_PER_ENEMY = 20;   // 요청 26
 // 명세에 "방패가 정확히 언제 파괴되는가"의 수치(예: 몇 대 맞으면
@@ -27452,7 +27472,7 @@ const TURRET_BASTION_ARMOR_PER_ENEMY = 20;   // 요청 26
 const TURRET_SHIELD_BREAK_HP_PERCENT = 0.30;
 // 요청 31/32 - 미니언 %HP 피해 표준화 공식(미니언 타입이 실제로
 // 생기면 target.minionType가 아래 키 중 하나와 일치해야 한다).
-const TURRET_MINION_DAMAGE_PERCENT = { melee: 0.45, caster: 0.70, siege: 0.14, super: 0.05 };
+const TURRET_MINION_DAMAGE_PERCENT = { melee: 0.45, caster: 0.70, siege: 0.14, super: 0.07 }; // 59차: 슈퍼 7%(MINION_STATS와 일치)
 
 // A. 포탑 능력치 - 하나의 데이터 정의(요청 47), 하드코딩 여러 곳에
 // 흩어놓지 않는다. destroyGoldOverride: 사용자가 이번에 추가로 지시한
@@ -27509,8 +27529,11 @@ const TURRET_DATA = {
 // 기준"). 이 데모에는 아직 "매치 시작" 개념이 없어 이 모듈이 로드된
 // 시점을 0초로 삼는다 - 나중에 실제 라운드/매치 시스템이 생기면 이
 // 함수 하나만 그 타이머를 참조하도록 바꾸면 된다.
-const TURRET_GAME_START_MS = performance.now();
+let TURRET_GAME_START_MS = performance.now();
 function getTurretGameTimeSec() { return (performance.now() - TURRET_GAME_START_MS) / 1000; }
+// 59차: 게임 시계는 구조물이 생기는 순간(로비에서 시작을 누른 뒤 첫 챔피언 로드)부터 0초로 센다 - 로비에 머문 시간이
+// 요새화(5분)·미니언 첫 웨이브·성장 시간을 깎아먹지 않게.
+function resetTurretGameClock() { TURRET_GAME_START_MS = performance.now(); }
 
 // B. 게임 시간 기반 능력치 증가 - A(포탑 능력치)와 분리된 별도 함수지만,
 // 최종 사용값은 이 함수 하나로 중앙화한다(요청 47 getTurretStats).
@@ -27569,8 +27592,29 @@ function findEnemyChampionsNear(turret) {
   const dist = getHorizontalDistance(getWorldPosition(turret), getWorldPosition(controller));
   return dist <= range + getCollisionRadius(controller) ? [controller] : []; // 44차: 원작 - 포탑 중심에서 대상 가장자리까지
 }
+// 59차: 챔피언 판정 - 플레이어 컨트롤러(championId)와 허수아비(isChampion) 모두.
+function isTurretChampionUnit(u) { return !!(u && (u.isChampion || typeof u.championId === 'string')); }
+// 59차 도움 요청(원작): 포탑 사거리 안에서 적 챔피언이 아군 챔피언에게 피해를 주면, 그 포탑은 곧바로(다음 발사부터) 그
+// 적 챔피언을 노린다 - 미니언을 치던 중이어도 바꾼다. 4초 동안 유지(그 사이 사거리 밖으로 나가면 풀린다).
+const TURRET_CALL_FOR_HELP_SEC = 4;
+function notifyTurretsChampionAttacked(attacker, victim) {
+  if (!attacker || !victim || !attacker.team || !victim.team || attacker.team === victim.team) return;
+  const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
+  for (const t of turrets) {
+    if (t.team !== victim.team || t.destroyed || !t.isStructure) continue;
+    const tp = getWorldPosition(t);
+    if (getHorizontalDistance(tp, getWorldPosition(victim)) > range + getCollisionRadius(victim)) continue; // 아군이 포탑 사거리 안
+    if (!isValidTurretTarget(t, attacker) || !canRealmInteract(t, attacker)) continue; // 공격자도 사거리 안
+    t._callForHelp = { target: attacker, until: getTurretGameTimeSec() + TURRET_CALL_FOR_HELP_SEC };
+    if (t.attackTarget !== attacker) t.attackTarget = attacker;
+  }
+}
+function notifyChampionAttackedChampion(attacker, victim) {
+  notifyTurretsChampionAttacked(attacker, victim);
+  if (typeof notifyMinionsChampionAttacked === 'function') notifyMinionsChampionAttacked(attacker, victim);
+}
 function isValidTurretTarget(turret, target) {
-  if (!target || target.hp <= 0) return false;
+  if (!target || target.hp <= 0 || target.isDead || target.destroyed || target.state === STATE.DEAD) return false;
   if (target.isUntargetable) return false; // 무적/대상 지정 불가(요청 13 단서, 22 단서)
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
   return getHorizontalDistance(getWorldPosition(turret), getWorldPosition(target)) <= range + getCollisionRadius(target);
@@ -27578,6 +27622,8 @@ function isValidTurretTarget(turret, target) {
 // 요청 8/9 - 8단계 우선순위를 순서대로 확인하고, 요청 10(현재 대상
 // 유지) - 이미 있던 대상이 여전히 유효하면 재계산 없이 그대로 둔다.
 function getTurretAttackTarget(turret) {
+  const cfh = turret._callForHelp;
+  if (cfh && getTurretGameTimeSec() < cfh.until && isValidTurretTarget(turret, cfh.target) && canRealmInteract(turret, cfh.target)) return cfh.target;
   if (turret.attackTarget && isValidTurretTarget(turret, turret.attackTarget)) return turret.attackTarget;
   const priorityGroups = [
     findShacoBoxesNear(turret), findChampionSummonsNear(turret),
@@ -27658,9 +27704,10 @@ function getBastionBonus(turret) {
 // 함수 자체에 챔피언 판정을 넣지 않아, 나중에 실제로 미니언 대상
 // 호출 경로가 생겨도 실수로 여기서 걸러지길 기대하지 않고 호출부
 // 책임을 명확히 한다).
-function getTurretHeatMultiplierAndRegister(turret) {
+function getTurretHeatMultiplierAndRegister(turret, target = null) {
   const now = performance.now();
-  if (!turret.heatStacks || (now - (turret.lastChampionHitAt || 0)) / 1000 > TURRET_HEAT_RESET_SEC) turret.heatStacks = 0;
+  if (!turret.heatStacks || (now - (turret.lastChampionHitAt || 0)) / 1000 > TURRET_HEAT_RESET_SEC || (target && turret._heatTarget && turret._heatTarget !== target)) turret.heatStacks = 0;
+  if (target) turret._heatTarget = target;
   const multiplier = 1 + Math.min(turret.heatStacks, TURRET_HEAT_MAX_STACKS) * TURRET_HEAT_STEP;
   turret.heatStacks = Math.min(turret.heatStacks + 1, TURRET_HEAT_MAX_STACKS);
   turret.lastChampionHitAt = now;
@@ -27674,15 +27721,16 @@ function getTurretHeatMultiplierAndRegister(turret) {
 // getTurretDamage(turret, target) - 포탑이 주는 피해 계산 하나로 통합(요청 47).
 function getTurretDamage(turret, target) {
   const stats = getTurretStats(turret);
-  const isChamp = !!target.isChampion;
+  const isChamp = isTurretChampionUnit(target);
   if (!isChamp && target.minionType && TURRET_MINION_DAMAGE_PERCENT[target.minionType] != null) {
     // 요청 31~33: 미니언 %HP 피해는 방어구/관통 계산을 전혀 적용하지
     // 않는다 - TRUE로 취급해서 calculateDamage()의 armor 분기를 타지
     // 않게 한다(챔피언용 AD/관통/Armor 계산과 완전히 분리).
     return { rawDamage: (target.maxHp || 0) * TURRET_MINION_DAMAGE_PERCENT[target.minionType], damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 };
   }
-  const heatMultiplier = isChamp ? getTurretHeatMultiplierAndRegister(turret) : 1; // 요청 17: 챔피언 대상일 때만 가열 중 적용/증가
+  const heatMultiplier = isChamp ? getTurretHeatMultiplierAndRegister(turret, target) : 1; // 요청 17: 챔피언 대상일 때만 가열 중 적용/증가
   return {
+    heatMultiplier,
     rawDamage: stats.attackDamage * heatMultiplier,
     damageType: DAMAGE_TYPE.PHYSICAL,
     isCritical: false, critMultiplier: 1,
@@ -27796,7 +27844,10 @@ function updateTurretVisual(turret) {
     // 다시 예약한다. 파괴 연출(Destroyed 재생) 도중에 뒤늦게 발화해
     // emissiveIntensity를 건드리지 않도록 turret.destroyed도 재확인한다.
     clearTimeout(turret._hitFlashTimerId);
-    turret.body.material.emissive = new THREE.Color(0xff3333);
+    // 59차: 발광 속성이 없는 재질(GLB unlit = MeshBasicMaterial)에 emissive를 새로 만들어 넣으면 three.js가 그 재질을 그릴 때
+    // uniforms.emissive가 없어 매 프레임 예외를 던졌다 - 원래 발광을 지원하는 재질에서만 번쩍인다.
+    if (!turret.body.material.emissive || !turret.body.material.emissive.isColor) return;
+    turret.body.material.emissive.setHex(0xff3333);
     turret.body.material.emissiveIntensity = 0.8;
     // 재검증(2차) 수정: 콜백은 "끄기"만 하므로 destroyed 여부와 무관하게
     // 항상 0으로 되돌려야 한다 - 직전 수정에서 !turret.destroyed 가드를
@@ -27910,7 +27961,7 @@ function createTurret(type, position, team = 'RED') {
   // 항상 빨강으로 고정돼 있어서 BLUE 포탑도 체력바가 빨갛게 보였다.
   // 진영 색을 인라인 스타일로 직접 지정해 덮어쓴다.
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
-  labelDiv.innerHTML = `${data.name}<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div>`;
+  labelDiv.innerHTML = `${data.name}<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div><div class="turretTraits"></div>`;
   const label = new CSS2DObject(labelDiv);
   label.position.set(0, height + 0.2, 0);
   group.add(label);
@@ -27923,7 +27974,7 @@ function createTurret(type, position, team = 'RED') {
     radius, collisionRadius: radius, selectionRadius: radius * 1.3,
     attackCooldown: 0, attackTarget: null,
     isTurret: true, isStructure: true, isChampion: false, isMonster: true, isTrainingDummy: false, destroyed: false,
-    isUntargetable: false,
+    isUntargetable: false, traitsDiv: labelDiv.querySelector('.turretTraits'),
   };
   if (usingRealModel) {
     turret._shieldStageIndex = 0;
@@ -27964,6 +28015,49 @@ function updateTurretShieldStageVisual(turret) {
 }
 
 
+// 59차: 포탑이 플레이어를 노리는 동안 포탑 꼭대기에서 플레이어까지 붉은 조준선을 그린다(원작의 포탑 어그로 표시).
+// 가열 단계가 오를수록 진해진다. 아군 포탑이 적 미니언을 노릴 때는 그리지 않는다(원작도 내 챔피언을 노릴 때만 보인다).
+function updateTurretAggroBeam(turret, target) {
+  const show = !!(target && typeof controller !== 'undefined' && target === controller && !turret.destroyed);
+  if (!show) { if (turret._aggroBeam) turret._aggroBeam.visible = false; return; }
+  if (!turret._aggroBeam) {
+    const geo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+    turret._aggroBeam = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: 0.55, depthWrite: false }));
+    turret._aggroBeam.frustumCulled = false; turret._aggroBeam.renderOrder = 5;
+    scene.add(turret._aggroBeam);
+  }
+  const a = getWorldPosition(turret).clone().add(new THREE.Vector3(0, BASE_UNIT * 1.6, 0));
+  const b = getWorldPosition(target).clone().add(new THREE.Vector3(0, 0.9, 0));
+  const pos = turret._aggroBeam.geometry.attributes.position;
+  pos.setXYZ(0, a.x, a.y, a.z); pos.setXYZ(1, b.x, b.y, b.z); pos.needsUpdate = true;
+  const recent = (performance.now() - (turret.lastChampionHitAt || 0)) / 1000 <= TURRET_HEAT_RESET_SEC && turret._heatTarget === target;
+  const stacks = recent ? (turret.heatStacks || 0) : 0;
+  turret._aggroBeam.material.opacity = 0.45 + 0.17 * stacks;
+  turret._aggroBeam.material.color.setHex([0xff3a2a, 0xff5a1a, 0xff7a10, 0xffa000][Math.min(3, stacks)]);
+  turret._aggroBeam.visible = true;
+}
+// 59차 포탑 특성 표시(원작 포탑 위 버프 아이콘 자리) - 이름표 아래에 지금 걸려 있는 특성을 글자 배지로 보여준다:
+// 요새화(남은 시간) / 방패(원거리 피해 17% 감소) / 방벽(남은 시간) / 백도어 보호(주변에 적 미니언이 없으면 받는 피해 80% 감소) /
+// 가열 n단계(+40%씩). 0.25초마다만 갱신한다.
+function updateTurretTraitBadges(turret, dt) {
+  if (!turret.traitsDiv) return;
+  turret._traitAccum = (turret._traitAccum || 0) + (dt || 0);
+  if (turret._traitAccum < 0.25 && turret._traitHtml != null) return;
+  turret._traitAccum = 0;
+  const data = TURRET_DATA[turret.type];
+  const now = getTurretGameTimeSec();
+  const badges = [];
+  const fmt = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+  if (isFortificationActive(turret, now)) badges.push(['#d9b15a', `요새화 ${fmt(data.fortificationEndSec - now)}`]);
+  if (data.hasShield && isShieldActive(turret)) badges.push(['#7fb3e6', '방패']);
+  if (turret.bastionEndsAt && now < turret.bastionEndsAt) badges.push(['#a98be0', `방벽 ${Math.ceil(turret.bastionEndsAt - now)}초`]);
+  if (isDoubleArmorActive(turret)) badges.push(['#9aa4ad', '백도어 보호']);
+  const recent = (performance.now() - (turret.lastChampionHitAt || 0)) / 1000 <= TURRET_HEAT_RESET_SEC;
+  if (recent && turret.heatStacks > 0) badges.push(['#ff7a3a', `가열 ${turret.heatStacks}단계 +${Math.round(turret.heatStacks * TURRET_HEAT_STEP * 100)}%`]);
+  const html = badges.map(([c, t]) => `<span style="display:inline-block;margin:1px 2px 0;padding:0 4px;border-radius:3px;font-size:9px;line-height:13px;color:#111;background:${c}">${t}</span>`).join('');
+  if (html !== turret._traitHtml) { turret.traitsDiv.innerHTML = html; turret._traitHtml = html; }
+}
+
 // 버그 수정("포탑 공격 시 GLB 투명화") - 이 자리에 있던 updateTurretRenderSafety()
 // 함수를 완전히 제거했다(아래 updateTurretCombat 안의 상세 설명 참고).
 // 카메라가 포탑 가까이 갈 때마다 그 포탑 material의 depthWrite를 매 프레임
@@ -27980,6 +28074,8 @@ function updateTurretCombat(turret, dt) {
   if (turret.usingRealModel && turret.mesh) turret.mesh.visible = true;
   if (data.indestructible) { if (turret.mixer) safeMixerUpdate(turret.mixer, dt, `well:${turret.team}`); updateNexusWell(turret, dt); return; } // 우물은 완전히 별도 로직(요청 6) - 항상 매 프레임 그대로 유지
   if (turret.destroyed) {
+    updateTurretAggroBeam(turret, null);
+    if (turret.traitsDiv) turret.traitsDiv.innerHTML = '';
     // 파괴 순간/이후도 게임 오브젝트와 모델 가시성을 완전히 분리한다.
     if (turret.usingRealModel && turret.mesh) {
       turret.mesh.visible = true;
@@ -28029,6 +28125,8 @@ function updateTurretCombat(turret, dt) {
   turret.attackCooldown = Math.max(0, turret.attackCooldown - dt);
   const target = getTurretAttackTarget(turret);
   turret.attackTarget = target;
+  updateTurretAggroBeam(turret, target);
+  updateTurretTraitBadges(turret, dt);
   if (!target || turret.attackCooldown > 0) return;
   turret.attackCooldown = 1 / data.attackSpeed; // 요청 7: 포탑 자신의 Attack Speed 사용 - Phase 2에서도 절대 변경하지 않음
   const result = getTurretDamage(turret, target);
@@ -28051,11 +28149,13 @@ function updateTurretCombat(turret, dt) {
   // 사라지고 골드/경험치를 지급해야 하는 killMinion() 흐름과 충돌한다.
   projectiles.spawn({
     from: origin, target, speed: TURRET_PROJECTILE_SPEED,
-    color: turret.team === 'BLUE' ? 0x8fc7ff : 0xff8f8f,
+    // 59차: 가열 단계가 오를수록 탄이 굵고 뜨거운 색이 된다(원작 포탑 광선이 점점 달아오르는 연출).
+    color: (result.heatMultiplier || 1) > 1 ? [0xffd27a, 0xff9a3c, 0xff4a1c][Math.min(2, Math.round(((result.heatMultiplier || 1) - 1) / TURRET_HEAT_STEP) - 1)] : (turret.team === 'BLUE' ? 0x8fc7ff : 0xff8f8f),
+    scale: 1.6 + ((result.heatMultiplier || 1) - 1) * 1.6,
     realmId: turret.realmId, // Phase 2 요청 17 - 발사 시점 realm 스냅샷(포탑은 realmId가 바뀌지 않지만 대칭성을 위해 항상 넘긴다)
     fromTurret: true, // 버그 수정(요청 27): 야스오 바람 장막은 포탑 공격/광선을 막지 않는다 -
     // ProjectileSystem.update()의 windwall 충돌 검사가 이 플래그를 보고 포탑 발사체는 건너뛴다.
-    onHit: (t) => { if (t.isMinion) applyDamageToMinion(t, result); else applyDamage(t, { ...result, isBasicAttack: true, source: turret }); },
+    onHit: (t) => { if (t.isMinion) applyDamageToMinion(t, { ...result, source: turret }); else applyDamage(t, { ...result, isBasicAttack: true, source: turret }); },
   });
 }
 // O. 우물(기지) - 요청 6/43: 일반 포탑 전투 시스템을
@@ -28667,7 +28767,8 @@ const MINION_SPAWN_POINT_BLUE_FALLBACK = new THREE.Vector3(0, 0, -45);
 const MINION_SPAWN_POINT_RED_FALLBACK = new THREE.Vector3(0, 0, 45);
 function getMinionSpawnPoint(team) {
   const nexus = getTeamNexus(team);
-  if (nexus) return getWorldPosition(nexus).clone();
+  // 59차: 넥서스 중심은 충돌 원 안이라 거기서 나오면 밀려나며 튄다 - 상대 진영 쪽 넥서스 가장자리 바로 앞에서 나온다.
+  if (nexus) return getWorldPosition(nexus).clone().add(new THREE.Vector3(0, 0, (team === 'RED' ? -1 : 1) * ((nexus.collisionRadius || 0) + 0.6)));
   return team === 'RED' ? MINION_SPAWN_POINT_RED_FALLBACK : MINION_SPAWN_POINT_BLUE_FALLBACK;
 }
 const MINION_SPAWN_POINT = MINION_SPAWN_POINT_BLUE_FALLBACK; // 하위 호환(기존 코드가 참조하던 이름 그대로 유지)
@@ -28690,7 +28791,32 @@ const MINION_LANE_WAYPOINTS_BLUE = [
 // 임의로 새로 만들지 말고 기존 좌표계를 기준으로 대칭시켜라).
 const MINION_LANE_WAYPOINTS_RED = MINION_LANE_WAYPOINTS_BLUE.map((wp) => new THREE.Vector3(wp.x, wp.y, -wp.z));
 const MINION_LANE_WAYPOINTS = MINION_LANE_WAYPOINTS_BLUE; // 하위 호환(기존 코드가 참조하던 이름 그대로 유지)
-function getMinionLaneWaypoints(team) { return team === 'RED' ? MINION_LANE_WAYPOINTS_RED : MINION_LANE_WAYPOINTS_BLUE; }
+// 59차: 칼바람 나락 맵이 있으면 원작 구조물 좌표(HA_STRUCTURES_LOL)로 라인 경로를 만든다. 예전 고정 좌표(-15~94.5)는
+// 이 맵(넥서스 z 약 ±55)보다 훨씬 길어서 미니언이 상대 넥서스를 지나 맵 끝으로 걸어가려 했다. 웨이포인트는 구조물
+// "사이" 한가운데(구조물 중심은 충돌 때문에 닿을 수 없다) - 내 넥서스 포탑 → 억제기 → 억제기 포탑 → 외곽 포탑 → 다리
+// 가운데 → 상대 쪽 같은 순서 → 상대 넥서스.
+let _haLaneWaypointsCache = null;
+function buildHowlingAbyssLaneWaypoints() {
+  if (typeof HA_STRUCTURES_LOL === 'undefined' || typeof haLolToWorld !== 'function') return null;
+  if (typeof howlingAbyssMap === 'undefined' || !howlingAbyssMap || !howlingAbyssMap.group) return null;
+  const zOf = (xz) => haLolToWorld(xz).z;
+  const side = (team) => {
+    const t = HA_STRUCTURES_LOL[team];
+    const ntz = (zOf(t.nexusTurrets[0]) + zOf(t.nexusTurrets[1])) / 2;
+    return [zOf(t.nexus), ntz, zOf(t.inhibitor), zOf(t.inhibTurret), zOf(t.outer)];
+  };
+  const b = side('BLUE'), r = side('RED');
+  const mids = (arr) => arr.slice(1).map((z, i) => (arr[i] + z) / 2);
+  // BLUE 기준 z 순서(넥서스 → 바깥): 사이사이 + 가운데 0 + 레드 쪽 사이사이(바깥 → 넥서스) + 레드 넥서스.
+  const blueZ = [...mids(b), 0, ...mids(r).reverse(), r[0]];
+  const redZ = [...mids(r), 0, ...mids(b).reverse(), b[0]];
+  return { BLUE: blueZ.map((z) => new THREE.Vector3(0, 0, z)), RED: redZ.map((z) => new THREE.Vector3(0, 0, z)) };
+}
+function getMinionLaneWaypoints(team) {
+  if (!_haLaneWaypointsCache) _haLaneWaypointsCache = buildHowlingAbyssLaneWaypoints();
+  if (_haLaneWaypointsCache) return _haLaneWaypointsCache[team === 'RED' ? 'RED' : 'BLUE'];
+  return team === 'RED' ? MINION_LANE_WAYPOINTS_RED : MINION_LANE_WAYPOINTS_BLUE;
+}
 
 // 하나의 중앙 데이터 정의(요청 38 MINION_STATS). 시간 성장 관련 필드는
 // 타입마다 실제로 주어진 형태가 달라서(전사 HP는 "가속 등차수열"까지
@@ -28959,6 +29085,7 @@ function shouldSpawnSuperMinion(team) {
 // 순서로 정렬해서 생성하고, 각 개체는 약간의 시간차(0.1초)를 두고
 // 스폰한다. 좌표는 그 팀의 실제 웨이포인트 진행 방향(전진 방향 단위벡터)을
 // 그대로 읽어서 자동으로 결정한다(하드코딩 금지 - 요청 8-D 단서).
+const MINION_SPAWN_STAGGER_MS = 650;
 function spawnMinionWave(team, gameTimeSec) {
   const waveIndex = team === 'RED' ? ++redMinionWaveCounter : ++minionWaveCounter;
   const spawnPoint = getMinionSpawnPoint(team);
@@ -28966,7 +29093,6 @@ function spawnMinionWave(team, gameTimeSec) {
   // 전진 방향 단위벡터: 스폰 지점 → 첫 웨이포인트.
   const forward = new THREE.Vector3().subVectors(waypoints[0], spawnPoint); forward.y = 0;
   if (forward.lengthSq() < 1e-6) forward.set(0, 0, team === 'RED' ? -1 : 1); else forward.normalize();
-  const spacing = 1.1;
   const composition = [];
   const spawnSuper = shouldSpawnSuperMinion(team);
   const spawnCannon = !spawnSuper && shouldSpawnCannonMinion(waveIndex, gameTimeSec); // 요청 3/32: 슈퍼+공성 동시 조합 금지
@@ -28975,12 +29101,11 @@ function spawnMinionWave(team, gameTimeSec) {
   if (spawnCannon) composition.push(MINION_TYPE.SIEGE);
   composition.push(MINION_TYPE.CASTER, MINION_TYPE.CASTER, MINION_TYPE.CASTER);
   composition.forEach((type, idx) => {
-    // 진행 방향 선두(슈퍼)부터 뒤로 갈수록 -forward*spacing*idx 만큼 밀려서
-    // 일렬 대형을 이룬다(요청 8-D). 좌우로는 살짝만 지그재그를 줘서 완전히
-    // 겹쳐 보이지 않게 한다.
-    const lateral = new THREE.Vector3(-forward.z, 0, forward.x).multiplyScalar((idx % 2 === 0 ? -1 : 1) * 0.35);
-    const pos = spawnPoint.clone().addScaledVector(forward, -spacing * idx).add(lateral);
-    setTimeout(() => { minions.push(createMinion(type, pos, gameTimeSec, team)); }, idx * 100); // 요청 8-E: 0.1초 간격 소환
+    // 59차: 원작처럼 넥서스 앞 같은 자리에서 한 마리씩(약 0.65초 간격) 나와 줄지어 걸어간다. 예전엔 넥서스 뒤쪽으로
+    // 일렬로 겹쳐 생겨서 넥서스 충돌 원 안에서 튕겨 나왔다.
+    const lateral = new THREE.Vector3(-forward.z, 0, forward.x).multiplyScalar((idx % 2 === 0 ? -1 : 1) * 0.25);
+    const pos = spawnPoint.clone().add(lateral);
+    setTimeout(() => { if (!gameEnded) minions.push(createMinion(type, pos, gameTimeSec, team)); }, idx * MINION_SPAWN_STAGGER_MS);
   });
   console.log(`[MINION] ${team} Wave ${waveIndex} (t=${gameTimeSec.toFixed(0)}s):`, composition.join(', '));
 }
@@ -28994,7 +29119,15 @@ function spawnMinionWave(team, gameTimeSec) {
 // 미니언 종류별 고정 높이표를 쓴다 - 절대 흔들리지 않는다("고정"). 실제
 // LoL 미니언 체력바처럼 미니언 몸통보다 살짝 얇고 짧은 바 하나만 깔끔하게
 // 표시한다(이름표 없음, 테두리 선명하게).
-const MINION_HEAD_HEIGHT = { melee: 0.95, caster: 0.85, siege: 1.15, super: 1.55 };
+// 59차: 사용자 제공 미니언 GLB 크기 - 가렌(키 약 206 LoL)을 기준으로 원작 비율에 맞춘 월드 키(그룹 배율 1.82를 나누기 전).
+// 근거리·원거리는 챔피언 키의 절반 남짓, 대포는 조금 크고, 슈퍼는 챔피언과 비슷하다. 체력바는 그 머리 위에 붙는다.
+const MINION_MODEL_HEIGHT_WORLD = { melee: 1.0, caster: 0.95, siege: 1.2, super: 1.8 };
+const MINION_GROUP_SCALE = 1.82;
+const MINION_HEAD_HEIGHT = Object.fromEntries(Object.entries(MINION_MODEL_HEIGHT_WORLD).map(([k, h]) => [k, h / MINION_GROUP_SCALE]));
+// 원작 충돌 반경(LoL): 근거리·원거리 48, 대포·슈퍼 65.
+const MINION_GAMEPLAY_RADIUS_LOL = { melee: 48, caster: 48, siege: 65, super: 65 };
+// 원작 원거리 미니언 투사체 속도(LoL/초): 원거리 650, 대포 1200.
+const MINION_MISSILE_SPEED_LOL = { caster: 650, siege: 1200 };
 const MINION_HEALTHBAR_CANVAS_W = 64, MINION_HEALTHBAR_CANVAS_H = 8;
 const MINION_HEALTHBAR_NEAR_DIST = 14;   // 이 거리 안 - 100% 표시(요청 21-F)
 const MINION_HEALTHBAR_MID_DIST = 26;    // 중간 거리 - 70~80%
@@ -29060,8 +29193,12 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
   const asset = minionBuildingAssets[assetKey];
   let group, body, mixer = null, actions = null, usingRealModel = false;
   if (asset) {
-    const inst = instantiateMinionBuildingAsset(assetKey);
-    group = inst.root; body = inst.body; mixer = inst.mixer; actions = inst.actions;
+    const inst = instantiateMinionBuildingAsset(assetKey, MINION_HEAD_HEIGHT[type]); // 59차: 종류별 원작 비율 키로 맞춘다
+    // 59차: inst.root(키를 맞춘 배율이 걸린 모델)를 회전 전용 자식으로 두고, 바깥 group에는 위치·공통 배율·체력바만
+    // 준다. 예전엔 group = inst.root라 아래 group.scale(1.82)이 키 맞춤 배율을 덮어썼고, 방향 전환(lookAt)도 스킨 메시
+    // 자체에 걸려(스킨 메시는 뼈대가 그리므로) 실제로는 돌지 않았다.
+    group = new THREE.Group(); group.add(inst.root);
+    body = inst.root; mixer = inst.mixer; actions = inst.actions;
     usingRealModel = true;
   } else {
     // GLB 미로딩 시 폴백(요청 22 "모델 로딩 실패해도 게임이 멈추면 안 된다") -
@@ -29079,17 +29216,17 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
   // 측정되면 실제 Idle/Walk 포즈의 실루엣과 달라 체력바가 살짝 어긋나
   // 보였다. 미니언 종류별 고정 높이표(MINION_HEAD_HEIGHT)를 쓰는 걸로
   // 바꿔서 절대 흔들리지 않게 했다.
-  const headY = (MINION_HEAD_HEIGHT[type] || 1.0) + 0.15;
+  const headY = (MINION_HEAD_HEIGHT[type] || 0.55) + 0.08;
   group.position.copy(position);
   scene.add(group);
   group.add(createBlobShadow(0.32)); // 최적화(문서 4-7절): 실시간 그림자 대신 값싼 blob 그림자
-  const healthBar = createMinionHealthBar(group, 0.3, headY);
+  const healthBar = createMinionHealthBar(group, type === 'super' ? 0.21 : (type === 'siege' ? 0.18 : 0.15), headY); // 59차: 몸 폭에 맞춘 얇은 바
   // 요청("미니언 크기를 1.4배 키워줘") - 몸체/체력바/그림자를 전부 만든
   // "뒤에" group 전체를 균일 확대한다. 먼저 스케일부터 걸면 자식으로
   // 추가되는 체력바/그림자까지 부모 스케일과 이중으로 곱해져서 위치와
   // 크기가 어긋난다 - 순서를 반드시 이렇게 지켜야 한다.
   // 요청("미니언 1.3배정도 크기를 키워줘") - 기존 1.4배에 추가로 1.3배 더 확대(1.4*1.3=1.82).
-  const MINION_SCALE = 1.82;
+  const MINION_SCALE = MINION_GROUP_SCALE;
   group.scale.setScalar(MINION_SCALE);
   const minion = {
     mesh: group, body, type, minionType: type, team,
@@ -29099,12 +29236,17 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
     hp: stats.hp, maxHp: stats.maxHp, armor: stats.armor, magicResist: stats.magicResist,
     attackDamage: stats.ad, attackSpeed: stats.attackSpeed, attackRange: stats.range,
     moveSpeedWorld: lolRangeToWorld(stats.moveSpeedLol),
-    radius: 0.3 * MINION_SCALE, collisionRadius: 0.3 * MINION_SCALE, selectionRadius: 0.3 * MINION_SCALE * 1.6, healthBar,
+    radius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48), collisionRadius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48), selectionRadius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48) * 1.6, healthBar,
     waypointIndex: 0, attackCooldown: 0, attackTarget: null, pendingHitTimer: null,
     hasAttackedStructure: false, // 요청 14/36: 한번 true가 되면 그 미니언 생존 동안 절대 false로 되돌리지 않는다(포탑/억제기/넥서스 전부 포함)
     lastAttackedByPlayerAt: 0, isDead: false, destroyed: false, realmId: 'main',
     spawnedAt: gameTimeSec, spawnWaveIndex: team === 'RED' ? redMinionWaveCounter : minionWaveCounter,
   };
+  // 59차: 지금 자리보다 앞(상대 진영 쪽)에 있는 첫 웨이포인트부터 따라간다 - 넥서스 앞에서 나온 미니언이 넥서스 쪽(뒤)의
+  // 첫 지점으로 되돌아가거나, 라인 중간에 만든 미니언이 자기 기지로 걸어가지 않게.
+  { const wps = getMinionLaneWaypoints(team), dir = team === 'RED' ? -1 : 1; let i = 0;
+    while (i < wps.length && (wps[i].z - position.z) * dir < 0.5) i++;
+    minion.waypointIndex = Math.min(i, Math.max(0, wps.length - 1)); }
   drawMinionHealthBar(minion); // 요청 23: 생성 즉시 풀피 상태로 그려둔다
   if (usingRealModel) playAssetClip(minion, `${team} ${type} minion`, MINION_IDLE_CLIP);
   return minion;
@@ -29187,39 +29329,86 @@ function isValidChampionTarget(minion, champion) {
   const range = lolRangeToWorld(minion.attackRange) + getCollisionRadius(minion) + getCollisionRadius(champion); // 44차: 가장자리 기준
   return getHorizontalDistance(minion.mesh.position, getWorldPosition(champion)) <= range;
 }
+// 59차: 미니언 어그로를 원작 규칙으로 다시 만들었다. 예전엔 "공격 사거리 안"에 들어온 대상만 골라서, 상대 웨이브가
+// 코앞에 와도 사거리(근거리 110)에 닿기 전까지는 무시하고 라인만 걸었고, 아군 챔피언을 때리는 적 챔피언에게 반응하는
+// 규칙(도움 요청)도 없었다. 이제 인식 범위(500) 안의 대상을 아래 순서로 골라 다가가서 때린다. 한번 고른 대상은 죽거나
+// 범위를 벗어나기 전까지 유지하고, 1순위(도움 요청)만 그 고정을 깬다.
+//   1. 아군 챔피언을 공격한 적 챔피언(도움 요청)  2. 아군 챔피언을 공격 중인 적 미니언  3. 아군 미니언을 공격 중인 적 미니언
+//   4. 아군 미니언을 공격 중인 적 포탑  5. 아군 미니언을 공격한 적 챔피언  6. 가장 가까운 적 미니언  7. 가장 가까운 적 챔피언
+//   그다음 구조물(포탑 → 억제기 → 넥서스, 원작처럼 공격 사거리 안일 때).
+// 허수아비(연습용 표적)는 RED 챔피언으로서 도움 요청을 받지만, BLUE 미니언이 스스로 때리러 가지는 않는다(연습 표적이 웨이브에
+// 녹아 버리지 않게).
+const MINION_ACQUISITION_RANGE_LOL = 500;
+const MINION_CALL_FOR_HELP_MS = 3000;
+const MINION_CHAMPION_ATTACKED_MINION_MS = 2000;
+function minionAcquireRangeWorld(minion, target) {
+  return lolRangeToWorld(Math.max(MINION_ACQUISITION_RANGE_LOL, minion.attackRange || 0)) + getCollisionRadius(minion) + getCollisionRadius(target);
+}
+function isAliveEnemyForMinion(minion, target) {
+  if (!target || target.hp <= 0 || target.isDead || target.destroyed || target.isUntargetable) return false;
+  if (target.state === STATE.DEAD) return false;
+  if (!target.team || target.team === minion.team) return false;
+  return canRealmInteract(minion, target);
+}
+function canMinionAcquire(minion, target) {
+  if (!isAliveEnemyForMinion(minion, target)) return false;
+  if (target.isStructure) return isValidMinionTarget(minion, target);
+  return getHorizontalDistance(minion.mesh.position, getWorldPosition(target)) <= minionAcquireRangeWorld(minion, target);
+}
+function getMinionEnemyChampions(minion) {
+  const list = [];
+  if (typeof controller !== 'undefined' && controller && controller.team && controller.team !== minion.team) list.push(controller);
+  return list;
+}
+function closestAcquirable(minion, candidates) {
+  let best = null, bestDist = Infinity;
+  for (const u of candidates) {
+    if (!canMinionAcquire(minion, u)) continue;
+    const d = getHorizontalDistance(minion.mesh.position, getWorldPosition(u));
+    if (d < bestDist) { bestDist = d; best = u; }
+  }
+  return best;
+}
 function getMinionAttackTarget(minion) {
   if (minion.isDead) return null;
-  // 0순위(요청 0/14/36, 두 팀 확장에서도 유지): 이미 구조물(포탑/억제기/
-  // 넥서스)을 공격 중이면 그 의지를 유지한다 - hasAttackedStructure는
-  // 한번 true가 되면 이 미니언이 죽을 때까지 계속 true다.
-  if (minion.hasAttackedStructure && minion.attackTarget && minion.attackTarget.isStructure && isValidMinionTarget(minion, minion.attackTarget)) {
-    return minion.attackTarget;
-  }
-  // 1순위: 가까운 적 미니언
-  const nearestMinion = findNearestEnemyMinion(minion);
-  if (nearestMinion) return nearestMinion;
-  // 2순위(요청 20-A): 자신을 공격하고 있는 적 챔피언 - 최근 5초 내 플레이어에게
-  // 피격당했다면 그 반격 의지를 우선한다(기존 보강 규칙 그대로 유지).
-  if (typeof controller !== 'undefined' && controller && performance.now() - minion.lastAttackedByPlayerAt < 5000 && isValidChampionTarget(minion, controller)) {
-    return controller;
-  }
-  // 3순위(요청 20-A): 가까운 적 챔피언 - 공격당한 적이 없어도 사거리
-  // 안에 들어오면 능동적으로 인식한다(실제 LoL 미니언 어그로와 동일).
-  if (typeof controller !== 'undefined' && controller && isValidChampionTarget(minion, controller)) {
-    return controller;
-  }
-  // 4순위: 아군 미니언을 공격 중인 적 포탑을 우선 도와준다(기존 유지) → 없으면 가장 가까운 적 포탑.
+  const now = performance.now();
+  // 0순위(요청 0/14/36): 이미 구조물을 공격 중이면 그 의지를 유지한다(도움 요청은 예외 - 원작도 포탑을 치던 미니언이 챔피언에게 돌아선다).
+  const cfh = minion._callForHelp;
+  if (cfh && now < cfh.until && canMinionAcquire(minion, cfh.target)) return cfh.target;
+  if (minion.hasAttackedStructure && minion.attackTarget && minion.attackTarget.isStructure && isValidMinionTarget(minion, minion.attackTarget)) return minion.attackTarget;
+  // 고정: 지금 대상이 아직 유효하면 그대로(구조물은 위에서 처리).
+  const cur = minion.attackTarget;
+  if (cur && !cur.isStructure && canMinionAcquire(minion, cur)) return cur;
+  const enemyMinions = minions.filter((m) => m !== minion && m.team !== minion.team && !m.isDead);
+  const champs = getMinionEnemyChampions(minion);
+  // 2. 아군 챔피언을 공격 중인 적 미니언
+  let t = closestAcquirable(minion, enemyMinions.filter((m) => m.attackTarget && m.attackTarget.isChampion && m.attackTarget.team === minion.team));
+  if (t) return t;
+  // 3. 아군 미니언을 공격 중인 적 미니언
+  t = closestAcquirable(minion, enemyMinions.filter((m) => m.attackTarget && m.attackTarget.isMinion && m.attackTarget.team === minion.team));
+  if (t) return t;
+  // 4. 아군 미니언을 공격 중인 적 포탑(공격 사거리 안)
   const engagedTurret = findTurretAttackingAllyMinion(minion);
   if (engagedTurret) return engagedTurret;
-  const nearestTurret = findNearestValidTurret(minion);
-  if (nearestTurret) return nearestTurret;
-  // 5순위: 적 억제기
-  const nearestInhib = findNearestValidInhibitor(minion);
-  if (nearestInhib) return nearestInhib;
-  // 6순위: 적 넥서스
-  const nearestNexus = findNearestValidNexus(minion);
-  if (nearestNexus) return nearestNexus;
-  return null;
+  // 5. 아군 미니언을 공격한 적 챔피언(최근 2초)
+  t = closestAcquirable(minion, champs.filter((c) => minions.some((m) => m.team === minion.team && !m.isDead && m._lastChampionAttacker === c && now - (m._lastChampionAttackedAt || 0) < MINION_CHAMPION_ATTACKED_MINION_MS)));
+  if (t) return t;
+  // 6. 가장 가까운 적 미니언  7. 가장 가까운 적 챔피언
+  t = closestAcquirable(minion, enemyMinions); if (t) return t;
+  t = closestAcquirable(minion, champs); if (t) return t;
+  // 구조물: 가장 가까운 적 포탑 → 억제기 → 넥서스
+  return findNearestValidTurret(minion) || findNearestValidInhibitor(minion) || findNearestValidNexus(minion) || null;
+}
+// 59차 도움 요청: 적 챔피언(attacker)이 아군 챔피언(victim)에게 피해를 주면, victim 팀 미니언 중 attacker가 인식 범위 안에
+// 있는 미니언들이 3초 동안 attacker를 최우선으로 노린다(포탑 쪽은 notifyTurretsChampionAttacked가 맡는다).
+function notifyMinionsChampionAttacked(attacker, victim) {
+  if (!attacker || !victim || !attacker.team || attacker.team === victim.team) return;
+  const until = performance.now() + MINION_CALL_FOR_HELP_MS;
+  for (const m of minions) {
+    if (m.isDead || m.team !== victim.team) continue;
+    if (getHorizontalDistance(m.mesh.position, getWorldPosition(attacker)) > minionAcquireRangeWorld(m, attacker)) continue;
+    m._callForHelp = { target: attacker, until };
+  }
 }
 
 // updateMinionMovement(minion, dt) - 자기 팀의 웨이포인트(=자기 진영→상대
@@ -29313,6 +29502,15 @@ function computeFriendlySeparation(minion) {
   }
   return { x: fx, z: fz };
 }
+// 59차: 모델이 (dx, dz) 방향을 보게 한다. lookAt은 월드 좌표를 받으므로 바깥 group의 월드 위치 기준으로 계산한다(예전엔
+// 로컬 위치(0,0,0) + 방향을 넘겨 엉뚱한 곳을 봤다). 사용자 제공 GLB는 두 팀 모두 +Z가 정면이라 팀별 보정이 필요 없다.
+function faceMinionToward(minion, dx, dz) {
+  if (!minion.body || Math.hypot(dx, dz) < 1e-6) return;
+  const p = minion.mesh.position;
+  if (minion.body === minion.mesh) return;
+  minion.mesh.updateMatrixWorld(true);
+  minion.body.lookAt(p.x + dx, minion.body.getWorldPosition(new THREE.Vector3()).y, p.z + dz);
+}
 function updateMinionMovement(minion, dt) {
   if (minion.isDead) return;
   resolveMinionStructureCollisions(minion); // 이동 여부와 상관없이 매 프레임 겹침을 즉시 풀어준다
@@ -29363,8 +29561,7 @@ function updateMinionMovement(minion, dt) {
   }
   minion.mesh.position.x += mx * minion.moveSpeedWorld * dt;
   minion.mesh.position.z += mz * minion.moveSpeedWorld * dt;
-  const dir = new THREE.Vector3(mx, 0, mz);
-  minion.body.lookAt(minion.body.position.clone().add(dir)); // 요청 20: 이동 벡터를 모델 회전에 그대로 연결
+  faceMinionToward(minion, mx, mz); // 요청 20: 이동 벡터를 모델 회전에 그대로 연결
   // 버그 수정(사용자 지적 "붉은 진영 미니언이 바라보는 방향이 이상해") -
   // 포탑/넥서스/억제기와 똑같은 원인이다: RED는 별도의 GLB 에셋 파일
   // (redMelee/redCaster 등)을 쓰는데, 그 파일들의 모델 기본 정면 방향이
@@ -29372,7 +29569,6 @@ function updateMinionMovement(minion, dt) {
   // 를 모르고 그냥 로컬 -Z를 목표로 돌리기 때문에, 기본 정면이 다른
   // RED 모델은 이동 방향과 어긋난 채로 보인다. 포탑에 적용했던 것과
   // 동일하게 RED만 180도 추가 보정한다.
-  if (minion.team === 'RED') minion.body.rotateY(Math.PI);
   if (!inHitFlash && minion.usingRealModel) playAssetClip(minion, `${minion.team} ${minion.type} minion`, MINION_RUN_CLIP);
 }
 // updateMinionAttack(minion, dt) - 공격 속도 기반 쿨다운 + 애니메이션 재생
@@ -29388,7 +29584,10 @@ function updateMinionAttack(minion, dt) {
   minion.attackCooldown = Math.max(0, minion.attackCooldown - dt);
   const target = getMinionAttackTarget(minion);
   minion.attackTarget = target;
-  if (!target || minion.attackCooldown > 0) return;
+  if (!target || !isValidMinionTarget(minion, target)) return; // 59차: 인식 범위로 고른 대상이 아직 공격 사거리 밖이면 다가가기만 한다
+  const tpos = getWorldPosition(target);
+  faceMinionToward(minion, tpos.x - minion.mesh.position.x, tpos.z - minion.mesh.position.z);
+  if (minion.attackCooldown > 0) return;
   const cycleTime = 1 / minion.attackSpeed;
   minion.attackCooldown = cycleTime;
   const label = `${minion.team} ${minion.type} minion`;
@@ -29405,8 +29604,8 @@ function updateMinionAttack(minion, dt) {
       hitDelaySec = Math.min(clipDur * 0.5, cycleTime * 0.85); // 요청 16: 실제 타격 프레임 근사(클립 중간 지점) - 공격 주기를 넘지 않게 clamp
     }
   }
-  const dealHit = () => {
-    if (minion.isDead || !isValidMinionTarget(minion, target)) return; // 요청 16/37: 타격 시점에 대상이 이미 무효화됐으면 피해를 주지 않는다
+  const applyHit = (target) => {
+    if (!target || target.hp <= 0 || target.isDead || target.destroyed) return;
     const dmg = { rawDamage: minion.attackDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, source: minion };
     if (target.isTurret) {
       minion.hasAttackedStructure = true;
@@ -29435,6 +29634,15 @@ function updateMinionAttack(minion, dt) {
       applyDamage(target, { ...dmg, rawDamage: dmg.rawDamage * MINION_CHAMPION_DAMAGE_PERCENT, source: minion, isBasicAttack: true });
     }
   };
+  const dealHit = () => {
+    if (minion.isDead || !isValidMinionTarget(minion, target)) return; // 요청 16/37: 타격 시점에 대상이 이미 무효화됐으면 피해를 주지 않는다
+    const missileSpeedLol = MINION_MISSILE_SPEED_LOL[minion.type];
+    if (!missileSpeedLol || typeof projectiles === 'undefined') { applyHit(target); return; }
+    // 59차: 원거리·대포 미니언은 투사체를 쏜다(원작 속도 650/1200) - 날아가는 동안 대상이 죽으면 사라진다.
+    const from = minion.mesh.position.clone().add(new THREE.Vector3(0, (MINION_MODEL_HEIGHT_WORLD[minion.type] || 1) * 0.6, 0));
+    projectiles.spawn({ from, target, speed: lolRangeToWorld(missileSpeedLol), color: minion.team === 'BLUE' ? 0x9fd0ff : 0xffb08f,
+      realmId: minion.realmId, team: minion.team, scale: minion.type === 'siege' ? 1.4 : 0.8, onHit: (t) => applyHit(t) });
+  };
   if (hitDelaySec > 0) setTimeout(dealHit, hitDelaySec * 1000);
   else dealHit(); // 모델 미로딩(폴백 도형) 시에는 기존처럼 즉시 적용 - 회귀 없음
 }
@@ -29446,7 +29654,9 @@ function updateMinionRegeneration(minion, dt) {
 }
 function rewardMinionKill(minion) {
   const gold = getMinionGoldValue(minion, getTurretGameTimeSec());
-  if (typeof controller !== 'undefined' && controller) {
+  // 59차: 골드는 원작처럼 플레이어가 막타를 친 적 미니언만 준다. 예전엔 어느 팀 미니언이 누구에게 죽든(아군 미니언이
+  // 상대 웨이브에 죽어도) 전부 플레이어 골드로 들어갔다.
+  if (typeof controller !== 'undefined' && controller && minion._lastHitBy === controller && minion.team !== controller.team) {
     controller.gold = (controller.gold || 0) + gold;
     updateGoldDisplay();
   }
@@ -29555,10 +29765,12 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
   // "방금 플레이어가 나를 공격했다"고 착각해 요청 20-A 2순위(자신을
   // 공격 중인 적 챔피언) 판정이 잘못 발동한다. 실제로 플레이어(챔피언)가
   // 원인일 때만(fromPlayer===true) 갱신한다.
+  if (!fromPlayer) minion._lastHitBy = result.source || null; // 59차: 마지막 타격이 미니언·포탑이면 플레이어 막타(골드·CS)가 아니다
   if (fromPlayer) {
     minion.lastAttackedByPlayerAt = performance.now();
     if (typeof controller !== 'undefined' && controller) {
       minion._lastHitBy = controller;
+      minion._lastChampionAttacker = controller; minion._lastChampionAttackedAt = minion.lastAttackedByPlayerAt; // 59차 미니언 어그로 5순위
       // 아이템 패시브 "모든 피해 흡혈"(도란의 검/활)/"생명력 흡수"(흡혈의
       // 낫, 물리 피해 전용) - 미니언 피해도 실제 LoL처럼 흡혈 대상에
       // 포함된다(구조물 피해만 제외).
@@ -29595,7 +29807,10 @@ function updateMinionVisual(minion) {
     // 빨갛게 눌어붙는 문제가 있었기 때문에(재검증 2차 수정) 끄기는 상태와
     // 무관하게 항상 실행되어야 한다.
     clearTimeout(minion._hitFlashTimerId);
-    minion.body.material.emissive = new THREE.Color(0xff3333);
+    // 59차: 발광 속성이 없는 재질(GLB unlit = MeshBasicMaterial)에 emissive를 새로 만들어 넣으면 three.js가 그 재질을 그릴 때
+    // uniforms.emissive가 없어 매 프레임 예외를 던졌다 - 원래 발광을 지원하는 재질에서만 번쩍인다.
+    if (!minion.body.material.emissive || !minion.body.material.emissive.isColor) return;
+    minion.body.material.emissive.setHex(0xff3333);
     minion.body.material.emissiveIntensity = 0.8;
     // 재검증(2차) 수정: 포탑과 동일한 이유로 !minion.isDead 가드를 제거한다
     // - 죽는 순간의 마지막 피격 발광이 Death 애니메이션 재생 중(제거되기
@@ -29607,7 +29822,8 @@ function updateMinionVisual(minion) {
   }
 }
 function updateMinionWaveSpawner(gameTimeSec) {
-  if (gameTimeSec < MINION_FIRST_WAVE_SEC) return;
+  if (gameTimeSec < MINION_FIRST_WAVE_SEC || gameEnded) return;
+  if (typeof howlingAbyssStructuresSpawned !== 'undefined' && !howlingAbyssStructuresSpawned) return; // 59차: 맵·넥서스가 없는 연습 공간에서는 웨이브가 없다
   if (gameTimeSec - lastMinionWaveSec >= MINION_WAVE_INTERVAL_SEC) {
     lastMinionWaveSec = gameTimeSec;
     // 요청 문서 13절: 게임 시작 → RED 웨이브 생성 / BLUE 웨이브 생성이
@@ -35003,6 +35219,9 @@ if (clearWardsBtnEl) clearWardsBtnEl.addEventListener('click', () => wardSystem.
 // 37차: 연습용 골드 지급(설정 패널) - 누를 때마다 골드 +10000.
 const addGoldBtnEl = document.getElementById('addGoldBtn');
 if (addGoldBtnEl) addGoldBtnEl.addEventListener('click', () => { if (!controller) return; controller.gold = (controller.gold || 0) + 10000; updateGoldDisplay(); });
+// 59차: 첫 웨이브(1:05)를 기다리지 않고 양 팀 웨이브를 바로 부른다(연습용). 정기 웨이브 시계는 그대로 간다.
+const spawnWaveBtnEl = document.getElementById('spawnWaveBtn');
+if (spawnWaveBtnEl) spawnWaveBtnEl.addEventListener('click', () => { if (typeof howlingAbyssStructuresSpawned !== 'undefined' && !howlingAbyssStructuresSpawned) return; const t = getTurretGameTimeSec(); spawnMinionWave('BLUE', t); spawnMinionWave('RED', t); });
 function placeEnemyWardAt(point) {
   const type = enemyWardTypeSelectEl && enemyWardTypeSelectEl.value === 'control' ? 'control' : 'stealth';
   const data = type === 'stealth' ? ITEM_DATA.stealthWard : null;
@@ -36028,9 +36247,8 @@ async function bootstrapChampion(gltf, fileName) {
   // 좌표가 필요 없다 - 실제 넥서스 GLB 자체에 이미 포함돼 있다고 보고
   // 별도 오브젝트를 새로 만들지 않는다(요청 6절 - 중복 생성 금지 원칙).
   // 20차: 칼바람 나락 맵이 있으면 원작 좌표에 포탑·억제기·넥서스·분수를 만든다(첫 로드 때 한 번만 - 챔피언을
-  // 바꿔도 구조물은 유지). 맵이 없으면 예전처럼 구조물 없는 연습 공간이다. 미니언은 여전히 만들지 않는다.
+  // 바꿔도 구조물은 유지). 맵이 없으면 예전처럼 구조물 없는 연습 공간이다. 59차: 미니언도 챔피언을 바꿔도 그대로 둔다.
   if (typeof spawnHowlingAbyssStructures === 'function') spawnHowlingAbyssStructures();
-  minions.length = 0;
 
   // 요청("게임을 시작하면 자기 진영 우물에서 시작하게") - 실제 LoL처럼
   // 챔피언은 자기 팀 기지의 우물(분수)에서 스폰한다. 플레이어는 기존
@@ -36870,8 +37088,9 @@ const TURRET_MODEL_CLIPS = {
   destroyed: 'Destroyed',
   respawn: 'Respawn', // 문서의 "Respown"은 오타 - 실제 clip은 정상 철자
 };
-const INHIBITOR_MODEL_CLIPS = {}; // 억제기 GLB 제거됨
-const NEXUS_MODEL_CLIPS = {}; // 넥서스 GLB 제거됨
+// 59차: 사용자 제공 억제기/넥서스 GLB(assets/structures)의 실제 클립 이름.
+const INHIBITOR_MODEL_CLIPS = { spawn: 'Inhibitor_spawn.anm', idle: 'Idle_Normal1', death: 'Death_Base', deadIdle: 'Inhibitor_idle_dead.anm', respawn: 'Respawn_Base' };
+const NEXUS_MODEL_CLIPS = { spawn: 'Nexus_spawn.anm', idle: 'Idle1_Base', death: 'Death' };
 
 const minionBuildingAssets = {}; // slotKey -> { gltf, clipNames:Set<string> }
 // 요청("그냥 이름에 포탑 들어가있으면 다 포탑glb가 적용되게 해줘") - 예전엔
@@ -36956,7 +37175,31 @@ function loadEmbeddedBuildingAssets() {
       (err) => { console.error(`[MODEL LOAD ERROR] ${filename} (내장):`, err); resolve(); });
   })));
 }
-const embeddedBuildingAssetsReady = loadEmbeddedBuildingAssets();
+// 59차: 사용자 제공 미니언 4종·포탑·억제기·넥서스 GLB(블루/레드)를 저장소 파일(assets/minions, assets/structures)로 둔다 -
+// 챔피언 모델과 같은 방식으로 페이지가 열리면 바로 내려받아 minionBuildingAssets에 등록한다. 한 파일이 실패해도 나머지는
+// 그대로 쓰고(그 종류만 임시 도형), 전체가 오래 걸려도 20초 뒤에는 구조물 생성을 막지 않는다.
+const BUNDLED_BUILDING_GLBS = {
+  blueMelee: 'assets/minions/melee_blue.glb', redMelee: 'assets/minions/melee_red.glb',
+  blueCaster: 'assets/minions/caster_blue.glb', redCaster: 'assets/minions/caster_red.glb',
+  blueSiege: 'assets/minions/siege_blue.glb', redSiege: 'assets/minions/siege_red.glb',
+  blueSuper: 'assets/minions/super_blue.glb', redSuper: 'assets/minions/super_red.glb',
+  blueTurret: 'assets/structures/turret_blue.glb', redTurret: 'assets/structures/turret_red.glb',
+  blueInhibitor: 'assets/structures/inhibitor_blue.glb', redInhibitor: 'assets/structures/inhibitor_red.glb',
+  blueNexus: 'assets/structures/nexus_blue.glb', redNexus: 'assets/structures/nexus_red.glb',
+};
+function loadBundledBuildingAssets() {
+  return Promise.all(Object.entries(BUNDLED_BUILDING_GLBS).map(([key, url]) => new Promise((resolve) => {
+    if (minionBuildingAssets[key]) { resolve(); return; } // 직접 올린 파일이 이미 있으면 그쪽을 쓴다
+    new GLTFLoader().load(url, (gltf) => {
+      minionBuildingAssets[key] = { gltf, clipNames: new Set(gltf.animations.map((a) => a.name)), slot: { key } };
+      renderMinionAssetStatus(); resolve();
+    }, undefined, (err) => { console.warn(`[MODEL LOAD ERROR] ${url}:`, err && err.message ? err.message : err); resolve(); });
+  })));
+}
+const embeddedBuildingAssetsReady = Promise.race([
+  Promise.all([loadEmbeddedBuildingAssets(), loadBundledBuildingAssets()]),
+  new Promise((resolve) => setTimeout(resolve, 20000)),
+]);
 function renderMinionAssetStatus() {
   const el = document.getElementById('minionAssetStatus');
   if (!el) return;
@@ -37286,6 +37529,7 @@ function animate() {
     updateMarkers(dt);
     updateDummyAI(dt);
     updateDyingMinions(dt);
+    if (typeof updateMinions === 'function') updateMinions(dt); // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
     updateInhibitorBuildingAnim(dt);
     updateTurrets(dt); // 20차: 원작 위치에 배치한 포탑(공격·우물 회복/피해)
     updateNexusBuildingAnim(dt);

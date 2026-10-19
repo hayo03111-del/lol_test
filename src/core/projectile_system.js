@@ -75,11 +75,12 @@ class ProjectileSystem {
   // 맞힌다(노틸러스 Q와 같은 판정). 예전엔 발사 순간 직선 위의 대상을 골라 끝까지 따라가서 피할 수 없었고 사거리 밖까지 쫓아갔다.
   // line.pierce: 관통 - 닿는 대상마다 onHit(unit, index)을 부르고 사거리 끝까지 계속 날아간다. line.maxHits(>1): 그만큼 맞히면 사라진다(럭스 Q - 처음 둘).
   // hidden: 화살 모양을 그리지 않는다(자체 이펙트가 있는 스킬).
-  spawn({ from, target, targetPoint, speed = 26, damage = 0, color = 0xdff0ff, realmId, onHit, fromTurret = false, line = null, hidden = false }) {
+  spawn({ from, target, targetPoint, speed = 26, damage = 0, color = 0xdff0ff, realmId, onHit, fromTurret = false, line = null, hidden = false, scale = 1, team = null }) {
     const entry = this._acquireArrowMesh(color);
     entry.group.position.copy(from);
+    entry.group.scale.setScalar(scale); // 59차: 포탑 가열 단계마다 탄이 굵어진다(풀에서 다시 쓸 때도 매번 새로 맞춘다)
     if (!hidden) this.scene.add(entry.group);
-    const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target: line ? null : target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, life: 2.5, hasHit: false, done: false };
+    const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target: line ? null : target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, team, life: 2.5, hasHit: false, done: false };
     if (line) {
       const dir = line.dir.clone().setY(0).normalize();
       proj.line = { dir, origin: from.clone(), maxDist: line.maxDist, halfWidth: line.halfWidth, filter: line.filter || null, onMiss: line.onMiss || null, traveled: 0, pierce: !!line.pierce || line.maxHits > 1, maxHits: line.maxHits || 0, hitSet: new Set(), hits: 0 };
@@ -171,7 +172,7 @@ class ProjectileSystem {
       // 버그 수정(요청 27): 포탑 공격/광선은 막지 않는다 - fromTurret 발사체는
       // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
       // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
-      if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret) {
+      if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret && !(proj.team && proj.team === controller.team)) { // 59차: 아군 미니언 투사체는 통과
         const wall=controller._yasuo.windwall, progress=Math.min(1,(performance.now()-wall.createdAt)/180), wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, wall.width*0.75*progress), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this._remove(i, true); continue; }
       }
       if (proj.line) { this._updateLine(proj, i, dt); continue; }

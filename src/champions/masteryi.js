@@ -43,7 +43,7 @@ CharacterController.prototype._masteryiApplyWujuTrueDamage = function(target) {
     const lvl = Math.max(1, this.skillLevels.E || 1);
     const trueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * this._getBonusAD();
     const wouldKill = target.hp > 0 && target.hp <= trueDmg;
-    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, canDamageStructures: true }); // 기본 공격 적중 효과 - 구조물에도 들어간다
     if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
 };
 

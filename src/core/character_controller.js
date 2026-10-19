@@ -14,6 +14,7 @@ class CharacterController {
     // 전용 효과(서포터 아이템/어시스트 등)를 만들 때 이 필드를 generic하게
     // 참조할 수 있다.
     this.team = PLAYER_TEAM;
+    this.isChampion = true; // 59차: 포탑 가열·관통, 미니언/포탑 도움 요청이 플레이어를 챔피언으로 알아보게
     this.model = animationRoot; // 실제 GLB Scene/Skeleton/Bone이 들어있는 객체
     this.mixer = new THREE.AnimationMixer(animationRoot);
     this.clips = resolver.clips;

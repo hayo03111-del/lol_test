@@ -207,10 +207,8 @@ CharacterController.prototype._asheResolveWImpact = function(p) {
   const raw = skillVal(w.damageByLevel, p.lvl) + (w.bonusAdRatio || 0) * this._getBonusAD();
   for (const { unit } of hits) {
     if (!unit || unit.hp <= 0) continue;
-    if (unit.isTurret) { applyDamageToTurret(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, { isRanged: true, source: this }); continue; }
+    if (unit.isStructure) continue; // 59차: 원작 - 일제 사격(스킬)은 구조물에 피해를 주지 않는다
     if (unit.isMinion) { applyDamageToMinion(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true); this._asheApplyFrostShot(unit, false); continue; }
-    if (unit.isInhibitor) { applyDamageToInhibitor(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); continue; }
-    if (unit.isNexus) { applyDamageToNexus(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); continue; }
     applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
     this._asheApplyFrostShot(unit, false);
     vfx.spawn('hit', getWorldPosition(unit)?.clone() || unit.mesh.position.clone(), undefined, { color: 0xbfe8ff });
