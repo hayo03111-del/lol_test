@@ -66,7 +66,7 @@ function cameraFocusPoint(champPos, dt) {
       // 화면 오른쪽/위쪽에 해당하는 바닥 방향(카메라는 yaw 방향 뒤에서 내려다본다).
       const right = new THREE.Vector3(Math.cos(cameraRig.yaw), 0, -Math.sin(cameraRig.yaw));
       const up = new THREE.Vector3(-Math.sin(cameraRig.yaw), 0, -Math.cos(cameraRig.yaw));
-      const step = cameraRig.distance * CAMERA_EDGE_SPEED_PER_DIST * dt;
+      const step = cameraRig.distance * CAMERA_EDGE_SPEED_PER_DIST * (cameraRig.edgeSpeedMul || 1) * dt; // 72차: 설정 창 "카메라 이동 속도"
       cameraRig.freePos.addScaledVector(right, sx * step).addScaledVector(up, -sy * step);
       if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap && howlingAbyssMap.clampPosition) cameraRig.freePos.copy(howlingAbyssMap.clampPosition(cameraRig.freePos.clone()));
     }

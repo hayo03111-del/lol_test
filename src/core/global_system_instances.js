@@ -676,14 +676,17 @@ renderer.domElement.addEventListener('pointermove', (e) => {
 window.addEventListener('keydown', (e) => {
   // 33차: 상점 검색칸 등 입력칸에 타이핑하는 중에는 게임 단축키를 쓰지 않는다(Esc만 상점을 닫는다).
   const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
-  if (typing) { if (e.code === 'Escape' && typeof isShopOpen === 'function' && isShopOpen()) setShopOpen(false); return; }
+  if (typing) { if (e.code === 'Escape' && typeof isShopOpen === 'function' && isShopOpen()) setShopOpen(false); else if (e.code === 'Escape' && typeof isOptionsOpen === 'function' && isOptionsOpen()) setOptionsOpen(false); return; }
   // 상점(P - 원작 기본 키)은 챔피언을 불러오기 전에도 열어 볼 수 있다.
   if (e.code === 'KeyP' && !e.repeat) { if (typeof toggleShop === 'function') toggleShop(); return; }
   // 34차 스코어보드: Tab 누르고 있기 / O 켜고 끄기(원작 기본 키). Tab의 브라우저 포커스 이동은 막는다.
   if (e.code === 'Tab') { e.preventDefault(); if (typeof setScoreboardHeld === 'function') setScoreboardHeld(true); return; }
   if (e.code === 'KeyO' && !e.repeat && !e.ctrlKey) { if (typeof toggleScoreboard === 'function') toggleScoreboard(); return; }
   if (e.code === 'Escape' && typeof isShopOpen === 'function' && isShopOpen()) { setShopOpen(false); return; }
-  if (!controller) return;
+  // 72차: Esc = 원작식 설정 창(열려 있으면 닫기). 일시정지는 Pause 키나 설정 창 버튼.
+  if (e.code === 'Escape' && typeof isOptionsOpen === 'function' && isOptionsOpen()) { setOptionsOpen(false); return; }
+  if (e.code === 'Pause') { togglePause(); if (typeof setOptionsOpen === 'function' && isOptionsOpen()) setOptionsOpen(true); return; }
+  if (!controller) { if (e.code === 'Escape' && typeof setOptionsOpen === 'function') setOptionsOpen(true); return; }
   // 버그 수정("스킬 쓰면 마우스 커서가 사라진다"): 이 앱 자체는 커서를
   // 숨기는 코드가 없다 - 이건 브라우저가 키보드 입력이 들어오면 마우스
   // 커서를 잠깐 자동으로 숨기는 동작(특히 크롬 계열) 때문이다. Q/W/E/R
@@ -696,7 +699,7 @@ window.addEventListener('keydown', (e) => {
   const keepCursor = canvasEl.style.cursor;
   canvasEl.style.cursor = 'none';
   requestAnimationFrame(() => { canvasEl.style.cursor = keepCursor; });
-  if (e.code === 'Escape') { if (attackMoveArmed) { attackMoveArmed = false; renderer.domElement.style.cursor = ''; return; } if (skillAim.aiming) { skillAim.cancel(); return; } togglePause(); return; }
+  if (e.code === 'Escape') { if (attackMoveArmed) { attackMoveArmed = false; renderer.domElement.style.cursor = ''; return; } if (skillAim.aiming) { skillAim.cancel(); return; } if (typeof setOptionsOpen === 'function') setOptionsOpen(true); else togglePause(); return; }
   // 34차: 원작 카메라 키 - Y 고정 켜기/끄기, Space(누르고 있기)·F1 내 챔피언으로.
   if (e.code === 'KeyY' && !e.repeat) { if (typeof toggleCameraLock === 'function') toggleCameraLock(); return; }
   if (e.code === 'Space' || e.code === 'F1') { e.preventDefault(); cameraRig.centerHeld = true; return; }

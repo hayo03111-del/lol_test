@@ -423,9 +423,20 @@ function updateTurretRegeneration(turret, dt) {
 
 // 66차 원작식 구조물 체력바: 이름 글자 없이(원작은 포탑·억제기·넥서스 위에 이름을 띄우지 않는다) 굵은 바 하나 - 내 팀 파랑,
 // 적 빨강, 검은 테두리, 깎인 만큼 밝은 잔상. 바 아래에 포탑 특성 배지(59차)가 붙는다. 부서지면 바를 숨긴다.
-function structBarHtml(team, extra = '') {
+// 72차 원작식 구조물 체력바: 금테 두른 굵은 바 + 체력 1000마다 눈금 + 위쪽 광택. 무적(앞 포탑·억제기가 살아 있음)이거나
+// 바가 회색 빗금으로 바뀐다(syncStructBarState). 요새화(피해 감소)는 바에 표시하지 않는다(원작). 예전 글자 배지(요새화·방패·가열 등)는 설정 창
+// "포탑 상태 글자"를 켰을 때만 보인다(원작에는 없다).
+function structBarHtml(team, extra = '', maxHp = 0) {
   const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM;
-  return `<div class="lolBar structBar ${team === myTeam ? 'ally' : 'enemy'}"><div class="trail"></div><div class="fill hpBarInner"></div></div>${extra}`;
+  const tick = maxHp > 0 ? ` style="--tk:${(100000 / maxHp).toFixed(3)}%"` : '';
+  return `<div class="lolBar structBar ${team === myTeam ? 'ally' : 'enemy'}"><div class="trail"></div><div class="fill hpBarInner"></div><div class="sbar-ticks"${tick}></div><div class="sbar-lock"></div></div>${extra}`;
+}
+function syncStructBarState(s) {
+  if (!s || !s.labelDiv) return;
+  const bar = s._structBarEl || (s._structBarEl = s.labelDiv.querySelector('.structBar'));
+  if (!bar) return;
+  const inv = !s.destroyed && isStructureProtected(s);
+  if (bar._inv !== inv) { bar.classList.toggle('invuln', inv); bar._inv = inv; }
 }
 function setStructBar(labelDiv, ratio) {
   if (!labelDiv) return;
@@ -566,7 +577,7 @@ function createTurret(type, position, team = 'RED') {
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
   labelDiv.className = 'structLabel';
   labelDiv.title = data.name;
-  labelDiv.innerHTML = structBarHtml(team, '<div class="turretTraits"></div>');
+  labelDiv.innerHTML = structBarHtml(team, '<div class="turretTraits"></div>', data.maxHp);
   const label = new CSS2DObject(labelDiv);
   label.position.set(0, height + 0.2, 0);
   group.add(label);
@@ -649,6 +660,7 @@ function updateTurretTraitBadges(turret, dt) {
   turret._traitAccum = (turret._traitAccum || 0) + (dt || 0);
   if (turret._traitAccum < 0.25 && turret._traitHtml != null) return;
   turret._traitAccum = 0;
+  syncStructBarState(turret);
   const data = TURRET_DATA[turret.type];
   const now = getTurretGameTimeSec();
   const badges = [];
@@ -905,7 +917,7 @@ function createNexusBuilding(position, team = 'RED', radiusWorld = null) {
   const labelDiv = document.createElement('div');
   labelDiv.id = 'enemyLabel';
   labelDiv.className = 'structLabel nexus';
-  labelDiv.innerHTML = structBarHtml(team);
+  labelDiv.innerHTML = structBarHtml(team, '', NEXUS_MAX_HP);
   const labelHeight = nexusModelHeight != null ? nexusModelHeight + 0.4 : BASE_UNIT * 9.0 + 0.2;
   const label3d = new CSS2DObject(labelDiv);
   label3d.position.set(0, labelHeight, 0);
@@ -951,6 +963,7 @@ function updateNexusBuildingAnim(dt) {
   for (const n of nexusBuildings) {
     if (n.mixer) safeMixerUpdate(n.mixer, dt, `nexus:${n.team}`);
     if (n.label) n.label.position.set(0, n.labelHeight, 0); // 요청("고정") - 매 프레임 제자리 재확인
+    syncStructBarState(n);
   }
 }
 
@@ -1018,8 +1031,8 @@ function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
   // 기본색이 항상 빨강이라 BLUE 억제기도 빨갛게 보였다. 진영 색을 인라인
   // 스타일로 직접 지정한다.
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
-  labelDiv.className = 'structLabel';
-  labelDiv.innerHTML = structBarHtml(team);
+  labelDiv.className = 'structLabel inhib';
+  labelDiv.innerHTML = structBarHtml(team, '', INHIBITOR_MAX_HP);
   const label3d = new CSS2DObject(labelDiv);
   const inhibLabelHeight = inhibModelHeight != null ? inhibModelHeight + 0.4 : BASE_UNIT * 5.5;
   label3d.position.set(0, inhibLabelHeight, 0);
@@ -1116,6 +1129,7 @@ function updateInhibitorBuildingAnim(dt) {
     }
     if (i.mixer) safeMixerUpdate(i.mixer, dt, `inhibitor:${i.team}`);
     if (i.label) i.label.position.set(0, i.labelHeight, 0); // 요청("고정") - 매 프레임 제자리 재확인
+    syncStructBarState(i);
   }
 }
 
