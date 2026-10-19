@@ -344,6 +344,7 @@ function applyDamageToTurret(turret, result, sourceInfo = {}) {
   const data = TURRET_DATA[turret.type];
   if (!turret || turret.destroyed || data.indestructible) return 0;
   if (isStructureProtected(turret)) return 0; // 60차: 앞 구조물이 살아 있으면 무적
+  if (typeof recordStructureDamage === 'function') recordStructureDamage(turret, sourceInfo.source || result.source); // 62차: 파괴자 판정
   // 죽음의 세계 격리(명세 9절 "포탑 생성/영향 금지"의 반대 방향 - 죽음의
   // 세계 안에 있는 챔피언도 메인 월드 포탑에 피해를 줄 수 없다): 실제로는
   // 플레이어가 이미 멀리 떨어진 죽음의 세계 구역으로 이동해 있어 사거리
@@ -386,16 +387,10 @@ function destroyTurret(turret) {
   if (turret.destroyed) return;
   turret.destroyed = true;
   const data = TURRET_DATA[turret.type];
-  const goldAmount = data.destroyGoldOverride != null ? data.destroyGoldOverride : data.goldReward;
-  // 팀 시스템 추가(요청): 플레이어는 항상 적 진영과 적대 관계라는 기존
-  // 설계를 유지하므로, 적 구조물이 파괴됐을 때만 플레이어에게 골드를
-  // 준다 - 자기 진영 구조물이 미니언 전투로 파괴돼도 골드를 받지
-  // 않는다(원래 있던 "아군 전원 = 플레이어 하나" 단순화는 그대로 유지).
-  // 아군/적군/플레이어 시스템 - 'RED' 리터럴 대신 controller.team과 generic 비교.
+  // 62차: 보상은 reward_system.js(칼바람 값 - 팀 전체 + 파괴자 몫)로 옮겼다. 예전엔 어디서 부서지든 고정값 전액을 줬다.
   if (typeof controller !== 'undefined' && controller && isEnemyUnit(turret, controller)) {
-    controller.gold = (controller.gold || 0) + goldAmount;
-    console.log(`[TURRET] ${data.name} 파괴! +${goldAmount} Gold (누적 ${controller.gold})`);
-    updateGoldDisplay();
+    const got = typeof rewardStructureDestroyed === 'function' ? rewardStructureDestroyed(turret) : 0;
+    console.log(`[TURRET] ${data.name} 파괴! +${Math.round(got)} Gold (누적 ${Math.round(controller.gold)})`);
   } else {
     console.log(`[TURRET] ${turret.team} ${data.name} 파괴!`);
   }
@@ -1047,6 +1042,7 @@ function updateInhibitorVisual(inhibitor) {
 function applyDamageToInhibitor(inhibitor, result) {
   if (!inhibitor || inhibitor.destroyed) return 0;
   if (isStructureProtected(inhibitor)) return 0; // 60차: 억제기 포탑이 남아 있으면 무적
+  if (typeof recordStructureDamage === 'function') recordStructureDamage(inhibitor, resolveDamageSource(result.source, inhibitor));
   // 요청("방어력이 제대로 작동하게") - 실제 LoL 위키: "방어구 관통은
   // 억제기의 방어력에 영향을 주지 않는다." 공격자가 armorPenPercent를
   // 실어 보내도(방어구 관통 아이템/스킬) 여기서 강제로 0으로 덮어써서
@@ -1061,6 +1057,7 @@ function destroyInhibitor(inhibitor) {
   if (inhibitor.destroyed) return;
   inhibitor.destroyed = true;
   console.log(`[INHIBITOR] ${inhibitor.team} 억제기 파괴! ${INHIBITOR_RESPAWN_SEC}초 후 재생성`);
+  if (typeof rewardStructureDestroyed === 'function') rewardStructureDestroyed(inhibitor); // 62차: 팀 전체 50골드
   const labelKey = `${inhibitor.team} inhibitor`;
   if (inhibitor.labelDiv) inhibitor.labelDiv.style.opacity = '0.25';
   if (inhibitor.usingRealModel) {

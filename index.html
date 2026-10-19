@@ -27772,6 +27772,7 @@ function applyDamageToTurret(turret, result, sourceInfo = {}) {
   const data = TURRET_DATA[turret.type];
   if (!turret || turret.destroyed || data.indestructible) return 0;
   if (isStructureProtected(turret)) return 0; // 60차: 앞 구조물이 살아 있으면 무적
+  if (typeof recordStructureDamage === 'function') recordStructureDamage(turret, sourceInfo.source || result.source); // 62차: 파괴자 판정
   // 죽음의 세계 격리(명세 9절 "포탑 생성/영향 금지"의 반대 방향 - 죽음의
   // 세계 안에 있는 챔피언도 메인 월드 포탑에 피해를 줄 수 없다): 실제로는
   // 플레이어가 이미 멀리 떨어진 죽음의 세계 구역으로 이동해 있어 사거리
@@ -27814,16 +27815,10 @@ function destroyTurret(turret) {
   if (turret.destroyed) return;
   turret.destroyed = true;
   const data = TURRET_DATA[turret.type];
-  const goldAmount = data.destroyGoldOverride != null ? data.destroyGoldOverride : data.goldReward;
-  // 팀 시스템 추가(요청): 플레이어는 항상 적 진영과 적대 관계라는 기존
-  // 설계를 유지하므로, 적 구조물이 파괴됐을 때만 플레이어에게 골드를
-  // 준다 - 자기 진영 구조물이 미니언 전투로 파괴돼도 골드를 받지
-  // 않는다(원래 있던 "아군 전원 = 플레이어 하나" 단순화는 그대로 유지).
-  // 아군/적군/플레이어 시스템 - 'RED' 리터럴 대신 controller.team과 generic 비교.
+  // 62차: 보상은 reward_system.js(칼바람 값 - 팀 전체 + 파괴자 몫)로 옮겼다. 예전엔 어디서 부서지든 고정값 전액을 줬다.
   if (typeof controller !== 'undefined' && controller && isEnemyUnit(turret, controller)) {
-    controller.gold = (controller.gold || 0) + goldAmount;
-    console.log(`[TURRET] ${data.name} 파괴! +${goldAmount} Gold (누적 ${controller.gold})`);
-    updateGoldDisplay();
+    const got = typeof rewardStructureDestroyed === 'function' ? rewardStructureDestroyed(turret) : 0;
+    console.log(`[TURRET] ${data.name} 파괴! +${Math.round(got)} Gold (누적 ${Math.round(controller.gold)})`);
   } else {
     console.log(`[TURRET] ${turret.team} ${data.name} 파괴!`);
   }
@@ -28475,6 +28470,7 @@ function updateInhibitorVisual(inhibitor) {
 function applyDamageToInhibitor(inhibitor, result) {
   if (!inhibitor || inhibitor.destroyed) return 0;
   if (isStructureProtected(inhibitor)) return 0; // 60차: 억제기 포탑이 남아 있으면 무적
+  if (typeof recordStructureDamage === 'function') recordStructureDamage(inhibitor, resolveDamageSource(result.source, inhibitor));
   // 요청("방어력이 제대로 작동하게") - 실제 LoL 위키: "방어구 관통은
   // 억제기의 방어력에 영향을 주지 않는다." 공격자가 armorPenPercent를
   // 실어 보내도(방어구 관통 아이템/스킬) 여기서 강제로 0으로 덮어써서
@@ -28489,6 +28485,7 @@ function destroyInhibitor(inhibitor) {
   if (inhibitor.destroyed) return;
   inhibitor.destroyed = true;
   console.log(`[INHIBITOR] ${inhibitor.team} 억제기 파괴! ${INHIBITOR_RESPAWN_SEC}초 후 재생성`);
+  if (typeof rewardStructureDestroyed === 'function') rewardStructureDestroyed(inhibitor); // 62차: 팀 전체 50골드
   const labelKey = `${inhibitor.team} inhibitor`;
   if (inhibitor.labelDiv) inhibitor.labelDiv.style.opacity = '0.25';
   if (inhibitor.usingRealModel) {
@@ -29773,6 +29770,8 @@ function updateMinionRegeneration(minion, dt) {
   // 할 일이 없다 - 이름만 존재하는 명시적 no-op.
 }
 function rewardMinionKill(minion) {
+  // 62차: 막타 골드 + 근처 골드(칼바람 6)는 reward_system.js의 rewardMinionDeath가 맡는다.
+  if (typeof rewardMinionDeath === 'function') { rewardMinionDeath(minion); return; }
   const gold = getMinionGoldValue(minion, getTurretGameTimeSec());
   // 59차: 골드는 원작처럼 플레이어가 막타를 친 적 미니언만 준다. 예전엔 어느 팀 미니언이 누구에게 죽든(아군 미니언이
   // 상대 웨이브에 죽어도) 전부 플레이어 골드로 들어갔다.
@@ -29984,6 +29983,151 @@ let dummy = null;
 let placedDummies = []; // 요청: 사용자가 직접 설치하는 추가 허수아비들
 let dummyPlaceMode = false;
 
+
+/* ===== src/core/reward_system.js ===== */
+/* ============================================================
+   62차 골드·경험치 보상 시스템(칼바람 나락 기준)
+   ------------------------------------------------------------
+   흩어져 있던 보상 지급(미니언 막타 골드, 포탑 파괴 골드)을 한곳으로 모으고 빠져 있던 원작 규칙을 채운다.
+   - 시작 골드 1400, 기본 골드 수급 10초당 55(1:00부터) - 리그 위키 Gold(Howling Abyss 항목).
+   - 미니언: 골드는 막타 친 챔피언만(근거리 21·원거리 14·대포/슈퍼 60~90 - MINION_STATS). 내 막타가 아니어도 근처
+     (경험치 범위)에서 적 미니언이 죽으면 6골드(칼바람 규칙). 경험치는 막타와 상관없이 범위 안 챔피언끼리 나눈다
+     (awardMinionExperience - 기존 그대로).
+   - 포탑(칼바람 값 - 공식 표를 찾지 못해 Samurai Gamers 정리값): 외곽 = 팀 전체 150 + 파괴자 250, 억제기 포탑 = 150 + 175,
+     넥서스 포탑 = 150 + 0. 파괴자 = 최근 10초 안에 그 포탑을 때렸거나 파괴 순간 1000 안에 있던 그 팀 챔피언(나눠 가짐).
+     억제기 = 팀 전체 50(위키 일반값). 넥서스는 없음. 구조물은 경험치를 주지 않는다.
+   - 받은 골드는 그 자리에 "+21" 같은 금색 숫자로 잠깐 떠오른다(내 챔피언이 받은 것만).
+   ============================================================ */
+const ARAM_STARTING_GOLD = 1400;
+const ARAM_PASSIVE_GOLD_PER_10S = 55;
+const ARAM_PASSIVE_GOLD_START_SEC = 60;
+const ARAM_NEARBY_MINION_GOLD = 6;
+const TURRET_GOLD_HA = {
+  outer1: { global: 150, local: 250 },
+  outer2: { global: 150, local: 250 },
+  inhibitor: { global: 150, local: 175 },
+  nexusTwin: { global: 150, local: 0 },
+};
+const INHIBITOR_GLOBAL_GOLD = 50;
+const STRUCTURE_PARTICIPATION_SEC = 10;
+const STRUCTURE_PARTICIPATION_RANGE_LOL = 1000;
+
+function rewardGameActive() {
+  return typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned && !gameEnded;
+}
+// 골드 지급 공용 진입점 - 점수판 누적(goldEarned)과 HUD 갱신, 떠오르는 숫자까지 한 번에.
+function grantGold(ctrl, amount, opts = {}) {
+  if (!ctrl || !(amount > 0)) return 0;
+  ctrl.gold = (ctrl.gold || 0) + amount;
+  if (typeof ensureScore === 'function') { const s = ensureScore(ctrl); if (s) s.goldEarned = (s.goldEarned || 0) + amount; }
+  if (opts.at && typeof controller !== 'undefined' && ctrl === controller) spawnRewardText(opts.at, `+${Math.round(amount)}`, opts.color || '#ffd34d', opts.small);
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  return amount;
+}
+function grantStartingGold(ctrl) {
+  if (!ctrl || ctrl._startingGoldGiven) return;
+  ctrl._startingGoldGiven = true;
+  ctrl.gold = Math.max(ctrl.gold || 0, ARAM_STARTING_GOLD);
+  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+}
+
+// 미니언이 죽었을 때(killMinion에서 한 번) - 막타 골드 또는 근처 골드.
+function rewardMinionDeath(minion) {
+  if (typeof controller === 'undefined' || !controller || !minion || minion.team === controller.team) return;
+  const at = minion.mesh ? minion.mesh.position.clone().add(new THREE.Vector3(0, (minion.modelHeight || 0.8) + 0.3, 0)) : null;
+  if (minion._lastHitBy === controller) {
+    grantGold(controller, getMinionGoldValue(minion, getTurretGameTimeSec()), { at });
+    return;
+  }
+  if (controller.hp <= 0 || controller.state === STATE.DEAD || !minion.mesh) return;
+  if (getHorizontalDistance(controller.root.position, minion.mesh.position) > lolRangeToWorld(EXP_RANGE_LOL)) return;
+  grantGold(controller, ARAM_NEARBY_MINION_GOLD, { at, color: '#d9c27a', small: true });
+}
+
+// 구조물 피해 기록(파괴자 판정용) - 챔피언 공격자만.
+function recordStructureDamage(structure, source) {
+  if (!structure || !source || !(source.isChampion || typeof source.championId === 'string') || source.isTrainingDummy) return;
+  if (!structure._championDamagers) structure._championDamagers = new Map();
+  structure._championDamagers.set(source, performance.now());
+}
+function structureKillers(structure) {
+  const out = [];
+  if (typeof controller === 'undefined' || !controller || controller.team === structure.team || controller.hp <= 0 || controller.state === STATE.DEAD) return out;
+  const last = structure._championDamagers && structure._championDamagers.get(controller);
+  const recent = last != null && (performance.now() - last) / 1000 <= STRUCTURE_PARTICIPATION_SEC;
+  const near = getHorizontalDistance(controller.root.position, getWorldPosition(structure)) <= lolRangeToWorld(STRUCTURE_PARTICIPATION_RANGE_LOL) + getCollisionRadius(structure);
+  if (recent || near) out.push(controller);
+  return out;
+}
+// 구조물 파괴 보상 - 반환값은 플레이어가 받은 골드(로그용).
+function rewardStructureDestroyed(structure) {
+  if (typeof controller === 'undefined' || !controller || !structure || structure.team === controller.team) return 0;
+  const at = getWorldPosition(structure).clone().add(new THREE.Vector3(0, (structure.labelHeight || 3) * 0.6, 0));
+  if (structure.isInhibitor) return grantGold(controller, INHIBITOR_GLOBAL_GOLD, { at });
+  if (!structure.isTurret) return 0;
+  const g = TURRET_GOLD_HA[structure.type];
+  if (!g) return 0;
+  const killers = structureKillers(structure);
+  const local = killers.length ? g.local / killers.length : 0;
+  const mine = g.global + (killers.includes(controller) ? local : 0);
+  grantGold(controller, mine, { at });
+  if (typeof showRewardBanner === 'function') showRewardBanner(`포탑 파괴! +${Math.round(mine)} 골드${killers.includes(controller) && g.local ? ` (파괴자 ${Math.round(local)} 포함)` : ''}`);
+  return mine;
+}
+
+// 매 프레임: 기본 골드 수급 + 떠오르는 숫자.
+let _passiveGoldAcc = 0;
+function rewardTick(dt) {
+  if (rewardGameActive() && typeof controller !== 'undefined' && controller && getTurretGameTimeSec() >= ARAM_PASSIVE_GOLD_START_SEC) {
+    _passiveGoldAcc += ARAM_PASSIVE_GOLD_PER_10S / 10 * dt;
+    if (_passiveGoldAcc >= 1) { const whole = Math.floor(_passiveGoldAcc); _passiveGoldAcc -= whole; grantGold(controller, whole); }
+  }
+  updateRewardTexts(dt);
+}
+
+// 떠오르는 숫자(골드) - 화면 좌표로 투영한 작은 글자, 1.1초 동안 위로 뜨며 사라진다.
+let _rewardTexts = [];
+let _rewardLayer = null;
+function spawnRewardText(worldPos, text, color, small) {
+  if (typeof document === 'undefined') return;
+  if (!_rewardLayer) {
+    _rewardLayer = document.createElement('div');
+    _rewardLayer.id = 'rewardTextLayer';
+    _rewardLayer.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:60;overflow:hidden';
+    document.body.appendChild(_rewardLayer);
+  }
+  const el = document.createElement('div');
+  el.className = 'rewardText';
+  el.textContent = text;
+  el.style.cssText = `position:absolute;transform:translate(-50%,-50%);font:bold ${small ? 12 : 15}px sans-serif;color:${color};text-shadow:0 0 3px #000,0 1px 2px #000;white-space:nowrap`;
+  _rewardLayer.appendChild(el);
+  _rewardTexts.push({ el, pos: worldPos.clone(), t: 0, life: 1.1 });
+}
+function updateRewardTexts(dt) {
+  if (!_rewardTexts.length || typeof camera === 'undefined' || !camera) return;
+  const w = window.innerWidth, h = window.innerHeight, v = new THREE.Vector3();
+  _rewardTexts = _rewardTexts.filter((r) => {
+    r.t += dt;
+    if (r.t >= r.life) { r.el.remove(); return false; }
+    v.copy(r.pos); v.y += r.t * 0.8; v.project(camera);
+    if (v.z > 1) { r.el.style.display = 'none'; return true; }
+    r.el.style.display = '';
+    r.el.style.left = `${(v.x * 0.5 + 0.5) * w}px`; r.el.style.top = `${(-v.y * 0.5 + 0.5) * h}px`;
+    r.el.style.opacity = String(Math.min(1, (r.life - r.t) / 0.35));
+    return true;
+  });
+}
+// 큰 알림(포탑 파괴 등) - 화면 위쪽 가운데 2.5초.
+function showRewardBanner(text) {
+  if (typeof document === 'undefined') return;
+  const el = document.createElement('div');
+  el.className = 'rewardBanner';
+  el.textContent = text;
+  el.style.cssText = 'position:fixed;top:22%;left:50%;transform:translateX(-50%);font:bold 18px sans-serif;color:#ffd34d;text-shadow:0 0 6px #000,0 1px 3px #000;z-index:61;pointer-events:none;transition:opacity .5s';
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; }, 2000);
+  setTimeout(() => el.remove(), 2600);
+}
 
 /* ===== src/core/item_system.js ===== */
 // 아이템 시스템 - 구매/판매/사용/스탯 합산/틱형 패시브(재생·마나회복·충전).
@@ -36391,6 +36535,7 @@ async function bootstrapChampion(gltf, fileName) {
   // 20차: 칼바람 나락 맵이 있으면 원작 좌표에 포탑·억제기·넥서스·분수를 만든다(첫 로드 때 한 번만 - 챔피언을
   // 바꿔도 구조물은 유지). 맵이 없으면 예전처럼 구조물 없는 연습 공간이다. 59차: 미니언도 챔피언을 바꿔도 그대로 둔다.
   if (typeof spawnHowlingAbyssStructures === 'function') spawnHowlingAbyssStructures();
+  if (typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned && typeof grantStartingGold === 'function') grantStartingGold(controller); // 62차: 칼바람 시작 골드 1400
 
   // 요청("게임을 시작하면 자기 진영 우물에서 시작하게") - 실제 LoL처럼
   // 챔피언은 자기 팀 기지의 우물(분수)에서 스폰한다. 플레이어는 기존
@@ -37683,7 +37828,8 @@ function animate() {
     updateMarkers(dt);
     updateDummyAI(dt);
     updateDyingMinions(dt);
-    if (typeof updateMinions === 'function') updateMinions(dt); // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
+    if (typeof updateMinions === 'function') updateMinions(dt);
+    if (typeof rewardTick === 'function') rewardTick(dt); // 62차: 기본 골드 수급·떠오르는 골드 숫자 // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
     updateInhibitorBuildingAnim(dt);
     updateTurrets(dt); // 20차: 원작 위치에 배치한 포탑(공격·우물 회복/피해)
     updateNexusBuildingAnim(dt);

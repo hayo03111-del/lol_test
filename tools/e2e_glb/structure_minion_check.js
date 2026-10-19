@@ -240,6 +240,42 @@ const startServer = require('./server.js');
     const timer = (inh.labelDiv.querySelector('.inhibTimer') || {}).textContent || '';
     return { outerRubbleScaleY: scaleY, inhibDestroyed: inh.destroyed, inhibTimer: timer, inhibClip: inh.currentClipName };
   });
+  // 12) 62차 골드·경험치: 시작 1400, 기본 수급 10초당 55(1:00부터), 막타 골드 + 떠오르는 숫자, 근처 미니언 6골드,
+  // 미니언 경험치(막타 무관, 범위 안), 포탑 골드(팀 150 + 파괴자 몫), 구조물 경험치 없음
+  r.rewards = await page.evaluate(async () => {
+    const E = window.__e2e, c = window.controller, V = (x, z) => new E.THREE.Vector3(x, 0, z), L = E.lolRangeToWorld;
+    const out = { startGold: c._startingGoldGiven ? 'given' : 'no' };
+    window.__clearMinions(); window.__resetPlayer(V(0, -2));
+    E.setGameTimeSec(30); c.gold = 0; await new Promise((res) => setTimeout(res, 1000)); out.passiveBefore60 = Math.round(c.gold);
+    E.setGameTimeSec(120); c.gold = 0; await new Promise((res) => setTimeout(res, 2000)); out.passiveAfter60_2s = Math.round(c.gold);
+    E.setGameTimeSec(30); // 이후 측정이 기본 수급에 섞이지 않게
+    const now = E.getTurretGameTimeSec();
+    const a = E.createMinion('caster', V(0, 0), now, 'RED'); const b = E.createMinion('melee', V(1, 0), now, 'RED'); const far = E.createMinion('melee', V(0, L(2500)), now, 'RED');
+    const blue = E.createMinion('melee', V(1, -1), now, 'BLUE'); E.minions.push(a, b, far, blue);
+    let g = c.gold, x = c.currentExp || 0, lv = c.champLevel;
+    E.applyDamage(a, { rawDamage: 1e5, damageType: 'TRUE', isCritical: false, critMultiplier: 1, isBasicAttack: true, source: c });
+    out.lastHitCaster = { gold: Math.round(c.gold - g), exp: +((c.currentExp || 0) - x + (c.champLevel > lv ? 999 : 0)).toFixed(1), popup: E.rewardTexts };
+    g = c.gold; x = c.currentExp || 0;
+    E.applyDamageToMinion(b, { rawDamage: 1e5, damageType: 'TRUE', isCritical: false, critMultiplier: 1, source: blue });
+    out.allyMinionKill = { gold: Math.round(c.gold - g), exp: +((c.currentExp || 0) - x).toFixed(1) };
+    g = c.gold; x = c.currentExp || 0;
+    E.applyDamageToMinion(far, { rawDamage: 1e5, damageType: 'TRUE', isCritical: false, critMultiplier: 1, source: blue });
+    out.farKill = { gold: Math.round(c.gold - g), exp: +((c.currentExp || 0) - x).toFixed(1) };
+    window.__clearMinions();
+    // 포탑: 파괴자(가까이서 때림) 150+175 / 멀리서 미니언이 부숨 150
+    const nt = E.turrets.filter((t) => t.team === 'RED' && t.type === 'nexusTwin');
+    window.__resetPlayer(E.getWorldPosition(nt[0]).clone().add(V(0, -L(400))));
+    g = c.gold; x = c.currentExp || 0;
+    const fakeTurret = { ...nt[0], type: 'inhibitor', team: 'RED', isTurret: true, _championDamagers: new Map([[c, performance.now()]]) };
+    E.rewardStructureDestroyed(fakeTurret);
+    out.inhibTurretAsKiller = { gold: Math.round(c.gold - g), exp: +((c.currentExp || 0) - x).toFixed(1) };
+    window.__resetPlayer(E.getTeamSpawnPosition('BLUE')); g = c.gold;
+    E.rewardStructureDestroyed({ ...nt[0], type: 'outer1', team: 'RED', isTurret: true, _championDamagers: new Map() });
+    out.outerFarAway = Math.round(c.gold - g);
+    await new Promise((res) => setTimeout(res, 300));
+    out.banner = (document.querySelector('.rewardBanner') || {}).textContent || '';
+    return out;
+  });
   r.errors = errors;
   console.log(JSON.stringify(r, null, 1));
   await browser.close(); srv.close();

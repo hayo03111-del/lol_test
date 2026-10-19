@@ -794,6 +794,8 @@ function updateMinionRegeneration(minion, dt) {
   // 할 일이 없다 - 이름만 존재하는 명시적 no-op.
 }
 function rewardMinionKill(minion) {
+  // 62차: 막타 골드 + 근처 골드(칼바람 6)는 reward_system.js의 rewardMinionDeath가 맡는다.
+  if (typeof rewardMinionDeath === 'function') { rewardMinionDeath(minion); return; }
   const gold = getMinionGoldValue(minion, getTurretGameTimeSec());
   // 59차: 골드는 원작처럼 플레이어가 막타를 친 적 미니언만 준다. 예전엔 어느 팀 미니언이 누구에게 죽든(아군 미니언이
   // 상대 웨이브에 죽어도) 전부 플레이어 골드로 들어갔다.

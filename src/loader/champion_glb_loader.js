@@ -342,6 +342,7 @@ async function bootstrapChampion(gltf, fileName) {
   // 20차: 칼바람 나락 맵이 있으면 원작 좌표에 포탑·억제기·넥서스·분수를 만든다(첫 로드 때 한 번만 - 챔피언을
   // 바꿔도 구조물은 유지). 맵이 없으면 예전처럼 구조물 없는 연습 공간이다. 59차: 미니언도 챔피언을 바꿔도 그대로 둔다.
   if (typeof spawnHowlingAbyssStructures === 'function') spawnHowlingAbyssStructures();
+  if (typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned && typeof grantStartingGold === 'function') grantStartingGold(controller); // 62차: 칼바람 시작 골드 1400
 
   // 요청("게임을 시작하면 자기 진영 우물에서 시작하게") - 실제 LoL처럼
   // 챔피언은 자기 팀 기지의 우물(분수)에서 스폰한다. 플레이어는 기존
@@ -1634,7 +1635,8 @@ function animate() {
     updateMarkers(dt);
     updateDummyAI(dt);
     updateDyingMinions(dt);
-    if (typeof updateMinions === 'function') updateMinions(dt); // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
+    if (typeof updateMinions === 'function') updateMinions(dt);
+    if (typeof rewardTick === 'function') rewardTick(dt); // 62차: 기본 골드 수급·떠오르는 골드 숫자 // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
     updateInhibitorBuildingAnim(dt);
     updateTurrets(dt); // 20차: 원작 위치에 배치한 포탑(공격·우물 회복/피해)
     updateNexusBuildingAnim(dt);

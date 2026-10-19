@@ -66,6 +66,7 @@
     "src/world/mordekaiser_death_realm.js",
     "src/world/minion_system.js",
     "src/core/exp_level_system.js",
+    "src/core/reward_system.js",
     "src/core/item_system.js",
     "src/core/summoner_spells.js",
     "src/core/shop_ui.js",
