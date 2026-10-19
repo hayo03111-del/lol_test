@@ -21,18 +21,18 @@
    ============================================================ */
 const ITEM_SLOT_KEYS = ['1', '2', '3', '5', '6', '7']; // 원작 키 배치 - 4는 장신구(와드)
 const SHOP_STAT_FILTERS = [
-  { id: 'ad', nameKo: '공격력', test: (it, s) => s.attackDamage },
-  { id: 'as', nameKo: '공격 속도', test: (it, s) => s.attackSpeedPercent },
-  { id: 'crit', nameKo: '치명타', test: (it, s) => s.critChance || it.critDamagePercent },
-  { id: 'vamp', nameKo: '생명력 흡수', test: (it) => it.physicalVampPercent || it.allDamageVampPercent },
-  { id: 'pen', nameKo: '관통력', test: (it) => it.armorPenFlat || it.armorPenPercent || it.magicPenPercent },
-  { id: 'ap', nameKo: '주문력', test: (it, s) => s.abilityPower },
-  { id: 'mana', nameKo: '마나·마나 재생', test: (it, s) => s.mana || s.mpRegenPercent },
-  { id: 'haste', nameKo: '스킬 가속', test: (it, s) => s.abilityHaste },
-  { id: 'hp', nameKo: '체력·체력 재생', test: (it, s) => s.maxHp || s.hpRegenPercent },
-  { id: 'armor', nameKo: '방어력', test: (it, s) => s.armor },
-  { id: 'mr', nameKo: '마법 저항력', test: (it, s) => s.magicResist },
-  { id: 'ms', nameKo: '이동 속도', test: (it, s) => s.moveSpeed || it.isBoots },
+  { id: 'ad', icon: 'attack_damage', nameKo: '공격력', test: (it, s) => s.attackDamage },
+  { id: 'as', icon: 'attack_speed', nameKo: '공격 속도', test: (it, s) => s.attackSpeedPercent },
+  { id: 'crit', icon: 'critical_chance', nameKo: '치명타', test: (it, s) => s.critChance || it.critDamagePercent },
+  { id: 'vamp', icon: 'life_steal', nameKo: '생명력 흡수', test: (it) => it.physicalVampPercent || it.allDamageVampPercent },
+  { id: 'pen', icon: 'armor_pen', nameKo: '관통력', test: (it) => it.armorPenFlat || it.armorPenPercent || it.magicPenPercent },
+  { id: 'ap', icon: 'ability_power', nameKo: '주문력', test: (it, s) => s.abilityPower },
+  { id: 'mana', icon: 'mana', nameKo: '마나·마나 재생', test: (it, s) => s.mana || s.mpRegenPercent },
+  { id: 'haste', icon: 'cdr_reduction', nameKo: '스킬 가속', test: (it, s) => s.abilityHaste },
+  { id: 'hp', icon: 'health', nameKo: '체력·체력 재생', test: (it, s) => s.maxHp || s.hpRegenPercent },
+  { id: 'armor', icon: 'armor', nameKo: '방어력', test: (it, s) => s.armor },
+  { id: 'mr', icon: 'magic_resist', nameKo: '마법 저항력', test: (it, s) => s.magicResist },
+  { id: 'ms', icon: 'move_speed', nameKo: '이동 속도', test: (it, s) => s.moveSpeed || it.isBoots },
 ];
 // 아이콘 색(주 능력치 순서대로 처음 맞는 것).
 const SHOP_ICON_TONES = [
@@ -44,7 +44,26 @@ const SHOP_ICON_TONES = [
   { test: (it, s) => s.mana || s.mpRegenPercent, tone: '#4d84c4' },
 ];
 
+// 70차 원작 상점의 "추천" 탭: 챔피언 역할(룬 기본 역할과 같은 분류)별 시작·신발·핵심·상황 아이템.
+const SHOP_RECOMMENDED = {
+  mage: { starter: ['doransRing', 'darkSeal', 'healthPotion'], boots: ['sorcerersShoes', 'ionianBootsOfLucidity'],
+    core: ['ludensEcho', 'malignance', 'liandrysTorment', 'shadowflame', 'rabadonsDeathcap', 'voidStaff'],
+    situational: ['zhonyasHourglass', 'banshees', 'rylaisCrystalScepter', 'archangelsStaff', 'lichBane', 'cosmicDrive'] },
+  marksman: { starter: ['doransBlade', 'doransBow', 'healthPotion'], boots: ['berserkersGreaves', 'bootsOfSwiftness'],
+    core: ['krakenSlayer', 'infinityEdge', 'collector', 'phantomDancer', 'lordDominiksRegards', 'bloodthirster'],
+    situational: ['guardianAngel', 'immortalShieldbow', 'mortalReminder', 'rapidFireCannon', 'rageblade', 'youmuusGhostblade'] },
+  fighter: { starter: ['doransBlade', 'doransShield', 'healthPotion'], boots: ['platedSteelcaps', 'mercurysTreads'],
+    core: ['trinityForce', 'blackCleaver', 'sterakssGage', 'deathsDance', 'eclipse', 'titanicHydra'],
+    situational: ['guardianAngel', 'maw', 'spiritVisage', 'thornmail', 'hullbreaker', 'warmogsArmor'] },
+};
+const SHOP_REC_SECTIONS = [['starter', '시작 아이템'], ['boots', '신발'], ['core', '핵심 아이템'], ['situational', '상황별 아이템']];
+const SHOP_ROLE_NAMES = { mage: '마법사', marksman: '원거리 딜러', fighter: '전사' };
+function _shopRole(ctrl) {
+  const id = ctrl && ctrl.championId;
+  return (typeof RUNE_DEFAULT_ROLE !== 'undefined' && RUNE_DEFAULT_ROLE[id]) || 'fighter';
+}
 let _shopOpen = false;
+let _shopTab = 'all'; // 'rec'(추천) | 'all'(모든 아이템)
 let _shopCat = 'all';
 const _shopStatFilters = new Set();
 let _shopSearch = '';
@@ -173,16 +192,33 @@ function _shopRenderCats() {
   if (!nav) return;
   const cats = [{ id: 'all', nameKo: '전체 아이템' }].concat(ITEM_CATEGORIES);
   let html = '<div class="shop-nav-label uc">분류</div>';
-  for (const c of cats) html += `<button class="shop-cat${c.id === _shopCat ? ' active' : ''}" data-cat="${c.id}">${_shopEsc(c.nameKo)}</button>`;
+  for (const c of cats) html += `<button class="shop-cat${_shopTab === 'all' && c.id === _shopCat ? ' active' : ''}" data-cat="${c.id}">${_shopEsc(c.nameKo)}</button>`;
   html += '<div class="shop-nav-label uc">능력치</div><div class="shop-filters">';
-  for (const f of SHOP_STAT_FILTERS) html += `<button class="shop-filter bevel-s${_shopStatFilters.has(f.id) ? ' on' : ''}" data-filter="${f.id}">${_shopEsc(f.nameKo)}</button>`;
+  for (const f of SHOP_STAT_FILTERS) html += `<button class="shop-filter bevel-s${_shopStatFilters.has(f.id) ? ' on' : ''}" data-filter="${f.id}" title="${_shopEsc(f.nameKo)}"><img src="assets/stat_icons/${f.icon}.png" alt="" draggable="false"><span>${_shopEsc(f.nameKo)}</span></button>`;
   html += '</div>';
   if (_shopStatFilters.size || _shopSearch) html += '<button class="shop-reset" data-reset="1">필터 초기화</button>';
   nav.innerHTML = html;
+  document.querySelectorAll('#shopTabs [data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === _shopTab));
 }
 function _shopRenderGrid() {
   const grid = _shopEl('shopGrid');
   if (!grid) return;
+  if (_shopTab === 'rec') {
+    const role = _shopRole(controller), rec = SHOP_RECOMMENDED[role] || SHOP_RECOMMENDED.fighter;
+    _shopHadBounty = _shopOwnsBounty();
+    let html = `<div class="shop-rec-role">${_shopEsc((controller && controller.championId) ? `${SHOP_ROLE_NAMES[role] || role} 추천 빌드` : '추천 빌드')}</div>`;
+    for (const [key, name] of SHOP_REC_SECTIONS) {
+      const ids = _shopVisibleIds({ items: (rec[key] || []).filter((id) => ITEM_DATA[id]) });
+      if (!ids.length) continue;
+      html += `<div class="shop-section rec"><div class="shop-section-head uc">${_shopEsc(name)}<span>${ids.length}</span></div><div class="shop-tiles">`;
+      for (const id of ids) html += `<div class="shop-tile" data-id="${id}" title="${_shopEsc(ITEM_DATA[id].nameKo)}">${_shopIconHtml(ITEM_DATA[id])}<div class="st-name">${_shopEsc(ITEM_DATA[id].nameKo)}</div><div class="st-cost"></div></div>`;
+      html += '</div></div>';
+    }
+    grid.innerHTML = html;
+    _shopStateSig = '';
+    renderShopPanel(true);
+    return;
+  }
   let cats = _shopCat === 'all' ? ITEM_CATEGORIES : ITEM_CATEGORIES.filter((c) => c.id === _shopCat);
   // 37차: 세계의 결실을 들고 있으면 맨 위에 업그레이드 5종(무료)을 보여 준다(원작 상점의 업그레이드 선택).
   _shopHadBounty = _shopOwnsBounty();
@@ -283,7 +319,11 @@ function _shopRenderDetail() {
   const catName = (ITEM_CATEGORIES.find((c) => c.items.includes(item.id)) || {}).nameKo;
   const buildsInto = (typeof ITEM_ORDER !== 'undefined' ? ITEM_ORDER : Object.keys(ITEM_DATA))
     .filter((id) => ITEM_DATA[id] && !ITEM_DATA[id].hiddenFromShop && ITEM_DATA[id].recipe && ITEM_DATA[id].recipe.includes(item.id));
-  let html = `<div class="sd-head">${_shopIconHtml(item, 'big')}<div><div class="sd-name">${_shopEsc(item.nameKo)}</div>`;
+  // 70차 원작 배치: 위쪽에 "상위 아이템" 줄과 조합 트리, 아래에 이름·가격·능력치·효과.
+  let html = '';
+  if (buildsInto.length) html += `<div class="sd-label uc first">상위 아이템</div><div class="sd-into">${buildsInto.map((id) => _shopTileMini(id)).join('')}</div>`;
+  html += _shopRecipeHtml(item, ctrl);
+  html += `<div class="sd-head">${_shopIconHtml(item, 'big')}<div><div class="sd-name">${_shopEsc(item.nameKo)}</div>`;
   html += `<div class="sd-cost">${item.trinket ? '기본 장착' : `${cost.toLocaleString()} GOLD`}${build && cost !== item.cost ? ` <s>${item.cost.toLocaleString()}</s>` : ''}</div>`;
   html += '<div class="sd-tags">';
   if (catName) html += `<span>${_shopEsc(catName)}</span>`;
@@ -292,10 +332,6 @@ function _shopRenderDetail() {
   html += '</div></div></div>';
   html += _shopDescHtml(item);
   if (item.priceGuessed) html += '<div class="sd-note">* 원문에 가격이 없어 실제 LoL 가격을 사용</div>';
-  html += _shopRecipeHtml(item, ctrl);
-  if (buildsInto.length) {
-    html += `<div class="sd-label uc">상위 아이템</div><div class="sd-into">${buildsInto.map((id) => _shopTileMini(id)).join('')}</div>`;
-  }
   box.innerHTML = `<div class="sd-scroll">${html}</div>`
     + `<button class="sd-buy bevel-s${reason ? ' blocked' : ''}" data-buy="${item.id}">${reason ? _shopEsc(reason) : `${build ? '조합' : item.isBoots && ctrl && ctrl.boots ? '교체' : '구매'} · ${cost.toLocaleString()}`}</button>`;
 }
@@ -396,12 +432,20 @@ function isShopOpen() { return _shopOpen; }
     _shopSell();
   });
 
+  const tabs = _shopEl('shopTabs');
+  if (tabs) tabs.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-tab]');
+    if (!t) return;
+    _shopTab = t.dataset.tab;
+    _shopRenderCats();
+    _shopRenderGrid();
+  });
   const search = _shopEl('shopSearch');
   search.addEventListener('input', () => { _shopSearch = search.value; _shopRenderCats(); _shopRenderGrid(); });
   _shopEl('shopCats').addEventListener('click', (e) => {
     const cat = e.target.closest('[data-cat]');
     const filter = e.target.closest('[data-filter]');
-    if (cat) _shopCat = cat.dataset.cat;
+    if (cat) { _shopCat = cat.dataset.cat; _shopTab = 'all'; }
     else if (filter) { const id = filter.dataset.filter; if (_shopStatFilters.has(id)) _shopStatFilters.delete(id); else _shopStatFilters.add(id); }
     else if (e.target.closest('[data-reset]')) { _shopStatFilters.clear(); _shopSearch = ''; search.value = ''; }
     else return;
