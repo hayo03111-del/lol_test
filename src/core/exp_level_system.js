@@ -232,14 +232,15 @@ const MINION_HEALTHBAR_MAX_DIST = 40;    // 이 거리 밖 - 완전히 숨김
 //  - 색: 내 팀(아군) 미니언 파랑, 적 미니언 빨강 - 진영(RED/BLUE)이 아니라 "내 기준"으로 칠한다.
 //  - 검은 테두리 + 어두운 바탕, 맞으면 깎인 만큼 밝은 잔상이 잠깐 남았다가 줄어든다(피해량이 눈에 보인다 - 막타 가늠).
 //  - 폭: 근거리·원거리 50px, 대포 62px, 슈퍼 74px(슈퍼는 조금 더 굵다). 보이는 동안은 거리와 상관없이 항상 같은 모양.
-const MINION_HEALTHBAR_WIDTH_PX = { melee: 50, caster: 50, siege: 62, super: 74 };
+// 76차: 크기를 원작 화면 비율에 맞춤(근거리·원거리 56, 대포 66, 슈퍼 82px) - 높이는 CSS(.minionBar).
+const MINION_HEALTHBAR_WIDTH_PX = { melee: 56, caster: 56, siege: 66, super: 82 };
 function isAllyOfPlayer(unit) {
   const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || (typeof PLAYER_TEAM !== 'undefined' ? PLAYER_TEAM : 'BLUE');
   return unit.team === myTeam;
 }
 function createMinionHealthBar(group, type, headY) {
   const el = document.createElement('div');
-  el.className = 'lolBar minionBar' + (type === 'super' ? ' super' : '');
+  el.className = 'lolBar minionBar' + (type === 'super' ? ' super' : type === 'siege' ? ' siege' : '');
   el.style.width = `${MINION_HEALTHBAR_WIDTH_PX[type] || 50}px`;
   el.innerHTML = '<div class="trail"></div><div class="fill"></div>';
   const obj = new CSS2DObject(el);
@@ -267,6 +268,10 @@ function updateMinionHealthBarVisibility(minion) {
   if (!hb) return;
   if (minion.isDead) { hb.obj.visible = false; return; } // 요청 22/21-G: 사망 시 즉시 숨김
   hb.obj.position.set(0, hb.headY, 0); // 요청("고정") - 매 프레임 제자리
+  // 76차 버그 수정: 바는 피해를 받을 때만 다시 그려서, 회복·체력 재설정·팀 변경이 바에 반영되지 않았다(체력을 깎아 둔 미니언이
+  // 꽉 찬 바로 보임). 매 프레임 비율·팀이 바뀌었는지만 보고 바뀐 경우에만 다시 그린다.
+  const r = minion.maxHp > 0 ? THREE.MathUtils.clamp(minion.hp / minion.maxHp, 0, 1) : 0;
+  if (Math.abs(r - hb.lastRatio) > 0.001 || hb._ally !== isAllyOfPlayer(minion)) drawMinionHealthBar(minion);
 }
 function disposeMinionHealthBar(minion) {
   const hb = minion.healthBar;

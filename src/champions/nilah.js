@@ -444,7 +444,7 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
 
     // 28차(요청 "닐라 Q에 이상한 이펙트 다 빼야 함"): 예전엔 스프라이트 버스트(nilahQ)·물결 리본·잔상 2개·칼끝 고리
     // 트레일·적중 고리 3겹+파티클이 겹쳐 그려졌다. 전부 빼고 실제 판정 직선(사거리 600, 폭 80)만 바닥에 잠깐 그린다.
-    if (!preserveDash && typeof vfx.groundShapeFlash === 'function') vfx.groundShapeFlash(this.root.position, dir, { kind: 'line', length: lolRangeToWorld(q.range), width: lolRangeToWorld(q.impactRadius || 80) }, 0x9be8ff, 0.3);
+    if (!preserveDash && typeof vfx.groundShapeFlash === 'function') vfx.groundShapeFlash(this.root.position, dir, { kind: 'line', length: lolRangeToWorld(q.range), width: lolRangeToWorld(q.impactRadius || 150) }, 0x9be8ff, 0.3);
 
     // E 돌진 중 Q는 기존 돌진 모션을 끊지 않는다. Q 파동은 돌진 종료 시점에
     // 기존 _nilahResolveEDashEnd() 경로에서 처리한다.
@@ -817,7 +817,7 @@ CharacterController.prototype._nilahFinalQACheck = function() {
     const d=this._nilahData();
     const checks={
       stats: !!(d.stats && d.stats.hp===570 && d.stats.ad===58 && d.stats.range===225),
-      q: !!(d.Q && d.Q.range===600 && d.Q.impactRadius===80 && d.Q.coneAngleDeg===60 && d.Q.empoweredDuration===4),
+      q: !!(d.Q && d.Q.range===600 && d.Q.impactRadius===150 && d.Q.coneAngleDeg===60 && d.Q.empoweredDuration===4),
       w: !!(d.W && d.W.duration===2.25 && d.W.allyDuration===1.5 && d.W.magicDamageReductionPercent===25),
       e: !!(d.E && d.E.range===550 && d.E.maxCharges===2 && d.E.rechargeTime.length===5),
       r: !!(d.R && d.R.damageRadius===450 && d.R.healRadius===1500 && d.R.channelDuration===1 && d.R.tickInterval===0.25),

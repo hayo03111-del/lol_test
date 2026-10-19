@@ -439,7 +439,9 @@ const CHAMPION_DATA = {
       // 같은 숫자로 확인됨). 예전 150은 정확한 근거 없이 들어간 값이었다.
       // E 돌진 중 Q(웨이브)는 완전히 다른 오브젝트(NilahEQMis)라 폭도
       // 다르다 - mLineWidth=125, mMissileSpec.mMissileWidth도 125로 확인.
-      impactRadius: 80, waveImpactRadius: 125, coneAngleDeg: 60,
+      // 76차: 폭 80 → 150. 원작 위키(Nilah "WIDTH: Edge range 150")가 기준이다 - 위 bin 값 80은 반폭에 가까운 값으로 보인다
+      // (가장자리 기준 전체 폭 150의 반 75 + 여유). E 중 Q(웨이브) 125는 위키 수치를 찾지 못해 그대로 둔다.
+      impactRadius: 150, waveImpactRadius: 125, coneAngleDeg: 60,
       // 데이터 수정(현재 패치 기준 실제 값 확인): 패시브의 크리티컬 확률 기반
       // 방어구 관통/생명흡수는 출시 초기 수치(30%/20%)가 그대로 남아있었다.
       // 여러 차례 밸런스 패치를 거쳐 현재는 방어구 관통 0~33%, 생명흡수 0~15%

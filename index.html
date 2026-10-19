@@ -795,6 +795,11 @@
   .lolBar .fill{ z-index:1; transition:width .06s linear; }
   .lolBar.enemy .fill{ background:linear-gradient(180deg,#ff6a5c 0%,#d8352a 55%,#9c1b14 100%); }
   .lolBar.ally .fill{ background:linear-gradient(180deg,#6fb6ff 0%,#2f7fe0 55%,#1b4f9c 100%); }
+  /* 76차 원작식 미니언 체력바: 검은 테 + 아주 얇은 어두운 바깥선, 위쪽 광택, 슈퍼·대포는 조금 굵게. 챔피언·구조물 바와 같은 결. */
+  .minionBar{ height:5px; border:1px solid #000; background:#121316; box-shadow:0 0 0 1px rgba(20,20,20,0.6), 0 1px 3px rgba(0,0,0,0.7); }
+  .minionBar .fill::after{ content:''; position:absolute; left:0; right:0; top:0; height:40%; background:rgba(255,255,255,0.25); }
+  .minionBar .trail{ background:#f3e2b0; }
+  .minionBar.siege{ height:6px; }
   .minionBar.super{ height:7px; }
   #enemyLabel.structLabel, .structLabel{ background:transparent; padding:0; border-radius:0; transform:translate(-50%,-100%); display:flex; flex-direction:column; align-items:center; }
   .structBar{ width:132px; height:11px; border:1px solid #000; box-shadow:0 0 0 1px #5c4c2c, 0 2px 4px rgba(0,0,0,0.7); }
@@ -3360,7 +3365,9 @@ const CHAMPION_DATA = {
       // 같은 숫자로 확인됨). 예전 150은 정확한 근거 없이 들어간 값이었다.
       // E 돌진 중 Q(웨이브)는 완전히 다른 오브젝트(NilahEQMis)라 폭도
       // 다르다 - mLineWidth=125, mMissileSpec.mMissileWidth도 125로 확인.
-      impactRadius: 80, waveImpactRadius: 125, coneAngleDeg: 60,
+      // 76차: 폭 80 → 150. 원작 위키(Nilah "WIDTH: Edge range 150")가 기준이다 - 위 bin 값 80은 반폭에 가까운 값으로 보인다
+      // (가장자리 기준 전체 폭 150의 반 75 + 여유). E 중 Q(웨이브) 125는 위키 수치를 찾지 못해 그대로 둔다.
+      impactRadius: 150, waveImpactRadius: 125, coneAngleDeg: 60,
       // 데이터 수정(현재 패치 기준 실제 값 확인): 패시브의 크리티컬 확률 기반
       // 방어구 관통/생명흡수는 출시 초기 수치(30%/20%)가 그대로 남아있었다.
       // 여러 차례 밸런스 패치를 거쳐 현재는 방어구 관통 0~33%, 생명흡수 0~15%
@@ -21104,7 +21111,7 @@ CharacterController.prototype._nilahCastQ = function(mouseWorldPoint, free=false
 
     // 28차(요청 "닐라 Q에 이상한 이펙트 다 빼야 함"): 예전엔 스프라이트 버스트(nilahQ)·물결 리본·잔상 2개·칼끝 고리
     // 트레일·적중 고리 3겹+파티클이 겹쳐 그려졌다. 전부 빼고 실제 판정 직선(사거리 600, 폭 80)만 바닥에 잠깐 그린다.
-    if (!preserveDash && typeof vfx.groundShapeFlash === 'function') vfx.groundShapeFlash(this.root.position, dir, { kind: 'line', length: lolRangeToWorld(q.range), width: lolRangeToWorld(q.impactRadius || 80) }, 0x9be8ff, 0.3);
+    if (!preserveDash && typeof vfx.groundShapeFlash === 'function') vfx.groundShapeFlash(this.root.position, dir, { kind: 'line', length: lolRangeToWorld(q.range), width: lolRangeToWorld(q.impactRadius || 150) }, 0x9be8ff, 0.3);
 
     // E 돌진 중 Q는 기존 돌진 모션을 끊지 않는다. Q 파동은 돌진 종료 시점에
     // 기존 _nilahResolveEDashEnd() 경로에서 처리한다.
@@ -21477,7 +21484,7 @@ CharacterController.prototype._nilahFinalQACheck = function() {
     const d=this._nilahData();
     const checks={
       stats: !!(d.stats && d.stats.hp===570 && d.stats.ad===58 && d.stats.range===225),
-      q: !!(d.Q && d.Q.range===600 && d.Q.impactRadius===80 && d.Q.coneAngleDeg===60 && d.Q.empoweredDuration===4),
+      q: !!(d.Q && d.Q.range===600 && d.Q.impactRadius===150 && d.Q.coneAngleDeg===60 && d.Q.empoweredDuration===4),
       w: !!(d.W && d.W.duration===2.25 && d.W.allyDuration===1.5 && d.W.magicDamageReductionPercent===25),
       e: !!(d.E && d.E.range===550 && d.E.maxCharges===2 && d.E.rechargeTime.length===5),
       r: !!(d.R && d.R.damageRadius===450 && d.R.healRadius===1500 && d.R.channelDuration===1 && d.R.tickInterval===0.25),
@@ -29592,14 +29599,15 @@ const MINION_HEALTHBAR_MAX_DIST = 40;    // 이 거리 밖 - 완전히 숨김
 //  - 색: 내 팀(아군) 미니언 파랑, 적 미니언 빨강 - 진영(RED/BLUE)이 아니라 "내 기준"으로 칠한다.
 //  - 검은 테두리 + 어두운 바탕, 맞으면 깎인 만큼 밝은 잔상이 잠깐 남았다가 줄어든다(피해량이 눈에 보인다 - 막타 가늠).
 //  - 폭: 근거리·원거리 50px, 대포 62px, 슈퍼 74px(슈퍼는 조금 더 굵다). 보이는 동안은 거리와 상관없이 항상 같은 모양.
-const MINION_HEALTHBAR_WIDTH_PX = { melee: 50, caster: 50, siege: 62, super: 74 };
+// 76차: 크기를 원작 화면 비율에 맞춤(근거리·원거리 56, 대포 66, 슈퍼 82px) - 높이는 CSS(.minionBar).
+const MINION_HEALTHBAR_WIDTH_PX = { melee: 56, caster: 56, siege: 66, super: 82 };
 function isAllyOfPlayer(unit) {
   const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || (typeof PLAYER_TEAM !== 'undefined' ? PLAYER_TEAM : 'BLUE');
   return unit.team === myTeam;
 }
 function createMinionHealthBar(group, type, headY) {
   const el = document.createElement('div');
-  el.className = 'lolBar minionBar' + (type === 'super' ? ' super' : '');
+  el.className = 'lolBar minionBar' + (type === 'super' ? ' super' : type === 'siege' ? ' siege' : '');
   el.style.width = `${MINION_HEALTHBAR_WIDTH_PX[type] || 50}px`;
   el.innerHTML = '<div class="trail"></div><div class="fill"></div>';
   const obj = new CSS2DObject(el);
@@ -29627,6 +29635,10 @@ function updateMinionHealthBarVisibility(minion) {
   if (!hb) return;
   if (minion.isDead) { hb.obj.visible = false; return; } // 요청 22/21-G: 사망 시 즉시 숨김
   hb.obj.position.set(0, hb.headY, 0); // 요청("고정") - 매 프레임 제자리
+  // 76차 버그 수정: 바는 피해를 받을 때만 다시 그려서, 회복·체력 재설정·팀 변경이 바에 반영되지 않았다(체력을 깎아 둔 미니언이
+  // 꽉 찬 바로 보임). 매 프레임 비율·팀이 바뀌었는지만 보고 바뀐 경우에만 다시 그린다.
+  const r = minion.maxHp > 0 ? THREE.MathUtils.clamp(minion.hp / minion.maxHp, 0, 1) : 0;
+  if (Math.abs(r - hb.lastRatio) > 0.001 || hb._ally !== isAllyOfPlayer(minion)) drawMinionHealthBar(minion);
 }
 function disposeMinionHealthBar(minion) {
   const hb = minion.healthBar;

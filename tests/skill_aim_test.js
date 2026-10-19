@@ -74,6 +74,7 @@ for (const id of Object.keys(CD)) {
 {
   assert(near(computeSkillAim(champ('nilah'), 'Q', at(300)).segments[0].len, W(600)), '닐라 Q: 커서가 가까워도 600');
   assert(near(computeSkillAim(champ('nilah'), 'Q', at(900)).segments[0].len, W(600)), '닐라 Q: 사거리 600으로 당김');
+  assert(near(computeSkillAim(champ('nilah'), 'Q', at(300)).segments[0].width, W(150)), '닐라 Q: 폭 150(76차 - 원작 위키 Edge range 150)');
 }
 // 7) 상태에 따라 바뀌는 조준: 야스오 Q 3타(회오리) 1150 x 180, 요네 Q 강화 시 돌진 + 돌풍 구간.
 {
