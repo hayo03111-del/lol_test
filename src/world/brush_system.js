@@ -57,7 +57,7 @@ class BrushSystem {
 
   _material() {
     if (!this._grassMat && typeof THREE !== 'undefined') {
-      this._grassMat = new THREE.MeshStandardMaterial({ color: 0x2f7a35, roughness: 0.9, transparent: true, opacity: 1, side: THREE.DoubleSide });
+      this._grassMat = new THREE.MeshStandardMaterial({ color: 0x2c5f5a /* 73차: 칼바람 부쉬는 얼어붙은 청록빛 */, roughness: 0.9, transparent: true, opacity: 1, side: THREE.DoubleSide });
     }
     return this._grassMat;
   }
@@ -70,7 +70,7 @@ class BrushSystem {
     if (this.scene && typeof THREE !== 'undefined') {
       const group = new THREE.Group();
       // 바닥 그늘
-      const baseMat = new THREE.MeshBasicMaterial({ color: 0x1b4d22, transparent: true, opacity: 0.55, depthWrite: false });
+      const baseMat = new THREE.MeshBasicMaterial({ color: 0x1a3d3c, transparent: true, opacity: 0.55, depthWrite: false });
       const base = new THREE.Mesh(new THREE.PlaneGeometry(w, d), baseMat);
       base.rotation.x = -Math.PI / 2; base.position.y = 0.02;
       group.add(base);

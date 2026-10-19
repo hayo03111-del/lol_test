@@ -355,12 +355,15 @@ async function bootstrapChampion(gltf, fileName) {
 }
 
 // 추가 수정사항 12: 캐릭터 크기(정규화 후 bounding sphere)에 맞춰 카메라 거리 자동 계산.
+// 73차: 원작 카메라 거리. 예전엔 챔피언 모델 크기 × 26으로 정해 화면 가로가 약 5,100 LoL 유닛이나 보였다(원작 최대 축소의
+// 약 1.75배) - 맵이 짧아 보이고 구조물이 다 한 화면에 들어왔다. 원작은 시야각 40°·각도 약 56°·최대 거리 2,250(1920×1080에서
+// 화면 가로 약 2,900 유닛)이고 게임 시작은 최대 축소다. 확대는 그 55%까지.
+const CAMERA_MAX_DISTANCE_LOL = 2250;
 function applyCameraDistanceForChampion() {
-  const r = (currentChampion?.boundsRadius || BASE_UNIT * 0.55) * championBaseScaleMultiplier * modelScaleMultiplier;
-  const dist = THREE.MathUtils.clamp(r * 26, 16, 60);
-  cameraRig.distance = dist;
-  cameraRig.minDistance = THREE.MathUtils.clamp(dist * 0.62, 10, 50);
-  cameraRig.maxDistance = THREE.MathUtils.clamp(dist * 1.6, 20, 90);
+  const max = lolRangeToWorld(CAMERA_MAX_DISTANCE_LOL);
+  cameraRig.maxDistance = max;
+  cameraRig.minDistance = max * 0.55;
+  cameraRig.distance = max;
 }
 
 function loadFromArrayBuffer(buffer, fileName) {

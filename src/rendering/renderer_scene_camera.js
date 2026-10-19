@@ -28,7 +28,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0d1117);
 scene.fog = new THREE.Fog(0x0d1117, 90, 250);
 
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 300);
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 300); // 73차: 원작 카메라 시야각 40°
 
 // MOBA-style quarter view camera rig: fixed pitch/yaw offset, only zoom is
 // adjustable. Distances are recomputed per-champion by
@@ -36,10 +36,10 @@ const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerH
 // these are just sane defaults for before anything is loaded.
 const cameraRig = {
   yaw: Math.PI * 0.25,
-  pitch: THREE.MathUtils.degToRad(50),
-  distance: 30,
-  minDistance: 20,
-  maxDistance: 48,
+  pitch: THREE.MathUtils.degToRad(56), // 73차: 원작 카메라 각도(약 56°)
+  distance: 19.45, // 73차: 원작 최대 거리 2,250 LoL(챔피언을 불러오면 applyCameraDistanceForChampion이 정확히 다시 맞춘다)
+  minDistance: 10.7,
+  maxDistance: 19.45,
   followPos: new THREE.Vector3(0, 0, 0),
   // 34차: 원작 카메라 조작 - Y = 카메라 고정 켜기/끄기, Space(누르고 있기)·F1 = 내 챔피언으로 카메라 이동.
   // 고정을 풀면 마우스를 화면 가장자리에 대면 그쪽으로 카메라가 움직인다. 처음은 지금까지처럼 고정 상태.
@@ -101,7 +101,7 @@ function snapCameraTo(targetPos) {
 window.addEventListener('wheel', (e) => {
   if (e.target && e.target.closest && e.target.closest('#shopWindow')) return; // 33차: 상점 창 안에서 굴리면 목록만 스크롤한다
   cameraRig.distance = THREE.MathUtils.clamp(
-    cameraRig.distance + Math.sign(e.deltaY) * 2.0,
+    cameraRig.distance + Math.sign(e.deltaY) * cameraRig.maxDistance * 0.1, // 73차: 최대 거리의 10%씩
     cameraRig.minDistance, cameraRig.maxDistance
   );
 }, { passive:true });

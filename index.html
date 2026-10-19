@@ -7500,7 +7500,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0d1117);
 scene.fog = new THREE.Fog(0x0d1117, 90, 250);
 
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 300);
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 300); // 73차: 원작 카메라 시야각 40°
 
 // MOBA-style quarter view camera rig: fixed pitch/yaw offset, only zoom is
 // adjustable. Distances are recomputed per-champion by
@@ -7508,10 +7508,10 @@ const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerH
 // these are just sane defaults for before anything is loaded.
 const cameraRig = {
   yaw: Math.PI * 0.25,
-  pitch: THREE.MathUtils.degToRad(50),
-  distance: 30,
-  minDistance: 20,
-  maxDistance: 48,
+  pitch: THREE.MathUtils.degToRad(56), // 73차: 원작 카메라 각도(약 56°)
+  distance: 19.45, // 73차: 원작 최대 거리 2,250 LoL(챔피언을 불러오면 applyCameraDistanceForChampion이 정확히 다시 맞춘다)
+  minDistance: 10.7,
+  maxDistance: 19.45,
   followPos: new THREE.Vector3(0, 0, 0),
   // 34차: 원작 카메라 조작 - Y = 카메라 고정 켜기/끄기, Space(누르고 있기)·F1 = 내 챔피언으로 카메라 이동.
   // 고정을 풀면 마우스를 화면 가장자리에 대면 그쪽으로 카메라가 움직인다. 처음은 지금까지처럼 고정 상태.
@@ -7573,7 +7573,7 @@ function snapCameraTo(targetPos) {
 window.addEventListener('wheel', (e) => {
   if (e.target && e.target.closest && e.target.closest('#shopWindow')) return; // 33차: 상점 창 안에서 굴리면 목록만 스크롤한다
   cameraRig.distance = THREE.MathUtils.clamp(
-    cameraRig.distance + Math.sign(e.deltaY) * 2.0,
+    cameraRig.distance + Math.sign(e.deltaY) * cameraRig.maxDistance * 0.1, // 73차: 최대 거리의 10%씩
     cameraRig.minDistance, cameraRig.maxDistance
   );
 }, { passive:true });
@@ -7774,25 +7774,26 @@ function haTurretGapZ(team) {
 }
 
 function createHowlingAbyssMap(scene) {
+  // ============================================================
+  // 73차: 맵 모양을 원작 칼바람 나락처럼 다시 만들었다(예전 "임시 구조물" 장식 전부 교체).
+  // ------------------------------------------------------------
+  // - 걸을 수 있는 땅(다리 + 양 기지)은 원작 이동 격자 모양(HA_WALK_SHAPE_LOL) 한 장의 바닥이다. 판석 무늬·눈 덮임은
+  //   코드로 그린 텍스처(CanvasTexture)라 외부 텍스처 서버(CommunityDragon)가 막혀도 항상 보인다 - 서버에 닿으면
+  //   원작 텍스처로 바꿔 끼운다.
+  // - 다리 양옆: 눈 덮인 낮은 돌 난간이 바닥 외곽선을 그대로 따라가고, 일정 간격마다 굵은 기둥, 다리 가운데 양쪽엔
+  //   거대한 프렐요드 수호자 석상. 난간 바깥은 눈 비탈이 심연(아래 깊은 어둠)으로 떨어지고, 바위·얼음 결정이 흩어져
+  //   있다. 멀리는 산 능선 실루엣.
+  // - 기지: 넥서스 단(둥근 돌 단), 넥서스 포탑 받침, 우물(팀 색으로 빛나는 문양 원), 상점, 맨 뒤 얼음 절벽 벽.
+  // 게임플레이(이동 범위 clampPosition·구조물 좌표·출현 지점)는 바꾸지 않았다.
+  // ============================================================
   const cfg = HA_MAP_CONFIG;
   const S = HA_MAP_SCALE;
   const group = new THREE.Group();
   group.scale.setScalar(S);
-  // 24차: 다리 바닥(눈 덮인 바닥 윗면, 줄이기 전 높이 0.405)이 월드 높이 0에 오도록 맵 전체를 내린다. 예전엔 바닥이
-  // 약 0.25 위에 떠 있어서 높이 0 부근에 그리는 조준 범위·스킬 예고·사거리 링이 바닥에 가려 안 보였고, 챔피언·허수아비
-  // 발도 바닥에 묻혀 있었다.
-  group.position.y = -HA_FLOOR_TOP_LOCAL * S;
-  const bridgeLen = cfg.laneMaxZ - cfg.laneMinZ;
-  const bridgeWidth = cfg.laneMaxX - cfg.laneMinX; // 14
-  // 기지 근처는 다리보다 넓은 개활지다. 벽/난간/체인/바닥/이동 범위(clampPosition) 전부 아래 widenExtraForZ() 하나를
-  // 공유해서 서로 어긋나지 않는다. (예전 요청 "끝쪽 넓이 2배", "끝쪽은 이런 구조야" 손그림의 각진 사각형 방 모양을
-  // 25차에 원작 이동 격자 모양으로 바꿨다.)
-  // 25차: 기지 넓어짐을 원작 이동 격자 모양(HA_WALK_SHAPE_LOL)으로. 예전엔 끝에서 42(약 3,060 LoL) 안쪽에서 갑자기
-  // 사각형 방(반폭 21 = 약 1,530 LoL)으로 넓어져 끝까지 갔다 - 넓어지는 자리가 원작보다 약 2,000 LoL 뒤였고(억제기가
-  // 좁은 다리 위에 놓였다), 우물 쪽이 좁아지지 않았다.
-  const LOL_PER_UNIT = lolRangeToWorld(1) > 0 ? 1 / (lolRangeToWorld(1) / S) : 1; // 줄이기 전 1단위 = 약 72.84 LoL
-  const WIDEN_EXTRA_X = HA_WALK_SHAPE_LOL.baseHalf / LOL_PER_UNIT - cfg.laneMaxX; // 약 9.41
-  const BASE_FLOOR_START = HA_WALK_SHAPE_LOL.widenStart / LOL_PER_UNIT;            // 약 55.6
+  group.position.y = -HA_FLOOR_TOP_LOCAL * S; // 바닥 윗면(줄이기 전 0.405)이 월드 높이 0
+  const FLOOR_Y = HA_FLOOR_TOP_LOCAL;
+  const LOL_PER_UNIT = 1 / (lolRangeToWorld(1) / S); // 줄이기 전 1단위 = 약 72.84 LoL
+  const WIDEN_EXTRA_X = HA_WALK_SHAPE_LOL.baseHalf / LOL_PER_UNIT - cfg.laneMaxX;
   function widenExtraForZ(z) {
     const a = Math.abs(z) * LOL_PER_UNIT, W = HA_WALK_SHAPE_LOL;
     if (a < W.widenStart) return 0;
@@ -7801,688 +7802,272 @@ function createHowlingAbyssMap(scene) {
     if (a < W.taperEnd) return WIDEN_EXTRA_X * (1 - (a - W.taperStart) / (W.taperEnd - W.taperStart));
     return 0;
   }
-  // 기지 바닥 모양(위 함수와 같은 경계) - sign: -1 블루, +1 레드. XY 평면 도형을 눕혀 쓴다(도형 y = -z).
-  function baseFloorShape(sign) {
-    const shape = new THREE.Shape(), steps = 60, z0 = BASE_FLOOR_START, z1 = cfg.laneMaxZ;
-    const pts = [];
-    for (let i = 0; i <= steps; i++) { const z = z0 + (z1 - z0) * i / steps; pts.push([cfg.laneMaxX + widenExtraForZ(z), sign * z]); }
-    for (let i = steps; i >= 0; i--) { const z = z0 + (z1 - z0) * i / steps; pts.push([-(cfg.laneMaxX + widenExtraForZ(z)), sign * z]); }
-    pts.forEach(([x, z], i) => (i ? shape.lineTo(x, -z) : shape.moveTo(x, -z)));
-    return shape;
+  const halfW = (z) => cfg.laneMaxX + widenExtraForZ(z);
+  // 결정적 난수(매번 같은 모양)
+  let seed = 7331;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+
+  // ---------- 코드로 그리는 텍스처 ----------
+  function canvasTex(size, draw, repeat = 1) {
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    const g = c.getContext('2d'); draw(g, size);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat, repeat);
+    t.colorSpace = THREE.SRGBColorSpace;
+    if (typeof renderer !== 'undefined' && renderer.capabilities) t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    return t;
   }
+  const blot = (g, x, y, r, col, a) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col.replace('A', a)); gr.addColorStop(1, col.replace('A', 0)); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); };
+  // 판석 바닥: 줄마다 길이가 다른 돌, 짙은 줄눈, 금, 가장자리에 쌓인 눈
+  function flagstones(g, n, base, snowAmt) {
+    g.fillStyle = '#2b333a'; g.fillRect(0, 0, n, n);
+    const rows = 8, rh = n / rows;
+    for (let r = 0; r < rows; r++) {
+      let x = -rnd() * 60;
+      while (x < n) {
+        const w = 50 + rnd() * 70;
+        const l = base[0] + (rnd() - .5) * 18, s2 = base[1] + (rnd() - .5) * 10;
+        g.fillStyle = `hsl(${base[2]},${s2}%,${l}%)`;
+        g.fillRect(x + 2, r * rh + 2, w - 4, rh - 4);
+        for (let k = 0; k < 6; k++) blot(g, x + rnd() * w, r * rh + rnd() * rh, 6 + rnd() * 14, 'rgba(0,0,0,A)', .08); // 얼룩
+        g.strokeStyle = 'rgba(255,255,255,0.10)'; g.lineWidth = 1; g.strokeRect(x + 2.5, r * rh + 2.5, w - 5, rh - 5); // 돌 모서리 밝게
+        if (rnd() < .35) { g.strokeStyle = 'rgba(10,14,18,0.55)'; g.beginPath(); let cx = x + rnd() * w, cy = r * rh + 3; g.moveTo(cx, cy); for (let j = 0; j < 4; j++) { cx += (rnd() - .5) * 18; cy += rh / 4; g.lineTo(cx, cy); } g.stroke(); }
+        x += w;
+      }
+    }
+    for (let i = 0; i < 7 * snowAmt; i++) blot(g, rnd() * n, rnd() * n, 50 + rnd() * 90, 'rgba(225,238,248,A)', .35 + rnd() * .3); // 크고 옅은 눈 더미
+    for (let r = 0; r < rows; r++) if (rnd() < .5) { g.fillStyle = 'rgba(230,240,248,0.28)'; g.fillRect(0, r * rh - 2, n, 4); } // 줄눈에 낀 눈
+    for (let i = 0; i < 400; i++) { g.fillStyle = `rgba(255,255,255,${rnd() * .12})`; g.fillRect(rnd() * n, rnd() * n, 2, 2); }
+  }
+  const laneTex = canvasTex(512, (g, n) => flagstones(g, n, [44, 9, 205], 1));
+  const baseTex = canvasTex(512, (g, n) => flagstones(g, n, [48, 11, 210], 1.6));
+  const wallTex = canvasTex(256, (g, n) => {
+    g.fillStyle = '#1e262c'; g.fillRect(0, 0, n, n);
+    for (let r = 0; r < 4; r++) for (let x = (r % 2) * -32; x < n; x += 64) { g.fillStyle = `hsl(205,8%,${30 + (rnd() - .5) * 10}%)`; g.fillRect(x + 2, r * 64 + 2, 60, 60); }
+    for (let i = 0; i < 40; i++) blot(g, rnd() * n, rnd() * n, 8 + rnd() * 18, 'rgba(0,0,0,A)', .15);
+  });
+  const rockTex = canvasTex(256, (g, n) => {
+    g.fillStyle = '#3a4954'; g.fillRect(0, 0, n, n);
+    for (let i = 0; i < 160; i++) blot(g, rnd() * n, rnd() * n, 6 + rnd() * 30, rnd() < .5 ? 'rgba(10,18,26,A)' : 'rgba(150,175,195,A)', .18);
+    g.strokeStyle = 'rgba(200,225,240,0.18)'; for (let i = 0; i < 30; i++) { g.beginPath(); const x = rnd() * n, y = rnd() * n; g.moveTo(x, y); g.lineTo(x + (rnd() - .5) * 60, y + rnd() * 40); g.stroke(); }
+  });
+  const snowTex = canvasTex(256, (g, n) => {
+    g.fillStyle = '#dce8f1'; g.fillRect(0, 0, n, n);
+    for (let i = 0; i < 120; i++) blot(g, rnd() * n, rnd() * n, 8 + rnd() * 28, rnd() < .5 ? 'rgba(160,190,215,A)' : 'rgba(255,255,255,A)', .25);
+  });
+  const std = (o) => new THREE.MeshStandardMaterial({ roughness: .9, metalness: 0, ...o });
+  laneTex.repeat.set(.55, .55); baseTex.repeat.set(.5, .5);
+  const laneMat = std({ map: laneTex, color: 0xc4d0d8 });
+  const baseMat = std({ map: baseTex, color: 0xc9d5dd });
+  const wallMat = std({ map: wallTex, color: 0xb9c6cf, roughness: .85 });
+  const rockMat = std({ map: rockTex, color: 0xb6c6d2, flatShading: true });
+  const snowMat = std({ map: snowTex, color: 0xb9c9d6, roughness: 1 });
+  const iceMat = std({ color: 0x9fd8f2, roughness: .25, metalness: .05, emissive: 0x2a6f99, emissiveIntensity: .35, transparent: true, opacity: .9, flatShading: true });
+  const darkMat = std({ color: 0x101c25, roughness: 1 });
+  // 원작 텍스처(CommunityDragon)에 닿으면 바꿔 끼운다(실패하면 위 텍스처 그대로).
   const ASSET = 'https://raw.communitydragon.org/latest/game/assets/maps/kitpieces/howling_abyss/textures/';
   const loader = new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
-  const texCache = new Map();
-  function tex(name, rx=1, ry=1) {
-    const key=name+'|'+rx+'|'+ry;
-    if(texCache.has(key)) return texCache.get(key);
-    const t=loader.load(ASSET+name,undefined,undefined,e=>console.warn('Howling Abyss texture:',name,e));
-    t.wrapS=THREE.RepeatWrapping; t.wrapT=THREE.RepeatWrapping;
-    t.repeat.set(rx,ry); t.colorSpace=THREE.SRGBColorSpace;
-    if(typeof renderer!=='undefined' && renderer.capabilities) t.anisotropy=Math.min(16,renderer.capabilities.getMaxAnisotropy());
-    texCache.set(key,t); return t;
+  function tryRemote(material, name) {
+    loader.load(ASSET + name, (t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; material.map = t; material.color.setHex(0xffffff); material.needsUpdate = true; }, undefined, () => {});
   }
-  function mat(name,opt={}) {
-    return new THREE.MeshStandardMaterial({map:tex(name,opt.rx??1,opt.ry??1),color:opt.color??0xffffff,
-      roughness:opt.roughness??.88,metalness:opt.metalness??0,transparent:!!opt.transparent,
-      opacity:opt.opacity??1,alphaTest:opt.alphaTest??0,side:opt.side??THREE.FrontSide});
+  tryRemote(laneMat, 'structure_lane_ground.png');
+  tryRemote(baseMat, 'structure_base_ground.png');
+  tryRemote(wallMat, 'structure_lane_walls.png');
+
+  function mesh(geo, material, pos = [0, 0, 0], rot = [0, 0, 0], scl = null, parent = group) {
+    const o = new THREE.Mesh(geo, material); o.position.set(...pos); o.rotation.set(...rot); if (scl) o.scale.set(...scl);
+    o.castShadow = false; o.receiveShadow = true; parent.add(o); return o;
   }
-  function colorMat(c,r=.85,m=0,e=0,ei=0){return new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m,emissive:e,emissiveIntensity:ei});}
-  function add(geo,ma,pos=[0,0,0],rot=[0,0,0],scale=null,parent=group){
-    if(!pos)pos=[0,0,0]; if(!rot)rot=[0,0,0];
-    const o=new THREE.Mesh(geo,ma); o.position.set(...pos); o.rotation.set(...rot); if(scale)o.scale.set(...scale);
-    o.castShadow=true;o.receiveShadow=true;parent.add(o);return o;
-  }
-  function segmentBetween(a,b,r=.05,ma=colorMat(0x27343a,.6,.45)){
-    const mid=new THREE.Vector3().addVectors(a,b).multiplyScalar(.5), d=new THREE.Vector3().subVectors(b,a), len=d.length();
-    const o=add(new THREE.CylinderGeometry(r,r,len,6),ma,mid);
-    o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()); o.castShadow=false; return o;
+  // 월드 좌표 UV(텍스처가 늘어나지 않게) - 줄이기 전 6단위(약 440 LoL)마다 한 번 반복
+  function worldUv(geo, tile = 6, axes = 'xy') {
+    const p = geo.attributes.position, uv = geo.attributes.uv;
+    for (let i = 0; i < p.count; i++) uv.setXY(i, (axes === 'xz' ? p.getX(i) : p.getX(i)) / tile, (axes === 'xz' ? p.getZ(i) : p.getY(i)) / tile);
+    uv.needsUpdate = true; return geo;
   }
 
-  // ============================================================
-  // 1) BRIDGE FLOOR: IMAGE-TILED, NOT MODELED.
-  // ------------------------------------------------------------
-  // The playable bridge surface is intentionally a single flat plane.
-  // The real CommunityDragon lane-ground texture is copied/repeated across
-  // the UVs so the floor reads like a continuous game-map texture rather
-  // than a collection of 3D stone slabs.
-  // ============================================================
-  // Dark structural underside: never visible from the normal gameplay view,
-  // but prevents the bridge from looking paper-thin from low camera angles.
-  add(new THREE.BoxGeometry(bridgeWidth+1.8,1.5,bridgeLen+2),colorMat(0x15242c,.98),[0,-.7,0]);
+  // ---------- 1) 걸을 수 있는 바닥(다리 + 양 기지, 원작 이동 격자 외곽선) ----------
+  const STEP = 1.0;
+  const zs = []; for (let z = cfg.laneMinZ; z <= cfg.laneMaxZ + 1e-6; z += STEP) zs.push(Math.min(z, cfg.laneMaxZ));
+  const outline = new THREE.Shape();
+  zs.forEach((z, i) => (i ? outline.lineTo(halfW(z), -z) : outline.moveTo(halfW(z), -z)));
+  for (let i = zs.length - 1; i >= 0; i--) outline.lineTo(-halfW(zs[i]), -zs[i]);
+  const floorGeo = worldUv(new THREE.ShapeGeometry(outline, 1));
+  // 기지 쪽(넓어지는 곳부터)은 기지 바닥 재질, 다리는 다리 재질 - 같은 외곽선을 둘로 나눈다
+  const floor = mesh(floorGeo, laneMat, [0, FLOOR_Y, 0], [-Math.PI / 2, 0, 0]);
+  floor.name = 'HA_FLOOR';
+  for (const sign of [-1, 1]) {
+    const z0 = HA_WALK_SHAPE_LOL.widenStart / LOL_PER_UNIT - 3, sh = new THREE.Shape(), pts = [];
+    for (let z = z0; z <= cfg.laneMaxZ + 1e-6; z += STEP) pts.push([halfW(z), sign * Math.min(z, cfg.laneMaxZ)]);
+    for (let i = pts.length - 1; i >= 0; i--) pts.push([-pts[i][0], pts[i][1]]);
+    pts.forEach(([x, z], i) => (i ? sh.lineTo(x, -z) : sh.moveTo(x, -z)));
+    mesh(worldUv(new THREE.ShapeGeometry(sh, 1)), baseMat, [0, FLOOR_Y + .004, 0], [-Math.PI / 2, 0, 0]);
+  }
+  // 바닥 아래 받침(옆에서 봤을 때 종잇장처럼 보이지 않게)
+  mesh(new THREE.ExtrudeGeometry(outline, { depth: 2.2, bevelEnabled: false }), darkMat, [0, FLOOR_Y - 2.25, 0], [-Math.PI / 2, 0, 0]);
 
-  // MAIN IMAGE FLOOR — one plane, tiled texture.
-  const floorTexture = tex('structure_lane_ground.png', 3.65, 17.8);
-  floorTexture.wrapS = THREE.RepeatWrapping;
-  floorTexture.wrapT = THREE.RepeatWrapping;
-  floorTexture.repeat.set(3.65,17.8);
-  floorTexture.offset.set(0,0);
-  const floorMaterial = new THREE.MeshStandardMaterial({
-    map: floorTexture,
-    color: 0xffffff,
-    roughness: .92,
-    metalness: 0,
-    side: THREE.DoubleSide
-  });
-  const floorMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(bridgeWidth-.06, bridgeLen-.06, 1, 1),
-    floorMaterial
-  );
-  floorMesh.rotation.x = -Math.PI/2;
-  floorMesh.position.set(0,.39,0);
-  floorMesh.receiveShadow = true;
-  floorMesh.castShadow = false;
-  floorMesh.name = 'HA_IMAGE_TILED_BRIDGE_FLOOR';
-  group.add(floorMesh);
-
-  // A second transparent image layer gives the floor a light frost/snow pass.
-  // It is also tiled rather than modeled.
-  const snowTexture = tex('basesnow.png', 3.4, 17.0);
-  const snowMaterial = new THREE.MeshStandardMaterial({
-    map: snowTexture,
-    transparent: true,
-    opacity: .22,
-    roughness: 1,
-    depthWrite: false,
-    side: THREE.DoubleSide
-  });
-  const snowFloor = new THREE.Mesh(
-    new THREE.PlaneGeometry(bridgeWidth-.12, bridgeLen-.12, 1, 1),
-    snowMaterial
-  );
-  snowFloor.rotation.x = -Math.PI/2;
-  snowFloor.position.set(0,.405,0);
-  snowFloor.receiveShadow = false;
-  snowFloor.castShadow = false;
-  snowFloor.name = 'HA_IMAGE_TILED_SNOW_OVERLAY';
-  group.add(snowFloor);
-
-  // 기지 쪽 넓어진 바닥은 addBaseEndDetail()이 원작 모양(baseFloorShape)으로 깐다(25차 - 예전엔 사각형 패치 4장).
-
-  // (삭제) 중앙선의 얼음 문양 타일 + 푸른 고리 장식 - 원작 칼바람 다리에 없는 임시 장식이라 지웠다(사용자 요청).
-
-  // ============================================================
-  // 2) SIDE PARAPETS: segmented walls, towers, chains, wood braces.
-  // ============================================================
-  const wallA=mat('structure_lane_walls.png',{rx:1.2,ry:1.5,roughness:.86});
-  const wallB=mat('structure_lane_walls2.png',{rx:1.2,ry:1.5,roughness:.86});
-  const snowWall=mat('prop_icecliff_snowtransition.png',{rx:1,ry:1.4,roughness:.96});
-  const wood=mat('prop_woodbeams.png',{rx:1,ry:1.1,roughness:.76});
-  const chain=mat('prop_chainlink.png',{roughness:.42,metalness:.5,transparent:true,alphaTest:.08,side:THREE.DoubleSide});
-  for(const side of [-1,1]){
-    // segmented parapet rather than one long wall
-    for(let i=0;i<17;i++){
-      const z=cfg.laneMinZ+2+i*((bridgeLen-4)/16);
-      const flare=widenExtraForZ(z); // 요청("끝 쪽 넓이 늘리기") - 기지 근처일수록 바깥으로 벌어짐
-      const x=side*(10.75+flare);
-      const postX=side*(10.92+flare);
-      const w=1.8+(i%3===0?.35:0);
-      add(new THREE.BoxGeometry(1.0,1.25,w),side<0?wallA:wallB,[x,.68,z]);
-      add(new THREE.BoxGeometry(1.15,.16,w+.08),snowWall,[x,1.34,z]);
-      // stone post/cap
-      add(new THREE.CylinderGeometry(.36,.44,2.15,8),wood,[postX,1.08,z]);
-      add(new THREE.CylinderGeometry(.52,.52,.16,8),mat('prop_chain_base_plate.png',{roughness:.65,metalness:.25}),[postX,.16,z]);
-    }
-    // three hanging chain lines, with actual chain texture used as alpha material
-    for(const y of [1.0,1.7,2.28]){
-      for(let i=0;i<16;i++){
-        const z0=cfg.laneMinZ+2+i*((bridgeLen-4)/16),z1=cfg.laneMinZ+2+(i+1)*((bridgeLen-4)/16);
-        const postX0=side*(10.92+widenExtraForZ(z0)),postX1=side*(10.92+widenExtraForZ(z1));
-        segmentBetween(new THREE.Vector3(postX0,y,z0),new THREE.Vector3(postX1,y,z1),.045,chain);
+  // ---------- 2) 난간(외곽선을 따라가는 낮은 돌벽 + 눈 + 기둥) ----------
+  const RAIL_OFF = .55, RAIL_H = 1.25, RAIL_T = .95;
+  const railPts = (side) => zs.filter((_, i) => i % 2 === 0).map((z) => new THREE.Vector3(side * (halfW(z) + RAIL_OFF), 0, z));
+  for (const side of [-1, 1]) {
+    const pts = railPts(side);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1], len = a.distanceTo(b) + .05, mid = a.clone().add(b).multiplyScalar(.5);
+      const yaw = Math.atan2(b.x - a.x, b.z - a.z);
+      mesh(new THREE.BoxGeometry(RAIL_T, RAIL_H, len), wallMat, [mid.x, FLOOR_Y + RAIL_H / 2 - .05, mid.z], [0, yaw, 0]);
+      mesh(new THREE.BoxGeometry(RAIL_T + .18, .22, len + .05), snowMat, [mid.x, FLOOR_Y + RAIL_H + .05, mid.z], [0, yaw, 0]);
+      if (i % 6 === 0) { // 기둥
+        const px = a.x + side * .1;
+        mesh(new THREE.BoxGeometry(1.7, 2.6, 1.7), wallMat, [px, FLOOR_Y + 1.25, a.z]);
+        mesh(new THREE.ConeGeometry(1.35, 1.0, 4), snowMat, [px, FLOOR_Y + 3.05, a.z], [0, Math.PI / 4, 0]);
+        mesh(new THREE.BoxGeometry(1.95, .3, 1.95), wallMat, [px, FLOOR_Y + .15, a.z]);
       }
     }
   }
-
-  // Underside: crossing beams + hanging chains are visible from the game's elevated camera.
-  for(let i=0;i<13;i++){
-    const z=cfg.laneMinZ+3+i*((bridgeLen-6)/12);
-    add(new THREE.BoxGeometry(1.0,.72,1.0),wood,[0,-1.15,z],[0,0,0]);
-    add(new THREE.BoxGeometry(15,.48,.58),wood,[0,-1.55,z],[0,0,0]);
-    for(const side of [-1,1]) add(new THREE.BoxGeometry(.5,4.8,.5),wood,[side*5.7,-3.35,z],[0,side*.15,side*.08]);
-  }
-
-  // ============================================================
-  // 3) OUTSIDE-BRIDGE PLACEHOLDERS (TEMPORARY)
-  //    다리 자체의 디테일은 유지하고, 다리 밖의 절벽/기지/장식은
-  //    추후 실제 kitpiece 모델로 교체하기 쉽도록 단순한 임시 구조물로 둔다.
-  // ============================================================
-  const abyssMat = colorMat(0x07141d, .98, 0);
-  const iceRockMat = colorMat(0x263d4b, .93, .02);
-  const iceSnowMat = colorMat(0x6f8fa0, .9, 0);
-  const darkStoneMat = colorMat(0x18262f, .96, .05);
-
-  // 깊은 어비스 바닥 - 고정 길이(190) 대신 실제 다리 길이에 맞춰 계산한다
-  // (맵을 길게 늘렸는데 이 바닥판만 예전 길이로 고정돼 있으면 다리 양쪽
-  // 끝에서 바닥이 끊겨 보인다).
-  add(new THREE.PlaneGeometry(90,bridgeLen+40), abyssMat, [0,-11,0], [-Math.PI/2,0,0]);
-
-  // 다리 바로 바깥에는 낮고 넓은 임시 얼음 절벽 덩어리만 배치한다.
-  // 버그 수정("끝쪽에 관통되는 벽... 치우고") - 이 장식 바위들이 예전
-  // 좁은 라인 폭(±10.5) 기준으로만 배치돼 있어서, 기지 근처가 넓어진
-  // 지금은 오히려 새로 넓어진 플라자 "안쪽"에 파묻혀 플레이어가 그대로
-  // 뚫고 지나다니는 것처럼 보였다. 벽과 똑같이 widenExtraForZ()를 더해서
-  // 넓어진 구간에서는 바위도 같이 바깥으로 밀려나게 한다.
-  for(const side of [-1,1]){
-    for(let i=0;i<18;i++){
-      const z=cfg.laneMinZ-5+i*((bridgeLen+10)/17);
-      const x=side*(13.1+widenExtraForZ(z)+(i%3)*1.25);
-      const h=2.8+(i%4)*1.15;
-      add(new THREE.CylinderGeometry(1.7+(i%3)*.3,2.5+(i%2)*.45,h,7,1),iceRockMat,
-        [x,h*.38,z],[0,(i%5)*.18,0],[1,.9+(i%3)*.12,1.15]);
-      add(new THREE.ConeGeometry(1.5+(i%2)*.25,1.6+(i%3)*.35,7),iceSnowMat,
-        [x, h+0.15, z],[Math.PI,0.15*(i%3),0],[1,.75,1]);
-    }
-
-    // 먼 쪽에 더 큰 실루엣을 만들어 빈 공간을 막는다.
-    for(let i=0;i<8;i++){
-      const z=cfg.laneMinZ-12+i*((bridgeLen+24)/7);
-      const x=side*(19.0+widenExtraForZ(z)+(i%2)*2.2);
-      add(new THREE.IcosahedronGeometry(3.2+(i%3)*.8,1),darkStoneMat,
-        [x,-.4+(i%3)*.35,z],[.1*i,.25*i,.08*i],[1.1,1.4+(i%2)*.35,1.2]);
+  // 맨 뒤(우물 뒤) 막는 얼음 절벽 벽
+  for (const sign of [-1, 1]) {
+    // 이동 끝 바로 뒤에서 시작해 바깥으로(우물 발판을 덮지 않게 바위 안쪽 끝이 이동 끝 너머에 오도록)
+    const zEnd = sign * (cfg.laneMaxZ + 3.2), w = halfW(cfg.laneMaxZ) + 4;
+    for (let x = -w; x <= w; x += 2.2) {
+      const h = 3.5 + rnd() * 3.5;
+      mesh(new THREE.DodecahedronGeometry(1.8 + rnd() * .7, 0), rockMat, [x, FLOOR_Y + h * .35, zEnd + sign * rnd() * 1.4], [rnd(), rnd() * 3, rnd()], [1.15, h / 2.4, .95]);
+      if (rnd() < .5) mesh(new THREE.ConeGeometry(.5 + rnd() * .4, 2 + rnd() * 2.5, 5), iceMat, [x + rnd(), FLOOR_Y + 1, zEnd - sign * 1.6], [0, rnd() * 3, (rnd() - .5) * .4]);
     }
   }
 
-  // 절벽 가장자리의 임시 눈 띠
-  for(const side of [-1,1]){
-    // 25차: 좁은 다리 구간에만 둔다 - 예전엔 끝까지 이어져서 넓어진 기지 바닥 위로 눈 띠가 솟아 있었다.
-    add(new THREE.BoxGeometry(2.0,1.4,BASE_FLOOR_START*2),iceSnowMat,[side*12.5,.35,0]);
-  }
-
-  // ============================================================
-  // 4) CENTRAL KEYSTONE - 요청에 따라 제거함(맵 중앙의 돌+크리스탈 조형).
-  // ============================================================
-
-  // ============================================================
-  // 5) OUTSIDE-BRIDGE BASE PLACEHOLDERS (TEMPORARY)
-  //    실제 포탑/억제기/넥서스 시스템과 충돌하지 않도록
-  //    맵 장식용의 단순한 플랫폼만 만든다.
-  // ============================================================
-  // ============================================================
-  // 5) BASE UNDERLAY
-  // ------------------------------------------------------------
-  // 기존의 거대한 직사각형 본진 성벽은 제거했다.
-  // 실제 Howling Abyss 스크린샷처럼 본진은 '다리에서 자연스럽게 이어지는
-  // 넓은 얼음 플랫폼 + 주변의 불규칙한 절벽'으로 표현한다.
-  // ============================================================
-  function buildBase(z,sign,team){
-    const teamColor = team==='blue' ? 0x43cfff : 0xff5365;
-    // ========================================================
-    // BASE LAYOUT — revised to the user's latest sketch.
-    // Bridge -> twin turrets -> nexus zone -> NEXUS -> well/shop -> end wall.
-    // The center/right plaza stays open; there is no pointless enclosure.
-    // ========================================================
-    const baseGround = mat('structure_base_ground.png',{rx:1.75,ry:1.75,roughness:.95});
-    const baseSnow = mat('basesnow.png',{rx:1.8,ry:1.8,roughness:1,transparent:true,opacity:.14,side:THREE.DoubleSide});
-    const baseWallMats = [
-      mat('structure_base_wall_d.png',{rx:1.0,ry:1.0,roughness:.92,side:THREE.DoubleSide}),
-      mat('structure_base_wall_e.png',{rx:1.0,ry:1.0,roughness:.92,side:THREE.DoubleSide}),
-      mat('structure_base_wall_f.png',{rx:1.0,ry:1.0,roughness:.92,side:THREE.DoubleSide}),
-      mat('structure_base_wall_g.png',{rx:1.0,ry:1.0,roughness:.92,side:THREE.DoubleSide})
-    ];
-    const iceCliffM = mat('prop_icecliff_h.png',{rx:1.0,ry:1.0,roughness:.96});
-    const iceSnowM = mat('prop_icecliff_snowtransition.png',{rx:1.0,ry:1.0,roughness:.95,transparent:true,alphaTest:.04,side:THREE.DoubleSide});
-    const iceChunkM = mat('prop_ice_chunksa.png',{rx:1.0,ry:1.0,roughness:.95});
-    const icicleM = mat('prop_icicles_c.png',{rx:1.0,ry:1.0,roughness:.9,transparent:true,alphaTest:.06,side:THREE.DoubleSide});
-    const shopM = mat('props_sw_shop_ice_frame.png',{rx:1,ry:1,roughness:.82,transparent:true,alphaTest:.04,side:THREE.DoubleSide});
-    const statueBaseM = mat('statue_base.png',{rx:1,ry:1,roughness:.74,transparent:true,alphaTest:.04,side:THREE.DoubleSide});
-
-    // 1) Open base floor. It expands from the bridge, with no side walls.
-    const plaza = new THREE.Mesh(new THREE.PlaneGeometry(42,48,1,1),baseGround);
-    plaza.rotation.x=-Math.PI/2;
-    plaza.position.set(0,.415,z+sign*1.0);
-    plaza.receiveShadow=true;
-    group.add(plaza);
-    const snowLayer = new THREE.Mesh(new THREE.PlaneGeometry(41.8,47.8,1,1),baseSnow);
-    snowLayer.rotation.x=-Math.PI/2;
-    snowLayer.position.set(0,.426,z+sign*1.0);
-    group.add(snowLayer);
-
-    // 2) Narrow-to-wide transition from the bridge.
-    const throat = new THREE.Mesh(new THREE.PlaneGeometry(31.5,16,1,1),baseGround);
-    throat.rotation.x=-Math.PI/2;
-    throat.position.set(0,.418,z-sign*15.5);
-    group.add(throat);
-
-    // 3) Twin turret zone — real gameplay turrets occupy the two pads.
-    const turretZoneZ = z-sign*22.5;
-    const turretPad = new THREE.Mesh(new THREE.PlaneGeometry(30,11,1,1),baseGround);
-    turretPad.rotation.x=-Math.PI/2;
-    turretPad.position.set(0,.422,turretZoneZ);
-    group.add(turretPad);
-    for(const x of [-3.0,3.0]){
-      const pad=new THREE.Mesh(new THREE.CylinderGeometry(2.05,2.3,.18,20),baseGround);
-      pad.position.set(x,.51,turretZoneZ);
-      group.add(pad);
+  // ---------- 3) 난간 바깥: 눈 비탈 → 심연, 바위·얼음 결정 ----------
+  const OUT = [0, 1.6, 4, 8, 14, 22, 32]; // 난간에서 바깥으로 거리
+  const HGT = [1.0, .7, -.2, -2.4, -6.5, -12, -18];
+  for (const side of [-1, 1]) {
+    const cols = OUT.length, rowsZ = [];
+    for (let z = cfg.laneMinZ - 4; z <= cfg.laneMaxZ + 4.01; z += 2) rowsZ.push(z);
+    const pos = [], col = [], idx = [];
+    rowsZ.forEach((z) => {
+      const edge = halfW(THREE.MathUtils.clamp(z, cfg.laneMinZ, cfg.laneMaxZ)) + RAIL_OFF + .4;
+      OUT.forEach((d, j) => {
+        const n = (rnd() - .5) * (j ? 1.6 + j * .5 : 0);
+        pos.push(side * (edge + d + (j ? (rnd() - .5) * 1.5 : 0)), FLOOR_Y + HGT[j] + n, z + (j > 1 ? (rnd() - .5) * 1.2 : 0));
+        const t = j / (cols - 1), snow = Math.max(0, 1 - t * 1.5) * (.85 + rnd() * .15);
+        col.push(.1 + .42 * snow, .15 + .45 * snow, .2 + .48 * snow);
+      });
+    });
+    for (let r = 0; r < rowsZ.length - 1; r++) for (let j = 0; j < cols - 1; j++) {
+      const a = r * cols + j, b = a + 1, c = a + cols, d = c + 1;
+      if (side > 0) idx.push(a, c, b, b, c, d); else idx.push(a, b, c, b, d, c);
     }
-
-    // 4) Open nexus approach zone between twin turrets and the Nexus.
-    const nexusApproachZ = z-sign*9.0;
-    const approach = new THREE.Mesh(new THREE.PlaneGeometry(34,17,1,1),baseGround);
-    approach.rotation.x=-Math.PI/2;
-    approach.position.set(0,.423,nexusApproachZ);
-    group.add(approach);
-
-    // 5) NEXUS: the round area from the sketch is now the actual Nexus location.
-    const nexusZ = z + sign*3.5; // RED +Z / BLUE -Z, in front of the rear facilities
-    const nexusPad = new THREE.Mesh(new THREE.CylinderGeometry(6.2,6.7,.30,32),baseGround);
-    nexusPad.position.set(0,.52,nexusZ);
-    nexusPad.receiveShadow=true;
-    group.add(nexusPad);
-    const nexusRing = new THREE.Mesh(
-      new THREE.RingGeometry(4.15,4.45,40),
-      new THREE.MeshStandardMaterial({color:teamColor,emissive:teamColor,emissiveIntensity:.35,roughness:.5,transparent:true,opacity:.62,side:THREE.DoubleSide})
-    );
-    nexusRing.rotation.x=-Math.PI/2;
-    nexusRing.position.set(0,.68,nexusZ);
-    group.add(nexusRing);
-
-    // 6) REAR FACILITIES: well in the center, shop on the left, right side empty.
-    const wellZ = z + sign*10.0;
-    const wellPad = new THREE.Mesh(new THREE.CylinderGeometry(5.0,5.45,.25,32),baseGround);
-    wellPad.position.set(0,.50,wellZ);
-    group.add(wellPad);
-    const wellRing = new THREE.Mesh(
-      new THREE.TorusGeometry(4.05,.20,8,40),
-      new THREE.MeshStandardMaterial({color:teamColor,emissive:teamColor,emissiveIntensity:.42,roughness:.55,transparent:true,opacity:.78})
-    );
-    wellRing.rotation.x=Math.PI/2;
-    wellRing.position.set(0,.66,wellZ);
-    group.add(wellRing);
-    const wellCore = new THREE.Mesh(
-      new THREE.CylinderGeometry(2.15,2.5,.42,20),
-      new THREE.MeshStandardMaterial({color:teamColor,emissive:teamColor,emissiveIntensity:.8,roughness:.25,metalness:.1,transparent:true,opacity:.92})
-    );
-    wellCore.position.set(0,.78,wellZ);
-    group.add(wellCore);
-
-    const shopZ = wellZ;
-    const shopG = new THREE.Group();
-    shopG.position.set(-9.2,.42,shopZ);
-    const shopBase = new THREE.Mesh(new THREE.CylinderGeometry(2.5,2.8,.34,10),statueBaseM);
-    shopG.add(shopBase);
-    const shopFrame = new THREE.Mesh(new THREE.CylinderGeometry(2.35,2.35,2.5,8),shopM);
-    shopFrame.position.y=1.25;
-    shopG.add(shopFrame);
-    const shopGlow = new THREE.Mesh(new THREE.OctahedronGeometry(.58,1),new THREE.MeshStandardMaterial({color:teamColor,emissive:teamColor,emissiveIntensity:.9,roughness:.22}));
-    shopGlow.position.y=2.72;
-    shopG.add(shopGlow);
-    shopG.userData.type='shop_visual';
-    shopG.userData.team=team;
-    group.add(shopG);
-
-    // 7) Nexus obelisk: behind the Nexus and behind the well, just before the end wall.
-    const obeliskZ = z + sign*14.0;
-    const obelisk = new THREE.Group();
-    obelisk.position.set(0,.42,obeliskZ);
-    const obBase = new THREE.Mesh(new THREE.CylinderGeometry(1.45,1.8,.5,12),statueBaseM);
-    obelisk.add(obBase);
-    const obBody = new THREE.Mesh(new THREE.ConeGeometry(.82,2.8,6),iceChunkM);
-    obBody.position.y=1.55;
-    obelisk.add(obBody);
-    const obGlow = new THREE.Mesh(new THREE.OctahedronGeometry(.62,1),new THREE.MeshStandardMaterial({color:teamColor,emissive:teamColor,emissiveIntensity:1.0,roughness:.2}));
-    obGlow.position.y=3.0;
-    obelisk.add(obGlow);
-    obelisk.userData.type='nexus_obelisk';
-    obelisk.userData.team=team;
-    group.add(obelisk);
-
-    // 7) End wall: close the very end of the map with actual Howling Abyss base-wall textures.
-    // It is only at the far rear edge; the play area in front stays completely open.
-    const wallZ = z + sign*17.0;
-    const wallW = 41.5, wallH = 7.0;
-    const wallPieces = 4;
-    for(let i=0;i<wallPieces;i++){
-      const x = -wallW/2 + (i+.5)*(wallW/wallPieces);
-      const pieceW = wallW/wallPieces + .12;
-      const wall = new THREE.Mesh(new THREE.PlaneGeometry(pieceW,wallH,1,1),baseWallMats[i]);
-      wall.position.set(x,wallH*.5,wallZ);
-      wall.rotation.y = sign>0 ? 0 : Math.PI;
-      wall.receiveShadow=true;
-      wall.castShadow=true;
-      group.add(wall);
-    }
-    // Low wall footing + irregular ice to blend the wall into the map instead of a floating rectangle.
-    const wallFoot = new THREE.Mesh(new THREE.BoxGeometry(wallW+.8,1.0,1.3),mat('structure_base_lower_wall.png',{rx:1,ry:1,roughness:.95}));
-    wallFoot.position.set(0,.45,wallZ-sign*.45);
-    group.add(wallFoot);
-    for(const side of [-1,1]){
-      for(let i=0;i<5;i++){
-        const x=side*(10.5+i*2.0);
-        const h=2.0+(i%3)*.7;
-        add(new THREE.ConeGeometry(.8+(i%2)*.25, h, 7),iceChunkM,
-          [x,.55+h*.5,wallZ-sign*(.4+(i%2)*.25)],[Math.PI,0,.08*side]);
-        if(i%2===0){
-          add(new THREE.ConeGeometry(.42,.95,7),icicleM,
-            [x-side*.45,h+1.1,wallZ-sign*.1],[Math.PI,0,.1*side]);
-        }
-      }
-    }
-
-    // 8) Natural side cliffs stay outside the playable plaza — no artificial side walls.
-    for(const side of [-1,1]){
-      for(let i=0;i<8;i++){
-        const x=side*(22.5+i*1.0);
-        const zz=z-sign*(15-i*2.4);
-        const h=2.5+(i%4)*.8;
-        add(new THREE.DodecahedronGeometry(1.55+(i%3)*.38,1),i%2?iceCliffM:iceSnowM,
-          [x,h*.35,zz],[.03*i,.15*i*side,0],[1.35,1.0+h*.2,1.12]);
-      }
-    }
-    // Rear corners: use cliff + snow transition to make the end wall feel embedded in the ice.
-    for(const side of [-1,1]){
-      for(let i=0;i<4;i++){
-        const x=side*(13.5+i*2.1);
-        const zz=wallZ-sign*(1.0+i*.65);
-        add(new THREE.ConeGeometry(1.0+(i%2)*.25,2.0+(i%3)*.45,7),iceCliffM,
-          [x,1.0+(i%3)*.4,zz],[Math.PI,0,.1*side]);
-      }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setIndex(idx); g.computeVertexNormals();
+    mesh(g, std({ vertexColors: true, flatShading: true, roughness: .95 }));
+    // 비탈 위 바위(눈 모자)와 얼음 결정
+    for (let z = cfg.laneMinZ; z <= cfg.laneMaxZ; z += 3.2) {
+      const edge = halfW(z) + RAIL_OFF + 2.5 + rnd() * 7, h = 1.2 + rnd() * 2.8;
+      const x = side * edge, y = FLOOR_Y + HGT[1] - (edge - halfW(z)) * .25;
+      mesh(new THREE.DodecahedronGeometry(1 + rnd() * 1.2, 0), rockMat, [x, y, z + rnd() * 2], [rnd(), rnd() * 3, rnd()], [1.2, h / 2, 1]);
+      mesh(new THREE.DodecahedronGeometry(.9 + rnd() * .8, 0), snowMat, [x, y + h * .45, z + rnd()], [rnd(), rnd() * 3, 0], [1.1, .35, 1]);
+      if (rnd() < .45) { const ix = x + side * (1 + rnd() * 2); for (let k = 0; k < 3; k++) mesh(new THREE.ConeGeometry(.25 + rnd() * .3, 1.4 + rnd() * 2.2, 5), iceMat, [ix + (rnd() - .5), y + .4, z + (rnd() - .5) * 1.5], [(rnd() - .5) * .6, rnd() * 3, (rnd() - .5) * .6]); }
     }
   }
-  // 버그 수정(사용자 지적 "넥서스 뒤에 파란색 원들... 다 지워줘") - buildBase()
-  // 는 예전(초기) 기지 장식 함수인데, 이후 더 다듬어진 addBaseEndDetail()
-  // (아래에서 호출)이 사실상 같은 자리에 같은 종류(넥서스/우물 바닥+링)를
-  // 또 그리고 있었다 - 둘 다 호출되다 보니 넥서스/우물 주변에 원형 장식이
-  // 두 겹으로 겹쳐 보였다. buildBase() 호출을 제거해서 addBaseEndDetail()
-  // 하나만 남긴다(함수 정의 자체는 다른 곳에서 참조하지 않아 안전하게
-  // 죽은 코드로 남겨둔다 - 호출만 없어지면 더 이상 그려지지 않는다).
-
-  // ============================================================
-  // 6) ICONIC PROPS: braziers, shops, chains and small ice chunks.
-  // ============================================================
-  function brazier(x,z){
-    const g=new THREE.Group();group.add(g);g.position.set(x,0,z);
-    add(new THREE.CylinderGeometry(.66,.84,.44,10),mat('prop_brazier_2.png',{roughness:.5,metalness:.3}),[0,1.08,0],[0,0,0],null,g);
-    add(new THREE.CylinderGeometry(.13,.17,1.1,8),colorMat(0x364149,.55,.35),[0,.55,0],[0,0,0],null,g);
-    add(new THREE.ConeGeometry(.3,.76,10),colorMat(0xff9a42,.3,0,0xff4a12,2.0),[0,1.7,0],[0,0,0],null,g);
-    // 최적화(문서 4-8절): 다리를 따라 최대 18개까지 배치되는 화로마다
-    // 실시간 PointLight를 하나씩 켜면(예전 방식) 포워드 렌더러가 모든
-    // 조명을 픽셀마다 계산하는 이 프로젝트 구조상 광원 개수가 그대로
-    // 셰이더 비용에 곱해진다. 불꽃 콘 메시의 emissive(주황색, 강도 2.0)
-    // 만으로도 "빛나는 화로"처럼 충분히 보이므로 실제 광원은 만들지 않는다.
+  // 다리 가운데 양쪽의 거대한 프렐요드 수호자 석상(원작 다리 옆 석상 실루엣을 단순화)
+  for (const z of [-26, 26]) for (const side of [-1, 1]) {
+    const g = new THREE.Group(); g.position.set(side * (halfW(z) + 5.5), FLOOR_Y - .5, z); g.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; group.add(g);
+    mesh(new THREE.BoxGeometry(4.2, 1.2, 4.2), wallMat, [0, .6, 0], [0, 0, 0], null, g);
+    mesh(new THREE.CylinderGeometry(1.2, 1.6, 5.5, 6), rockMat, [0, 3.9, 0], [0, 0, 0], null, g);
+    mesh(new THREE.BoxGeometry(3.6, 1.2, 1.6), rockMat, [0, 6.2, 0], [0, 0, 0], null, g); // 어깨
+    mesh(new THREE.DodecahedronGeometry(.95, 0), rockMat, [0, 7.4, 0], [0, 0, 0], null, g); // 머리
+    mesh(new THREE.ConeGeometry(.35, 2.2, 4), rockMat, [-.75, 8.2, 0], [0, 0, .5], null, g); // 뿔
+    mesh(new THREE.ConeGeometry(.35, 2.2, 4), rockMat, [.75, 8.2, 0], [0, 0, -.5], null, g);
+    mesh(new THREE.CylinderGeometry(.18, .18, 8.5, 6), wallMat, [1.7, 4.8, .3], [0, 0, .05], null, g); // 창
+    mesh(new THREE.ConeGeometry(.45, 1.4, 4), iceMat, [1.75, 9.6, .3], [0, 0, 0], null, g);
+    mesh(new THREE.BoxGeometry(3.7, .35, 1.7), snowMat, [0, 6.95, 0], [0, 0, 0], null, g);
   }
-  // (삭제) 다리 양옆 화로(주황 불꽃 원뿔) 배치 - 원작 다리에 없는 임시 장식이라 지웠다(사용자 요청).
-
-  function shop(x,z){
-    // 임시 상점: 추후 실제 shop kitpiece로 교체
-    const g=new THREE.Group();group.add(g);g.position.set(x,0,z);
-    add(new THREE.CylinderGeometry(2.0,2.35,.3,10),darkStoneMat,[0,.15,0],null,null,g);
-    add(new THREE.ConeGeometry(2.25,1.35,8),iceRockMat,[0,1.15,0],null,null,g);
-    add(new THREE.OctahedronGeometry(.38,1),colorMat(0x9bdfff,.2,0,0x55cfff,.8),[0,1.45,0]);
-  }
-  // Blue-side visual placeholders. Red gameplay structures are created later and remain untouched.
-  function nexusPlaceholder(team,z){
-    const g=new THREE.Group();
-    const c=team==='blue'?0x49cfff:0xff5968;
-    add(new THREE.CylinderGeometry(2.7,3,.5,18),colorMat(0x2f4854,.55,.2),[0,.45,z],[0,0,0],null,g);
-    add(new THREE.TorusGeometry(2.35,.27,10,36),colorMat(c,.2,0,c,.9),[0,.78,z],[Math.PI/2,0,0],null,g);
-    add(new THREE.OctahedronGeometry(1.55,1),colorMat(c,.15,0,c,1.15),[0,2.45,z],[0,.3,0],null,g);
-    g.userData.type='nexus';g.userData.team=team;group.add(g);return g;
+  // 심연 바닥과 먼 산 능선
+  mesh(new THREE.PlaneGeometry(260, 420), std({ color: 0x050d14, roughness: 1 }), [0, -22, 0], [-Math.PI / 2, 0, 0]);
+  for (const side of [-1, 1]) for (let i = 0; i < 14; i++) {
+    const z = -150 + i * 23 + rnd() * 10, h = 22 + rnd() * 26;
+    mesh(new THREE.ConeGeometry(14 + rnd() * 10, h, 5), std({ color: 0x1b2c39, roughness: 1, flatShading: true }), [side * (70 + rnd() * 30), -20 + h / 2, z], [0, rnd() * 3, 0]);
+    mesh(new THREE.ConeGeometry(5 + rnd() * 3, h * .3, 5), snowMat, [side * (70 + rnd() * 30), -20 + h * .9, z], [0, rnd() * 3, 0]);
   }
 
-  // ============================================================
-  // 5-A) HIGH-DETAIL BASE END ZONES
-  // ------------------------------------------------------------
-  // CommunityDragon의 실제 Howling Abyss 기지용 텍스처를 이용해
-  // 다리 끝부분을 단순한 원형 플랫폼이 아니라 넓은 얼음 요새/광장처럼
-  // 보이게 만든다. 게임플레이 오브젝트와 겹치지 않는 순수 시각 레이어.
-  // ============================================================
-  // ============================================================
-  // 5-A) REFERENCE-MATCHED BASE PLAZA
-  // ------------------------------------------------------------
-  // 사용자가 제공한 Howling Abyss 이미지를 기준으로 재구성.
-  //
-  // 핵심:
-  // 1. 기존의 거대한 직선형 본진 벽을 전부 제거했다.
-  // 2. 다리 -> 넓어지는 얼음 광장 -> 본진 구조물 순으로 자연스럽게 이어진다.
-  // 3. 광장 가장자리는 직사각형 성벽이 아니라 불규칙한 얼음/암석 절벽이다.
-  // 4. CommunityDragon의 실제 HA 텍스처를 평면/저폴리 구조물에 적용한다.
-  // ============================================================
-  // ============================================================
-  // 5-A) OPEN BASE PLAZA — REFERENCE / SKETCH MATCH
-  // ------------------------------------------------------------
-  // 본진은 성벽으로 둘러싸인 요새가 아니다.
-  // 다리 -> 넓은 개방형 얼음 광장 -> 넥서스 구역 순으로 이어진다.
-  // 양옆/후방은 플레이 공간을 막는 벽 대신 낮고 불규칙한 얼음 절벽으로만
-  // 처리한다. CommunityDragon Howling Abyss 텍스처를 적극적으로 사용한다.
-  // ============================================================
-  function addBaseEndDetail(baseZ, sign, team){
-    const teamColor = team==='blue' ? 0x43cfff : 0xff5365;
-    const baseGround = mat('structure_base_ground.png',{rx:2.2,ry:2.2,roughness:.96});
-    const snow = mat('basesnow.png',{rx:2.1,ry:2.1,roughness:1,transparent:true,opacity:.16});
-    const iceCliff = mat('prop_icecliff_h.png',{rx:1.0,ry:1.15,roughness:.96});
-    const iceCliffF = mat('prop_icecliff_f.png',{rx:1.0,ry:1.0,roughness:.96});
-    const iceChunks = mat('prop_ice_chunksa.png',{rx:1.0,ry:1.0,roughness:.95});
-    const icicles = mat('prop_icicles_c.png',{rx:1.0,ry:1.0,roughness:.9,transparent:true,alphaTest:.06,side:THREE.DoubleSide});
-    const shopMat = mat('props_sw_shop_ice_frame.png',{rx:1,ry:1,roughness:.82,transparent:true,alphaTest:.04,side:THREE.DoubleSide});
-    const statueBaseMat = mat('statue_base.png',{rx:1,ry:1,roughness:.74,transparent:true,alphaTest:.04,side:THREE.DoubleSide});
-    // 원작 구조물 자리(HA_STRUCTURES_LOL)를 이 그룹의 줄이기 전 단위로 - 넥서스 포탑 받침대·넥서스 받침대·우물·상점을
-    // 실제 구조물 위치에 맞춘다(20차).
-    const real = HA_STRUCTURES_LOL[team.toUpperCase()];
+  // ---------- 4) 기지: 넥서스 단·넥서스 포탑 받침·우물·상점 ----------
+  for (const team of ['BLUE', 'RED']) {
+    const real = HA_STRUCTURES_LOL[team];
+    const teamColor = team === 'BLUE' ? 0x3fc4ff : 0xff4d5e;
     const local = (xz) => { const w = haLolToWorld(xz); return { x: w.x / S, z: w.z / S }; };
-
-    // ========================================================
-    // BASE LAYOUT — exactly the requested open-plan shape.
-    // From the bridge inward:
-    //   twin turrets -> nexus zone -> well/shop -> nexus/obelisk.
-    // The right side is intentionally left open and empty.
-    // No enclosing base wall, no giant gate, no decorative barrier.
-    // ========================================================
-
-    // 1~2) 기지 바닥 - 원작 이동 격자 모양(25차, baseFloorShape). 예전엔 42×46 사각형 광장 + 15.5 길이 목 부분이라
-    // 이동 가능 영역보다 넓거나 끝 너머(우물 뒤 약 1,300 LoL)까지 깔려 있었다.
-    const shape = baseFloorShape(sign);
-    const shapeUv = (geo) => { const pos = geo.attributes.position, uv = geo.attributes.uv; for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / 42 + .5, pos.getY(i) / 46); uv.needsUpdate = true; return geo; };
-    const plaza = new THREE.Mesh(shapeUv(new THREE.ShapeGeometry(shape)), baseGround);
-    plaza.rotation.x=-Math.PI/2;
-    plaza.position.y=.415;
-    plaza.receiveShadow=true;
-    group.add(plaza);
-    const plazaSnow = new THREE.Mesh(shapeUv(new THREE.ShapeGeometry(shape)), snow);
-    plazaSnow.rotation.x=-Math.PI/2;
-    plazaSnow.position.y=.425;
-    group.add(plazaSnow);
-    // 아래에서 봤을 때 빈 공간이 안 보이게 받치는 판(예전 넓힘 패치 아래 슬랩과 같은 역할)
-    const slab = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 1.5, bevelEnabled: false }), colorMat(0x15242c, .98));
-    slab.rotation.x=-Math.PI/2;
-    slab.position.y=-1.45;
-    group.add(slab);
-
-    // 3) Twin-turret zone: visually marked, but left open for real turret objects.
-    const nexusTurretPads = real.nexusTurrets.map(local);
-    const turretZoneZ = (nexusTurretPads[0].z + nexusTurretPads[1].z) / 2;
-    const turretPad = new THREE.Mesh(new THREE.PlaneGeometry(28,10,1,1),baseGround);
-    turretPad.rotation.x=-Math.PI/2;
-    turretPad.position.set(0,.422,turretZoneZ);
-    group.add(turretPad);
-    for(const tp of nexusTurretPads){
-      const pad=new THREE.Mesh(new THREE.CylinderGeometry(2.0,2.25,.18,20),baseGround);
-      pad.position.set(tp.x,.51,tp.z);
-      group.add(pad);
+    const glow = (o = {}) => std({ color: teamColor, emissive: teamColor, emissiveIntensity: .9, roughness: .3, ...o });
+    // 넥서스 단(두 겹 둥근 돌 단 + 팀 색 홈)
+    const nx = local(real.nexus);
+    mesh(worldUv(new THREE.CylinderGeometry(7.4, 8.0, .35, 40), 6, 'xz'), baseMat, [nx.x, FLOOR_Y + .02, nx.z]);
+    mesh(new THREE.CylinderGeometry(5.6, 6.0, .3, 40), wallMat, [nx.x, FLOOR_Y + .3, nx.z]);
+    mesh(new THREE.TorusGeometry(6.4, .12, 6, 48), glow({ emissiveIntensity: .5 }), [nx.x, FLOOR_Y + .22, nx.z], [Math.PI / 2, 0, 0]);
+    // 넥서스 포탑 받침
+    for (const tp of real.nexusTurrets.map(local)) {
+      mesh(new THREE.CylinderGeometry(2.2, 2.5, .3, 8), wallMat, [tp.x, FLOOR_Y + .05, tp.z]);
+      mesh(new THREE.TorusGeometry(2.35, .08, 4, 8), snowMat, [tp.x, FLOOR_Y + .22, tp.z], [Math.PI / 2, 0, 0]);
     }
-
-    // 4) Nexus-zone floor between twin turrets and the fountain/well.
-    const nexusZoneZ = baseZ-sign*12.0;
-    const nexusZone = new THREE.Mesh(new THREE.PlaneGeometry(34,12,1,1),baseGround);
-    nexusZone.rotation.x=-Math.PI/2;
-    nexusZone.position.set(0,.423,nexusZoneZ);
-    group.add(nexusZone);
-    // 버그 수정(사용자 지적 "파란색 원들... 우물 원 하나만 남기고 지워줘") -
-    // 여기 있던 zoneRune(넥서스 구역 장식 링)을 제거했다. 우물 원(wellRing)
-    // 하나만 "우물을 표시하는 원"으로 남긴다.
-
-    // 5) WELL / FOUNTAIN: centered, between the nexus and twin-turret zone.
-    // Gameplay fountain turret is moved to the same coordinate elsewhere.
-    const fountain = local(real.fountain);
-    const wellZ = fountain.z;
-    const wellPad = new THREE.Mesh(new THREE.CylinderGeometry(5.2,5.6,.24,28),baseGround);
-    wellPad.position.set(fountain.x,.49,wellZ);
-    wellPad.receiveShadow=true;
-    group.add(wellPad);
-    const wellRing = new THREE.Mesh(
-      new THREE.TorusGeometry(4.3,.19,8,36),
-      new THREE.MeshStandardMaterial({color:teamColor,emissive:teamColor,emissiveIntensity:.32,roughness:.6,transparent:true,opacity:.72})
-    );
-    wellRing.rotation.x=Math.PI/2;
-    wellRing.position.set(fountain.x,.64,wellZ);
-    group.add(wellRing);
-
-    // 6) SHOP: only on the LEFT side. The RIGHT side remains intentionally empty.
-    const shopAt = local(real.shop);
-    const shopG=new THREE.Group();
-    shopG.position.set(shopAt.x,.42,shopAt.z);
-    const shopBase=new THREE.Mesh(new THREE.CylinderGeometry(2.45,2.75,.34,10),statueBaseMat);
-    shopG.add(shopBase);
-    const shopFrame=new THREE.Mesh(new THREE.CylinderGeometry(2.25,2.25,2.35,8),shopMat);
-    shopFrame.position.y=1.2;
-    shopG.add(shopFrame);
-    const shopCrystal=new THREE.Mesh(new THREE.OctahedronGeometry(.52,1),new THREE.MeshStandardMaterial({color:teamColor,emissive:teamColor,emissiveIntensity:.85,roughness:.25}));
-    shopCrystal.position.y=2.62;
-    shopG.add(shopCrystal);
-    shopG.userData.type='shop_visual';
-    shopG.userData.team=team;
-    group.add(shopG);
-
-    // 7) REAR NEXUS PLATFORM + NEXUS + OBELISK.
-    // This is the far end of the base, beyond the well, exactly like the sketch.
-    const nexusAt = local(real.nexus);
-    const nexusPad = new THREE.Mesh(new THREE.CylinderGeometry(7.0,7.6,.26,28),baseGround);
-    nexusPad.position.set(nexusAt.x,.52,nexusAt.z);
-    nexusPad.receiveShadow=true;
-    group.add(nexusPad);
-
-    // 실제 넥서스 게임 오브젝트는 spawnHowlingAbyssStructures()가 같은 원작 좌표에 만든다.
-    // 버그 수정(사용자 지적 "파란색 원들... 우물 원 하나만 남기고 지워줘") -
-    // 여기 있던 nexusHalo(넥서스 후광 링)도 제거했다.
-
-    // Obelisk sits behind the Nexus, at the farthest playable end.
-    const obeliskZ = sign*(cfg.laneMaxZ + 1.5); // 25차: 이동 끝 바로 뒤(예전 baseZ+15.5는 끝이 줄어든 뒤 다리 밖 허공이었다)
-    const obelisk = new THREE.Group();
-    obelisk.position.set(0,.42,obeliskZ);
-    const obBase = new THREE.Mesh(new THREE.CylinderGeometry(1.65,1.95,.55,12),statueBaseMat);
-    obelisk.add(obBase);
-    const obBody = new THREE.Mesh(new THREE.ConeGeometry(.95,3.25,6),iceChunks);
-    obBody.position.y=1.72;
-    obelisk.add(obBody);
-    const obGlow = new THREE.Mesh(new THREE.OctahedronGeometry(.74,1),new THREE.MeshStandardMaterial({color:teamColor,emissive:teamColor,emissiveIntensity:1.0,roughness:.2,metalness:.05}));
-    obGlow.position.y=3.3;
-    obelisk.add(obGlow);
-    obelisk.userData.type='nexus_obelisk';
-    obelisk.userData.team=team;
-    group.add(obelisk);
-
-    // 8) Keep the entire right side empty. No decorative counterpart to the shop.
-    // Only natural cliff formations remain OUTSIDE the playable width.
-
-    // 9) Natural ice cliffs beyond the playable area. These are not walls and do not
-    // block the open base. They stay outside ±21 so the player sees a deep abyss.
-    for(const side of [-1,1]){
-      for(let i=0;i<9;i++){
-        const x=side*(22.8+i*1.05+(i%2)*.55);
-        const z=baseZ-sign*(16.0-i*2.7);
-        const h=2.6+(i%4)*.85;
-        const rockMat=i%3===0?iceCliffF:(i%3===1?iceCliff:iceChunks);
-        add(new THREE.DodecahedronGeometry(1.55+(i%3)*.42,1),rockMat,
-          [x,h*.36,z],[.04*i,.18*i*side,0],[1.35,1.0+h*.2,1.12]);
-        if(i%2===0){
-          add(new THREE.ConeGeometry(.7+(i%3)*.16,1.65+(i%2)*.45,7),icicles,
-            [x-side*.38,h+1.0,z+sign*.55],[Math.PI,0,.12*side]);
-        }
-      }
-    }
-
-    // 10) Rear natural ice formations only. No straight rear wall.
-    for(const side of [-1,1]){
-      for(let i=0;i<6;i++){
-        const x=side*(10.5+i*2.0);
-        const z=baseZ+sign*(18.0+(i%2)*1.8);
-        const h=2.1+(i%3)*.85;
-        add(new THREE.IcosahedronGeometry(1.45+(i%2)*.4,1),i%2?iceCliff:iceCliffF,
-          [x,h*.35,z],[0,.25*i,0],[1.25,1.0+h*.18,1.15]);
-      }
-    }
-
-    // Small natural ice chunks near the perimeter only. Keep the central/right
-    // play area clear for the player, minions, shop and fountain.
-    for(let i=0;i<8;i++){
-      const side=i%2?-1:1;
-      const x=side*(14.5+(i%4)*1.45);
-      const z=baseZ-sign*(2+(i%4)*4.2);
-      add(new THREE.ConeGeometry(.35+(i%3)*.12,1.0+(i%4)*.28,6),iceChunks,
-        [x,.8,z],[Math.PI,0,.1*i]);
-    }
-  }
-  addBaseEndDetail(cfg.blueBaseZ,-1,'blue');
-  addBaseEndDetail(cfg.redBaseZ,1,'red');
-
-  function turretPlaceholder(team,z){
-    const g=new THREE.Group(),c=team==='blue'?0x50d7ff:0xff626b;
-    add(new THREE.CylinderGeometry(1.0,1.3,3.8,12),colorMat(team==='blue'?0x315b73:0x703d45,.55,.15),[0,1.9,z],[0,0,0],null,g);
-    add(new THREE.ConeGeometry(1.08,1.55,12),mat('ha_ap_hero_tower2.png',{roughness:.68}),[0,4.55,z]);
-    add(new THREE.OctahedronGeometry(.44,1),colorMat(c,.15,0,c,1.1),[0,5.5,z]);
-    g.userData.type='turret';g.userData.team=team;g.userData.hp=1000;group.add(g);return g;
+    for (const key of ['outer', 'inhibTurret']) { const tp = local(real[key]); mesh(new THREE.CylinderGeometry(2.0, 2.3, .25, 8), wallMat, [tp.x, FLOOR_Y + .02, tp.z]); }
+    const ih = local(real.inhibitor);
+    mesh(new THREE.CylinderGeometry(3.6, 3.9, .25, 24), wallMat, [ih.x, FLOOR_Y + .02, ih.z]);
+    // 우물: 빛나는 문양 원 + 발판(챔피언 출현 지점)
+    const ft = local(real.fountain);
+    mesh(new THREE.CylinderGeometry(6.0, 6.5, .3, 40), wallMat, [ft.x, FLOOR_Y + .0, ft.z]);
+    mesh(new THREE.RingGeometry(4.6, 5.2, 48), glow({ transparent: true, opacity: .75, side: THREE.DoubleSide }), [ft.x, FLOOR_Y + .17, ft.z], [-Math.PI / 2, 0, 0]);
+    mesh(new THREE.RingGeometry(2.6, 2.85, 6), glow({ transparent: true, opacity: .55, side: THREE.DoubleSide }), [ft.x, FLOOR_Y + .17, ft.z], [-Math.PI / 2, 0, 0]);
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; mesh(new THREE.BoxGeometry(.6, 1.6, .6), wallMat, [ft.x + Math.cos(a) * 5.6, FLOOR_Y + .8, ft.z + Math.sin(a) * 5.6]); mesh(new THREE.OctahedronGeometry(.32, 0), glow(), [ft.x + Math.cos(a) * 5.6, FLOOR_Y + 1.9, ft.z + Math.sin(a) * 5.6]); }
+    // 상점(프렐요드 상인 천막 대신 돌 단 + 얼음 진열대 + 팀 색 수정)
+    const sp = local(real.shop);
+    const shopG = new THREE.Group(); shopG.position.set(sp.x, FLOOR_Y, sp.z); group.add(shopG); shopG.userData.type = 'shop_visual';
+    mesh(new THREE.CylinderGeometry(2.6, 2.9, .4, 10), wallMat, [0, .2, 0], [0, 0, 0], null, shopG);
+    mesh(new THREE.BoxGeometry(3.2, 1.1, 1.2), rockMat, [0, .95, 0], [0, 0, 0], null, shopG);
+    mesh(new THREE.BoxGeometry(3.4, .18, 1.4), snowMat, [0, 1.55, 0], [0, 0, 0], null, shopG);
+    for (const x of [-1.3, 1.3]) mesh(new THREE.CylinderGeometry(.14, .14, 3, 6), wallMat, [x, 1.5, -.6], [0, 0, 0], null, shopG);
+    mesh(new THREE.BoxGeometry(3.3, .1, 1.8), std({ color: team === 'BLUE' ? 0x1d3f66 : 0x6a1f2a, roughness: .9 }), [0, 3.0, -.2], [.25, 0, 0], null, shopG); // 팀 색 차양
+    mesh(new THREE.OctahedronGeometry(.45, 0), glow(), [0, 2.2, 0], [0, 0, 0], null, shopG);
   }
 
-  // Snow and ice motes.
-  // 임시(경량) 처리: 파티클 수를 대폭 줄이고, 프레임당 BufferAttribute
-  // getX/getY/setXYZ 호출(함수 오버헤드) 대신 Float32Array를 직접 읽고
-  // 쓰도록 바꿔서 최적화함. 매 프레임 Math.sin 호출도 절반으로 줄임
-  // (한 프레임 걸러 위상만 갱신). 눈이 내리는 느낌 자체는 동일하게 유지.
-  const snowCount=420,geo=new THREE.BufferGeometry(),positions=new Float32Array(snowCount*3),vel=new Float32Array(snowCount),phase=new Float32Array(snowCount),wob=new Float32Array(snowCount);
-  for(let i=0;i<snowCount;i++){positions[i*3]=(Math.random()-.5)*38;positions[i*3+1]=Math.random()*25;positions[i*3+2]=cfg.laneMinZ-15+Math.random()*(bridgeLen+30);vel[i]=1+Math.random()*2.1;phase[i]=Math.random()*Math.PI*2;}
-  geo.setAttribute('position',new THREE.BufferAttribute(positions,3));
-  const snow=new THREE.Points(geo,new THREE.PointsMaterial({color:0xffffff,size:.065,transparent:true,opacity:.68,depthWrite:false,sizeAttenuation:true}));
-  snow.frustumCulled=false;group.add(snow);
-  let snowFrameToggle=false;
-  function updateSnow(dt,focusPos){
-    const cx=(focusPos?.x??0)/S,cz=(focusPos?.z??0)/S; // 눈 입자는 맵 그룹(줄이기 전 단위) 안에 있다
-    snowFrameToggle=!snowFrameToggle;
-    for(let i=0;i<snowCount;i++){
-      const idx=i*3;
-      let y=positions[idx+1]-vel[i]*dt;
-      if(snowFrameToggle){phase[i]+=dt*1.3;wob[i]=Math.sin(phase[i])*.13;}
-      let x=positions[idx]+wob[i]*dt-.12*dt;
-      let z=positions[idx+2]-.025*dt;
-      if(y<0){y=19+Math.random()*7;x=cx+(Math.random()-.5)*38;z=cz+(Math.random()-.5)*55;}
-      positions[idx]=x;positions[idx+1]=y;positions[idx+2]=z;
+  // ---------- 5) 눈 ----------
+  const bridgeLen = cfg.laneMaxZ - cfg.laneMinZ;
+  const snowCount = 520, sgeo = new THREE.BufferGeometry(), positions = new Float32Array(snowCount * 3), vel = new Float32Array(snowCount), phase = new Float32Array(snowCount), wob = new Float32Array(snowCount);
+  for (let i = 0; i < snowCount; i++) { positions[i * 3] = (Math.random() - .5) * 38; positions[i * 3 + 1] = Math.random() * 25; positions[i * 3 + 2] = cfg.laneMinZ - 15 + Math.random() * (bridgeLen + 30); vel[i] = 1 + Math.random() * 2.1; phase[i] = Math.random() * Math.PI * 2; }
+  sgeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const snowPts = new THREE.Points(sgeo, new THREE.PointsMaterial({ color: 0xffffff, size: .07, transparent: true, opacity: .75, depthWrite: false, sizeAttenuation: true }));
+  snowPts.frustumCulled = false; group.add(snowPts);
+  let snowFrameToggle = false;
+  function updateSnow(dt, focusPos) {
+    const cx = (focusPos?.x ?? 0) / S, cz = (focusPos?.z ?? 0) / S;
+    snowFrameToggle = !snowFrameToggle;
+    for (let i = 0; i < snowCount; i++) {
+      const k = i * 3;
+      let y = positions[k + 1] - vel[i] * dt;
+      if (snowFrameToggle) { phase[i] += dt * 1.3; wob[i] = Math.sin(phase[i]) * .13; }
+      let x = positions[k] + wob[i] * dt - .12 * dt, z = positions[k + 2] - .025 * dt;
+      if (y < 0) { y = 14 + Math.random() * 7; x = cx + (Math.random() - .5) * 30; z = cz + (Math.random() - .5) * 34; }
+      positions[k] = x; positions[k + 1] = y; positions[k + 2] = z;
     }
-    geo.attributes.position.needsUpdate=true;
+    sgeo.attributes.position.needsUpdate = true;
   }
 
-  // ============================================================
-  // 7) ATMOSPHERE: blue fog, cold key light, warm fire contrast.
-  // ------------------------------------------------------------
-  // 최적화(문서 4-8절 "Ambient + 기본 Directional Light 정도로 끝내라"):
-  // 예전에는 여기서 새 HemisphereLight + DirectionalLight 2개(moon/fill)를
-  // 씬에 추가로 얹어서, 기존 베이스 조명(hemi/dirLight)과 합쳐 총 5개의
-  // 실시간 광원이 동시에 켜져 있었다 - Three.js 기본(non-clustered) 포워드
-  // 렌더러는 모든 조명을 픽셀마다 전부 계산하므로 저사양 GPU에 특히
-  // 비싸다. 새 광원을 추가하는 대신 이미 있는 hemi/dirLight의 색상만
-  // 얼음 맵 분위기(차가운 키라이트)로 바꿔서 재사용한다 - 광원 개수는
-  // 시작부터 끝까지 hemisphere 1개 + directional 1개, 총 2개로 고정된다.
-  scene.fog=new THREE.FogExp2(0x587082,.0102);
-  scene.background=new THREE.Color(0x3f596b);
-  hemi.color.setHex(0xc8ebff); hemi.groundColor.setHex(0x101d26); hemi.intensity=0.72;
-  dirLight.color.setHex(0xd8efff); dirLight.intensity=0.82; dirLight.position.set(-26,38,-22);
+  // ---------- 6) 분위기: 차가운 달빛 + 푸른 안개(광원은 기존 2개 그대로) ----------
+  scene.fog = new THREE.FogExp2(0x1d3446, .0085);
+  scene.background = new THREE.Color(0x0e1f2c);
+  hemi.color.setHex(0xd2ecff); hemi.groundColor.setHex(0x1a2a36); hemi.intensity = 0.95;
+  dirLight.color.setHex(0xe4f2ff); dirLight.intensity = 1.05; dirLight.position.set(-26, 38, -22);
 
   scene.add(group);
-  const pathBlueToRed=[],pathRedToBlue=[];
-  for(let i=0;i<11;i++){const z=cfg.laneMinZ+6+(i/10)*(bridgeLen-12);pathBlueToRed.push(new THREE.Vector3(0,.02,z*S));}
-  for(let i=pathBlueToRed.length-1;i>=0;i--)pathRedToBlue.push(pathBlueToRed[i].clone());
-  // 요청("각 끝 쪽 부분의 넓이를 늘려줘") - 이동 가능 범위도 벽/바닥과
-  // 똑같이 widenExtraForZ()를 그대로 재사용해서 기지 근처에서 더 넓게
-  // 걸어다닐 수 있게 한다(서로 다른 값을 쓰면 벽은 넓어졌는데 못 걸어가거나,
-  // 반대로 바닥 없는 곳을 걸어가는 불일치가 생긴다).
-  // 판정은 월드 좌표로 받아서 줄이기 전 단위로 비교한다(맵 그룹 배율 S).
-  function clampPosition(p){const maxX=(cfg.laneMaxX+widenExtraForZ(p.z/S))*S;p.x=THREE.MathUtils.clamp(p.x,-maxX,maxX);p.z=THREE.MathUtils.clamp(p.z,cfg.laneMinZ*S,cfg.laneMaxZ*S);return p;}
-  function isInsidePlayableArea(p){const maxX=(cfg.laneMaxX+widenExtraForZ(p.z/S))*S;return p.x>=-maxX&&p.x<=maxX&&p.z>=cfg.laneMinZ*S&&p.z<=cfg.laneMaxZ*S;}
-  return {group,scale:S,laneMinX:cfg.laneMinX*S,laneMaxX:cfg.laneMaxX*S,laneMinZ:cfg.laneMinZ*S,laneMaxZ:cfg.laneMaxZ*S,
-    spawnBlue:haLolToWorld(HA_SPAWN_LOL.BLUE),spawnRed:haLolToWorld(HA_SPAWN_LOL.RED),
-    blueNexus:null,redNexus:null,blueTurret:null,redTurret:null,
-    pathBlueToRed,pathRedToBlue,clampPosition,isInsidePlayableArea,updateSnow};
+  const pathBlueToRed = [], pathRedToBlue = [];
+  for (let i = 0; i < 11; i++) { const z = cfg.laneMinZ + 6 + (i / 10) * (bridgeLen - 12); pathBlueToRed.push(new THREE.Vector3(0, .02, z * S)); }
+  for (let i = pathBlueToRed.length - 1; i >= 0; i--) pathRedToBlue.push(pathBlueToRed[i].clone());
+  // 이동 범위: 바닥 외곽선과 같은 widenExtraForZ()(판정은 월드 좌표 → 줄이기 전 단위).
+  function clampPosition(p) { const maxX = (cfg.laneMaxX + widenExtraForZ(p.z / S)) * S; p.x = THREE.MathUtils.clamp(p.x, -maxX, maxX); p.z = THREE.MathUtils.clamp(p.z, cfg.laneMinZ * S, cfg.laneMaxZ * S); return p; }
+  function isInsidePlayableArea(p) { const maxX = (cfg.laneMaxX + widenExtraForZ(p.z / S)) * S; return p.x >= -maxX && p.x <= maxX && p.z >= cfg.laneMinZ * S && p.z <= cfg.laneMaxZ * S; }
+  return { group, scale: S, laneMinX: cfg.laneMinX * S, laneMaxX: cfg.laneMaxX * S, laneMinZ: cfg.laneMinZ * S, laneMaxZ: cfg.laneMaxZ * S,
+    spawnBlue: haLolToWorld(HA_SPAWN_LOL.BLUE), spawnRed: haLolToWorld(HA_SPAWN_LOL.RED),
+    blueNexus: null, redNexus: null, blueTurret: null, redTurret: null,
+    pathBlueToRed, pathRedToBlue, clampPosition, isInsidePlayableArea, updateSnow };
 }
 // 칼바람 나락 맵(요청 "칼바람 나락 맵 다시 넣고"): 지형·절벽·장식·눈을 만든다. 생성에 실패하면(텍스처 서버 문제 등과 무관하게
-// 코드 오류일 때) 예전처럼 맵 없는 연습장 경계로 돌아간다. 지형 텍스처는 CommunityDragon에서 받는다 - 접속이 막힌
-// 환경에서는 색만 보이고 모양·판정은 그대로다.
+// 코드 오류일 때) 예전처럼 맵 없는 연습장 경계로 돌아간다. 지형 텍스처는 코드로 그리고(73차), CommunityDragon에 닿으면
+// 원작 텍스처로 바꿔 끼운다.
 const HOWLING_ABYSS_ENABLED = true;
 let howlingAbyssMap = null;
 if (HOWLING_ABYSS_ENABLED) { try { howlingAbyssMap = createHowlingAbyssMap(scene); } catch (e) { console.warn('[MAP] 칼바람 나락 생성 실패 - 연습장으로 대체', e); howlingAbyssMap = null; } }
@@ -10760,7 +10345,7 @@ class BrushSystem {
 
   _material() {
     if (!this._grassMat && typeof THREE !== 'undefined') {
-      this._grassMat = new THREE.MeshStandardMaterial({ color: 0x2f7a35, roughness: 0.9, transparent: true, opacity: 1, side: THREE.DoubleSide });
+      this._grassMat = new THREE.MeshStandardMaterial({ color: 0x2c5f5a /* 73차: 칼바람 부쉬는 얼어붙은 청록빛 */, roughness: 0.9, transparent: true, opacity: 1, side: THREE.DoubleSide });
     }
     return this._grassMat;
   }
@@ -10773,7 +10358,7 @@ class BrushSystem {
     if (this.scene && typeof THREE !== 'undefined') {
       const group = new THREE.Group();
       // 바닥 그늘
-      const baseMat = new THREE.MeshBasicMaterial({ color: 0x1b4d22, transparent: true, opacity: 0.55, depthWrite: false });
+      const baseMat = new THREE.MeshBasicMaterial({ color: 0x1a3d3c, transparent: true, opacity: 0.55, depthWrite: false });
       const base = new THREE.Mesh(new THREE.PlaneGeometry(w, d), baseMat);
       base.rotation.x = -Math.PI / 2; base.position.y = 0.02;
       group.add(base);
@@ -38161,12 +37746,15 @@ async function bootstrapChampion(gltf, fileName) {
 }
 
 // 추가 수정사항 12: 캐릭터 크기(정규화 후 bounding sphere)에 맞춰 카메라 거리 자동 계산.
+// 73차: 원작 카메라 거리. 예전엔 챔피언 모델 크기 × 26으로 정해 화면 가로가 약 5,100 LoL 유닛이나 보였다(원작 최대 축소의
+// 약 1.75배) - 맵이 짧아 보이고 구조물이 다 한 화면에 들어왔다. 원작은 시야각 40°·각도 약 56°·최대 거리 2,250(1920×1080에서
+// 화면 가로 약 2,900 유닛)이고 게임 시작은 최대 축소다. 확대는 그 55%까지.
+const CAMERA_MAX_DISTANCE_LOL = 2250;
 function applyCameraDistanceForChampion() {
-  const r = (currentChampion?.boundsRadius || BASE_UNIT * 0.55) * championBaseScaleMultiplier * modelScaleMultiplier;
-  const dist = THREE.MathUtils.clamp(r * 26, 16, 60);
-  cameraRig.distance = dist;
-  cameraRig.minDistance = THREE.MathUtils.clamp(dist * 0.62, 10, 50);
-  cameraRig.maxDistance = THREE.MathUtils.clamp(dist * 1.6, 20, 90);
+  const max = lolRangeToWorld(CAMERA_MAX_DISTANCE_LOL);
+  cameraRig.maxDistance = max;
+  cameraRig.minDistance = max * 0.55;
+  cameraRig.distance = max;
 }
 
 function loadFromArrayBuffer(buffer, fileName) {
