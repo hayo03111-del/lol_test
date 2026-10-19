@@ -17,7 +17,7 @@ const RUNE_STORAGE_KEY = 'lolsim.runePage.v1';
 const RUNE_ADAPTIVE_AP_CHAMPS = new Set(['ahri', 'lux', 'vex', 'mordekaiser', 'chogath']);
 const RUNE_SHARD_EFFECTS = {
   adaptive: { adaptive: 9 }, as: { asPercent: 0.10 }, ah: { ah: 8 }, ms: { msPercent: 0.02 },
-  hpScale: { hpScale: [10, 180] }, hp: { hp: 65 }, tenacity: { tenacity: 0.10 },
+  hpScale: { hpScale: [10, 180] }, hp: { hp: 65 }, tenacity: { tenacity: 0.15, slowResist: 0.15 }, // 83차: V25.22부터 강인함·둔화 저항 각 15%
 };
 // 효과를 구현한 룬(키). 나머지는 고를 수는 있어도 효과 없음(툴팁에 표시).
 const RUNE_IMPLEMENTED = new Set([
@@ -115,11 +115,11 @@ function runeComputeStatic(ctrl) {
   if (!ctrl) return;
   if (!ctrl._rune) runeResetState(ctrl);
   const p = ctrl.runePage;
-  let adaptive = 0, asPct = 0, ah = 0, msPct = 0, hp = 0, ten = 0, armor = 0, mr = 0, vamp = 0, mana = 0, ultAh = 0;
+  let adaptive = 0, asPct = 0, ah = 0, msPct = 0, hp = 0, ten = 0, slowRes = 0, armor = 0, mr = 0, vamp = 0, mana = 0, ultAh = 0;
   if (p) {
     for (const key of p.shards || []) {
       const e = RUNE_SHARD_EFFECTS[key] || {};
-      adaptive += e.adaptive || 0; asPct += e.asPercent || 0; ah += e.ah || 0; msPct += e.msPercent || 0; hp += e.hp || 0; ten += e.tenacity || 0;
+      adaptive += e.adaptive || 0; asPct += e.asPercent || 0; ah += e.ah || 0; msPct += e.msPercent || 0; hp += e.hp || 0; ten = 1 - (1 - ten) * (1 - (e.tenacity || 0)); slowRes = 1 - (1 - slowRes) * (1 - (e.slowResist || 0)); /* 83차: 곱연산 */
       if (e.hpScale) hp += runeLevelLerp(ctrl, e.hpScale[0], e.hpScale[1]);
     }
     const r = ctrl._rune, lvl = ctrl.champLevel || 1;
@@ -130,7 +130,7 @@ function runeComputeStatic(ctrl) {
     if (runeHas(ctrl, 'UltimateHunter')) ultAh += 6 + 5 * Math.min(5, r.ultHunter || 0);
     if (runeHas(ctrl, 'Transcendence')) ah += (lvl >= 5 ? 5 : 0) + (lvl >= 8 ? 5 : 0);
     if (runeHas(ctrl, 'Celerity')) msPct += 0.01;
-    if (runeHas(ctrl, 'Unflinching')) ten += 0.10;
+    if (runeHas(ctrl, 'Unflinching')) { ten = 1 - (1 - ten) * 0.9; slowRes = 1 - (1 - slowRes) * 0.9; } // 83차: 강인함과 둔화 저항 둘 다
     if (runeHas(ctrl, 'Conditioning') && runeGameMinutes() >= 12) { armor += 8; mr += 8; }
     if (runeHas(ctrl, 'Overgrowth')) hp += 3 * Math.floor((r.minionKills || 0) / 8);
     if (runeHas(ctrl, 'GraspOfTheUndying')) hp += r.graspHp || 0;
@@ -143,7 +143,7 @@ function runeComputeStatic(ctrl) {
   ctrl.runeAD = isAP ? 0 : adaptive * 0.6;
   ctrl.runeAP = isAP ? adaptive : 0;
   ctrl.runeAttackSpeedPercent = asPct; ctrl.runeAbilityHaste = ah; ctrl.runeUltimateHaste = ultAh; ctrl.runeMsPercent = msPct;
-  ctrl.runeMaxHp = hp; ctrl.runeTenacity = ten; ctrl.runeArmor = armor; ctrl.runeMr = mr; ctrl.runePhysicalVamp = vamp; ctrl.runeMana = mana;
+  ctrl.runeMaxHp = hp; ctrl.runeTenacity = ten; ctrl.runeSlowResist = slowRes; ctrl.runeArmor = armor; ctrl.runeMr = mr; ctrl.runePhysicalVamp = vamp; ctrl.runeMana = mana;
 }
 function runeGameMinutes() {
   const s = typeof getTurretGameTimeSec === 'function' ? getTurretGameTimeSec() : 0;

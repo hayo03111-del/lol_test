@@ -76,7 +76,11 @@ function allyAbsorbIncoming(a, dmg, result) {
     remaining = Math.max(0, remaining - a._dreamBlue.amount);
     a._dreamBlue = null;
   }
-  for (const e of (a.shieldEntries || [])) {
+  // 83차: 먼저 만료되는 보호막부터(원작). 피해 종류 전용 보호막은 그 종류만, 같은 종류면 먼저 깎인다.
+  const dType = (result && result.damageType) || null;
+  const sorted = (a.shieldEntries || []).slice().sort((x, y) => (x.expiresAt || Infinity) - (y.expiresAt || Infinity));
+  const order = sorted.filter((e) => e.onlyType && e.onlyType === dType).concat(sorted.filter((e) => !e.onlyType));
+  for (const e of order) {
     if (remaining <= 0) break;
     const take = Math.min(e.amount, remaining);
     e.amount -= take; remaining -= take;

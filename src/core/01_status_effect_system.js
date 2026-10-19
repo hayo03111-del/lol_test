@@ -57,7 +57,7 @@ function applyStatus(target, effect) {
     return null;
   }
   // 구조물(포탑·억제기·넥서스)은 군중 제어에 걸리지 않는다(원작) - 광역 CC가 포탑을 기절시키거나 둔화시키던 문제 방지.
-  if (target && target.isStructure && CC_TYPES.has(effect.type) && effect.type !== 'ARMOR_SHRED' && effect.type !== 'MR_SHRED') return null;
+  if (target && target.isStructure && CC_TYPES.has(effect.type) && effect.type !== 'ARMOR_SHRED' && effect.type !== 'MR_SHRED' && effect.type !== 'ARMOR_SHRED_FLAT') return null;
   const now = performance.now();
   // 마스터 이 R(최후의 전사): 지속 중 둔화 면역(원작). 시전 시 기존 둔화는 _masteryiCastR이 제거한다.
   if (effect.type === 'SLOW' && target && target.championId === 'masteryi' && target._masteryi && (target._masteryi.rActiveUntil || 0) > now) {
@@ -78,17 +78,22 @@ function applyStatus(target, effect) {
   // PC 위키(Tenacity): 에어본·수면·근시·경직(정지)·제압을 뺀 모든 군중 제어 지속시간을 줄인다 - 둔화 포함.
   // 예전엔 둔화가 빠져 있었다.
   if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR', 'SLOW', 'TAUNT'].includes(effect.type)) {
-    effDuration = effDuration * (1 - tenacity);
+    // 83차: PC 위키(Tenacity) - 강인함으로 0.3초 미만까지 줄지는 않는다(원래 0.3초보다 짧으면 그대로).
+    effDuration = Math.max(Math.min(effDuration, 0.3), effDuration * (1 - tenacity));
   }
-  if (target && target.itemSlowResistPercent > 0 && effect.type === 'SLOW') {
-    effValue = effValue * (1 - target.itemSlowResistPercent);
+  // 둔화 저항: 아이템·룬 출처끼리 곱연산(83차, 예전엔 아이템 합만).
+  const slowResist = target ? 1 - (1 - Math.max(0, Math.min(1, target.itemSlowResistPercent || 0))) * (1 - Math.max(0, Math.min(1, target.runeSlowResist || 0))) : 0;
+  if (slowResist > 0 && effect.type === 'SLOW') {
+    effValue = effValue * (1 - slowResist);
   }
   const rec = { ...effect, duration: effDuration, value: effValue, expiresAt: now + Math.max(0, effDuration) * 1000, _tickAccum: 0 };
   if (effect.type === 'KNOCKUP') {
     // 27차: 이미 떠 있는 대상을 다시 띄우면(야스오 Q3 → R 등) 처음 바닥 높이를 유지한다. 예전엔 지금(공중) 높이를
     // 바닥으로 기억해서, 공중 상태가 끝나도 그 높이에 계속 떠 있었다.
     const base = target._yasuoAirborne ? target._yasuoAirborne.baseY : (target.mesh?.position?.y ?? 0);
-    target._yasuoAirborne = { baseY: base, elapsed: 0, duration: Math.max(0.05, effect.duration), height: effect.airborneHeight ?? 1.6 };
+    // 83차: 남은 공중 시간이 새 에어본보다 길면 그대로 둔다(짧은 에어본이 겹치면 상태는 남았는데 일찍 착지하던 문제).
+    const prev = target._yasuoAirborne, prevLeft = prev ? Math.max(0, prev.duration - prev.elapsed) : 0;
+    if (!(prev && prevLeft >= effect.duration)) target._yasuoAirborne = { baseY: base, elapsed: 0, duration: Math.max(0.05, effect.duration), height: effect.airborneHeight ?? 1.6 };
   }
   const idx = target.statusEffects.findIndex((e) => e.id === effect.id);
   // 버그 수정: 같은 지속 피해(DOT)를 다시 걸면 틱 진행도(_tickAccum)가 0으로 초기화돼, 다시
@@ -173,6 +178,14 @@ function getArmorShredPercent(target) {
   v = 1 - keep;
   return v;
 }
+// 83차: 고정 방어력 감소(ARMOR_SHRED_FLAT) - 원작 저항 계산의 첫 단계. 서로 다른 출처끼리 더해지고 방어력을 음수로도 만든다.
+function getArmorShredFlat(target) {
+  if (!target || !target.statusEffects) return 0;
+  const now = performance.now();
+  let v = 0;
+  for (const e of target.statusEffects) if (e.type === 'ARMOR_SHRED_FLAT' && e.expiresAt > now) v += e.value;
+  return v;
+}
 // ARMOR_SHRED(getArmorShredPercent)와 달리 이건 퍼센트가 아니라 고정
 // 마법저항력 감소량이다(악의 "증오안개" - 마법 저항력 10 감소, 퍼센트
 // 아님) - 이름에 Percent를 쓰지 않아 호출부에서 헷갈리지 않게 한다.
@@ -249,7 +262,7 @@ function getFlatMoveSpeedBuff(target) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();
   let v = 0;
-  for (const e of target.statusEffects) if (e.type === 'MS_BUFF_FLAT' && e.expiresAt > now) v = Math.max(v, e.value);
+  for (const e of target.statusEffects) if (e.type === 'MS_BUFF_FLAT' && e.expiresAt > now) v += e.value; // 83차: 고정 이동 속도 증가는 서로 더해진다(원작)
   return v;
 }
 // 바루스 E(화살비) - "고통스러운 상처"(자가 회복/재생 약화). 범용 상태이상

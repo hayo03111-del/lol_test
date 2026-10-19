@@ -330,7 +330,7 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
     isMinion: true, isChampion: false, isMonster: true, isTrainingDummy: false, isTurret: false,
     hp: stats.hp, maxHp: stats.maxHp, armor: stats.armor, magicResist: stats.magicResist,
     attackDamage: stats.ad, attackSpeed: stats.attackSpeed, attackRange: stats.range,
-    moveSpeedWorld: lolRangeToWorld(stats.moveSpeedLol),
+    moveSpeedWorld: lolRangeToWorld(stats.moveSpeedLol), moveSpeedLol: stats.moveSpeedLol, // 83차: 둔화 계산용 기본 이동 속도(LoL)
     radius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48), collisionRadius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48), selectionRadius: lolRangeToWorld(MINION_SELECTION_RADIUS_LOL[type] || 115), healthBar, // 64차: 원작 선택 반경(클릭 판정)
     waypointIndex: 0, attackCooldown: 0, attackTarget: null, pendingHitTimer: null,
     hasAttackedStructure: false, // 요청 14/36: 한번 true가 되면 그 미니언 생존 동안 절대 false로 되돌리지 않는다(포탑/억제기/넥서스 전부 포함)
@@ -498,6 +498,9 @@ function minionTargetRank(minion, u, now) {
 }
 function getMinionAttackTarget(minion) {
   if (minion.isDead) return null;
+  // 83차: 도발되면 시전자만 공격한다(원작).
+  const taunter = typeof getTauntSource === 'function' ? getTauntSource(minion) : null;
+  if (taunter) return taunter;
   const now = performance.now();
   const pos = minion.mesh.position;
   // 추격 제한: 챔피언을 쫓다 너무 멀리 끌려가면 포기
@@ -748,8 +751,10 @@ function updateMinionMovement(minion, dt) {
     const len = Math.hypot(mx, mz);
     if (len > 0.0001) { mx /= len; mz /= len; }
   }
-  minion.mesh.position.x += mx * minion.moveSpeedWorld * dt;
-  minion.mesh.position.z += mz * minion.moveSpeedWorld * dt;
+  // 83차: 둔화·이속 증가가 실제로 적용된다(예전엔 고정 속도라 미니언 둔화가 표시만 됐다).
+  const mSpeed = typeof getUnitMoveSpeedWorld === 'function' ? getUnitMoveSpeedWorld(minion) : minion.moveSpeedWorld;
+  minion.mesh.position.x += mx * mSpeed * dt;
+  minion.mesh.position.z += mz * mSpeed * dt;
   faceMinionToward(minion, mx, mz); // 요청 20: 이동 벡터를 모델 회전에 그대로 연결
   // 버그 수정(사용자 지적 "붉은 진영 미니언이 바라보는 방향이 이상해") -
   // 포탑/넥서스/억제기와 똑같은 원인이다: RED는 별도의 GLB 에셋 파일
@@ -983,7 +988,7 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
       // 아이템 패시브 "모든 피해 흡혈"(도란의 검/활)/"생명력 흡수"(흡혈의
       // 낫, 물리 피해 전용) - 미니언 피해도 실제 LoL처럼 흡혈 대상에
       // 포함된다(구조물 피해만 제외).
-      if (typeof applyItemVamp === 'function') applyItemVamp(controller, finalDmg);
+      if (typeof applyItemVamp === 'function') applyItemVamp(controller, finalDmg, { target: minion, isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isAoE: !!result.isAoE, isPet: !!result.isPet }); // 83차: 광역·도트 33%
       if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(controller, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, !!result.isBasicAttack);
       // 운명의 재(발화)/여신의 눈물(마나순환) - 챔피언 전용 효과(그리버스/
       // 카탈리스트 마나 회복)는 itemOnDamageDealt() 내부에서 target.isChampion

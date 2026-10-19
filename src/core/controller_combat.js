@@ -132,7 +132,7 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
     // 아이템 패시브 "수확"(수확의 낫) - 기본 공격 적중 시 고정 체력 회복.
     // 대상 종류(챔피언/더미/미니언/포탑)를 가리지 않는 실제 아이템 설명과
     // 동일하게 범용으로 적용한다.
-    if (this.itemOnHitHeal > 0) this.hp = Math.min(this.maxHp, this.hp + this.itemOnHitHeal);
+    if (this.itemOnHitHeal > 0) this.hp = Math.min(this.maxHp, this.hp + this.itemOnHitHeal * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(this) : 1)); // 83차: 치유 감소·증폭 적용
     // 아이템 패시브(광휘의 검/티아맷) - 평타 적중 공용 훅. 둘 다
     // item_system.js의 전용 함수가 "보유 여부"부터 직접 확인하므로 여기선
     // 무조건 호출만 한다(들고 있지 않으면 즉시 return).

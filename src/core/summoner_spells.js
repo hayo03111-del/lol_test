@@ -88,6 +88,8 @@ function castSummonerSpell(ctrl, slot, mousePoint, pointerClient) {
   if (!markRecast && now < s[slot].readyAt) return _summonerFail(`${d.nameKo} - 재사용 대기시간 ${Math.ceil((s[slot].readyAt - now) / 1000)}초`);
   // 기절 등 행동 불가 중에는 정화만 쓸 수 있다. 속박 중에는 점멸·표식 돌진을 못 쓴다(이동 주문).
   if (id !== 'cleanse' && typeof isCrowdControlled === 'function' && isCrowdControlled(ctrl)) return _summonerFail(`${d.nameKo} - 행동 불가 상태`);
+  // 83차: PC 위키 - 정화도 제압 중에는 쓸 수 없다(제압은 정화로 풀리지 않음).
+  if (id === 'cleanse' && typeof hasStatus === 'function' && hasStatus(ctrl, 'SUPPRESSION')) return _summonerFail(`${d.nameKo} - 제압 상태`);
   if ((id === 'flash' || markRecast) && typeof isRooted === 'function' && isRooted(ctrl)) return _summonerFail(`${d.nameKo} - 속박 상태`);
   if ((id === 'flash' || markRecast) && ctrl._dashState) return _summonerFail(`${d.nameKo} - 돌진 중`);
   let ok = false;

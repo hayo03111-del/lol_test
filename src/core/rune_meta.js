@@ -484,7 +484,7 @@ const RUNE_SHARD_ROWS = [
   },
   {
    "key": "tenacity",
-   "name": "강인함 및 둔화 저항 +10%"
+   "name": "강인함 및 둔화 저항 +15%"
   },
   {
    "key": "hpScale",

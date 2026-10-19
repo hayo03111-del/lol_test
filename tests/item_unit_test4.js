@@ -113,7 +113,7 @@ function assert(cond, msg) {
   assert(c4.itemBonusMoveSpeedLol === 55, 'boots of swiftness grant +55 move speed');
   const c5 = makeFakeCtrl();
   buyItem(c5, 'mercurysTreads');
-  assert(c5.itemTenacityPercent === 0.30, 'mercurys treads grant 30% tenacity');
+  assert(Math.abs(c5.itemTenacityPercent - 0.30) < 1e-9, 'mercurys treads grant 30% tenacity');
   assert(c5.stats.magicResist === 50, 'mercurys treads grant +20 MR');
 
   // Boots of Greed: slaughter stacking shares the takedown hook with Dark Seal.

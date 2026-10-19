@@ -558,29 +558,30 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   // 안 쓰이므로 영향이 없다.
   const critAtk = resolveDamageSource(source, target);
   const critBonus = (critAtk && critAtk.itemBonusCritDamagePercent) || 0;
-  let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critMultiplier + critBonus) : 1);
+  // 83차: 치명타 피해 보정(요네 ×0.9 등)은 기본 배율 + 대검 보너스 "합계"에 곱한다. critMultiplier는 이미 보정이 들어간
+  // 값(요네 1.575)이라 보정 전 값으로 되돌린 뒤 더하고 다시 곱한다.
+  const critMod = (critAtk && critAtk.stats && critAtk.stats.critDamageModifier) || 1;
+  const critTotal = critMod !== 1 ? (critMultiplier / critMod + critBonus) * critMod : critMultiplier + critBonus;
+  let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critTotal) : 1);
   if (damageType === DAMAGE_TYPE.PHYSICAL) {
     let armor = (target && (target.armor ?? target.stats?.armor)) || 0;
-    if (bonusArmorIgnorePercent > 0 && target) { const baseArmor = target.baseArmor ?? target.stats?.baseArmor ?? armor; const bonusArmor = Math.max(0, armor - baseArmor); armor = baseArmor + bonusArmor * (1 - Math.min(1, bonusArmorIgnorePercent)); }
+    // 83차: 원작 순서 - 방어력 감소(고정 → %) → 방어구 관통력(%) → 추가 방어구 관통(%, 추가 방어력 몫에만) → 물리 관통력(고정).
+    // % 감소·% 관통은 방어력이 양수일 때만 적용된다(음수 방어력에 % 감소를 곱하면 오히려 0 쪽으로 올라가던 버그).
+    const baseArmor0 = target ? (target.baseArmor ?? target.stats?.baseArmor ?? armor) : armor;
+    const bonusShare = armor > 0 ? Math.max(0, Math.min(1, (armor - baseArmor0) / armor)) : 0; // 현재 방어력 중 추가 방어력 비율
+    if (typeof getArmorShredFlat === 'function') armor -= getArmorShredFlat(target); // 고정 방어력 감소(음수로도 내려감)
     // 기획안 8절 ARMOR_SHRED(예: 가렌 E 6회 피격 시 방어력 25% 감소) 반영.
-    if (typeof getArmorShredPercent === 'function') armor *= (1 - getArmorShredPercent(target));
-    // 아이템 패시브(톱날 단검 - 고정 물리 관통력 10) - 원작 순서대로 % 관통
-    // 뒤(맨 마지막)에 적용한다(아래).
+    if (armor > 0 && typeof getArmorShredPercent === 'function') armor *= (1 - getArmorShredPercent(target));
     const atkP = resolveDamageSource(source, target);
-    // 벼락폭풍검(창공)의 "4초간 물리 관통력 획득"은 영구 스탯(itemBonusArmorPenFlat,
-    // 구매/판매 시에만 재계산)과 별개로 지속시간이 있는 임시 버프라 자체
-    // 필드(itemTempArmorPenFlat)에 더해서 같은 자리에서 합산한다.
+    // 벼락폭풍검(창공)의 "4초간 물리 관통력 획득"은 영구 스탯(itemBonusArmorPenFlat)과 별개의 임시 버프(itemTempArmorPenFlat).
     const flatArmorPen = ((atkP && atkP.itemBonusArmorPenFlat) || 0) + ((atkP && atkP.itemTempArmorPenFlat) || 0);
-    // 버그 수정(원작 적용 순서): 방어력 감소(고정→%) → 방어구 관통력(%) → 물리 관통력(고정).
-    // 예전엔 고정 관통을 % 관통보다 먼저 빼서 % 관통 효율이 실제보다 낮게 나왔다.
-    if (armor > 0) armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등(양수일 때만)
-    // 경계(빛과 어둠 - 어둠)의 "10%(최대 30%) 방어구 관통력"도 영구
-    // 곱연산 필드(itemBonusArmorPenMultiplier)와 별개인 임시 버프라
-    // 똑같이 곱으로 추가 적용한다.
+    if (armor > 0) armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등
+    // 경계(빛과 어둠 - 어둠)의 임시 방어구 관통력(최대 30%) - 영구 곱연산 필드와 별개로 곱한다.
     if (armor > 0 && atkP && atkP.itemTempArmorPenPercent > 0) armor *= (1 - Math.max(0, Math.min(1, atkP.itemTempArmorPenPercent)));
-    // 아이템 패시브(최후의 속삭임 - 방어구 관통력 18%) - 마법 관통력(위
-    // MAGICAL 분기)과 동일한 이유로 공격자를 source||controller로 찾는다.
+    // 아이템 패시브(최후의 속삭임 - 방어구 관통력) - 영구 곱연산.
     if (armor > 0 && atkP && atkP.itemBonusArmorPenMultiplier < 1) armor *= atkP.itemBonusArmorPenMultiplier;
+    // 추가 방어구 관통(야스오 R 등) - % 감소·% 관통 뒤 남은 방어력 중 "추가 방어력 몫"에만 적용(83차, 예전엔 맨 앞에 적용).
+    if (armor > 0 && bonusArmorIgnorePercent > 0) armor -= armor * bonusShare * Math.min(1, bonusArmorIgnorePercent);
     armor = armor > 0 ? Math.max(0, armor - flatArmorPen) : armor; // 고정 관통은 맨 마지막(관통으로는 0 아래로 못 내림)
     dmg *= resistDamageMultiplier(armor);
   } else if (damageType === DAMAGE_TYPE.MAGICAL) {
@@ -705,46 +706,41 @@ function applyDamage(target, result) {
   // 59차 도움 요청: 적 챔피언이 아군 챔피언(허수아비 포함)에게 피해를 주면 근처 포탑·미니언이 그 챔피언을 노린다.
   if (target.isChampion && dmgSource && dmgSource !== target && (dmgSource.isChampion || typeof dmgSource.championId === 'string')
       && typeof notifyChampionAttackedChampion === 'function') notifyChampionAttackedChampion(dmgSource, target);
+  // 83차: 흡혈은 대상의 피해 감소까지 적용된 피해(보호막 흡수 전) 기준. takeDamage가 있는 대상(플레이어)은 피해 감소를
+  // takeDamage 안에서 곱하므로 여기서 같은 비율로 맞춘다(예전엔 감소 전 피해로 흡혈해 과다 회복).
+  let vampBase = finalDmg;
+  if (typeof target.takeDamage === 'function') {
+    const dt0 = result.damageType || DAMAGE_TYPE.PHYSICAL;
+    const red = dt0 === DAMAGE_TYPE.MAGICAL ? (typeof getMagicDamageReductionPercent === 'function' ? getMagicDamageReductionPercent(target, result.source) : 0) : (typeof getDamageReductionPercent === 'function' ? getDamageReductionPercent(target, result.source) : 0);
+    vampBase = finalDmg * (1 - Math.max(0, Math.min(1, red)));
+  }
   if (dmgSource && typeof dmgSource.championId === 'string') {
-    if (typeof applyItemVamp === 'function') applyItemVamp(dmgSource, finalDmg);
+    if (typeof applyItemVamp === 'function') applyItemVamp(dmgSource, vampBase, { target, isStatusTick: !!result.isStatusTick, isAoE: !!result.isAoE, isPet: !!result.isPet });
     const dealtDamageType = result.damageType || DAMAGE_TYPE.PHYSICAL; // calculateDamage()의 기본값과 동일하게 맞춘다
-    if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(dmgSource, finalDmg, dealtDamageType, !!result.isBasicAttack);
+    if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(dmgSource, vampBase, dealtDamageType, !!result.isBasicAttack);
     if (target.isChampion) dmgSource._itemLastDealtChampionDamageAt = performance.now();
     if (typeof target._itemLastTookChampionDamageAt !== 'undefined') target._itemLastTookChampionDamageAt = performance.now();
-    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, finalDmg, dealtDamageType, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
+    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, vampBase, dealtDamageType, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
   }
-  // 요청(처형 시스템): 이 피해로 대상이 실제로 죽는지를 데미지 적용 "전"에
-  // 먼저 판정한다 - 학습용 더미는 damageEnemy()에서 2% 바닥에 멈추도록
-  // 되어 있어서 target.hp가 실제로 0이 되지는 않지만, 그 floor 처리가
-  // 일어나기 전 원래 판정(hp <= finalDmg)은 여전히 "실제 챔피언이었다면
-  // 죽었을 타격"과 정확히 동일하다. 새 피해 계산을 따로 만들지 않고 이미
-  // 계산된 finalDmg를 그대로 판정에 재사용한다. applyDamage() 하나가
-  // 모든 스킬의 공통 진입점이므로, 이 판정 하나만 추가하면 지금까지
-  // 만든 모든 챔피언의 모든 스킬에 자동으로 처형 감지가 적용된다(개별
-  // 스킬 코드를 하나도 건드릴 필요 없음).
-  if (target.hp > 0 && target.hp <= finalDmg) {
-    markExecute(target, finalDmg);
-    // 아리 패시브(정기 흡수) 챔피언 처치 관여 heal + R(혼령 질주) 처치 관여
-    // 재사용 횟수 회복 - 이 뷰어의 학습용 더미는 damageEnemy()에서 2% 바닥에
-    // 멈춰 실제로 hp<=0이 되지는 않으므로, "죽었어야 할 타격"을 이미 판정해둔
-    // 이 지점(처형 판정)을 그대로 재사용해 챔피언 처치 관여로 취급한다.
-    if (result.source && result.source.championId === 'ahri' && typeof result.source._ahriOnChampionTakedown === 'function') {
-      result.source._ahriOnChampionTakedown(target);
-    }
-    // 암흑의 인장(영광) - 챔피언 처치 관여 시 중첩 획득. 위 아리 패시브와
-    // 동일한 이유로 이 처형 판정 지점을 "챔피언 처치"로 재사용한다.
-    if (dmgSource && typeof itemOnChampionTakedown === 'function') itemOnChampionTakedown(dmgSource);
-    // 가렌 W(용기) 패시브 - 처치 시 방어력/마법 저항력 영구 증가(미니언 처치는 killMinion에서).
-    // 학습용 허수아비는 죽지 않고 2% 바닥에 멈추므로, 이미 바닥에 있는 허수아비를
-    // 계속 때리는 것은 새 처치로 치지 않는다(같은 허수아비로 무한 적립 방지).
-    if (!isFlooredTrainingDummy(target) && dmgSource && dmgSource.championId === 'garen' && typeof dmgSource._garenOnTakedown === 'function') dmgSource._garenOnTakedown();
-    // 바루스 패시브(살아있는 복수) - 챔피언 처치 관여(미니언 처치는 killMinion에서).
-    if (!isFlooredTrainingDummy(target) && target.isChampion && dmgSource && dmgSource.championId === 'varus' && typeof dmgSource._varusOnKill === 'function') dmgSource._varusOnKill(target, true);
-  }
-  // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만"
-  // 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 그대로 넘긴다.
+  // 83차: 처치(처형) 판정은 피해를 "실제로 적용한 뒤"에 한다 - 예전엔 적용 전 hp <= 피해로 판정해, 보호막·피해 감소·수호 천사
+  // 때문에 살아남아도 처치 효과(아리 패시브·암흑의 인장·가렌 W·바루스)가 발동했다. 학습용 허수아비는 죽지 않고 2% 바닥에
+  // 멈추므로 "이번 타격으로 처음 바닥에 닿은 경우"를 처치로 친다(바닥에서 계속 때려도 새 처치가 아니다).
+  const hpBefore = target.hp, wasFloored = isFlooredTrainingDummy(target);
+  // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만" 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 넘긴다.
   if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isCritical: !!result.isCritical });
   else damageEnemy(target, finalDmg, result);
+  const lethal = hpBefore > 0 && (target.hp <= 0 || (target.isTrainingDummy && !wasFloored && isFlooredTrainingDummy(target) && finalDmg >= hpBefore));
+  if (lethal) {
+    markExecute(target, finalDmg);
+    // 아리 패시브(정기 흡수) 챔피언 처치 관여 회복 + R 재사용 횟수 회복.
+    if (result.source && result.source.championId === 'ahri' && typeof result.source._ahriOnChampionTakedown === 'function') result.source._ahriOnChampionTakedown(target);
+    // 암흑의 인장(영광) - 챔피언 처치 관여 시 중첩.
+    if (dmgSource && typeof itemOnChampionTakedown === 'function') itemOnChampionTakedown(dmgSource);
+    // 가렌 W(용기) 패시브 - 처치 시 방어력/마법 저항력 영구 증가(미니언 처치는 killMinion에서).
+    if (dmgSource && dmgSource.championId === 'garen' && typeof dmgSource._garenOnTakedown === 'function') dmgSource._garenOnTakedown();
+    // 바루스 패시브(살아있는 복수) - 챔피언 처치 관여(미니언 처치는 killMinion에서).
+    if (target.isChampion && dmgSource && dmgSource.championId === 'varus' && typeof dmgSource._varusOnKill === 'function') dmgSource._varusOnKill(target, true);
+  }
   return finalDmg;
 }
 // 처형 판정 시 콘솔 로그 + 화면 시각 효과(네임플레이트 붉은 섬광). 새

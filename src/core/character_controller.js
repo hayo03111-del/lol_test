@@ -58,7 +58,7 @@ class CharacterController {
     // (getFinalMoveSpeed 등)을 통해서만 이뤄진다.
     this.stats = {
       baseMoveSpeed: MOVE_SPEED, flatMoveSpeedBonus: 0, percentMoveSpeedBonus: 0,
-      slowPercent: 0, moveSpeedMultiplier: 1, minMoveSpeed: MOVE_SPEED * 0.2, maxMoveSpeed: MOVE_SPEED * 3.0,
+      slowPercent: 0, moveSpeedMultiplier: 1, minMoveSpeed: MOVE_SPEED * 0.2, maxMoveSpeed: Infinity, /* 83차: 원작은 이동 속도 상한 없음(소프트 캡만) */
 
       attackDamage: 10, attackRange: ATTACK_RANGE,
       baseAttackSpeed: 1.0, bonusAttackSpeedPercent: 0, attackSpeedMultiplier: 1,
@@ -480,7 +480,10 @@ class CharacterController {
     // 야스오와 달리 이동 누적형 Flow 보호막이 없으므로 그 부분만 제외하고
     // 크리티컬 관련 스탯만 매 tick(_yoneTick)에서 계속 갱신한다. 여기서는
     // 챔피언 교체 시 상태 초기화만 담당.
-    if (this.championId === 'yone') { this.stats.critMultiplier = this._champData().passive.critDamage; this.mp = 0; }
+    // 83차: 요네 치명타 피해 감소(×0.9)는 "총 치명타 피해"에 곱한다 - 무한의 대검 +30%가 먼저 더해진 뒤 ×0.9((1.75+0.3)×0.9).
+    // 예전엔 1.575에 대검 +0.3을 더해 1.875가 됐다(실제 1.845).
+    this.stats.critDamageModifier = 1;
+    if (this.championId === 'yone') { this.stats.critMultiplier = this._champData().passive.critDamage; this.stats.critDamageModifier = this._champData().passive.critDamageModifier || 1; this.mp = 0; }
     if (this.championId === 'nilah') {
       this.armorPenPercent = 0;
       // 닐라 지형 충돌 반경 32·선택 반경 120(실제 bin 확인)은 25차부터 CHAMPION_UNIT_SIZE_LOL 표에서 위 공통 코드가 넣는다.

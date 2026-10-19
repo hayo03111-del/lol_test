@@ -94,8 +94,9 @@ function recomputeItemStats(ctrl) {
     // 신속의 장화(둔화 저항)/헤르메스의 발걸음(강인함) - 둘 다 "더 센 쪽
     // 하나만 적용"이 아니라 실제 LoL처럼 단순 합산(이 데모엔 둘 다 가질
     // 방법이 마땅치 않아 사실상 하나만 적용되지만, 합산해도 안전하다).
-    ctrl.itemSlowResistPercent += item.slowResistPercent || 0;
-    ctrl.itemTenacityPercent += item.tenacityPercent || 0;
+    // 83차: 원작처럼 출처끼리 곱연산(1-(1-a)(1-b)) - 예전엔 더했다(헤르메스 30% + 20% = 50% → 실제 44%).
+    ctrl.itemSlowResistPercent = 1 - (1 - ctrl.itemSlowResistPercent) * (1 - (item.slowResistPercent || 0));
+    ctrl.itemTenacityPercent = 1 - (1 - ctrl.itemTenacityPercent) * (1 - (item.tenacityPercent || 0));
     if (item.grievousOnHitPassive) {
       ctrl.itemGrievousOnHitPercent = Math.max(ctrl.itemGrievousOnHitPercent, item.grievousOnHitPassive.percent);
       ctrl.itemGrievousOnHitDurationSec = Math.max(ctrl.itemGrievousOnHitDurationSec, item.grievousOnHitPassive.durationSec);
@@ -175,7 +176,7 @@ function recomputeItemStats(ctrl) {
     if (eff.attackDamage) ctrl.itemBonusAD += eff.attackDamage;
     if (eff.abilityPower) ctrl.itemBonusAP += eff.abilityPower;
     if (eff.mpRegenPercent) ctrl.itemBonusMpRegenPercent += eff.mpRegenPercent;
-    if (eff.tenacityPercent) ctrl.itemTenacityPercent += eff.tenacityPercent;
+    if (eff.tenacityPercent) ctrl.itemTenacityPercent = 1 - (1 - ctrl.itemTenacityPercent) * (1 - eff.tenacityPercent); // 83차: 곱연산
   }
   // 경탄(마나무네/무라마나) - "마나의 2%만큼 추가 공격력". 최대 마나 자체가
   // 이 함수가 끝난 뒤 recomputeStats()에서야 계산되므로(순환 의존), 챔피언
@@ -772,7 +773,7 @@ function _itemTickManaRegen(ctrl, item, dt, now) {
     if ((ctrl.maxMp || 0) > 0 && ctrl.mp < ctrl.maxMp) {
       ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + manaPerSec);
     } else {
-      ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + manaPerSec * p.noManaHpRegenPercent);
+      ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + manaPerSec * p.noManaHpRegenPercent * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(ctrl) : 1)); // 83차: 치유 감소 적용
     }
   }
 }
@@ -1298,8 +1299,32 @@ function itemSystemTick(ctrl, dt) {
 
 // 모든 피해 흡혈(도란의 검/활) - applyDamage()/applyDamageToMinion() 양쪽에서
 // 공용으로 호출한다(구조물 피해는 실제 LoL처럼 흡혈이 붙지 않으므로 호출하지 않음).
-function applyItemVamp(source, finalDmg) {
+// 83차: PC 위키(Vamp, V14.1~) - 모든 피해 흡혈은 미니언·몬스터에게 준 "광역·소환물·지속 피해"에는 33%만 적용된다.
+// 광역 여부: 호출부가 isAoE를 주거나, 같은 시전자의 스킬이 같은 순간(동기 실행 한 번)에 2명 이상을 맞히면 광역으로 본다.
+const _vampAoeBatch = new Map(); // source -> { targets:Set, pending:[{amount, healTarget}] }
+function _vampEffFor(opts) {
+  const t = opts && opts.target;
+  const nonChamp = t && (t.isMinion || t.isMonster);
+  return nonChamp && (opts.isStatusTick || opts.isAoE || opts.isPet) ? 0.33 : 1;
+}
+function applyItemVamp(source, finalDmg, opts = null) {
   if (!source || !(finalDmg > 0)) return;
+  const t = opts && opts.target;
+  // 미니언·몬스터에 대한 스킬 피해(평타·도트 제외)는 같은 순간에 몇 명을 맞혔는지 모은 뒤 정산한다.
+  if (t && (t.isMinion || t.isMonster) && opts && !opts.isBasicAttack && !opts.isStatusTick && !opts.isAoE && !opts._batched && typeof queueMicrotask === 'function') {
+    let b = _vampAoeBatch.get(source);
+    if (!b) {
+      b = { targets: new Set(), pending: [] }; _vampAoeBatch.set(source, b);
+      queueMicrotask(() => {
+        _vampAoeBatch.delete(source);
+        const aoe = b.targets.size > 1;
+        for (const p of b.pending) applyItemVamp(source, p.amount, { ...p.opts, isAoE: aoe, _batched: true });
+      });
+    }
+    b.targets.add(t); b.pending.push({ amount: finalDmg, opts });
+    return;
+  }
+  const eff = _vampEffFor(opts);
   // 멜모셔스의 아귀(생명선) - 발동 후 일정 시간 모든 피해 흡혈 10% 추가.
   // 인벤토리 기반 영구 스탯(itemAllDamageVampPercent, recomputeItemStats()가
   // 채움)과 달리 시간 제한 임시 보너스라 itemSystemTick()이 매 프레임
@@ -1312,7 +1337,7 @@ function applyItemVamp(source, finalDmg) {
   // 그리버스 치유 감소 - 실제 LoL에서도 흡혈/스펠뱀프는 그리버스의 직접
   // 적용 대상이다(위 _itemTickActiveHeals 주석 참고).
   const healMult = getHealReceivedMultiplier(source);
-  source.hp = Math.min(source.maxHp, source.hp + finalDmg * vampPercent * healMult);
+  source.hp = Math.min(source.maxHp, source.hp + finalDmg * vampPercent * eff * healMult);
 }
 
 // 생명력 흡수(흡혈의 낫 등) - "모든 피해 흡혈"(위 applyItemVamp)과 달리 "기본 공격"
@@ -1462,7 +1487,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
       // 정령의형상(무한한 활력)/월석재생기(별빛 은총) - 생명선 보호막도
       // "받는 보호막"에 해당한다(보호막 전용 증폭률 사용).
       const shieldAmt = (shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent) * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
-      addShield(ctrl, 'itemMaw', shieldAmt, p.shieldDurationSec); // 보호막 인스턴스(다른 보호막과 합산)
+      addShield(ctrl, 'itemMaw', shieldAmt, p.shieldDurationSec, { onlyType: DAMAGE_TYPE.MAGICAL }); // 83차: 마법 피해만 막는 보호막(원작)
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       ctrl._itemMawOmnivampUntil = now + p.omnivampDurationSec * 1000;
       console.log('[ITEM] 멜모셔스의 아귀 - 생명선 발동');
@@ -1653,7 +1678,7 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType, meta = null) {
   if (ctrl._itemActiveElixir && ctrl._itemActiveElixir.id === 'elixirOfWrath' && target.isChampion && damageType === DAMAGE_TYPE.PHYSICAL) {
     const eff = ITEM_DATA.elixirOfWrath.elixirEffect;
     if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') {
-      ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + finalDmg * eff.championPhysicalVampPercent);
+      ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + finalDmg * eff.championPhysicalVampPercent * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(ctrl) : 1)); // 83차
     }
   }
   // 전설급 2차분 - "스킬로 피해를 입히면" 계열(월식/무라마나 충격/쇼진의창).
@@ -2098,7 +2123,7 @@ function itemOnSlowOrImmobilize(ctrl, target, effectType) {
     if ((ctrl._itemSleighIcdUntil || 0) <= now) {
       ctrl._itemSleighIcdUntil = now + p.icdSec * 1000;
       const heal = _itemScaleByLevel(ctrl, p.minHeal, p.maxHeal, p.levelMin, p.levelMax);
-      if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal);
+      if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(ctrl) : 1)); // 83차
       if (typeof applyStatus === 'function') {
         applyStatus(ctrl, { id: 'itemSolsticeSleighMs', type: 'MS_BUFF', duration: p.msDurationSec, value: p.msPercent });
         // "자신과 주변 체력이 가장 낮은 아군" - 체력 비율이 가장 낮은 아군 더미 1명.
@@ -2143,7 +2168,7 @@ function itemOnSlowOrImmobilize(ctrl, target, effectType) {
   // 같은 id의 상태이상을 다시 걸면 자동으로 덮어써서 지속시간이 연장되므로
   // 별도 처리가 필요 없다.
   const mandateSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].commandPassive);
-  const IMMOBILIZE_TYPES = ['STUN', 'ROOT', 'SUPPRESSION', 'KNOCKUP', 'CHARM', 'FEAR']; // 둔화(SLOW) 제외
+  const IMMOBILIZE_TYPES = ['STUN', 'ROOT', 'SUPPRESSION', 'KNOCKUP', 'CHARM', 'FEAR', 'TAUNT']; // 둔화(SLOW) 제외. 83차: 도발도 이동 불가
   if (mandateSlot && target && target.isChampion && IMMOBILIZE_TYPES.includes(effectType) && typeof applyStatus === 'function') {
     const p = ITEM_DATA[mandateSlot.id].commandPassive;
     applyStatus(target, { id: 'itemImperialMandateVulnerable', type: 'VULNERABLE', duration: p.durationSec, value: p.vulnerablePercent, source: ctrl });
@@ -2693,7 +2718,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
       if (p.healApPercent || p.healBonusHpPercent) {
         const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
         const heal = (p.healApPercent || 0) * ap + (p.healBonusHpPercent || 0) * bonusHp;
-        if (heal > 0 && typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal);
+        if (heal > 0 && typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(ctrl) : 1)); // 83차
       }
     }
   }
@@ -2889,7 +2914,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
       const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
       const baseAd = (baseStats && typeof baseStats.attackDamage === 'number') ? baseStats.attackDamage : (ctrl.stats.attackDamage || 0);
       const healAmt = healPercent * baseAd + missingHp * p.missingHpHealPercent;
-      ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + healAmt);
+      ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + healAmt * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(ctrl) : 1)); // 83차
     }
   }
 

@@ -187,6 +187,8 @@ CharacterController.prototype.updateMovement = function(dt) {
     if (typeof resolvePlayerMinionCollisions === 'function') resolvePlayerMinionCollisions(this); // 61차: 미니언과 몸 충돌
     if (typeof resolvePlayerStructureCollisions === 'function') resolvePlayerStructureCollisions(this); // 미니언에 밀려 구조물 안으로 들어가지 않게 한 번 더
     if (this.state !== STATE.MOVE || !this.targetPos) return;
+    // 83차: 이동 중에 기절·속박 등이 걸리면 그 자리에서 멈춘다(예전엔 moveTo에서만 막아 걷던 걸음은 계속됐다).
+    if ((typeof isCrowdControlled === 'function' && isCrowdControlled(this)) || (typeof isRooted === 'function' && isRooted(this))) return;
     const pos = this.root.position;
     const toTarget = new THREE.Vector3().subVectors(this.targetPos, pos);
     toTarget.y = 0;

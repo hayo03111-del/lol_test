@@ -1954,29 +1954,30 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   // 안 쓰이므로 영향이 없다.
   const critAtk = resolveDamageSource(source, target);
   const critBonus = (critAtk && critAtk.itemBonusCritDamagePercent) || 0;
-  let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critMultiplier + critBonus) : 1);
+  // 83차: 치명타 피해 보정(요네 ×0.9 등)은 기본 배율 + 대검 보너스 "합계"에 곱한다. critMultiplier는 이미 보정이 들어간
+  // 값(요네 1.575)이라 보정 전 값으로 되돌린 뒤 더하고 다시 곱한다.
+  const critMod = (critAtk && critAtk.stats && critAtk.stats.critDamageModifier) || 1;
+  const critTotal = critMod !== 1 ? (critMultiplier / critMod + critBonus) * critMod : critMultiplier + critBonus;
+  let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critTotal) : 1);
   if (damageType === DAMAGE_TYPE.PHYSICAL) {
     let armor = (target && (target.armor ?? target.stats?.armor)) || 0;
-    if (bonusArmorIgnorePercent > 0 && target) { const baseArmor = target.baseArmor ?? target.stats?.baseArmor ?? armor; const bonusArmor = Math.max(0, armor - baseArmor); armor = baseArmor + bonusArmor * (1 - Math.min(1, bonusArmorIgnorePercent)); }
+    // 83차: 원작 순서 - 방어력 감소(고정 → %) → 방어구 관통력(%) → 추가 방어구 관통(%, 추가 방어력 몫에만) → 물리 관통력(고정).
+    // % 감소·% 관통은 방어력이 양수일 때만 적용된다(음수 방어력에 % 감소를 곱하면 오히려 0 쪽으로 올라가던 버그).
+    const baseArmor0 = target ? (target.baseArmor ?? target.stats?.baseArmor ?? armor) : armor;
+    const bonusShare = armor > 0 ? Math.max(0, Math.min(1, (armor - baseArmor0) / armor)) : 0; // 현재 방어력 중 추가 방어력 비율
+    if (typeof getArmorShredFlat === 'function') armor -= getArmorShredFlat(target); // 고정 방어력 감소(음수로도 내려감)
     // 기획안 8절 ARMOR_SHRED(예: 가렌 E 6회 피격 시 방어력 25% 감소) 반영.
-    if (typeof getArmorShredPercent === 'function') armor *= (1 - getArmorShredPercent(target));
-    // 아이템 패시브(톱날 단검 - 고정 물리 관통력 10) - 원작 순서대로 % 관통
-    // 뒤(맨 마지막)에 적용한다(아래).
+    if (armor > 0 && typeof getArmorShredPercent === 'function') armor *= (1 - getArmorShredPercent(target));
     const atkP = resolveDamageSource(source, target);
-    // 벼락폭풍검(창공)의 "4초간 물리 관통력 획득"은 영구 스탯(itemBonusArmorPenFlat,
-    // 구매/판매 시에만 재계산)과 별개로 지속시간이 있는 임시 버프라 자체
-    // 필드(itemTempArmorPenFlat)에 더해서 같은 자리에서 합산한다.
+    // 벼락폭풍검(창공)의 "4초간 물리 관통력 획득"은 영구 스탯(itemBonusArmorPenFlat)과 별개의 임시 버프(itemTempArmorPenFlat).
     const flatArmorPen = ((atkP && atkP.itemBonusArmorPenFlat) || 0) + ((atkP && atkP.itemTempArmorPenFlat) || 0);
-    // 버그 수정(원작 적용 순서): 방어력 감소(고정→%) → 방어구 관통력(%) → 물리 관통력(고정).
-    // 예전엔 고정 관통을 % 관통보다 먼저 빼서 % 관통 효율이 실제보다 낮게 나왔다.
-    if (armor > 0) armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등(양수일 때만)
-    // 경계(빛과 어둠 - 어둠)의 "10%(최대 30%) 방어구 관통력"도 영구
-    // 곱연산 필드(itemBonusArmorPenMultiplier)와 별개인 임시 버프라
-    // 똑같이 곱으로 추가 적용한다.
+    if (armor > 0) armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등
+    // 경계(빛과 어둠 - 어둠)의 임시 방어구 관통력(최대 30%) - 영구 곱연산 필드와 별개로 곱한다.
     if (armor > 0 && atkP && atkP.itemTempArmorPenPercent > 0) armor *= (1 - Math.max(0, Math.min(1, atkP.itemTempArmorPenPercent)));
-    // 아이템 패시브(최후의 속삭임 - 방어구 관통력 18%) - 마법 관통력(위
-    // MAGICAL 분기)과 동일한 이유로 공격자를 source||controller로 찾는다.
+    // 아이템 패시브(최후의 속삭임 - 방어구 관통력) - 영구 곱연산.
     if (armor > 0 && atkP && atkP.itemBonusArmorPenMultiplier < 1) armor *= atkP.itemBonusArmorPenMultiplier;
+    // 추가 방어구 관통(야스오 R 등) - % 감소·% 관통 뒤 남은 방어력 중 "추가 방어력 몫"에만 적용(83차, 예전엔 맨 앞에 적용).
+    if (armor > 0 && bonusArmorIgnorePercent > 0) armor -= armor * bonusShare * Math.min(1, bonusArmorIgnorePercent);
     armor = armor > 0 ? Math.max(0, armor - flatArmorPen) : armor; // 고정 관통은 맨 마지막(관통으로는 0 아래로 못 내림)
     dmg *= resistDamageMultiplier(armor);
   } else if (damageType === DAMAGE_TYPE.MAGICAL) {
@@ -2101,46 +2102,41 @@ function applyDamage(target, result) {
   // 59차 도움 요청: 적 챔피언이 아군 챔피언(허수아비 포함)에게 피해를 주면 근처 포탑·미니언이 그 챔피언을 노린다.
   if (target.isChampion && dmgSource && dmgSource !== target && (dmgSource.isChampion || typeof dmgSource.championId === 'string')
       && typeof notifyChampionAttackedChampion === 'function') notifyChampionAttackedChampion(dmgSource, target);
+  // 83차: 흡혈은 대상의 피해 감소까지 적용된 피해(보호막 흡수 전) 기준. takeDamage가 있는 대상(플레이어)은 피해 감소를
+  // takeDamage 안에서 곱하므로 여기서 같은 비율로 맞춘다(예전엔 감소 전 피해로 흡혈해 과다 회복).
+  let vampBase = finalDmg;
+  if (typeof target.takeDamage === 'function') {
+    const dt0 = result.damageType || DAMAGE_TYPE.PHYSICAL;
+    const red = dt0 === DAMAGE_TYPE.MAGICAL ? (typeof getMagicDamageReductionPercent === 'function' ? getMagicDamageReductionPercent(target, result.source) : 0) : (typeof getDamageReductionPercent === 'function' ? getDamageReductionPercent(target, result.source) : 0);
+    vampBase = finalDmg * (1 - Math.max(0, Math.min(1, red)));
+  }
   if (dmgSource && typeof dmgSource.championId === 'string') {
-    if (typeof applyItemVamp === 'function') applyItemVamp(dmgSource, finalDmg);
+    if (typeof applyItemVamp === 'function') applyItemVamp(dmgSource, vampBase, { target, isStatusTick: !!result.isStatusTick, isAoE: !!result.isAoE, isPet: !!result.isPet });
     const dealtDamageType = result.damageType || DAMAGE_TYPE.PHYSICAL; // calculateDamage()의 기본값과 동일하게 맞춘다
-    if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(dmgSource, finalDmg, dealtDamageType, !!result.isBasicAttack);
+    if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(dmgSource, vampBase, dealtDamageType, !!result.isBasicAttack);
     if (target.isChampion) dmgSource._itemLastDealtChampionDamageAt = performance.now();
     if (typeof target._itemLastTookChampionDamageAt !== 'undefined') target._itemLastTookChampionDamageAt = performance.now();
-    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, finalDmg, dealtDamageType, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
+    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, vampBase, dealtDamageType, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
   }
-  // 요청(처형 시스템): 이 피해로 대상이 실제로 죽는지를 데미지 적용 "전"에
-  // 먼저 판정한다 - 학습용 더미는 damageEnemy()에서 2% 바닥에 멈추도록
-  // 되어 있어서 target.hp가 실제로 0이 되지는 않지만, 그 floor 처리가
-  // 일어나기 전 원래 판정(hp <= finalDmg)은 여전히 "실제 챔피언이었다면
-  // 죽었을 타격"과 정확히 동일하다. 새 피해 계산을 따로 만들지 않고 이미
-  // 계산된 finalDmg를 그대로 판정에 재사용한다. applyDamage() 하나가
-  // 모든 스킬의 공통 진입점이므로, 이 판정 하나만 추가하면 지금까지
-  // 만든 모든 챔피언의 모든 스킬에 자동으로 처형 감지가 적용된다(개별
-  // 스킬 코드를 하나도 건드릴 필요 없음).
-  if (target.hp > 0 && target.hp <= finalDmg) {
-    markExecute(target, finalDmg);
-    // 아리 패시브(정기 흡수) 챔피언 처치 관여 heal + R(혼령 질주) 처치 관여
-    // 재사용 횟수 회복 - 이 뷰어의 학습용 더미는 damageEnemy()에서 2% 바닥에
-    // 멈춰 실제로 hp<=0이 되지는 않으므로, "죽었어야 할 타격"을 이미 판정해둔
-    // 이 지점(처형 판정)을 그대로 재사용해 챔피언 처치 관여로 취급한다.
-    if (result.source && result.source.championId === 'ahri' && typeof result.source._ahriOnChampionTakedown === 'function') {
-      result.source._ahriOnChampionTakedown(target);
-    }
-    // 암흑의 인장(영광) - 챔피언 처치 관여 시 중첩 획득. 위 아리 패시브와
-    // 동일한 이유로 이 처형 판정 지점을 "챔피언 처치"로 재사용한다.
-    if (dmgSource && typeof itemOnChampionTakedown === 'function') itemOnChampionTakedown(dmgSource);
-    // 가렌 W(용기) 패시브 - 처치 시 방어력/마법 저항력 영구 증가(미니언 처치는 killMinion에서).
-    // 학습용 허수아비는 죽지 않고 2% 바닥에 멈추므로, 이미 바닥에 있는 허수아비를
-    // 계속 때리는 것은 새 처치로 치지 않는다(같은 허수아비로 무한 적립 방지).
-    if (!isFlooredTrainingDummy(target) && dmgSource && dmgSource.championId === 'garen' && typeof dmgSource._garenOnTakedown === 'function') dmgSource._garenOnTakedown();
-    // 바루스 패시브(살아있는 복수) - 챔피언 처치 관여(미니언 처치는 killMinion에서).
-    if (!isFlooredTrainingDummy(target) && target.isChampion && dmgSource && dmgSource.championId === 'varus' && typeof dmgSource._varusOnKill === 'function') dmgSource._varusOnKill(target, true);
-  }
-  // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만"
-  // 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 그대로 넘긴다.
+  // 83차: 처치(처형) 판정은 피해를 "실제로 적용한 뒤"에 한다 - 예전엔 적용 전 hp <= 피해로 판정해, 보호막·피해 감소·수호 천사
+  // 때문에 살아남아도 처치 효과(아리 패시브·암흑의 인장·가렌 W·바루스)가 발동했다. 학습용 허수아비는 죽지 않고 2% 바닥에
+  // 멈추므로 "이번 타격으로 처음 바닥에 닿은 경우"를 처치로 친다(바닥에서 계속 때려도 새 처치가 아니다).
+  const hpBefore = target.hp, wasFloored = isFlooredTrainingDummy(target);
+  // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만" 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 넘긴다.
   if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isCritical: !!result.isCritical });
   else damageEnemy(target, finalDmg, result);
+  const lethal = hpBefore > 0 && (target.hp <= 0 || (target.isTrainingDummy && !wasFloored && isFlooredTrainingDummy(target) && finalDmg >= hpBefore));
+  if (lethal) {
+    markExecute(target, finalDmg);
+    // 아리 패시브(정기 흡수) 챔피언 처치 관여 회복 + R 재사용 횟수 회복.
+    if (result.source && result.source.championId === 'ahri' && typeof result.source._ahriOnChampionTakedown === 'function') result.source._ahriOnChampionTakedown(target);
+    // 암흑의 인장(영광) - 챔피언 처치 관여 시 중첩.
+    if (dmgSource && typeof itemOnChampionTakedown === 'function') itemOnChampionTakedown(dmgSource);
+    // 가렌 W(용기) 패시브 - 처치 시 방어력/마법 저항력 영구 증가(미니언 처치는 killMinion에서).
+    if (dmgSource && dmgSource.championId === 'garen' && typeof dmgSource._garenOnTakedown === 'function') dmgSource._garenOnTakedown();
+    // 바루스 패시브(살아있는 복수) - 챔피언 처치 관여(미니언 처치는 killMinion에서).
+    if (target.isChampion && dmgSource && dmgSource.championId === 'varus' && typeof dmgSource._varusOnKill === 'function') dmgSource._varusOnKill(target, true);
+  }
   return finalDmg;
 }
 // 처형 판정 시 콘솔 로그 + 화면 시각 효과(네임플레이트 붉은 섬광). 새
@@ -2249,7 +2245,7 @@ function applyStatus(target, effect) {
     return null;
   }
   // 구조물(포탑·억제기·넥서스)은 군중 제어에 걸리지 않는다(원작) - 광역 CC가 포탑을 기절시키거나 둔화시키던 문제 방지.
-  if (target && target.isStructure && CC_TYPES.has(effect.type) && effect.type !== 'ARMOR_SHRED' && effect.type !== 'MR_SHRED') return null;
+  if (target && target.isStructure && CC_TYPES.has(effect.type) && effect.type !== 'ARMOR_SHRED' && effect.type !== 'MR_SHRED' && effect.type !== 'ARMOR_SHRED_FLAT') return null;
   const now = performance.now();
   // 마스터 이 R(최후의 전사): 지속 중 둔화 면역(원작). 시전 시 기존 둔화는 _masteryiCastR이 제거한다.
   if (effect.type === 'SLOW' && target && target.championId === 'masteryi' && target._masteryi && (target._masteryi.rActiveUntil || 0) > now) {
@@ -2270,17 +2266,22 @@ function applyStatus(target, effect) {
   // PC 위키(Tenacity): 에어본·수면·근시·경직(정지)·제압을 뺀 모든 군중 제어 지속시간을 줄인다 - 둔화 포함.
   // 예전엔 둔화가 빠져 있었다.
   if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR', 'SLOW', 'TAUNT'].includes(effect.type)) {
-    effDuration = effDuration * (1 - tenacity);
+    // 83차: PC 위키(Tenacity) - 강인함으로 0.3초 미만까지 줄지는 않는다(원래 0.3초보다 짧으면 그대로).
+    effDuration = Math.max(Math.min(effDuration, 0.3), effDuration * (1 - tenacity));
   }
-  if (target && target.itemSlowResistPercent > 0 && effect.type === 'SLOW') {
-    effValue = effValue * (1 - target.itemSlowResistPercent);
+  // 둔화 저항: 아이템·룬 출처끼리 곱연산(83차, 예전엔 아이템 합만).
+  const slowResist = target ? 1 - (1 - Math.max(0, Math.min(1, target.itemSlowResistPercent || 0))) * (1 - Math.max(0, Math.min(1, target.runeSlowResist || 0))) : 0;
+  if (slowResist > 0 && effect.type === 'SLOW') {
+    effValue = effValue * (1 - slowResist);
   }
   const rec = { ...effect, duration: effDuration, value: effValue, expiresAt: now + Math.max(0, effDuration) * 1000, _tickAccum: 0 };
   if (effect.type === 'KNOCKUP') {
     // 27차: 이미 떠 있는 대상을 다시 띄우면(야스오 Q3 → R 등) 처음 바닥 높이를 유지한다. 예전엔 지금(공중) 높이를
     // 바닥으로 기억해서, 공중 상태가 끝나도 그 높이에 계속 떠 있었다.
     const base = target._yasuoAirborne ? target._yasuoAirborne.baseY : (target.mesh?.position?.y ?? 0);
-    target._yasuoAirborne = { baseY: base, elapsed: 0, duration: Math.max(0.05, effect.duration), height: effect.airborneHeight ?? 1.6 };
+    // 83차: 남은 공중 시간이 새 에어본보다 길면 그대로 둔다(짧은 에어본이 겹치면 상태는 남았는데 일찍 착지하던 문제).
+    const prev = target._yasuoAirborne, prevLeft = prev ? Math.max(0, prev.duration - prev.elapsed) : 0;
+    if (!(prev && prevLeft >= effect.duration)) target._yasuoAirborne = { baseY: base, elapsed: 0, duration: Math.max(0.05, effect.duration), height: effect.airborneHeight ?? 1.6 };
   }
   const idx = target.statusEffects.findIndex((e) => e.id === effect.id);
   // 버그 수정: 같은 지속 피해(DOT)를 다시 걸면 틱 진행도(_tickAccum)가 0으로 초기화돼, 다시
@@ -2365,6 +2366,14 @@ function getArmorShredPercent(target) {
   v = 1 - keep;
   return v;
 }
+// 83차: 고정 방어력 감소(ARMOR_SHRED_FLAT) - 원작 저항 계산의 첫 단계. 서로 다른 출처끼리 더해지고 방어력을 음수로도 만든다.
+function getArmorShredFlat(target) {
+  if (!target || !target.statusEffects) return 0;
+  const now = performance.now();
+  let v = 0;
+  for (const e of target.statusEffects) if (e.type === 'ARMOR_SHRED_FLAT' && e.expiresAt > now) v += e.value;
+  return v;
+}
 // ARMOR_SHRED(getArmorShredPercent)와 달리 이건 퍼센트가 아니라 고정
 // 마법저항력 감소량이다(악의 "증오안개" - 마법 저항력 10 감소, 퍼센트
 // 아님) - 이름에 Percent를 쓰지 않아 호출부에서 헷갈리지 않게 한다.
@@ -2441,7 +2450,7 @@ function getFlatMoveSpeedBuff(target) {
   if (!target || !target.statusEffects) return 0;
   const now = performance.now();
   let v = 0;
-  for (const e of target.statusEffects) if (e.type === 'MS_BUFF_FLAT' && e.expiresAt > now) v = Math.max(v, e.value);
+  for (const e of target.statusEffects) if (e.type === 'MS_BUFF_FLAT' && e.expiresAt > now) v += e.value; // 83차: 고정 이동 속도 증가는 서로 더해진다(원작)
   return v;
 }
 // 바루스 E(화살비) - "고통스러운 상처"(자가 회복/재생 약화). 범용 상태이상
@@ -2516,13 +2525,14 @@ function recomputeShield(u) {
 }
 // 보호막 추가. id가 같으면 기존 것을 교체(같은 스킬 재시전은 중첩하지 않음). durationSec이 null이면 무기한.
 // decay: 지속시간(감소 시작 지연 뒤 남은 시간)에 걸쳐 0까지 선형 감소.
-function addShield(u, id, amount, durationSec, { decay = false, decayDelaySec = 0, replace = true } = {}) {
+// 83차: onlyType('MAGICAL'/'PHYSICAL') - 그 피해 종류만 막는 보호막(멜모셔스의 아귀 생명선 = 마법 피해 전용).
+function addShield(u, id, amount, durationSec, { decay = false, decayDelaySec = 0, replace = true, onlyType = null } = {}) {
   const list = _shieldHost(u); if (!list || !(amount > 0)) return 0;
   const now = performance.now();
   if (replace && id != null) for (let i = list.length - 1; i >= 0; i--) if (list[i].id === id) list.splice(i, 1);
   const expiresAt = durationSec == null ? Infinity : now + durationSec * 1000;
   const decaySpan = durationSec == null ? 0 : Math.max(0, durationSec - decayDelaySec);
-  list.push({ id, amount, initial: amount, expiresAt, decayStartAt: now + decayDelaySec * 1000, decayPerSec: decay && decaySpan > 0 ? amount / decaySpan : 0 });
+  list.push({ id, amount, initial: amount, expiresAt, decayStartAt: now + decayDelaySec * 1000, decayPerSec: decay && decaySpan > 0 ? amount / decaySpan : 0, onlyType });
   recomputeShield(u);
   return amount;
 }
@@ -2558,11 +2568,13 @@ function tickShields(u, dt) {
   if (changed) recomputeShield(u);
 }
 // 피해 흡수: 먼저 만료되는 보호막부터 깎고 남은 피해를 돌려준다.
-function absorbShieldDamage(u, dmg) {
+// 83차: 피해 종류 전용 보호막(onlyType)은 그 종류의 피해만 막고, 같은 종류면 일반 보호막보다 먼저 깎인다.
+function absorbShieldDamage(u, dmg, damageType = null) {
   const list = _shieldHost(u); if (!list || !list.length || !(dmg > 0)) return dmg;
   let remaining = dmg;
   list.sort((a, b) => a.expiresAt - b.expiresAt);
-  for (const e of list) {
+  const order = list.filter((e) => e.onlyType && e.onlyType === damageType).concat(list.filter((e) => !e.onlyType));
+  for (const e of order) {
     if (remaining <= 0) break;
     const take = Math.min(e.amount, remaining);
     e.amount -= take; remaining -= take;
@@ -2745,11 +2757,30 @@ function isSilenced(target) { return hasStatus(target, 'SILENCE'); }
 // 이동 제한은 isRooted()로 따로 확인한다(moveTo 등).
 function isStunned(target) {
   // 공포(FEAR, 벡스 패시브)도 매혹처럼 행동을 막고 강제로 이동시킨다(시전자에게서 멀어짐).
-  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM') || hasStatus(target, 'FEAR') || hasStatus(target, 'TAUNT');
+  // 83차: 도발(TAUNT)은 여기서 뺐다 - 원작에서 도발된 유닛은 시전자를 "기본 공격"한다(스킬·아이템·자유 이동만 막힘).
+  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM') || hasStatus(target, 'FEAR');
 }
 function isRooted(target) { return hasStatus(target, 'ROOT'); }
-// CC(기절/속박류)로 이동/행동이 실제로 막히는지 - 사용처: moveTo/castAbility/_tryEngageTarget
-function isCrowdControlled(target) { return isStunned(target); }
+function isTaunted(target) { return hasStatus(target, 'TAUNT'); }
+// 도발한 시전자(살아 있으면). 도발된 유닛의 공격 대상은 이것으로 고정된다.
+function getTauntSource(target) {
+  if (!target || !target.statusEffects) return null;
+  const now = performance.now();
+  for (const e of target.statusEffects) if (e.type === 'TAUNT' && e.expiresAt > now && e.source && e.source.hp > 0) return e.source;
+  return null;
+}
+// CC(기절/속박류)로 이동/행동이 실제로 막히는지 - 사용처: moveTo/castAbility/_tryEngageTarget. 도발도 자유 행동은 막는다.
+function isCrowdControlled(target) { return isStunned(target) || isTaunted(target); }
+// 83차: 유닛의 현재 이동 속도(world/초) - 둔화·이속 증가·소프트 캡 반영. 강제 이동(매혹·공포)과 미니언 이동이 쓴다.
+// 예전엔 미니언이 고정 속도로만 걸어 둔화가 전혀 먹지 않았고, 매혹·공포는 전역 MOVE_SPEED로 걸었다.
+function getUnitMoveSpeedWorld(u) {
+  if (!u) return 0;
+  if (u.stats && typeof getFinalMoveSpeed === 'function' && u.stats.baseMoveSpeed != null) return getFinalMoveSpeed(u.stats);
+  const baseLol = u.moveSpeedLol || (u.moveSpeedWorld ? worldDistanceToLol(u.moveSpeedWorld) : 345);
+  const buff = typeof getMoveSpeedBuffPercent === 'function' ? getMoveSpeedBuffPercent(u) : 0;
+  const slow = typeof getSlowPercent === 'function' ? getSlowPercent(u) : 0;
+  return lolRangeToWorld(applyMoveSpeedSoftCap(baseLol * (1 + buff) * (1 - Math.min(1, slow))));
+}
 // 매 프레임 상태이상을 갱신(DOT 틱 적용 + 만료 제거)
 function tickStatusEffects(target, dt) {
   if (!target || !target.statusEffects || !target.statusEffects.length) return;
@@ -2784,7 +2815,12 @@ function tickStatusEffects(target, dt) {
     if ((e.type === 'CHARM' || e.type === 'FEAR' || e.type === 'TAUNT') && e.expiresAt > now && e.source && (e.source.hp <= 0 || e.source.isDead)) e.expiresAt = now;
   }
   for (const e of target.statusEffects) {
-    // 38차: 도발(TAUNT - 람머스 E)도 같은 이동 - 원작은 "시전자를 공격"이지만 이 연습장의 적은 평타를 하지 않아 시전자에게 다가가는 것으로 표현(감속 없음).
+    // 83차: 도발은 여기서 걷기만 하지 않는다 - 미니언·허수아비는 시전자를 공격 대상으로 고정하고 평소처럼 다가가 평타한다(사거리 밖이면 다가감).
+    if (e.type === 'TAUNT' && e.expiresAt > now && e.source && target.mesh?.position) {
+      const sp = getWorldPosition(e.source), tp0 = target.mesh.position;
+      const reach = (target.attackRange || 0) + getCollisionRadius(e.source);
+      if (sp && (target.isMinion || getHorizontalDistance(sp, tp0) <= reach)) continue; // 미니언은 자기 이동·공격 루프가 처리, 사거리 안이면 멈춰서 공격
+    }
     if ((e.type !== 'CHARM' && e.type !== 'TAUNT') || e.expiresAt <= now || !e.source || !target.mesh?.position) continue;
     const srcPos = getWorldPosition(e.source);
     if (!srcPos) continue;
@@ -2793,7 +2829,8 @@ function tickStatusEffects(target, dt) {
     const stopDistance = (getCollisionRadius(target) + getCollisionRadius(e.source)) * 0.8;
     if (dist > stopDistance) {
       // PC 위키: 매혹된 대상은 이동 속도가 줄어든 채 시전자 쪽으로 걷는다(아리 E: 65% 둔화 → 0.35배).
-      const walkSpeed = MOVE_SPEED * (1 - (e.type === 'TAUNT' ? 0 : (e.charmSlow ?? 0.65)));
+      // 83차: 대상 자신의 현재 이동 속도(둔화 포함)에 매혹 감속을 곱한다(예전엔 전역 MOVE_SPEED 고정).
+      const walkSpeed = getUnitMoveSpeedWorld(target) * (1 - (e.type === 'TAUNT' ? 0 : (e.charmSlow ?? 0.65)));
       toSrc.multiplyScalar(1 / dist);
       target.mesh.position.addScaledVector(toSrc, Math.min(dist - stopDistance, walkSpeed * dt));
       if (typeof constrainUnitPosition === 'function') constrainUnitPosition(target, target.mesh.position); // 지형·죽음의 세계 경계 통과 불가
@@ -2808,7 +2845,7 @@ function tickStatusEffects(target, dt) {
     const dist = away.length();
     if (dist < 1e-6) away.set(0, 0, 1); else away.multiplyScalar(1 / dist);
     const slow = typeof e.fearSlowAt === 'function' ? e.fearSlowAt(dist) : 0.6;
-    target.mesh.position.addScaledVector(away, MOVE_SPEED * Math.max(0, 1 - slow) * dt);
+    target.mesh.position.addScaledVector(away, getUnitMoveSpeedWorld(target) * Math.max(0, 1 - slow) * dt); // 83차: 자기 이동 속도 기준
     if (typeof constrainUnitPosition === 'function') constrainUnitPosition(target, target.mesh.position);
   }
   if (target._yasuoAirborne && target.mesh?.position) {
@@ -2826,6 +2863,15 @@ function tickStatusEffects(target, dt) {
     const arc = a.hold ? 1 : 4 * t * (1 - t);
     target.mesh.position.y = a.baseY + a.height * arc;
     if (t >= 1) { target.mesh.position.y = a.baseY; target._yasuoAirborne = null; }
+  }
+  // 83차: 만료되는 지속 피해(DOT)는 아직 안 들어간 틱을 먼저 마저 넣는다(프레임 오차로 마지막 틱이 빠지던 문제).
+  for (const e of target.statusEffects) {
+    if (e.type !== 'DOT' || e.expiresAt > now) continue;
+    const tickInterval = e.tickInterval || 1.0, totalTicks = Math.max(1, Math.round(e.duration / tickInterval));
+    while ((e._ticksFired || 0) < totalTicks && target.hp > 0) {
+      e._ticksFired = (e._ticksFired || 0) + 1;
+      applyDamage(target, { rawDamage: e.totalDamage / totalTicks, damageType: e.damageType || DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isStatusTick: true, source: e.source || undefined });
+    }
   }
   const before = target.statusEffects;
   target.statusEffects = before.filter((e) => e.expiresAt > now);
@@ -2938,7 +2984,11 @@ function allyAbsorbIncoming(a, dmg, result) {
     remaining = Math.max(0, remaining - a._dreamBlue.amount);
     a._dreamBlue = null;
   }
-  for (const e of (a.shieldEntries || [])) {
+  // 83차: 먼저 만료되는 보호막부터(원작). 피해 종류 전용 보호막은 그 종류만, 같은 종류면 먼저 깎인다.
+  const dType = (result && result.damageType) || null;
+  const sorted = (a.shieldEntries || []).slice().sort((x, y) => (x.expiresAt || Infinity) - (y.expiresAt || Infinity));
+  const order = sorted.filter((e) => e.onlyType && e.onlyType === dType).concat(sorted.filter((e) => !e.onlyType));
+  for (const e of order) {
     if (remaining <= 0) break;
     const take = Math.min(e.amount, remaining);
     e.amount -= take; remaining -= take;
@@ -12454,7 +12504,7 @@ class CharacterController {
     // (getFinalMoveSpeed 등)을 통해서만 이뤄진다.
     this.stats = {
       baseMoveSpeed: MOVE_SPEED, flatMoveSpeedBonus: 0, percentMoveSpeedBonus: 0,
-      slowPercent: 0, moveSpeedMultiplier: 1, minMoveSpeed: MOVE_SPEED * 0.2, maxMoveSpeed: MOVE_SPEED * 3.0,
+      slowPercent: 0, moveSpeedMultiplier: 1, minMoveSpeed: MOVE_SPEED * 0.2, maxMoveSpeed: Infinity, /* 83차: 원작은 이동 속도 상한 없음(소프트 캡만) */
 
       attackDamage: 10, attackRange: ATTACK_RANGE,
       baseAttackSpeed: 1.0, bonusAttackSpeedPercent: 0, attackSpeedMultiplier: 1,
@@ -12876,7 +12926,10 @@ class CharacterController {
     // 야스오와 달리 이동 누적형 Flow 보호막이 없으므로 그 부분만 제외하고
     // 크리티컬 관련 스탯만 매 tick(_yoneTick)에서 계속 갱신한다. 여기서는
     // 챔피언 교체 시 상태 초기화만 담당.
-    if (this.championId === 'yone') { this.stats.critMultiplier = this._champData().passive.critDamage; this.mp = 0; }
+    // 83차: 요네 치명타 피해 감소(×0.9)는 "총 치명타 피해"에 곱한다 - 무한의 대검 +30%가 먼저 더해진 뒤 ×0.9((1.75+0.3)×0.9).
+    // 예전엔 1.575에 대검 +0.3을 더해 1.875가 됐다(실제 1.845).
+    this.stats.critDamageModifier = 1;
+    if (this.championId === 'yone') { this.stats.critMultiplier = this._champData().passive.critDamage; this.stats.critDamageModifier = this._champData().passive.critDamageModifier || 1; this.mp = 0; }
     if (this.championId === 'nilah') {
       this.armorPenPercent = 0;
       // 닐라 지형 충돌 반경 32·선택 반경 120(실제 bin 확인)은 25차부터 CHAMPION_UNIT_SIZE_LOL 표에서 위 공통 코드가 넣는다.
@@ -14092,6 +14145,8 @@ CharacterController.prototype.updateMovement = function(dt) {
     if (typeof resolvePlayerMinionCollisions === 'function') resolvePlayerMinionCollisions(this); // 61차: 미니언과 몸 충돌
     if (typeof resolvePlayerStructureCollisions === 'function') resolvePlayerStructureCollisions(this); // 미니언에 밀려 구조물 안으로 들어가지 않게 한 번 더
     if (this.state !== STATE.MOVE || !this.targetPos) return;
+    // 83차: 이동 중에 기절·속박 등이 걸리면 그 자리에서 멈춘다(예전엔 moveTo에서만 막아 걷던 걸음은 계속됐다).
+    if ((typeof isCrowdControlled === 'function' && isCrowdControlled(this)) || (typeof isRooted === 'function' && isRooted(this))) return;
     const pos = this.root.position;
     const toTarget = new THREE.Vector3().subVectors(this.targetPos, pos);
     toTarget.y = 0;
@@ -14452,7 +14507,7 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
     // 아이템 패시브 "수확"(수확의 낫) - 기본 공격 적중 시 고정 체력 회복.
     // 대상 종류(챔피언/더미/미니언/포탑)를 가리지 않는 실제 아이템 설명과
     // 동일하게 범용으로 적용한다.
-    if (this.itemOnHitHeal > 0) this.hp = Math.min(this.maxHp, this.hp + this.itemOnHitHeal);
+    if (this.itemOnHitHeal > 0) this.hp = Math.min(this.maxHp, this.hp + this.itemOnHitHeal * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(this) : 1)); // 83차: 치유 감소·증폭 적용
     // 아이템 패시브(광휘의 검/티아맷) - 평타 적중 공용 훅. 둘 다
     // item_system.js의 전용 함수가 "보유 여부"부터 직접 확인하므로 여기선
     // 무조건 호출만 한다(들고 있지 않으면 즉시 return).
@@ -17449,7 +17504,7 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     // 끝내고, 실제로 HP를 깎은 양(actualHpLoss)만 넘긴다. 모데카이저 W의
     // "받은 피해 축적"도 동일한 성격의 값이라 같이 바로잡는다.
     // 보호막 인스턴스 모델: 먼저 만료되는 보호막부터 흡수(01_status_effect_system.js absorbShieldDamage).
-    remaining = absorbShieldDamage(this, remaining);
+    remaining = absorbShieldDamage(this, remaining, damageType); // 83차: 피해 종류 전용 보호막 반영
     const actualHpLoss = Math.min(remaining, this.hp);
     // 가렌 인내심(PC 위키): 챔피언·포탑·에픽 몬스터에게 "실제로" 피해를 입었을 때만 8초 멈춘다.
     // 보호막에 전부 막혔거나 0으로 줄어든 피해, 미니언·우물(지속 피해) 피해는 멈추지 않는다.
@@ -29918,7 +29973,7 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
     isMinion: true, isChampion: false, isMonster: true, isTrainingDummy: false, isTurret: false,
     hp: stats.hp, maxHp: stats.maxHp, armor: stats.armor, magicResist: stats.magicResist,
     attackDamage: stats.ad, attackSpeed: stats.attackSpeed, attackRange: stats.range,
-    moveSpeedWorld: lolRangeToWorld(stats.moveSpeedLol),
+    moveSpeedWorld: lolRangeToWorld(stats.moveSpeedLol), moveSpeedLol: stats.moveSpeedLol, // 83차: 둔화 계산용 기본 이동 속도(LoL)
     radius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48), collisionRadius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48), selectionRadius: lolRangeToWorld(MINION_SELECTION_RADIUS_LOL[type] || 115), healthBar, // 64차: 원작 선택 반경(클릭 판정)
     waypointIndex: 0, attackCooldown: 0, attackTarget: null, pendingHitTimer: null,
     hasAttackedStructure: false, // 요청 14/36: 한번 true가 되면 그 미니언 생존 동안 절대 false로 되돌리지 않는다(포탑/억제기/넥서스 전부 포함)
@@ -30086,6 +30141,9 @@ function minionTargetRank(minion, u, now) {
 }
 function getMinionAttackTarget(minion) {
   if (minion.isDead) return null;
+  // 83차: 도발되면 시전자만 공격한다(원작).
+  const taunter = typeof getTauntSource === 'function' ? getTauntSource(minion) : null;
+  if (taunter) return taunter;
   const now = performance.now();
   const pos = minion.mesh.position;
   // 추격 제한: 챔피언을 쫓다 너무 멀리 끌려가면 포기
@@ -30336,8 +30394,10 @@ function updateMinionMovement(minion, dt) {
     const len = Math.hypot(mx, mz);
     if (len > 0.0001) { mx /= len; mz /= len; }
   }
-  minion.mesh.position.x += mx * minion.moveSpeedWorld * dt;
-  minion.mesh.position.z += mz * minion.moveSpeedWorld * dt;
+  // 83차: 둔화·이속 증가가 실제로 적용된다(예전엔 고정 속도라 미니언 둔화가 표시만 됐다).
+  const mSpeed = typeof getUnitMoveSpeedWorld === 'function' ? getUnitMoveSpeedWorld(minion) : minion.moveSpeedWorld;
+  minion.mesh.position.x += mx * mSpeed * dt;
+  minion.mesh.position.z += mz * mSpeed * dt;
   faceMinionToward(minion, mx, mz); // 요청 20: 이동 벡터를 모델 회전에 그대로 연결
   // 버그 수정(사용자 지적 "붉은 진영 미니언이 바라보는 방향이 이상해") -
   // 포탑/넥서스/억제기와 똑같은 원인이다: RED는 별도의 GLB 에셋 파일
@@ -30571,7 +30631,7 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
       // 아이템 패시브 "모든 피해 흡혈"(도란의 검/활)/"생명력 흡수"(흡혈의
       // 낫, 물리 피해 전용) - 미니언 피해도 실제 LoL처럼 흡혈 대상에
       // 포함된다(구조물 피해만 제외).
-      if (typeof applyItemVamp === 'function') applyItemVamp(controller, finalDmg);
+      if (typeof applyItemVamp === 'function') applyItemVamp(controller, finalDmg, { target: minion, isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isAoE: !!result.isAoE, isPet: !!result.isPet }); // 83차: 광역·도트 33%
       if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(controller, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, !!result.isBasicAttack);
       // 운명의 재(발화)/여신의 눈물(마나순환) - 챔피언 전용 효과(그리버스/
       // 카탈리스트 마나 회복)는 itemOnDamageDealt() 내부에서 target.isChampion
@@ -30890,8 +30950,9 @@ function recomputeItemStats(ctrl) {
     // 신속의 장화(둔화 저항)/헤르메스의 발걸음(강인함) - 둘 다 "더 센 쪽
     // 하나만 적용"이 아니라 실제 LoL처럼 단순 합산(이 데모엔 둘 다 가질
     // 방법이 마땅치 않아 사실상 하나만 적용되지만, 합산해도 안전하다).
-    ctrl.itemSlowResistPercent += item.slowResistPercent || 0;
-    ctrl.itemTenacityPercent += item.tenacityPercent || 0;
+    // 83차: 원작처럼 출처끼리 곱연산(1-(1-a)(1-b)) - 예전엔 더했다(헤르메스 30% + 20% = 50% → 실제 44%).
+    ctrl.itemSlowResistPercent = 1 - (1 - ctrl.itemSlowResistPercent) * (1 - (item.slowResistPercent || 0));
+    ctrl.itemTenacityPercent = 1 - (1 - ctrl.itemTenacityPercent) * (1 - (item.tenacityPercent || 0));
     if (item.grievousOnHitPassive) {
       ctrl.itemGrievousOnHitPercent = Math.max(ctrl.itemGrievousOnHitPercent, item.grievousOnHitPassive.percent);
       ctrl.itemGrievousOnHitDurationSec = Math.max(ctrl.itemGrievousOnHitDurationSec, item.grievousOnHitPassive.durationSec);
@@ -30971,7 +31032,7 @@ function recomputeItemStats(ctrl) {
     if (eff.attackDamage) ctrl.itemBonusAD += eff.attackDamage;
     if (eff.abilityPower) ctrl.itemBonusAP += eff.abilityPower;
     if (eff.mpRegenPercent) ctrl.itemBonusMpRegenPercent += eff.mpRegenPercent;
-    if (eff.tenacityPercent) ctrl.itemTenacityPercent += eff.tenacityPercent;
+    if (eff.tenacityPercent) ctrl.itemTenacityPercent = 1 - (1 - ctrl.itemTenacityPercent) * (1 - eff.tenacityPercent); // 83차: 곱연산
   }
   // 경탄(마나무네/무라마나) - "마나의 2%만큼 추가 공격력". 최대 마나 자체가
   // 이 함수가 끝난 뒤 recomputeStats()에서야 계산되므로(순환 의존), 챔피언
@@ -31568,7 +31629,7 @@ function _itemTickManaRegen(ctrl, item, dt, now) {
     if ((ctrl.maxMp || 0) > 0 && ctrl.mp < ctrl.maxMp) {
       ctrl.mp = Math.min(ctrl.maxMp, ctrl.mp + manaPerSec);
     } else {
-      ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + manaPerSec * p.noManaHpRegenPercent);
+      ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + manaPerSec * p.noManaHpRegenPercent * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(ctrl) : 1)); // 83차: 치유 감소 적용
     }
   }
 }
@@ -32094,8 +32155,32 @@ function itemSystemTick(ctrl, dt) {
 
 // 모든 피해 흡혈(도란의 검/활) - applyDamage()/applyDamageToMinion() 양쪽에서
 // 공용으로 호출한다(구조물 피해는 실제 LoL처럼 흡혈이 붙지 않으므로 호출하지 않음).
-function applyItemVamp(source, finalDmg) {
+// 83차: PC 위키(Vamp, V14.1~) - 모든 피해 흡혈은 미니언·몬스터에게 준 "광역·소환물·지속 피해"에는 33%만 적용된다.
+// 광역 여부: 호출부가 isAoE를 주거나, 같은 시전자의 스킬이 같은 순간(동기 실행 한 번)에 2명 이상을 맞히면 광역으로 본다.
+const _vampAoeBatch = new Map(); // source -> { targets:Set, pending:[{amount, healTarget}] }
+function _vampEffFor(opts) {
+  const t = opts && opts.target;
+  const nonChamp = t && (t.isMinion || t.isMonster);
+  return nonChamp && (opts.isStatusTick || opts.isAoE || opts.isPet) ? 0.33 : 1;
+}
+function applyItemVamp(source, finalDmg, opts = null) {
   if (!source || !(finalDmg > 0)) return;
+  const t = opts && opts.target;
+  // 미니언·몬스터에 대한 스킬 피해(평타·도트 제외)는 같은 순간에 몇 명을 맞혔는지 모은 뒤 정산한다.
+  if (t && (t.isMinion || t.isMonster) && opts && !opts.isBasicAttack && !opts.isStatusTick && !opts.isAoE && !opts._batched && typeof queueMicrotask === 'function') {
+    let b = _vampAoeBatch.get(source);
+    if (!b) {
+      b = { targets: new Set(), pending: [] }; _vampAoeBatch.set(source, b);
+      queueMicrotask(() => {
+        _vampAoeBatch.delete(source);
+        const aoe = b.targets.size > 1;
+        for (const p of b.pending) applyItemVamp(source, p.amount, { ...p.opts, isAoE: aoe, _batched: true });
+      });
+    }
+    b.targets.add(t); b.pending.push({ amount: finalDmg, opts });
+    return;
+  }
+  const eff = _vampEffFor(opts);
   // 멜모셔스의 아귀(생명선) - 발동 후 일정 시간 모든 피해 흡혈 10% 추가.
   // 인벤토리 기반 영구 스탯(itemAllDamageVampPercent, recomputeItemStats()가
   // 채움)과 달리 시간 제한 임시 보너스라 itemSystemTick()이 매 프레임
@@ -32108,7 +32193,7 @@ function applyItemVamp(source, finalDmg) {
   // 그리버스 치유 감소 - 실제 LoL에서도 흡혈/스펠뱀프는 그리버스의 직접
   // 적용 대상이다(위 _itemTickActiveHeals 주석 참고).
   const healMult = getHealReceivedMultiplier(source);
-  source.hp = Math.min(source.maxHp, source.hp + finalDmg * vampPercent * healMult);
+  source.hp = Math.min(source.maxHp, source.hp + finalDmg * vampPercent * eff * healMult);
 }
 
 // 생명력 흡수(흡혈의 낫 등) - "모든 피해 흡혈"(위 applyItemVamp)과 달리 "기본 공격"
@@ -32258,7 +32343,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
       // 정령의형상(무한한 활력)/월석재생기(별빛 은총) - 생명선 보호막도
       // "받는 보호막"에 해당한다(보호막 전용 증폭률 사용).
       const shieldAmt = (shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent) * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
-      addShield(ctrl, 'itemMaw', shieldAmt, p.shieldDurationSec); // 보호막 인스턴스(다른 보호막과 합산)
+      addShield(ctrl, 'itemMaw', shieldAmt, p.shieldDurationSec, { onlyType: DAMAGE_TYPE.MAGICAL }); // 83차: 마법 피해만 막는 보호막(원작)
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       ctrl._itemMawOmnivampUntil = now + p.omnivampDurationSec * 1000;
       console.log('[ITEM] 멜모셔스의 아귀 - 생명선 발동');
@@ -32449,7 +32534,7 @@ function itemOnDamageDealt(ctrl, target, finalDmg, damageType, meta = null) {
   if (ctrl._itemActiveElixir && ctrl._itemActiveElixir.id === 'elixirOfWrath' && target.isChampion && damageType === DAMAGE_TYPE.PHYSICAL) {
     const eff = ITEM_DATA.elixirOfWrath.elixirEffect;
     if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') {
-      ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + finalDmg * eff.championPhysicalVampPercent);
+      ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + finalDmg * eff.championPhysicalVampPercent * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(ctrl) : 1)); // 83차
     }
   }
   // 전설급 2차분 - "스킬로 피해를 입히면" 계열(월식/무라마나 충격/쇼진의창).
@@ -32894,7 +32979,7 @@ function itemOnSlowOrImmobilize(ctrl, target, effectType) {
     if ((ctrl._itemSleighIcdUntil || 0) <= now) {
       ctrl._itemSleighIcdUntil = now + p.icdSec * 1000;
       const heal = _itemScaleByLevel(ctrl, p.minHeal, p.maxHeal, p.levelMin, p.levelMax);
-      if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal);
+      if (typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(ctrl) : 1)); // 83차
       if (typeof applyStatus === 'function') {
         applyStatus(ctrl, { id: 'itemSolsticeSleighMs', type: 'MS_BUFF', duration: p.msDurationSec, value: p.msPercent });
         // "자신과 주변 체력이 가장 낮은 아군" - 체력 비율이 가장 낮은 아군 더미 1명.
@@ -32939,7 +33024,7 @@ function itemOnSlowOrImmobilize(ctrl, target, effectType) {
   // 같은 id의 상태이상을 다시 걸면 자동으로 덮어써서 지속시간이 연장되므로
   // 별도 처리가 필요 없다.
   const mandateSlot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].commandPassive);
-  const IMMOBILIZE_TYPES = ['STUN', 'ROOT', 'SUPPRESSION', 'KNOCKUP', 'CHARM', 'FEAR']; // 둔화(SLOW) 제외
+  const IMMOBILIZE_TYPES = ['STUN', 'ROOT', 'SUPPRESSION', 'KNOCKUP', 'CHARM', 'FEAR', 'TAUNT']; // 둔화(SLOW) 제외. 83차: 도발도 이동 불가
   if (mandateSlot && target && target.isChampion && IMMOBILIZE_TYPES.includes(effectType) && typeof applyStatus === 'function') {
     const p = ITEM_DATA[mandateSlot.id].commandPassive;
     applyStatus(target, { id: 'itemImperialMandateVulnerable', type: 'VULNERABLE', duration: p.durationSec, value: p.vulnerablePercent, source: ctrl });
@@ -33489,7 +33574,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
       if (p.healApPercent || p.healBonusHpPercent) {
         const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
         const heal = (p.healApPercent || 0) * ap + (p.healBonusHpPercent || 0) * bonusHp;
-        if (heal > 0 && typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal);
+        if (heal > 0 && typeof ctrl.hp === 'number' && typeof ctrl.maxHp === 'number') ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + heal * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(ctrl) : 1)); // 83차
       }
     }
   }
@@ -33685,7 +33770,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
       const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
       const baseAd = (baseStats && typeof baseStats.attackDamage === 'number') ? baseStats.attackDamage : (ctrl.stats.attackDamage || 0);
       const healAmt = healPercent * baseAd + missingHp * p.missingHpHealPercent;
-      ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + healAmt);
+      ctrl.hp = Math.min(ctrl.maxHp, (ctrl.hp || 0) + healAmt * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(ctrl) : 1)); // 83차
     }
   }
 
@@ -34508,6 +34593,8 @@ function castSummonerSpell(ctrl, slot, mousePoint, pointerClient) {
   if (!markRecast && now < s[slot].readyAt) return _summonerFail(`${d.nameKo} - 재사용 대기시간 ${Math.ceil((s[slot].readyAt - now) / 1000)}초`);
   // 기절 등 행동 불가 중에는 정화만 쓸 수 있다. 속박 중에는 점멸·표식 돌진을 못 쓴다(이동 주문).
   if (id !== 'cleanse' && typeof isCrowdControlled === 'function' && isCrowdControlled(ctrl)) return _summonerFail(`${d.nameKo} - 행동 불가 상태`);
+  // 83차: PC 위키 - 정화도 제압 중에는 쓸 수 없다(제압은 정화로 풀리지 않음).
+  if (id === 'cleanse' && typeof hasStatus === 'function' && hasStatus(ctrl, 'SUPPRESSION')) return _summonerFail(`${d.nameKo} - 제압 상태`);
   if ((id === 'flash' || markRecast) && typeof isRooted === 'function' && isRooted(ctrl)) return _summonerFail(`${d.nameKo} - 속박 상태`);
   if ((id === 'flash' || markRecast) && ctrl._dashState) return _summonerFail(`${d.nameKo} - 돌진 중`);
   let ok = false;
@@ -36169,7 +36256,7 @@ const RUNE_SHARD_ROWS = [
   },
   {
    "key": "tenacity",
-   "name": "강인함 및 둔화 저항 +10%"
+   "name": "강인함 및 둔화 저항 +15%"
   },
   {
    "key": "hpScale",
@@ -36198,7 +36285,7 @@ const RUNE_STORAGE_KEY = 'lolsim.runePage.v1';
 const RUNE_ADAPTIVE_AP_CHAMPS = new Set(['ahri', 'lux', 'vex', 'mordekaiser', 'chogath']);
 const RUNE_SHARD_EFFECTS = {
   adaptive: { adaptive: 9 }, as: { asPercent: 0.10 }, ah: { ah: 8 }, ms: { msPercent: 0.02 },
-  hpScale: { hpScale: [10, 180] }, hp: { hp: 65 }, tenacity: { tenacity: 0.10 },
+  hpScale: { hpScale: [10, 180] }, hp: { hp: 65 }, tenacity: { tenacity: 0.15, slowResist: 0.15 }, // 83차: V25.22부터 강인함·둔화 저항 각 15%
 };
 // 효과를 구현한 룬(키). 나머지는 고를 수는 있어도 효과 없음(툴팁에 표시).
 const RUNE_IMPLEMENTED = new Set([
@@ -36296,11 +36383,11 @@ function runeComputeStatic(ctrl) {
   if (!ctrl) return;
   if (!ctrl._rune) runeResetState(ctrl);
   const p = ctrl.runePage;
-  let adaptive = 0, asPct = 0, ah = 0, msPct = 0, hp = 0, ten = 0, armor = 0, mr = 0, vamp = 0, mana = 0, ultAh = 0;
+  let adaptive = 0, asPct = 0, ah = 0, msPct = 0, hp = 0, ten = 0, slowRes = 0, armor = 0, mr = 0, vamp = 0, mana = 0, ultAh = 0;
   if (p) {
     for (const key of p.shards || []) {
       const e = RUNE_SHARD_EFFECTS[key] || {};
-      adaptive += e.adaptive || 0; asPct += e.asPercent || 0; ah += e.ah || 0; msPct += e.msPercent || 0; hp += e.hp || 0; ten += e.tenacity || 0;
+      adaptive += e.adaptive || 0; asPct += e.asPercent || 0; ah += e.ah || 0; msPct += e.msPercent || 0; hp += e.hp || 0; ten = 1 - (1 - ten) * (1 - (e.tenacity || 0)); slowRes = 1 - (1 - slowRes) * (1 - (e.slowResist || 0)); /* 83차: 곱연산 */
       if (e.hpScale) hp += runeLevelLerp(ctrl, e.hpScale[0], e.hpScale[1]);
     }
     const r = ctrl._rune, lvl = ctrl.champLevel || 1;
@@ -36311,7 +36398,7 @@ function runeComputeStatic(ctrl) {
     if (runeHas(ctrl, 'UltimateHunter')) ultAh += 6 + 5 * Math.min(5, r.ultHunter || 0);
     if (runeHas(ctrl, 'Transcendence')) ah += (lvl >= 5 ? 5 : 0) + (lvl >= 8 ? 5 : 0);
     if (runeHas(ctrl, 'Celerity')) msPct += 0.01;
-    if (runeHas(ctrl, 'Unflinching')) ten += 0.10;
+    if (runeHas(ctrl, 'Unflinching')) { ten = 1 - (1 - ten) * 0.9; slowRes = 1 - (1 - slowRes) * 0.9; } // 83차: 강인함과 둔화 저항 둘 다
     if (runeHas(ctrl, 'Conditioning') && runeGameMinutes() >= 12) { armor += 8; mr += 8; }
     if (runeHas(ctrl, 'Overgrowth')) hp += 3 * Math.floor((r.minionKills || 0) / 8);
     if (runeHas(ctrl, 'GraspOfTheUndying')) hp += r.graspHp || 0;
@@ -36324,7 +36411,7 @@ function runeComputeStatic(ctrl) {
   ctrl.runeAD = isAP ? 0 : adaptive * 0.6;
   ctrl.runeAP = isAP ? adaptive : 0;
   ctrl.runeAttackSpeedPercent = asPct; ctrl.runeAbilityHaste = ah; ctrl.runeUltimateHaste = ultAh; ctrl.runeMsPercent = msPct;
-  ctrl.runeMaxHp = hp; ctrl.runeTenacity = ten; ctrl.runeArmor = armor; ctrl.runeMr = mr; ctrl.runePhysicalVamp = vamp; ctrl.runeMana = mana;
+  ctrl.runeMaxHp = hp; ctrl.runeTenacity = ten; ctrl.runeSlowResist = slowRes; ctrl.runeArmor = armor; ctrl.runeMr = mr; ctrl.runePhysicalVamp = vamp; ctrl.runeMana = mana;
 }
 function runeGameMinutes() {
   const s = typeof getTurretGameTimeSec === 'function' ? getTurretGameTimeSec() : 0;

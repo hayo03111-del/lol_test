@@ -170,11 +170,30 @@ function isSilenced(target) { return hasStatus(target, 'SILENCE'); }
 // 이동 제한은 isRooted()로 따로 확인한다(moveTo 등).
 function isStunned(target) {
   // 공포(FEAR, 벡스 패시브)도 매혹처럼 행동을 막고 강제로 이동시킨다(시전자에게서 멀어짐).
-  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM') || hasStatus(target, 'FEAR') || hasStatus(target, 'TAUNT');
+  // 83차: 도발(TAUNT)은 여기서 뺐다 - 원작에서 도발된 유닛은 시전자를 "기본 공격"한다(스킬·아이템·자유 이동만 막힘).
+  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM') || hasStatus(target, 'FEAR');
 }
 function isRooted(target) { return hasStatus(target, 'ROOT'); }
-// CC(기절/속박류)로 이동/행동이 실제로 막히는지 - 사용처: moveTo/castAbility/_tryEngageTarget
-function isCrowdControlled(target) { return isStunned(target); }
+function isTaunted(target) { return hasStatus(target, 'TAUNT'); }
+// 도발한 시전자(살아 있으면). 도발된 유닛의 공격 대상은 이것으로 고정된다.
+function getTauntSource(target) {
+  if (!target || !target.statusEffects) return null;
+  const now = performance.now();
+  for (const e of target.statusEffects) if (e.type === 'TAUNT' && e.expiresAt > now && e.source && e.source.hp > 0) return e.source;
+  return null;
+}
+// CC(기절/속박류)로 이동/행동이 실제로 막히는지 - 사용처: moveTo/castAbility/_tryEngageTarget. 도발도 자유 행동은 막는다.
+function isCrowdControlled(target) { return isStunned(target) || isTaunted(target); }
+// 83차: 유닛의 현재 이동 속도(world/초) - 둔화·이속 증가·소프트 캡 반영. 강제 이동(매혹·공포)과 미니언 이동이 쓴다.
+// 예전엔 미니언이 고정 속도로만 걸어 둔화가 전혀 먹지 않았고, 매혹·공포는 전역 MOVE_SPEED로 걸었다.
+function getUnitMoveSpeedWorld(u) {
+  if (!u) return 0;
+  if (u.stats && typeof getFinalMoveSpeed === 'function' && u.stats.baseMoveSpeed != null) return getFinalMoveSpeed(u.stats);
+  const baseLol = u.moveSpeedLol || (u.moveSpeedWorld ? worldDistanceToLol(u.moveSpeedWorld) : 345);
+  const buff = typeof getMoveSpeedBuffPercent === 'function' ? getMoveSpeedBuffPercent(u) : 0;
+  const slow = typeof getSlowPercent === 'function' ? getSlowPercent(u) : 0;
+  return lolRangeToWorld(applyMoveSpeedSoftCap(baseLol * (1 + buff) * (1 - Math.min(1, slow))));
+}
 // 매 프레임 상태이상을 갱신(DOT 틱 적용 + 만료 제거)
 function tickStatusEffects(target, dt) {
   if (!target || !target.statusEffects || !target.statusEffects.length) return;
@@ -209,7 +228,12 @@ function tickStatusEffects(target, dt) {
     if ((e.type === 'CHARM' || e.type === 'FEAR' || e.type === 'TAUNT') && e.expiresAt > now && e.source && (e.source.hp <= 0 || e.source.isDead)) e.expiresAt = now;
   }
   for (const e of target.statusEffects) {
-    // 38차: 도발(TAUNT - 람머스 E)도 같은 이동 - 원작은 "시전자를 공격"이지만 이 연습장의 적은 평타를 하지 않아 시전자에게 다가가는 것으로 표현(감속 없음).
+    // 83차: 도발은 여기서 걷기만 하지 않는다 - 미니언·허수아비는 시전자를 공격 대상으로 고정하고 평소처럼 다가가 평타한다(사거리 밖이면 다가감).
+    if (e.type === 'TAUNT' && e.expiresAt > now && e.source && target.mesh?.position) {
+      const sp = getWorldPosition(e.source), tp0 = target.mesh.position;
+      const reach = (target.attackRange || 0) + getCollisionRadius(e.source);
+      if (sp && (target.isMinion || getHorizontalDistance(sp, tp0) <= reach)) continue; // 미니언은 자기 이동·공격 루프가 처리, 사거리 안이면 멈춰서 공격
+    }
     if ((e.type !== 'CHARM' && e.type !== 'TAUNT') || e.expiresAt <= now || !e.source || !target.mesh?.position) continue;
     const srcPos = getWorldPosition(e.source);
     if (!srcPos) continue;
@@ -218,7 +242,8 @@ function tickStatusEffects(target, dt) {
     const stopDistance = (getCollisionRadius(target) + getCollisionRadius(e.source)) * 0.8;
     if (dist > stopDistance) {
       // PC 위키: 매혹된 대상은 이동 속도가 줄어든 채 시전자 쪽으로 걷는다(아리 E: 65% 둔화 → 0.35배).
-      const walkSpeed = MOVE_SPEED * (1 - (e.type === 'TAUNT' ? 0 : (e.charmSlow ?? 0.65)));
+      // 83차: 대상 자신의 현재 이동 속도(둔화 포함)에 매혹 감속을 곱한다(예전엔 전역 MOVE_SPEED 고정).
+      const walkSpeed = getUnitMoveSpeedWorld(target) * (1 - (e.type === 'TAUNT' ? 0 : (e.charmSlow ?? 0.65)));
       toSrc.multiplyScalar(1 / dist);
       target.mesh.position.addScaledVector(toSrc, Math.min(dist - stopDistance, walkSpeed * dt));
       if (typeof constrainUnitPosition === 'function') constrainUnitPosition(target, target.mesh.position); // 지형·죽음의 세계 경계 통과 불가
@@ -233,7 +258,7 @@ function tickStatusEffects(target, dt) {
     const dist = away.length();
     if (dist < 1e-6) away.set(0, 0, 1); else away.multiplyScalar(1 / dist);
     const slow = typeof e.fearSlowAt === 'function' ? e.fearSlowAt(dist) : 0.6;
-    target.mesh.position.addScaledVector(away, MOVE_SPEED * Math.max(0, 1 - slow) * dt);
+    target.mesh.position.addScaledVector(away, getUnitMoveSpeedWorld(target) * Math.max(0, 1 - slow) * dt); // 83차: 자기 이동 속도 기준
     if (typeof constrainUnitPosition === 'function') constrainUnitPosition(target, target.mesh.position);
   }
   if (target._yasuoAirborne && target.mesh?.position) {
@@ -251,6 +276,15 @@ function tickStatusEffects(target, dt) {
     const arc = a.hold ? 1 : 4 * t * (1 - t);
     target.mesh.position.y = a.baseY + a.height * arc;
     if (t >= 1) { target.mesh.position.y = a.baseY; target._yasuoAirborne = null; }
+  }
+  // 83차: 만료되는 지속 피해(DOT)는 아직 안 들어간 틱을 먼저 마저 넣는다(프레임 오차로 마지막 틱이 빠지던 문제).
+  for (const e of target.statusEffects) {
+    if (e.type !== 'DOT' || e.expiresAt > now) continue;
+    const tickInterval = e.tickInterval || 1.0, totalTicks = Math.max(1, Math.round(e.duration / tickInterval));
+    while ((e._ticksFired || 0) < totalTicks && target.hp > 0) {
+      e._ticksFired = (e._ticksFired || 0) + 1;
+      applyDamage(target, { rawDamage: e.totalDamage / totalTicks, damageType: e.damageType || DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isStatusTick: true, source: e.source || undefined });
+    }
   }
   const before = target.statusEffects;
   target.statusEffects = before.filter((e) => e.expiresAt > now);

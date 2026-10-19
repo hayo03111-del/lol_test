@@ -21,13 +21,14 @@ function recomputeShield(u) {
 }
 // 보호막 추가. id가 같으면 기존 것을 교체(같은 스킬 재시전은 중첩하지 않음). durationSec이 null이면 무기한.
 // decay: 지속시간(감소 시작 지연 뒤 남은 시간)에 걸쳐 0까지 선형 감소.
-function addShield(u, id, amount, durationSec, { decay = false, decayDelaySec = 0, replace = true } = {}) {
+// 83차: onlyType('MAGICAL'/'PHYSICAL') - 그 피해 종류만 막는 보호막(멜모셔스의 아귀 생명선 = 마법 피해 전용).
+function addShield(u, id, amount, durationSec, { decay = false, decayDelaySec = 0, replace = true, onlyType = null } = {}) {
   const list = _shieldHost(u); if (!list || !(amount > 0)) return 0;
   const now = performance.now();
   if (replace && id != null) for (let i = list.length - 1; i >= 0; i--) if (list[i].id === id) list.splice(i, 1);
   const expiresAt = durationSec == null ? Infinity : now + durationSec * 1000;
   const decaySpan = durationSec == null ? 0 : Math.max(0, durationSec - decayDelaySec);
-  list.push({ id, amount, initial: amount, expiresAt, decayStartAt: now + decayDelaySec * 1000, decayPerSec: decay && decaySpan > 0 ? amount / decaySpan : 0 });
+  list.push({ id, amount, initial: amount, expiresAt, decayStartAt: now + decayDelaySec * 1000, decayPerSec: decay && decaySpan > 0 ? amount / decaySpan : 0, onlyType });
   recomputeShield(u);
   return amount;
 }
@@ -63,11 +64,13 @@ function tickShields(u, dt) {
   if (changed) recomputeShield(u);
 }
 // 피해 흡수: 먼저 만료되는 보호막부터 깎고 남은 피해를 돌려준다.
-function absorbShieldDamage(u, dmg) {
+// 83차: 피해 종류 전용 보호막(onlyType)은 그 종류의 피해만 막고, 같은 종류면 일반 보호막보다 먼저 깎인다.
+function absorbShieldDamage(u, dmg, damageType = null) {
   const list = _shieldHost(u); if (!list || !list.length || !(dmg > 0)) return dmg;
   let remaining = dmg;
   list.sort((a, b) => a.expiresAt - b.expiresAt);
-  for (const e of list) {
+  const order = list.filter((e) => e.onlyType && e.onlyType === damageType).concat(list.filter((e) => !e.onlyType));
+  for (const e of order) {
     if (remaining <= 0) break;
     const take = Math.min(e.amount, remaining);
     e.amount -= take; remaining -= take;
