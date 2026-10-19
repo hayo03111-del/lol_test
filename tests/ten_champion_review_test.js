@@ -794,3 +794,18 @@ stubs.targetRing = { clear() {} };
   c._leesinCastQ(null, false);
   assert(c.mp === 200 && c._leesin.qMarkTarget === t, '리 신 Q2(81차): 1250 밖 표식 대상에게는 재시전되지 않는다');
 }
+
+// --- 82차: 초가스 포식 크기 ---
+{
+  const c = makeChamp('chogath');
+  const label = { position: { y: 3 } };
+  c._hpLabel3d = label; c._hpLabelBaseY = 3; c._sizeScale = 1;
+  c.skillLevels.R = 3; c._chogath.predationStacks = 5; // +50%
+  for (let i = 0; i < 60; i++) c._tickSizeScale(1 / 30);
+  assert(near(c._sizeScale, 1.5, 1e-3) && near(label.position.y, 0.5 + 2.5 * 1.5, 1e-2), '초가스(82차): 5중첩(3레벨) → 크기 1.5배, 체력바도 같이 올라감');
+  c._chogath.predationStacks = 40;
+  for (let i = 0; i < 60; i++) c._tickSizeScale(1 / 30);
+  assert(near(c._sizeScale, 2, 1e-3), '초가스(82차): 크기는 최대 2배(추가 100%)');
+  const g = makeChamp('garen'); g._tickSizeScale(1 / 30);
+  assert((g._sizeScale || 1) === 1, '초가스(82차): 다른 챔피언은 크기 변화 없음');
+}

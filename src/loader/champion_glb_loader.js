@@ -294,6 +294,9 @@ async function bootstrapChampion(gltf, fileName) {
   // 바닥을 맞춰서, 실제 대기 자세에서는 챔피언이 떠 있었다(노틸러스 약 140, 애쉬 약 80, 다리우스·레넥톤 약 85 LoL 유닛).
   const groundDrop = groundModelOnIdlePose(controller);
   if (groundDrop) hpLabel3d.position.y -= groundDrop;
+  // 82차: 크기가 바뀌는 효과(초가스 포식)에 맞춰 체력바 높이를 옮기기 위한 기준값.
+  controller._hpLabel3d = hpLabel3d; controller._hpLabelBaseY = hpLabel3d.position.y;
+  controller._sizeScale = 1;
   updateBars(controller);
   updateSkillUI(controller.cooldowns);
   // 요청("ui적용해줘") - 새 HUD 초상화 박스에 챔피언 ID 앞 두 글자를 표시한다.
@@ -1107,7 +1110,7 @@ scaleButtonsEl.querySelectorAll('button').forEach((btn) => {
   btn.addEventListener('click', () => {
     modelScaleMultiplier = parseFloat(btn.dataset.scale);
     scaleButtonsEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
-    if (championRoot) championRoot.children[0].scale.setScalar(championBaseScaleMultiplier * modelScaleMultiplier);
+    if (championRoot) championRoot.children[0].scale.setScalar(championBaseScaleMultiplier * modelScaleMultiplier * ((controller && controller._sizeScale) || 1));
     applyCameraDistanceForChampion();
   });
 });
@@ -1654,6 +1657,7 @@ function animate() {
     updateNexusBuildingAnim(dt);
     if (howlingAbyssMap) howlingAbyssMap.updateSnow(dt, controller ? controller.root.position : null); // 요청 18: 카메라(플레이어) 주변에서 자연스럽게 보이도록 재활용
     tickPullEffects(dt);
+    if (controller && typeof controller._tickSizeScale === 'function') controller._tickSizeScale(dt); // 82차: 초가스 포식 크기
     if (typeof tickAllyUnits === 'function') tickAllyUnits(dt);
     vfx.update(dt);
     nilahVfx2.update(dt);

@@ -22610,6 +22610,24 @@ CharacterController.prototype._chogathCastR = function(free) {
 };
 
 
+// 82차: 포식 중첩만큼 실제로 커진다(추가 크기 6/8/10%/중첩, 최대 +100% - PC 위키). 모델 배율과 체력바 높이를
+// 약 0.4초에 걸쳐 부드럽게 맞춘다. 판정 반경(게임플레이 반경)은 원작처럼 그대로다 - 바뀌는 건 모습·평타 사거리·E 폭.
+CharacterController.prototype._tickSizeScale = function(dt) {
+  if (this.championId !== 'chogath' && (this._sizeScale || 1) === 1) return; // 크기 효과가 없는 챔피언은 건드리지 않는다
+  const target = this.championId === 'chogath' && typeof chogathFeastBonus === 'function' ? 1 + chogathFeastBonus(this).sizePercent / 100 : 1;
+  const cur = this._sizeScale || 1;
+  if (Math.abs(target - cur) < 1e-4 && this._sizeScaleApplied) return;
+  const next = Math.abs(target - cur) < 1e-3 ? target : cur + (target - cur) * Math.min(1, (dt || 0) * 8);
+  this._sizeScale = next; this._sizeScaleApplied = true;
+  const wrapper = this.model && this.model.parent; // scaleWrapper(챔피언 고정 배율 담당)
+  if (wrapper && wrapper.scale && typeof championBaseScaleMultiplier !== 'undefined') {
+    wrapper.scale.setScalar(championBaseScaleMultiplier * (typeof modelScaleMultiplier !== 'undefined' ? modelScaleMultiplier : 1) * next);
+  }
+  // 원작처럼 체력바 높이도 크기에 비례(스킨 메시 Box3는 바인드 포즈 기준이라 실제 키를 못 재므로 바 기준 높이에 곱한다).
+  // 바 기준 높이 중 머리 위 여유(약 0.5)는 고정, 나머지(키)만 크기에 비례.
+  if (this._hpLabel3d && this._hpLabelBaseY != null) { const gap = Math.min(0.5, this._hpLabelBaseY); this._hpLabel3d.position.y = gap + (this._hpLabelBaseY - gap) * next; }
+};
+
 /* ===== src/champions/leesin.js ===== */
 // ---------------- 리 신 애니메이션 공용 헬퍼 ----------------
 // 실제 리 신.glb(51클립) 확인 결과로 다시 짰다. 예전 구조의 문제:
@@ -38067,6 +38085,9 @@ async function bootstrapChampion(gltf, fileName) {
   // 바닥을 맞춰서, 실제 대기 자세에서는 챔피언이 떠 있었다(노틸러스 약 140, 애쉬 약 80, 다리우스·레넥톤 약 85 LoL 유닛).
   const groundDrop = groundModelOnIdlePose(controller);
   if (groundDrop) hpLabel3d.position.y -= groundDrop;
+  // 82차: 크기가 바뀌는 효과(초가스 포식)에 맞춰 체력바 높이를 옮기기 위한 기준값.
+  controller._hpLabel3d = hpLabel3d; controller._hpLabelBaseY = hpLabel3d.position.y;
+  controller._sizeScale = 1;
   updateBars(controller);
   updateSkillUI(controller.cooldowns);
   // 요청("ui적용해줘") - 새 HUD 초상화 박스에 챔피언 ID 앞 두 글자를 표시한다.
@@ -38880,7 +38901,7 @@ scaleButtonsEl.querySelectorAll('button').forEach((btn) => {
   btn.addEventListener('click', () => {
     modelScaleMultiplier = parseFloat(btn.dataset.scale);
     scaleButtonsEl.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
-    if (championRoot) championRoot.children[0].scale.setScalar(championBaseScaleMultiplier * modelScaleMultiplier);
+    if (championRoot) championRoot.children[0].scale.setScalar(championBaseScaleMultiplier * modelScaleMultiplier * ((controller && controller._sizeScale) || 1));
     applyCameraDistanceForChampion();
   });
 });
@@ -39427,6 +39448,7 @@ function animate() {
     updateNexusBuildingAnim(dt);
     if (howlingAbyssMap) howlingAbyssMap.updateSnow(dt, controller ? controller.root.position : null); // 요청 18: 카메라(플레이어) 주변에서 자연스럽게 보이도록 재활용
     tickPullEffects(dt);
+    if (controller && typeof controller._tickSizeScale === 'function') controller._tickSizeScale(dt); // 82차: 초가스 포식 크기
     if (typeof tickAllyUnits === 'function') tickAllyUnits(dt);
     vfx.update(dt);
     nilahVfx2.update(dt);

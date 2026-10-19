@@ -231,3 +231,21 @@ CharacterController.prototype._chogathCastR = function(free) {
   
 };
 
+
+// 82차: 포식 중첩만큼 실제로 커진다(추가 크기 6/8/10%/중첩, 최대 +100% - PC 위키). 모델 배율과 체력바 높이를
+// 약 0.4초에 걸쳐 부드럽게 맞춘다. 판정 반경(게임플레이 반경)은 원작처럼 그대로다 - 바뀌는 건 모습·평타 사거리·E 폭.
+CharacterController.prototype._tickSizeScale = function(dt) {
+  if (this.championId !== 'chogath' && (this._sizeScale || 1) === 1) return; // 크기 효과가 없는 챔피언은 건드리지 않는다
+  const target = this.championId === 'chogath' && typeof chogathFeastBonus === 'function' ? 1 + chogathFeastBonus(this).sizePercent / 100 : 1;
+  const cur = this._sizeScale || 1;
+  if (Math.abs(target - cur) < 1e-4 && this._sizeScaleApplied) return;
+  const next = Math.abs(target - cur) < 1e-3 ? target : cur + (target - cur) * Math.min(1, (dt || 0) * 8);
+  this._sizeScale = next; this._sizeScaleApplied = true;
+  const wrapper = this.model && this.model.parent; // scaleWrapper(챔피언 고정 배율 담당)
+  if (wrapper && wrapper.scale && typeof championBaseScaleMultiplier !== 'undefined') {
+    wrapper.scale.setScalar(championBaseScaleMultiplier * (typeof modelScaleMultiplier !== 'undefined' ? modelScaleMultiplier : 1) * next);
+  }
+  // 원작처럼 체력바 높이도 크기에 비례(스킨 메시 Box3는 바인드 포즈 기준이라 실제 키를 못 재므로 바 기준 높이에 곱한다).
+  // 바 기준 높이 중 머리 위 여유(약 0.5)는 고정, 나머지(키)만 크기에 비례.
+  if (this._hpLabel3d && this._hpLabelBaseY != null) { const gap = Math.min(0.5, this._hpLabelBaseY); this._hpLabel3d.position.y = gap + (this._hpLabelBaseY - gap) * next; }
+};
