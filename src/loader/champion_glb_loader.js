@@ -344,6 +344,12 @@ async function bootstrapChampion(gltf, fileName) {
   // 바꿔도 구조물은 유지). 맵이 없으면 예전처럼 구조물 없는 연습 공간이다. 59차: 미니언도 챔피언을 바꿔도 그대로 둔다.
   if (typeof spawnHowlingAbyssStructures === 'function') spawnHowlingAbyssStructures();
   if (typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned && typeof grantStartingGold === 'function') grantStartingGold(controller); // 62차: 칼바람 시작 골드 1400
+  // 83차: 칼바람 나락은 3레벨로 시작한다(원작). 스킬은 이 연습장 규칙대로 Q/W/E/R 모두 1랭크가 이미 있어(테스트 편의) 추가 스킬 포인트는 주지 않는다.
+  if (typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned && controller.champLevel < 3) {
+    controller.champLevel = 3; controller.currentExp = 0;
+    controller.recomputeStats(); controller.hp = controller.maxHp; controller.mp = controller.maxMp;
+    updateBars(controller); if (typeof updateExpUI === 'function') updateExpUI(controller);
+  }
 
   // 요청("게임을 시작하면 자기 진영 우물에서 시작하게") - 실제 LoL처럼
   // 챔피언은 자기 팀 기지의 우물(분수)에서 스폰한다. 플레이어는 기존
@@ -1513,7 +1519,7 @@ function tickOneDummy(unit, dt) {
   if (isStunned(unit)) return;
   const dist = getHorizontalDistance(unit.mesh.position, controller.root.position);
   if (dist <= unit.attackRange && unit.attackCooldown <= 0) {
-    unit.attackCooldown = 1 / (unit.attackSpeed || 1 / 1.4);
+    unit.attackCooldown = 1 / ((unit.attackSpeed || 1 / 1.4) * (typeof getAttackSpeedReductionMultiplier === "function" ? getAttackSpeedReductionMultiplier(unit) : 1)); // 83차: 공속 감소 반영
     if (typeof brushSystem !== 'undefined') brushSystem.onActionFromBrush(unit); // 부쉬 안에서 공격하면 잠깐 드러남
     applyDamage(controller, { rawDamage: unit.attackDamage ?? 6, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
   }

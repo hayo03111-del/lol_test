@@ -46,7 +46,10 @@ function _allyRecomputeShield(a) {
 // 회복을 부르는" 재귀를 막기 위한 플래그다.
 function healAlly(source, target, amount, { noItemHook = false } = {}) {
   if (!target || target.hp <= 0 || !(amount > 0)) return 0;
-  const eff = amount * getHealReceivedMultiplier(target);
+  // 83차: 칼바람 오라 - 남에게 주는 치유는 50%(자기 치유는 제외), 챔피언별 치유 보정도 적용.
+  const bal = typeof getAramBalance === 'function' ? getAramBalance(source) : null;
+  const aura = (source && source !== target && typeof isAramRulesActive === 'function' && isAramRulesActive()) ? 0.5 : 1;
+  const eff = amount * aura * (1 + ((bal && bal.healing) || 0)) * getHealReceivedMultiplier(target);
   const before = target.hp;
   target.hp = Math.min(target.maxHp, target.hp + eff);
   if (!noItemHook && source && typeof itemOnAllyHealOrShield === 'function') itemOnAllyHealOrShield(source, target, 'heal', eff);

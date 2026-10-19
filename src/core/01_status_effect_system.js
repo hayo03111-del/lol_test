@@ -290,13 +290,16 @@ function getGrievousPercent(target) {
 // 챙기게 한다).
 function getHealReceivedMultiplier(target) {
   if (!target) return 1;
-  return (1 + (target.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(target));
+  // 83차: 칼바람 챔피언별 치유 보정(이 연습장에서 챔피언이 받는 치유는 전부 자기 치유라 받는 쪽에 곱한다).
+  const bal = typeof getAramBalance === 'function' ? getAramBalance(target) : null;
+  return (1 + (target.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(target)) * (1 + ((bal && bal.healing) || 0));
 }
 // 받는 보호막 배율(정령의형상/월석재생기 등의 "보호막 효과 증가") - 아이템
 // 보호막은 이미 이 필드를 곱하고 있었다. 챔피언 스킬 보호막도 같은 배율을 쓴다.
 function getShieldReceivedMultiplier(target) {
   if (!target) return 1;
-  return 1 + (target.itemShieldReceivedBonusPercent || 0);
+  const bal = typeof getAramBalance === 'function' ? getAramBalance(target) : null; // 83차: 칼바람 보호막 보정
+  return (1 + (target.itemShieldReceivedBonusPercent || 0)) * (1 + ((bal && bal.shielding) || 0));
 }
 function getAttackSpeedBuffPercent(target) {
   if (!target || !target.statusEffects) return 0;
@@ -307,8 +310,15 @@ function getAttackSpeedBuffPercent(target) {
   // 적용돼, 예컨대 마스터 이 R 중에는 아이템 공속 버프가 통째로 무시됐다.
   // 같은 버프의 재적용은 applyStatus가 같은 id를 덮어쓰므로 중복 합산되지 않는다.
   for (const e of target.statusEffects) if ((e.type === 'MASTERYI_R_AS' || e.type === 'AS_BUFF') && e.expiresAt > now) v += e.value;
-  for (const e of target.statusEffects) if (e.type === 'AS_REDUCTION' && e.expiresAt > now) v -= e.value; // 71차: 얼어붙은 심장(혹한의 포옹)
   return v;
+}
+// 83차: 공격 속도 감소(AS_REDUCTION - 얼어붙은 심장 혹한의 포옹 등) = 총 공격 속도 × Π(1 - 감소). 출처끼리 곱연산(위키 Cripple).
+function getAttackSpeedReductionMultiplier(target) {
+  if (!target || !target.statusEffects) return 1;
+  const now = performance.now();
+  let keep = 1;
+  for (const e of target.statusEffects) if (e.type === 'AS_REDUCTION' && e.expiresAt > now) keep *= 1 - Math.max(0, Math.min(1, e.value));
+  return keep;
 }
 
 

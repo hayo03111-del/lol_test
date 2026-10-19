@@ -443,11 +443,11 @@ CharacterController.prototype._rammusLand = function(j) {
   for (const u of units) {
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
     const epi = farBonus > 0 && isInCircle(u, center, lolRangeToWorld(rd.centerRadius)) ? 1 + farBonus : 1;
-    applyDamage(u, { rawDamage: raw * epi * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
+    applyDamage(u, { isUltimate: true, rawDamage: raw * epi * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
     if (u.isStructure || u.hp <= 0) continue;
     applyStatus(u, { id: 'rammusR_slow', type: 'SLOW', duration: rd.slowDurationSec, value: slow, source: this });
     if (j.powerball && isInCircle(u, center, lolRangeToWorld(rd.centerRadius))) {
-      applyDamage(u, { rawDamage: qRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+      applyDamage(u, { isUltimate: true, rawDamage: qRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
       if (u.hp > 0) applyStatus(u, { id: 'rammusR_knockup', type: 'KNOCKUP', duration: rd.powerballKnockupSec, value: 1, source: this });
     }
   }

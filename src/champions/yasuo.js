@@ -518,7 +518,7 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
           // rArmorBuffUntil은 이 onFire 콜백 아래에서 지금부터 15초로
           // 설정된다. R 명중 판정 시점엔 아직 그 버프가 시작되지 않았고,
           // R 스스로도 그 버프 대상이 아니므로 여기서는 항상 0이다.
-          applyDamage(target,{
+          applyDamage(target, { isUltimate: true,
             rawDamage:raw,
             damageType:DAMAGE_TYPE.PHYSICAL,
             isCritical:false,

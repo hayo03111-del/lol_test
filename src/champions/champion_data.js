@@ -647,7 +647,7 @@ const CHAMPION_DATA = {
     // (+25.13) 패치 노트·위키 패치 기록 요약을 검색으로 교차 확인한 값. 확인하지 못한 값은 "추정"으로 표시했다.
     stats: {
       hp: 645, hpGrowth: 100, hpRegen: 8, hpRegenGrowth: 0.55,
-      ad: 65, adGrowth: 2.75, attackSpeed: 0.7, attackSpeedGrowthPercent: 2.215, // adGrowth: Data Dragon이 0으로 내보내는 알려진 문제 - 2.75는 추정
+      ad: 65, adGrowth: 2.75, attackSpeed: 0.7, attackSpeedRatio: 0.625, attackSpeedGrowthPercent: 2.215, /* 83차: 공속 계수 0.625(PC 위키) */ // adGrowth: Data Dragon이 0으로 내보내는 알려진 문제 - 2.75는 추정
       armor: 35, armorGrowth: 4.5, mr: 32, mrGrowth: 2.05,
       range: 125, moveSpeed: 335, mana: 310, manaGrowth: 33, manaRegen: 7.85, manaRegenGrowth: 0.5,
       windupPercent: 0.2292, // 39차: LeagueSandbox Rammus.json(4.20) AttackDelayCastOffsetPercent -0.0708 → 0.3 - 0.0708
@@ -790,7 +790,7 @@ const CHAMPION_DATA = {
     displayName: '초가스',
     stats: {
       hp: 644, hpGrowth: 94, hpRegen: 9, hpRegenGrowth: 0.85,
-      ad: 69, adGrowth: 4.2, attackSpeed: 0.658, attackSpeedGrowthPercent: 1.44,
+      ad: 69, adGrowth: 4.2, attackSpeed: 0.658, attackSpeedRatio: 0.625, attackSpeedGrowthPercent: 1.44, /* 83차: 공속 계수 0.625(PC 위키) */
       armor: 38, armorGrowth: 4.5, mr: 32, mrGrowth: 2.05,
       range: 125, moveSpeed: 345, mana: 270, manaGrowth: 60, manaRegen: 7.2, manaRegenGrowth: 0.45,
       // PC 위키 기본 스탯: 평타 선딜 21.9%
@@ -1462,4 +1462,25 @@ function computeChampionStats(championId, level) {
   };
 }
 
-
+// 83차: 칼바람 나락 챔피언별 밸런스 보정(원작 ARAM 전용). dmgDealt/dmgTaken/healing/shielding = 증감 비율(0.05 = +5%).
+// 출처: PC 위키 ARAM 문서·패치 기록, aramnerfs.com·u.gg 26.19~26.20(위키 직접 접속 불가 - 검색 요약). 26.15에 대부분 중립으로
+// 정리됐다. 신뢰도 낮은 항목은 주석으로 표시 - 위키를 열 수 있게 되면 이 표만 고치면 된다. 없는 챔피언 = 보정 없음.
+const ARAM_BALANCE = {
+  garen: { dmgTaken: -0.05 },
+  leesin: { dmgDealt: 0.05, dmgTaken: -0.05, healing: 0.10 },
+  lux: { dmgDealt: -0.10, dmgTaken: 0.10, shielding: -0.10 },
+  ashe: { dmgDealt: 0.05 },
+  ahri: { healing: -0.10 },
+  vex: { dmgDealt: -0.05 },
+  nautilus: { dmgDealt: -0.05, dmgTaken: 0.10 },          // u.gg 26.20(신뢰도 중간)
+  chogath: { dmgTaken: 0.10 },                             // 출처끼리 엇갈림(대난투 쪽은 -5%)
+  rammus: { dmgDealt: 0.05, dmgTaken: -0.10 },             // 옛 패치 기록(신뢰도 낮음)
+  darius: { dmgDealt: 0.05 },                              // 날짜 없는 집계(신뢰도 낮음)
+};
+// 칼바람 규칙(밸런스 보정·원거리 감소·남에게 주는 치유 50%)은 칼바람 맵이 깔렸을 때만 적용한다.
+function isAramRulesActive() { return typeof howlingAbyssStructuresSpawned !== 'undefined' && !!howlingAbyssStructuresSpawned; }
+function getAramBalance(unit) {
+  if (!isAramRulesActive()) return null;
+  const id = unit && typeof unit.championId === 'string' ? unit.championId : null;
+  return (id && ARAM_BALANCE[id]) || null;
+}

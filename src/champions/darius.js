@@ -160,7 +160,7 @@ CharacterController.prototype._dariusROnHit = function(target) {
     const dmg = min * (1 + (r.perStackBonusPercent / 100) * stacks);
     // 처치 판정: 실제로 들어간 피해 기준 + 2% 바닥에 멈춘 허수아비 반복 타격은 처치 아님(무한 재시전 방지).
     const hpBefore = target.hp, floored = isFlooredTrainingDummy(target);
-    const dealtR = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isAbility: true }) || 0;
+    const dealtR = applyDamage(target, { isUltimate: true, rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isAbility: true }) || 0;
     const killed = hpBefore > 0 && hpBefore <= dealtR && !floored;
     // PC 위키(Hemorrhage): 단두대는 피해를 준 뒤 출혈 중첩을 1 건다(예전엔 누락). 피해 계산에는 시전 전 중첩만 쓴다.
     if (!killed && target.hp > 0) this._dariusApplyBleed(target);

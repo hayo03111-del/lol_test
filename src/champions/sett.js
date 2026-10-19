@@ -636,7 +636,7 @@ CharacterController.prototype._settRImpact = function(seq) {
       const floor = r.shockwaveFalloffFloor != null ? r.shockwaveFalloffFloor : 0.25;
       const falloff = impactRadiusWorld > 0 ? THREE.MathUtils.clamp(1 - (1 - floor) * (h.distance / impactRadiusWorld), floor, 1) : 1;
       const dmg = maxDmg * falloff;
-      applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+      applyDamage(h.unit, { isUltimate: true, rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
       applyStatus(h.unit, { id: 'settR_slow', type: 'SLOW', duration: r.slowDuration, value: r.slowPercent / 100 });
       console.log(`[SETT R] IMPACT -> ${unitLabel(h.unit)}: dist=${h.distance.toFixed(2)} falloff=${(falloff * 100).toFixed(0)}% dmg=${dmg.toFixed(1)}`);
     }

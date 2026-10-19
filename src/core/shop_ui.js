@@ -88,6 +88,7 @@ function _shopIconHtml(item, cls) {
 }
 function _shopInBase(ctrl) {
   if (!ctrl || !ctrl.root) return false;
+  if (ctrl.hp <= 0 || (typeof STATE !== 'undefined' && ctrl.state === STATE.DEAD)) return true; // 83차: 죽어 있으면 어디서든 상점 이용(원작)
   return typeof isPositionInBaseZone !== 'function' || isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM);
 }
 function _shopCanBuild(ctrl, item) {

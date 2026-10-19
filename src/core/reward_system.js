@@ -12,7 +12,7 @@
    - 받은 골드는 그 자리에 "+21" 같은 금색 숫자로 잠깐 떠오른다(내 챔피언이 받은 것만).
    ============================================================ */
 const ARAM_STARTING_GOLD = 1400;
-const ARAM_PASSIVE_GOLD_PER_10S = 55;
+const ARAM_PASSIVE_GOLD_PER_10S = 60; // 83차: PC 위키 Gold/ARAM - 1:00부터 10초당 60(예전 55)
 const ARAM_PASSIVE_GOLD_START_SEC = 60;
 const ARAM_NEARBY_MINION_GOLD = 6;
 const TURRET_GOLD_HA = {

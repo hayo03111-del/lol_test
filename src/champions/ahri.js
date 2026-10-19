@@ -612,7 +612,7 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   const boltHit = (u) => {
     if (!u || u.hp <= 0) return;
     const raw = baseRaw * this._ahriCharmVulnMultiplier(u);
-    applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    applyDamage(u, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     vfx.spawn('ahriOrbHit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0x9fd7ff });
     debugSkillHit('Ahri R (정기 탄환)', u);
   };

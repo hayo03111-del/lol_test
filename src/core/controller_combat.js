@@ -920,6 +920,7 @@ CharacterController.prototype._beginAttackSwing = function() {
       timeScale = THREE.MathUtils.clamp(startHit.start.duration / Math.max(1e-3, windup), 0.4, 3.0);
     }
 
+    this._markAttackSwing(windup, attackInterval); // 83차: 평타 타이머(1/공속)는 선딜 시작 시점부터 돈다
     this.runAction(key, STATE.ATTACK, {
       faceDir: dirToTarget,
       startupOverride: windup,
@@ -928,6 +929,9 @@ CharacterController.prototype._beginAttackSwing = function() {
       dataOverride: attackData,
       animationSequenceClips: attackData.animationSequenceClips || null,
       onFire: () => {
+        // 83차: 선딜 도중 기절·공중에 뜸 등 행동 불가가 걸렸거나 대상이 대상 지정 불가가 되면 공격이 취소되고 타이머는 돌려받는다(원작).
+        if (isCrowdControlled(this) || target.isUntargetable) { this._cancelAttackWindup(); return; }
+        this._attackWindupEndsAt = 0; // 선딜 완료 - 이후 이동해도 타이머는 그대로
         if (hitClip) this.crossFadeToClip(hitClip, { loop: THREE.LoopOnce, clampWhenFinished: true, fade: 0.05, timeScale: attackHitClipTimeScale(this, windup) });
         // 죽음의 세계: 서로 다른 세계의 대상은 때릴 수 없다(스윙 도중 한쪽이 들어가도 명중 취소).
         if (typeof canRealmInteract === 'function' && !canRealmInteract(this, target)) return;

@@ -927,8 +927,8 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
     hits.forEach((h) => {
       const t = h.unit;
       const half = total * 0.5;
-      let dealtR = applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
-      if (t.hp > 0) dealtR += applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
+      let dealtR = applyDamage(t, { isUltimate: true, rawDamage: half, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
+      if (t.hp > 0) dealtR += applyDamage(t, { isUltimate: true, rawDamage: half, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
       this._yoneRecordMark(t, dealtR);
     });
     // 2단계: 맞은 "적 챔피언" 중 가장 먼 대상 뒤 200(없으면 최대 사거리)으로 블링크.

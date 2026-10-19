@@ -99,7 +99,7 @@ CharacterController.prototype._garenROnHit = function(target) {
     const missingHp = Math.max(0, (target.maxHp || 0) - (target.hp || 0));
     const dmg = base + missingHp * missingPct;
     // W 패시브 처치 스택은 applyDamage()의 공용 처치 판정에서 쌓인다(여기서 따로 부르면 이중 적립).
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+    applyDamage(target, { isUltimate: true, rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
   
 };
 

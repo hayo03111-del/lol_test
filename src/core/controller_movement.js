@@ -11,7 +11,11 @@ CharacterController.prototype.moveTo = function(point) {
     this._wardOrder = null; // 이동 명령은 "걸어가서 와드 놓기"를 취소한다(와드 명령 자신은 moveTo 뒤에 다시 건다)
     this._approachCast = null; // 이동 명령은 "다가가서 시전"을 취소한다(접근 시전 자신은 moveTo 뒤에 다시 건다)
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
-    if (isCrowdControlled(this) || isRooted(this)) return; // 기절/속박 중에는 이동 명령을 받지 않는다
+    if (!this._keepAttackMove) this._attackMoveDest = null; // 83차: 일반 이동 명령은 공격 이동을 끝낸다
+    this._autoAcquired = false;
+    // 83차: 행동 불가 중 내린 이동 명령은 버리지 않고 기억했다가 풀리면 실행한다(원작).
+    if (isCrowdControlled(this) || isRooted(this)) { this._ccBufferedMove = point.clone(); return; }
+    this._ccBufferedMove = null;
     if (this.currentActionKey === 'rWindup' || this.currentActionKey === 'rChannel' || this.currentActionKey === 'rCast'
         || this._isLeeSinCastLock()) return;
     // 모데카이저 R "죽음의 세계" 명세 6절 "경계 밖으로 나가지 못함": 이
@@ -355,6 +359,8 @@ CharacterController.prototype.selectTarget = function(enemy) {
     // 않고 기존 시스템에 도달하게만 한다.
     const isMasterYiMeditating = this.championId === 'masteryi' &&
       (this.currentActionKey === 'w' || this.currentActionKey === 'masteryiW');
+    // 83차: 평타 선딜 도중 "다른" 대상에게 공격 명령 → 선딜 취소(타이머 반환) 후 새 대상과 교전(원작). 같은 대상 재클릭은 무시.
+    const retargetDuringWindup = this.state === STATE.ATTACK && enemy !== this.currentTarget && this._attackWindupEndsAt && performance.now() < this._attackWindupEndsAt;
     this.currentTarget = enemy;
     this.attackOrderActive = true;
     this.attackOrderAnchor = enemy;
@@ -365,6 +371,7 @@ CharacterController.prototype.selectTarget = function(enemy) {
       this._tryEngageTarget();
       return;
     }
+    if (retargetDuringWindup) { this._cancelAttackWindup(); this._tryEngageTarget(); return; }
     if (this.state === STATE.IDLE || this.state === STATE.MOVE) this._tryEngageTarget();
 };
 
@@ -411,5 +418,100 @@ CharacterController.prototype._tryEngageTarget = function() {
       return;
     }
     this.isChasing = false;
+    // 83차: 평타 타이머(1/공속)가 아직 돌고 있으면 사거리 안에서 대상을 바라보며 기다린다 - 예전엔 이동·스킬 뒤 다시 공격 명령을
+    // 주면 곧바로 휘둘러, 이동/스킬이 공짜 평타 초기화가 됐다. 진짜 초기화 스킬만 resetAttackTimer()로 타이머를 지운다.
+    const nowA = performance.now();
+    if (nowA < (this._attackReadyAt || 0) - 15) {
+      this._awaitingAttackTimer = true;
+      if (this.state === STATE.MOVE) { this.targetPos = null; this.setState(STATE.IDLE); this.playFirstAvailable(this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.12 }); }
+      const tp = getWorldPosition(this.currentTarget);
+      if (tp) { const d = new THREE.Vector3(tp.x - this.root.position.x, 0, tp.z - this.root.position.z); if (d.lengthSq() > 1e-6) this.faceDirectionInstant(d.normalize()); }
+      return;
+    }
+    this._awaitingAttackTimer = false;
     this._beginAttackSwing();
+};
+
+// 83차: 평타 타이머. 선딜이 시작될 때 다음 평타 가능 시각 = 지금 + 1/공속. 선딜 도중 취소되면 이전 값으로 돌려준다.
+CharacterController.prototype._markAttackSwing = function(windupSec, intervalSec) {
+    const now = performance.now();
+    this._attackPrevReadyAt = this._attackReadyAt || 0;
+    this._attackReadyAt = now + Math.max(0, intervalSec) * 1000;
+    this._attackWindupEndsAt = now + Math.max(0, windupSec) * 1000;
+    this._attackMarkPending = true; // 바로 뒤 runAction의 _clearActionTimers는 취소가 아니다
+};
+// 평타 초기화(가렌 Q·다리우스 W·레넥톤 W·노틸러스 W·마스터 이 W·티아맷/히드라 사용 등): 다음 평타를 바로 할 수 있다.
+CharacterController.prototype.resetAttackTimer = function() { this._attackReadyAt = 0; this._attackWindupEndsAt = 0; };
+// 선딜 도중 공격 취소(타이머 반환) - 대상은 유지하고 행동 불가가 풀리면 다시 공격한다.
+CharacterController.prototype._cancelAttackWindup = function() {
+    this._attackReadyAt = this._attackPrevReadyAt || 0; this._attackWindupEndsAt = 0; // 타이머 반환
+    this._clearActionTimers();
+    this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
+    if (this.state === STATE.ATTACK) this.setState(STATE.IDLE);
+    this._awaitingAttackTimer = !!this.currentTarget;
+};
+// 83차 공격 이동(원작): 기본은 "내 챔피언에서 가장 가까운" 적, 옵션(커서 기준 공격 이동)이면 커서에서 가장 가까운 적을
+// 사거리 안에서 고른다. 없으면 목적지로 걸어가며 계속 살피다 사거리에 들어온 첫 적을 공격하고, 처치하면 목적지로 다시 간다.
+// "챔피언만 공격"(기본 ` 키 누르고 있기)이면 챔피언만 고른다.
+CharacterController.prototype._scanAttackableInRange = function(opts = {}) {
+    let best = null, bestD = Infinity;
+    const ref = opts.cursorPoint || null;
+    for (const u of (typeof getTargetableEnemyUnits === 'function' ? getTargetableEnemyUnits() : [])) {
+      if (!u || u.hp <= 0 || u.isWard || u.isUntargetable) continue;
+      if (opts.championsOnly && !u.isChampion) continue;
+      if (u.isStructure && typeof isStructureProtected === 'function' && isStructureProtected(u)) continue;
+      if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
+      if (!this._isInAttackRangeWithBonus(u)) continue;
+      const p = getWorldPosition(u); if (!p) continue;
+      const d = getHorizontalDistance(ref || this.root.position, p);
+      if (d < bestD) { bestD = d; best = u; }
+    }
+    return best;
+};
+CharacterController.prototype.attackMoveTo = function(point, opts = {}) {
+    const t = this._scanAttackableInRange(opts);
+    this._attackMoveOpts = { championsOnly: !!opts.championsOnly };
+    if (t) { this._attackMoveDest = point ? point.clone() : null; this.selectTarget(t); return t; }
+    this._keepAttackMove = true; this.moveTo(point); this._keepAttackMove = false;
+    this._attackMoveDest = point ? point.clone() : null;
+    return null;
+};
+// 매 프레임: 평타 타이머 대기, 공격 이동 중 적 탐색, 대기 중 자동 공격(사거리 안), 행동 불가 중 받아 둔 이동 명령.
+CharacterController.prototype._updateAttackTimerWait = function() {
+    if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
+    const cc = typeof isCrowdControlled === 'function' && (isCrowdControlled(this) || (typeof isRooted === 'function' && isRooted(this)));
+    if (this._ccBufferedMove && !cc && !this.currentActionKey) { const p = this._ccBufferedMove; this._ccBufferedMove = null; this.moveTo(p); return; }
+    // 평타 후딜(선딜 이후) 중 대상이 사거리를 벗어나면 곧바로 추격한다(타이머는 계속 돈다).
+    if (this.state === STATE.ATTACK && this.currentPhase === 'RECOVERY' && !this._attackWindupEndsAt && this.currentTarget && this.currentTarget.hp > 0
+        && !this._isInAttackRangeWithBonus(this.currentTarget) && (this._attackReadyAt || 0) > 0) {
+      this._clearActionTimers(); this.currentActionKey = null; this.currentPhase = null; this.setState(STATE.IDLE);
+      this._tryEngageTarget();
+      return;
+    }
+    // 공격 이동: 걸어가는 중 사거리에 들어온 적 공격 / 대상 처치 후 목적지로 복귀.
+    if (this._attackMoveDest && !cc) {
+      if (this.state === STATE.MOVE && !this.currentTarget) {
+        const t = this._scanAttackableInRange(this._attackMoveOpts || {});
+        if (t) { const dest = this._attackMoveDest; this.selectTarget(t); this._attackMoveDest = dest; return; }
+      } else if (this.state === STATE.IDLE && !this.currentTarget && !this.currentActionKey) {
+        const dest = this._attackMoveDest;
+        if (getHorizontalDistance(dest, this.root.position) > 0.2) { this._keepAttackMove = true; this.moveTo(dest); this._keepAttackMove = false; }
+        else this._attackMoveDest = null;
+        return;
+      }
+    }
+    // 자동 공격(옵션 "자동 공격", 원작 기본 켜짐): 아무 명령 없이 서 있으면 사거리 안의 적을 친다(쫓아가지는 않는다).
+    if (this.state === STATE.IDLE && !this.currentTarget && !this.targetPos && !this.currentActionKey && !cc
+        && (typeof optionsState === 'undefined' || optionsState.autoAttack !== false)) {
+      const t = this._scanAttackableInRange({});
+      if (t) { this.selectTarget(t); this._autoAcquired = true; return; }
+    }
+    if (!this._awaitingAttackTimer) return;
+    if (!this.currentTarget || this.currentTarget.hp <= 0) { this._awaitingAttackTimer = false; return; }
+    if (this.state !== STATE.IDLE || this.currentActionKey) return;
+    if (typeof isCrowdControlled === 'function' && isCrowdControlled(this)) return;
+    const ready = performance.now() >= (this._attackReadyAt || 0) - 15;
+    const inRangeNow = this._isInAttackRangeWithBonus(this.currentTarget);
+    if (!inRangeNow && this._autoAcquired) { this.currentTarget = null; this._awaitingAttackTimer = false; this._autoAcquired = false; if (typeof targetRing !== 'undefined') targetRing.clear(); return; } // 자동 공격은 쫓아가지 않는다
+    if (ready || !inRangeNow) this._tryEngageTarget();
 };

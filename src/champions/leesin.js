@@ -470,7 +470,7 @@ CharacterController.prototype._leesinCastR = function(free) {
 CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
     const r = this._champData().R;
     vfx.spawn('r', this.root.position.clone());
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+    applyDamage(target, { isUltimate: true, rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
     applyStatus(target, { id: 'leesinR_air', type: 'KNOCKUP', duration: r.airborneDuration, value: 1 });
     const from = target.mesh.position.clone();
     const dir = new THREE.Vector3().subVectors(from, this.root.position); dir.y = 0;
@@ -494,7 +494,7 @@ CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
       // 차인 대상이 그 지점에 도달하는 시각에 맞춰 판정.
       const t = this._champTimeout(() => {
         if (u.hp <= 0) return;
-        applyDamage(u, { rawDamage: collideDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+        applyDamage(u, { isUltimate: true, rawDamage: collideDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
         applyStatus(u, { id: 'leesinR_collide_air', type: 'KNOCKUP', duration: r.collisionAirborneSec || 1, value: 1 });
         debugSkillHit('Lee Sin R (충돌)', u, { dmg: Math.round(collideDmg) });
       }, (along / Math.max(1e-6, pullDist)) * (r.knockbackSec || 0.8) * 1000);

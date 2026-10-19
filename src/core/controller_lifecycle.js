@@ -14,6 +14,8 @@
 /* ---------------- recall ---------------- */
 CharacterController.prototype.startRecall = function() {
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN || this.state === STATE.RECALL) return;
+    // 83차: 칼바람 나락에는 귀환이 없다(원작).
+    if (typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned) { if (typeof showSkillToast === 'function') showSkillToast('칼바람 나락에서는 귀환할 수 없습니다'); return; }
     // PC 위키: 귀환은 이동 스킬로 취급되어 속박 중엔 쓸 수 없고, 기절류(행동 불가) 중에도 쓸 수 없다.
     if ((typeof isRooted === 'function' && isRooted(this)) || (typeof isCrowdControlled === 'function' && isCrowdControlled(this))) { if (typeof showSkillToast === 'function') showSkillToast('귀환 - 군중 제어 중 사용 불가'); return; }
     this._clearActionTimers();
@@ -186,7 +188,9 @@ CharacterController.prototype._die = function() {
     if (typeof ensureScore === 'function' && typeof controller !== 'undefined' && controller === this) ensureScore(this).deaths += 1; // 34차 스코어보드
     vfx.spawn('death', this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)));
     this.playFirstAvailable(this.actionData.death.clips, { loop:THREE.LoopOnce, fade:0.1, clampWhenFinished:true });
-    const t = setTimeout(() => this._respawn(), RESPAWN_WAIT * 1000);
+    const waitSec = (typeof ARAM_DEATH_TIMER_BY_LEVEL !== 'undefined' && ARAM_DEATH_TIMER_BY_LEVEL[this.champLevel]) || RESPAWN_WAIT; // 83차: 레벨별 부활 시간
+    this._respawnAt = performance.now() + waitSec * 1000;
+    const t = setTimeout(() => this._respawn(), waitSec * 1000);
     this._pendingTimeouts.push(t);
 };
 // 25차: 리스폰·귀환은 자기 팀 우물(원작 출현 지점)로 간다. 예전엔 둘 다 맵 한가운데(0,0,0)였다.

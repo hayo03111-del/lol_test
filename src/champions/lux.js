@@ -24,9 +24,9 @@ CharacterController.prototype._luxAimDir = function(mouseWorldPoint) {
   if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1).applyQuaternion(this.root.quaternion);
   return dir.setY(0).normalize();
 };
-CharacterController.prototype._luxSpellDamage = function(u, raw) {
+CharacterController.prototype._luxSpellDamage = function(u, raw, isUltimate = false) {
   if (!u || u.hp <= 0 || u.isStructure) return 0;
-  return applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
+  return applyDamage(u, { isUltimate, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
 };
 
 /* ---------------- 패시브 - 광채 ---------------- */
@@ -277,7 +277,7 @@ CharacterController.prototype._luxCastR = function(mouseWorldPoint, free = false
     for (const u of hits) {
       if (!u || u.hp <= 0 || u.isStructure || !canRealmInteract(this, u)) continue;
       this._luxDetonateMark(u); // 이전 표식을 먼저 터뜨리고
-      this._luxSpellDamage(u, raw);
+      this._luxSpellDamage(u, raw, true); // 83차: 궁극기(칼바람 원거리 감소 제외)
       if (u.hp > 0) {
         this._luxMark(u); // 새 표식을 남긴다
         if (typeof visionSystem !== 'undefined' && visionSystem && visionSystem.revealUnit) visionSystem.revealUnit(u, r.revealSec, this.team);

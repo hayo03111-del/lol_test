@@ -387,7 +387,7 @@ CharacterController.prototype._varusRHit = function(firstUnit, dir) {
   const applyOne = (u) => {
     if (!u || u.hp <= 0 || infected.has(u)) return;
     infected.add(u);
-    applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    applyDamage(u, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     applyStatus(u, { id: 'varusR_root', type: 'ROOT', duration: r.rootDuration || 2, value: 0, source: this });
     this._varusDetonateBlight(u, { viaQ: false, chargeFraction: 0 });
     vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0xb08cff });

@@ -132,6 +132,11 @@ this.clearStatus = clearStatus;
 this.getDeathRealm = getDeathRealm;
 this.chogathFeastBonus = chogathFeastBonus;
 this.setUnitSizeMod = setUnitSizeMod;
+this.addShield = addShield;
+this.absorbShieldDamage = absorbShieldDamage;
+this.isTaunted = isTaunted;
+this.getTauntSource = getTauntSource;
+this.getAttackSpeedReductionMultiplier = getAttackSpeedReductionMultiplier;
 this.getFinalAttackSpeed = getFinalAttackSpeed;
 `, context);
 const { CharacterController, CHAMPION_DATA, STATE, applyStatus, applyDamage, getStatus, getSlowPercent,
@@ -823,4 +828,69 @@ stubs.targetRing = { clear() {} };
   assert(near(c._sizeScale, 1.22), '크기(83차): 강철심장 +12%와 모데 R +10%는 더해져 +22%(예전엔 서로 덮어씀)');
   context.setUnitSizeMod(c, 'mordeR', 1);
   assert(near(c._sizeScale, 1.12), '크기(83차): 한 효과가 끝나도 다른 효과는 남는다');
+}
+
+
+// --- 83차: 전투 규칙 정밀화 ---
+{
+  const { calculateDamage, applyStatus } = context;
+  // 음수 방어력에는 % 방어력 감소가 적용되지 않는다
+  const neg = { armor: -20, statusEffects: [] };
+  const d0 = calculateDamage({ rawDamage: 100, target: neg, source: {} });
+  applyStatus(neg, { id: 'shred', type: 'ARMOR_SHRED', duration: 5, value: 0.3 });
+  const d1 = calculateDamage({ rawDamage: 100, target: neg, source: {} });
+  assert(near(d0, d1, 1e-9) && d0 > 100, '83차: 음수 방어력에는 % 감소가 적용되지 않는다(피해가 줄지 않음)');
+  // 고정 방어력 감소는 음수로도 내려간다
+  const t2 = { armor: 10, statusEffects: [] };
+  applyStatus(t2, { id: 'flat', type: 'ARMOR_SHRED_FLAT', duration: 5, value: 30 });
+  assert(near(calculateDamage({ rawDamage: 100, target: t2, source: {} }), 100 * (2 - 100 / 120), 1e-6), '83차: 고정 방어력 감소(10-30=-20)는 음수 방어력 피해 증가로 이어진다');
+  // 추가 방어 관통(야스오 R 등)은 % 관통 뒤 추가 방어력 몫에만
+  const t3 = { armor: 200, baseArmor: 100, statusEffects: [] };
+  const dPen = calculateDamage({ rawDamage: 100, target: t3, source: {}, armorPenPercent: 0.5, bonusArmorIgnorePercent: 0.5 });
+  assert(near(dPen, 100 * 100 / (100 + 75), 1e-6), '83차: 방어력 200(추가 100) → % 관통 50% → 100, 추가 몫 50의 50% 관통 → 75');
+}
+{
+  // 마법 전용 보호막은 마법 피해만 막는다(같은 종류면 일반 보호막보다 먼저)
+  const u = { statusEffects: [] };
+  context.addShield(u, 'generic', 100, 5);
+  context.addShield(u, 'maw', 100, 10, { onlyType: 'MAGICAL' });
+  assert(context.absorbShieldDamage(u, 150, 'PHYSICAL') === 50, '83차: 물리 피해는 마법 전용 보호막을 건너뛴다');
+  const u2 = { statusEffects: [] };
+  context.addShield(u2, 'generic', 100, 5); context.addShield(u2, 'maw', 100, 10, { onlyType: 'MAGICAL' });
+  context.absorbShieldDamage(u2, 80, 'MAGICAL');
+  assert(near(u2.shield, 120), '83차: 마법 피해는 마법 전용 보호막부터 깎는다(일반 보호막 100 그대로)');
+}
+{
+  // 강인함: 0.3초 미만으로 줄지 않음, 아이템 곱연산은 item_system에서(여기선 룬+상태)
+  const u = { statusEffects: [], runeTenacity: 0.9 };
+  context.applyStatus(u, { id: 's', type: 'STUN', duration: 1, value: 1 });
+  assert(near(u.statusEffects[0].duration, 0.3), '83차: 강인함이 커도 기절은 0.3초 미만으로 줄지 않는다');
+  // 도발된 대상은 기절이 아니라 시전자를 공격한다
+  const src = { hp: 100, mesh: { position: new Vector3(0, 0, 0) } };
+  const t = { statusEffects: [], mesh: { position: new Vector3(0, 0, 1) } };
+  context.applyStatus(t, { id: 'taunt', type: 'TAUNT', duration: 1, value: 1, source: src });
+  assert(!isStunned(t) && context.isTaunted(t) && context.getTauntSource(t) === src, '83차: 도발은 행동 불가(기절)가 아니라 시전자 공격 강제');
+  // 공속 감소는 곱연산
+  const a = { statusEffects: [] };
+  context.applyStatus(a, { id: 'a1', type: 'AS_REDUCTION', duration: 2, value: 0.2 });
+  context.applyStatus(a, { id: 'a2', type: 'AS_REDUCTION', duration: 2, value: 0.15 });
+  assert(near(context.getAttackSpeedReductionMultiplier(a), 0.8 * 0.85), '83차: 공격 속도 감소는 출처끼리 곱연산(총 공속에 곱함)');
+}
+{
+  // 요네 치명타 + 무한의 대검: (1.75 + 0.3) × 0.9
+  const c = makeChamp('yone');
+  c.recomputeStats && c.stats; c.stats.critDamageModifier = 0.9; c.itemBonusCritDamagePercent = 0.3;
+  const d = context.calculateDamage({ rawDamage: 100, damageType: 'TRUE', isCritical: true, critMultiplier: 1.575, target: { statusEffects: [] }, source: c });
+  assert(near(d, 184.5, 1e-6), '83차: 요네 치명타 보정은 대검 보너스까지 더한 총 배율에 곱한다(184.5) ' + d);
+}
+{
+  // 칼바람 규칙: 맵이 깔렸을 때만. 리 신 +5% 피해, 1500 거리 = 22.5% 감소, 궁극기는 제외
+  context.howlingAbyssStructuresSpawned = true;
+  const c = makeChamp('leesin');
+  const far = makeEnemy(0, lolRangeToWorld(1500), { armor: 0 });
+  const dNear = context.calculateDamage({ rawDamage: 100, damageType: 'TRUE', target: makeEnemy(0, 1, { armor: 0 }), source: c });
+  const dFar = context.calculateDamage({ rawDamage: 100, damageType: 'TRUE', target: far, source: c });
+  const dUlt = context.calculateDamage({ rawDamage: 100, damageType: 'TRUE', target: far, source: c, isUltimate: true });
+  assert(near(dNear, 105) && near(dFar, 105 * 0.775) && near(dUlt, 105), '83차: 칼바람 - 리 신 피해 +5%, 1500 거리 22.5% 감소, 궁극기는 감소 제외');
+  context.howlingAbyssStructuresSpawned = false;
 }

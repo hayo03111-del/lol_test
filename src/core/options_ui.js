@@ -9,13 +9,13 @@
    ============================================================ */
 const OPTIONS_STORAGE_KEY = 'lolsim.options.v1';
 const OPTIONS_DEFAULTS = {
-  castMode: 'normal', cameraLocked: true, edgeSpeed: 1, rangeIndicator: false,
+  castMode: 'normal', cameraLocked: true, edgeSpeed: 1, rangeIndicator: false, autoAttack: true, attackMoveOnCursor: false, // 83차
   hudScale: 1, minimapScale: 1, showChampBars: true, showMinionBars: true, showStructBars: true, showFps: true, showRewardText: true,
   showTurretTraits: false, renderScale: 1,
 };
 const OPTIONS_TABS = [['game', '게임'], ['ui', '인터페이스'], ['video', '비디오'], ['keys', '단축키'], ['practice', '연습 도구']];
 const OPTIONS_HOTKEYS = [
-  ['스킬', [['Q W E R', '스킬 사용'], ['Ctrl + Q W E R', '스킬 레벨 업'], ['D F', '소환사 주문'], ['A', '공격 이동(+ 좌클릭)'], ['S', '정지'], ['B', '귀환']]],
+  ['스킬', [['Q W E R', '스킬 사용'], ['Ctrl + Q W E R', '스킬 레벨 업'], ['D F', '소환사 주문'], ['A', '공격 이동(+ 좌클릭)'], ['` (누르고 있기)', '챔피언만 공격'], ['S', '정지'], ['B', '귀환']]],
   ['아이템', [['1 2 3 5 6 7', '아이템 사용'], ['4', '장신구(와드) 설치'], ['P', '상점 열기/닫기']]],
   ['카메라·화면', [['Y', '카메라 고정 켜기/끄기'], ['Space / F1 (누르고 있기)', '내 챔피언 보기'], ['마우스 휠', '확대·축소'], ['Tab (누르고 있기) / O', '스코어보드'], ['V', '사거리 표시'], ['Esc', '설정 창'], ['Pause', '일시정지']]],
   ['연습장 전용', [['F6', '허수아비 설치 모드'], ['F7', '아군 허수아비 설치 모드'], ['F8', '부쉬 설치 모드'], ['F9', '디버그 패널']]],
@@ -74,6 +74,8 @@ function _optBodyHtml() {
       return `<h3>조작</h3>`
         + _optRow('스킬 시전 방식', _optSelect('castMode', [['normal', '일반 (논타겟 즉시 · 대상 지정은 대상 클릭)'], ['indicator', '표시기 사용 빠른 시전 (떼면 시전)'], ['quick', '빠른 시전 (모두 즉시)']]))
         + _optRow('공격 사거리 표시', _optCheck('rangeIndicator'), 'V')
+        + _optRow('자동 공격', _optCheck('autoAttack'), '가만히 있을 때 사거리 안의 적을 공격(쫓아가지 않음)')
+        + _optRow('커서 기준 공격 이동', _optCheck('attackMoveOnCursor'), '공격 이동이 커서에서 가장 가까운 적을 노림(끄면 내 챔피언 기준)')
         + `<h3>카메라</h3>`
         + _optRow('카메라 고정', _optCheck('cameraLocked'), 'Y - 끄면 화면 가장자리로 카메라 이동')
         + _optRow('카메라 이동 속도', _optSlider('edgeSpeed', 0.3, 2.5, 0.1, _pct));

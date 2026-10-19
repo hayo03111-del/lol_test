@@ -148,6 +148,7 @@ CharacterController.prototype._renektonCastW = function(mouseWorldPoint, free=fa
     const w=this._renektonData().W;
     if (this._renekton.wArmed && !free) { this._renekton.wArmed=false; this._renekton.wEmpowered=false; return; }
     if (!free && (this.cooldowns.W>0 || this.state===STATE.DEAD || isSilenced(this))) return;
+    this.resetAttackTimer(); // 83차: 무자비한 포식자는 평타 초기화(원작)
     if (!free) this.cooldowns.W=abilityHasteCooldown(this, skillVal(w.cooldown,this.skillLevels.W||1));
     const empowered = !free && this._renekton.rage>=50;
     if (empowered) this._renekton.rage-=50;
@@ -189,6 +190,7 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
     this._renektonFacePoint(getWorldPosition(target));
     const clipName=(this.comboIndex++%2===0)?'Attack1':'Attack2';
     const clip=this.findAnimation(clipName); const interval=getAttackInterval(this.stats); const windup=getWindupDuration(this.stats); const recovery=getRecoveryDuration(this.stats);
+    this._markAttackSwing(windup,interval); // 83차: 평타 타이머
     this.runAction(`renektonAA${this.comboIndex}`,STATE.ATTACK,{faceDir:dir,startupOverride:windup,recoveryOverride:recovery,timeScaleOverride:clip&&interval>0?attackClipTimeScale(this,clip,windup,interval):1,dataOverride:{clips:[clipName],startup:windup,recovery,cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{
       if(!targetLockValid(target)) return;
       if(target.isWard){ wardSystem.hitWard(target,this); return; } // 32차: 와드는 평타 1회에 체력 1
@@ -341,7 +343,7 @@ CharacterController.prototype._renektonTick = function(dt) {
         // 0.5초마다 초당 피해의 절반(PC 위키: 30/75/120 + 추가 AD 5% + AP 5%).
         const raw=(skillVal(rd.damagePerSecond,lvl)+rd.bonusAdRatio*this._renektonExtraAD()+rd.apRatio*(this.stats.abilityPower||0))*tickSec;
         const radius=rd.range;
-        for(const h of findEnemiesInRadius(this.root.position,radius))applyDamage(h.unit,{rawDamage:raw,damageType:DAMAGE_TYPE.MAGICAL,isCritical:false,critMultiplier:1});
+        for(const h of findEnemiesInRadius(this.root.position,radius))applyDamage(h.unit, { isUltimate: true,rawDamage:raw,damageType:DAMAGE_TYPE.MAGICAL,isCritical:false,critMultiplier:1});
       }
       if(now>=r.rActiveUntil)this._renektonEndR();
     } else {

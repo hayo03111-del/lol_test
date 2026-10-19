@@ -55,7 +55,7 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
         const t = this._vex.recastTarget;
         if (t && t.hp > 0 && !t.isDead && !t.destroyed) {
           const raw = skillVal(rd.recastDamageByLevel, lvl) + (rd.recastApRatio || 0) * (this.stats.abilityPower || 0);
-          applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1 });
+          applyDamage(t, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1 });
           vfx.spawn('r', this.root.position.clone());
           debugSkillHit('Vex R Recast', t);
           if (t.hp <= 0) {
@@ -98,7 +98,7 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
       realmId: this.realmId,
       onHit: (hitTarget) => {
         if (!hitTarget || hitTarget.hp <= 0) return;
-        applyDamage(hitTarget, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1 });
+        applyDamage(hitTarget, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1 });
         vfx.spawn('r', getWorldPosition(hitTarget) || hitTarget.mesh.position.clone());
         debugSkillHit('Vex R', hitTarget);
         if (hitTarget.hp > 0) {

@@ -835,7 +835,8 @@ function updateNexusWell(well, dt) {
   // 안에 있으면 회복된다.
   if (typeof controller !== 'undefined' && controller && controller.hp > 0 && controller.state !== STATE.DEAD
       && well.team === (controller.team || PLAYER_TEAM) && canRealmInteract(well, controller)) {
-    if (isPositionInBaseZone(controller.root.position, well.team) && (controller.hp < controller.maxHp || controller.mp < controller.maxMp)) {
+    // 83차: 칼바람 나락 우물은 회복시키지 않는다(원작 - 회복은 체력 구슬과 부활뿐).
+    if (!(typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned) && isPositionInBaseZone(controller.root.position, well.team) && (controller.hp < controller.maxHp || controller.mp < controller.maxMp)) {
       controller.hp = Math.min(controller.maxHp, controller.hp + WELL_HEAL_HP_PER_SEC * dt);
       controller.mp = Math.min(controller.maxMp, controller.mp + WELL_HEAL_MP_PER_SEC * dt);
       updateBars(controller);

@@ -693,6 +693,7 @@ CharacterController.prototype._masteryiEndMeditate = function(reason = 'natural'
 // Extracted from CharacterController: _masteryiWOnCast
 CharacterController.prototype._masteryiWOnCast = function() {
     const cd = this._champData(); if (!cd) return;
+    this.resetAttackTimer(); // 83차: 명상은 평타 초기화(원작)
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
     this._masteryi.wStartedAt = performance.now(); // 진단 로그용(_masteryiEndMeditate의 경과시간 계산)

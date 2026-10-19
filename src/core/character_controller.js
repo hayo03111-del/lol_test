@@ -62,7 +62,7 @@ class CharacterController {
 
       attackDamage: 10, attackRange: ATTACK_RANGE,
       baseAttackSpeed: 1.0, bonusAttackSpeedPercent: 0, attackSpeedMultiplier: 1,
-      minAttackSpeed: 0.2, maxAttackSpeed: 2.5, // 원작 공격 속도 상한 2.5(예전 3.5)
+      minAttackSpeed: 0.2, maxAttackSpeed: 3.003, // 83차: 25.S1.3부터 공격 속도 상한 3.003(예전 2.5)
       windupPercent: 0.4,
 
       projectileSpeed: 30,
@@ -701,6 +701,9 @@ class CharacterController {
     const names = entry?.attackOverrideAnimationNames;
     if (!Array.isArray(names) || !names.length) return;
     const mode = entry.attackOverrideMode || 'duration';
+    // 83차: 원작 평타 초기화 스킬 - 가렌 Q·다리우스 W·노틸러스 W(레넥톤 W·마스터 이 W·티아맷은 각자 경로에서).
+    const RESET_SLOTS = { garen: 'Q', darius: 'W', nautilus: 'W' };
+    if (RESET_SLOTS[this.championId] === roleLetter) this.resetAttackTimer();
     this.registerAttackOverride({
       id: roleLetter,
       clips: names,
@@ -1254,6 +1257,10 @@ class CharacterController {
   // startRecall/debugPreviewClip 전부), 진행 중이던 AnimationSequencePlayer
   // 시퀀스도 여기서 한 번에 취소한다 -- 남은 Step은 절대 실행되지 않는다.
   _clearActionTimers() {
+    // 83차: 평타 선딜 도중 취소(이동·다른 대상 명령·스킬·S·행동 불가)는 평타 타이머를 돌려받는다(원작). 선딜이 끝난 뒤의 취소는 그대로.
+    // (방금 스윙을 시작하며 runAction이 부르는 정리는 취소가 아니다 - _markAttackSwing 직후 첫 정리는 건너뛴다)
+    if (this._attackMarkPending) this._attackMarkPending = false;
+    else if (this._attackWindupEndsAt && performance.now() < this._attackWindupEndsAt - 5) { this._attackReadyAt = this._attackPrevReadyAt || 0; this._attackWindupEndsAt = 0; }
     this._actionSerial = (this._actionSerial || 0) + 1;
     this._actionTimers.forEach(clearTimeout);
     this._actionTimers = [];
@@ -1374,6 +1381,7 @@ class CharacterController {
     if (this._updateApproachCast) this._updateApproachCast(); // 대상 지정 스킬: 사거리까지 걸어간 뒤 시전
     this.updateMovement(dt);
     this.updateTargetChase();
+    this._updateAttackTimerWait(); // 83차: 평타 타이머 대기 → 준비되면 공격
     this.updateEChannel(dt); // 요청(가렌형 한계 해결): 방향 채널링 E의 지속시간/도트 데미지
     this.updateCooldowns(dt);
     this.regen(dt);
@@ -1425,6 +1433,10 @@ class CharacterController {
     const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
     const chogathRange = (this.championId === 'chogath' && typeof chogathFeastBonus === 'function') ? chogathFeastBonus(this).attackRangeLol : 0; // 81차: 포식 중첩 평타 사거리
     this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange);
+    // 83차: 공격 속도 감소(얼어붙은 심장 등)는 "총 공격 속도"에 곱한다(출처끼리 곱연산) - 예전엔 추가 공속에서 뺐다.
+    this.stats.attackSpeedMultiplier = typeof getAttackSpeedReductionMultiplier === 'function' ? getAttackSpeedReductionMultiplier(this) : 1;
+    // 바루스 패시브(살아있는 복수) 중에는 공격 속도 상한 3.33(원작).
+    this.stats.maxAttackSpeed = (this.championId === 'varus' && this._varus && this._varus.lv && this._varus.lv.until > performance.now()) ? 3.33 : 3.003;
     this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0) + (typeof runeAttackSpeedBonus === 'function' ? runeAttackSpeedBonus(this) : 0)
       + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();

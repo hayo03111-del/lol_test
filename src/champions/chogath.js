@@ -186,7 +186,7 @@ CharacterController.prototype._chogathROnHit = function(target) {
       ? skillVal(r.championDamageByLevel, lvl) + r.championApRatio * this.stats.abilityPower + r.championBonusHpRatio * bonusHp
       : r.nonChampionDamage + r.nonChampionApRatio * this.stats.abilityPower + r.nonChampionBonusHpRatio * bonusHp;
     const hpB = target.hp, flB = isFlooredTrainingDummy(target);
-    const dealt = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: this }) || 0;
+    const dealt = applyDamage(target, { isUltimate: true, rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: this }) || 0;
     const wouldKill = !flB && hpB > 0 && hpB <= dealt;
     if (wouldKill) {
       // 중첩: 챔피언/에픽 몬스터는 제한 없음, 미니언/일반 몬스터로 얻는 중첩은 최대 6(PC 위키).

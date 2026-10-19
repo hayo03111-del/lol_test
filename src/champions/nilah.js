@@ -641,7 +641,7 @@ CharacterController.prototype._nilahRApplyTick = function(seq) {
     const bonusAd=Math.max(0,this.stats.attackDamage-baseAd);
     const raw=skillVal(r.tickDamageByLevel,lvl)+r.tickBonusAdRatio*bonusAd;
     for(const u of hits){
-      const dealt=applyDamage(u,{rawDamage:raw,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,armorPenPercent:this.armorPenPercent||0});
+      const dealt=applyDamage(u, { isUltimate: true,rawDamage:raw,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,armorPenPercent:this.armorPenPercent||0});
       if(u.isChampion||u.type==='champion'||u.championId) seq.championDamage+=dealt; else seq.nonChampionDamage+=dealt;
       // 미구현이었던 부분: 원작은 R의 틱 타격도 대상을 슬로우시킨다(다시
       // 맞으면 갱신) - id를 고정해서 applyStatus가 새로 걸지 않고 지속시간만
@@ -676,7 +676,7 @@ CharacterController.prototype._nilahRFinish = function(seq) {
     const bonusAd=Math.max(0,this.stats.attackDamage-baseAd);
     const raw=skillVal(r.finalDamageByLevel,lvl)+r.finalBonusAdRatio*bonusAd;
     for(const u of hits){
-      const dealt=applyDamage(u,{rawDamage:raw,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,armorPenPercent:this.armorPenPercent||0});
+      const dealt=applyDamage(u, { isUltimate: true,rawDamage:raw,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,armorPenPercent:this.armorPenPercent||0});
       if(u.isChampion||u.type==='champion'||u.championId) seq.championDamage+=dealt; else seq.nonChampionDamage+=dealt;
       applyStatus(u,{id:'nilahR_slow',type:'SLOW',duration:r.slowDuration,value:r.slowPercent/100});
       const from=getWorldPosition(u); if(from){const dir=new THREE.Vector3().subVectors(this.root.position,from).setY(0); if(dir.lengthSq()>1e-8){dir.normalize(); const to=this.root.position.clone().addScaledVector(dir,-(this.collisionRadius+getCollisionRadius(u))); to.y=from.y; // 닐라 몸 바로 앞까지(예전엔 닐라 위치에 겹쳐 쌓였다)

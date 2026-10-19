@@ -622,18 +622,20 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     // 그 땅으로 걷기만 해서, 미니언을 우클릭하면 때리지 않고 미니언 쪽으로 걸어가기만 했다.
     attackMoveArmed = false;
     const enemyUnderCursor = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
-    if (enemyUnderCursor) { controller.selectTarget(enemyUnderCursor); return; }
+    // 83차: "챔피언만 공격"(` 누르고 있기) 중에는 챔피언이 아닌 대상을 우클릭해도 그 자리로 이동만 한다.
+    if (enemyUnderCursor && (!window.__championsOnlyHeld || enemyUnderCursor.isChampion)) { controller.selectTarget(enemyUnderCursor); return; }
     spawnMoveMarker(groundPoint); controller.moveTo(groundPoint);
   } else if (e.button === 0) {
     // 64차 공격 이동(원작 A + 좌클릭): 커서 아래 적, 없으면 클릭 지점에서 가장 가까운 적(400 안)을 공격하고, 없으면 그 자리로 이동.
     if (attackMoveArmed) {
       attackMoveArmed = false;
       const p = getGroundPoint(e.clientX, e.clientY) || lastGroundPoint;
-      // 커서 바로 아래가 미니언·챔피언이면 그것, 아니면 클릭 지점 근처(400) 가장 가까운 적, 그래도 없으면 커서 아래 구조물.
+      // 83차(원작): 커서 바로 아래 적을 찍으면 그 적, 아니면 사거리 안에서 내 챔피언(옵션: 커서)에 가장 가까운 적. 없으면 그 자리로
+      // 걸어가며 계속 살핀다(공격 이동 유지). ` 키를 누르고 있으면 챔피언만.
+      const champsOnly = !!window.__championsOnlyHeld;
       const under = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
-      const t = (under && !under.isStructure ? under : null) || (p ? findAttackMoveTarget(p) : null) || under;
-      if (t) controller.selectTarget(t);
-      else if (p) { spawnMoveMarker(p); controller.moveTo(p); }
+      if (under && (!champsOnly || under.isChampion)) { controller._attackMoveDest = null; controller.selectTarget(under); return; }
+      if (p) { spawnMoveMarker(p); controller.attackMoveTo(p, { championsOnly: champsOnly, cursorPoint: (typeof optionsState !== 'undefined' && optionsState.attackMoveOnCursor) ? p : null }); }
       return;
     }
     if (dummyPlaceMode) {
@@ -819,3 +821,9 @@ function togglePause() {
   clock.getDelta();
 }
 
+
+// 83차: "챔피언만 공격" - 원작 기본 키 `(누르고 있는 동안). 우클릭·공격 이동이 챔피언만 노린다.
+window.__championsOnlyHeld = false;
+window.addEventListener('keydown', (e) => { if (e.code === 'Backquote') window.__championsOnlyHeld = true; });
+window.addEventListener('keyup', (e) => { if (e.code === 'Backquote') window.__championsOnlyHeld = false; });
+window.addEventListener('blur', () => { window.__championsOnlyHeld = false; });

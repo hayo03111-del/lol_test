@@ -274,7 +274,7 @@ function _itemLegendaryDuplicate(ctrl, item) {
 function buyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
-  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
+  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM) && !(ctrl.hp <= 0 || ctrl.state === STATE.DEAD)) { // 83차: 죽어 있는 동안에도 구매·판매 가능(원작)
     itemWarn('기지(상점 구역) 안에서만 구매할 수 있습니다.');
     return false;
   }
@@ -368,7 +368,7 @@ function buildOrBuyItem(ctrl, itemId) {
   if (!item.recipe || !item.recipe.length || !hasComponents(ctrl, item.recipe)) {
     return buyItem(ctrl, itemId);
   }
-  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
+  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM) && !(ctrl.hp <= 0 || ctrl.state === STATE.DEAD)) { // 83차: 죽어 있는 동안에도 구매·판매 가능(원작)
     itemWarn('기지(상점 구역) 안에서만 조합할 수 있습니다.');
     return false;
   }
@@ -524,6 +524,7 @@ function _useActiveAbilityItem(ctrl, item) {
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
   if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   ctrl._itemActiveCooldownUntil[item.id] = now + item.activeAbility.cooldownSec * 1000;
+  if (typeof ctrl.resetAttackTimer === 'function') ctrl.resetAttackTimer(); // 83차: 티아맷·히드라 사용은 평타 초기화(원작)
   const raw = item.activeAbility.percentAD * (ctrl.stats.attackDamage || 0);
   if (raw > 0 && typeof findEnemiesInRadius === 'function') {
     const hits = findEnemiesInRadius(ctrl.root.position, item.activeAbility.radius);

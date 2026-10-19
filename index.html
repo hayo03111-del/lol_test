@@ -1662,7 +1662,9 @@ const STATE = {
 const Q_COOLDOWN = 4, W_COOLDOWN = 8, E_COOLDOWN = 6, R_COOLDOWN = 20;
 const Q_MANA = 15, W_MANA = 20, E_MANA = 15, R_MANA = 50;
 const RECALL_DURATION = 4.0;
-const RESPAWN_WAIT = 3.0;
+const RESPAWN_WAIT = 3.0; // (레벨 표가 없을 때의 기본값)
+// 83차: 칼바람 나락 부활 대기 시간은 레벨로만 정해진다(PC 위키 Death/ARAM - 3레벨 11초 … 18레벨 40초).
+const ARAM_DEATH_TIMER_BY_LEVEL = [0, 10, 10, 11, 13, 15, 17, 19, 21, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40];
 const E_COMBO_WINDOW = 1.2;
 // 커스텀(사용자 정의 다중 애니메이션 시퀀스) Q/W/E/R용 비용/데미지 테이블.
 // 슬롯 이름으로만 조회하는 범용 테이블이라 어떤 챔피언에도 동일하게 적용된다.
@@ -1947,7 +1949,7 @@ function resolveDamageSource(source, target) {
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
 // 넘어온다 - 여기서 다시 굴리지 않는다(같은 공격 인스턴스의 결과가 명중
 // 시점에 바뀌면 안 되므로).
-function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false }) {
+function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false, isStatusTick = false, isUltimate = false }) {
   // 무한의 대검(치명타 피해량 +30%) - 각 챔피언 스킬이 저마다 다른
   // critMultiplier를 넘기므로(공용 필드가 아님), 공격자의 아이템 보너스를
   // 여기서 한 곳에서 더해 넣는다 - 치명타가 아니면 critMultiplier 자체가
@@ -2033,6 +2035,23 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   if (typeof getItemExtraOutgoingAmp === 'function') dmg *= (1 + getItemExtraOutgoingAmp(ampSource, isBasicAttack));
   // 36차: 소환사 주문 탈진 - 탈진에 걸린 공격자가 입히는 모든 피해 감소(summoner_spells.js).
   if (typeof getOutgoingDamageReductionPercent === 'function') dmg *= 1 - getOutgoingDamageReductionPercent(ampSource);
+  // 83차: 칼바람 나락 규칙(챔피언 → 챔피언 피해에만).
+  if (typeof isAramRulesActive === 'function' && isAramRulesActive() && ampSource && target && ampSource !== target && (ampSource.isChampion || typeof ampSource.championId === 'string') && target.isChampion) {
+    // (1) 챔피언별 밸런스 보정 - 26.15부터 스킬·평타·아이템 피해 모두에 적용.
+    if (typeof getAramBalance === 'function') {
+      const bs = getAramBalance(ampSource), bt = getAramBalance(target);
+      if (bs && bs.dmgDealt) dmg *= 1 + bs.dmgDealt;
+      if (bt && bt.dmgTaken) dmg *= 1 + bt.dmgTaken;
+    }
+    // (2) 칼바람 오라 - 1000보다 먼 적 챔피언에게 받는 피해 15%(1000)~30%(2000) 감소. 지속 피해·궁극기는 제외.
+    if (!isStatusTick && !isUltimate && typeof getWorldPosition === 'function') {
+      const ps = getWorldPosition(ampSource), pt = getWorldPosition(target);
+      if (ps && pt) {
+        const dLol = worldDistanceToLol(getHorizontalDistance(ps, pt));
+        if (dLol > 1000) dmg *= 1 - (0.15 + 0.15 * Math.min(1, (dLol - 1000) / 1000));
+      }
+    }
+  }
   return dmg;
 }
 
@@ -2478,13 +2497,16 @@ function getGrievousPercent(target) {
 // 챙기게 한다).
 function getHealReceivedMultiplier(target) {
   if (!target) return 1;
-  return (1 + (target.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(target));
+  // 83차: 칼바람 챔피언별 치유 보정(이 연습장에서 챔피언이 받는 치유는 전부 자기 치유라 받는 쪽에 곱한다).
+  const bal = typeof getAramBalance === 'function' ? getAramBalance(target) : null;
+  return (1 + (target.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(target)) * (1 + ((bal && bal.healing) || 0));
 }
 // 받는 보호막 배율(정령의형상/월석재생기 등의 "보호막 효과 증가") - 아이템
 // 보호막은 이미 이 필드를 곱하고 있었다. 챔피언 스킬 보호막도 같은 배율을 쓴다.
 function getShieldReceivedMultiplier(target) {
   if (!target) return 1;
-  return 1 + (target.itemShieldReceivedBonusPercent || 0);
+  const bal = typeof getAramBalance === 'function' ? getAramBalance(target) : null; // 83차: 칼바람 보호막 보정
+  return (1 + (target.itemShieldReceivedBonusPercent || 0)) * (1 + ((bal && bal.shielding) || 0));
 }
 function getAttackSpeedBuffPercent(target) {
   if (!target || !target.statusEffects) return 0;
@@ -2495,8 +2517,15 @@ function getAttackSpeedBuffPercent(target) {
   // 적용돼, 예컨대 마스터 이 R 중에는 아이템 공속 버프가 통째로 무시됐다.
   // 같은 버프의 재적용은 applyStatus가 같은 id를 덮어쓰므로 중복 합산되지 않는다.
   for (const e of target.statusEffects) if ((e.type === 'MASTERYI_R_AS' || e.type === 'AS_BUFF') && e.expiresAt > now) v += e.value;
-  for (const e of target.statusEffects) if (e.type === 'AS_REDUCTION' && e.expiresAt > now) v -= e.value; // 71차: 얼어붙은 심장(혹한의 포옹)
   return v;
+}
+// 83차: 공격 속도 감소(AS_REDUCTION - 얼어붙은 심장 혹한의 포옹 등) = 총 공격 속도 × Π(1 - 감소). 출처끼리 곱연산(위키 Cripple).
+function getAttackSpeedReductionMultiplier(target) {
+  if (!target || !target.statusEffects) return 1;
+  const now = performance.now();
+  let keep = 1;
+  for (const e of target.statusEffects) if (e.type === 'AS_REDUCTION' && e.expiresAt > now) keep *= 1 - Math.max(0, Math.min(1, e.value));
+  return keep;
 }
 
 
@@ -2954,7 +2983,10 @@ function _allyRecomputeShield(a) {
 // 회복을 부르는" 재귀를 막기 위한 플래그다.
 function healAlly(source, target, amount, { noItemHook = false } = {}) {
   if (!target || target.hp <= 0 || !(amount > 0)) return 0;
-  const eff = amount * getHealReceivedMultiplier(target);
+  // 83차: 칼바람 오라 - 남에게 주는 치유는 50%(자기 치유는 제외), 챔피언별 치유 보정도 적용.
+  const bal = typeof getAramBalance === 'function' ? getAramBalance(source) : null;
+  const aura = (source && source !== target && typeof isAramRulesActive === 'function' && isAramRulesActive()) ? 0.5 : 1;
+  const eff = amount * aura * (1 + ((bal && bal.healing) || 0)) * getHealReceivedMultiplier(target);
   const before = target.hp;
   target.hp = Math.min(target.maxHp, target.hp + eff);
   if (!noItemHook && source && typeof itemOnAllyHealOrShield === 'function') itemOnAllyHealOrShield(source, target, 'heal', eff);
@@ -3663,7 +3695,7 @@ const CHAMPION_DATA = {
     // (+25.13) 패치 노트·위키 패치 기록 요약을 검색으로 교차 확인한 값. 확인하지 못한 값은 "추정"으로 표시했다.
     stats: {
       hp: 645, hpGrowth: 100, hpRegen: 8, hpRegenGrowth: 0.55,
-      ad: 65, adGrowth: 2.75, attackSpeed: 0.7, attackSpeedGrowthPercent: 2.215, // adGrowth: Data Dragon이 0으로 내보내는 알려진 문제 - 2.75는 추정
+      ad: 65, adGrowth: 2.75, attackSpeed: 0.7, attackSpeedRatio: 0.625, attackSpeedGrowthPercent: 2.215, /* 83차: 공속 계수 0.625(PC 위키) */ // adGrowth: Data Dragon이 0으로 내보내는 알려진 문제 - 2.75는 추정
       armor: 35, armorGrowth: 4.5, mr: 32, mrGrowth: 2.05,
       range: 125, moveSpeed: 335, mana: 310, manaGrowth: 33, manaRegen: 7.85, manaRegenGrowth: 0.5,
       windupPercent: 0.2292, // 39차: LeagueSandbox Rammus.json(4.20) AttackDelayCastOffsetPercent -0.0708 → 0.3 - 0.0708
@@ -3806,7 +3838,7 @@ const CHAMPION_DATA = {
     displayName: '초가스',
     stats: {
       hp: 644, hpGrowth: 94, hpRegen: 9, hpRegenGrowth: 0.85,
-      ad: 69, adGrowth: 4.2, attackSpeed: 0.658, attackSpeedGrowthPercent: 1.44,
+      ad: 69, adGrowth: 4.2, attackSpeed: 0.658, attackSpeedRatio: 0.625, attackSpeedGrowthPercent: 1.44, /* 83차: 공속 계수 0.625(PC 위키) */
       armor: 38, armorGrowth: 4.5, mr: 32, mrGrowth: 2.05,
       range: 125, moveSpeed: 345, mana: 270, manaGrowth: 60, manaRegen: 7.2, manaRegenGrowth: 0.45,
       // PC 위키 기본 스탯: 평타 선딜 21.9%
@@ -4478,7 +4510,28 @@ function computeChampionStats(championId, level) {
   };
 }
 
-
+// 83차: 칼바람 나락 챔피언별 밸런스 보정(원작 ARAM 전용). dmgDealt/dmgTaken/healing/shielding = 증감 비율(0.05 = +5%).
+// 출처: PC 위키 ARAM 문서·패치 기록, aramnerfs.com·u.gg 26.19~26.20(위키 직접 접속 불가 - 검색 요약). 26.15에 대부분 중립으로
+// 정리됐다. 신뢰도 낮은 항목은 주석으로 표시 - 위키를 열 수 있게 되면 이 표만 고치면 된다. 없는 챔피언 = 보정 없음.
+const ARAM_BALANCE = {
+  garen: { dmgTaken: -0.05 },
+  leesin: { dmgDealt: 0.05, dmgTaken: -0.05, healing: 0.10 },
+  lux: { dmgDealt: -0.10, dmgTaken: 0.10, shielding: -0.10 },
+  ashe: { dmgDealt: 0.05 },
+  ahri: { healing: -0.10 },
+  vex: { dmgDealt: -0.05 },
+  nautilus: { dmgDealt: -0.05, dmgTaken: 0.10 },          // u.gg 26.20(신뢰도 중간)
+  chogath: { dmgTaken: 0.10 },                             // 출처끼리 엇갈림(대난투 쪽은 -5%)
+  rammus: { dmgDealt: 0.05, dmgTaken: -0.10 },             // 옛 패치 기록(신뢰도 낮음)
+  darius: { dmgDealt: 0.05 },                              // 날짜 없는 집계(신뢰도 낮음)
+};
+// 칼바람 규칙(밸런스 보정·원거리 감소·남에게 주는 치유 50%)은 칼바람 맵이 깔렸을 때만 적용한다.
+function isAramRulesActive() { return typeof howlingAbyssStructuresSpawned !== 'undefined' && !!howlingAbyssStructuresSpawned; }
+function getAramBalance(unit) {
+  if (!isAramRulesActive()) return null;
+  const id = unit && typeof unit.championId === 'string' ? unit.championId : null;
+  return (id && ARAM_BALANCE[id]) || null;
+}
 
 /* ===== src/champions/item_data.js ===== */
 // 아이템 시스템 - 1차분(도란 시리즈 5종) + 2차분(남은 시작 아이템 중 이
@@ -12508,7 +12561,7 @@ class CharacterController {
 
       attackDamage: 10, attackRange: ATTACK_RANGE,
       baseAttackSpeed: 1.0, bonusAttackSpeedPercent: 0, attackSpeedMultiplier: 1,
-      minAttackSpeed: 0.2, maxAttackSpeed: 2.5, // 원작 공격 속도 상한 2.5(예전 3.5)
+      minAttackSpeed: 0.2, maxAttackSpeed: 3.003, // 83차: 25.S1.3부터 공격 속도 상한 3.003(예전 2.5)
       windupPercent: 0.4,
 
       projectileSpeed: 30,
@@ -13147,6 +13200,9 @@ class CharacterController {
     const names = entry?.attackOverrideAnimationNames;
     if (!Array.isArray(names) || !names.length) return;
     const mode = entry.attackOverrideMode || 'duration';
+    // 83차: 원작 평타 초기화 스킬 - 가렌 Q·다리우스 W·노틸러스 W(레넥톤 W·마스터 이 W·티아맷은 각자 경로에서).
+    const RESET_SLOTS = { garen: 'Q', darius: 'W', nautilus: 'W' };
+    if (RESET_SLOTS[this.championId] === roleLetter) this.resetAttackTimer();
     this.registerAttackOverride({
       id: roleLetter,
       clips: names,
@@ -13700,6 +13756,10 @@ class CharacterController {
   // startRecall/debugPreviewClip 전부), 진행 중이던 AnimationSequencePlayer
   // 시퀀스도 여기서 한 번에 취소한다 -- 남은 Step은 절대 실행되지 않는다.
   _clearActionTimers() {
+    // 83차: 평타 선딜 도중 취소(이동·다른 대상 명령·스킬·S·행동 불가)는 평타 타이머를 돌려받는다(원작). 선딜이 끝난 뒤의 취소는 그대로.
+    // (방금 스윙을 시작하며 runAction이 부르는 정리는 취소가 아니다 - _markAttackSwing 직후 첫 정리는 건너뛴다)
+    if (this._attackMarkPending) this._attackMarkPending = false;
+    else if (this._attackWindupEndsAt && performance.now() < this._attackWindupEndsAt - 5) { this._attackReadyAt = this._attackPrevReadyAt || 0; this._attackWindupEndsAt = 0; }
     this._actionSerial = (this._actionSerial || 0) + 1;
     this._actionTimers.forEach(clearTimeout);
     this._actionTimers = [];
@@ -13820,6 +13880,7 @@ class CharacterController {
     if (this._updateApproachCast) this._updateApproachCast(); // 대상 지정 스킬: 사거리까지 걸어간 뒤 시전
     this.updateMovement(dt);
     this.updateTargetChase();
+    this._updateAttackTimerWait(); // 83차: 평타 타이머 대기 → 준비되면 공격
     this.updateEChannel(dt); // 요청(가렌형 한계 해결): 방향 채널링 E의 지속시간/도트 데미지
     this.updateCooldowns(dt);
     this.regen(dt);
@@ -13871,6 +13932,10 @@ class CharacterController {
     const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
     const chogathRange = (this.championId === 'chogath' && typeof chogathFeastBonus === 'function') ? chogathFeastBonus(this).attackRangeLol : 0; // 81차: 포식 중첩 평타 사거리
     this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange);
+    // 83차: 공격 속도 감소(얼어붙은 심장 등)는 "총 공격 속도"에 곱한다(출처끼리 곱연산) - 예전엔 추가 공속에서 뺐다.
+    this.stats.attackSpeedMultiplier = typeof getAttackSpeedReductionMultiplier === 'function' ? getAttackSpeedReductionMultiplier(this) : 1;
+    // 바루스 패시브(살아있는 복수) 중에는 공격 속도 상한 3.33(원작).
+    this.stats.maxAttackSpeed = (this.championId === 'varus' && this._varus && this._varus.lv && this._varus.lv.until > performance.now()) ? 3.33 : 3.003;
     this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0) + (typeof runeAttackSpeedBonus === 'function' ? runeAttackSpeedBonus(this) : 0)
       + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
@@ -13969,7 +14034,11 @@ CharacterController.prototype.moveTo = function(point) {
     this._wardOrder = null; // 이동 명령은 "걸어가서 와드 놓기"를 취소한다(와드 명령 자신은 moveTo 뒤에 다시 건다)
     this._approachCast = null; // 이동 명령은 "다가가서 시전"을 취소한다(접근 시전 자신은 moveTo 뒤에 다시 건다)
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
-    if (isCrowdControlled(this) || isRooted(this)) return; // 기절/속박 중에는 이동 명령을 받지 않는다
+    if (!this._keepAttackMove) this._attackMoveDest = null; // 83차: 일반 이동 명령은 공격 이동을 끝낸다
+    this._autoAcquired = false;
+    // 83차: 행동 불가 중 내린 이동 명령은 버리지 않고 기억했다가 풀리면 실행한다(원작).
+    if (isCrowdControlled(this) || isRooted(this)) { this._ccBufferedMove = point.clone(); return; }
+    this._ccBufferedMove = null;
     if (this.currentActionKey === 'rWindup' || this.currentActionKey === 'rChannel' || this.currentActionKey === 'rCast'
         || this._isLeeSinCastLock()) return;
     // 모데카이저 R "죽음의 세계" 명세 6절 "경계 밖으로 나가지 못함": 이
@@ -14313,6 +14382,8 @@ CharacterController.prototype.selectTarget = function(enemy) {
     // 않고 기존 시스템에 도달하게만 한다.
     const isMasterYiMeditating = this.championId === 'masteryi' &&
       (this.currentActionKey === 'w' || this.currentActionKey === 'masteryiW');
+    // 83차: 평타 선딜 도중 "다른" 대상에게 공격 명령 → 선딜 취소(타이머 반환) 후 새 대상과 교전(원작). 같은 대상 재클릭은 무시.
+    const retargetDuringWindup = this.state === STATE.ATTACK && enemy !== this.currentTarget && this._attackWindupEndsAt && performance.now() < this._attackWindupEndsAt;
     this.currentTarget = enemy;
     this.attackOrderActive = true;
     this.attackOrderAnchor = enemy;
@@ -14323,6 +14394,7 @@ CharacterController.prototype.selectTarget = function(enemy) {
       this._tryEngageTarget();
       return;
     }
+    if (retargetDuringWindup) { this._cancelAttackWindup(); this._tryEngageTarget(); return; }
     if (this.state === STATE.IDLE || this.state === STATE.MOVE) this._tryEngageTarget();
 };
 
@@ -14369,7 +14441,102 @@ CharacterController.prototype._tryEngageTarget = function() {
       return;
     }
     this.isChasing = false;
+    // 83차: 평타 타이머(1/공속)가 아직 돌고 있으면 사거리 안에서 대상을 바라보며 기다린다 - 예전엔 이동·스킬 뒤 다시 공격 명령을
+    // 주면 곧바로 휘둘러, 이동/스킬이 공짜 평타 초기화가 됐다. 진짜 초기화 스킬만 resetAttackTimer()로 타이머를 지운다.
+    const nowA = performance.now();
+    if (nowA < (this._attackReadyAt || 0) - 15) {
+      this._awaitingAttackTimer = true;
+      if (this.state === STATE.MOVE) { this.targetPos = null; this.setState(STATE.IDLE); this.playFirstAvailable(this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.12 }); }
+      const tp = getWorldPosition(this.currentTarget);
+      if (tp) { const d = new THREE.Vector3(tp.x - this.root.position.x, 0, tp.z - this.root.position.z); if (d.lengthSq() > 1e-6) this.faceDirectionInstant(d.normalize()); }
+      return;
+    }
+    this._awaitingAttackTimer = false;
     this._beginAttackSwing();
+};
+
+// 83차: 평타 타이머. 선딜이 시작될 때 다음 평타 가능 시각 = 지금 + 1/공속. 선딜 도중 취소되면 이전 값으로 돌려준다.
+CharacterController.prototype._markAttackSwing = function(windupSec, intervalSec) {
+    const now = performance.now();
+    this._attackPrevReadyAt = this._attackReadyAt || 0;
+    this._attackReadyAt = now + Math.max(0, intervalSec) * 1000;
+    this._attackWindupEndsAt = now + Math.max(0, windupSec) * 1000;
+    this._attackMarkPending = true; // 바로 뒤 runAction의 _clearActionTimers는 취소가 아니다
+};
+// 평타 초기화(가렌 Q·다리우스 W·레넥톤 W·노틸러스 W·마스터 이 W·티아맷/히드라 사용 등): 다음 평타를 바로 할 수 있다.
+CharacterController.prototype.resetAttackTimer = function() { this._attackReadyAt = 0; this._attackWindupEndsAt = 0; };
+// 선딜 도중 공격 취소(타이머 반환) - 대상은 유지하고 행동 불가가 풀리면 다시 공격한다.
+CharacterController.prototype._cancelAttackWindup = function() {
+    this._attackReadyAt = this._attackPrevReadyAt || 0; this._attackWindupEndsAt = 0; // 타이머 반환
+    this._clearActionTimers();
+    this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
+    if (this.state === STATE.ATTACK) this.setState(STATE.IDLE);
+    this._awaitingAttackTimer = !!this.currentTarget;
+};
+// 83차 공격 이동(원작): 기본은 "내 챔피언에서 가장 가까운" 적, 옵션(커서 기준 공격 이동)이면 커서에서 가장 가까운 적을
+// 사거리 안에서 고른다. 없으면 목적지로 걸어가며 계속 살피다 사거리에 들어온 첫 적을 공격하고, 처치하면 목적지로 다시 간다.
+// "챔피언만 공격"(기본 ` 키 누르고 있기)이면 챔피언만 고른다.
+CharacterController.prototype._scanAttackableInRange = function(opts = {}) {
+    let best = null, bestD = Infinity;
+    const ref = opts.cursorPoint || null;
+    for (const u of (typeof getTargetableEnemyUnits === 'function' ? getTargetableEnemyUnits() : [])) {
+      if (!u || u.hp <= 0 || u.isWard || u.isUntargetable) continue;
+      if (opts.championsOnly && !u.isChampion) continue;
+      if (u.isStructure && typeof isStructureProtected === 'function' && isStructureProtected(u)) continue;
+      if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
+      if (!this._isInAttackRangeWithBonus(u)) continue;
+      const p = getWorldPosition(u); if (!p) continue;
+      const d = getHorizontalDistance(ref || this.root.position, p);
+      if (d < bestD) { bestD = d; best = u; }
+    }
+    return best;
+};
+CharacterController.prototype.attackMoveTo = function(point, opts = {}) {
+    const t = this._scanAttackableInRange(opts);
+    this._attackMoveOpts = { championsOnly: !!opts.championsOnly };
+    if (t) { this._attackMoveDest = point ? point.clone() : null; this.selectTarget(t); return t; }
+    this._keepAttackMove = true; this.moveTo(point); this._keepAttackMove = false;
+    this._attackMoveDest = point ? point.clone() : null;
+    return null;
+};
+// 매 프레임: 평타 타이머 대기, 공격 이동 중 적 탐색, 대기 중 자동 공격(사거리 안), 행동 불가 중 받아 둔 이동 명령.
+CharacterController.prototype._updateAttackTimerWait = function() {
+    if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
+    const cc = typeof isCrowdControlled === 'function' && (isCrowdControlled(this) || (typeof isRooted === 'function' && isRooted(this)));
+    if (this._ccBufferedMove && !cc && !this.currentActionKey) { const p = this._ccBufferedMove; this._ccBufferedMove = null; this.moveTo(p); return; }
+    // 평타 후딜(선딜 이후) 중 대상이 사거리를 벗어나면 곧바로 추격한다(타이머는 계속 돈다).
+    if (this.state === STATE.ATTACK && this.currentPhase === 'RECOVERY' && !this._attackWindupEndsAt && this.currentTarget && this.currentTarget.hp > 0
+        && !this._isInAttackRangeWithBonus(this.currentTarget) && (this._attackReadyAt || 0) > 0) {
+      this._clearActionTimers(); this.currentActionKey = null; this.currentPhase = null; this.setState(STATE.IDLE);
+      this._tryEngageTarget();
+      return;
+    }
+    // 공격 이동: 걸어가는 중 사거리에 들어온 적 공격 / 대상 처치 후 목적지로 복귀.
+    if (this._attackMoveDest && !cc) {
+      if (this.state === STATE.MOVE && !this.currentTarget) {
+        const t = this._scanAttackableInRange(this._attackMoveOpts || {});
+        if (t) { const dest = this._attackMoveDest; this.selectTarget(t); this._attackMoveDest = dest; return; }
+      } else if (this.state === STATE.IDLE && !this.currentTarget && !this.currentActionKey) {
+        const dest = this._attackMoveDest;
+        if (getHorizontalDistance(dest, this.root.position) > 0.2) { this._keepAttackMove = true; this.moveTo(dest); this._keepAttackMove = false; }
+        else this._attackMoveDest = null;
+        return;
+      }
+    }
+    // 자동 공격(옵션 "자동 공격", 원작 기본 켜짐): 아무 명령 없이 서 있으면 사거리 안의 적을 친다(쫓아가지는 않는다).
+    if (this.state === STATE.IDLE && !this.currentTarget && !this.targetPos && !this.currentActionKey && !cc
+        && (typeof optionsState === 'undefined' || optionsState.autoAttack !== false)) {
+      const t = this._scanAttackableInRange({});
+      if (t) { this.selectTarget(t); this._autoAcquired = true; return; }
+    }
+    if (!this._awaitingAttackTimer) return;
+    if (!this.currentTarget || this.currentTarget.hp <= 0) { this._awaitingAttackTimer = false; return; }
+    if (this.state !== STATE.IDLE || this.currentActionKey) return;
+    if (typeof isCrowdControlled === 'function' && isCrowdControlled(this)) return;
+    const ready = performance.now() >= (this._attackReadyAt || 0) - 15;
+    const inRangeNow = this._isInAttackRangeWithBonus(this.currentTarget);
+    if (!inRangeNow && this._autoAcquired) { this.currentTarget = null; this._awaitingAttackTimer = false; this._autoAcquired = false; if (typeof targetRing !== 'undefined') targetRing.clear(); return; } // 자동 공격은 쫓아가지 않는다
+    if (ready || !inRangeNow) this._tryEngageTarget();
 };
 
 /* ===== src/core/controller_combat.js ===== */
@@ -15295,6 +15462,7 @@ CharacterController.prototype._beginAttackSwing = function() {
       timeScale = THREE.MathUtils.clamp(startHit.start.duration / Math.max(1e-3, windup), 0.4, 3.0);
     }
 
+    this._markAttackSwing(windup, attackInterval); // 83차: 평타 타이머(1/공속)는 선딜 시작 시점부터 돈다
     this.runAction(key, STATE.ATTACK, {
       faceDir: dirToTarget,
       startupOverride: windup,
@@ -15303,6 +15471,9 @@ CharacterController.prototype._beginAttackSwing = function() {
       dataOverride: attackData,
       animationSequenceClips: attackData.animationSequenceClips || null,
       onFire: () => {
+        // 83차: 선딜 도중 기절·공중에 뜸 등 행동 불가가 걸렸거나 대상이 대상 지정 불가가 되면 공격이 취소되고 타이머는 돌려받는다(원작).
+        if (isCrowdControlled(this) || target.isUntargetable) { this._cancelAttackWindup(); return; }
+        this._attackWindupEndsAt = 0; // 선딜 완료 - 이후 이동해도 타이머는 그대로
         if (hitClip) this.crossFadeToClip(hitClip, { loop: THREE.LoopOnce, clampWhenFinished: true, fade: 0.05, timeScale: attackHitClipTimeScale(this, windup) });
         // 죽음의 세계: 서로 다른 세계의 대상은 때릴 수 없다(스윙 도중 한쪽이 들어가도 명중 취소).
         if (typeof canRealmInteract === 'function' && !canRealmInteract(this, target)) return;
@@ -17438,6 +17609,8 @@ CharacterController.prototype._isMovementAbility = function(slot) {
 /* ---------------- recall ---------------- */
 CharacterController.prototype.startRecall = function() {
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN || this.state === STATE.RECALL) return;
+    // 83차: 칼바람 나락에는 귀환이 없다(원작).
+    if (typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned) { if (typeof showSkillToast === 'function') showSkillToast('칼바람 나락에서는 귀환할 수 없습니다'); return; }
     // PC 위키: 귀환은 이동 스킬로 취급되어 속박 중엔 쓸 수 없고, 기절류(행동 불가) 중에도 쓸 수 없다.
     if ((typeof isRooted === 'function' && isRooted(this)) || (typeof isCrowdControlled === 'function' && isCrowdControlled(this))) { if (typeof showSkillToast === 'function') showSkillToast('귀환 - 군중 제어 중 사용 불가'); return; }
     this._clearActionTimers();
@@ -17610,7 +17783,9 @@ CharacterController.prototype._die = function() {
     if (typeof ensureScore === 'function' && typeof controller !== 'undefined' && controller === this) ensureScore(this).deaths += 1; // 34차 스코어보드
     vfx.spawn('death', this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)));
     this.playFirstAvailable(this.actionData.death.clips, { loop:THREE.LoopOnce, fade:0.1, clampWhenFinished:true });
-    const t = setTimeout(() => this._respawn(), RESPAWN_WAIT * 1000);
+    const waitSec = (typeof ARAM_DEATH_TIMER_BY_LEVEL !== 'undefined' && ARAM_DEATH_TIMER_BY_LEVEL[this.champLevel]) || RESPAWN_WAIT; // 83차: 레벨별 부활 시간
+    this._respawnAt = performance.now() + waitSec * 1000;
+    const t = setTimeout(() => this._respawn(), waitSec * 1000);
     this._pendingTimeouts.push(t);
 };
 // 25차: 리스폰·귀환은 자기 팀 우물(원작 출현 지점)로 간다. 예전엔 둘 다 맵 한가운데(0,0,0)였다.
@@ -17929,7 +18104,7 @@ CharacterController.prototype._dariusROnHit = function(target) {
     const dmg = min * (1 + (r.perStackBonusPercent / 100) * stacks);
     // 처치 판정: 실제로 들어간 피해 기준 + 2% 바닥에 멈춘 허수아비 반복 타격은 처치 아님(무한 재시전 방지).
     const hpBefore = target.hp, floored = isFlooredTrainingDummy(target);
-    const dealtR = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isAbility: true }) || 0;
+    const dealtR = applyDamage(target, { isUltimate: true, rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isAbility: true }) || 0;
     const killed = hpBefore > 0 && hpBefore <= dealtR && !floored;
     // PC 위키(Hemorrhage): 단두대는 피해를 준 뒤 출혈 중첩을 1 건다(예전엔 누락). 피해 계산에는 시전 전 중첩만 쓴다.
     if (!killed && target.hp > 0) this._dariusApplyBleed(target);
@@ -18068,7 +18243,7 @@ CharacterController.prototype._garenROnHit = function(target) {
     const missingHp = Math.max(0, (target.maxHp || 0) - (target.hp || 0));
     const dmg = base + missingHp * missingPct;
     // W 패시브 처치 스택은 applyDamage()의 공용 처치 판정에서 쌓인다(여기서 따로 부르면 이중 적립).
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+    applyDamage(target, { isUltimate: true, rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
   
 };
 
@@ -18731,7 +18906,7 @@ CharacterController.prototype._settRImpact = function(seq) {
       const floor = r.shockwaveFalloffFloor != null ? r.shockwaveFalloffFloor : 0.25;
       const falloff = impactRadiusWorld > 0 ? THREE.MathUtils.clamp(1 - (1 - floor) * (h.distance / impactRadiusWorld), floor, 1) : 1;
       const dmg = maxDmg * falloff;
-      applyDamage(h.unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+      applyDamage(h.unit, { isUltimate: true, rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
       applyStatus(h.unit, { id: 'settR_slow', type: 'SLOW', duration: r.slowDuration, value: r.slowPercent / 100 });
       console.log(`[SETT R] IMPACT -> ${unitLabel(h.unit)}: dist=${h.distance.toFixed(2)} falloff=${(falloff * 100).toFixed(0)}% dmg=${dmg.toFixed(1)}`);
     }
@@ -18920,6 +19095,7 @@ CharacterController.prototype._renektonCastW = function(mouseWorldPoint, free=fa
     const w=this._renektonData().W;
     if (this._renekton.wArmed && !free) { this._renekton.wArmed=false; this._renekton.wEmpowered=false; return; }
     if (!free && (this.cooldowns.W>0 || this.state===STATE.DEAD || isSilenced(this))) return;
+    this.resetAttackTimer(); // 83차: 무자비한 포식자는 평타 초기화(원작)
     if (!free) this.cooldowns.W=abilityHasteCooldown(this, skillVal(w.cooldown,this.skillLevels.W||1));
     const empowered = !free && this._renekton.rage>=50;
     if (empowered) this._renekton.rage-=50;
@@ -18961,6 +19137,7 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
     this._renektonFacePoint(getWorldPosition(target));
     const clipName=(this.comboIndex++%2===0)?'Attack1':'Attack2';
     const clip=this.findAnimation(clipName); const interval=getAttackInterval(this.stats); const windup=getWindupDuration(this.stats); const recovery=getRecoveryDuration(this.stats);
+    this._markAttackSwing(windup,interval); // 83차: 평타 타이머
     this.runAction(`renektonAA${this.comboIndex}`,STATE.ATTACK,{faceDir:dir,startupOverride:windup,recoveryOverride:recovery,timeScaleOverride:clip&&interval>0?attackClipTimeScale(this,clip,windup,interval):1,dataOverride:{clips:[clipName],startup:windup,recovery,cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{
       if(!targetLockValid(target)) return;
       if(target.isWard){ wardSystem.hitWard(target,this); return; } // 32차: 와드는 평타 1회에 체력 1
@@ -19113,7 +19290,7 @@ CharacterController.prototype._renektonTick = function(dt) {
         // 0.5초마다 초당 피해의 절반(PC 위키: 30/75/120 + 추가 AD 5% + AP 5%).
         const raw=(skillVal(rd.damagePerSecond,lvl)+rd.bonusAdRatio*this._renektonExtraAD()+rd.apRatio*(this.stats.abilityPower||0))*tickSec;
         const radius=rd.range;
-        for(const h of findEnemiesInRadius(this.root.position,radius))applyDamage(h.unit,{rawDamage:raw,damageType:DAMAGE_TYPE.MAGICAL,isCritical:false,critMultiplier:1});
+        for(const h of findEnemiesInRadius(this.root.position,radius))applyDamage(h.unit, { isUltimate: true,rawDamage:raw,damageType:DAMAGE_TYPE.MAGICAL,isCritical:false,critMultiplier:1});
       }
       if(now>=r.rActiveUntil)this._renektonEndR();
     } else {
@@ -19655,7 +19832,7 @@ CharacterController.prototype._yasuoCastR = function(free=false) {
           // rArmorBuffUntil은 이 onFire 콜백 아래에서 지금부터 15초로
           // 설정된다. R 명중 판정 시점엔 아직 그 버프가 시작되지 않았고,
           // R 스스로도 그 버프 대상이 아니므로 여기서는 항상 0이다.
-          applyDamage(target,{
+          applyDamage(target, { isUltimate: true,
             rawDamage:raw,
             damageType:DAMAGE_TYPE.PHYSICAL,
             isCritical:false,
@@ -20742,8 +20919,8 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
     hits.forEach((h) => {
       const t = h.unit;
       const half = total * 0.5;
-      let dealtR = applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
-      if (t.hp > 0) dealtR += applyDamage(t, { rawDamage: half, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
+      let dealtR = applyDamage(t, { isUltimate: true, rawDamage: half, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
+      if (t.hp > 0) dealtR += applyDamage(t, { isUltimate: true, rawDamage: half, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
       this._yoneRecordMark(t, dealtR);
     });
     // 2단계: 맞은 "적 챔피언" 중 가장 먼 대상 뒤 200(없으면 최대 사거리)으로 블링크.
@@ -21449,7 +21626,7 @@ CharacterController.prototype._nilahRApplyTick = function(seq) {
     const bonusAd=Math.max(0,this.stats.attackDamage-baseAd);
     const raw=skillVal(r.tickDamageByLevel,lvl)+r.tickBonusAdRatio*bonusAd;
     for(const u of hits){
-      const dealt=applyDamage(u,{rawDamage:raw,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,armorPenPercent:this.armorPenPercent||0});
+      const dealt=applyDamage(u, { isUltimate: true,rawDamage:raw,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,armorPenPercent:this.armorPenPercent||0});
       if(u.isChampion||u.type==='champion'||u.championId) seq.championDamage+=dealt; else seq.nonChampionDamage+=dealt;
       // 미구현이었던 부분: 원작은 R의 틱 타격도 대상을 슬로우시킨다(다시
       // 맞으면 갱신) - id를 고정해서 applyStatus가 새로 걸지 않고 지속시간만
@@ -21484,7 +21661,7 @@ CharacterController.prototype._nilahRFinish = function(seq) {
     const bonusAd=Math.max(0,this.stats.attackDamage-baseAd);
     const raw=skillVal(r.finalDamageByLevel,lvl)+r.finalBonusAdRatio*bonusAd;
     for(const u of hits){
-      const dealt=applyDamage(u,{rawDamage:raw,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,armorPenPercent:this.armorPenPercent||0});
+      const dealt=applyDamage(u, { isUltimate: true,rawDamage:raw,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,armorPenPercent:this.armorPenPercent||0});
       if(u.isChampion||u.type==='champion'||u.championId) seq.championDamage+=dealt; else seq.nonChampionDamage+=dealt;
       applyStatus(u,{id:'nilahR_slow',type:'SLOW',duration:r.slowDuration,value:r.slowPercent/100});
       const from=getWorldPosition(u); if(from){const dir=new THREE.Vector3().subVectors(this.root.position,from).setY(0); if(dir.lengthSq()>1e-8){dir.normalize(); const to=this.root.position.clone().addScaledVector(dir,-(this.collisionRadius+getCollisionRadius(u))); to.y=from.y; // 닐라 몸 바로 앞까지(예전엔 닐라 위치에 겹쳐 쌓였다)
@@ -22339,6 +22516,7 @@ CharacterController.prototype._masteryiEndMeditate = function(reason = 'natural'
 // Extracted from CharacterController: _masteryiWOnCast
 CharacterController.prototype._masteryiWOnCast = function() {
     const cd = this._champData(); if (!cd) return;
+    this.resetAttackTimer(); // 83차: 명상은 평타 초기화(원작)
     const w = cd.W;
     const lvl = Math.max(1, this.skillLevels.W || 1);
     this._masteryi.wStartedAt = performance.now(); // 진단 로그용(_masteryiEndMeditate의 경과시간 계산)
@@ -22649,7 +22827,7 @@ CharacterController.prototype._chogathROnHit = function(target) {
       ? skillVal(r.championDamageByLevel, lvl) + r.championApRatio * this.stats.abilityPower + r.championBonusHpRatio * bonusHp
       : r.nonChampionDamage + r.nonChampionApRatio * this.stats.abilityPower + r.nonChampionBonusHpRatio * bonusHp;
     const hpB = target.hp, flB = isFlooredTrainingDummy(target);
-    const dealt = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: this }) || 0;
+    const dealt = applyDamage(target, { isUltimate: true, rawDamage: dmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: this }) || 0;
     const wouldKill = !flB && hpB > 0 && hpB <= dealt;
     if (wouldKill) {
       // 중첩: 챔피언/에픽 몬스터는 제한 없음, 미니언/일반 몬스터로 얻는 중첩은 최대 6(PC 위키).
@@ -23180,7 +23358,7 @@ CharacterController.prototype._leesinCastR = function(free) {
 CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
     const r = this._champData().R;
     vfx.spawn('r', this.root.position.clone());
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+    applyDamage(target, { isUltimate: true, rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
     applyStatus(target, { id: 'leesinR_air', type: 'KNOCKUP', duration: r.airborneDuration, value: 1 });
     const from = target.mesh.position.clone();
     const dir = new THREE.Vector3().subVectors(from, this.root.position); dir.y = 0;
@@ -23204,7 +23382,7 @@ CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
       // 차인 대상이 그 지점에 도달하는 시각에 맞춰 판정.
       const t = this._champTimeout(() => {
         if (u.hp <= 0) return;
-        applyDamage(u, { rawDamage: collideDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+        applyDamage(u, { isUltimate: true, rawDamage: collideDmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
         applyStatus(u, { id: 'leesinR_collide_air', type: 'KNOCKUP', duration: r.collisionAirborneSec || 1, value: 1 });
         debugSkillHit('Lee Sin R (충돌)', u, { dmg: Math.round(collideDmg) });
       }, (along / Math.max(1e-6, pullDist)) * (r.knockbackSec || 0.8) * 1000);
@@ -23660,7 +23838,7 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
         const t = this._vex.recastTarget;
         if (t && t.hp > 0 && !t.isDead && !t.destroyed) {
           const raw = skillVal(rd.recastDamageByLevel, lvl) + (rd.recastApRatio || 0) * (this.stats.abilityPower || 0);
-          applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1 });
+          applyDamage(t, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1 });
           vfx.spawn('r', this.root.position.clone());
           debugSkillHit('Vex R Recast', t);
           if (t.hp <= 0) {
@@ -23703,7 +23881,7 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
       realmId: this.realmId,
       onHit: (hitTarget) => {
         if (!hitTarget || hitTarget.hp <= 0) return;
-        applyDamage(hitTarget, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1 });
+        applyDamage(hitTarget, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1 });
         vfx.spawn('r', getWorldPosition(hitTarget) || hitTarget.mesh.position.clone());
         debugSkillHit('Vex R', hitTarget);
         if (hitTarget.hp > 0) {
@@ -24371,7 +24549,7 @@ CharacterController.prototype._ezrealTickRTravel = function(dt) {
       // 피해를 받아야 하므로, 이 뷰어에 별도 몬스터 시스템이 없는 만큼
       // isMinion만으로 판정한다.
       if (u.isMinion) dmg *= (r.minionDamageMultiplier != null ? r.minionDamageMultiplier : 1);
-      applyDamage(u, { rawDamage: dmg, damageType: r.damageType === 'MAGICAL' ? DAMAGE_TYPE.MAGICAL : DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
+      applyDamage(u, { isUltimate: true, rawDamage: dmg, damageType: r.damageType === 'MAGICAL' ? DAMAGE_TYPE.MAGICAL : DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
       vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone());
       debugSkillHit('Ezreal R', u, { dmg: dmg.toFixed(1) });
       this._ezrealGainPassiveStack();
@@ -25007,7 +25185,7 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   const boltHit = (u) => {
     if (!u || u.hp <= 0) return;
     const raw = baseRaw * this._ahriCharmVulnMultiplier(u);
-    applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    applyDamage(u, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     vfx.spawn('ahriOrbHit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0x9fd7ff });
     debugSkillHit('Ahri R (정기 탄환)', u);
   };
@@ -25456,7 +25634,7 @@ CharacterController.prototype._varusRHit = function(firstUnit, dir) {
   const applyOne = (u) => {
     if (!u || u.hp <= 0 || infected.has(u)) return;
     infected.add(u);
-    applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    applyDamage(u, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     applyStatus(u, { id: 'varusR_root', type: 'ROOT', duration: r.rootDuration || 2, value: 0, source: this });
     this._varusDetonateBlight(u, { viaQ: false, chargeFraction: 0 });
     vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0xb08cff });
@@ -25882,7 +26060,7 @@ CharacterController.prototype._asheResolveRHit = function(primary, travel) {
   const lolDistance = worldDistanceToLol(travel.traveled);
   const stunSec = this._asheStunDurationForDistance(lolDistance);
 
-  applyDamage(primary, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+  applyDamage(primary, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
   applyStatus(primary, { id: 'asheR_stun', type: 'STUN', duration: stunSec, value: 0, source: this });
   vfx.spawn('hit', getWorldPosition(primary)?.clone() || primary.mesh.position.clone(), undefined, { color: 0x9fd7ff });
   debugSkillHit('Ashe R (마법의 수정화살 - 주 대상)', primary, { stunSec: stunSec.toFixed(2), lolDistance: lolDistance.toFixed(0) });
@@ -25896,7 +26074,7 @@ CharacterController.prototype._asheResolveRHit = function(primary, travel) {
   for (const u of getAllEnemyUnits()) {
     if (!u || u === primary || u.hp <= 0) continue;
     if (!isInCircle(u, travel.pos, splashRadius)) continue;
-    applyDamage(u, { rawDamage: raw * splashMult, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    applyDamage(u, { isUltimate: true, rawDamage: raw * splashMult, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     this._asheApplyFrostShot(u, false); // PC 위키: 주변 적에게도 서리 화살
     vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0x9fd7ff });
     debugSkillHit('Ashe R (마법의 수정화살 - 주변 피해)', u);
@@ -26388,7 +26566,7 @@ CharacterController.prototype._nautilusTickRTravel = function(dt) {
     if (!u || u === target || u.hp <= 0 || u.isStructure || t.pathHit.has(u)) continue;
     if (!isInCircle(u, t.pos, lolRangeToWorld(r.pathEruptionRadius || 225))) continue;
     t.pathHit.add(u);
-    applyDamage(u, { rawDamage: pathRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    applyDamage(u, { isUltimate: true, rawDamage: pathRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     applyStatus(u, { id: 'nautilusR_pathKnockup', type: 'KNOCKUP', duration: r.pathKnockupSec, value: 1, source: this });
     debugSkillHit('Nautilus R(폭뢰 - 경로)', u);
   }
@@ -26396,14 +26574,14 @@ CharacterController.prototype._nautilusTickRTravel = function(dt) {
   if (isInCircle(target, t.pos, BASE_UNIT * 0.2) || dist <= step) {
     this._nautilus.rTravel = null;
     const raw = skillVal(r.damageByLevel, t.lvl) + r.apRatio * (this.stats.abilityPower || 0);
-    applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    applyDamage(target, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     applyStatus(target, { id: 'nautilusR_knockup', type: 'KNOCKUP', duration: skillVal(r.stunByLevel, t.lvl), value: 1, source: this });
     // 81차: 대상 위치의 마지막 폭발은 반경 300(PC 위키 "225 / 300") - 주변 적도 경로 폭발과 같은 피해·에어본(경로에서 이미 맞은 적 제외).
     for (const u of getAllEnemyUnits()) {
       if (!u || u === target || u.hp <= 0 || u.isStructure || t.pathHit.has(u)) continue;
       if (!isInCircle(u, getWorldPosition(target), lolRangeToWorld(r.finalEruptionRadius || 300))) continue;
       t.pathHit.add(u);
-      applyDamage(u, { rawDamage: pathRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+      applyDamage(u, { isUltimate: true, rawDamage: pathRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
       applyStatus(u, { id: 'nautilusR_pathKnockup', type: 'KNOCKUP', duration: r.pathKnockupSec, value: 1, source: this });
       debugSkillHit('Nautilus R(폭뢰 - 마지막 폭발)', u);
     }
@@ -26937,11 +27115,11 @@ CharacterController.prototype._rammusLand = function(j) {
   for (const u of units) {
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
     const epi = farBonus > 0 && isInCircle(u, center, lolRangeToWorld(rd.centerRadius)) ? 1 + farBonus : 1;
-    applyDamage(u, { rawDamage: raw * epi * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
+    applyDamage(u, { isUltimate: true, rawDamage: raw * epi * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
     if (u.isStructure || u.hp <= 0) continue;
     applyStatus(u, { id: 'rammusR_slow', type: 'SLOW', duration: rd.slowDurationSec, value: slow, source: this });
     if (j.powerball && isInCircle(u, center, lolRangeToWorld(rd.centerRadius))) {
-      applyDamage(u, { rawDamage: qRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+      applyDamage(u, { isUltimate: true, rawDamage: qRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
       if (u.hp > 0) applyStatus(u, { id: 'rammusR_knockup', type: 'KNOCKUP', duration: rd.powerballKnockupSec, value: 1, source: this });
     }
   }
@@ -27015,9 +27193,9 @@ CharacterController.prototype._luxAimDir = function(mouseWorldPoint) {
   if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1).applyQuaternion(this.root.quaternion);
   return dir.setY(0).normalize();
 };
-CharacterController.prototype._luxSpellDamage = function(u, raw) {
+CharacterController.prototype._luxSpellDamage = function(u, raw, isUltimate = false) {
   if (!u || u.hp <= 0 || u.isStructure) return 0;
-  return applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
+  return applyDamage(u, { isUltimate, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
 };
 
 /* ---------------- 패시브 - 광채 ---------------- */
@@ -27268,7 +27446,7 @@ CharacterController.prototype._luxCastR = function(mouseWorldPoint, free = false
     for (const u of hits) {
       if (!u || u.hp <= 0 || u.isStructure || !canRealmInteract(this, u)) continue;
       this._luxDetonateMark(u); // 이전 표식을 먼저 터뜨리고
-      this._luxSpellDamage(u, raw);
+      this._luxSpellDamage(u, raw, true); // 83차: 궁극기(칼바람 원거리 감소 제외)
       if (u.hp > 0) {
         this._luxMark(u); // 새 표식을 남긴다
         if (typeof visionSystem !== 'undefined' && visionSystem && visionSystem.revealUnit) visionSystem.revealUnit(u, r.revealSec, this.team);
@@ -28742,7 +28920,8 @@ function updateNexusWell(well, dt) {
   // 안에 있으면 회복된다.
   if (typeof controller !== 'undefined' && controller && controller.hp > 0 && controller.state !== STATE.DEAD
       && well.team === (controller.team || PLAYER_TEAM) && canRealmInteract(well, controller)) {
-    if (isPositionInBaseZone(controller.root.position, well.team) && (controller.hp < controller.maxHp || controller.mp < controller.maxMp)) {
+    // 83차: 칼바람 나락 우물은 회복시키지 않는다(원작 - 회복은 체력 구슬과 부활뿐).
+    if (!(typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned) && isPositionInBaseZone(controller.root.position, well.team) && (controller.hp < controller.maxHp || controller.mp < controller.maxMp)) {
       controller.hp = Math.min(controller.maxHp, controller.hp + WELL_HEAL_HP_PER_SEC * dt);
       controller.mp = Math.min(controller.maxMp, controller.mp + WELL_HEAL_MP_PER_SEC * dt);
       updateBars(controller);
@@ -30723,7 +30902,7 @@ let dummyPlaceMode = false;
    - 받은 골드는 그 자리에 "+21" 같은 금색 숫자로 잠깐 떠오른다(내 챔피언이 받은 것만).
    ============================================================ */
 const ARAM_STARTING_GOLD = 1400;
-const ARAM_PASSIVE_GOLD_PER_10S = 55;
+const ARAM_PASSIVE_GOLD_PER_10S = 60; // 83차: PC 위키 Gold/ARAM - 1:00부터 10초당 60(예전 55)
 const ARAM_PASSIVE_GOLD_START_SEC = 60;
 const ARAM_NEARBY_MINION_GOLD = 6;
 const TURRET_GOLD_HA = {
@@ -31130,7 +31309,7 @@ function _itemLegendaryDuplicate(ctrl, item) {
 function buyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
-  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
+  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM) && !(ctrl.hp <= 0 || ctrl.state === STATE.DEAD)) { // 83차: 죽어 있는 동안에도 구매·판매 가능(원작)
     itemWarn('기지(상점 구역) 안에서만 구매할 수 있습니다.');
     return false;
   }
@@ -31224,7 +31403,7 @@ function buildOrBuyItem(ctrl, itemId) {
   if (!item.recipe || !item.recipe.length || !hasComponents(ctrl, item.recipe)) {
     return buyItem(ctrl, itemId);
   }
-  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM)) {
+  if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM) && !(ctrl.hp <= 0 || ctrl.state === STATE.DEAD)) { // 83차: 죽어 있는 동안에도 구매·판매 가능(원작)
     itemWarn('기지(상점 구역) 안에서만 조합할 수 있습니다.');
     return false;
   }
@@ -31380,6 +31559,7 @@ function _useActiveAbilityItem(ctrl, item) {
   const readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
   if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   ctrl._itemActiveCooldownUntil[item.id] = now + item.activeAbility.cooldownSec * 1000;
+  if (typeof ctrl.resetAttackTimer === 'function') ctrl.resetAttackTimer(); // 83차: 티아맷·히드라 사용은 평타 초기화(원작)
   const raw = item.activeAbility.percentAD * (ctrl.stats.attackDamage || 0);
   if (raw > 0 && typeof findEnemiesInRadius === 'function') {
     const hits = findEnemiesInRadius(ctrl.root.position, item.activeAbility.radius);
@@ -34973,6 +35153,7 @@ function _shopIconHtml(item, cls) {
 }
 function _shopInBase(ctrl) {
   if (!ctrl || !ctrl.root) return false;
+  if (ctrl.hp <= 0 || (typeof STATE !== 'undefined' && ctrl.state === STATE.DEAD)) return true; // 83차: 죽어 있으면 어디서든 상점 이용(원작)
   return typeof isPositionInBaseZone !== 'function' || isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM);
 }
 function _shopCanBuild(ctrl, item) {
@@ -37511,18 +37692,20 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     // 그 땅으로 걷기만 해서, 미니언을 우클릭하면 때리지 않고 미니언 쪽으로 걸어가기만 했다.
     attackMoveArmed = false;
     const enemyUnderCursor = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
-    if (enemyUnderCursor) { controller.selectTarget(enemyUnderCursor); return; }
+    // 83차: "챔피언만 공격"(` 누르고 있기) 중에는 챔피언이 아닌 대상을 우클릭해도 그 자리로 이동만 한다.
+    if (enemyUnderCursor && (!window.__championsOnlyHeld || enemyUnderCursor.isChampion)) { controller.selectTarget(enemyUnderCursor); return; }
     spawnMoveMarker(groundPoint); controller.moveTo(groundPoint);
   } else if (e.button === 0) {
     // 64차 공격 이동(원작 A + 좌클릭): 커서 아래 적, 없으면 클릭 지점에서 가장 가까운 적(400 안)을 공격하고, 없으면 그 자리로 이동.
     if (attackMoveArmed) {
       attackMoveArmed = false;
       const p = getGroundPoint(e.clientX, e.clientY) || lastGroundPoint;
-      // 커서 바로 아래가 미니언·챔피언이면 그것, 아니면 클릭 지점 근처(400) 가장 가까운 적, 그래도 없으면 커서 아래 구조물.
+      // 83차(원작): 커서 바로 아래 적을 찍으면 그 적, 아니면 사거리 안에서 내 챔피언(옵션: 커서)에 가장 가까운 적. 없으면 그 자리로
+      // 걸어가며 계속 살핀다(공격 이동 유지). ` 키를 누르고 있으면 챔피언만.
+      const champsOnly = !!window.__championsOnlyHeld;
       const under = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
-      const t = (under && !under.isStructure ? under : null) || (p ? findAttackMoveTarget(p) : null) || under;
-      if (t) controller.selectTarget(t);
-      else if (p) { spawnMoveMarker(p); controller.moveTo(p); }
+      if (under && (!champsOnly || under.isChampion)) { controller._attackMoveDest = null; controller.selectTarget(under); return; }
+      if (p) { spawnMoveMarker(p); controller.attackMoveTo(p, { championsOnly: champsOnly, cursorPoint: (typeof optionsState !== 'undefined' && optionsState.attackMoveOnCursor) ? p : null }); }
       return;
     }
     if (dummyPlaceMode) {
@@ -37708,6 +37891,12 @@ function togglePause() {
   clock.getDelta();
 }
 
+
+// 83차: "챔피언만 공격" - 원작 기본 키 `(누르고 있는 동안). 우클릭·공격 이동이 챔피언만 노린다.
+window.__championsOnlyHeld = false;
+window.addEventListener('keydown', (e) => { if (e.code === 'Backquote') window.__championsOnlyHeld = true; });
+window.addEventListener('keyup', (e) => { if (e.code === 'Backquote') window.__championsOnlyHeld = false; });
+window.addEventListener('blur', () => { window.__championsOnlyHeld = false; });
 
 /* ===== src/core/game_screen_ui.js ===== */
 /* ============================================================
@@ -38255,6 +38444,12 @@ async function bootstrapChampion(gltf, fileName) {
   // 바꿔도 구조물은 유지). 맵이 없으면 예전처럼 구조물 없는 연습 공간이다. 59차: 미니언도 챔피언을 바꿔도 그대로 둔다.
   if (typeof spawnHowlingAbyssStructures === 'function') spawnHowlingAbyssStructures();
   if (typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned && typeof grantStartingGold === 'function') grantStartingGold(controller); // 62차: 칼바람 시작 골드 1400
+  // 83차: 칼바람 나락은 3레벨로 시작한다(원작). 스킬은 이 연습장 규칙대로 Q/W/E/R 모두 1랭크가 이미 있어(테스트 편의) 추가 스킬 포인트는 주지 않는다.
+  if (typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned && controller.champLevel < 3) {
+    controller.champLevel = 3; controller.currentExp = 0;
+    controller.recomputeStats(); controller.hp = controller.maxHp; controller.mp = controller.maxMp;
+    updateBars(controller); if (typeof updateExpUI === 'function') updateExpUI(controller);
+  }
 
   // 요청("게임을 시작하면 자기 진영 우물에서 시작하게") - 실제 LoL처럼
   // 챔피언은 자기 팀 기지의 우물(분수)에서 스폰한다. 플레이어는 기존
@@ -39424,7 +39619,7 @@ function tickOneDummy(unit, dt) {
   if (isStunned(unit)) return;
   const dist = getHorizontalDistance(unit.mesh.position, controller.root.position);
   if (dist <= unit.attackRange && unit.attackCooldown <= 0) {
-    unit.attackCooldown = 1 / (unit.attackSpeed || 1 / 1.4);
+    unit.attackCooldown = 1 / ((unit.attackSpeed || 1 / 1.4) * (typeof getAttackSpeedReductionMultiplier === "function" ? getAttackSpeedReductionMultiplier(unit) : 1)); // 83차: 공속 감소 반영
     if (typeof brushSystem !== 'undefined') brushSystem.onActionFromBrush(unit); // 부쉬 안에서 공격하면 잠깐 드러남
     applyDamage(controller, { rawDamage: unit.attackDamage ?? 6, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
   }
@@ -39808,13 +40003,13 @@ if (typeof document !== 'undefined') {
    ============================================================ */
 const OPTIONS_STORAGE_KEY = 'lolsim.options.v1';
 const OPTIONS_DEFAULTS = {
-  castMode: 'normal', cameraLocked: true, edgeSpeed: 1, rangeIndicator: false,
+  castMode: 'normal', cameraLocked: true, edgeSpeed: 1, rangeIndicator: false, autoAttack: true, attackMoveOnCursor: false, // 83차
   hudScale: 1, minimapScale: 1, showChampBars: true, showMinionBars: true, showStructBars: true, showFps: true, showRewardText: true,
   showTurretTraits: false, renderScale: 1,
 };
 const OPTIONS_TABS = [['game', '게임'], ['ui', '인터페이스'], ['video', '비디오'], ['keys', '단축키'], ['practice', '연습 도구']];
 const OPTIONS_HOTKEYS = [
-  ['스킬', [['Q W E R', '스킬 사용'], ['Ctrl + Q W E R', '스킬 레벨 업'], ['D F', '소환사 주문'], ['A', '공격 이동(+ 좌클릭)'], ['S', '정지'], ['B', '귀환']]],
+  ['스킬', [['Q W E R', '스킬 사용'], ['Ctrl + Q W E R', '스킬 레벨 업'], ['D F', '소환사 주문'], ['A', '공격 이동(+ 좌클릭)'], ['` (누르고 있기)', '챔피언만 공격'], ['S', '정지'], ['B', '귀환']]],
   ['아이템', [['1 2 3 5 6 7', '아이템 사용'], ['4', '장신구(와드) 설치'], ['P', '상점 열기/닫기']]],
   ['카메라·화면', [['Y', '카메라 고정 켜기/끄기'], ['Space / F1 (누르고 있기)', '내 챔피언 보기'], ['마우스 휠', '확대·축소'], ['Tab (누르고 있기) / O', '스코어보드'], ['V', '사거리 표시'], ['Esc', '설정 창'], ['Pause', '일시정지']]],
   ['연습장 전용', [['F6', '허수아비 설치 모드'], ['F7', '아군 허수아비 설치 모드'], ['F8', '부쉬 설치 모드'], ['F9', '디버그 패널']]],
@@ -39873,6 +40068,8 @@ function _optBodyHtml() {
       return `<h3>조작</h3>`
         + _optRow('스킬 시전 방식', _optSelect('castMode', [['normal', '일반 (논타겟 즉시 · 대상 지정은 대상 클릭)'], ['indicator', '표시기 사용 빠른 시전 (떼면 시전)'], ['quick', '빠른 시전 (모두 즉시)']]))
         + _optRow('공격 사거리 표시', _optCheck('rangeIndicator'), 'V')
+        + _optRow('자동 공격', _optCheck('autoAttack'), '가만히 있을 때 사거리 안의 적을 공격(쫓아가지 않음)')
+        + _optRow('커서 기준 공격 이동', _optCheck('attackMoveOnCursor'), '공격 이동이 커서에서 가장 가까운 적을 노림(끄면 내 챔피언 기준)')
         + `<h3>카메라</h3>`
         + _optRow('카메라 고정', _optCheck('cameraLocked'), 'Y - 끄면 화면 가장자리로 카메라 이동')
         + _optRow('카메라 이동 속도', _optSlider('edgeSpeed', 0.3, 2.5, 0.1, _pct));

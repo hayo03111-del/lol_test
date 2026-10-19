@@ -370,7 +370,7 @@ CharacterController.prototype._ezrealTickRTravel = function(dt) {
       // 피해를 받아야 하므로, 이 뷰어에 별도 몬스터 시스템이 없는 만큼
       // isMinion만으로 판정한다.
       if (u.isMinion) dmg *= (r.minionDamageMultiplier != null ? r.minionDamageMultiplier : 1);
-      applyDamage(u, { rawDamage: dmg, damageType: r.damageType === 'MAGICAL' ? DAMAGE_TYPE.MAGICAL : DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
+      applyDamage(u, { isUltimate: true, rawDamage: dmg, damageType: r.damageType === 'MAGICAL' ? DAMAGE_TYPE.MAGICAL : DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
       vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone());
       debugSkillHit('Ezreal R', u, { dmg: dmg.toFixed(1) });
       this._ezrealGainPassiveStack();

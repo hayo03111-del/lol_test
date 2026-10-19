@@ -371,7 +371,7 @@ CharacterController.prototype._asheResolveRHit = function(primary, travel) {
   const lolDistance = worldDistanceToLol(travel.traveled);
   const stunSec = this._asheStunDurationForDistance(lolDistance);
 
-  applyDamage(primary, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+  applyDamage(primary, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
   applyStatus(primary, { id: 'asheR_stun', type: 'STUN', duration: stunSec, value: 0, source: this });
   vfx.spawn('hit', getWorldPosition(primary)?.clone() || primary.mesh.position.clone(), undefined, { color: 0x9fd7ff });
   debugSkillHit('Ashe R (마법의 수정화살 - 주 대상)', primary, { stunSec: stunSec.toFixed(2), lolDistance: lolDistance.toFixed(0) });
@@ -385,7 +385,7 @@ CharacterController.prototype._asheResolveRHit = function(primary, travel) {
   for (const u of getAllEnemyUnits()) {
     if (!u || u === primary || u.hp <= 0) continue;
     if (!isInCircle(u, travel.pos, splashRadius)) continue;
-    applyDamage(u, { rawDamage: raw * splashMult, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    applyDamage(u, { isUltimate: true, rawDamage: raw * splashMult, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     this._asheApplyFrostShot(u, false); // PC 위키: 주변 적에게도 서리 화살
     vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0x9fd7ff });
     debugSkillHit('Ashe R (마법의 수정화살 - 주변 피해)', u);

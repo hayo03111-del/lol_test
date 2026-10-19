@@ -266,7 +266,9 @@ const STATE = {
 const Q_COOLDOWN = 4, W_COOLDOWN = 8, E_COOLDOWN = 6, R_COOLDOWN = 20;
 const Q_MANA = 15, W_MANA = 20, E_MANA = 15, R_MANA = 50;
 const RECALL_DURATION = 4.0;
-const RESPAWN_WAIT = 3.0;
+const RESPAWN_WAIT = 3.0; // (레벨 표가 없을 때의 기본값)
+// 83차: 칼바람 나락 부활 대기 시간은 레벨로만 정해진다(PC 위키 Death/ARAM - 3레벨 11초 … 18레벨 40초).
+const ARAM_DEATH_TIMER_BY_LEVEL = [0, 10, 10, 11, 13, 15, 17, 19, 21, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40];
 const E_COMBO_WINDOW = 1.2;
 // 커스텀(사용자 정의 다중 애니메이션 시퀀스) Q/W/E/R용 비용/데미지 테이블.
 // 슬롯 이름으로만 조회하는 범용 테이블이라 어떤 챔피언에도 동일하게 적용된다.
@@ -551,7 +553,7 @@ function resolveDamageSource(source, target) {
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
 // 넘어온다 - 여기서 다시 굴리지 않는다(같은 공격 인스턴스의 결과가 명중
 // 시점에 바뀌면 안 되므로).
-function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false }) {
+function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false, isStatusTick = false, isUltimate = false }) {
   // 무한의 대검(치명타 피해량 +30%) - 각 챔피언 스킬이 저마다 다른
   // critMultiplier를 넘기므로(공용 필드가 아님), 공격자의 아이템 보너스를
   // 여기서 한 곳에서 더해 넣는다 - 치명타가 아니면 critMultiplier 자체가
@@ -637,6 +639,23 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   if (typeof getItemExtraOutgoingAmp === 'function') dmg *= (1 + getItemExtraOutgoingAmp(ampSource, isBasicAttack));
   // 36차: 소환사 주문 탈진 - 탈진에 걸린 공격자가 입히는 모든 피해 감소(summoner_spells.js).
   if (typeof getOutgoingDamageReductionPercent === 'function') dmg *= 1 - getOutgoingDamageReductionPercent(ampSource);
+  // 83차: 칼바람 나락 규칙(챔피언 → 챔피언 피해에만).
+  if (typeof isAramRulesActive === 'function' && isAramRulesActive() && ampSource && target && ampSource !== target && (ampSource.isChampion || typeof ampSource.championId === 'string') && target.isChampion) {
+    // (1) 챔피언별 밸런스 보정 - 26.15부터 스킬·평타·아이템 피해 모두에 적용.
+    if (typeof getAramBalance === 'function') {
+      const bs = getAramBalance(ampSource), bt = getAramBalance(target);
+      if (bs && bs.dmgDealt) dmg *= 1 + bs.dmgDealt;
+      if (bt && bt.dmgTaken) dmg *= 1 + bt.dmgTaken;
+    }
+    // (2) 칼바람 오라 - 1000보다 먼 적 챔피언에게 받는 피해 15%(1000)~30%(2000) 감소. 지속 피해·궁극기는 제외.
+    if (!isStatusTick && !isUltimate && typeof getWorldPosition === 'function') {
+      const ps = getWorldPosition(ampSource), pt = getWorldPosition(target);
+      if (ps && pt) {
+        const dLol = worldDistanceToLol(getHorizontalDistance(ps, pt));
+        if (dLol > 1000) dmg *= 1 - (0.15 + 0.15 * Math.min(1, (dLol - 1000) / 1000));
+      }
+    }
+  }
   return dmg;
 }
 
