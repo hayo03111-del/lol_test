@@ -164,7 +164,7 @@ function resolveShapeParams(championId, slot, cd, ctrl = null) {
   const shape = (SKILL_HITBOX_SHAPE[championId] && SKILL_HITBOX_SHAPE[championId][slot]) || { type: 'circle' };
   const data = cd && cd[slot];
   if (championId === 'sett' && slot === 'W' && data) {
-    return { type: 'trapezoid', centerHalfWidth: data.centerHalfWidth, endHalfWidth: data.endHalfWidth };
+    return { type: 'trapezoid', centerHalfWidth: data.centerHalfWidth, startHalfWidth: data.startHalfWidth, endHalfWidth: data.endHalfWidth };
   }
   if (!data) return shape;
   if (shape.type === 'line') {
@@ -201,7 +201,7 @@ function buildRangeShapeGeometry(desc, worldRange) {
     }
     shape.closePath();
   } else if (desc.type === 'trapezoid') {
-    const cw = lolRangeToWorld(desc.centerHalfWidth || 0), ew = lolRangeToWorld(desc.endHalfWidth || 0);
+    const cw = lolRangeToWorld(desc.startHalfWidth || desc.centerHalfWidth || 0), ew = lolRangeToWorld(desc.endHalfWidth || 0);
     shape.moveTo(-cw, 0); shape.lineTo(-ew, worldRange); shape.lineTo(ew, worldRange); shape.lineTo(cw, 0); shape.closePath();
   } else {
     return null; // circle은 기존 RingGeometry로 처리(호출부에서 분기)

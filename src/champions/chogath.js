@@ -136,15 +136,27 @@ CharacterController.prototype._chogathEOnHit = function(target) {
     const cd = this._champData(); const e = cd.E;
     const lvl = Math.max(1, this.skillLevels.E || 1);
     const stacks = this._chogath.predationStacks || 0;
-    const dmg = skillVal(e.perHitDamageByLevel, lvl) + e.apRatio * this.stats.abilityPower
-      + (target.maxHp || 0) * ((skillVal(e.perHitMaxHpPercentByLevel, lvl) + e.perStackMaxHpPercent * stacks) / 100);
-    const hpB = target.hp, flB = isFlooredTrainingDummy(target);
-    const dealt = applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
-    const wouldKill = !flB && hpB > 0 && hpB <= dealt;
-    applyStatus(target, { id: 'chogathE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100 });
-    if (wouldKill) this._chogathOnKill(target);
+    // 79차: 가시는 평타 대상 한 명이 아니라 초가스→대상 방향 직선(사거리 650) 위 모든 적을 맞힌다.
+    // 폭은 340 + 크기(포식 중첩)당 30, 최대 500.
+    const targets = [target];
+    const tp = getWorldPosition(target), o = this.root.position;
+    const dir = new THREE.Vector3(tp.x - o.x, 0, tp.z - o.z);
+    if (e.widthMin && dir.lengthSq() > 1e-8) {
+      dir.normalize();
+      const width = Math.min(e.widthMax || e.widthMin, e.widthMin + (e.widthPerStack || 0) * stacks);
+      for (const u of findEnemiesInLine(o, dir, e.rangeMax, width)) if (u !== target && !u.isTurret && !u.isStructure) targets.push(u);
+    }
+    for (const unit of targets) {
+      const dmg = skillVal(e.perHitDamageByLevel, lvl) + e.apRatio * this.stats.abilityPower
+        + (unit.maxHp || 0) * ((skillVal(e.perHitMaxHpPercentByLevel, lvl) + e.perStackMaxHpPercent * stacks) / 100);
+      const hpB = unit.hp, flB = isFlooredTrainingDummy(unit);
+      const dealt = applyDamage(unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
+      const wouldKill = !flB && hpB > 0 && hpB <= dealt;
+      applyStatus(unit, { id: 'chogathE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100 });
+      if (wouldKill) this._chogathOnKill(unit);
+    }
     this._chogath.eChargesRemaining -= 1;
-    debugSkillHit("Cho'Gath E (가시)", target, { chargesLeft: this._chogath.eChargesRemaining });
+    debugSkillHit("Cho'Gath E (가시)", target, { chargesLeft: this._chogath.eChargesRemaining, count: targets.length });
   
 };
 

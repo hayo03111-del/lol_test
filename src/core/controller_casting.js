@@ -1367,16 +1367,16 @@ CharacterController.prototype._castW = function(mouseWorldPoint, free = false) {
     // CHAMPION_DATA.sett.W(range/centerHalfWidth/endHalfWidth) - 색/투명도는 연출값.
     const settWData = this.championId === 'sett' ? CHAMPION_DATA.sett?.W : null;
     if (settWData) {
-      const wLen = lolRangeToWorld(settWData.range), wHw0 = lolRangeToWorld(settWData.centerHalfWidth), wHw1 = lolRangeToWorld(settWData.endHalfWidth);
+      const wLen = lolRangeToWorld(settWData.range), wHw0 = lolRangeToWorld(settWData.centerHalfWidth), wHwS = lolRangeToWorld(settWData.startHalfWidth ?? settWData.centerHalfWidth), wHw1 = lolRangeToWorld(settWData.endHalfWidth);
       const wWind = SKILL_TIMING_DATABASE.sett?.W?.eventTime || 0.75;
-      vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'trapezoid', length: wLen, hw0: wHw0, hw1: wHw1, hold: true, opacity: 0.18 }, 0xff9a5a, wWind);
+      vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'trapezoid', length: wLen, hw0: wHwS, hw1: wHw1, hold: true, opacity: 0.18 }, 0xff9a5a, wWind);
       vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'line', length: wLen, width: wHw0 * 2, hold: true, opacity: 0.32, yOffset: 0.005 }, 0xfff0c8, wWind);
     }
     this.runAction('w', STATE.W_CAST, {
       onFire: () => {
         if (settWData) {
-          const wLen = lolRangeToWorld(settWData.range), wHw0 = lolRangeToWorld(settWData.centerHalfWidth), wHw1 = lolRangeToWorld(settWData.endHalfWidth);
-          vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'trapezoid', length: wLen, hw0: wHw0, hw1: wHw1, opacity: 0.4 }, 0xff8a3a, 0.4);
+          const wLen = lolRangeToWorld(settWData.range), wHw0 = lolRangeToWorld(settWData.centerHalfWidth), wHwS = lolRangeToWorld(settWData.startHalfWidth ?? settWData.centerHalfWidth), wHw1 = lolRangeToWorld(settWData.endHalfWidth);
+          vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'trapezoid', length: wLen, hw0: wHwS, hw1: wHw1, opacity: 0.4 }, 0xff8a3a, 0.4);
           vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'line', length: wLen, width: wHw0 * 2, opacity: 0.75, yOffset: 0.005 }, 0xffffff, 0.45);
         }
         // 세트 W 문서 8/9절: 실제 전방 사다리꼴 범위 탐색 + 중앙(True Damage)/

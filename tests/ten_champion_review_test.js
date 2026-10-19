@@ -670,3 +670,55 @@ stubs.targetRing = { clear() {} };
   now += 4100; late.statusEffects = []; lastIntervalFn();
   assert(getSlowPercent(late) === 0, '바루스 E: 4초 뒤 지대가 사라지면 더 이상 둔화하지 않는다');
 }
+
+// --- 79차: 보류했던 스킬 판정 형태 ---
+{
+  const L = lolRangeToWorld, tiny = { collisionRadius: 0.001 };
+  // 세트 W: 시작 폭 300(반폭 150) → 끝 620, 중앙 70, 반경 720 원과 교집합
+  timers = []; clearPlaced();
+  const c = makeChamp('sett');
+  c.bonusAD = 0; c._sett.wPendingSpent = 0;
+  const startSide = place(makeEnemy(L(140), L(10), tiny)), startOut = place(makeEnemy(L(170), L(10), tiny));
+  const center = place(makeEnemy(L(30), L(400), tiny)), cornerOut = place(makeEnemy(L(300), L(690), tiny));
+  const hp0 = [startSide, startOut, center, cornerOut].map((u) => u.hp);
+  c._settWOnCast(new Vector3(0, 0, 0), new Vector3(0, 0, 1));
+  assert(startSide.hp < hp0[0] && startOut.hp === hp0[1], '세트 W(79차): 시작 폭 300 - 옆 140은 맞고 170은 빗나감');
+  assert(center.hp < hp0[2], '세트 W(79차): 중앙 띠(반폭 35) 안 적중');
+  assert(cornerOut.hp === hp0[3], '세트 W(79차): 사다리꼴 끝 모서리라도 반경 720 원 밖이면 빗나감');
+}
+{
+  const L = lolRangeToWorld, tiny = { collisionRadius: 0.001 };
+  // 초가스 E: 평타 방향 직선(650) 위 모든 적, 폭 340(+30/중첩)
+  timers = []; clearPlaced();
+  const c = makeChamp('chogath');
+  c._chogath.eChargesRemaining = 3; c._chogath.predationStacks = 0;
+  const t = place(makeEnemy(0, L(150), tiny)), behind = place(makeEnemy(L(150), L(500), tiny)), wide = place(makeEnemy(L(200), L(400), tiny)), far = place(makeEnemy(0, L(700), tiny));
+  const hp0 = [t, behind, wide, far].map((u) => u.hp);
+  c._chogathEOnHit(t);
+  assert(t.hp < hp0[0] && behind.hp < hp0[1], '초가스 E(79차): 평타 대상 뒤 직선 위 적도 가시에 맞는다');
+  assert(wide.hp === hp0[2] && far.hp === hp0[3], '초가스 E(79차): 폭(반폭 170)·사거리(650) 밖은 빗나감');
+  assert(c._chogath.eChargesRemaining === 2, '초가스 E(79차): 여러 명을 맞혀도 충전은 1회만 소모');
+  c._chogath.predationStacks = 6; // 폭 340+180=520 → 최대 500(반폭 250)
+  c._chogathEOnHit(t);
+  assert(wide.hp < hp0[2], '초가스 E(79차): 크기 중첩으로 폭이 넓어진다(최대 500)');
+}
+{
+  const L = lolRangeToWorld, tiny = { collisionRadius: 0.001 };
+  // 모데카이저 Q: 시작 폭 90 → 끝 폭 150
+  timers = []; clearPlaced();
+  const c = makeChamp('mordekaiser');
+  const nearSide = place(makeEnemy(L(60), L(30), tiny)), farSide = place(makeEnemy(L(60), L(600), tiny));
+  const hp0 = [nearSide, farSide].map((u) => u.hp);
+  c._mordeQOnCast(new Vector3(0, 0, 0), new Vector3(0, 0, 1));
+  assert(nearSide.hp === hp0[0] && farSide.hp < hp0[1], '모데 Q(79차): 가까운 쪽은 좁고(반폭 ~46) 먼 쪽은 넓다(반폭 ~74)');
+}
+{
+  const L = lolRangeToWorld, tiny = { collisionRadius: 0.001 };
+  // 세트 E: 좌우 450, 앞뒤 폭 280의 직사각형
+  timers = []; clearPlaced();
+  const c = makeChamp('sett');
+  const left = place(makeEnemy(L(-400), L(100), tiny)), right = place(makeEnemy(L(400), L(-100), tiny)), front = place(makeEnemy(L(-100), L(300), tiny));
+  c._settEOnCast(new Vector3(0, 0, 1));
+  assert(isStunned(left) && isStunned(right), '세트 E(79차): 양옆(앞뒤 140 이내) 적은 끌려와 기절');
+  assert(!getStatus(front, 'settE_slow') && front.hp === 3000, '세트 E(79차): 정면 300(앞뒤 폭 밖)은 맞지 않는다');
+}

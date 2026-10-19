@@ -396,18 +396,24 @@ function isProjectileHit(projectilePos, projectileRadius, target) {
 // 선형으로 넓어짐) 안에 있으면 'SIDE', 완전히 밖이면 null을 반환한다.
 // 전부 LoL 원본 수치를 받아 내부에서 world로 변환한다 - 호출부는 변환을
 //신경 쓸 필요가 없다. 대상의 collisionRadius도 함께 고려한다(요청 17).
-function isPointInsideSettWTrapezoid(target, origin, forward, lolRange, lolCenterHalfWidth, lolEndHalfWidth) {
+// 79차: opts {startHalfWidth, minRange, circleRadius} - 시작 폭과 끝 폭이 다르고(300→620),
+// 시전자 뒤 25부터 시작하며, 반경 720 원과 교집합인 최신 판정. 생략하면 예전 방식.
+function isPointInsideSettWTrapezoid(target, origin, forward, lolRange, lolCenterHalfWidth, lolEndHalfWidth, opts) {
+  opts = opts || {};
   const p = getWorldPosition(target);
   const r = getCollisionRadius(target);
   const range = lolRangeToWorld(lolRange);
   const centerHalfWidth = lolRangeToWorld(lolCenterHalfWidth);
   const endHalfWidth = lolRangeToWorld(lolEndHalfWidth);
+  const startHalfWidth = opts.startHalfWidth != null ? lolRangeToWorld(opts.startHalfWidth) : centerHalfWidth;
+  const minRange = opts.minRange != null ? lolRangeToWorld(opts.minRange) : 0;
   const dx = p.x - origin.x, dz = p.z - origin.z;
   const forwardDist = dx * forward.x + dz * forward.z; // 전방 투영 거리
-  if (forwardDist < -r || forwardDist > range + r) return null; // 사거리 밖
+  if (forwardDist < minRange - r || forwardDist > range + r) return null; // 사거리 밖
+  if (opts.circleRadius != null && Math.hypot(dx, dz) > lolRangeToWorld(opts.circleRadius) + r) return null; // 원 밖
   const lateralDist = Math.abs(dx * -forward.z + dz * forward.x); // 중심선에서 옆으로 벗어난 거리
-  const t = Math.max(0, Math.min(1, forwardDist / Math.max(range, 1e-6)));
-  const widthAtDist = centerHalfWidth + (endHalfWidth - centerHalfWidth) * t; // 사다리꼴 폭(전방 거리에 비례해 넓어짐)
+  const t = Math.max(0, Math.min(1, (forwardDist - minRange) / Math.max(range - minRange, 1e-6)));
+  const widthAtDist = startHalfWidth + (endHalfWidth - startHalfWidth) * t; // 사다리꼴 폭(전방 거리에 비례해 넓어짐)
   if (lateralDist > widthAtDist + r) return null; // 사다리꼴 밖
   if (lateralDist <= centerHalfWidth + r) return 'CENTER'; // 중앙 직선(폭 고정) 안
   return 'SIDE';

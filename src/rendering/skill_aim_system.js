@@ -34,7 +34,7 @@ const SKILL_AIM = {
   },
   sett: {
     Q: { type: 'instant' },
-    W: { type: 'trapezoid', range: (c, d) => d.range, centerHalfWidth: (c, d) => d.centerHalfWidth, endHalfWidth: (c, d) => d.endHalfWidth },
+    W: { type: 'trapezoid', range: (c, d) => d.range, centerHalfWidth: (c, d) => d.centerHalfWidth, startHalfWidth: (c, d) => d.startHalfWidth ?? d.centerHalfWidth, endHalfWidth: (c, d) => d.endHalfWidth },
     E: { type: 'selfAim', radius: (c, d) => d.range },                                              // 반경 안 적을 커서 방향 기준 좌우로 나눔
     R: { type: 'unit', range: (c, d) => d.range },
   },
@@ -201,7 +201,7 @@ function computeSkillAim(c, slot, point) {
       break;
     }
     case 'cone': aim.rangeWorld = W(V('range')); aim.angleDeg = V('angleDeg'); break;
-    case 'trapezoid': aim.rangeWorld = W(V('range')); aim.centerHalfWidth = W(V('centerHalfWidth')); aim.endHalfWidth = W(V('endHalfWidth')); break;
+    case 'trapezoid': aim.rangeWorld = W(V('range')); aim.centerHalfWidth = W(V('centerHalfWidth')); aim.startHalfWidth = W(V('startHalfWidth')); aim.endHalfWidth = W(V('endHalfWidth')); break;
     case 'dash': {
       aim.rangeWorld = W(V('range'));
       aim.segments = [{ len: aim.rangeWorld, width: spec.width ? W(V('width')) : 2 * (c.collisionRadius || W(65)) }]; // 판정 폭이 없는 돌진은 몸 폭
@@ -302,7 +302,7 @@ class SkillAimSystem {
         break;
       case 'cone': this._cone(aim.origin, yaw, aim.rangeWorld, aim.angleDeg); break;
       case 'trapezoid':
-        this._trap(aim.origin, yaw, aim.rangeWorld, aim.centerHalfWidth, aim.endHalfWidth);
+        this._trap(aim.origin, yaw, aim.rangeWorld, aim.startHalfWidth || aim.centerHalfWidth, aim.endHalfWidth);
         this._lane(aim.origin, yaw, aim.rangeWorld, aim.centerHalfWidth); // 세트 W 중앙(고정 피해) 띠
         break;
       case 'wall': this._rect(aim.origin, yaw, aim.wall.dist - aim.wall.thickness / 2, aim.wall.dist + aim.wall.thickness / 2, aim.wall.length / 2); break;

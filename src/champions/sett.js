@@ -189,7 +189,8 @@ CharacterController.prototype._settWOnCast = function(origin, forward) {
     const gritRatio = w.gritSpendPercent + (bonusAd / 100) * (w.gritSpendPercentPer100BonusAd || 0);
     let centerHit = 0, sideHits = 0;
     for (const unit of getAllEnemyUnits()) {
-      const zone = isPointInsideSettWTrapezoid(unit, origin, forward, w.range, w.centerHalfWidth, w.endHalfWidth);
+      const zone = isPointInsideSettWTrapezoid(unit, origin, forward, w.range, w.centerHalfWidth, w.endHalfWidth,
+        { startHalfWidth: w.startHalfWidth, minRange: w.minRange, circleRadius: w.circleRadius ?? w.range });
       if (!zone) continue;
       if (zone === 'CENTER') {
         // 중앙 적중: 투지 비례 고정 피해(True Damage) - Armor/MR 무시.
@@ -218,7 +219,14 @@ CharacterController.prototype._settEOnCast = function(facing) {
     const origin = this.root.position;
     const fwd = (facing && facing.lengthSq() > 1e-6) ? facing.clone().setY(0).normalize() : new THREE.Vector3(0, 0, 1);
     const rightVec = new THREE.Vector3(-fwd.z, 0, fwd.x); // fwd를 +90도 회전한 "오른쪽" 방향
-    const hits = findEnemiesInRadius(origin, e.range); // e.range는 LoL 원본 수치, 내부에서 world로 변환됨
+    // 79차: 원작 판정은 원이 아니라 좌우로 긴 직사각형(좌우 각 450, 앞뒤 폭 280) - 앞뒤로 먼 대상은 제외.
+    const eHalfDepth = lolRangeToWorld((e.width || 0) / 2);
+    const hits = findEnemiesInRadius(origin, e.range + (e.width || 0) / 2).filter((h) => {
+      if (!e.width) return h.distance <= lolRangeToWorld(e.range) + getCollisionRadius(h.unit);
+      const p = getWorldPosition(h.unit), r = getCollisionRadius(h.unit);
+      const dx = p.x - origin.x, dz = p.z - origin.z;
+      return Math.abs(dx * fwd.x + dz * fwd.z) <= eHalfDepth + r && Math.abs(dx * rightVec.x + dz * rightVec.z) <= lolRangeToWorld(e.range) + r;
+    });
     // 버그 수정(요청 6/7 "한쪽당 1명만 선택하는 버그"): 예전엔 각 측면에서
     // 가장 가까운 대상 1명만 leftTarget/rightTarget 단일 변수에 저장했다.
     // 실제 LoL Facebreaker는 판정 범위 안의 "그쪽에 있는 모든 유효 대상"을

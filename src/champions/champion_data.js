@@ -145,7 +145,7 @@ const CHAMPION_DATA = {
     W: {
       name: '영혼 가르기',
       cooldown: 14, cooldownFloor: 6, castTime: 0.5, castTimeFloor: 0.19,
-      range: 700, angleDeg: 80,
+      range: 600, angleDeg: 80, // 사거리 700 → 600(가장자리 기준 원뿔 반경) (79차: PC 위키 Template:Data, 검색 요약 대조)
       // 수치 출처 갱신(요네.bin YoneW 실데이터로 재확인):
       // MaxHealthDamage(레벨1~5) = 7/8/9/10/11% (이전에 위키 문서 프로즈를
       // 옮기며 8/9/10/11/12%로 한 칸씩 밀려 잘못 반영했던 것을 수정).
@@ -228,7 +228,8 @@ const CHAMPION_DATA = {
       firstRageNonChampion: 2, firstRageChampion: 10, damageType: 'PHYSICAL'
     },
     R: {
-      name: '강신', cooldown: [120,100,80], mana: 0, range: 350, castTime: 0.125, duration: 15,
+      name: '강신', cooldown: [120,100,80], mana: 0, range: 375, // 반경 350 → 375 (79차: PC 위키 Template:Data, 검색 요약 대조)
+      castTime: 0.125, duration: 15,
       bonusMaxHp: [300,500,700], immediateRage: 20, ragePerSecond: 5,
       sizeIncreasePercent: 20, // 28차: PC 위키 Dominus - 크기 20% 증가(Unit size 표: 판정 반경 80 → 96)
       damagePerSecond: [60,150,240], bonusAdRatio: 0.1, apRatio: 0.1, tickSec: 0.5, bonusAttackRange: 25, damageType: 'MAGICAL' // PC 위키: 0.5초마다 30/75/120(+추가 AD 5%+AP 5%), 사거리 +25
@@ -316,7 +317,7 @@ const CHAMPION_DATA = {
     },
     Q: {
       name: '학살', cooldown: [9, 8, 7, 6, 5], manaByLevel: [25, 30, 35, 40, 45],
-      range: 425, handleRange: 205, prepDuration: 0.75,
+      range: 460, handleRange: 240, prepDuration: 0.75, // 바깥 460 / 손잡이(안쪽) 240 (79차: PC 위키 Template:Data, 검색 요약 대조)
       bladeDamageByLevel: [50, 80, 110, 140, 170], bladeAdRatioByLevel: [1.0, 1.1, 1.2, 1.3, 1.4],
       handleDamageByLevel: [17.5, 28, 38.5, 49, 59.5], handleAdRatioByLevel: [0.35, 0.385, 0.42, 0.455, 0.49],
       healPercentOfLostHp: 17, healCapPercent: 51, damageType: 'PHYSICAL',
@@ -381,18 +382,20 @@ const CHAMPION_DATA = {
       // PC 위키 Template:Data Sett/Haymaker: 80~160 + 소모한 투지의 (25% + 추가 공격력 100당 25%).
       // 버그 수정: 예전엔 추가 공격력 25%를 고정 피해로 더했다(투지 비율에 붙는 계수였음).
       damageBaseByLevel: [80, 100, 120, 140, 160], gritSpendPercent: 25, gritSpendPercentPer100BonusAd: 25,
-      range: 790, damageType: 'TRUE',
+      range: 720, minRange: -25, damageType: 'TRUE', // 사거리 790 → 720(뒤쪽 25부터, 반경 720 원과 교집합) (79차: PC 위키 Template:Data, 검색 요약 대조)
       // 버그 수정(공식 수치 확인함 - League Wiki Sett/Patch_history:
       // "Target Range: 790. Width: 805 / 180. Angle: 27°."): 예전엔
       // 공식 발표치를 못 찾아서 "전방으로 갈수록 넓어지는 사다리꼴"이라는
       // 서술만으로 근사했는데, 실제 폭은 원거리(끝) 805 / 근거리(중심) 180
       // 였다 - half-width로 환산하면 끝=402.5, 중심=90. 예전 근사값
       // (중심 55, 끝 220)은 실제 폭의 절반 정도로 너무 좁았다.
-      centerHalfWidth: 90, endHalfWidth: 402.5,
+      // 79차: 최신 Template:Data는 시작 폭 300 → 끝 폭 620, 중앙(고정 피해) 띠 70.
+      // (예전 805/180은 출시 당시 값이고 27° 각도와도 맞지 않았다 - 300→620/720은 약 25°.)
+      startHalfWidth: 150, centerHalfWidth: 35, endHalfWidth: 310,
     },
     E: {
       // 사거리 490 → 450 (78차: PC 위키 Template:Data, 검색 요약 대조)
-      name: '안면강타', cooldown: [16, 14.5, 13, 11.5, 10], mana: 0, range: 450,
+      name: '안면강타', cooldown: [16, 14.5, 13, 11.5, 10], mana: 0, range: 450, width: 280, // 폭 280(앞뒤 140) (79차: PC 위키 Template:Data, 검색 요약 대조)
       damageByLevel: [50, 70, 90, 110, 130], adRatio: 0.6, slowPercent: 70, slowDuration: 0.5, stunDuration: 1,
       monsterBonusDamageMin: 125, monsterBonusDamageMax: 250, // 챔피언 레벨(1~18)에 선형 보간, 몬스터 전용
       damageType: 'PHYSICAL',
@@ -544,7 +547,7 @@ const CHAMPION_DATA = {
     },
     Q: {
       // PC 위키: 사거리 625(가장자리 22.5~625), 폭 90~150의 전방 직사각형 판정. 예전 575 + 지점 원형 판정은 근거 없음.
-      name: '말살', cooldown: [8, 7, 6, 5, 4], mana: 0, range: 625, width: 150,
+      name: '말살', cooldown: [8, 7, 6, 5, 4], mana: 0, range: 625, width: 150, widthStart: 90, widthEnd: 150, // 79차: 시작 90 → 끝 150 사다리꼴
       damageByLevel: [80, 115, 150, 185, 220], bonusAdRatio: 1.2, apRatio: 0.7,
       // 챔피언 레벨(스킬 레벨과 별개) 보너스 고정 피해: 10레벨부터 매
       // 레벨 +5, 18레벨에 45로 최대(요청 그대로 "0~45(10레벨부터 5씩 증가)").
@@ -605,7 +608,7 @@ const CHAMPION_DATA = {
     W: {
       name: '타이탄의 분노', cooldown: 12, mana: 60, durationSec: 6,
       shieldByLevel: [50, 60, 70, 80, 90], shieldMaxHpPercentByLevel: [8, 9, 10, 11, 12],
-      onHitDamageByLevel: [30, 40, 50, 60, 70], onHitApRatio: 0.4, onHitDotDurationSec: 2, splashRadius: 350,
+      onHitDamageByLevel: [30, 40, 50, 60, 70], onHitApRatio: 0.4, onHitDotDurationSec: 2, splashRadius: 250, // 주변 피해 반경 350 → 250 (79차: PC 위키 Template:Data, 검색 요약 대조)
       damageType: 'MAGICAL',
     },
     E: {
@@ -807,6 +810,7 @@ const CHAMPION_DATA = {
     E: {
       // 사거리 500 → 650 (78차: PC 위키 Template:Data, 검색 요약 대조)
       name: '날카로운 가시', cooldown: [8, 7, 6, 5, 4], mana: 30, charges: 3, rangeMax: 650,
+      widthMin: 340, widthMax: 500, widthPerStack: 30, // 79차: 가시 폭 340 + 크기(포식 중첩)당 30, 최대 500 - 공격 방향 직선 전체 적중
       perHitDamageByLevel: [30, 50, 70, 90, 110], apRatio: 0.3, // V26.17: 20~100 → 30~110
       perHitMaxHpPercentByLevel: [2.5, 2.85, 3.2, 3.55, 3.9], perStackMaxHpPercent: 0.5,
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDuration: 1.5, damageType: 'MAGICAL',

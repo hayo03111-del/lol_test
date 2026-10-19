@@ -53,8 +53,17 @@ CharacterController.prototype._mordeQOnCast = function(origin, dir) {
     const cd = this._champData(); if (!cd) return;
     const q = cd.Q;
     const lvl = Math.max(1, this.skillLevels.Q || 1);
-    // 전방 직사각형(사거리 625, 폭 150 - 원작은 시작 90에서 끝 150으로 넓어짐, 여기선 150으로 단순화).
-    const hits = findEnemiesInLine(origin, dir, q.range, q.width || 150).map((unit) => ({ unit }));
+    // 전방 판정(사거리 625) - 79차: 원작처럼 시작 폭 90에서 끝 폭 150으로 넓어지는 사다리꼴.
+    const wStart = q.widthStart ?? (q.width || 150), wEnd = q.widthEnd ?? (q.width || 150);
+    const qRange = lolRangeToWorld(q.range);
+    const hits = findEnemiesInLine(origin, dir, q.range, Math.max(wStart, wEnd)).filter((unit) => {
+      const p = getWorldPosition(unit);
+      const dx = p.x - origin.x, dz = p.z - origin.z;
+      const along = dx * dir.x + dz * dir.z;
+      const lateral = Math.abs(dx * -dir.z + dz * dir.x);
+      const t = Math.max(0, Math.min(1, along / Math.max(qRange, 1e-6)));
+      return lateral <= lolRangeToWorld(wStart + (wEnd - wStart) * t) * 0.5 + getCollisionRadius(unit);
+    }).map((unit) => ({ unit }));
     if (!hits.length) { debugSkillMiss('Mordekaiser Q', 'no target in impact area'); return; }
     const isSingle = hits.length === 1;
     // 챔피언 레벨(스킬 레벨과 별개) 보너스 고정 피해 - 10레벨부터 매
