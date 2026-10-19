@@ -18,6 +18,18 @@ const _hudEls = {
 const _hudLast = { hpPct: '', hpText: '', shieldLeft: '', shieldWidth: '', shieldDisplay: '', mpFlow: null, mpWidth: '', mpText: '', label: '', worldHpPct: '', worldHpText: '', worldResourceWidth: '', worldResourceDisplay: '', worldResourceMode: '' };
 function updateBars(ch) {
   const hpPct = `${(ch.hp / ch.maxHp) * 100}%`;
+  // 69차: 원작 HUD처럼 체력·마나 바 오른쪽 끝에 초당 재생량(+1.6). 가득 차 있으면 숨긴다. hpRegen/mpRegen은 5초당 값이다.
+  const hpRegenEl = document.getElementById('hpRegenText'), mpRegenEl = document.getElementById('mpRegenText');
+  if (hpRegenEl) {
+    const v = (ch.hpRegen || 0) * (1 + (ch.itemBonusHpRegenPercent || 0)) / 5;
+    const t = ch.hp < ch.maxHp - 0.5 && v > 0 ? `+${v.toFixed(1)}` : '';
+    if (hpRegenEl.textContent !== t) hpRegenEl.textContent = t;
+  }
+  if (mpRegenEl) {
+    const v = (ch.mpRegen || 0) * (1 + (ch.itemBonusMpRegenPercent || 0)) / 5;
+    const t = Number(ch.maxMp) > 0 && ch.mp < ch.maxMp - 0.5 && v > 0 ? `+${v.toFixed(1)}` : '';
+    if (mpRegenEl.textContent !== t) mpRegenEl.textContent = t;
+  }
   if (_hudLast.hpPct !== hpPct) { _hudEls.hpFill.style.width = hpPct; _hudLast.hpPct = hpPct; }
   // 28차: 최대 체력이 소수(레벨 성장)일 때 소수점까지 나오던 것을 정수로 표시한다.
   const hpText = `${Math.ceil(ch.hp)}/${Math.round(ch.maxHp)}${ch.shield > 0 ? ` (+${Math.ceil(ch.shield)} 보호막)` : ''}`;
@@ -173,12 +185,16 @@ function updateExpUI(champion) {
   const spEl = document.getElementById('skillPointText');
   if (!levelEl || !fillEl) return;
   const maxed = champion.champLevel >= EXP_MAX_LEVEL;
-  const levelText = `Lv.${champion.champLevel}`;
+  const levelText = `${champion.champLevel}`; // 69차: 초상화 아래 레벨 원(숫자만)
   if (_expUiLast.levelText !== levelText) { levelEl.textContent = levelText; _expUiLast.levelText = levelText; }
   const required = maxed ? 1 : getExpRequired(champion.champLevel);
   const pctNum = maxed ? 100 : Math.min(100, ((champion.currentExp || 0) / required) * 100);
   const pct = `${pctNum}%`;
-  if (_expUiLast.pct !== pct) { fillEl.style.width = pct; _expUiLast.pct = pct; }
+  if (_expUiLast.pct !== pct) {
+    fillEl.style.width = pct; _expUiLast.pct = pct;
+    const ring = document.getElementById('portraitRing'); // 69차: 경험치 = 초상화 둘레 원형 게이지(원작)
+    if (ring) { ring.style.setProperty('--xp', String(pctNum)); ring.title = maxed ? 'MAX LEVEL' : `경험치 ${Math.floor(champion.currentExp || 0)} / ${required}`; }
+  }
   fillEl.title = maxed ? 'MAX LEVEL' : `${Math.floor(champion.currentExp || 0)} / ${required}`;
   const sp = champion.skillPoints || 0;
   const spText = sp > 0 ? `+${sp}` : '';

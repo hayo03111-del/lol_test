@@ -512,6 +512,47 @@
   .hud-item.usable:not(.empty){ border-color:#4a7a4a; }
   .hud-item.trinket{ border-color:var(--accent-dim); }
   #hudGold{ pointer-events:auto; margin-left:0; align-items:flex-start; } /* 오른쪽 끝은 챔피언 패널에 가려지므로 아이템 칸 바로 옆에 둔다(원작도 아이템 칸 옆) */
+  /* ============================================================
+     69차 원작식 HUD: 화면 아래 가운데 장식 패널 하나(옆은 게임 화면이 보인다) - 능력치 | 둥근 초상화(경험치 원형 게이지 +
+     레벨 원) | 패시브·Q·W·E·R + D·F, 그 아래 체력·마나 바(숫자 + 초당 재생) | 아이템 2줄 + 장신구 | 골드·상점·귀환.
+     ============================================================ */
+  #hud{ left:50% !important; right:auto !important; transform:translateX(-50%); height:auto; min-height:0; padding:8px 12px 8px 8px; gap:0;
+    background:linear-gradient(180deg,#1a1d22 0%,#0c0f13 100%); border:1px solid #463714; border-bottom:none;
+    box-shadow:0 0 0 1px #000, inset 0 1px 0 rgba(200,170,110,0.35), 0 -6px 24px rgba(0,0,0,0.65);
+    clip-path:polygon(14px 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%,0 14px); }
+  #hud::before{ content:''; position:absolute; left:14px; right:14px; top:0; height:2px; background:linear-gradient(90deg,transparent,#c8aa6e 20%,#f0e6d2 50%,#c8aa6e 80%,transparent); opacity:.8; pointer-events:none; }
+  body.practice-tools:has(#championPanel:not(.collapsed)) #hud{ left:calc((100% - 280px) / 2) !important; }
+  #hudStats{ border-right:1px solid #2b2618; }
+  #hudPortrait{ width:92px; position:relative; border-right:none; flex-direction:column; }
+  .portrait-ring{ --xp:0; width:76px; height:76px; border-radius:50%; padding:3px; box-sizing:border-box;
+    background:conic-gradient(#b48cf0 calc(var(--xp) * 1%), #1d1a26 0); box-shadow:0 0 0 1px #000, 0 0 0 2px #785a28; }
+  .portrait-ring .portrait-box{ width:100% !important; height:100% !important; border-radius:50%; border:2px solid #0a0e12 !important; overflow:hidden; }
+  .portrait-level{ position:absolute; bottom:6px; right:8px; min-width:22px; height:22px; padding:0 3px; box-sizing:border-box; border-radius:11px;
+    display:flex; align-items:center; justify-content:center; background:#0a0e12; border:1px solid #c8aa6e; color:#f0e6d2; font:700 11px/1 sans-serif; }
+  #hudPortrait #skillPointText{ position:absolute; top:4px; right:6px; font:700 10px/1 sans-serif; color:#f0d073; text-shadow:0 1px 2px #000; }
+  #hudCenter{ display:flex; flex-direction:column; justify-content:center; gap:6px; padding:0 10px; }
+  .hud-abilities{ display:flex; align-items:center; gap:10px; margin-bottom:9px; } /* 아래 랭크 칸이 체력바에 겹치지 않게 */
+  #skillBar, #spellBar{ border-right:none !important; padding:0 !important; }
+  #spellBar .spell-row{ gap:4px; }
+  #spellChangeBtn{ display:none; }
+  body.practice-tools #spellChangeBtn{ display:block; }
+  #bars{ width:auto !important; padding:0 !important; border-right:none !important; gap:3px !important; }
+  #bars .barRow{ height:16px; border:1px solid #000; box-shadow:0 0 0 1px #3c3c41; background:#060a0d; }
+  #bars #hpFill{ background:linear-gradient(180deg,#5fdc4a 0%,#2f9d23 55%,#1c6815 100%); }
+  #bars #mpFill{ background:linear-gradient(180deg,#58a7ff 0%,#2a6fd6 55%,#183f86 100%); }
+  #bars .barRow:last-child{ height:13px; }
+  #bars .barText{ font-size:11px; font-weight:700; }
+  .barRegen{ position:absolute; right:6px; top:50%; transform:translateY(-50%); z-index:3; font:600 9.5px/1 var(--font-num); color:rgba(240,230,210,0.8); text-shadow:0 1px 2px #000; pointer-events:none; }
+  #hudItems{ border-right:none !important; padding:0 8px 0 10px !important; border-left:1px solid #2b2618; }
+  #hudGold{ padding:0 4px 0 8px !important; justify-content:center; gap:2px; }
+  #hudGold .g-amount{ font-size:17px; color:#f0d073; text-shadow:0 1px 2px #000; }
+  #hudGold .g-amount::before{ content:'●'; color:#c8aa6e; font-size:10px; margin-right:4px; vertical-align:2px; }
+  #hudGold .g-btns{ display:flex; gap:4px; margin-top:4px; }
+  #hudGold .g-btns button{ margin:0 !important; padding:3px 8px !important; }
+  #hudRecallBtn{ border:1px solid #2f5a8a; background:var(--bg-2); color:#8cc4ff; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit; }
+  #hudRecallBtn:hover{ background:#1d3a5c; }
+  #hudRecallBtn small{ color:var(--text-2); font-weight:400; margin-left:4px; }
+  @media (min-width:1420px){ #minimap{ bottom:12px !important; } } /* HUD 패널 옆에 자리가 있으면 원작처럼 오른쪽 아래 구석 */
   #hudShopBtn{ margin-top:6px; padding:4px 12px; border:1px solid var(--accent-dim); background:var(--bg-2); color:var(--accent); font-size:11px; font-weight:700; letter-spacing:0.06em; cursor:pointer; font-family:inherit; }
   #hudShopBtn:hover{ background:var(--accent-dim); color:var(--text-0); }
   #hudShopBtn small{ color:var(--text-2); font-weight:400; margin-left:4px; }
@@ -587,7 +628,6 @@
   body:not(.practice-tools) #debugPanel, body:not(.practice-tools) #debugPanelToggle, body:not(.practice-tools) #helpBox,
   body:not(.practice-tools) #rangeIndicatorToggle, body:not(.practice-tools) #stateLabel,
   body:not(.practice-tools) #championPanel, body:not(.practice-tools) #championPanelToggle { display:none !important; }
-  body:not(.practice-tools) #hud { right:0 !important; }
   #practiceToolsBtn{ position:fixed; left:14px; top:14px; z-index:12; height:26px; padding:0 10px; background:linear-gradient(180deg,#1e2328,#0a0e12);
     color:#c8aa6e; border:1px solid #785a28; font:600 11px/24px sans-serif; letter-spacing:0.04em; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.6); }
   #practiceToolsBtn:hover{ color:#f0e6d2; border-color:#c8aa6e; }
@@ -957,25 +997,28 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
 
 <div id="hud">
   <div id="hudStats" title="능력치 (누르면 다음 쪽)"></div>
-  <div id="hudPortrait"><div class="portrait-box" id="portraitBox">-</div></div>
-  <div id="bars">
-    <div class="barRow"><div id="hpFill" class="barFill"></div><div id="shieldFill" class="barFill"></div><div id="hpText" class="barText">100/100</div></div>
-    <div class="barRow"><span id="resourceLabel" class="barLabel">MP</span><div id="mpFill" class="barFill"></div><div id="mpText" class="barText">100/100</div></div>
-    <div class="level-row"><span id="levelText">Lv.1</span><div class="xp-bar"><div class="fill" id="xpFill"></div></div><span id="skillPointText"></span></div>
-  </div>
-  <div id="skillBar">
-    <div class="skillSlot passiveSlot" id="slotP"><span class="label">P</span><span class="name"></span></div>
-    <div class="skillSlot ready" id="slotQ"><span class="label">Q</span><span class="name">Q</span></div>
-    <div class="skillSlot ready" id="slotW"><span class="label">W</span><span class="name">W</span></div>
-    <div class="skillSlot ready" id="slotE"><span class="label">E</span><span class="name">E</span></div>
-    <div class="skillSlot yasuo-r-disabled" id="slotR"><span class="label">R</span><span class="name">R</span></div>
-  </div>
-  <div id="spellBar">
-    <div class="spell-row"><div class="spellSlot" id="spellSlotD"></div><div class="spellSlot" id="spellSlotF"></div></div>
-    <button id="spellChangeBtn" title="소환사 주문 바꾸기">주문 변경</button>
+  <div id="hudPortrait"><div class="portrait-ring" id="portraitRing"><div class="portrait-box" id="portraitBox">-</div></div><div class="portrait-level" id="levelText">1</div><span id="skillPointText"></span><div class="xp-bar" hidden><div class="fill" id="xpFill"></div></div></div>
+  <div id="hudCenter">
+    <div class="hud-abilities">
+      <div id="skillBar">
+        <div class="skillSlot passiveSlot" id="slotP"><span class="label">P</span><span class="name"></span></div>
+        <div class="skillSlot ready" id="slotQ"><span class="label">Q</span><span class="name">Q</span></div>
+        <div class="skillSlot ready" id="slotW"><span class="label">W</span><span class="name">W</span></div>
+        <div class="skillSlot ready" id="slotE"><span class="label">E</span><span class="name">E</span></div>
+        <div class="skillSlot yasuo-r-disabled" id="slotR"><span class="label">R</span><span class="name">R</span></div>
+      </div>
+      <div id="spellBar">
+        <div class="spell-row"><div class="spellSlot" id="spellSlotD"></div><div class="spellSlot" id="spellSlotF"></div></div>
+        <button id="spellChangeBtn" title="소환사 주문 바꾸기">주문 변경</button>
+      </div>
+    </div>
+    <div id="bars">
+      <div class="barRow"><div id="hpFill" class="barFill"></div><div id="shieldFill" class="barFill"></div><div id="hpText" class="barText">100/100</div><span class="barRegen" id="hpRegenText"></span></div>
+      <div class="barRow"><span id="resourceLabel" class="barLabel">MP</span><div id="mpFill" class="barFill"></div><div id="mpText" class="barText">100/100</div><span class="barRegen" id="mpRegenText"></span></div>
+    </div>
   </div>
   <div id="hudItems"></div>
-  <div id="hudGold"><div class="g-amount" id="goldAmount">0</div><div class="g-label">GOLD</div><button id="hudShopBtn" title="상점 열기/닫기 (P)">상점<small>P</small></button></div>
+  <div id="hudGold"><div class="g-amount" id="goldAmount">0</div><div class="g-label">GOLD</div><div class="g-btns"><button id="hudShopBtn" title="상점 열기/닫기 (P)">상점<small>P</small></button><button id="hudRecallBtn" title="귀환 (B)">귀환<small>B</small></button></div></div>
 </div>
 <div id="levelUpFx"></div>
 
@@ -26934,6 +26977,18 @@ const _hudEls = {
 const _hudLast = { hpPct: '', hpText: '', shieldLeft: '', shieldWidth: '', shieldDisplay: '', mpFlow: null, mpWidth: '', mpText: '', label: '', worldHpPct: '', worldHpText: '', worldResourceWidth: '', worldResourceDisplay: '', worldResourceMode: '' };
 function updateBars(ch) {
   const hpPct = `${(ch.hp / ch.maxHp) * 100}%`;
+  // 69차: 원작 HUD처럼 체력·마나 바 오른쪽 끝에 초당 재생량(+1.6). 가득 차 있으면 숨긴다. hpRegen/mpRegen은 5초당 값이다.
+  const hpRegenEl = document.getElementById('hpRegenText'), mpRegenEl = document.getElementById('mpRegenText');
+  if (hpRegenEl) {
+    const v = (ch.hpRegen || 0) * (1 + (ch.itemBonusHpRegenPercent || 0)) / 5;
+    const t = ch.hp < ch.maxHp - 0.5 && v > 0 ? `+${v.toFixed(1)}` : '';
+    if (hpRegenEl.textContent !== t) hpRegenEl.textContent = t;
+  }
+  if (mpRegenEl) {
+    const v = (ch.mpRegen || 0) * (1 + (ch.itemBonusMpRegenPercent || 0)) / 5;
+    const t = Number(ch.maxMp) > 0 && ch.mp < ch.maxMp - 0.5 && v > 0 ? `+${v.toFixed(1)}` : '';
+    if (mpRegenEl.textContent !== t) mpRegenEl.textContent = t;
+  }
   if (_hudLast.hpPct !== hpPct) { _hudEls.hpFill.style.width = hpPct; _hudLast.hpPct = hpPct; }
   // 28차: 최대 체력이 소수(레벨 성장)일 때 소수점까지 나오던 것을 정수로 표시한다.
   const hpText = `${Math.ceil(ch.hp)}/${Math.round(ch.maxHp)}${ch.shield > 0 ? ` (+${Math.ceil(ch.shield)} 보호막)` : ''}`;
@@ -27089,12 +27144,16 @@ function updateExpUI(champion) {
   const spEl = document.getElementById('skillPointText');
   if (!levelEl || !fillEl) return;
   const maxed = champion.champLevel >= EXP_MAX_LEVEL;
-  const levelText = `Lv.${champion.champLevel}`;
+  const levelText = `${champion.champLevel}`; // 69차: 초상화 아래 레벨 원(숫자만)
   if (_expUiLast.levelText !== levelText) { levelEl.textContent = levelText; _expUiLast.levelText = levelText; }
   const required = maxed ? 1 : getExpRequired(champion.champLevel);
   const pctNum = maxed ? 100 : Math.min(100, ((champion.currentExp || 0) / required) * 100);
   const pct = `${pctNum}%`;
-  if (_expUiLast.pct !== pct) { fillEl.style.width = pct; _expUiLast.pct = pct; }
+  if (_expUiLast.pct !== pct) {
+    fillEl.style.width = pct; _expUiLast.pct = pct;
+    const ring = document.getElementById('portraitRing'); // 69차: 경험치 = 초상화 둘레 원형 게이지(원작)
+    if (ring) { ring.style.setProperty('--xp', String(pctNum)); ring.title = maxed ? 'MAX LEVEL' : `경험치 ${Math.floor(champion.currentExp || 0)} / ${required}`; }
+  }
   fillEl.title = maxed ? 'MAX LEVEL' : `${Math.floor(champion.currentExp || 0)} / ${required}`;
   const sp = champion.skillPoints || 0;
   const spText = sp > 0 ? `+${sp}` : '';
@@ -36488,6 +36547,12 @@ function setPracticeToolsVisible(on) {
   if (b) b.classList.toggle('on', !!on);
   try { localStorage.setItem(PRACTICE_TOOLS_KEY, on ? '1' : '0'); } catch (e) { /* 저장 불가(시크릿 창 등) - 무시 */ }
 }
+// 69차: HUD 귀환 버튼(원작 아이템 칸 옆 귀환 아이콘) - B 키와 같다.
+(function initRecallButton() {
+  if (typeof document === 'undefined') return;
+  const b = document.getElementById('hudRecallBtn');
+  if (b) b.addEventListener('click', () => { if (typeof controller !== 'undefined' && controller && !paused) controller.startRecall(); });
+})();
 (function initPracticeToolsToggle() {
   if (typeof document === 'undefined') return;
   const btn = document.createElement('button');

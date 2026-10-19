@@ -16,6 +16,12 @@ function setPracticeToolsVisible(on) {
   if (b) b.classList.toggle('on', !!on);
   try { localStorage.setItem(PRACTICE_TOOLS_KEY, on ? '1' : '0'); } catch (e) { /* 저장 불가(시크릿 창 등) - 무시 */ }
 }
+// 69차: HUD 귀환 버튼(원작 아이템 칸 옆 귀환 아이콘) - B 키와 같다.
+(function initRecallButton() {
+  if (typeof document === 'undefined') return;
+  const b = document.getElementById('hudRecallBtn');
+  if (b) b.addEventListener('click', () => { if (typeof controller !== 'undefined' && controller && !paused) controller.startRecall(); });
+})();
 (function initPracticeToolsToggle() {
   if (typeof document === 'undefined') return;
   const btn = document.createElement('button');
