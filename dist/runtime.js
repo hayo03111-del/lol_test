@@ -1609,6 +1609,7 @@ const CHAMPION_DATA = {
     W: {
       name: '바람 장막', cooldown: [25,23,21,19,17], range: 400,
       width: [320,390,460,530,600], duration: 4, damageType: 'NONE',
+      wallTravel: 350, wallTravelSec: 0.6, wallDrift: 50, // 80차: 0.6초 동안 350까지 나아간 뒤 남은 시간 동안 50 더 밀려남(PC 위키 Template:Data Yasuo/Wind Wall)
       castTimeSec: 0.013, // PC 위키(야스오 문서): 시전 시간 0.013초, 시전 중 이동 가능
     },
     E: {
@@ -1769,6 +1770,7 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '자르고 토막내기', cooldown: [16,14.5,13,11.5,10], mana: 0, range: 450, // Data Dragon: 돌진 450(예전 550)
+      dashSpeedBase: 760, dashSpeedMsRatio: 1.0, // 80차: 돌진 속도 760 + 이동 속도 100%(PC 위키 Template:Data)
       halfWidth: 45, rHalfWidthBonus: 50, // 돌진 경로 판정 반폭, R 중 +50 - 출처 확인 못 함(추정, 45차에 코드에서 데이터로 옮김)
       damageByLevel: [40,70,100,130,160], bonusAdRatio: 0.9,
       empoweredDamageByLevel: [70,115,160,205,250], empoweredBonusAdRatio: 1.35,
@@ -2166,6 +2168,7 @@ const CHAMPION_DATA = {
       // PC 위키: 폭발 3회(의도된 간격 0.25초), 두 번째 이후 폭발은 50% 피해, 둔화는 1.5초에 걸쳐 감쇠(2→1.5초 패치).
       explosionCount: 3, subsequentDamagePercent: 50,
       explosionIntervalSec: 0.25,
+      waveRings: [[0, 350], [215, 465], [350, 590]], // 80차: 파동마다 고리 범위(가까이 있으면 첫 파동만) (80차: PC 위키 Template:Data, 검색 요약 대조)
       // PC 위키(노틸러스 문서): 시전 시간 0.25초. 폭발은 시전이 끝난 뒤 0 / 0.297 / 0.561초(의도는 0.25 간격, 위키 실측 유효 시각).
       castTimeSec: 0.25, explosionOffsetsSec: [0, 0.297, 0.561],
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDecaySec: 1.5,
@@ -2364,7 +2367,7 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDuration: 1.5, damageType: 'MAGICAL',
     },
     R: {
-      name: '포식', cooldown: [80, 70, 60], mana: 100, castTime: 0.25 /* PC 위키(예전 즉시) */, rangeBase: 175, rangePerStack: 2.5, // 버그 수정: 175가 맞음(Leaguepedia 패치 기록 "RANGE: 150 ⇒ 175" 확인) - 200은 잘못된 값이었음
+      name: '포식', cooldown: [80, 70, 60], mana: 100, castTime: 0.25 /* PC 위키(예전 즉시) */, rangeBase: 175, rangePerStack: 2.5, rangeBonusCap: 25, /* 80차: 중첩당 +2.5, 10중첩 +25에서 상한(최대 200) */ // 버그 수정: 175가 맞음(Leaguepedia 패치 기록 "RANGE: 150 ⇒ 175" 확인) - 200은 잘못된 값이었음
       championDamageByLevel: [300, 475, 650], championApRatio: 0.5, championBonusHpRatio: 0.1,
       nonChampionDamage: 1200, nonChampionApRatio: 0.5, nonChampionBonusHpRatio: 0.1,
       hpGrowthByLevel: [80, 120, 160], nonEpicStackCap: 6, damageType: 'TRUE',
@@ -2409,7 +2412,7 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '폭풍/무력화', cooldown: 8, energy1: 50, energy2: 25,
-      range: 450, markDuration: 3, castTimeSec: 0.25,
+      range: 450, markDuration: 3, castTimeSec: 0.25, cripple2Radius: 550, // 무력화(E2)는 리 신 주변 550 안의 표식 대상만 (80차: PC 위키 Template:Data, 검색 요약 대조)
       damageByLevel: [35, 60, 85, 110, 135], adRatio: 0.9,
       slowPercentByLevel: [35, 45, 55, 65, 75], slowDuration: 4, damageType: 'MAGICAL',
     },
@@ -2803,7 +2806,7 @@ const CHAMPION_DATA = {
       rangeChargeDuration: 1.5, maxHoldSec: 4, holdTimeoutManaRefundPercent: 50, chargeSelfSlowPercent: 20,
       // V26.05: 최대 기본 피해 80/150/220/290/360, 현재 최대 계수 추가 AD 120%(PC 위키). 예전 값은 총 AD 130~170%.
       damageMaxByLevel: [80, 150, 220, 290, 360], bonusAdRatioMax: 1.2,
-      missileSpeed: 1500, width: 140, damageType: 'PHYSICAL',
+      missileSpeed: 1900, width: 140, damageType: 'PHYSICAL', // 투사체 속도 1500 → 1900 (80차: PC 위키 Template:Data, 검색 요약 대조)
     },
     W: {
       name: '오한의 화살통',
@@ -8570,7 +8573,7 @@ class ProjectileSystem {
       // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
       // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
       if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret && !(proj.team && proj.team === controller.team)) { // 59차: 아군 미니언 투사체는 통과
-        const wall=controller._yasuo.windwall, progress=Math.min(1,(performance.now()-wall.createdAt)/180), wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, wall.width*0.75*progress), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this._remove(i, true); continue; }
+        const wall=controller._yasuo.windwall, wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, yasuoWindwallOffsetWorld(wall)), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this._remove(i, true); continue; }
       }
       if (proj.line) { this._updateLine(proj, i, dt); continue; }
       const aim = this._currentAimPoint(proj);
@@ -9580,7 +9583,7 @@ const SKILL_AIM = {
   yasuo: {
     Q: { type: 'line', range: (c, d) => (yasuoAimTornado(c) ? d.tornadoRange : d.range), width: (c, d) => (yasuoAimTornado(c) ? d.tornadoWidth : d.width),
       instantIf: (c) => c.currentActionKey === 'yasuoE' && c.currentPhase === 'ACTIVE' }, // 45차: E 돌진 중 Q(EQ)는 조준 없이 바로 - 돌진 끝에 주변 원형
-    W: { type: 'wall', width: (c, d, lvl) => skillVal(d.width, lvl) },                              // 앞쪽 width*0.75 지점, 길이 width
+    W: { type: 'wall', width: (c, d, lvl) => skillVal(d.width, lvl) },                              // 앞쪽 350 지점(80차), 길이 width
     E: { type: 'unit', range: (c, d) => d.range },
     R: { type: 'unit', range: (c, d) => d.range, approach: false },                                  // 공중에 뜬 적(걸어가서 시전하지 않음 - 띄운 적이 사거리 안에 있을 때만)
   },
@@ -9623,7 +9626,7 @@ const SKILL_AIM = {
     Q: { type: 'circleAt', range: (c, d) => d.range, radius: (c, d) => d.radius },
     W: { type: 'cone', range: (c, d) => d.range, angleDeg: (c, d) => d.coneAngleDeg },
     E: { type: 'instant' },
-    R: { type: 'unit', range: (c, d) => d.rangeBase + d.rangePerStack * ((c._chogath && c._chogath.predationStacks) || 0) },
+    R: { type: 'unit', range: (c, d) => d.rangeBase + Math.min(d.rangeBonusCap ?? Infinity, d.rangePerStack * ((c._chogath && c._chogath.predationStacks) || 0)) },
   },
   leesin: {
     Q: { type: 'line', range: (c, d) => d.range1, width: (c, d) => d.width,                            // 음파 폭(데이터) - 투사체 line 판정과 같다
@@ -9745,8 +9748,9 @@ function computeSkillAim(c, slot, point) {
     }
     case 'wall': {
       const w = W(V('width'));
-      aim.rangeWorld = w * 0.75 + 0.45;
-      aim.wall = { dist: w * 0.75, length: w, thickness: 0.9 };                               // projectile_system.js 막기 판정과 같음
+      const wd = lolRangeToWorld((d.wallTravel || 350)); // 80차: 장막이 0.6초 뒤 도달하는 거리(350)
+      aim.rangeWorld = wd + 0.45;
+      aim.wall = { dist: wd, length: w, thickness: 0.9 };                               // projectile_system.js 막기 판정과 같음
       break;
     }
     case 'unit': case 'ally': aim.rangeWorld = W(V('range')); aim.pickWorld = spec.pickLol ? W(spec.pickLol) : 0; break;
@@ -10464,7 +10468,7 @@ function resolveRingRangeLol(ctrl, slot, data) {
   if (data.range != null) return skillVal(data.range, lvl);
   if (data.range1 != null) return data.range1;
   if (data.radius != null) return data.radius; // 자기중심 범위 스킬(노틸러스 E 등)
-  if (data.rangeBase != null) return data.rangeBase + (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0);
+  if (data.rangeBase != null) return data.rangeBase + Math.min(data.rangeBonusCap ?? Infinity, (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0));
   if (data.rangeMax != null) return data.rangeMax;
   return null;
 }
@@ -16612,9 +16616,7 @@ CharacterController.prototype._garenCastRDuringE = function() {
 CharacterController.prototype._settLeftHandRangeBonusWorld = function() { 
     if (this.championId !== 'sett' || !this._sett.qUsesRemaining) return 0;
     const cd = this._champData(); if (!cd) return 0;
-    const seqNames = getAttackSequenceNames(this.championId);
-    const nextIsLeft = (this.comboIndex % seqNames.length) === 0;
-    if (!nextIsLeft) return 0;
+    // 80차: PC 위키 - 강화된 다음 기본 공격 2회 모두 사거리 +50(예전엔 왼손 1회만).
     return lolRangeToWorld(cd.Q.leftHandRangeBonus || 0);
   
 };
@@ -17537,7 +17539,11 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
     const dest=origin.clone().addScaledVector(dir,lolRangeToWorld(e.range));
     this._clearActionTimers(); this.currentActionKey=isSecond?'renektonE2':'renektonE1'; this.currentPhase='ACTIVE'; this.setState(STATE.E_CAST); this.phaseCancelable=false;
     this._renektonPlay('Spell3',{loop:THREE.LoopOnce,fade:0.03,clampWhenFinished:true});
-    this._dashState={from:origin,to:dest,duration:0.28,elapsed:0,faceDir:dir};
+    // 80차: PC 위키 - 돌진 속도 760 + 이동 속도 100%(예전 0.28초 고정 ≈ 1607/초).
+    const msW=typeof getFinalMoveSpeed==='function'?getFinalMoveSpeed(this.stats):0;
+    const msLol=msW>0?worldDistanceToLol(msW):(CHAMPION_DATA.renekton.stats.moveSpeed||345);
+    const dashSec=e.range/((e.dashSpeedBase||760)+(e.dashSpeedMsRatio??1)*msLol);
+    this._dashState={from:origin,to:dest,duration:dashSec,elapsed:0,faceDir:dir};
     const hits=this._renektonFindLineHits(origin,dest,this._renekton.rActive?(CHAMPION_DATA.renekton.E.rHalfWidthBonus||0):0);
     const empowered=isSecond&&!free&&this._renekton.rage>=50;
     if(empowered)this._renekton.rage-=50;
@@ -17554,7 +17560,7 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
       if(!isSecond && hits.length){this._renekton.eSecondReadyUntil=performance.now()+4000;this._renekton.eFirstHit=true;}
       if(isSecond){this._renekton.eSecondReadyUntil=0;this._renekton.eFirstHit=false;}
       this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();updateBars(this);
-    },280);
+    },dashSec*1000);
     this._actionTimers.push(timer);
     updateBars(this);
   
@@ -17892,6 +17898,16 @@ CharacterController.prototype._yasuoCastW = function(mouseWorldPoint, free=false
     if(!free) this.cooldowns.W=abilityHasteCooldown(this, this._yasuoLevelValue(w.cooldown,lvl));
 
 };
+
+// 80차: 바람 장막의 현재 전방 거리(world). 0.6초 동안 0→350, 이후 남은 지속 시간 동안 +50(PC 위키).
+// 예전엔 폭×0.75 지점(240~450, 레벨 따라 달라짐)까지 0.18초 만에 가서 멈췄다.
+function yasuoWindwallOffsetWorld(wall) {
+  const w = CHAMPION_DATA.yasuo.W;
+  const t = (performance.now() - wall.createdAt) / 1000, travelSec = w.wallTravelSec || 0.6, dur = w.duration || 4;
+  const lol = t <= travelSec ? (w.wallTravel || 350) * (t / travelSec)
+    : (w.wallTravel || 350) + (w.wallDrift || 0) * Math.min(1, (t - travelSec) / Math.max(dur - travelSec, 1e-6));
+  return lolRangeToWorld(lol);
+}
 
 // Extracted from CharacterController: _yasuoCreateWindwall
 CharacterController.prototype._yasuoCreateWindwall = function(dir,width) {
@@ -21164,7 +21180,7 @@ CharacterController.prototype._chogathCastR = function(free) {
     if (!this.canStartNewAction()) return;
     if (!this.currentTarget || this.currentTarget.hp <= 0) { debugSkillMiss("Cho'Gath R", 'no currentTarget selected'); return; }
     const cd = this._champData(); const r = cd.R;
-    const range = r.rangeBase + r.rangePerStack * (this._chogath.predationStacks || 0);
+    const range = r.rangeBase + Math.min(r.rangeBonusCap ?? Infinity, r.rangePerStack * (this._chogath.predationStacks || 0));
     if (!isInRange(this, this.currentTarget, range)) { debugSkillMiss("Cho'Gath R", 'out of range'); return; }
     if (!this._payCost('R', free)) return;
     // PC 위키: 시전 0.25초 뒤 판정(예전엔 즉시). 그 사이 끊기면 취소.
@@ -21386,7 +21402,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
       let dashSec = 0.05;
       if (dir.length() > 0.05) {
         const stopDist = this.collisionRadius * 2;
-        const speed = Math.max(dir.length() - stopDist, 0.05) / 0.35;
+        const speed = this._leesinDashSpeedWorld(); // 80차: 1350 + 이동 속도 100%(PC 위키, 예전 거리/0.35초)
         dir.normalize();
         this.faceDirectionInstant(dir); // 29차: rotation.y만 바꾸면 직전 회전이 180°일 때 정반대를 봤다(쿼터니언으로 설정)
         const from = this.root.position.clone();
@@ -21501,6 +21517,7 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
     const lvl = Math.max(1, this.skillLevels.W || 1);
     const amount = skillVal(w.shieldByLevel, lvl) + (w.shieldApRatio || 0) * (this.stats.abilityPower || 0);
     const dashTarget = ally ? getWorldPosition(ally) : (ward ? ward.position : null);
+    let wDashSec = 0;
     if (dashTarget) {
       const to = dashTarget.clone();
       const dir = new THREE.Vector3().subVectors(to, this.root.position).setY(0);
@@ -21508,7 +21525,9 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
         dir.normalize();
         to.addScaledVector(dir, -(this.collisionRadius + (ally ? getCollisionRadius(ally) : 0)));
         to.y = this.root.position.y;
-        this._dashState = { from: this.root.position.clone(), to, duration: 0.35, elapsed: 0, faceDir: dir.clone() }; // Q2 돌진과 같은 시간
+        // 80차: 돌진 속도 1350 + 이동 속도 100%(PC 위키 Template:Data Lee Sin/Safeguard, 예전 0.35초 고정)
+        wDashSec = Math.max(0.05, getHorizontalDistance(to, this.root.position) / this._leesinDashSpeedWorld());
+        this._dashState = { from: this.root.position.clone(), to, duration: wDashSec, elapsed: 0, faceDir: dir.clone() };
       }
       if (ally && typeof shieldAlly === 'function') shieldAlly(this, ally, amount, w.shieldDuration);
     }
@@ -21516,7 +21535,7 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
     // 없으므로 행동을 잡지 않는다(평타/이동 중이면 모션도 끼워 넣지 않음).
     if (dashTarget) {
       this._clearActionTimers();
-      this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: 0.35, state: STATE.W_CAST, exitIdle: ['Spell2_ToIdle'] });
+      this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: Math.max(wDashSec, 0.05), state: STATE.W_CAST, exitIdle: ['Spell2_ToIdle'] });
     } else if (!this.currentActionKey && !this.targetPos) {
       this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: 0, exitIdle: ['Spell2_ToIdle'] });
     }
@@ -21583,8 +21602,9 @@ CharacterController.prototype._leesinCastE = function(free) {
       if (!free) { this.mp -= e.energy2; updateBars(this); }
       const lvl = Math.max(1, this.skillLevels.E || 1);
       // 원작: 35~75% 둔화가 4초에 걸쳐 점점 약해진다(decayLinear - 노틸러스 E와 같은 방식).
+      const e2R = e.cripple2Radius ? lolRangeToWorld(e.cripple2Radius) : Infinity;
       for (const unit of this._leesin.eMarkHits) {
-        if (unit.hp > 0) applyStatus(unit, { id: 'leesinE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100, decayLinear: true, source: this });
+        if (unit.hp > 0 && getHorizontalDistance(getWorldPosition(unit), this.root.position) <= e2R + getCollisionRadius(unit)) applyStatus(unit, { id: 'leesinE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100, decayLinear: true, source: this });
       }
       this._leesinPlayInstantRecastClip(['Spell3_b_idle.ASU_LeeSin.anm'], ['Spell3_b_moving.ASU_LeeSin.anm']);
       this._leesinOnSkillUsed();
@@ -21683,6 +21703,13 @@ CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
   
 };
 
+
+// 80차: Q2(공명의 일격)·W(방호) 돌진 속도 = 1350 + 이동 속도 100%(PC 위키). world 단위/초.
+CharacterController.prototype._leesinDashSpeedWorld = function() {
+  const msW = typeof getFinalMoveSpeed === 'function' ? getFinalMoveSpeed(this.stats) : 0;
+  const msLol = msW > 0 ? worldDistanceToLol(msW) : (CHAMPION_DATA.leesin.stats.moveSpeed || 345);
+  return lolRangeToWorld(1350 + msLol);
+};
 
 /* ===== src/champions/mordekaiser.js ===== */
 // Extracted from CharacterController: _mordeOnDealtHit
@@ -22689,7 +22716,7 @@ CharacterController.prototype._ezrealCastE = function(mouseWorldPoint, free = fa
     const raw = skillVal(e.damageByLevel, lvl) + (e.bonusAdRatio || 0) * this._getBonusAD() + (e.apRatio || 0) * (this.stats.abilityPower || 0);
     const from = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
     projectiles.spawn({
-      from, target: best, speed: lolRangeToWorld(2600), damage: 0,
+      from, target: best, speed: lolRangeToWorld(2000), damage: 0, // 80차: 유도탄 속도 2600 → 2000(PC 위키)
       // 정정(레퍼런스 영상 ability_0081_E1.webm 프레임 대조): 실제 비전
       // 이동 유도탄은 금색/노란색 화살이다(예전엔 시안색으로 잘못 나갔음 -
       // W와 색이 서로 뒤바뀌어 있던 것과 같은 원인으로 보인다).
@@ -24712,7 +24739,10 @@ CharacterController.prototype._nautilusExplodeE = function(seq) {
   const e = this._champData().E;
   const base = skillVal(e.damageByLevel, seq.lvl) + e.apRatio * (this.stats.abilityPower || 0);
   vfx.spawn('e', this.root.position.clone());
-  const hits = findEnemiesInRadius(this.root.position, e.radius);
+  // 80차: 파동마다 고리(0~350 / 215~465 / 350~590) - 바로 옆 대상은 첫 파동만 맞는다.
+  const ring = (e.waveRings && e.waveRings[Math.min(seq.fired, e.waveRings.length - 1)]) || [0, e.radius];
+  const hits = findEnemiesInRadius(this.root.position, ring[1])
+    .filter((h) => h.distance + getCollisionRadius(h.unit) >= lolRangeToWorld(ring[0]));
   for (const { unit } of hits) {
     if (!unit || unit.hp <= 0 || unit.isStructure) continue;
     const n = seq.hitCounts.get(unit) || 0;
@@ -26099,7 +26129,7 @@ function distanceDebugText(ctrl) {
     const lvl = Math.max(1, (ctrl.skillLevels && ctrl.skillLevels[slot]) || 1);
     if (data.range != null) return skillVal(data.range, lvl);
     if (data.range1 != null) return data.range1;
-    if (data.rangeBase != null) return data.rangeBase + (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0);
+    if (data.rangeBase != null) return data.rangeBase + Math.min(data.rangeBonusCap ?? Infinity, (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0));
     if (data.rangeMax != null) return data.rangeMax;
     return null;
   };

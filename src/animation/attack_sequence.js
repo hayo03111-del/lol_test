@@ -155,7 +155,7 @@ function resolveRingRangeLol(ctrl, slot, data) {
   if (data.range != null) return skillVal(data.range, lvl);
   if (data.range1 != null) return data.range1;
   if (data.radius != null) return data.radius; // 자기중심 범위 스킬(노틸러스 E 등)
-  if (data.rangeBase != null) return data.rangeBase + (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0);
+  if (data.rangeBase != null) return data.rangeBase + Math.min(data.rangeBonusCap ?? Infinity, (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0));
   if (data.rangeMax != null) return data.rangeMax;
   return null;
 }

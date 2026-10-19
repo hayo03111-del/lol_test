@@ -404,7 +404,7 @@ function distanceDebugText(ctrl) {
     const lvl = Math.max(1, (ctrl.skillLevels && ctrl.skillLevels[slot]) || 1);
     if (data.range != null) return skillVal(data.range, lvl);
     if (data.range1 != null) return data.range1;
-    if (data.rangeBase != null) return data.rangeBase + (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0);
+    if (data.rangeBase != null) return data.rangeBase + Math.min(data.rangeBonusCap ?? Infinity, (data.rangePerStack || 0) * ((ctrl._chogath && ctrl._chogath.predationStacks) || 0));
     if (data.rangeMax != null) return data.rangeMax;
     return null;
   };

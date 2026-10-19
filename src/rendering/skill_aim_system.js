@@ -45,7 +45,7 @@ const SKILL_AIM = {
   yasuo: {
     Q: { type: 'line', range: (c, d) => (yasuoAimTornado(c) ? d.tornadoRange : d.range), width: (c, d) => (yasuoAimTornado(c) ? d.tornadoWidth : d.width),
       instantIf: (c) => c.currentActionKey === 'yasuoE' && c.currentPhase === 'ACTIVE' }, // 45차: E 돌진 중 Q(EQ)는 조준 없이 바로 - 돌진 끝에 주변 원형
-    W: { type: 'wall', width: (c, d, lvl) => skillVal(d.width, lvl) },                              // 앞쪽 width*0.75 지점, 길이 width
+    W: { type: 'wall', width: (c, d, lvl) => skillVal(d.width, lvl) },                              // 앞쪽 350 지점(80차), 길이 width
     E: { type: 'unit', range: (c, d) => d.range },
     R: { type: 'unit', range: (c, d) => d.range, approach: false },                                  // 공중에 뜬 적(걸어가서 시전하지 않음 - 띄운 적이 사거리 안에 있을 때만)
   },
@@ -88,7 +88,7 @@ const SKILL_AIM = {
     Q: { type: 'circleAt', range: (c, d) => d.range, radius: (c, d) => d.radius },
     W: { type: 'cone', range: (c, d) => d.range, angleDeg: (c, d) => d.coneAngleDeg },
     E: { type: 'instant' },
-    R: { type: 'unit', range: (c, d) => d.rangeBase + d.rangePerStack * ((c._chogath && c._chogath.predationStacks) || 0) },
+    R: { type: 'unit', range: (c, d) => d.rangeBase + Math.min(d.rangeBonusCap ?? Infinity, d.rangePerStack * ((c._chogath && c._chogath.predationStacks) || 0)) },
   },
   leesin: {
     Q: { type: 'line', range: (c, d) => d.range1, width: (c, d) => d.width,                            // 음파 폭(데이터) - 투사체 line 판정과 같다
@@ -210,8 +210,9 @@ function computeSkillAim(c, slot, point) {
     }
     case 'wall': {
       const w = W(V('width'));
-      aim.rangeWorld = w * 0.75 + 0.45;
-      aim.wall = { dist: w * 0.75, length: w, thickness: 0.9 };                               // projectile_system.js 막기 판정과 같음
+      const wd = lolRangeToWorld((d.wallTravel || 350)); // 80차: 장막이 0.6초 뒤 도달하는 거리(350)
+      aim.rangeWorld = wd + 0.45;
+      aim.wall = { dist: wd, length: w, thickness: 0.9 };                               // projectile_system.js 막기 판정과 같음
       break;
     }
     case 'unit': case 'ally': aim.rangeWorld = W(V('range')); aim.pickWorld = spec.pickLol ? W(spec.pickLol) : 0; break;

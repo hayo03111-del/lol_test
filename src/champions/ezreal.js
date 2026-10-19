@@ -244,7 +244,7 @@ CharacterController.prototype._ezrealCastE = function(mouseWorldPoint, free = fa
     const raw = skillVal(e.damageByLevel, lvl) + (e.bonusAdRatio || 0) * this._getBonusAD() + (e.apRatio || 0) * (this.stats.abilityPower || 0);
     const from = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
     projectiles.spawn({
-      from, target: best, speed: lolRangeToWorld(2600), damage: 0,
+      from, target: best, speed: lolRangeToWorld(2000), damage: 0, // 80차: 유도탄 속도 2600 → 2000(PC 위키)
       // 정정(레퍼런스 영상 ability_0081_E1.webm 프레임 대조): 실제 비전
       // 이동 유도탄은 금색/노란색 화살이다(예전엔 시안색으로 잘못 나갔음 -
       // W와 색이 서로 뒤바뀌어 있던 것과 같은 원인으로 보인다).

@@ -198,7 +198,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
       let dashSec = 0.05;
       if (dir.length() > 0.05) {
         const stopDist = this.collisionRadius * 2;
-        const speed = Math.max(dir.length() - stopDist, 0.05) / 0.35;
+        const speed = this._leesinDashSpeedWorld(); // 80차: 1350 + 이동 속도 100%(PC 위키, 예전 거리/0.35초)
         dir.normalize();
         this.faceDirectionInstant(dir); // 29차: rotation.y만 바꾸면 직전 회전이 180°일 때 정반대를 봤다(쿼터니언으로 설정)
         const from = this.root.position.clone();
@@ -313,6 +313,7 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
     const lvl = Math.max(1, this.skillLevels.W || 1);
     const amount = skillVal(w.shieldByLevel, lvl) + (w.shieldApRatio || 0) * (this.stats.abilityPower || 0);
     const dashTarget = ally ? getWorldPosition(ally) : (ward ? ward.position : null);
+    let wDashSec = 0;
     if (dashTarget) {
       const to = dashTarget.clone();
       const dir = new THREE.Vector3().subVectors(to, this.root.position).setY(0);
@@ -320,7 +321,9 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
         dir.normalize();
         to.addScaledVector(dir, -(this.collisionRadius + (ally ? getCollisionRadius(ally) : 0)));
         to.y = this.root.position.y;
-        this._dashState = { from: this.root.position.clone(), to, duration: 0.35, elapsed: 0, faceDir: dir.clone() }; // Q2 돌진과 같은 시간
+        // 80차: 돌진 속도 1350 + 이동 속도 100%(PC 위키 Template:Data Lee Sin/Safeguard, 예전 0.35초 고정)
+        wDashSec = Math.max(0.05, getHorizontalDistance(to, this.root.position) / this._leesinDashSpeedWorld());
+        this._dashState = { from: this.root.position.clone(), to, duration: wDashSec, elapsed: 0, faceDir: dir.clone() };
       }
       if (ally && typeof shieldAlly === 'function') shieldAlly(this, ally, amount, w.shieldDuration);
     }
@@ -328,7 +331,7 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
     // 없으므로 행동을 잡지 않는다(평타/이동 중이면 모션도 끼워 넣지 않음).
     if (dashTarget) {
       this._clearActionTimers();
-      this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: 0.35, state: STATE.W_CAST, exitIdle: ['Spell2_ToIdle'] });
+      this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: Math.max(wDashSec, 0.05), state: STATE.W_CAST, exitIdle: ['Spell2_ToIdle'] });
     } else if (!this.currentActionKey && !this.targetPos) {
       this._leesinPlayCast({ actionKey: 'leesinW', clips: ['Spell2'], lockSec: 0, exitIdle: ['Spell2_ToIdle'] });
     }
@@ -395,8 +398,9 @@ CharacterController.prototype._leesinCastE = function(free) {
       if (!free) { this.mp -= e.energy2; updateBars(this); }
       const lvl = Math.max(1, this.skillLevels.E || 1);
       // 원작: 35~75% 둔화가 4초에 걸쳐 점점 약해진다(decayLinear - 노틸러스 E와 같은 방식).
+      const e2R = e.cripple2Radius ? lolRangeToWorld(e.cripple2Radius) : Infinity;
       for (const unit of this._leesin.eMarkHits) {
-        if (unit.hp > 0) applyStatus(unit, { id: 'leesinE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100, decayLinear: true, source: this });
+        if (unit.hp > 0 && getHorizontalDistance(getWorldPosition(unit), this.root.position) <= e2R + getCollisionRadius(unit)) applyStatus(unit, { id: 'leesinE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100, decayLinear: true, source: this });
       }
       this._leesinPlayInstantRecastClip(['Spell3_b_idle.ASU_LeeSin.anm'], ['Spell3_b_moving.ASU_LeeSin.anm']);
       this._leesinOnSkillUsed();
@@ -495,3 +499,10 @@ CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
   
 };
 
+
+// 80차: Q2(공명의 일격)·W(방호) 돌진 속도 = 1350 + 이동 속도 100%(PC 위키). world 단위/초.
+CharacterController.prototype._leesinDashSpeedWorld = function() {
+  const msW = typeof getFinalMoveSpeed === 'function' ? getFinalMoveSpeed(this.stats) : 0;
+  const msLol = msW > 0 ? worldDistanceToLol(msW) : (CHAMPION_DATA.leesin.stats.moveSpeed || 345);
+  return lolRangeToWorld(1350 + msLol);
+};

@@ -198,7 +198,7 @@ CharacterController.prototype._chogathCastR = function(free) {
     if (!this.canStartNewAction()) return;
     if (!this.currentTarget || this.currentTarget.hp <= 0) { debugSkillMiss("Cho'Gath R", 'no currentTarget selected'); return; }
     const cd = this._champData(); const r = cd.R;
-    const range = r.rangeBase + r.rangePerStack * (this._chogath.predationStacks || 0);
+    const range = r.rangeBase + Math.min(r.rangeBonusCap ?? Infinity, r.rangePerStack * (this._chogath.predationStacks || 0));
     if (!isInRange(this, this.currentTarget, range)) { debugSkillMiss("Cho'Gath R", 'out of range'); return; }
     if (!this._payCost('R', free)) return;
     // PC 위키: 시전 0.25초 뒤 판정(예전엔 즉시). 그 사이 끊기면 취소.

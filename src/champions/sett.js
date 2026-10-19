@@ -2,9 +2,7 @@
 CharacterController.prototype._settLeftHandRangeBonusWorld = function() { 
     if (this.championId !== 'sett' || !this._sett.qUsesRemaining) return 0;
     const cd = this._champData(); if (!cd) return 0;
-    const seqNames = getAttackSequenceNames(this.championId);
-    const nextIsLeft = (this.comboIndex % seqNames.length) === 0;
-    if (!nextIsLeft) return 0;
+    // 80차: PC 위키 - 강화된 다음 기본 공격 2회 모두 사거리 +50(예전엔 왼손 1회만).
     return lolRangeToWorld(cd.Q.leftHandRangeBonus || 0);
   
 };

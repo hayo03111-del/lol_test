@@ -306,7 +306,10 @@ CharacterController.prototype._nautilusExplodeE = function(seq) {
   const e = this._champData().E;
   const base = skillVal(e.damageByLevel, seq.lvl) + e.apRatio * (this.stats.abilityPower || 0);
   vfx.spawn('e', this.root.position.clone());
-  const hits = findEnemiesInRadius(this.root.position, e.radius);
+  // 80차: 파동마다 고리(0~350 / 215~465 / 350~590) - 바로 옆 대상은 첫 파동만 맞는다.
+  const ring = (e.waveRings && e.waveRings[Math.min(seq.fired, e.waveRings.length - 1)]) || [0, e.radius];
+  const hits = findEnemiesInRadius(this.root.position, ring[1])
+    .filter((h) => h.distance + getCollisionRadius(h.unit) >= lolRangeToWorld(ring[0]));
   for (const { unit } of hits) {
     if (!unit || unit.hp <= 0 || unit.isStructure) continue;
     const n = seq.hitCounts.get(unit) || 0;

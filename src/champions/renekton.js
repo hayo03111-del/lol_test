@@ -248,7 +248,11 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
     const dest=origin.clone().addScaledVector(dir,lolRangeToWorld(e.range));
     this._clearActionTimers(); this.currentActionKey=isSecond?'renektonE2':'renektonE1'; this.currentPhase='ACTIVE'; this.setState(STATE.E_CAST); this.phaseCancelable=false;
     this._renektonPlay('Spell3',{loop:THREE.LoopOnce,fade:0.03,clampWhenFinished:true});
-    this._dashState={from:origin,to:dest,duration:0.28,elapsed:0,faceDir:dir};
+    // 80차: PC 위키 - 돌진 속도 760 + 이동 속도 100%(예전 0.28초 고정 ≈ 1607/초).
+    const msW=typeof getFinalMoveSpeed==='function'?getFinalMoveSpeed(this.stats):0;
+    const msLol=msW>0?worldDistanceToLol(msW):(CHAMPION_DATA.renekton.stats.moveSpeed||345);
+    const dashSec=e.range/((e.dashSpeedBase||760)+(e.dashSpeedMsRatio??1)*msLol);
+    this._dashState={from:origin,to:dest,duration:dashSec,elapsed:0,faceDir:dir};
     const hits=this._renektonFindLineHits(origin,dest,this._renekton.rActive?(CHAMPION_DATA.renekton.E.rHalfWidthBonus||0):0);
     const empowered=isSecond&&!free&&this._renekton.rage>=50;
     if(empowered)this._renekton.rage-=50;
@@ -265,7 +269,7 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
       if(!isSecond && hits.length){this._renekton.eSecondReadyUntil=performance.now()+4000;this._renekton.eFirstHit=true;}
       if(isSecond){this._renekton.eSecondReadyUntil=0;this._renekton.eFirstHit=false;}
       this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();updateBars(this);
-    },280);
+    },dashSec*1000);
     this._actionTimers.push(timer);
     updateBars(this);
   

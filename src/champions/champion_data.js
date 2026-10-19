@@ -61,6 +61,7 @@ const CHAMPION_DATA = {
     W: {
       name: '바람 장막', cooldown: [25,23,21,19,17], range: 400,
       width: [320,390,460,530,600], duration: 4, damageType: 'NONE',
+      wallTravel: 350, wallTravelSec: 0.6, wallDrift: 50, // 80차: 0.6초 동안 350까지 나아간 뒤 남은 시간 동안 50 더 밀려남(PC 위키 Template:Data Yasuo/Wind Wall)
       castTimeSec: 0.013, // PC 위키(야스오 문서): 시전 시간 0.013초, 시전 중 이동 가능
     },
     E: {
@@ -221,6 +222,7 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '자르고 토막내기', cooldown: [16,14.5,13,11.5,10], mana: 0, range: 450, // Data Dragon: 돌진 450(예전 550)
+      dashSpeedBase: 760, dashSpeedMsRatio: 1.0, // 80차: 돌진 속도 760 + 이동 속도 100%(PC 위키 Template:Data)
       halfWidth: 45, rHalfWidthBonus: 50, // 돌진 경로 판정 반폭, R 중 +50 - 출처 확인 못 함(추정, 45차에 코드에서 데이터로 옮김)
       damageByLevel: [40,70,100,130,160], bonusAdRatio: 0.9,
       empoweredDamageByLevel: [70,115,160,205,250], empoweredBonusAdRatio: 1.35,
@@ -618,6 +620,7 @@ const CHAMPION_DATA = {
       // PC 위키: 폭발 3회(의도된 간격 0.25초), 두 번째 이후 폭발은 50% 피해, 둔화는 1.5초에 걸쳐 감쇠(2→1.5초 패치).
       explosionCount: 3, subsequentDamagePercent: 50,
       explosionIntervalSec: 0.25,
+      waveRings: [[0, 350], [215, 465], [350, 590]], // 80차: 파동마다 고리 범위(가까이 있으면 첫 파동만) (80차: PC 위키 Template:Data, 검색 요약 대조)
       // PC 위키(노틸러스 문서): 시전 시간 0.25초. 폭발은 시전이 끝난 뒤 0 / 0.297 / 0.561초(의도는 0.25 간격, 위키 실측 유효 시각).
       castTimeSec: 0.25, explosionOffsetsSec: [0, 0.297, 0.561],
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDecaySec: 1.5,
@@ -816,7 +819,7 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDuration: 1.5, damageType: 'MAGICAL',
     },
     R: {
-      name: '포식', cooldown: [80, 70, 60], mana: 100, castTime: 0.25 /* PC 위키(예전 즉시) */, rangeBase: 175, rangePerStack: 2.5, // 버그 수정: 175가 맞음(Leaguepedia 패치 기록 "RANGE: 150 ⇒ 175" 확인) - 200은 잘못된 값이었음
+      name: '포식', cooldown: [80, 70, 60], mana: 100, castTime: 0.25 /* PC 위키(예전 즉시) */, rangeBase: 175, rangePerStack: 2.5, rangeBonusCap: 25, /* 80차: 중첩당 +2.5, 10중첩 +25에서 상한(최대 200) */ // 버그 수정: 175가 맞음(Leaguepedia 패치 기록 "RANGE: 150 ⇒ 175" 확인) - 200은 잘못된 값이었음
       championDamageByLevel: [300, 475, 650], championApRatio: 0.5, championBonusHpRatio: 0.1,
       nonChampionDamage: 1200, nonChampionApRatio: 0.5, nonChampionBonusHpRatio: 0.1,
       hpGrowthByLevel: [80, 120, 160], nonEpicStackCap: 6, damageType: 'TRUE',
@@ -861,7 +864,7 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '폭풍/무력화', cooldown: 8, energy1: 50, energy2: 25,
-      range: 450, markDuration: 3, castTimeSec: 0.25,
+      range: 450, markDuration: 3, castTimeSec: 0.25, cripple2Radius: 550, // 무력화(E2)는 리 신 주변 550 안의 표식 대상만 (80차: PC 위키 Template:Data, 검색 요약 대조)
       damageByLevel: [35, 60, 85, 110, 135], adRatio: 0.9,
       slowPercentByLevel: [35, 45, 55, 65, 75], slowDuration: 4, damageType: 'MAGICAL',
     },
@@ -1255,7 +1258,7 @@ const CHAMPION_DATA = {
       rangeChargeDuration: 1.5, maxHoldSec: 4, holdTimeoutManaRefundPercent: 50, chargeSelfSlowPercent: 20,
       // V26.05: 최대 기본 피해 80/150/220/290/360, 현재 최대 계수 추가 AD 120%(PC 위키). 예전 값은 총 AD 130~170%.
       damageMaxByLevel: [80, 150, 220, 290, 360], bonusAdRatioMax: 1.2,
-      missileSpeed: 1500, width: 140, damageType: 'PHYSICAL',
+      missileSpeed: 1900, width: 140, damageType: 'PHYSICAL', // 투사체 속도 1500 → 1900 (80차: PC 위키 Template:Data, 검색 요약 대조)
     },
     W: {
       name: '오한의 화살통',

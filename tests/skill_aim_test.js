@@ -90,7 +90,7 @@ assert(near(computeSkillAim(champ('leesin'), 'Q', at(300)).segments[0].width, W(
 // 9) 야스오 W 바람 장막: 앞쪽 width*0.75 지점, 길이 width(1레벨 320).
 {
   const a = computeSkillAim(champ('yasuo'), 'W', at(300));
-  assert(near(a.wall.dist, W(320) * 0.75) && near(a.wall.length, W(320)), '야스오 W: 320*0.75 지점, 길이 320');
+  assert(near(a.wall.dist, W(350)) && near(a.wall.length, W(320)), '야스오 W: 350 지점(80차, 0.6초 뒤 도달), 길이 320');
 }
 // 10) 바루스 Q 충전(75차: PC 위키 895~1595): 0초 895, 0.75초 1245, 1.5초 이상 1595.
 {

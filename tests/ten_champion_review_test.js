@@ -722,3 +722,28 @@ stubs.targetRing = { clear() {} };
   assert(isStunned(left) && isStunned(right), '세트 E(79차): 양옆(앞뒤 140 이내) 적은 끌려와 기절');
   assert(!getStatus(front, 'settE_slow') && front.hp === 3000, '세트 E(79차): 정면 300(앞뒤 폭 밖)은 맞지 않는다');
 }
+
+// --- 80차: 전 챔피언 사거리·폭 대조 ---
+{
+  const L = lolRangeToWorld, tiny = { collisionRadius: 0.001 };
+  // 노틸러스 E: 파동마다 고리 0~350 / 215~465 / 350~590
+  timers = []; clearPlaced();
+  const c = makeChamp('nautilus');
+  const close = place(makeEnemy(0, L(100), tiny)), mid = place(makeEnemy(0, L(400), tiny)), outer = place(makeEnemy(0, L(550), tiny));
+  const seq = { fired: 0, hitCounts: new Map(), lvl: 1 };
+  const hits = [];
+  for (let i = 0; i < 3; i++) { seq.fired = i; const hp = [close, mid, outer].map((u) => u.hp); c._nautilusExplodeE(seq); hits.push([close, mid, outer].map((u, k) => u.hp < hp[k])); }
+  assert(JSON.stringify(hits) === JSON.stringify([[true, false, false], [false, true, false], [false, true, true]]), '노틸러스 E(80차): 파동별 고리 범위(가까운 대상은 첫 파동만) ' + JSON.stringify(hits));
+}
+{
+  // 초가스 R: 중첩당 +2.5, 최대 +25(사거리 200)
+  const c = makeChamp('chogath');
+  const r = CHAMPION_DATA.chogath.R;
+  assert(r.rangeBase + Math.min(r.rangeBonusCap, r.rangePerStack * 40) === 200, '초가스 R(80차): 40중첩이어도 사거리 200에서 상한');
+}
+{
+  // 세트 Q: 강화된 2회 공격 모두 사거리 +50
+  const c = makeChamp('sett');
+  c._sett.qUsesRemaining = 2; c.comboIndex = 1;
+  assert(near(c._settLeftHandRangeBonusWorld(), lolRangeToWorld(50)), '세트 Q(80차): 오른손 공격도 사거리 +50');
+}

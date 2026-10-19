@@ -243,6 +243,16 @@ CharacterController.prototype._yasuoCastW = function(mouseWorldPoint, free=false
 
 };
 
+// 80차: 바람 장막의 현재 전방 거리(world). 0.6초 동안 0→350, 이후 남은 지속 시간 동안 +50(PC 위키).
+// 예전엔 폭×0.75 지점(240~450, 레벨 따라 달라짐)까지 0.18초 만에 가서 멈췄다.
+function yasuoWindwallOffsetWorld(wall) {
+  const w = CHAMPION_DATA.yasuo.W;
+  const t = (performance.now() - wall.createdAt) / 1000, travelSec = w.wallTravelSec || 0.6, dur = w.duration || 4;
+  const lol = t <= travelSec ? (w.wallTravel || 350) * (t / travelSec)
+    : (w.wallTravel || 350) + (w.wallDrift || 0) * Math.min(1, (t - travelSec) / Math.max(dur - travelSec, 1e-6));
+  return lolRangeToWorld(lol);
+}
+
 // Extracted from CharacterController: _yasuoCreateWindwall
 CharacterController.prototype._yasuoCreateWindwall = function(dir,width) {
     // 바람 장막은 시전한 자리에 고정된다 - 예전엔 판정 기준점이 매 프레임 야스오의
