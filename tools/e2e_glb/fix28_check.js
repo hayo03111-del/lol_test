@@ -49,9 +49,9 @@ const startServer = require('./server.js');
   r.renekton = await page.evaluate(() => new Promise((res) => {
     const E = window.__e2e, T = E.THREE, c = window.controller;
     const h = () => { const b = new T.Box3().setFromObject(c.model); return b.max.y - b.min.y; };
-    const s0 = c.root.scale.x, h0 = h();
+    const s0 = (c._sizeScale || 1), h0 = h();
     c.castAbility('R', null);
-    setTimeout(() => { const s1 = c.root.scale.x, h1 = h(); c._renektonEndR(); setTimeout(() => res({ scaleBefore: +s0.toFixed(3), scaleDuring: +s1.toFixed(3), heightRatio: +(h1 / h0).toFixed(3), scaleAfterEnd: +c.root.scale.x.toFixed(3) }), 100); }, 600);
+    setTimeout(() => { const s1 = (c._sizeScale || 1), h1 = h(); c._renektonEndR(); setTimeout(() => res({ scaleBefore: +s0.toFixed(3), scaleDuring: +s1.toFixed(3), heightRatio: +(h1 / h0).toFixed(3), scaleAfterEnd: +(c._sizeScale || 1).toFixed(3) }), 100); }, 600);
   }));
 
   // 3) 닐라: Q 이펙트(판정 직선만), R 이펙트가 닐라를 따라감

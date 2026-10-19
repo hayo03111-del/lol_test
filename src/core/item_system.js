@@ -1090,13 +1090,14 @@ function itemSystemTick(ctrl, dt) {
   }
   // 강철심장(거인) - 최대 체력 1000당 모델 크기 3% 증가(최대 30%, 시각
   // 효과 - 전투 수치에는 영향 없음).
+  // 83차: 공용 크기 효과(setUnitSizeMod)로 - 다른 크기 효과와 더해진다(예전엔 root.scale을 덮어썼다).
   if (heartsteelSlot && ctrl.root && ctrl.root.scale) {
     const p = ITEM_DATA.heartsteel.titanicPassive;
     const scaleBonus = Math.min(p.maxScalePercent, ((ctrl.maxHp || 0) / p.hpPerScaleStep) * p.scalePercentPerStep);
     const s = 1 + scaleBonus;
-    if (Math.abs((ctrl._itemHeartsteelScale || 1) - s) > 1e-4) { ctrl._itemHeartsteelScale = s; ctrl.root.scale.setScalar(s); }
+    if (Math.abs((ctrl._itemHeartsteelScale || 1) - s) > 1e-4) { ctrl._itemHeartsteelScale = s; setUnitSizeMod(ctrl, 'heartsteel', s); }
   } else if (!heartsteelSlot && ctrl._itemHeartsteelScale && ctrl._itemHeartsteelScale !== 1 && ctrl.root && ctrl.root.scale) {
-    ctrl._itemHeartsteelScale = 1; ctrl.root.scale.setScalar(1);
+    ctrl._itemHeartsteelScale = 1; setUnitSizeMod(ctrl, 'heartsteel', 1);
   }
   // 워모그의 갑옷(워모그의 심장) - 추가 체력 2000 이상일 때, 챔피언에게
   // 8초(비챔피언에게는 3초) 동안 피해를 입지 않으면 초당 3% 체력 회복.

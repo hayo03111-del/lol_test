@@ -288,7 +288,7 @@ CharacterController.prototype._renektonCastR = function(free=false) {
       // 28차: PC 위키 - 크기 20% 증가(판정 반경 80 → 96). 예전엔 출처 없는 15%였고 판정 반경은 그대로였다.
       const sizeMul=1+(r.sizeIncreasePercent!=null?r.sizeIncreasePercent:20)/100;
       this._renekton.rBaseCollisionRadius=this.collisionRadius;this.collisionRadius*=sizeMul;
-      this._renekton.rBonusMaxHp=skillVal(r.bonusMaxHp,lvl);this.bonusMaxHp=this._renekton.rBonusMaxHp;this.root.scale.setScalar((this._itemHeartsteelScale||1)*sizeMul);this.recomputeStats();
+      this._renekton.rBonusMaxHp=skillVal(r.bonusMaxHp,lvl);this.bonusMaxHp=this._renekton.rBonusMaxHp;setUnitSizeMod(this,'renektonR',sizeMul);this.recomputeStats(); /* 83차: 공용 크기 효과 */
       this._renektonGainRage(r.immediateRage);this._renektonMarkCombat();
       if (this._renekton.rAuraVfx) vfx.stopRenektonRAura(this._renekton.rAuraVfx);
       this._renekton.rAuraVfx = vfx.startRenektonRAura(() => this.root.position, lolRangeToWorld(r.range));
@@ -306,7 +306,7 @@ CharacterController.prototype._renektonEndR = function() {
     this._renekton.rActive=false;this._renekton.rActiveUntil=0;this._renekton.rAuraAccum=0;this._renekton.rRageAccum=0;this._renekton.rBonusMaxHp=0;
     if (this._renekton.rAuraVfx) { vfx.stopRenektonRAura(this._renekton.rAuraVfx); this._renekton.rAuraVfx=null; }
     if(this._renekton.rBaseCollisionRadius){this.collisionRadius=this._renekton.rBaseCollisionRadius;this._renekton.rBaseCollisionRadius=0;}
-    this.bonusMaxHp=0;this.root.scale.setScalar(this._itemHeartsteelScale||1);this.recomputeStats();this.hp=Math.min(this.hp,this.maxHp);updateBars(this);
+    this.bonusMaxHp=0;setUnitSizeMod(this,'renektonR',1);this.recomputeStats();this.hp=Math.min(this.hp,this.maxHp);updateBars(this);
   
 };
 

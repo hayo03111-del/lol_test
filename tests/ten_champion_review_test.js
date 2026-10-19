@@ -131,6 +131,7 @@ this.constrainUnitPosition = constrainUnitPosition;
 this.clearStatus = clearStatus;
 this.getDeathRealm = getDeathRealm;
 this.chogathFeastBonus = chogathFeastBonus;
+this.setUnitSizeMod = setUnitSizeMod;
 this.getFinalAttackSpeed = getFinalAttackSpeed;
 `, context);
 const { CharacterController, CHAMPION_DATA, STATE, applyStatus, applyDamage, getStatus, getSlowPercent,
@@ -585,7 +586,7 @@ stubs.targetRing = { clear() {} };
   assert(enemies1.length === 1 && enemies1[0] === t && context.getAllEnemyUnits(true).includes(outsider), '모데 R: 안에서는 대상만 상호작용, 바깥 목록은 혼령 표시용으로만 조회');
   assert(om.material !== mat && om.material.opacity < 0.5, '모데 R: 바깥 유닛은 반투명 혼령으로 보인다');
   advance(300); c._mordeUpdateR();
-  assert(near(c.root.scale.v, 1.1) && near(t.mesh.scale.v, 0.9), '모데 R: 크기 모데카이저 +10%, 대상 -10%(0.25초에 걸쳐)');
+  assert(near(c._sizeScale, 1.1) && near(t.mesh.scale.v, 0.9), '모데 R: 크기 모데카이저 +10%, 대상 -10%(0.25초에 걸쳐)');
   // 경계: 경기장 밖으로 밀려나면(돌진·이동) 경계 안으로 되돌린다
   c.root.position.set(0, 0, -lolRangeToWorld(2000));
   c._mordeUpdateR();
@@ -593,6 +594,9 @@ stubs.targetRing = { clear() {} };
   const posBeforeEnd = c.root.position.clone();
   advance(7000); c._mordeUpdateR();
   assert(!c._morde.isInDeathRealm && c.realmId === 'main' && t.realmId === 'main', '모데 R: 7초 뒤 종료, 둘 다 일반 세계로');
+  assert(near(t.mesh.scale.v, 1) && c._sizeScale > 1.09, '모데 R(83차): 끝나면 대상은 즉시 원래 크기, 모데카이저는 아직 큼(0.25초에 걸쳐 작아짐)');
+  advance(300); c._mordeUpdateR();
+  assert(near(c._sizeScale, 1), '모데 R(83차): 0.25초 뒤 모데카이저도 원래 크기');
   assert(c.root.position.distanceTo(posBeforeEnd) < 1e-9, '모데 R: 끝나도 들어가기 전 위치로 되돌리지 않는다(그 자리에서 복귀)');
   assert(near(t.armor, 30) && near(t.maxHp, 3000) && near(t.attackDamage, 6) && near(c.bonusArmor, 0) && near(c.maxHp, maxHp0), '모데 R: 종료 시 훔친 능력치 반환');
   assert(om.material === mat && !context.getDeathRealm('deathRealm_1'), '모데 R: 종료 시 혼령 표시·경기장 정리');
@@ -601,6 +605,8 @@ stubs.targetRing = { clear() {} };
   c._mordeROnHit(t);
   t.hp = 0; c._mordeUpdateR();
   assert(!c._morde.isInDeathRealm && c._morde.rKept && c.bonusArmor > 0, '모데 R: 대상이 안에서 죽으면 일찍 끝나고 훔친 능력치는 유지');
+  advance(400); c._mordeUpdateR();
+  assert(c._sizeScale > 1.05, '모데 R(83차): 대상이 죽어 능력치를 들고 있는 동안 크기도 유지 ' + c._sizeScale);
   c._mordeUpdateR();
   assert(c._morde.rKept && c.bonusArmor > 0, '모데 R: 대상이 죽어 있는 동안 계속 유지');
   t.hp = 1000; c._mordeUpdateR();
@@ -808,4 +814,13 @@ stubs.targetRing = { clear() {} };
   assert(near(c._sizeScale, 2, 1e-3), '초가스(82차): 크기는 최대 2배(추가 100%)');
   const g = makeChamp('garen'); g._tickSizeScale(1 / 30);
   assert((g._sizeScale || 1) === 1, '초가스(82차): 다른 챔피언은 크기 변화 없음');
+}
+
+// --- 83차: 크기 효과는 더해진다 ---
+{
+  const c = makeChamp('mordekaiser');
+  context.setUnitSizeMod(c, 'heartsteel', 1.12); context.setUnitSizeMod(c, 'mordeR', 1.1);
+  assert(near(c._sizeScale, 1.22), '크기(83차): 강철심장 +12%와 모데 R +10%는 더해져 +22%(예전엔 서로 덮어씀)');
+  context.setUnitSizeMod(c, 'mordeR', 1);
+  assert(near(c._sizeScale, 1.12), '크기(83차): 한 효과가 끝나도 다른 효과는 남는다');
 }

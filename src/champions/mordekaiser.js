@@ -234,7 +234,8 @@ CharacterController.prototype._mordeROnHit = function(target) {
     showDeathRealmBoundary(realm.center, realm.radius);
     activateDeathRealmAtmosphere();
     this._mordeGhostOutsiders();
-    this._mordeStartSizeAnim(target, 1.1, 0.9);
+    const szPct = (r.sizeStealPercent != null ? r.sizeStealPercent : 10) / 100; // PC 위키: 자기 크기 +10%, 대상 자기 크기 -10%
+    this._mordeStartSizeAnim(target, 1 + szPct, 1 - szPct);
     console.log('[MORDE R] Death Realm 진입', { target: unitLabel(target), durationSec: r.duration, realmId, steal });
 };
 
@@ -281,8 +282,12 @@ CharacterController.prototype._mordeGhostOutsiders = function() {
 
 // 크기 변화(약 0.25초에 걸쳐). 모데카이저는 root.scale, 허수아비는 mesh.scale.
 CharacterController.prototype._mordeStartSizeAnim = function(target, selfTo, targetTo) {
-    const cur = this._morde.rSize || { self: 1, target: 1, targetRef: null };
-    this._morde.rSize = { selfFrom: cur.self, selfTo, targetFrom: cur.targetRef === target ? cur.target : 1, targetTo, targetRef: target, start: performance.now(), self: cur.self, target: cur.targetRef === target ? cur.target : 1 };
+    const cur = this._morde.rSize || { self: (this._sizeMods && this._sizeMods.mordeR) || 1, target: 1, targetRef: null };
+    // 83차(PC 위키): 대상은 빼앗길 때 0.25초에 걸쳐 작아지지만, 효과가 끝나면 "즉시" 원래 크기로 돌아온다.
+    let targetFrom = cur.targetRef === target ? cur.target : 1;
+    if (targetTo === 1) targetFrom = 1;
+    this._morde.rSize = { selfFrom: cur.self, selfTo, targetFrom, targetTo, targetRef: target, start: performance.now(), self: cur.self, target: targetFrom };
+    if (targetTo === 1) { const tr = target && (target.mesh || target.root); if (tr && tr.scale) tr.scale.setScalar(1); } // 즉시 복귀
 };
 CharacterController.prototype._mordeTickSizeAnim = function() {
     const sz = this._morde.rSize;
@@ -290,7 +295,7 @@ CharacterController.prototype._mordeTickSizeAnim = function() {
     const k = Math.min(1, (performance.now() - sz.start) / 250);
     sz.self = sz.selfFrom + (sz.selfTo - sz.selfFrom) * k;
     sz.target = sz.targetFrom + (sz.targetTo - sz.targetFrom) * k;
-    if (this.root && this.root.scale) this.root.scale.setScalar((this._itemHeartsteelScale || 1) * sz.self);
+    setUnitSizeMod(this, 'mordeR', sz.self); // 83차: 공용 크기 효과(강철심장 등과 더해짐)
     const tr = sz.targetRef && (sz.targetRef.mesh || sz.targetRef.root);
     if (tr && tr.scale) tr.scale.setScalar(sz.target);
     if (k >= 1 && sz.selfTo === 1 && sz.targetTo === 1) this._morde.rSize = null;
@@ -302,6 +307,7 @@ CharacterController.prototype._mordeReleaseSteal = function(reason) {
     if (!kept) return;
     this._mordeApplyStealToSelf(kept.steal, -1);
     this._morde.rKept = null;
+    this._mordeStartSizeAnim(null, 1, 1); // 83차: 들고 있던 능력치를 내려놓을 때 0.25초에 걸쳐 원래 크기로
     console.log('[MORDE R] 유지하던 능력치 반환', { reason });
 };
 
@@ -332,7 +338,9 @@ CharacterController.prototype._mordeEndDeathRealm = function(reason) {
     hideDeathRealmBoundary();
     deactivateDeathRealmAtmosphere();
     clearDeathRealmGhosts();
-    this._mordeStartSizeAnim(target, 1, 1);
+    // 83차(PC 위키): 모데카이저는 효과가 끝나면 0.25초에 걸쳐 작아진다 - 대상이 안에서 죽어 능력치를 들고 있으면
+    // 그동안 커진 채로 있다(_mordeReleaseSteal에서 작아짐). 대상은 즉시 원래 크기.
+    this._mordeStartSizeAnim(target, targetDied ? (this._morde.rSize ? this._morde.rSize.selfTo : 1) : 1, 1);
     this._morde.isInDeathRealm = false;
     this._morde.rTarget = null;
     this._morde.rEndsAt = 0;

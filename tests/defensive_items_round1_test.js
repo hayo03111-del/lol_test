@@ -52,7 +52,9 @@ const stubs = {
 };
 const context = vm.createContext(stubs);
 const itemDataSrc = fs.readFileSync(path.join(ROOT, 'src/champions/item_data.js'), 'utf8');
-const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8') + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8'); // 보호막 인스턴스 모델 포함
+const constantsSrc = fs.readFileSync(path.join(ROOT, 'src/core/00_global_constants.js'), 'utf8');
+const sizeModSrc = constantsSrc.slice(constantsSrc.indexOf('// 83차: 챔피언 크기 효과 통합.')); // 공용 크기 효과(setUnitSizeMod)만
+const itemSystemSrc = fs.readFileSync(path.join(ROOT, 'src/core/shield_system.js'), 'utf8') + '\n' + sizeModSrc + '\n' + fs.readFileSync(path.join(ROOT, 'src/core/item_system.js'), 'utf8'); // 보호막 인스턴스 모델 포함
 vm.runInContext(itemDataSrc + '\n' + itemSystemSrc + `
 this.ITEM_DATA = ITEM_DATA;
 this.buyItem = buyItem;
@@ -272,7 +274,7 @@ function makeTarget(overrides = {}) {
   // 거인(모델 크기) - maxHp가 900+a일 때 크기 증가 확인.
   itemSystemTick(ctrl, 0.016);
   const expectedScale = 1 + Math.min(0.30, (ctrl.maxHp / 1000) * 0.03);
-  assert(Math.abs(ctrl.root.scale.x - expectedScale) < 1e-4, '거인: 최대 체력에 비례해 모델 크기가 커진다');
+  assert(Math.abs(ctrl._sizeScale - expectedScale) < 1e-4, '거인: 최대 체력에 비례해 모델 크기가 커진다(83차: 공용 크기 효과)');
 }
 
 // ========================================================================

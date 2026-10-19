@@ -296,7 +296,7 @@ async function bootstrapChampion(gltf, fileName) {
   if (groundDrop) hpLabel3d.position.y -= groundDrop;
   // 82차: 크기가 바뀌는 효과(초가스 포식)에 맞춰 체력바 높이를 옮기기 위한 기준값.
   controller._hpLabel3d = hpLabel3d; controller._hpLabelBaseY = hpLabel3d.position.y;
-  controller._sizeScale = 1;
+  controller._scaleWrapper = scaleWrapper; controller._sizeScale = 1; controller._sizeMods = {};
   updateBars(controller);
   updateSkillUI(controller.cooldowns);
   // 요청("ui적용해줘") - 새 HUD 초상화 박스에 챔피언 ID 앞 두 글자를 표시한다.

@@ -32,7 +32,7 @@ const startServer = require('./server.js');
       morderMovedLol: Math.round(c.root.position.distanceTo(b.c) / W), dummyMovedLol: Math.round(E.getWorldPosition(d).distanceTo(b.d) / W),
       armor: d.armor, armorBefore: b.armor, maxHpGain: Math.round(c.maxHp - b.maxHp), dummyMaxHp: d.maxHp, fog: !!E.scene.fog,
       sceneAdded: E.scene.children.length - b.scene, othersOpacity: others.map(opac), targetOpacity: opac(d),
-      scale: +c.root.scale.x.toFixed(3), dummyScale: +d.mesh.scale.x.toFixed(3),
+      scale: +(c._sizeScale || 1).toFixed(3), wrapperScale: +c._scaleWrapper.scale.x.toFixed(3), dummyScale: +d.mesh.scale.x.toFixed(3),
       enteredAfterCastMs: Math.round(c._morde.rEndsAt - 7000 - window.__castAt), center: (() => { const R = c._morde.realmId && getDeathRealmForE2E(c._morde.realmId); return R ? { distMordeLol: Math.round(c.root.position.distanceTo(R.center) / W), radiusLol: Math.round(R.radius / W) } : null; })() };
     // 경계 밖으로 이동 명령 → 경계 안에서 멈춰야 한다
     // R 시전 잠금이 풀린 뒤, 대상 반대쪽(경계까지 약 550)으로 3000만큼 이동 명령
@@ -47,7 +47,7 @@ const startServer = require('./server.js');
     const E = window.__e2e, c = window.controller, d = E.dummies[0], others = E.dummies.slice(1);
     const R = getDeathRealmForE2E(c._morde.realmId);
     const pm = c.root.position.clone().multiplyScalar(1.01); const pm2 = pm.clone(); window.__mapClamp(pm2);
-    const out = { mordeAtMapEdge: pm2.distanceTo(pm) > 1e-6, movedLol: Math.round(c.root.position.distanceTo(window.__movePos0) / E.lolRangeToWorld(1)), afterMoveOutDistFromCenterLol: R ? Math.round(c.root.position.distanceTo(R.center) / E.lolRangeToWorld(1)) : null, scale: +c.root.scale.x.toFixed(3), dummyScale: +d.mesh.scale.x.toFixed(3) };
+    const out = { mordeAtMapEdge: pm2.distanceTo(pm) > 1e-6, movedLol: Math.round(c.root.position.distanceTo(window.__movePos0) / E.lolRangeToWorld(1)), afterMoveOutDistFromCenterLol: R ? Math.round(c.root.position.distanceTo(R.center) / E.lolRangeToWorld(1)) : null, scale: +(c._sizeScale || 1).toFixed(3), wrapperScale: +c._scaleWrapper.scale.x.toFixed(3), dummyScale: +d.mesh.scale.x.toFixed(3) };
     // 바깥 허수아비 공격 시도 → 피해 없어야 한다
     if (others[0]) { window.__otherHp = others[0].hp; c.root.position.copy(E.getWorldPosition(others[0])).add(new E.THREE.Vector3(0, 0, E.lolRangeToWorld(150))); c.selectTarget(others[0]); }
     return out;
@@ -74,7 +74,7 @@ const startServer = require('./server.js');
     const E = window.__e2e, c = window.controller, d = E.dummies[0], b = window.__before;
     const opac = (u) => { let o = null; u.mesh.traverse((m) => { if (m.isMesh && o == null && m.material && !Array.isArray(m.material)) o = m.material.opacity; }); return o; };
     return { inRealm: c._morde.isInDeathRealm, realm: c.realmId, dummyRealm: d.realmId, armor: d.armor, maxHpBack: Math.round(c.maxHp - b.maxHp), dummyMaxHp: d.maxHp,
-      fog: !!E.scene.fog, fogBefore: b.fog, sceneDiff: E.scene.children.length - b.scene, othersOpacity: E.dummies.slice(1).map(opac), scale: +c.root.scale.x.toFixed(3), dummyScale: +d.mesh.scale.x.toFixed(3) };
+      fog: !!E.scene.fog, fogBefore: b.fog, sceneDiff: E.scene.children.length - b.scene, othersOpacity: E.dummies.slice(1).map(opac), scale: +(c._sizeScale || 1).toFixed(3), wrapperScale: +c._scaleWrapper.scale.x.toFixed(3), dummyScale: +d.mesh.scale.x.toFixed(3) };
   });
   console.log(JSON.stringify({ setup, mid, mid2, end, errors: errors.slice(0, 5) }, null, 1));
   await browser.close(); srv.close();

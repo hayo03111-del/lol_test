@@ -763,3 +763,32 @@ function markExecute(target, dmg) {
 // 만들지 않고 기존 hp/maxHp만 읽어서 그린다).
 const EXECUTE_ZONE_PERCENT = 25;
 
+// 83차: 챔피언 크기 효과 통합. 원작처럼 크기 효과는 서로 "더해진다"(예: 강철심장 +12%와 모데카이저 R +10% → +22%).
+// 예전엔 강철심장·레넥톤 R·모데카이저 R이 각자 root.scale을 덮어써서 겹치면 하나가 사라졌다.
+// key별 배율(1 = 효과 없음)을 모아 scaleWrapper(모델)만 키우고, 체력바 높이는 머리 위 여유(약 0.5)를 뺀 키만큼 비례해 올린다.
+function setUnitSizeMod(ctrl, key, mul) {
+  if (!ctrl) return;
+  if (!ctrl._sizeMods) ctrl._sizeMods = {};
+  if (mul == null || Math.abs(mul - 1) < 1e-6) delete ctrl._sizeMods[key];
+  else ctrl._sizeMods[key] = mul;
+  applyUnitSize(ctrl);
+}
+function getUnitSizeTotal(ctrl) {
+  let total = 1;
+  const mods = (ctrl && ctrl._sizeMods) || {};
+  for (const k in mods) total += mods[k] - 1;
+  return Math.max(0.1, total);
+}
+function applyUnitSize(ctrl) {
+  const total = getUnitSizeTotal(ctrl);
+  ctrl._sizeScale = total;
+  const wrapper = ctrl._scaleWrapper || (ctrl.model && ctrl.model.parent);
+  if (wrapper && wrapper.scale && typeof championBaseScaleMultiplier !== 'undefined') {
+    wrapper.scale.setScalar(championBaseScaleMultiplier * (typeof modelScaleMultiplier !== 'undefined' ? modelScaleMultiplier : 1) * total);
+  }
+  if (ctrl.root && ctrl.root.scale && ctrl.root.scale.x !== 1) ctrl.root.scale.setScalar(1); // 예전 방식(root 배율)의 흔적 정리
+  if (ctrl._hpLabel3d && ctrl._hpLabelBaseY != null) {
+    const gap = Math.min(0.5, ctrl._hpLabelBaseY);
+    ctrl._hpLabel3d.position.y = gap + (ctrl._hpLabelBaseY - gap) * total;
+  }
+}
