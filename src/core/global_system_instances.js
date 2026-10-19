@@ -431,26 +431,44 @@ function getEnemyHit(clientX, clientY, { includeWards = false } = {}) {
   // 32차: 평타 대상 고르기(좌클릭·커서)에서만 보이는 적 와드도 후보로 넣는다 - 스킬 조준은 와드를 고르지 않는다.
   if (includeWards && typeof wardSystem !== 'undefined' && wardSystem) candidates.push(...wardSystem.targetableFor((controller && controller.team) || PLAYER_TEAM));
   if (!candidates.length) return null;
-  mouseNDC.x = (clientX / window.innerWidth) * 2 - 1;
-  mouseNDC.y = -(clientY / window.innerHeight) * 2 + 1;
-  raycaster.setFromCamera(mouseNDC, camera);
-  const bodies = candidates.map((u) => u.body);
-  const hits = raycaster.intersectObjects(bodies, false);
-  if (hits.length) {
-    const exact = candidates.find((u) => u.body === hits[0].object);
-    if (exact) return exact;
-  }
-  // 정밀 레이캐스트가 빗나갔을 때의 관대한 폴백.
-  let best = null, bestDist = Infinity;
+  // 64차: 원작식 선택 판정 - 유닛마다 발밑~머리 높이의 "선택 원기둥"(반경 selectionRadius)을 화면에 투영하고, 커서가 그
+  // 안에 들어온 유닛 중 가장 가운데에 가까운 것을 고른다. 예전엔 ① 정밀 판정(레이캐스트)이 u.body만 비재귀로 봐서, 61차부터
+  // 모델을 담는 그룹이 된 미니언 body에는 한 번도 맞지 않았고 ② 대신 쓰던 예비 판정은 "발밑 한 점에서 38픽셀"이라 미니언 몸통을
+  // 누르면 빗나가 공격 대신 이동이 됐다(미니언 때리기가 어려웠던 원인).
+  const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+  let best = null, bestScore = Infinity;
   for (const u of candidates) {
-    const p = getWorldPosition(u);
-    if (!p || isBehindCamera(p)) continue;
-    const screen = worldToScreenPx(p);
-    const dist = Math.hypot(screen.x - clientX, screen.y - clientY);
-    const radiusPx = (u.isMinion || u.isWard) ? ENEMY_CLICK_RADIUS_MINION_PX : ENEMY_CLICK_RADIUS_PX;
-    if (dist <= radiusPx && dist < bestDist) { bestDist = dist; best = u; }
+    const feet = getWorldPosition(u);
+    if (!feet || isBehindCamera(feet)) continue;
+    const h = getUnitSelectionHeight(u);
+    const r = Math.max(u.selectionRadius || 0, getCollisionRadius(u) || 0, 0.15);
+    // 카메라 앞뒤 범위(NDC z -1~1) 밖이면 투영 좌표가 뒤집혀 화면을 가로지르는 엉뚱한 선분이 된다 - 그런 대상은 뺀다
+    // (카메라 뒤 멀리 있는 넥서스 포탑이 화면 가운데 클릭에 잡히던 문제).
+    const na = feet.clone().project(camera), nb = feet.clone().add(new THREE.Vector3(0, h, 0)).project(camera);
+    if (Math.abs(na.z) > 1 || Math.abs(nb.z) > 1) continue;
+    if ((Math.abs(na.x) > 1.3 || Math.abs(na.y) > 1.3) && (Math.abs(nb.x) > 1.3 || Math.abs(nb.y) > 1.3)) continue;
+    const a = { x: (na.x * 0.5 + 0.5) * window.innerWidth, y: (-na.y * 0.5 + 0.5) * window.innerHeight };
+    const b = { x: (nb.x * 0.5 + 0.5) * window.innerWidth, y: (-nb.y * 0.5 + 0.5) * window.innerHeight };
+    const edge = worldToScreenPx(feet.clone().addScaledVector(right, r));
+    const radiusPx = Math.max(u.isWard ? 16 : 12, Math.hypot(edge.x - a.x, edge.y - a.y));
+    // 커서와 선분(발밑~머리) 사이 거리
+    const vx = b.x - a.x, vy = b.y - a.y, len2 = vx * vx + vy * vy;
+    const t = len2 > 1e-6 ? Math.max(0, Math.min(1, ((clientX - a.x) * vx + (clientY - a.y) * vy) / len2)) : 0;
+    const d = Math.hypot(clientX - (a.x + vx * t), clientY - (a.y + vy * t));
+    if (d > radiusPx) continue;
+    // 겹치면 미니언·챔피언·와드를 구조물보다 먼저(원작도 포탑 앞 미니언을 누르면 미니언이 잡힌다).
+    const score = d / radiusPx + (u.isStructure ? 1 : 0);
+    if (score < bestScore) { bestScore = score; best = u; }
   }
   return best;
+}
+// 선택 원기둥 높이(월드) - 미니언은 실제 모델 키, 포탑·억제기·넥서스는 이름표 높이, 챔피언·허수아비는 몸 높이.
+function getUnitSelectionHeight(u) {
+  if (u.modelHeight) return u.modelHeight;
+  if (u.isStructure && u.labelHeight) return Math.max(1, u.labelHeight - 0.4);
+  if (u.collisionHeight) return u.collisionHeight;
+  if (u.isWard) return 0.5;
+  return 1.6;
 }
 
 let paused = false;
@@ -566,6 +584,19 @@ if (healDummyBtnEl) {
   });
 }
 
+// 64차 공격 이동(A키): 누르면 다음 좌클릭이 공격 이동 명령이 된다(커서가 조준 십자로 바뀐다). 우클릭·Esc로 취소.
+let attackMoveArmed = false;
+const ATTACK_MOVE_PICK_RADIUS_LOL = 400;
+function findAttackMoveTarget(point) {
+  let best = null, bestD = Infinity;
+  for (const u of getTargetableEnemyUnits()) {
+    if (!u || u.hp <= 0 || u.isWard || u.isUntargetable) continue;
+    if (u.isStructure && typeof isStructureProtected === 'function' && isStructureProtected(u)) continue;
+    const d = getHorizontalDistance(point, getWorldPosition(u)) - getCollisionRadius(u);
+    if (d <= lolRangeToWorld(ATTACK_MOVE_PICK_RADIUS_LOL) && d < bestD) { bestD = d; best = u; }
+  }
+  return best;
+}
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (paused || !controller) return;
   // 조준 중(일반 시전): 좌클릭 = 그 자리로 시전, 우클릭 = 조준 취소(아래 이동 명령은 그대로 처리).
@@ -588,8 +619,24 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
       controller._masteryiSetAlphaStrikeReemergeDirection(groundPoint);
       return;
     }
+    // 64차: 원작처럼 우클릭한 자리에 적(미니언·챔피언·구조물·와드)이 있으면 이동이 아니라 공격 명령이다. 예전엔 우클릭이 항상
+    // 그 땅으로 걷기만 해서, 미니언을 우클릭하면 때리지 않고 미니언 쪽으로 걸어가기만 했다.
+    attackMoveArmed = false;
+    const enemyUnderCursor = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
+    if (enemyUnderCursor) { controller.selectTarget(enemyUnderCursor); return; }
     spawnMoveMarker(groundPoint); controller.moveTo(groundPoint);
   } else if (e.button === 0) {
+    // 64차 공격 이동(원작 A + 좌클릭): 커서 아래 적, 없으면 클릭 지점에서 가장 가까운 적(400 안)을 공격하고, 없으면 그 자리로 이동.
+    if (attackMoveArmed) {
+      attackMoveArmed = false;
+      const p = getGroundPoint(e.clientX, e.clientY) || lastGroundPoint;
+      // 커서 바로 아래가 미니언·챔피언이면 그것, 아니면 클릭 지점 근처(400) 가장 가까운 적, 그래도 없으면 커서 아래 구조물.
+      const under = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
+      const t = (under && !under.isStructure ? under : null) || (p ? findAttackMoveTarget(p) : null) || under;
+      if (t) controller.selectTarget(t);
+      else if (p) { spawnMoveMarker(p); controller.moveTo(p); }
+      return;
+    }
     if (dummyPlaceMode) {
       const groundPoint = getGroundPoint(e.clientX, e.clientY);
       if (groundPoint) placeDummyAt(groundPoint);
@@ -622,7 +669,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 // 있을 때는 값이 안 바뀌므로 매 프레임이 아니라 실제 mousemove 이벤트가
 // 있을 때만 계산되고, 후보 수도 최대 수십 개 수준이라 비용이 거의 없다.
 renderer.domElement.addEventListener('pointermove', (e) => {
-  if (paused || !controller || dummyPlaceMode || allyPlaceMode || brushPlaceMode || enemyWardPlaceMode || skillAim.aiming) { renderer.domElement.style.cursor = (brushPlaceMode || enemyWardPlaceMode || skillAim.aiming) ? 'crosshair' : ''; return; }
+  if (paused || !controller || dummyPlaceMode || allyPlaceMode || brushPlaceMode || enemyWardPlaceMode || skillAim.aiming || attackMoveArmed) { renderer.domElement.style.cursor = (brushPlaceMode || enemyWardPlaceMode || skillAim.aiming || attackMoveArmed) ? 'crosshair' : ''; return; }
   const enemyHit = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
   renderer.domElement.style.cursor = enemyHit ? 'pointer' : '';
 });
@@ -650,7 +697,7 @@ window.addEventListener('keydown', (e) => {
   const keepCursor = canvasEl.style.cursor;
   canvasEl.style.cursor = 'none';
   requestAnimationFrame(() => { canvasEl.style.cursor = keepCursor; });
-  if (e.code === 'Escape') { if (skillAim.aiming) { skillAim.cancel(); return; } togglePause(); return; }
+  if (e.code === 'Escape') { if (attackMoveArmed) { attackMoveArmed = false; renderer.domElement.style.cursor = ''; return; } if (skillAim.aiming) { skillAim.cancel(); return; } togglePause(); return; }
   // 34차: 원작 카메라 키 - Y 고정 켜기/끄기, Space(누르고 있기)·F1 내 챔피언으로.
   if (e.code === 'KeyY' && !e.repeat) { if (typeof toggleCameraLock === 'function') toggleCameraLock(); return; }
   if (e.code === 'Space' || e.code === 'F1') { e.preventDefault(); cameraRig.centerHeld = true; return; }
@@ -695,6 +742,7 @@ window.addEventListener('keydown', (e) => {
     // (R도 Q/W/E와 같은 조준 경로 - onSkillKeyDown)
     case 'KeyR': onSkillKeyDown('R', e.code, mousePoint); break;
     case 'KeyB': controller.startRecall(); break;
+    case 'KeyA': attackMoveArmed = true; renderer.domElement.style.cursor = 'crosshair'; break; // 64차 공격 이동
     // 36차: 소환사 주문(원작 기본 키 D/F).
     case 'KeyD': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'D', mousePoint, lastPointerClient); break;
     case 'KeyF': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'F', mousePoint, lastPointerClient); break;

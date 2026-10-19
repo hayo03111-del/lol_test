@@ -322,7 +322,7 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
     hp: stats.hp, maxHp: stats.maxHp, armor: stats.armor, magicResist: stats.magicResist,
     attackDamage: stats.ad, attackSpeed: stats.attackSpeed, attackRange: stats.range,
     moveSpeedWorld: lolRangeToWorld(stats.moveSpeedLol),
-    radius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48), collisionRadius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48), selectionRadius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48) * 1.6, healthBar,
+    radius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48), collisionRadius: lolRangeToWorld(MINION_GAMEPLAY_RADIUS_LOL[type] || 48), selectionRadius: lolRangeToWorld(MINION_SELECTION_RADIUS_LOL[type] || 115), healthBar, // 64차: 원작 선택 반경(클릭 판정)
     waypointIndex: 0, attackCooldown: 0, attackTarget: null, pendingHitTimer: null,
     hasAttackedStructure: false, // 요청 14/36: 한번 true가 되면 그 미니언 생존 동안 절대 false로 되돌리지 않는다(포탑/억제기/넥서스 전부 포함)
     lastAttackedByPlayerAt: 0, isDead: false, destroyed: false, realmId: 'main',
@@ -541,9 +541,14 @@ function resolvePlayerStructureCollisions(ctrl) {
 // 61차: 챔피언과 미니언 몸 충돌(원작은 서로 길을 막는다). 예전엔 플레이어가 미니언을 그대로 통과했다. 원작 길찾기 반경
 // (플레이어 pathingRadius, 미니언 근거리·원거리 35.7 / 대포·슈퍼 55.7)이 겹친 만큼 둘이 반씩 밀려난다 - 한쪽만 밀면 웨이브
 // 속에서 플레이어가 갇히거나 미니언이 구조물로 밀려 들어간다. 유체화(닐라 W 등)·돌진 중에는 통과한다.
+// 64차: 원작 선택 반경(LeagueSandbox-Default Stats SRU_*Minion* SelectionRadius) - 클릭 판정 원기둥 반경.
+const MINION_SELECTION_RADIUS_LOL = { melee: 115, caster: 115, siege: 140, super: 145 };
 const MINION_PATHING_RADIUS_LOL = { melee: 35.7, caster: 35.7, siege: 55.7, super: 55.5 };
 function resolvePlayerMinionCollisions(ctrl) {
   if (typeof minions === 'undefined' || !minions.length || isGhosted(ctrl) || ctrl._dashState || ctrl.state === STATE.DEAD) return;
+  // 64차: 서 있거나 공격·시전 중인 챔피언은 거의 밀리지 않고(미니언이 비켜 감), 걷는 중에만 반씩 밀린다 - 예전엔 평타를 치는
+  // 동안에도 지나가는 웨이브에 계속 밀려 사거리 밖으로 나가 공격이 끊겼다.
+  const playerShare = ctrl.state === STATE.MOVE ? 0.5 : 0.1;
   const pos = ctrl.root.position;
   const pr = ctrl.pathingRadius != null ? ctrl.pathingRadius : ctrl.collisionRadius;
   for (const m of minions) {
@@ -554,9 +559,9 @@ function resolvePlayerMinionCollisions(ctrl) {
     let d = Math.hypot(dx, dz);
     if (d >= minDist) continue;
     if (d < 1e-4) { dx = 1; dz = 0; d = 1; }
-    const push = (minDist - d) * 0.5;
-    pos.x += (dx / d) * push; pos.z += (dz / d) * push;
-    mp.x -= (dx / d) * push; mp.z -= (dz / d) * push;
+    const overlap = minDist - d;
+    pos.x += (dx / d) * overlap * playerShare; pos.z += (dz / d) * overlap * playerShare;
+    mp.x -= (dx / d) * overlap * (1 - playerShare); mp.z -= (dz / d) * overlap * (1 - playerShare);
   }
 }
 function resolveMinionStructureCollisions(minion) {
@@ -740,6 +745,9 @@ function updateMinionAttack(minion, dt) {
     const clipName = minion.attackClipSequence[minion.attackClipIndex % minion.attackClipSequence.length];
     minion.attackClipIndex++;
     const action = playAssetClip(minion, label, clipName, { fade: 0.06, loopOnce: true });
+    // 64차: 공격 동작 길이를 공격 주기에 맞춘다 - 클립이 주기보다 길면 다음 공격이 나가도 앞 동작이 끝나지 않아 휘두름과 피해가
+    // 어긋나 보였다(막타 타이밍 읽기가 어려웠던 이유 중 하나).
+    if (action) { const raw = action.getClip().duration; action.timeScale = raw > cycleTime * 0.95 ? raw / (cycleTime * 0.95) : 1; }
     if (action) {
       const clipDur = action.getClip().duration / (action.timeScale || 1);
       hitDelaySec = Math.min(MINION_CAST_TIME_SEC[minion.type] != null ? MINION_CAST_TIME_SEC[minion.type] : clipDur * 0.5, cycleTime * 0.85); // 요청 16 + 61차: 원작 시전 프레임이 있으면 그 시점
