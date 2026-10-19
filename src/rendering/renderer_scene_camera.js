@@ -55,6 +55,7 @@ document.addEventListener('mouseleave', () => { cameraRig.edgePointer = null; })
 window.addEventListener('blur', () => { cameraRig.edgePointer = null; cameraRig.centerHeld = false; });
 // 이번 프레임 카메라가 바라볼 지점. 고정이거나 Space를 누르고 있으면 챔피언, 아니면 가장자리로 움직인 자유 지점.
 function cameraFocusPoint(champPos, dt) {
+  if (cameraRig.minimapFocus) return cameraRig.minimapFocus; // 68차: 미니맵 좌클릭(누르고 있는 동안) 그 자리를 본다
   if (cameraRig.locked || cameraRig.centerHeld) { cameraRig.freePos.copy(champPos); return champPos; }
   const p = cameraRig.edgePointer;
   if (p && document.hasFocus()) {

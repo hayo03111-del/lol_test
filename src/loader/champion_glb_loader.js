@@ -1636,7 +1636,8 @@ function animate() {
     if (typeof updateMinions === 'function') updateMinions(dt);
     if (typeof rewardTick === 'function') rewardTick(dt);
     if (typeof tickHudItemCooldowns === 'function') tickHudItemCooldowns(controller); // 63차: HUD 아이템 재사용 대기 표시
-    if (typeof tickChampionBars === 'function') tickChampionBars(); // 67차: 허수아비 체력바(회복·보호막·리스폰 즉시 반영) // 62차: 기본 골드 수급·떠오르는 골드 숫자 // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
+    if (typeof tickChampionBars === 'function') tickChampionBars(); // 67차: 허수아비 체력바(회복·보호막·리스폰 즉시 반영)
+    if (typeof tickGameScreen === 'function') tickGameScreen(dt); // 68차: 오른쪽 위 전적 줄·미니맵 // 62차: 기본 골드 수급·떠오르는 골드 숫자 // 59차: 미니언 웨이브·이동·전투(예전엔 루프에서 빠져 미니언이 아예 나오지 않았다)
     updateInhibitorBuildingAnim(dt);
     updateTurrets(dt); // 20차: 원작 위치에 배치한 포탑(공격·우물 회복/피해)
     updateNexusBuildingAnim(dt);
