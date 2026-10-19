@@ -394,7 +394,7 @@ function destroyTurret(turret) {
   } else {
     console.log(`[TURRET] ${turret.team} ${data.name} 파괴!`);
   }
-  if (turret.labelDiv) turret.labelDiv.style.opacity = '0.25';
+  if (turret.labelDiv) { const b = turret.labelDiv.querySelector('.lolBar'); if (b) b.style.display = 'none'; } // 66차: 부서진 포탑은 체력바를 숨긴다(원작)
   turret._turretVisualState = 'DESTROYING';
   turret._turretDestroyElapsed = 0;
   turret._turretDestroyDuration = 1.1; // 61차: 무너지는 시간(원작 포탑 붕괴처럼 내려앉아 잔해가 된다)
@@ -421,12 +421,22 @@ function updateTurretRegeneration(turret, dt) {
   turret.hp = Math.min(turret.maxHp, turret.hp + data.hpRegenPerSec * dt);
 }
 
+// 66차 원작식 구조물 체력바: 이름 글자 없이(원작은 포탑·억제기·넥서스 위에 이름을 띄우지 않는다) 굵은 바 하나 - 내 팀 파랑,
+// 적 빨강, 검은 테두리, 깎인 만큼 밝은 잔상. 바 아래에 포탑 특성 배지(59차)가 붙는다. 부서지면 바를 숨긴다.
+function structBarHtml(team, extra = '') {
+  const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM;
+  return `<div class="lolBar structBar ${team === myTeam ? 'ally' : 'enemy'}"><div class="trail"></div><div class="fill hpBarInner"></div></div>${extra}`;
+}
+function setStructBar(labelDiv, ratio) {
+  if (!labelDiv) return;
+  const pct = `${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(1)}%`;
+  const fill = labelDiv.querySelector('.fill'), trail = labelDiv.querySelector('.trail');
+  if (fill) fill.style.width = pct;
+  if (trail) trail.style.width = pct;
+}
 function updateTurretVisual(turret) {
   const pct = Math.max(0, (turret.hp / turret.maxHp) * 100);
-  if (turret.labelDiv) {
-    const bar = turret.labelDiv.querySelector('.hpBarInner');
-    if (bar) bar.style.width = pct + '%';
-  }
+  setStructBar(turret.labelDiv, pct / 100);
   if (turret.body && turret.body.material && !turret.destroyed) {
     // 버그 수정(Phase 1 요청 5: "Hit Flash와 Material 충돌 검사" -
     // "반복 setTimeout 누적 여부 확인") - 120ms 안에 여러 번 맞으면 매번
@@ -554,7 +564,9 @@ function createTurret(type, position, team = 'RED') {
   // 항상 빨강으로 고정돼 있어서 BLUE 포탑도 체력바가 빨갛게 보였다.
   // 진영 색을 인라인 스타일로 직접 지정해 덮어쓴다.
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
-  labelDiv.innerHTML = `${data.name}<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div><div class="turretTraits"></div>`;
+  labelDiv.className = 'structLabel';
+  labelDiv.title = data.name;
+  labelDiv.innerHTML = structBarHtml(team, '<div class="turretTraits"></div>');
   const label = new CSS2DObject(labelDiv);
   label.position.set(0, height + 0.2, 0);
   group.add(label);
@@ -892,7 +904,8 @@ function createNexusBuilding(position, team = 'RED', radiusWorld = null) {
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
   const labelDiv = document.createElement('div');
   labelDiv.id = 'enemyLabel';
-  labelDiv.innerHTML = `${team} 넥서스<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div>`;
+  labelDiv.className = 'structLabel nexus';
+  labelDiv.innerHTML = structBarHtml(team);
   const labelHeight = nexusModelHeight != null ? nexusModelHeight + 0.4 : BASE_UNIT * 9.0 + 0.2;
   const label3d = new CSS2DObject(labelDiv);
   label3d.position.set(0, labelHeight, 0);
@@ -921,10 +934,7 @@ function applyDamageToNexus(nexus, result) {
   if (isStructureProtected(nexus)) return 0; // 60차: 넥서스 포탑·억제기가 남아 있으면 무적
   const finalDmg = calculateDamage({ ...result, target: nexus });
   nexus.hp = Math.max(0, nexus.hp - finalDmg);
-  if (nexus.labelDiv) {
-    const bar = nexus.labelDiv.querySelector('.hpBarInner');
-    if (bar) bar.style.width = Math.max(0, (nexus.hp / nexus.maxHp) * 100) + '%';
-  }
+  setStructBar(nexus.labelDiv, nexus.hp / nexus.maxHp);
   if (nexus.hp <= 0) destroyNexus(nexus);
   return finalDmg;
 }
@@ -932,7 +942,7 @@ function destroyNexus(nexus) {
   if (nexus.destroyed) return;
   nexus.destroyed = true;
   console.log(`[NEXUS] ${nexus.team} 넥서스 파괴!`);
-  if (nexus.labelDiv) nexus.labelDiv.style.opacity = '0.25';
+  if (nexus.labelDiv) { const b = nexus.labelDiv.querySelector('.lolBar'); if (b) b.style.display = 'none'; }
   if (nexus.usingRealModel) playAssetClip(nexus, `${nexus.team} nexus`, NEXUS_MODEL_CLIPS.death, { fade: 0.3, loopOnce: true });
   else if (nexus.body && nexus.body.material) nexus.body.material.color = new THREE.Color(0x222222);
   checkWinCondition();
@@ -1008,7 +1018,8 @@ function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
   // 기본색이 항상 빨강이라 BLUE 억제기도 빨갛게 보였다. 진영 색을 인라인
   // 스타일로 직접 지정한다.
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
-  labelDiv.innerHTML = `${team} 억제기<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div>`;
+  labelDiv.className = 'structLabel';
+  labelDiv.innerHTML = structBarHtml(team);
   const label3d = new CSS2DObject(labelDiv);
   const inhibLabelHeight = inhibModelHeight != null ? inhibModelHeight + 0.4 : BASE_UNIT * 5.5;
   label3d.position.set(0, inhibLabelHeight, 0);
@@ -1034,10 +1045,7 @@ function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
 }
 function updateInhibitorVisual(inhibitor) {
   const pct = Math.max(0, (inhibitor.hp / inhibitor.maxHp) * 100);
-  if (inhibitor.labelDiv) {
-    const bar = inhibitor.labelDiv.querySelector('.hpBarInner');
-    if (bar) bar.style.width = pct + '%';
-  }
+  setStructBar(inhibitor.labelDiv, pct / 100);
 }
 function applyDamageToInhibitor(inhibitor, result) {
   if (!inhibitor || inhibitor.destroyed) return 0;
@@ -1059,7 +1067,7 @@ function destroyInhibitor(inhibitor) {
   console.log(`[INHIBITOR] ${inhibitor.team} 억제기 파괴! ${INHIBITOR_RESPAWN_SEC}초 후 재생성`);
   if (typeof rewardStructureDestroyed === 'function') rewardStructureDestroyed(inhibitor); // 62차: 팀 전체 50골드
   const labelKey = `${inhibitor.team} inhibitor`;
-  if (inhibitor.labelDiv) inhibitor.labelDiv.style.opacity = '0.25';
+  if (inhibitor.labelDiv) { const b = inhibitor.labelDiv.querySelector('.lolBar'); if (b) b.style.display = 'none'; } // 부서진 동안은 재생성 시간만
   if (inhibitor.usingRealModel) {
     // 61차: 파괴 동작이 끝나면 부서진 채 대기하는 원작 클립(Inhibitor_idle_dead)으로 넘긴다 - 예전엔 마지막 프레임에 멈춰 있었다.
     const a = playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.death, { fade: 0.3, loopOnce: true });
@@ -1074,7 +1082,7 @@ function respawnInhibitor(inhibitor) {
   if (inhibitor.labelDiv) { const t = inhibitor.labelDiv.querySelector('.inhibTimer'); if (t) t.textContent = ''; }
   inhibitor.hp = inhibitor.maxHp;
   updateInhibitorVisual(inhibitor);
-  if (inhibitor.labelDiv) inhibitor.labelDiv.style.opacity = '1';
+  if (inhibitor.labelDiv) { const b = inhibitor.labelDiv.querySelector('.lolBar'); if (b) b.style.display = ''; }
   const labelKey = `${inhibitor.team} inhibitor`;
   if (inhibitor.usingRealModel) {
     const spawnAction = playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.respawn || INHIBITOR_MODEL_CLIPS.spawn, { fade: 0.2, loopOnce: true }); // 61차: 원작 재생성 클립

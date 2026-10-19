@@ -26784,7 +26784,7 @@ function destroyTurret(turret) {
   } else {
     console.log(`[TURRET] ${turret.team} ${data.name} 파괴!`);
   }
-  if (turret.labelDiv) turret.labelDiv.style.opacity = '0.25';
+  if (turret.labelDiv) { const b = turret.labelDiv.querySelector('.lolBar'); if (b) b.style.display = 'none'; } // 66차: 부서진 포탑은 체력바를 숨긴다(원작)
   turret._turretVisualState = 'DESTROYING';
   turret._turretDestroyElapsed = 0;
   turret._turretDestroyDuration = 1.1; // 61차: 무너지는 시간(원작 포탑 붕괴처럼 내려앉아 잔해가 된다)
@@ -26811,12 +26811,22 @@ function updateTurretRegeneration(turret, dt) {
   turret.hp = Math.min(turret.maxHp, turret.hp + data.hpRegenPerSec * dt);
 }
 
+// 66차 원작식 구조물 체력바: 이름 글자 없이(원작은 포탑·억제기·넥서스 위에 이름을 띄우지 않는다) 굵은 바 하나 - 내 팀 파랑,
+// 적 빨강, 검은 테두리, 깎인 만큼 밝은 잔상. 바 아래에 포탑 특성 배지(59차)가 붙는다. 부서지면 바를 숨긴다.
+function structBarHtml(team, extra = '') {
+  const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM;
+  return `<div class="lolBar structBar ${team === myTeam ? 'ally' : 'enemy'}"><div class="trail"></div><div class="fill hpBarInner"></div></div>${extra}`;
+}
+function setStructBar(labelDiv, ratio) {
+  if (!labelDiv) return;
+  const pct = `${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(1)}%`;
+  const fill = labelDiv.querySelector('.fill'), trail = labelDiv.querySelector('.trail');
+  if (fill) fill.style.width = pct;
+  if (trail) trail.style.width = pct;
+}
 function updateTurretVisual(turret) {
   const pct = Math.max(0, (turret.hp / turret.maxHp) * 100);
-  if (turret.labelDiv) {
-    const bar = turret.labelDiv.querySelector('.hpBarInner');
-    if (bar) bar.style.width = pct + '%';
-  }
+  setStructBar(turret.labelDiv, pct / 100);
   if (turret.body && turret.body.material && !turret.destroyed) {
     // 버그 수정(Phase 1 요청 5: "Hit Flash와 Material 충돌 검사" -
     // "반복 setTimeout 누적 여부 확인") - 120ms 안에 여러 번 맞으면 매번
@@ -26944,7 +26954,9 @@ function createTurret(type, position, team = 'RED') {
   // 항상 빨강으로 고정돼 있어서 BLUE 포탑도 체력바가 빨갛게 보였다.
   // 진영 색을 인라인 스타일로 직접 지정해 덮어쓴다.
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
-  labelDiv.innerHTML = `${data.name}<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div><div class="turretTraits"></div>`;
+  labelDiv.className = 'structLabel';
+  labelDiv.title = data.name;
+  labelDiv.innerHTML = structBarHtml(team, '<div class="turretTraits"></div>');
   const label = new CSS2DObject(labelDiv);
   label.position.set(0, height + 0.2, 0);
   group.add(label);
@@ -27282,7 +27294,8 @@ function createNexusBuilding(position, team = 'RED', radiusWorld = null) {
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
   const labelDiv = document.createElement('div');
   labelDiv.id = 'enemyLabel';
-  labelDiv.innerHTML = `${team} 넥서스<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div>`;
+  labelDiv.className = 'structLabel nexus';
+  labelDiv.innerHTML = structBarHtml(team);
   const labelHeight = nexusModelHeight != null ? nexusModelHeight + 0.4 : BASE_UNIT * 9.0 + 0.2;
   const label3d = new CSS2DObject(labelDiv);
   label3d.position.set(0, labelHeight, 0);
@@ -27311,10 +27324,7 @@ function applyDamageToNexus(nexus, result) {
   if (isStructureProtected(nexus)) return 0; // 60차: 넥서스 포탑·억제기가 남아 있으면 무적
   const finalDmg = calculateDamage({ ...result, target: nexus });
   nexus.hp = Math.max(0, nexus.hp - finalDmg);
-  if (nexus.labelDiv) {
-    const bar = nexus.labelDiv.querySelector('.hpBarInner');
-    if (bar) bar.style.width = Math.max(0, (nexus.hp / nexus.maxHp) * 100) + '%';
-  }
+  setStructBar(nexus.labelDiv, nexus.hp / nexus.maxHp);
   if (nexus.hp <= 0) destroyNexus(nexus);
   return finalDmg;
 }
@@ -27322,7 +27332,7 @@ function destroyNexus(nexus) {
   if (nexus.destroyed) return;
   nexus.destroyed = true;
   console.log(`[NEXUS] ${nexus.team} 넥서스 파괴!`);
-  if (nexus.labelDiv) nexus.labelDiv.style.opacity = '0.25';
+  if (nexus.labelDiv) { const b = nexus.labelDiv.querySelector('.lolBar'); if (b) b.style.display = 'none'; }
   if (nexus.usingRealModel) playAssetClip(nexus, `${nexus.team} nexus`, NEXUS_MODEL_CLIPS.death, { fade: 0.3, loopOnce: true });
   else if (nexus.body && nexus.body.material) nexus.body.material.color = new THREE.Color(0x222222);
   checkWinCondition();
@@ -27398,7 +27408,8 @@ function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
   // 기본색이 항상 빨강이라 BLUE 억제기도 빨갛게 보였다. 진영 색을 인라인
   // 스타일로 직접 지정한다.
   const hpFillColor = team === 'BLUE' ? '#4f8fe0' : '#e0473f';
-  labelDiv.innerHTML = `${team} 억제기<div class="hpBarOuter"><div class="hpBarInner" style="background:${hpFillColor}"></div></div>`;
+  labelDiv.className = 'structLabel';
+  labelDiv.innerHTML = structBarHtml(team);
   const label3d = new CSS2DObject(labelDiv);
   const inhibLabelHeight = inhibModelHeight != null ? inhibModelHeight + 0.4 : BASE_UNIT * 5.5;
   label3d.position.set(0, inhibLabelHeight, 0);
@@ -27424,10 +27435,7 @@ function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
 }
 function updateInhibitorVisual(inhibitor) {
   const pct = Math.max(0, (inhibitor.hp / inhibitor.maxHp) * 100);
-  if (inhibitor.labelDiv) {
-    const bar = inhibitor.labelDiv.querySelector('.hpBarInner');
-    if (bar) bar.style.width = pct + '%';
-  }
+  setStructBar(inhibitor.labelDiv, pct / 100);
 }
 function applyDamageToInhibitor(inhibitor, result) {
   if (!inhibitor || inhibitor.destroyed) return 0;
@@ -27449,7 +27457,7 @@ function destroyInhibitor(inhibitor) {
   console.log(`[INHIBITOR] ${inhibitor.team} 억제기 파괴! ${INHIBITOR_RESPAWN_SEC}초 후 재생성`);
   if (typeof rewardStructureDestroyed === 'function') rewardStructureDestroyed(inhibitor); // 62차: 팀 전체 50골드
   const labelKey = `${inhibitor.team} inhibitor`;
-  if (inhibitor.labelDiv) inhibitor.labelDiv.style.opacity = '0.25';
+  if (inhibitor.labelDiv) { const b = inhibitor.labelDiv.querySelector('.lolBar'); if (b) b.style.display = 'none'; } // 부서진 동안은 재생성 시간만
   if (inhibitor.usingRealModel) {
     // 61차: 파괴 동작이 끝나면 부서진 채 대기하는 원작 클립(Inhibitor_idle_dead)으로 넘긴다 - 예전엔 마지막 프레임에 멈춰 있었다.
     const a = playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.death, { fade: 0.3, loopOnce: true });
@@ -27464,7 +27472,7 @@ function respawnInhibitor(inhibitor) {
   if (inhibitor.labelDiv) { const t = inhibitor.labelDiv.querySelector('.inhibTimer'); if (t) t.textContent = ''; }
   inhibitor.hp = inhibitor.maxHp;
   updateInhibitorVisual(inhibitor);
-  if (inhibitor.labelDiv) inhibitor.labelDiv.style.opacity = '1';
+  if (inhibitor.labelDiv) { const b = inhibitor.labelDiv.querySelector('.lolBar'); if (b) b.style.display = ''; }
   const labelKey = `${inhibitor.team} inhibitor`;
   if (inhibitor.usingRealModel) {
     const spawnAction = playAssetClip(inhibitor, labelKey, INHIBITOR_MODEL_CLIPS.respawn || INHIBITOR_MODEL_CLIPS.spawn, { fade: 0.2, loopOnce: true }); // 61차: 원작 재생성 클립
@@ -28165,59 +28173,52 @@ const MINION_HEALTHBAR_CANVAS_W = 64, MINION_HEALTHBAR_CANVAS_H = 8;
 const MINION_HEALTHBAR_NEAR_DIST = 14;   // 이 거리 안 - 100% 표시(요청 21-F)
 const MINION_HEALTHBAR_MID_DIST = 26;    // 중간 거리 - 70~80%
 const MINION_HEALTHBAR_MAX_DIST = 40;    // 이 거리 밖 - 완전히 숨김
-function createMinionHealthBar(group, radius, headY) {
-  const canvas = document.createElement('canvas');
-  canvas.width = MINION_HEALTHBAR_CANVAS_W; canvas.height = MINION_HEALTHBAR_CANVAS_H;
-  const ctx = canvas.getContext('2d');
-  const texture = new THREE.CanvasTexture(canvas);
-  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false });
-  const sprite = new THREE.Sprite(material);
-  // 요청 21-A: width ≈ 몸통 폭의 1.3~1.6배, height ≈ width의 0.08~0.12배(매우 얇게).
-  const bodyWidth = Math.max(0.2, radius * 2);
-  const width = bodyWidth * 1.45, height = width * 0.10;
-  sprite.scale.set(width, height, 1);
-  sprite.renderOrder = 999;
-  sprite.position.set(0, headY, 0);
-  group.add(sprite);
-  return { sprite, canvas, ctx, texture, headY };
+// 66차 원작식 체력바: 화면 크기가 고정된 얇은 바(확대·축소해도 같은 픽셀 크기)로 바꿨다. 예전 캔버스 스프라이트는 월드 크기라
+// 카메라를 당기면 커지고 멀어지면 작아졌고, 거리에 따라 흐려지거나 사라졌다. 원작처럼:
+//  - 색: 내 팀(아군) 미니언 파랑, 적 미니언 빨강 - 진영(RED/BLUE)이 아니라 "내 기준"으로 칠한다.
+//  - 검은 테두리 + 어두운 바탕, 맞으면 깎인 만큼 밝은 잔상이 잠깐 남았다가 줄어든다(피해량이 눈에 보인다 - 막타 가늠).
+//  - 폭: 근거리·원거리 50px, 대포 62px, 슈퍼 74px(슈퍼는 조금 더 굵다). 보이는 동안은 거리와 상관없이 항상 같은 모양.
+const MINION_HEALTHBAR_WIDTH_PX = { melee: 50, caster: 50, siege: 62, super: 74 };
+function isAllyOfPlayer(unit) {
+  const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || (typeof PLAYER_TEAM !== 'undefined' ? PLAYER_TEAM : 'BLUE');
+  return unit.team === myTeam;
+}
+function createMinionHealthBar(group, type, headY) {
+  const el = document.createElement('div');
+  el.className = 'lolBar minionBar' + (type === 'super' ? ' super' : '');
+  el.style.width = `${MINION_HEALTHBAR_WIDTH_PX[type] || 50}px`;
+  el.innerHTML = '<div class="trail"></div><div class="fill"></div>';
+  const obj = new CSS2DObject(el);
+  obj.position.set(0, headY, 0);
+  obj.center && obj.center.set(0.5, 1); // 바 아래쪽 가운데를 머리 위 점에 맞춘다
+  group.add(obj);
+  return { sprite: obj, obj, el, fill: el.querySelector('.fill'), trail: el.querySelector('.trail'), headY, lastRatio: 1 };
 }
 function drawMinionHealthBar(minion) {
   const hb = minion.healthBar;
   if (!hb) return;
   const ratio = THREE.MathUtils.clamp(minion.hp / minion.maxHp, 0, 1); // 요청 21-C
-  const w = MINION_HEALTHBAR_CANVAS_W, h = MINION_HEALTHBAR_CANVAS_H;
-  const ctx = hb.ctx;
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = 'rgba(6,6,6,0.92)'; // 요청 21-C-1: 어두운 외곽 테두리/배경(실제 LoL처럼 진하게)
-  ctx.fillRect(0, 0, w, h);
-  // 요청 21-D: 팀 색상으로 적/아군 구분(너무 밝지 않은 톤).
-  ctx.fillStyle = minion.team === 'RED' ? '#e0473f' : '#4f8fe0';
-  ctx.fillRect(1, 1, Math.max(0, (w - 2) * ratio), h - 2);
-  // 실제 LoL 체력바처럼 밝은 테두리 한 줄을 더해 윤곽을 또렷하게 한다.
-  ctx.strokeStyle = 'rgba(230,230,230,0.55)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
-  hb.texture.needsUpdate = true; // 요청 23: HP 반영과 동시에 즉시 갱신(지연 없음)
+  const ally = isAllyOfPlayer(minion);
+  if (hb._ally !== ally) { hb._ally = ally; hb.el.classList.toggle('ally', ally); hb.el.classList.toggle('enemy', !ally); }
+  const pct = `${(ratio * 100).toFixed(1)}%`;
+  hb.fill.style.width = pct;
+  // 잔상: 줄어들 때만 늦게 따라간다(회복은 즉시).
+  if (ratio >= hb.lastRatio) hb.trail.style.transition = 'none';
+  else hb.trail.style.transition = '';
+  hb.trail.style.width = pct;
+  hb.lastRatio = ratio;
 }
 function updateMinionHealthBarVisibility(minion) {
   const hb = minion.healthBar;
   if (!hb) return;
-  if (minion.isDead) { hb.sprite.visible = false; return; } // 요청 22/21-G: 사망 시 즉시 숨김
-  // 요청("아예 지정 대상한테 고정") - 다른 코드가 실수로 건드리든, 부동
-  // 소수점 오차가 누적되든 상관없이 매 프레임 제자리로 다시 못박는다.
-  hb.sprite.position.set(0, hb.headY, 0);
-  if (typeof camera === 'undefined' || !camera) { hb.sprite.visible = false; return; }
-  const dist = getHorizontalDistance(minion.mesh.position, camera.position);
-  if (dist > MINION_HEALTHBAR_MAX_DIST) { hb.sprite.visible = false; return; } // 요청 21-F: 너무 멀면 숨김
-  hb.sprite.visible = true;
-  hb.sprite.material.opacity = dist > MINION_HEALTHBAR_MID_DIST ? 0.45 : (dist > MINION_HEALTHBAR_NEAR_DIST ? 0.78 : 1);
+  if (minion.isDead) { hb.obj.visible = false; return; } // 요청 22/21-G: 사망 시 즉시 숨김
+  hb.obj.position.set(0, hb.headY, 0); // 요청("고정") - 매 프레임 제자리
 }
 function disposeMinionHealthBar(minion) {
   const hb = minion.healthBar;
   if (!hb) return;
-  if (hb.sprite.parent) hb.sprite.parent.remove(hb.sprite);
-  hb.texture.dispose();
-  hb.sprite.material.dispose();
+  if (hb.obj.parent) hb.obj.parent.remove(hb.obj);
+  if (hb.el && hb.el.parentNode) hb.el.parentNode.removeChild(hb.el);
 }
 
 function createMinion(type, position, gameTimeSec, team = 'BLUE') {
@@ -28255,7 +28256,7 @@ function createMinion(type, position, gameTimeSec, team = 'BLUE') {
   group.position.copy(position);
   scene.add(group);
   group.add(createBlobShadow(0.32)); // 최적화(문서 4-7절): 실시간 그림자 대신 값싼 blob 그림자
-  const healthBar = createMinionHealthBar(group, type === 'super' ? 0.38 : (type === 'siege' ? 0.32 : 0.27), headY); // 61차: 원작 비율 모델 폭에 맞춘 얇은 바
+  const healthBar = createMinionHealthBar(group, type, headY); // 66차: 원작식 화면 고정 크기 바
   // 요청("미니언 크기를 1.4배 키워줘") - 몸체/체력바/그림자를 전부 만든
   // "뒤에" group 전체를 균일 확대한다. 먼저 스케일부터 걸면 자식으로
   // 추가되는 체력바/그림자까지 부모 스케일과 이중으로 곱해져서 위치와
