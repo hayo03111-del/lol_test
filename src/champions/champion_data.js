@@ -201,8 +201,9 @@ const CHAMPION_DATA = {
     // PC 위키: 평타당 분노 5, 체력 50% 미만이면 분노 획득 50% 증가, 12초 비전투 후 0.25초마다 1씩(초당 4) 감소.
     passive: { name: '분노의 지배', rageMax: 100, empoweredThreshold: 50, lowHpThreshold: 0.5, lowHpMultiplier: 1.5, combatExitSec: 12, rageDecayInterval: 0.25, rageDecayAmount: 1 },
     Q: {
-      name: '양떼 도륙', cooldown: 7, mana: 0, range: 325, damageByLevel: [60,90,120,150,180], bonusAdRatio: 1.0,
-      rRangeBonus: 50, // R(강신) 중 Q 반경 +50 - 출처 확인 못 함(추정, 45차에 코드에서 데이터로 옮김)
+      // 반경 325 → 400, 강신(R) 중 480 (78차: PC 위키 Template:Data, 검색 요약 대조)
+      name: '양떼 도륙', cooldown: 7, mana: 0, range: 400, damageByLevel: [60,90,120,150,180], bonusAdRatio: 1.0,
+      rRangeBonus: 80, // R(강신) 중 Q 반경 400 → 480
       healNonChampion: [2,3,4,5,6], healNonChampionAdRatio: 0.02,
       healChampion: [12,20,28,36,44], healChampionAdRatio: 0.17, healChampionCap: [50,75,100,125,150],
       empoweredDamageByLevel: [90,135,180,225,270], empoweredBonusAdRatio: 1.4, // PC 위키: 5레벨 270(예전 275)
@@ -335,7 +336,7 @@ const CHAMPION_DATA = {
     },
     R: {
       name: '녹서스의 단두대', cooldown: [120, 100, 80], manaByLevel: [100, 100, 0],
-      range: 460, castTime: 0.36, recastWindow: 20,
+      range: 475, castTime: 0.36, recastWindow: 20, // 사거리 460 → 475 (78차: PC 위키 Template:Data, 검색 요약 대조)
       minDamageByLevel: [125, 250, 375], maxDamageByLevel: [250, 500, 750],
       minAdRatio: 0.75, maxAdRatio: 1.5, perStackBonusPercent: 20,
       fearDuration: 1.5, damageType: 'TRUE',
@@ -390,7 +391,8 @@ const CHAMPION_DATA = {
       centerHalfWidth: 90, endHalfWidth: 402.5,
     },
     E: {
-      name: '안면강타', cooldown: [16, 14.5, 13, 11.5, 10], mana: 0, range: 490,
+      // 사거리 490 → 450 (78차: PC 위키 Template:Data, 검색 요약 대조)
+      name: '안면강타', cooldown: [16, 14.5, 13, 11.5, 10], mana: 0, range: 450,
       damageByLevel: [50, 70, 90, 110, 130], adRatio: 0.6, slowPercent: 70, slowDuration: 0.5, stunDuration: 1,
       monsterBonusDamageMin: 125, monsterBonusDamageMax: 250, // 챔피언 레벨(1~18)에 선형 보간, 몬스터 전용
       damageType: 'PHYSICAL',
@@ -592,7 +594,8 @@ const CHAMPION_DATA = {
       sameTargetCooldownSec: 5, // PC 위키 패치 기록 V13.24: 같은 대상 재발동 6초 → 5초(이후 되돌린 기록 없음)
     },
     Q: {
-      name: '닻줄 견인', cooldown: [14, 13, 12, 11, 10], mana: 60, range: 1150,
+      // 사거리 1150 → 1122 (78차: PC 위키 Template:Data, 검색 요약 대조)
+      name: '닻줄 견인', cooldown: [14, 13, 12, 11, 10], mana: 60, range: 1122,
       damageByLevel: [85, 125, 165, 205, 245], apRatio: 0.9, damageType: 'MAGICAL', // 26.18 피해 조정 반영, AP 계수 90%
       missileSpeed: 2000, width: 180, // PC 위키 Template:Data Nautilus/Dredge Line: 속도 2000, 폭 180(가장자리)
       castTimeSec: 0.25, // PC 위키: 시전 시간 0.25
@@ -606,7 +609,8 @@ const CHAMPION_DATA = {
       damageType: 'MAGICAL',
     },
     E: {
-      name: '역류', cooldown: [7, 6.5, 6, 5.5, 5], mana: [50, 60, 70, 80, 90], radius: 600,
+      // 바깥 반경 600 → 590(세 번의 파동 0~350 / 215~465 / 350~590) (78차: PC 위키 Template:Data, 검색 요약 대조)
+      name: '역류', cooldown: [7, 6.5, 6, 5.5, 5], mana: [50, 60, 70, 80, 90], radius: 590,
       damageByLevel: [55, 90, 125, 160, 195], apRatio: 0.5, damageType: 'MAGICAL',
       // PC 위키: 폭발 3회(의도된 간격 0.25초), 두 번째 이후 폭발은 50% 피해, 둔화는 1.5초에 걸쳐 감쇠(2→1.5초 패치).
       explosionCount: 3, subsequentDamagePercent: 50,
@@ -671,7 +675,8 @@ const CHAMPION_DATA = {
       damageByLevel: [150, 250, 350], apRatio: 0.6, structureDamageMultiplier: 2, // 25.12: 100~250 → 150~350. 구조물 2배(위키)
       slowPercentByLevel: [30, 40, 50], slowDurationSec: 1.5, aftershockCount: 3, aftershockDurationSec: 3.5, // 여진은 둔화만(25.12에서 여진 피해 삭제)
       powerballKnockupSec: 1, // 대회전 중 사용 시 중앙 적 공중에 뜸 + 대회전 피해(1초는 검색 자료 하나 - 추정)
-      radius: 300, centerRadius: 150, rangeBase: 800, rangeBonusMsRatio: 1.0, jumpSec: 0.75, // 추정: 범위·중앙 반경·사거리(기본 + 추가 이동 속도)·도약 시간
+      radius: 400, centerRadius: 200, rangeBase: 800, // 반경 300 → 400, 중앙 150 → 200 (78차: PC 위키 Template:Data, 검색 요약 대조)
+      rangeBonusMsRatio: 1.0, jumpSec: 0.75, // 추정: 범위·중앙 반경·사거리(기본 + 추가 이동 속도)·도약 시간
     },
   },
   lux: {
@@ -690,11 +695,13 @@ const CHAMPION_DATA = {
       durationSec: 6, base: 20, perLevel: 10, apRatio: 0.3, // 레벨 1~18: 30~200(+AP 30%) - 위키 값과 같은 범위
     },
     Q: {
-      name: '빛의 속박', cooldown: 10, mana: 50, range: 1175, width: 140, missileSpeed: 1200, castTimeSec: 0.25, maxTargets: 2, // 폭·속도: PC 위키
+      // 사거리 1175 → 1240 (78차: PC 위키 Template:Data, 검색 요약 대조)
+      name: '빛의 속박', cooldown: 10, mana: 50, range: 1240, width: 140, missileSpeed: 1200, castTimeSec: 0.25, maxTargets: 2, // 폭·속도: PC 위키
       damageByLevel: [80, 120, 160, 200, 240], apRatio: 0.6, rootDurationSec: 2, damageType: 'MAGICAL', // 처음 맞은 둘 모두 피해·속박
     },
     W: {
-      name: '프리즘 보호막', cooldown: [12, 11.5, 11, 10.5, 10], mana: [60, 65, 70, 75, 80], range: 1150, width: 220, missileSpeed: 2400, castTimeSec: 0.25,
+      // 사거리 1150 → 1175 (78차: PC 위키 Template:Data, 검색 요약 대조)
+      name: '프리즘 보호막', cooldown: [12, 11.5, 11, 10.5, 10], mana: [60, 65, 70, 75, 80], range: 1175, width: 220, missileSpeed: 2400, castTimeSec: 0.25,
       shieldByLevel: [40, 55, 70, 85, 100], shieldApRatio: 0.35, shieldDurationSec: 2.5, // 나갈 때·돌아올 때 각각 보호막(같은 양) - 폭은 추정(위키 반경 110)
     },
     E: {
@@ -703,7 +710,8 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [25, 30, 35, 40, 45], slowLingerSec: 1, // 영역 안 둔화, 터진 뒤 1초 더(Data Dragon 툴팁)
     },
     R: {
-      name: '최후의 섬광', cooldown: [60, 50, 40], mana: 100, range: 3340, width: 200, castTimeSec: 1, revealSec: 1.5,
+      // 사거리 3340 → 3400 (78차: PC 위키 Template:Data, 검색 요약 대조)
+      name: '최후의 섬광', cooldown: [60, 50, 40], mana: 100, range: 3400, width: 200, castTimeSec: 1, revealSec: 1.5,
       damageByLevel: [300, 400, 500], apRatio: 1.2, damageType: 'MAGICAL', // 위키: 300/400/500(+AP 120%), 맞은 적 1.5초 드러남
     },
   },
@@ -797,7 +805,8 @@ const CHAMPION_DATA = {
       silenceDurationByLevel: [1.6, 1.7, 1.8, 1.9, 2.0], damageType: 'MAGICAL',
     },
     E: {
-      name: '날카로운 가시', cooldown: [8, 7, 6, 5, 4], mana: 30, charges: 3, rangeMax: 500,
+      // 사거리 500 → 650 (78차: PC 위키 Template:Data, 검색 요약 대조)
+      name: '날카로운 가시', cooldown: [8, 7, 6, 5, 4], mana: 30, charges: 3, rangeMax: 650,
       perHitDamageByLevel: [30, 50, 70, 90, 110], apRatio: 0.3, // V26.17: 20~100 → 30~110
       perHitMaxHpPercentByLevel: [2.5, 2.85, 3.2, 3.55, 3.9], perStackMaxHpPercent: 0.5,
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDuration: 1.5, damageType: 'MAGICAL',
@@ -833,7 +842,8 @@ const CHAMPION_DATA = {
     },
     Q: {
       name: '음파/공명의 일격', cooldown: [10, 9, 8, 7, 6], energy1: 50, energy2: 25,
-      range1: 1100, range2: 1250, markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800, width: 120, // 45차: 음파 폭 120(PC 위키) - 예전엔 코드에 월드 단위 1.2(≈139)로 박혀 있었다
+      range1: 1200, range2: 1250, // 음파 사거리 1100 → 1200 (78차: PC 위키 Template:Data, 검색 요약 대조)
+      markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800, width: 120, // 45차: 음파 폭 120(PC 위키) - 예전엔 코드에 월드 단위 1.2(≈139)로 박혀 있었다
       damageByLevel: [60, 90, 120, 150, 180], bonusAdRatio: 0.9,
       maxDamageByLevel: [120, 180, 240, 300, 360], maxBonusAdRatio: 1.8,
       damageType: 'PHYSICAL',
