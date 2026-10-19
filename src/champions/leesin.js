@@ -179,6 +179,10 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
         debugSkillMiss('Lee Sin Q (재시전)', '표식 대상이 유효하지 않음');
         return;
       }
+      // 81차: PC 위키 - 표식 대상이 1250 안에 있어야 재시전할 수 있다(예전엔 거리 무관).
+      if (getHorizontalDistance(getWorldPosition(target), this.root.position) > lolRangeToWorld(q.range2 || 1250) + getCollisionRadius(target)) {
+        debugSkillMiss('Lee Sin Q (재시전)', '표식 대상이 너무 멀다'); return;
+      }
       if (!free && this.mp < q.energy2) { debugSkillMiss('Lee Sin Q (재시전)', '기력 부족'); return; }
       if (!free) { this.mp -= q.energy2; updateBars(this); }
       const lvl = Math.max(1, this.skillLevels.Q || 1);
@@ -206,7 +210,9 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
         dashSec = LEESIN_Q2_MAX_DASH_SEC;
         this._dashState = {
           from, to, duration: dashSec, elapsed: 0, faceDir: dir.clone(),
-          follow: { target, speed, stopDist, lastTargetPos: target.mesh.position.clone() },
+          // 81차: 돌진 중 대상이 2000 넘게 멀어지면 그 직전 위치로 가고 끝 - 피해 없이 표식도 남는다(PC 위키).
+          follow: { target, speed, stopDist, lastTargetPos: target.mesh.position.clone(), leashWorld: lolRangeToWorld(q.q2LeashRange || 2000),
+            onLeash: () => { this._leesin.q2Leashed = true; if (performance.now() < (this._leesin.qMarkExpiresAt || 0)) this._leesin.qMarkTarget = target; } },
           onArrive: () => { if (this._leesinCastRelease) this._leesinCastRelease(); },
         };
       }
@@ -215,6 +221,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
         actionKey: 'leesinQ2', clips: ['Spell1_B.ASU_LeeSin.anm', 'Spell1_B.ASU_LeeSin,anm'], lockSec: dashSec,
         state: STATE.Q_CAST, exitIdle: ['Spell1_ToIdle'],
         onRelease: () => {
+          if (this._leesin.q2Leashed) { this._leesin.q2Leashed = false; debugSkillMiss('Lee Sin Q (재시전)', '대상이 2000 밖으로 벗어남'); return; }
           if (!target || target.hp <= 0 || target.destroyed || target.isDead) return;
           const lostPercent = target.maxHp ? Math.max(0, (target.maxHp - target.hp) / target.maxHp) : 0;
           const base = skillVal(q.damageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD();
@@ -483,7 +490,7 @@ CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
       const along = rel.dot(dir);
       if (along < 0 || along > pullDist) continue;
       const lateral = Math.sqrt(Math.max(0, rel.lengthSq() - along * along));
-      if (lateral > kickedRadius + getCollisionRadius(u)) continue;
+      if (lateral > lolRangeToWorld(CHAMPION_DATA.leesin.R.collisionRadius || 160) + getCollisionRadius(u)) continue; // 81차: 날아가는 대상 충돌 반경 160(PC 위키)
       // 차인 대상이 그 지점에 도달하는 시각에 맞춰 판정.
       const t = this._champTimeout(() => {
         if (u.hp <= 0) return;

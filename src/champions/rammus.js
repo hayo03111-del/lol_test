@@ -81,7 +81,7 @@ CharacterController.prototype._rammusTickRoll = function(dt) {
     if (!u || u.hp <= 0 || u.isStructure || u.isWard || u.isDead) continue;
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
     const up = getWorldPosition(u); if (!up) continue;
-    if (Math.hypot(up.x - pos.x, up.z - pos.z) <= (this.collisionRadius || 0) + getCollisionRadius(u) + lolRangeToWorld(10)) {
+    if (Math.hypot(up.x - pos.x, up.z - pos.z) <= lolRangeToWorld(this._champData().Q.collisionRadius || 75) + getCollisionRadius(u)) { // 81차: 충돌 반경 75(PC 위키 Template:Data Rammus/Powerball)
       this._rammusQImpact();
       return;
     }
@@ -383,7 +383,8 @@ CharacterController.prototype._rammusRRangeLol = function() {
   const r = this._champData().R;
   const baseMs = this._champData().stats.moveSpeed;
   const nowMs = typeof worldDistanceToLol === 'function' ? worldDistanceToLol(getFinalMoveSpeed(this.stats)) : baseMs;
-  return r.rangeBase + r.rangeBonusMsRatio * Math.max(0, nowMs - baseMs);
+  // 81차: PC 위키 "800 또는 이동 속도의 150%" 중 큰 값(예전: 800 + 기본 대비 추가 이동 속도 100%).
+  return Math.max(r.rangeBase, (r.rangeMsRatio || 1.5) * nowMs);
 };
 CharacterController.prototype._rammusCastR = function(mouseWorldPoint, free = false) {
   if (!this._rammusIsAlive()) return;
@@ -409,7 +410,8 @@ CharacterController.prototype._rammusCastR = function(mouseWorldPoint, free = fa
   const db = this._championAbilityDbEntry();
   const jumpClip = db && db.R && db.R.jumpClip;
   this.playFirstAvailable([jumpClip, 'Spell4'].filter(Boolean), { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
-  this._rammus.jump = { from, to, elapsed: 0, dur: rd.jumpSec, powerball: wasRolling, lvl: Math.max(1, this.skillLevels.R || 1) };
+  const castDistLol = worldDistanceToLol(getHorizontalDistance(from, to));
+  this._rammus.jump = { from, to, elapsed: 0, dur: rd.jumpSec, powerball: wasRolling, lvl: Math.max(1, this.skillLevels.R || 1), castDistLol };
   debugSkillHit('Rammus R(지진 폭격) 도약', this, { powerball: wasRolling });
 };
 CharacterController.prototype._rammusTickJump = function(dt) {
@@ -436,9 +438,12 @@ CharacterController.prototype._rammusLand = function(j) {
   const qLvl = Math.max(1, this.skillLevels.Q || 1);
   const qRaw = skillVal(q.damageByLevel, qLvl) + q.apRatio * (this.stats.abilityPower || 0);
   const units = getTargetableEnemyUnits().filter((u) => u && u.hp > 0 && !u.isWard && isInCircle(u, center, lolRangeToWorld(rd.radius)));
+  // 81차: 800보다 멀리 뛰면 중앙(200) 피해가 거리에 비례해 늘어난다 - 1700에서 +50%로 최대(위키).
+  const farBonus = Math.max(0, Math.min(1, ((j.castDistLol || 0) - rd.rangeBase) / Math.max(1, (rd.epicenterMaxRange || 1700) - rd.rangeBase))) * ((rd.epicenterMaxBonusPercent || 50) / 100);
   for (const u of units) {
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
-    applyDamage(u, { rawDamage: raw * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
+    const epi = farBonus > 0 && isInCircle(u, center, lolRangeToWorld(rd.centerRadius)) ? 1 + farBonus : 1;
+    applyDamage(u, { rawDamage: raw * epi * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
     if (u.isStructure || u.hp <= 0) continue;
     applyStatus(u, { id: 'rammusR_slow', type: 'SLOW', duration: rd.slowDurationSec, value: slow, source: this });
     if (j.powerball && isInCircle(u, center, lolRangeToWorld(rd.centerRadius))) {

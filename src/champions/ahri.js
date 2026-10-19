@@ -379,9 +379,16 @@ CharacterController.prototype._ahriFireFoxfireAt = function(f, target) {
     raw *= (w.minionBonusMultiplier != null ? w.minionBonusMultiplier : 1);
   }
   raw *= this._ahriCharmVulnMultiplier(target);
-  applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
-  vfx.spawn('hit', getWorldPosition(target)?.clone() || f.sprite.position.clone(), undefined, { color: 0x7ff5ff });
-  debugSkillHit('Ahri W (여우불 공격)', target);
+  const hit = (t) => {
+    if (!t || t.hp <= 0) return;
+    applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    vfx.spawn('hit', getWorldPosition(t)?.clone() || t.mesh.position.clone(), undefined, { color: 0x7ff5ff });
+    debugSkillHit('Ahri W (여우불 공격)', t);
+  };
+  // 81차: 여우불은 속도 1400의 유도 투사체(PC 위키) - 여우불 위치에서 날아가 닿을 때 피해. 예전엔 즉시 피해.
+  if (typeof projectiles !== 'undefined' && projectiles && projectiles.spawn && f.sprite) {
+    projectiles.spawn({ from: f.sprite.position.clone(), target, speed: lolRangeToWorld(w.missileSpeed || 1400), damage: 0, color: 0x7ff5ff, realmId: this.realmId, onHit: hit });
+  } else hit(target);
 };
 
 // E(매혹): 입맞춤 투사체를 발사한다. 적중한 적에게 마법 피해를 입히고
@@ -567,7 +574,10 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   // 46차: 원작처럼 "지정한 위치로" 돌진한다(사거리 500 - PC 위키 Template:Data Ahri/Spirit Rush). 커서가 가까우면 짧게 간다.
   // 예전엔 커서 거리와 무관하게 항상 500을 돌진했다.
   const dashWorldDist = Math.min(lolRangeToWorld(r.dashDistance || 500), cursorDist);
-  const dashWorldSpeed = lolRangeToWorld(r.dashSpeed || 1200);
+  // 81차: PC 위키 - 돌진 속도 1200 + 이동 속도 100%(예전 1200 고정).
+  const ahriMsW = typeof getFinalMoveSpeed === 'function' ? getFinalMoveSpeed(this.stats) : 0;
+  const ahriMsLol = ahriMsW > 0 ? worldDistanceToLol(ahriMsW) : (CHAMPION_DATA.ahri.stats.moveSpeed || 330);
+  const dashWorldSpeed = lolRangeToWorld((r.dashSpeed || 1200) + (r.dashSpeedMsRatio ?? 1) * ahriMsLol);
   const dashDuration = Math.max(0.05, dashWorldDist / Math.max(0.01, dashWorldSpeed)); // 짧은 돌진도 최소 0.05초
   const startPos = this.root.position.clone();
   const endPos = startPos.clone().addScaledVector(dir, dashWorldDist);
@@ -598,11 +608,18 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   // 버그 수정(레퍼런스 영상 ability_0103_R1.webm 픽셀 대조): 기존 보라색
   // (0xb98bff)가 아니라 실측 화이트에 가까운 밝은 블루(#f4fefe 자체 발광,
   // 궤적은 #7695c3 부근) - 밝은 하늘색으로 정정.
-  for (const { u } of candidates) {
+  // 81차: 정기 탄환은 속도 1400의 투사체(PC 위키) - 착지 지점에서 날아가 닿을 때 피해. 예전엔 즉시 피해.
+  const boltHit = (u) => {
+    if (!u || u.hp <= 0) return;
     const raw = baseRaw * this._ahriCharmVulnMultiplier(u);
     applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     vfx.spawn('ahriOrbHit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0x9fd7ff });
     debugSkillHit('Ahri R (정기 탄환)', u);
+  };
+  for (const { u } of candidates) {
+    if (typeof projectiles !== 'undefined' && projectiles && projectiles.spawn) {
+      projectiles.spawn({ from: endPos.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)), target: u, speed: lolRangeToWorld(r.boltSpeed || 1400), damage: 0, color: 0x9fd7ff, realmId: this.realmId, onHit: boltHit });
+    } else boltHit(u);
   }
   if (!candidates.length) debugSkillMiss('Ahri R', 'no target in range');
 

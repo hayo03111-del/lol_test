@@ -1576,12 +1576,19 @@ function tickPullEffects(dt) {
       const alive = tg && tg.hp > 0 && !tg.destroyed && !tg.isDead && tg.mesh;
       if (alive) {
         const tp = tg.mesh.position;
+        const prevTp = f.lastTargetPos.clone();
         const moved = Math.hypot(tp.x - f.lastTargetPos.x, tp.z - f.lastTargetPos.z);
         f.lastTargetPos.copy(tp);
         const to = new THREE.Vector3(tp.x - pos.x, 0, tp.z - pos.z);
         const dist = to.length();
         const step = f.speed * dt + moved;
-        if (dist <= f.stopDist + step) {
+        if (f.leashWorld && dist > f.leashWorld) {
+          // 81차: 대상이 사거리(리 신 Q2 2000) 밖으로 벗어나면 그 직전 위치로 마저 돌진하고 끝낸다.
+          p.follow = null; p.from = pos.clone(); p.to = new THREE.Vector3(prevTp.x, pos.y, prevTp.z);
+          p.elapsed = 0; p.duration = Math.max(0.05, getHorizontalDistance(p.from, p.to) / Math.max(1e-6, f.speed));
+          if (f.onLeash) f.onLeash();
+          t = 0;
+        } else if (dist <= f.stopDist + step) {
           if (dist > f.stopDist) pos.addScaledVector(to.normalize(), dist - f.stopDist);
           t = 1;
         } else {
@@ -1591,7 +1598,7 @@ function tickPullEffects(dt) {
         }
       } else t = 1; // 대상이 죽거나 사라지면 그 자리에서 끝
       pos.y = p.from.y;
-      p.to.copy(pos);
+      if (p.follow) p.to.copy(pos); // 81차: 사거리 이탈로 일반 돌진으로 바뀐 프레임에는 목적지를 덮어쓰지 않는다
     } else controller.root.position.lerpVectors(p.from, p.to, t);
     if (p.faceDir && p.faceDir.lengthSq() > 1e-8) {
       // 29차(요청 "리 신 Q2로 날아갈 때 날아가는 방향을 안 봄"): 예전엔 root.rotation.y(오일러)만 덮어썼다. 직전에

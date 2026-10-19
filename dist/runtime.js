@@ -1685,7 +1685,7 @@ const CHAMPION_DATA = {
       // 돌풍 판정 사거리(950)가 서로 다르다(이전 구현은 이 둘을 혼동해서
       // 본체까지 950 이동시켰다 - bin 데이터로 수정).
       // 75차: 돌풍 폭 80 → 160(PC 위키 Template:Data Yone/Mortal Steel "WIDTH: Edge range 80 / 160" - 3타 돌풍이 160).
-      dashRange: 450, missileRange: 950, dashAoEWidth: 100, missileWidth: 160,
+      dashRange: 450, missileRange: 950, dashAoEWidth: 200, /* 81차: 돌진 본체 충돌 반경 100 = 폭 200(PC 위키 Template:Data Yone/Mortal Steel "collision radius 100") */ missileWidth: 160,
       dashSpeed: 1500,
       damageByLevel: [25,50,75,100,125], totalAdRatio: 1.10,
       stackDuration: 6, maxStacks: 2, knockupDuration: 0.75,
@@ -2034,6 +2034,7 @@ const CHAMPION_DATA = {
       // 데이터 수정: E 마나 비용이 40으로 되어 있었는데, 현재 패치 기준
       // 실제 값은 30이다(위키 3곳 이상 교차 확인).
       mana: 40, range: 550, maxCharges: 2, // Data Dragon 16.20.1: 40(예전 30)
+      dashDistance: 450, // 81차: 대상 지정 사거리 550, 돌진은 대상 방향 고정 거리 450(PC 위키 Template:Data Nilah/Slipstream "range 450")
       // 데이터 수정: 재충전 시간 [26,22.5,19,15.5,12]는 출시 초반 상향
       // 이후의 값(12.13 패치에서 강화 시간이 늘어난 값)이 그대로 남아있던
       // 것으로 보인다 - 이후 다시 조정되어 현재는 [22,19.5,17,14.5,12]다.
@@ -2117,6 +2118,7 @@ const CHAMPION_DATA = {
     E: {
       // PC 위키: 시전 사거리 700, 판정 직사각형 길이 800·폭 200, 0.5초 뒤 250 유닛 끌어당김.
       name: '죽음의 손아귀', cooldown: [16, 14, 12, 10, 8], mana: 0, range: 700, areaLength: 800, areaWidth: 200, pullDistance: 250,
+      areaFarExtra: 200, // 81차: 위키 사거리 "700 / 900" - 판정 끝이 지정 지점 + 200(최대 900)
       magicPenPercentByLevel: [5, 7.5, 10, 12.5, 15],
       damageByLevel: [60, 80, 100, 120, 140], apRatio: 0.45, pullDelay: 0.5, damageType: 'MAGICAL',
     },
@@ -2180,7 +2182,7 @@ const CHAMPION_DATA = {
       stunByLevel: [1, 1.5, 2], // 주 대상 에어본+기절 총합
       pathKnockupSec: 1, // PC 위키: 경로 폭발에 맞은 적은 1초 공중에 뜸(0.5초 → 1초 패치). 예전 0.75는 근거 없던 값
       // PC 위키(노틸러스 문서·Depth Charge 템플릿): 경로는 0.264초마다 충격파 위치에서 반경 225 폭발(예전엔 미확인 폭 300의 연속 판정).
-      pathEruptionRadius: 225, pathEruptionIntervalSec: 0.264,
+      pathEruptionRadius: 225, pathEruptionIntervalSec: 0.264, finalEruptionRadius: 300, // 81차: 대상 위치 마지막 폭발 반경 300
       // PC 위키 Template:Data Nautilus/Depth Charge: 시전 0.46초, 충격파 속도 275에서 초당 +466.67 가속.
       shockwaveSpeed: 275, shockwaveAccelPerSec: 466.67,
       castTimeSec: 0.46,
@@ -2203,7 +2205,7 @@ const CHAMPION_DATA = {
       armorToAdPercent: 15, mrToAdPercent: 15, // 25.12: 평타 추가 마법 피해 → 총 방어력·마저 15% 추가 공격력
     },
     Q: {
-      name: '대회전', cooldown: [12, 10.5, 9, 7.5, 6], mana: 60, damageType: 'MAGICAL', // 재사용 대기시간은 구르기가 끝난 뒤부터 돈다
+      name: '대회전', cooldown: [12, 10.5, 9, 7.5, 6], mana: 60, damageType: 'MAGICAL', collisionRadius: 75, // 재사용 대기시간은 구르기가 끝난 뒤부터 돈다. 81차: 충돌 반경 75(PC 위키)
       damageByLevel: [80, 120, 160, 200, 240], apRatio: 1.0, // 25.12: 80~200 → 80~240. AP 100%
       rollDurationSec: 6, recastLockSec: 1, // 최대 6초, 1초 뒤부터 재사용으로 끝낼 수 있다
       msPercentPerSecAt1: 25, msPercentPerSecAt18: 40.83, msPercentCapAt1: 150, msPercentCapAt18: 245, // 초당 이동 속도 증가율·최대치(레벨 비례)
@@ -2230,7 +2232,8 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [30, 40, 50], slowDurationSec: 1.5, aftershockCount: 3, aftershockDurationSec: 3.5, // 여진은 둔화만(25.12에서 여진 피해 삭제)
       powerballKnockupSec: 1, // 대회전 중 사용 시 중앙 적 공중에 뜸 + 대회전 피해(1초는 검색 자료 하나 - 추정)
       radius: 400, centerRadius: 200, rangeBase: 800, // 반경 300 → 400, 중앙 150 → 200 (78차: PC 위키 Template:Data, 검색 요약 대조)
-      rangeBonusMsRatio: 1.0, jumpSec: 0.75, // 추정: 범위·중앙 반경·사거리(기본 + 추가 이동 속도)·도약 시간
+      rangeMsRatio: 1.5, epicenterMaxRange: 1700, epicenterMaxBonusPercent: 50, // 81차: 사거리 max(800, 이동 속도 150%), 800 넘게 뛰면 중앙 피해 증가(1700에서 +50%)
+      jumpSec: 0.75, // 도약 시간(800 기준 약 1067/초 - 위키 속도 범위 900~2000 안)
     },
   },
   lux: {
@@ -2361,7 +2364,8 @@ const CHAMPION_DATA = {
     E: {
       // 사거리 500 → 650 (78차: PC 위키 Template:Data, 검색 요약 대조)
       name: '날카로운 가시', cooldown: [8, 7, 6, 5, 4], mana: 30, charges: 3, rangeMax: 650,
-      widthMin: 340, widthMax: 500, widthPerStack: 30, // 79차: 가시 폭 340 + 크기(포식 중첩)당 30, 최대 500 - 공격 방향 직선 전체 적중
+      // 81차: 가시 폭은 추가 크기(0~100%)에 따라 단계별로 바뀐다(위키 "340 – 500 (based on bonus size)", 단계마다 +30, 3번째만 +10).
+      widthBySizeStep: [340, 370, 400, 410, 440, 470, 500], // 공격 방향 직선 전체 적중(79차)
       perHitDamageByLevel: [30, 50, 70, 90, 110], apRatio: 0.3, // V26.17: 20~100 → 30~110
       perHitMaxHpPercentByLevel: [2.5, 2.85, 3.2, 3.55, 3.9], perStackMaxHpPercent: 0.5,
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDuration: 1.5, damageType: 'MAGICAL',
@@ -2370,7 +2374,9 @@ const CHAMPION_DATA = {
       name: '포식', cooldown: [80, 70, 60], mana: 100, castTime: 0.25 /* PC 위키(예전 즉시) */, rangeBase: 175, rangePerStack: 2.5, rangeBonusCap: 25, /* 80차: 중첩당 +2.5, 10중첩 +25에서 상한(최대 200) */ // 버그 수정: 175가 맞음(Leaguepedia 패치 기록 "RANGE: 150 ⇒ 175" 확인) - 200은 잘못된 값이었음
       championDamageByLevel: [300, 475, 650], championApRatio: 0.5, championBonusHpRatio: 0.1,
       nonChampionDamage: 1200, nonChampionApRatio: 0.5, nonChampionBonusHpRatio: 0.1,
-      hpGrowthByLevel: [80, 120, 160], nonEpicStackCap: 6, damageType: 'TRUE',
+      hpGrowthByLevel: [80, 120, 160], nonEpicStackCap: 6,
+      bonusSizePercentPerStackByLevel: [6, 8, 10], bonusSizeCapPercent: 100, // 81차: 중첩당 크기 6/8/10%, 최대 100%(PC 위키)
+      bonusAttackRangePerStackByLevel: [4.7, 6.2, 7.7], bonusAttackRangeCap: 75, // 81차: 중첩당 평타 사거리 4.7/6.2/7.7, 최대 +75(14.2~) damageType: 'TRUE',
     },
   },
   leesin: {
@@ -2397,7 +2403,7 @@ const CHAMPION_DATA = {
     },
     Q: {
       name: '음파/공명의 일격', cooldown: [10, 9, 8, 7, 6], energy1: 50, energy2: 25,
-      range1: 1200, range2: 1250, // 음파 사거리 1100 → 1200 (78차: PC 위키 Template:Data, 검색 요약 대조)
+      range1: 1200, range2: 1250, q2LeashRange: 2000, /* 81차: Q2는 1250 안에서만 재시전, 돌진 중 2000 밖으로 벗어나면 피해 없이 끝(PC 위키) */ // 음파 사거리 1100 → 1200 (78차: PC 위키 Template:Data, 검색 요약 대조)
       markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800, width: 120, // 45차: 음파 폭 120(PC 위키) - 예전엔 코드에 월드 단위 1.2(≈139)로 박혀 있었다
       damageByLevel: [60, 90, 120, 150, 180], bonusAdRatio: 0.9,
       maxDamageByLevel: [120, 180, 240, 300, 360], maxBonusAdRatio: 1.8,
@@ -2417,7 +2423,7 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [35, 45, 55, 65, 75], slowDuration: 4, damageType: 'MAGICAL',
     },
     R: {
-      name: '용의 분노', cooldown: [110, 85, 60], mana: 0, range: 375,
+      name: '용의 분노', cooldown: [110, 85, 60], mana: 0, range: 375, collisionRadius: 160, // 81차: 걷어찬 대상 충돌 반경 160(PC 위키)
       damageByLevel: [175, 400, 625], bonusAdRatio: 2.0,
       // PC 위키: 800 밀어냄(0.8초 동안), 대상 공중에 뜸 1초, 충돌한 적도 공중에 뜸 1초(확인). 예전 1200은 출처 불명.
       knockbackDistance: 800, knockbackSec: 0.8, airborneDuration: 1, castTimeSec: 0.25, collisionAirborneSec: 1,
@@ -2475,7 +2481,7 @@ const CHAMPION_DATA = {
 
      W: {
       name: '거리 두기', cooldown: [16, 15, 14, 13, 12] /* Data Dragon 16.20.1 */, mana: 75,
-      range: 475, castTimeSec: 0.25, damageByLevel: [80, 120, 160, 200, 240], // PC 위키: 시전 0.25초(이동 가능), 반경 475
+      range: 475, dashingRange: 550, /* 81차: 돌진 중인 적에게는 550(PC 위키 Template:Data Vex/Personal Space "475 • 550") */ castTimeSec: 0.25, damageByLevel: [80, 120, 160, 200, 240], // PC 위키: 시전 0.25초(이동 가능), 반경 475
       // PC 위키: 보호막 50/75/100/125/150(+주문력 75%), 2.5초. 예전 50~170은 주문력 80% 시절 기본값.
       apRatio: 0.3, shieldByLevel: [50, 75, 100, 125, 150], shieldApRatio: 0.75, shieldDuration: 2.5,
       damageType: 'MAGICAL',
@@ -2697,7 +2703,7 @@ const CHAMPION_DATA = {
       returnSpeed: 60, returnMaxSpeed: 2600, returnAccel: 1900,
     },
     W: {
-      name: '여우불',
+      name: '여우불', missileSpeed: 1400, // 81차: 여우불 유도탄 속도 1400(PC 위키)
       desc: '짧은 이동 속도 증가 효과를 얻고, 여우불 3개를 소환한다. 여우불은 주변 적을 자동으로 공격한다.',
       // AhriW(캐스트) 그대로: cooldownTime(index1~5)=[9,8,7,6,5], manaValues
       // 전 랭크 30 고정. DataValues: MovementSpeed=0.40(+2초), BaseDamage
@@ -2746,7 +2752,7 @@ const CHAMPION_DATA = {
       cooldown: [140, 120, 100], mana: 100,
       damageByLevel: [75, 125, 175], apRatio: 0.35,
       recastLockoutSec: 1, // 28차: PC 위키 - 재시전 사이 1초 고정 대기(스킬 가속 영향 없음)
-      dashDistance: 500, dashSpeed: 1200, maxCasts: 3, maxTargetsPerCast: 3,
+      dashDistance: 500, dashSpeed: 1200, dashSpeedMsRatio: 1.0, boltSpeed: 1400, /* 81차: 돌진 1200 + 이동 속도 100%, 탄환 속도 1400(PC 위키) */ maxCasts: 3, maxTargetsPerCast: 3,
       recastWindow: 15, acquisitionRange: 600, resetCastsOnTakedown: 1,
       recastWindowExtendOnTakedown: 10,
       damageType: 'MAGICAL',
@@ -2826,7 +2832,7 @@ const CHAMPION_DATA = {
       damageByLevel: [60, 90, 120, 150, 180], bonusAdRatio: 0.9,
       slowPercentByLevel: [30, 35, 40, 45, 50], zoneDuration: 4,
       grievousPercent: 40, grievousDuration: 0.5,
-      missileSpeed: 1750, damageType: 'PHYSICAL',
+      landDelaySec: 0.5, damageType: 'PHYSICAL', // 81차: 시전 후 0.5초 뒤 착탄(PC 위키). 예전 missileSpeed 1750은 쓰이지 않던 근거 없는 값
     },
     R: {
       name: '속박의 사슬',
@@ -2910,7 +2916,7 @@ const CHAMPION_DATA = {
       // 총 110~130%)의 다발 공격으로 바뀐다. 시전 후 첫 다발은 1발 더(6발, 총 132~156%). 화살마다 서리 화살,
       // 적중 시 효과는 다발당 1회. 마나 30(Data Dragon).
       // 버그 수정: 예전 구현은 "시전 후 첫 평타 1번만, 주변 여러 대상에 나눠서"였다.
-      attackSpeedPercentByLevel: [20, 25, 30, 35, 40],
+      attackSpeedPercentByLevel: [20, 30, 40, 50, 60], // 81차: 20~40 → 20~60(PC 위키 Ashe 문서 패치 기록·26.20 가이드)
       flurryArrowCount: 5, firstFlurryBonusArrows: 1,
       flurryArrowAdPercentByLevel: [22, 23, 24, 25, 26],
       flurryMissileSpeed: 3200,
@@ -2923,7 +2929,7 @@ const CHAMPION_DATA = {
       // PC 위키 Template:Data Ashe/Volley: 60/95/130/165/200(+추가 AD 100%), 화살 7~11발, 부채꼴 27.75/37/37/
       // 46.25/46.25°, 사거리 1200. 마나 75~55(Data Dragon).
       cooldown: [18, 14.5, 11, 7.5, 4] /* Data Dragon 16.20.1 */, mana: [75, 70, 65, 60, 55],
-      range: 1200, coneAngleDegByLevel: [27.75, 37, 37, 46.25, 46.25], arrowsByLevel: [7, 8, 9, 10, 11],
+      range: 1200, missileSpeed: 2000, spawnOffset: 75, /* 81차: 화살 속도 2000, 애쉬 앞 75에서 출발(PC 위키) */ coneAngleDegByLevel: [27.75, 37, 37, 46.25, 46.25], arrowsByLevel: [7, 8, 9, 10, 11],
       damageByLevel: [60, 95, 130, 165, 200], bonusAdRatio: 1.0,
       castTimeSec: 0.25,
       damageType: 'PHYSICAL',
@@ -2949,11 +2955,11 @@ const CHAMPION_DATA = {
       missileSpeedBySecond: [1500, 1700, 1900, 2100], // PC 위키: 비행 시간(초)에 따라 1500/1700/1900/2100
       damageByLevel: [200, 400, 600], apRatio: 1.2,
       splashDamagePercent: 100, splashRadius: 400, // 주변 적도 같은 피해 + 서리 화살(PC 위키). 반경 400은 6차에 PC 위키로 확인
-      // 기절 1~3.5초(비행 거리 비례). 최대가 되는 거리는 위키·패치 기록에 숫자가 없어 1500으로 추정(예전 20000은 사실상
-      // 항상 최소 1초라 거리 비례가 작동하지 않았다). ashe.bin.json을 받으면 확정값으로 바꾼다.
-      minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 1500, maxStunDistanceGuessed: true,
+      // 기절 1~3.5초(비행 거리 비례). 81차: 기절 1~3.5초 체계가 생긴 뒤의 공식 포럼 측정값 - 2800을 날아가야
+      // 3.5초(그 뒤 이 수치를 바꾼 패치 기록 없음). 예전 1500은 근거 없는 추정이었다.
+      minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 2800,
       castTimeSec: 0.25, // PC 위키 Template:Data Ashe/Enchanted Crystal Arrow(예전 0.5)
-      visionRadius: 900, visionDurationSec: 3.0, // 비행 경로/명중 지점에도 짧은 시야(공식 설명: "1초간 경로의 시야를 밝힌다" - 근사)
+      visionRadius: 350, visionDurationSec: 1.0, // 81차: 비행 경로와 명중 지점 시야 반경 350, 1초(PC 위키 Template:Data, 예전 900·3초 근사)
       damageType: 'MAGICAL',
     },
   },
@@ -9602,7 +9608,7 @@ const SKILL_AIM = {
   mordekaiser: {
     Q: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width || 150 },                // findEnemiesInLine
     W: { type: 'instant' },
-    E: { type: 'rectAtPoint', range: (c, d) => d.range, length: (c, d) => d.areaLength || 800, width: (c, d) => d.areaWidth || 200 },
+    E: { type: 'rectAtPoint', range: (c, d) => d.range, length: (c, d) => d.areaLength || 800, width: (c, d) => d.areaWidth || 200, farExtra: (c, d) => d.areaFarExtra || 0 },
     R: { type: 'unit', range: (c, d) => d.range },
   },
   nautilus: {
@@ -9734,7 +9740,7 @@ function computeSkillAim(c, slot, point) {
     }
     case 'rectAtPoint': {
       aim.rangeWorld = W(V('range'));
-      const dist = Math.min(rawDist, aim.rangeWorld), len = W(V('length'));
+      const dist = Math.min(rawDist, aim.rangeWorld) + (spec.farExtra ? W(V('farExtra')) : 0), len = W(V('length')); // 81차: 끝이 지정 지점 + farExtra
       aim.segments = [{ start: dist - len, len, width: W(V('width')) }];                      // 지정 지점에서 시전자 쪽으로 length
       break;
     }
@@ -12391,7 +12397,8 @@ class CharacterController {
     this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? lolRangeToWorld(getFlatMoveSpeedBuff(this)) : 0;
     // 레넥톤 R(강신): 지속 중 사거리 +25(PC 위키).
     const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
-    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange);
+    const chogathRange = (this.championId === 'chogath' && typeof chogathFeastBonus === 'function') ? chogathFeastBonus(this).attackRangeLol : 0; // 81차: 포식 중첩 평타 사거리
+    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange);
     this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0) + (typeof runeAttackSpeedBonus === 'function' ? runeAttackSpeedBonus(this) : 0)
       + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
@@ -19912,7 +19919,7 @@ CharacterController.prototype._nilahCastE = function(mouseWorldPoint, free=false
     // 전부 돌진한다 - 대상이 가까이 있어도 그 자리에서 멈추지 않고
     // 방향은 그대로 유지한 채 끝까지 나아간다. 예전엔 Math.min(dist,
     // maxWorld)로 "대상까지의 거리"에서 멈춰버렸다.
-    const maxWorld=lolRangeToWorld(e.range); const d=new THREE.Vector3(targetPos.x-start.x,0,targetPos.z-start.z); const dist=d.length();
+    const maxWorld=lolRangeToWorld(e.dashDistance||e.range); /* 81차: 돌진 거리 450(대상 지정 사거리 550과 별개) */ const d=new THREE.Vector3(targetPos.x-start.x,0,targetPos.z-start.z); const dist=d.length();
     if(dist<1e-6)d.copy(this.moveDir).setY(0); if(d.lengthSq()<1e-6)d.set(0,0,1); d.normalize();
     const end=start.clone().addScaledVector(d,maxWorld);
     const eClip=this.findAnimation('Spell3_Cast') || this.findAnimation('Spell3A'); const duration=Math.max(0.10,Math.min(0.22,eClip ? eClip.duration*0.55 : e.dashDuration));
@@ -21112,6 +21119,17 @@ CharacterController.prototype._chogathCastE = function(free) {
   
 };
 
+// 81차: 포식 중첩 → 추가 크기(%)·추가 평타 사거리(LoL). R 레벨에 따라 중첩당 값이 다르고 상한이 있다(PC 위키).
+function chogathFeastBonus(ctrl) {
+  const r = CHAMPION_DATA.chogath.R;
+  const stacks = (ctrl && ctrl._chogath && ctrl._chogath.predationStacks) || 0;
+  const rLvl = Math.max(1, Math.min(3, (ctrl && ctrl.skillLevels && ctrl.skillLevels.R) || 1));
+  return {
+    sizePercent: Math.min(r.bonusSizeCapPercent || 100, stacks * skillVal(r.bonusSizePercentPerStackByLevel || [0], rLvl)),
+    attackRangeLol: Math.min(r.bonusAttackRangeCap || 75, stacks * skillVal(r.bonusAttackRangePerStackByLevel || [0], rLvl)),
+  };
+}
+
 // Extracted from CharacterController: _chogathEOnHit
 CharacterController.prototype._chogathEOnHit = function(target) { 
     if (!this._chogath.eChargesRemaining || this._chogath.eChargesRemaining <= 0) return;
@@ -21123,9 +21141,11 @@ CharacterController.prototype._chogathEOnHit = function(target) {
     const targets = [target];
     const tp = getWorldPosition(target), o = this.root.position;
     const dir = new THREE.Vector3(tp.x - o.x, 0, tp.z - o.z);
-    if (e.widthMin && dir.lengthSq() > 1e-8) {
+    const steps = e.widthBySizeStep;
+    if (steps && dir.lengthSq() > 1e-8) {
       dir.normalize();
-      const width = Math.min(e.widthMax || e.widthMin, e.widthMin + (e.widthPerStack || 0) * stacks);
+      const size = chogathFeastBonus(this).sizePercent / 100; // 0~1
+      const width = steps[Math.min(steps.length - 1, Math.floor(size * (steps.length - 1) + 1e-9))];
       for (const u of findEnemiesInLine(o, dir, e.rangeMax, width)) if (u !== target && !u.isTurret && !u.isStructure) targets.push(u);
     }
     for (const unit of targets) {
@@ -21383,6 +21403,10 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
         debugSkillMiss('Lee Sin Q (재시전)', '표식 대상이 유효하지 않음');
         return;
       }
+      // 81차: PC 위키 - 표식 대상이 1250 안에 있어야 재시전할 수 있다(예전엔 거리 무관).
+      if (getHorizontalDistance(getWorldPosition(target), this.root.position) > lolRangeToWorld(q.range2 || 1250) + getCollisionRadius(target)) {
+        debugSkillMiss('Lee Sin Q (재시전)', '표식 대상이 너무 멀다'); return;
+      }
       if (!free && this.mp < q.energy2) { debugSkillMiss('Lee Sin Q (재시전)', '기력 부족'); return; }
       if (!free) { this.mp -= q.energy2; updateBars(this); }
       const lvl = Math.max(1, this.skillLevels.Q || 1);
@@ -21410,7 +21434,9 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
         dashSec = LEESIN_Q2_MAX_DASH_SEC;
         this._dashState = {
           from, to, duration: dashSec, elapsed: 0, faceDir: dir.clone(),
-          follow: { target, speed, stopDist, lastTargetPos: target.mesh.position.clone() },
+          // 81차: 돌진 중 대상이 2000 넘게 멀어지면 그 직전 위치로 가고 끝 - 피해 없이 표식도 남는다(PC 위키).
+          follow: { target, speed, stopDist, lastTargetPos: target.mesh.position.clone(), leashWorld: lolRangeToWorld(q.q2LeashRange || 2000),
+            onLeash: () => { this._leesin.q2Leashed = true; if (performance.now() < (this._leesin.qMarkExpiresAt || 0)) this._leesin.qMarkTarget = target; } },
           onArrive: () => { if (this._leesinCastRelease) this._leesinCastRelease(); },
         };
       }
@@ -21419,6 +21445,7 @@ CharacterController.prototype._leesinCastQ = function(mouseWorldPoint, free) {
         actionKey: 'leesinQ2', clips: ['Spell1_B.ASU_LeeSin.anm', 'Spell1_B.ASU_LeeSin,anm'], lockSec: dashSec,
         state: STATE.Q_CAST, exitIdle: ['Spell1_ToIdle'],
         onRelease: () => {
+          if (this._leesin.q2Leashed) { this._leesin.q2Leashed = false; debugSkillMiss('Lee Sin Q (재시전)', '대상이 2000 밖으로 벗어남'); return; }
           if (!target || target.hp <= 0 || target.destroyed || target.isDead) return;
           const lostPercent = target.maxHp ? Math.max(0, (target.maxHp - target.hp) / target.maxHp) : 0;
           const base = skillVal(q.damageByLevel, lvl) + q.bonusAdRatio * this._getBonusAD();
@@ -21687,7 +21714,7 @@ CharacterController.prototype._leesinRKick = function(target, dmg, lvl) {
       const along = rel.dot(dir);
       if (along < 0 || along > pullDist) continue;
       const lateral = Math.sqrt(Math.max(0, rel.lengthSq() - along * along));
-      if (lateral > kickedRadius + getCollisionRadius(u)) continue;
+      if (lateral > lolRangeToWorld(CHAMPION_DATA.leesin.R.collisionRadius || 160) + getCollisionRadius(u)) continue; // 81차: 날아가는 대상 충돌 반경 160(PC 위키)
       // 차인 대상이 그 지점에 도달하는 시각에 맞춰 판정.
       const t = this._champTimeout(() => {
         if (u.hp <= 0) return;
@@ -21868,7 +21895,9 @@ CharacterController.prototype._mordeEAreaHits = function(origin, dir, dist) {
       const r = getCollisionRadius(u);
       const v = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
       const along = v.dot(dir);
-      if (along > dist + r || along < dist - lenWorld - r) continue;
+      // 81차: PC 위키 사거리 "700 / 900" - 지정 사거리 700, 손아귀 끝은 지정 지점보다 200 더 나가 최대 900까지 닿는다.
+      const far = dist + lolRangeToWorld(e.areaFarExtra || 0);
+      if (along > far + r || along < far - lenWorld - r) continue;
       const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
       if (lateral <= half + r) out.push(u);
     }
@@ -22322,7 +22351,12 @@ CharacterController.prototype._vexCastW = function(mouseWorldPoint, free = false
     this._vex.wShield = { amount: shield, expiresAt: performance.now() + (w.shieldDuration || 2.5) * 1000 };
     vfx.spawn('w', this.root.position.clone());
     const raw = skillVal(w.damageByLevel, lvl) + (w.apRatio || 0) * (this.stats.abilityPower || 0);
-    for (const h of findEnemiesInRadius(this.root.position, w.range || 475)) {
+    // 81차: PC 위키 - 반경 475, 돌진 중인 적에게는 550.
+    const dashR = w.dashingRange || w.range || 475, nowW = performance.now();
+    const isDashing = (u) => !!(u && (u._dashState || u.isDashing || (u._lastDashAt && nowW - u._lastDashAt <= (w.dashWindowMs || 400))));
+    const wHits = findEnemiesInRadius(this.root.position, dashR)
+      .filter((h) => isDashing(h.unit) || h.distance <= lolRangeToWorld(w.range || 475) + getCollisionRadius(h.unit));
+    for (const h of wHits) {
       applyDamage(h.unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
       this._vexOnAbilityHit(h.unit, doom);
       debugSkillHit('Vex W', h.unit);
@@ -22460,6 +22494,7 @@ CharacterController.prototype._vexOnBasicAttackHit = function(target) { this._ve
 // 현재 데모의 적(허수아비·미니언)은 돌진하지 않아 호출부가 없다 - 적 돌진이 생기면 여기로 알린다.
 function vexNotifyEnemyDash(unit) {
   const c = typeof controller !== 'undefined' ? controller : null;
+  if (unit) unit._lastDashAt = performance.now(); // 81차: 벡스 W가 돌진 중인 적에게 넓은 반경(550)을 쓰기 위한 표시
   if (!c || c.championId !== 'vex' || !c._vex || !unit || unit.hp <= 0) return;
   if (!(unit.isChampion || unit.isMonster)) return;
   const p = getWorldPosition(unit); if (!p) return;
@@ -23245,9 +23280,16 @@ CharacterController.prototype._ahriFireFoxfireAt = function(f, target) {
     raw *= (w.minionBonusMultiplier != null ? w.minionBonusMultiplier : 1);
   }
   raw *= this._ahriCharmVulnMultiplier(target);
-  applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
-  vfx.spawn('hit', getWorldPosition(target)?.clone() || f.sprite.position.clone(), undefined, { color: 0x7ff5ff });
-  debugSkillHit('Ahri W (여우불 공격)', target);
+  const hit = (t) => {
+    if (!t || t.hp <= 0) return;
+    applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    vfx.spawn('hit', getWorldPosition(t)?.clone() || t.mesh.position.clone(), undefined, { color: 0x7ff5ff });
+    debugSkillHit('Ahri W (여우불 공격)', t);
+  };
+  // 81차: 여우불은 속도 1400의 유도 투사체(PC 위키) - 여우불 위치에서 날아가 닿을 때 피해. 예전엔 즉시 피해.
+  if (typeof projectiles !== 'undefined' && projectiles && projectiles.spawn && f.sprite) {
+    projectiles.spawn({ from: f.sprite.position.clone(), target, speed: lolRangeToWorld(w.missileSpeed || 1400), damage: 0, color: 0x7ff5ff, realmId: this.realmId, onHit: hit });
+  } else hit(target);
 };
 
 // E(매혹): 입맞춤 투사체를 발사한다. 적중한 적에게 마법 피해를 입히고
@@ -23433,7 +23475,10 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   // 46차: 원작처럼 "지정한 위치로" 돌진한다(사거리 500 - PC 위키 Template:Data Ahri/Spirit Rush). 커서가 가까우면 짧게 간다.
   // 예전엔 커서 거리와 무관하게 항상 500을 돌진했다.
   const dashWorldDist = Math.min(lolRangeToWorld(r.dashDistance || 500), cursorDist);
-  const dashWorldSpeed = lolRangeToWorld(r.dashSpeed || 1200);
+  // 81차: PC 위키 - 돌진 속도 1200 + 이동 속도 100%(예전 1200 고정).
+  const ahriMsW = typeof getFinalMoveSpeed === 'function' ? getFinalMoveSpeed(this.stats) : 0;
+  const ahriMsLol = ahriMsW > 0 ? worldDistanceToLol(ahriMsW) : (CHAMPION_DATA.ahri.stats.moveSpeed || 330);
+  const dashWorldSpeed = lolRangeToWorld((r.dashSpeed || 1200) + (r.dashSpeedMsRatio ?? 1) * ahriMsLol);
   const dashDuration = Math.max(0.05, dashWorldDist / Math.max(0.01, dashWorldSpeed)); // 짧은 돌진도 최소 0.05초
   const startPos = this.root.position.clone();
   const endPos = startPos.clone().addScaledVector(dir, dashWorldDist);
@@ -23464,11 +23509,18 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   // 버그 수정(레퍼런스 영상 ability_0103_R1.webm 픽셀 대조): 기존 보라색
   // (0xb98bff)가 아니라 실측 화이트에 가까운 밝은 블루(#f4fefe 자체 발광,
   // 궤적은 #7695c3 부근) - 밝은 하늘색으로 정정.
-  for (const { u } of candidates) {
+  // 81차: 정기 탄환은 속도 1400의 투사체(PC 위키) - 착지 지점에서 날아가 닿을 때 피해. 예전엔 즉시 피해.
+  const boltHit = (u) => {
+    if (!u || u.hp <= 0) return;
     const raw = baseRaw * this._ahriCharmVulnMultiplier(u);
     applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     vfx.spawn('ahriOrbHit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0x9fd7ff });
     debugSkillHit('Ahri R (정기 탄환)', u);
+  };
+  for (const { u } of candidates) {
+    if (typeof projectiles !== 'undefined' && projectiles && projectiles.spawn) {
+      projectiles.spawn({ from: endPos.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)), target: u, speed: lolRangeToWorld(r.boltSpeed || 1400), damage: 0, color: 0x9fd7ff, realmId: this.realmId, onHit: boltHit });
+    } else boltHit(u);
   }
   if (!candidates.length) debugSkillMiss('Ahri R', 'no target in range');
 
@@ -23804,6 +23856,23 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
   const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'varusE') return;
     this.currentPhase = 'ACTIVE';
+    // 81차: 화살비는 시전이 끝나고 0.5초 뒤에 떨어진다(PC 위키) - 그동안 착탄 지점을 예고 표시하고 피할 수 있다.
+    // 예전엔 시전 끝(0.242초)에 바로 피해. 이미 쏜 화살이라 행동 취소와 무관하게 떨어진다.
+    const landSec = e.landDelaySec != null ? e.landDelaySec : 0.5;
+    if (landSec > 0 && typeof skillTelegraphs !== 'undefined') skillTelegraphs.spawn({ shape: 'circle', center: targetPoint, radius: e.radius || 300, duration: landSec, color: 0xff9a4a, team: this.team, owner: this, opacity: 0.3 });
+    this._champTimeout(() => this._varusLandE(targetPoint), landSec * 1000);
+  }, castTime * 1000);
+  this._actionTimers.push(fireTimer);
+
+  const doneTimer = this._champTimeout(() => {
+    if (this.currentActionKey === 'varusE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+  }, (castTime + 0.15) * 1000);
+  this._actionTimers.push(doneTimer);
+};
+
+CharacterController.prototype._varusLandE = function(targetPoint) {
+  {
+    const e = this._champData().E;
     vfx.spawn('hit', targetPoint.clone(), undefined, { color: 0xff9a4a });
     const lvl = Math.max(1, this.skillLevels.E || 1);
     const raw = skillVal(e.damageByLevel, lvl) + (e.bonusAdRatio || 0) * this._getBonusAD();
@@ -23836,13 +23905,7 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
       applyZone();
     }, 250);
     if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.spawn({ shape: 'circle', center: targetPoint, radius: e.radius || 300, duration: e.zoneDuration || 4, color: 0x9a3dff, team: this.team, owner: this, opacity: 0.45 });
-  }, castTime * 1000);
-  this._actionTimers.push(fireTimer);
-
-  const doneTimer = this._champTimeout(() => {
-    if (this.currentActionKey === 'varusE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
-  }, (castTime + 0.15) * 1000);
-  this._actionTimers.push(doneTimer);
+  }
 };
 
 // R(속박의 사슬): 직선 스킬샷. 처음 맞은 대상에게 마법 피해 + 속박, 이후
@@ -24159,10 +24222,20 @@ CharacterController.prototype._asheResolveWImpact = function(p) {
   }
   if (!hits.length) { debugSkillMiss('Ashe W (일제 사격)', '부채꼴 범위 내 대상 없음'); return; }
   const raw = skillVal(w.damageByLevel, p.lvl) + (w.bonusAdRatio || 0) * this._getBonusAD();
-  for (const { unit } of hits) {
-    if (!unit || unit.hp <= 0) continue;
-    if (unit.isStructure) continue; // 59차: 원작 - 일제 사격(스킬)은 구조물에 피해를 주지 않는다
-    if (unit.isMinion) { applyDamageToMinion(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true); this._asheApplyFrostShot(unit, false); continue; }
+  // 81차: 화살은 애쉬 앞 75 지점에서 출발해 속도 2000으로 날아간다(PC 위키) - 거리만큼 늦게 맞는다. 예전엔 즉시 피해.
+  const speedLol = w.missileSpeed || 2000, startLol = w.spawnOffset != null ? w.spawnOffset : 75;
+  for (const h of hits) {
+    const delayMs = Math.max(0, (worldDistanceToLol(h.along) - startLol) / speedLol) * 1000;
+    if (delayMs > 1 && typeof this._champTimeout === 'function') this._champTimeout(() => this._asheApplyWHit(h.unit, raw, p.lvl), delayMs);
+    else this._asheApplyWHit(h.unit, raw, p.lvl);
+  }
+};
+
+CharacterController.prototype._asheApplyWHit = function(unit, raw, lvl) {
+  {
+    if (!unit || unit.hp <= 0) return;
+    if (unit.isStructure) return; // 59차: 원작 - 일제 사격(스킬)은 구조물에 피해를 주지 않는다
+    if (unit.isMinion) { applyDamageToMinion(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true); this._asheApplyFrostShot(unit, false); return; }
     applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
     this._asheApplyFrostShot(unit, false);
     vfx.spawn('hit', getWorldPosition(unit)?.clone() || unit.mesh.position.clone(), undefined, { color: 0xbfe8ff });
@@ -24831,6 +24904,15 @@ CharacterController.prototype._nautilusTickRTravel = function(dt) {
     const raw = skillVal(r.damageByLevel, t.lvl) + r.apRatio * (this.stats.abilityPower || 0);
     applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     applyStatus(target, { id: 'nautilusR_knockup', type: 'KNOCKUP', duration: skillVal(r.stunByLevel, t.lvl), value: 1, source: this });
+    // 81차: 대상 위치의 마지막 폭발은 반경 300(PC 위키 "225 / 300") - 주변 적도 경로 폭발과 같은 피해·에어본(경로에서 이미 맞은 적 제외).
+    for (const u of getAllEnemyUnits()) {
+      if (!u || u === target || u.hp <= 0 || u.isStructure || t.pathHit.has(u)) continue;
+      if (!isInCircle(u, getWorldPosition(target), lolRangeToWorld(r.finalEruptionRadius || 300))) continue;
+      t.pathHit.add(u);
+      applyDamage(u, { rawDamage: pathRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+      applyStatus(u, { id: 'nautilusR_pathKnockup', type: 'KNOCKUP', duration: r.pathKnockupSec, value: 1, source: this });
+      debugSkillHit('Nautilus R(폭뢰 - 마지막 폭발)', u);
+    }
     vfx.spawn('r', goal.clone());
     debugSkillHit('Nautilus R(폭뢰)', target, { dmg: raw.toFixed(1) });
   }
@@ -24999,7 +25081,7 @@ CharacterController.prototype._rammusTickRoll = function(dt) {
     if (!u || u.hp <= 0 || u.isStructure || u.isWard || u.isDead) continue;
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
     const up = getWorldPosition(u); if (!up) continue;
-    if (Math.hypot(up.x - pos.x, up.z - pos.z) <= (this.collisionRadius || 0) + getCollisionRadius(u) + lolRangeToWorld(10)) {
+    if (Math.hypot(up.x - pos.x, up.z - pos.z) <= lolRangeToWorld(this._champData().Q.collisionRadius || 75) + getCollisionRadius(u)) { // 81차: 충돌 반경 75(PC 위키 Template:Data Rammus/Powerball)
       this._rammusQImpact();
       return;
     }
@@ -25301,7 +25383,8 @@ CharacterController.prototype._rammusRRangeLol = function() {
   const r = this._champData().R;
   const baseMs = this._champData().stats.moveSpeed;
   const nowMs = typeof worldDistanceToLol === 'function' ? worldDistanceToLol(getFinalMoveSpeed(this.stats)) : baseMs;
-  return r.rangeBase + r.rangeBonusMsRatio * Math.max(0, nowMs - baseMs);
+  // 81차: PC 위키 "800 또는 이동 속도의 150%" 중 큰 값(예전: 800 + 기본 대비 추가 이동 속도 100%).
+  return Math.max(r.rangeBase, (r.rangeMsRatio || 1.5) * nowMs);
 };
 CharacterController.prototype._rammusCastR = function(mouseWorldPoint, free = false) {
   if (!this._rammusIsAlive()) return;
@@ -25327,7 +25410,8 @@ CharacterController.prototype._rammusCastR = function(mouseWorldPoint, free = fa
   const db = this._championAbilityDbEntry();
   const jumpClip = db && db.R && db.R.jumpClip;
   this.playFirstAvailable([jumpClip, 'Spell4'].filter(Boolean), { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
-  this._rammus.jump = { from, to, elapsed: 0, dur: rd.jumpSec, powerball: wasRolling, lvl: Math.max(1, this.skillLevels.R || 1) };
+  const castDistLol = worldDistanceToLol(getHorizontalDistance(from, to));
+  this._rammus.jump = { from, to, elapsed: 0, dur: rd.jumpSec, powerball: wasRolling, lvl: Math.max(1, this.skillLevels.R || 1), castDistLol };
   debugSkillHit('Rammus R(지진 폭격) 도약', this, { powerball: wasRolling });
 };
 CharacterController.prototype._rammusTickJump = function(dt) {
@@ -25354,9 +25438,12 @@ CharacterController.prototype._rammusLand = function(j) {
   const qLvl = Math.max(1, this.skillLevels.Q || 1);
   const qRaw = skillVal(q.damageByLevel, qLvl) + q.apRatio * (this.stats.abilityPower || 0);
   const units = getTargetableEnemyUnits().filter((u) => u && u.hp > 0 && !u.isWard && isInCircle(u, center, lolRangeToWorld(rd.radius)));
+  // 81차: 800보다 멀리 뛰면 중앙(200) 피해가 거리에 비례해 늘어난다 - 1700에서 +50%로 최대(위키).
+  const farBonus = Math.max(0, Math.min(1, ((j.castDistLol || 0) - rd.rangeBase) / Math.max(1, (rd.epicenterMaxRange || 1700) - rd.rangeBase))) * ((rd.epicenterMaxBonusPercent || 50) / 100);
   for (const u of units) {
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
-    applyDamage(u, { rawDamage: raw * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
+    const epi = farBonus > 0 && isInCircle(u, center, lolRangeToWorld(rd.centerRadius)) ? 1 + farBonus : 1;
+    applyDamage(u, { rawDamage: raw * epi * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
     if (u.isStructure || u.hp <= 0) continue;
     applyStatus(u, { id: 'rammusR_slow', type: 'SLOW', duration: rd.slowDurationSec, value: slow, source: this });
     if (j.powerball && isInCircle(u, center, lolRangeToWorld(rd.centerRadius))) {
@@ -37873,12 +37960,19 @@ function tickPullEffects(dt) {
       const alive = tg && tg.hp > 0 && !tg.destroyed && !tg.isDead && tg.mesh;
       if (alive) {
         const tp = tg.mesh.position;
+        const prevTp = f.lastTargetPos.clone();
         const moved = Math.hypot(tp.x - f.lastTargetPos.x, tp.z - f.lastTargetPos.z);
         f.lastTargetPos.copy(tp);
         const to = new THREE.Vector3(tp.x - pos.x, 0, tp.z - pos.z);
         const dist = to.length();
         const step = f.speed * dt + moved;
-        if (dist <= f.stopDist + step) {
+        if (f.leashWorld && dist > f.leashWorld) {
+          // 81차: 대상이 사거리(리 신 Q2 2000) 밖으로 벗어나면 그 직전 위치로 마저 돌진하고 끝낸다.
+          p.follow = null; p.from = pos.clone(); p.to = new THREE.Vector3(prevTp.x, pos.y, prevTp.z);
+          p.elapsed = 0; p.duration = Math.max(0.05, getHorizontalDistance(p.from, p.to) / Math.max(1e-6, f.speed));
+          if (f.onLeash) f.onLeash();
+          t = 0;
+        } else if (dist <= f.stopDist + step) {
           if (dist > f.stopDist) pos.addScaledVector(to.normalize(), dist - f.stopDist);
           t = 1;
         } else {
@@ -37888,7 +37982,7 @@ function tickPullEffects(dt) {
         }
       } else t = 1; // 대상이 죽거나 사라지면 그 자리에서 끝
       pos.y = p.from.y;
-      p.to.copy(pos);
+      if (p.follow) p.to.copy(pos); // 81차: 사거리 이탈로 일반 돌진으로 바뀐 프레임에는 목적지를 덮어쓰지 않는다
     } else controller.root.position.lerpVectors(p.from, p.to, t);
     if (p.faceDir && p.faceDir.lengthSq() > 1e-8) {
       // 29차(요청 "리 신 Q2로 날아갈 때 날아가는 방향을 안 봄"): 예전엔 root.rotation.y(오일러)만 덮어썼다. 직전에

@@ -154,7 +154,9 @@ CharacterController.prototype._mordeEAreaHits = function(origin, dir, dist) {
       const r = getCollisionRadius(u);
       const v = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);
       const along = v.dot(dir);
-      if (along > dist + r || along < dist - lenWorld - r) continue;
+      // 81차: PC 위키 사거리 "700 / 900" - 지정 사거리 700, 손아귀 끝은 지정 지점보다 200 더 나가 최대 900까지 닿는다.
+      const far = dist + lolRangeToWorld(e.areaFarExtra || 0);
+      if (along > far + r || along < far - lenWorld - r) continue;
       const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
       if (lateral <= half + r) out.push(u);
     }

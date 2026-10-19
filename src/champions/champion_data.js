@@ -137,7 +137,7 @@ const CHAMPION_DATA = {
       // 돌풍 판정 사거리(950)가 서로 다르다(이전 구현은 이 둘을 혼동해서
       // 본체까지 950 이동시켰다 - bin 데이터로 수정).
       // 75차: 돌풍 폭 80 → 160(PC 위키 Template:Data Yone/Mortal Steel "WIDTH: Edge range 80 / 160" - 3타 돌풍이 160).
-      dashRange: 450, missileRange: 950, dashAoEWidth: 100, missileWidth: 160,
+      dashRange: 450, missileRange: 950, dashAoEWidth: 200, /* 81차: 돌진 본체 충돌 반경 100 = 폭 200(PC 위키 Template:Data Yone/Mortal Steel "collision radius 100") */ missileWidth: 160,
       dashSpeed: 1500,
       damageByLevel: [25,50,75,100,125], totalAdRatio: 1.10,
       stackDuration: 6, maxStacks: 2, knockupDuration: 0.75,
@@ -486,6 +486,7 @@ const CHAMPION_DATA = {
       // 데이터 수정: E 마나 비용이 40으로 되어 있었는데, 현재 패치 기준
       // 실제 값은 30이다(위키 3곳 이상 교차 확인).
       mana: 40, range: 550, maxCharges: 2, // Data Dragon 16.20.1: 40(예전 30)
+      dashDistance: 450, // 81차: 대상 지정 사거리 550, 돌진은 대상 방향 고정 거리 450(PC 위키 Template:Data Nilah/Slipstream "range 450")
       // 데이터 수정: 재충전 시간 [26,22.5,19,15.5,12]는 출시 초반 상향
       // 이후의 값(12.13 패치에서 강화 시간이 늘어난 값)이 그대로 남아있던
       // 것으로 보인다 - 이후 다시 조정되어 현재는 [22,19.5,17,14.5,12]다.
@@ -569,6 +570,7 @@ const CHAMPION_DATA = {
     E: {
       // PC 위키: 시전 사거리 700, 판정 직사각형 길이 800·폭 200, 0.5초 뒤 250 유닛 끌어당김.
       name: '죽음의 손아귀', cooldown: [16, 14, 12, 10, 8], mana: 0, range: 700, areaLength: 800, areaWidth: 200, pullDistance: 250,
+      areaFarExtra: 200, // 81차: 위키 사거리 "700 / 900" - 판정 끝이 지정 지점 + 200(최대 900)
       magicPenPercentByLevel: [5, 7.5, 10, 12.5, 15],
       damageByLevel: [60, 80, 100, 120, 140], apRatio: 0.45, pullDelay: 0.5, damageType: 'MAGICAL',
     },
@@ -632,7 +634,7 @@ const CHAMPION_DATA = {
       stunByLevel: [1, 1.5, 2], // 주 대상 에어본+기절 총합
       pathKnockupSec: 1, // PC 위키: 경로 폭발에 맞은 적은 1초 공중에 뜸(0.5초 → 1초 패치). 예전 0.75는 근거 없던 값
       // PC 위키(노틸러스 문서·Depth Charge 템플릿): 경로는 0.264초마다 충격파 위치에서 반경 225 폭발(예전엔 미확인 폭 300의 연속 판정).
-      pathEruptionRadius: 225, pathEruptionIntervalSec: 0.264,
+      pathEruptionRadius: 225, pathEruptionIntervalSec: 0.264, finalEruptionRadius: 300, // 81차: 대상 위치 마지막 폭발 반경 300
       // PC 위키 Template:Data Nautilus/Depth Charge: 시전 0.46초, 충격파 속도 275에서 초당 +466.67 가속.
       shockwaveSpeed: 275, shockwaveAccelPerSec: 466.67,
       castTimeSec: 0.46,
@@ -655,7 +657,7 @@ const CHAMPION_DATA = {
       armorToAdPercent: 15, mrToAdPercent: 15, // 25.12: 평타 추가 마법 피해 → 총 방어력·마저 15% 추가 공격력
     },
     Q: {
-      name: '대회전', cooldown: [12, 10.5, 9, 7.5, 6], mana: 60, damageType: 'MAGICAL', // 재사용 대기시간은 구르기가 끝난 뒤부터 돈다
+      name: '대회전', cooldown: [12, 10.5, 9, 7.5, 6], mana: 60, damageType: 'MAGICAL', collisionRadius: 75, // 재사용 대기시간은 구르기가 끝난 뒤부터 돈다. 81차: 충돌 반경 75(PC 위키)
       damageByLevel: [80, 120, 160, 200, 240], apRatio: 1.0, // 25.12: 80~200 → 80~240. AP 100%
       rollDurationSec: 6, recastLockSec: 1, // 최대 6초, 1초 뒤부터 재사용으로 끝낼 수 있다
       msPercentPerSecAt1: 25, msPercentPerSecAt18: 40.83, msPercentCapAt1: 150, msPercentCapAt18: 245, // 초당 이동 속도 증가율·최대치(레벨 비례)
@@ -682,7 +684,8 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [30, 40, 50], slowDurationSec: 1.5, aftershockCount: 3, aftershockDurationSec: 3.5, // 여진은 둔화만(25.12에서 여진 피해 삭제)
       powerballKnockupSec: 1, // 대회전 중 사용 시 중앙 적 공중에 뜸 + 대회전 피해(1초는 검색 자료 하나 - 추정)
       radius: 400, centerRadius: 200, rangeBase: 800, // 반경 300 → 400, 중앙 150 → 200 (78차: PC 위키 Template:Data, 검색 요약 대조)
-      rangeBonusMsRatio: 1.0, jumpSec: 0.75, // 추정: 범위·중앙 반경·사거리(기본 + 추가 이동 속도)·도약 시간
+      rangeMsRatio: 1.5, epicenterMaxRange: 1700, epicenterMaxBonusPercent: 50, // 81차: 사거리 max(800, 이동 속도 150%), 800 넘게 뛰면 중앙 피해 증가(1700에서 +50%)
+      jumpSec: 0.75, // 도약 시간(800 기준 약 1067/초 - 위키 속도 범위 900~2000 안)
     },
   },
   lux: {
@@ -813,7 +816,8 @@ const CHAMPION_DATA = {
     E: {
       // 사거리 500 → 650 (78차: PC 위키 Template:Data, 검색 요약 대조)
       name: '날카로운 가시', cooldown: [8, 7, 6, 5, 4], mana: 30, charges: 3, rangeMax: 650,
-      widthMin: 340, widthMax: 500, widthPerStack: 30, // 79차: 가시 폭 340 + 크기(포식 중첩)당 30, 최대 500 - 공격 방향 직선 전체 적중
+      // 81차: 가시 폭은 추가 크기(0~100%)에 따라 단계별로 바뀐다(위키 "340 – 500 (based on bonus size)", 단계마다 +30, 3번째만 +10).
+      widthBySizeStep: [340, 370, 400, 410, 440, 470, 500], // 공격 방향 직선 전체 적중(79차)
       perHitDamageByLevel: [30, 50, 70, 90, 110], apRatio: 0.3, // V26.17: 20~100 → 30~110
       perHitMaxHpPercentByLevel: [2.5, 2.85, 3.2, 3.55, 3.9], perStackMaxHpPercent: 0.5,
       slowPercentByLevel: [30, 35, 40, 45, 50], slowDuration: 1.5, damageType: 'MAGICAL',
@@ -822,7 +826,9 @@ const CHAMPION_DATA = {
       name: '포식', cooldown: [80, 70, 60], mana: 100, castTime: 0.25 /* PC 위키(예전 즉시) */, rangeBase: 175, rangePerStack: 2.5, rangeBonusCap: 25, /* 80차: 중첩당 +2.5, 10중첩 +25에서 상한(최대 200) */ // 버그 수정: 175가 맞음(Leaguepedia 패치 기록 "RANGE: 150 ⇒ 175" 확인) - 200은 잘못된 값이었음
       championDamageByLevel: [300, 475, 650], championApRatio: 0.5, championBonusHpRatio: 0.1,
       nonChampionDamage: 1200, nonChampionApRatio: 0.5, nonChampionBonusHpRatio: 0.1,
-      hpGrowthByLevel: [80, 120, 160], nonEpicStackCap: 6, damageType: 'TRUE',
+      hpGrowthByLevel: [80, 120, 160], nonEpicStackCap: 6,
+      bonusSizePercentPerStackByLevel: [6, 8, 10], bonusSizeCapPercent: 100, // 81차: 중첩당 크기 6/8/10%, 최대 100%(PC 위키)
+      bonusAttackRangePerStackByLevel: [4.7, 6.2, 7.7], bonusAttackRangeCap: 75, // 81차: 중첩당 평타 사거리 4.7/6.2/7.7, 최대 +75(14.2~) damageType: 'TRUE',
     },
   },
   leesin: {
@@ -849,7 +855,7 @@ const CHAMPION_DATA = {
     },
     Q: {
       name: '음파/공명의 일격', cooldown: [10, 9, 8, 7, 6], energy1: 50, energy2: 25,
-      range1: 1200, range2: 1250, // 음파 사거리 1100 → 1200 (78차: PC 위키 Template:Data, 검색 요약 대조)
+      range1: 1200, range2: 1250, q2LeashRange: 2000, /* 81차: Q2는 1250 안에서만 재시전, 돌진 중 2000 밖으로 벗어나면 피해 없이 끝(PC 위키) */ // 음파 사거리 1100 → 1200 (78차: PC 위키 Template:Data, 검색 요약 대조)
       markDuration: 3, castTimeSec: 0.25, missileSpeed: 1800, width: 120, // 45차: 음파 폭 120(PC 위키) - 예전엔 코드에 월드 단위 1.2(≈139)로 박혀 있었다
       damageByLevel: [60, 90, 120, 150, 180], bonusAdRatio: 0.9,
       maxDamageByLevel: [120, 180, 240, 300, 360], maxBonusAdRatio: 1.8,
@@ -869,7 +875,7 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [35, 45, 55, 65, 75], slowDuration: 4, damageType: 'MAGICAL',
     },
     R: {
-      name: '용의 분노', cooldown: [110, 85, 60], mana: 0, range: 375,
+      name: '용의 분노', cooldown: [110, 85, 60], mana: 0, range: 375, collisionRadius: 160, // 81차: 걷어찬 대상 충돌 반경 160(PC 위키)
       damageByLevel: [175, 400, 625], bonusAdRatio: 2.0,
       // PC 위키: 800 밀어냄(0.8초 동안), 대상 공중에 뜸 1초, 충돌한 적도 공중에 뜸 1초(확인). 예전 1200은 출처 불명.
       knockbackDistance: 800, knockbackSec: 0.8, airborneDuration: 1, castTimeSec: 0.25, collisionAirborneSec: 1,
@@ -927,7 +933,7 @@ const CHAMPION_DATA = {
 
      W: {
       name: '거리 두기', cooldown: [16, 15, 14, 13, 12] /* Data Dragon 16.20.1 */, mana: 75,
-      range: 475, castTimeSec: 0.25, damageByLevel: [80, 120, 160, 200, 240], // PC 위키: 시전 0.25초(이동 가능), 반경 475
+      range: 475, dashingRange: 550, /* 81차: 돌진 중인 적에게는 550(PC 위키 Template:Data Vex/Personal Space "475 • 550") */ castTimeSec: 0.25, damageByLevel: [80, 120, 160, 200, 240], // PC 위키: 시전 0.25초(이동 가능), 반경 475
       // PC 위키: 보호막 50/75/100/125/150(+주문력 75%), 2.5초. 예전 50~170은 주문력 80% 시절 기본값.
       apRatio: 0.3, shieldByLevel: [50, 75, 100, 125, 150], shieldApRatio: 0.75, shieldDuration: 2.5,
       damageType: 'MAGICAL',
@@ -1149,7 +1155,7 @@ const CHAMPION_DATA = {
       returnSpeed: 60, returnMaxSpeed: 2600, returnAccel: 1900,
     },
     W: {
-      name: '여우불',
+      name: '여우불', missileSpeed: 1400, // 81차: 여우불 유도탄 속도 1400(PC 위키)
       desc: '짧은 이동 속도 증가 효과를 얻고, 여우불 3개를 소환한다. 여우불은 주변 적을 자동으로 공격한다.',
       // AhriW(캐스트) 그대로: cooldownTime(index1~5)=[9,8,7,6,5], manaValues
       // 전 랭크 30 고정. DataValues: MovementSpeed=0.40(+2초), BaseDamage
@@ -1198,7 +1204,7 @@ const CHAMPION_DATA = {
       cooldown: [140, 120, 100], mana: 100,
       damageByLevel: [75, 125, 175], apRatio: 0.35,
       recastLockoutSec: 1, // 28차: PC 위키 - 재시전 사이 1초 고정 대기(스킬 가속 영향 없음)
-      dashDistance: 500, dashSpeed: 1200, maxCasts: 3, maxTargetsPerCast: 3,
+      dashDistance: 500, dashSpeed: 1200, dashSpeedMsRatio: 1.0, boltSpeed: 1400, /* 81차: 돌진 1200 + 이동 속도 100%, 탄환 속도 1400(PC 위키) */ maxCasts: 3, maxTargetsPerCast: 3,
       recastWindow: 15, acquisitionRange: 600, resetCastsOnTakedown: 1,
       recastWindowExtendOnTakedown: 10,
       damageType: 'MAGICAL',
@@ -1278,7 +1284,7 @@ const CHAMPION_DATA = {
       damageByLevel: [60, 90, 120, 150, 180], bonusAdRatio: 0.9,
       slowPercentByLevel: [30, 35, 40, 45, 50], zoneDuration: 4,
       grievousPercent: 40, grievousDuration: 0.5,
-      missileSpeed: 1750, damageType: 'PHYSICAL',
+      landDelaySec: 0.5, damageType: 'PHYSICAL', // 81차: 시전 후 0.5초 뒤 착탄(PC 위키). 예전 missileSpeed 1750은 쓰이지 않던 근거 없는 값
     },
     R: {
       name: '속박의 사슬',
@@ -1362,7 +1368,7 @@ const CHAMPION_DATA = {
       // 총 110~130%)의 다발 공격으로 바뀐다. 시전 후 첫 다발은 1발 더(6발, 총 132~156%). 화살마다 서리 화살,
       // 적중 시 효과는 다발당 1회. 마나 30(Data Dragon).
       // 버그 수정: 예전 구현은 "시전 후 첫 평타 1번만, 주변 여러 대상에 나눠서"였다.
-      attackSpeedPercentByLevel: [20, 25, 30, 35, 40],
+      attackSpeedPercentByLevel: [20, 30, 40, 50, 60], // 81차: 20~40 → 20~60(PC 위키 Ashe 문서 패치 기록·26.20 가이드)
       flurryArrowCount: 5, firstFlurryBonusArrows: 1,
       flurryArrowAdPercentByLevel: [22, 23, 24, 25, 26],
       flurryMissileSpeed: 3200,
@@ -1375,7 +1381,7 @@ const CHAMPION_DATA = {
       // PC 위키 Template:Data Ashe/Volley: 60/95/130/165/200(+추가 AD 100%), 화살 7~11발, 부채꼴 27.75/37/37/
       // 46.25/46.25°, 사거리 1200. 마나 75~55(Data Dragon).
       cooldown: [18, 14.5, 11, 7.5, 4] /* Data Dragon 16.20.1 */, mana: [75, 70, 65, 60, 55],
-      range: 1200, coneAngleDegByLevel: [27.75, 37, 37, 46.25, 46.25], arrowsByLevel: [7, 8, 9, 10, 11],
+      range: 1200, missileSpeed: 2000, spawnOffset: 75, /* 81차: 화살 속도 2000, 애쉬 앞 75에서 출발(PC 위키) */ coneAngleDegByLevel: [27.75, 37, 37, 46.25, 46.25], arrowsByLevel: [7, 8, 9, 10, 11],
       damageByLevel: [60, 95, 130, 165, 200], bonusAdRatio: 1.0,
       castTimeSec: 0.25,
       damageType: 'PHYSICAL',
@@ -1401,11 +1407,11 @@ const CHAMPION_DATA = {
       missileSpeedBySecond: [1500, 1700, 1900, 2100], // PC 위키: 비행 시간(초)에 따라 1500/1700/1900/2100
       damageByLevel: [200, 400, 600], apRatio: 1.2,
       splashDamagePercent: 100, splashRadius: 400, // 주변 적도 같은 피해 + 서리 화살(PC 위키). 반경 400은 6차에 PC 위키로 확인
-      // 기절 1~3.5초(비행 거리 비례). 최대가 되는 거리는 위키·패치 기록에 숫자가 없어 1500으로 추정(예전 20000은 사실상
-      // 항상 최소 1초라 거리 비례가 작동하지 않았다). ashe.bin.json을 받으면 확정값으로 바꾼다.
-      minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 1500, maxStunDistanceGuessed: true,
+      // 기절 1~3.5초(비행 거리 비례). 81차: 기절 1~3.5초 체계가 생긴 뒤의 공식 포럼 측정값 - 2800을 날아가야
+      // 3.5초(그 뒤 이 수치를 바꾼 패치 기록 없음). 예전 1500은 근거 없는 추정이었다.
+      minStunSec: 1.0, maxStunSec: 3.5, maxStunLolDistance: 2800,
       castTimeSec: 0.25, // PC 위키 Template:Data Ashe/Enchanted Crystal Arrow(예전 0.5)
-      visionRadius: 900, visionDurationSec: 3.0, // 비행 경로/명중 지점에도 짧은 시야(공식 설명: "1초간 경로의 시야를 밝힌다" - 근사)
+      visionRadius: 350, visionDurationSec: 1.0, // 81차: 비행 경로와 명중 지점 시야 반경 350, 1초(PC 위키 Template:Data, 예전 900·3초 근사)
       damageType: 'MAGICAL',
     },
   },

@@ -205,10 +205,20 @@ CharacterController.prototype._asheResolveWImpact = function(p) {
   }
   if (!hits.length) { debugSkillMiss('Ashe W (일제 사격)', '부채꼴 범위 내 대상 없음'); return; }
   const raw = skillVal(w.damageByLevel, p.lvl) + (w.bonusAdRatio || 0) * this._getBonusAD();
-  for (const { unit } of hits) {
-    if (!unit || unit.hp <= 0) continue;
-    if (unit.isStructure) continue; // 59차: 원작 - 일제 사격(스킬)은 구조물에 피해를 주지 않는다
-    if (unit.isMinion) { applyDamageToMinion(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true); this._asheApplyFrostShot(unit, false); continue; }
+  // 81차: 화살은 애쉬 앞 75 지점에서 출발해 속도 2000으로 날아간다(PC 위키) - 거리만큼 늦게 맞는다. 예전엔 즉시 피해.
+  const speedLol = w.missileSpeed || 2000, startLol = w.spawnOffset != null ? w.spawnOffset : 75;
+  for (const h of hits) {
+    const delayMs = Math.max(0, (worldDistanceToLol(h.along) - startLol) / speedLol) * 1000;
+    if (delayMs > 1 && typeof this._champTimeout === 'function') this._champTimeout(() => this._asheApplyWHit(h.unit, raw, p.lvl), delayMs);
+    else this._asheApplyWHit(h.unit, raw, p.lvl);
+  }
+};
+
+CharacterController.prototype._asheApplyWHit = function(unit, raw, lvl) {
+  {
+    if (!unit || unit.hp <= 0) return;
+    if (unit.isStructure) return; // 59차: 원작 - 일제 사격(스킬)은 구조물에 피해를 주지 않는다
+    if (unit.isMinion) { applyDamageToMinion(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, true); this._asheApplyFrostShot(unit, false); return; }
     applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
     this._asheApplyFrostShot(unit, false);
     vfx.spawn('hit', getWorldPosition(unit)?.clone() || unit.mesh.position.clone(), undefined, { color: 0xbfe8ff });

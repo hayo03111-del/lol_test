@@ -68,7 +68,7 @@ for (const id of Object.keys(CD)) {
 // 5) 모데카이저 E: 지정 지점(700으로 당김)에서 모데카이저 쪽으로 길이 800 직사각형.
 {
   const a = computeSkillAim(champ('mordekaiser'), 'E', at(1000));
-  assert(near(a.segments[0].start, W(700 - 800)) && near(a.segments[0].len, W(800)) && near(a.segments[0].width, W(200)), '모데카이저 E 직사각형 (700-800 ~ 700) x 200');
+  assert(near(a.segments[0].start, W(900 - 800)) && near(a.segments[0].len, W(800)) && near(a.segments[0].width, W(200)), '모데카이저 E 직사각형 (900-800 ~ 900) x 200(81차: 끝은 지정 지점 + 200)');
 }
 // 6) 닐라 Q: 원작처럼 커서 거리와 무관한 고정 600 직선(45차), 폭 = impactRadius(판정 반폭 impactRadius/2).
 {
@@ -83,7 +83,7 @@ for (const id of Object.keys(CD)) {
   assert(near(y1.segments[0].len, W(450)) && near(y1.segments[0].width, W(80)), '야스오 Q 1·2타 450 x 80(75차: PC 위키 Edge range 450)');
   assert(near(y3.segments[0].len, W(1150)) && near(y3.segments[0].width, W(180)), '야스오 Q 3타 회오리 1150 x 180');
   const yo = computeSkillAim(champ('yone', { _yone: { qStacks: 2 } }), 'Q', at(300));
-  assert(yo.segments.length === 2 && near(yo.segments[0].len, W(450)) && near(yo.segments[0].width, W(100)) && near(yo.segments[1].len, W(500)) && near(yo.segments[1].width, W(160)), '요네 Q 강화: 450 x 100 + 500 x 160(75차: 돌풍 폭 160)');
+  assert(yo.segments.length === 2 && near(yo.segments[0].len, W(450)) && near(yo.segments[0].width, W(200)) && near(yo.segments[1].len, W(500)) && near(yo.segments[1].width, W(160)), '요네 Q 강화: 450 x 200 + 500 x 160(81차: 돌진 충돌 반경 100)');
 }
 // 8) 리 신 Q 폭은 데이터 width(120) - 투사체 line 판정 반폭 W(120)/2와 같다(45차).
 assert(near(computeSkillAim(champ('leesin'), 'Q', at(300)).segments[0].width, W(120)), '리 신 Q 폭 = 데이터 120');

@@ -130,6 +130,17 @@ CharacterController.prototype._chogathCastE = function(free) {
   
 };
 
+// 81차: 포식 중첩 → 추가 크기(%)·추가 평타 사거리(LoL). R 레벨에 따라 중첩당 값이 다르고 상한이 있다(PC 위키).
+function chogathFeastBonus(ctrl) {
+  const r = CHAMPION_DATA.chogath.R;
+  const stacks = (ctrl && ctrl._chogath && ctrl._chogath.predationStacks) || 0;
+  const rLvl = Math.max(1, Math.min(3, (ctrl && ctrl.skillLevels && ctrl.skillLevels.R) || 1));
+  return {
+    sizePercent: Math.min(r.bonusSizeCapPercent || 100, stacks * skillVal(r.bonusSizePercentPerStackByLevel || [0], rLvl)),
+    attackRangeLol: Math.min(r.bonusAttackRangeCap || 75, stacks * skillVal(r.bonusAttackRangePerStackByLevel || [0], rLvl)),
+  };
+}
+
 // Extracted from CharacterController: _chogathEOnHit
 CharacterController.prototype._chogathEOnHit = function(target) { 
     if (!this._chogath.eChargesRemaining || this._chogath.eChargesRemaining <= 0) return;
@@ -141,9 +152,11 @@ CharacterController.prototype._chogathEOnHit = function(target) {
     const targets = [target];
     const tp = getWorldPosition(target), o = this.root.position;
     const dir = new THREE.Vector3(tp.x - o.x, 0, tp.z - o.z);
-    if (e.widthMin && dir.lengthSq() > 1e-8) {
+    const steps = e.widthBySizeStep;
+    if (steps && dir.lengthSq() > 1e-8) {
       dir.normalize();
-      const width = Math.min(e.widthMax || e.widthMin, e.widthMin + (e.widthPerStack || 0) * stacks);
+      const size = chogathFeastBonus(this).sizePercent / 100; // 0~1
+      const width = steps[Math.min(steps.length - 1, Math.floor(size * (steps.length - 1) + 1e-9))];
       for (const u of findEnemiesInLine(o, dir, e.rangeMax, width)) if (u !== target && !u.isTurret && !u.isStructure) targets.push(u);
     }
     for (const unit of targets) {

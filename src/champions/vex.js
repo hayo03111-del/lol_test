@@ -240,7 +240,12 @@ CharacterController.prototype._vexCastW = function(mouseWorldPoint, free = false
     this._vex.wShield = { amount: shield, expiresAt: performance.now() + (w.shieldDuration || 2.5) * 1000 };
     vfx.spawn('w', this.root.position.clone());
     const raw = skillVal(w.damageByLevel, lvl) + (w.apRatio || 0) * (this.stats.abilityPower || 0);
-    for (const h of findEnemiesInRadius(this.root.position, w.range || 475)) {
+    // 81차: PC 위키 - 반경 475, 돌진 중인 적에게는 550.
+    const dashR = w.dashingRange || w.range || 475, nowW = performance.now();
+    const isDashing = (u) => !!(u && (u._dashState || u.isDashing || (u._lastDashAt && nowW - u._lastDashAt <= (w.dashWindowMs || 400))));
+    const wHits = findEnemiesInRadius(this.root.position, dashR)
+      .filter((h) => isDashing(h.unit) || h.distance <= lolRangeToWorld(w.range || 475) + getCollisionRadius(h.unit));
+    for (const h of wHits) {
       applyDamage(h.unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
       this._vexOnAbilityHit(h.unit, doom);
       debugSkillHit('Vex W', h.unit);
@@ -378,6 +383,7 @@ CharacterController.prototype._vexOnBasicAttackHit = function(target) { this._ve
 // 현재 데모의 적(허수아비·미니언)은 돌진하지 않아 호출부가 없다 - 적 돌진이 생기면 여기로 알린다.
 function vexNotifyEnemyDash(unit) {
   const c = typeof controller !== 'undefined' ? controller : null;
+  if (unit) unit._lastDashAt = performance.now(); // 81차: 벡스 W가 돌진 중인 적에게 넓은 반경(550)을 쓰기 위한 표시
   if (!c || c.championId !== 'vex' || !c._vex || !unit || unit.hp <= 0) return;
   if (!(unit.isChampion || unit.isMonster)) return;
   const p = getWorldPosition(unit); if (!p) return;

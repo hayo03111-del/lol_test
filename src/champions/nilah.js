@@ -585,7 +585,7 @@ CharacterController.prototype._nilahCastE = function(mouseWorldPoint, free=false
     // 전부 돌진한다 - 대상이 가까이 있어도 그 자리에서 멈추지 않고
     // 방향은 그대로 유지한 채 끝까지 나아간다. 예전엔 Math.min(dist,
     // maxWorld)로 "대상까지의 거리"에서 멈춰버렸다.
-    const maxWorld=lolRangeToWorld(e.range); const d=new THREE.Vector3(targetPos.x-start.x,0,targetPos.z-start.z); const dist=d.length();
+    const maxWorld=lolRangeToWorld(e.dashDistance||e.range); /* 81차: 돌진 거리 450(대상 지정 사거리 550과 별개) */ const d=new THREE.Vector3(targetPos.x-start.x,0,targetPos.z-start.z); const dist=d.length();
     if(dist<1e-6)d.copy(this.moveDir).setY(0); if(d.lengthSq()<1e-6)d.set(0,0,1); d.normalize();
     const end=start.clone().addScaledVector(d,maxWorld);
     const eClip=this.findAnimation('Spell3_Cast') || this.findAnimation('Spell3A'); const duration=Math.max(0.10,Math.min(0.22,eClip ? eClip.duration*0.55 : e.dashDuration));

@@ -281,6 +281,23 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
   const fireTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'varusE') return;
     this.currentPhase = 'ACTIVE';
+    // 81차: 화살비는 시전이 끝나고 0.5초 뒤에 떨어진다(PC 위키) - 그동안 착탄 지점을 예고 표시하고 피할 수 있다.
+    // 예전엔 시전 끝(0.242초)에 바로 피해. 이미 쏜 화살이라 행동 취소와 무관하게 떨어진다.
+    const landSec = e.landDelaySec != null ? e.landDelaySec : 0.5;
+    if (landSec > 0 && typeof skillTelegraphs !== 'undefined') skillTelegraphs.spawn({ shape: 'circle', center: targetPoint, radius: e.radius || 300, duration: landSec, color: 0xff9a4a, team: this.team, owner: this, opacity: 0.3 });
+    this._champTimeout(() => this._varusLandE(targetPoint), landSec * 1000);
+  }, castTime * 1000);
+  this._actionTimers.push(fireTimer);
+
+  const doneTimer = this._champTimeout(() => {
+    if (this.currentActionKey === 'varusE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+  }, (castTime + 0.15) * 1000);
+  this._actionTimers.push(doneTimer);
+};
+
+CharacterController.prototype._varusLandE = function(targetPoint) {
+  {
+    const e = this._champData().E;
     vfx.spawn('hit', targetPoint.clone(), undefined, { color: 0xff9a4a });
     const lvl = Math.max(1, this.skillLevels.E || 1);
     const raw = skillVal(e.damageByLevel, lvl) + (e.bonusAdRatio || 0) * this._getBonusAD();
@@ -313,13 +330,7 @@ CharacterController.prototype._varusCastE = function(mouseWorldPoint, free = fal
       applyZone();
     }, 250);
     if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.spawn({ shape: 'circle', center: targetPoint, radius: e.radius || 300, duration: e.zoneDuration || 4, color: 0x9a3dff, team: this.team, owner: this, opacity: 0.45 });
-  }, castTime * 1000);
-  this._actionTimers.push(fireTimer);
-
-  const doneTimer = this._champTimeout(() => {
-    if (this.currentActionKey === 'varusE') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
-  }, (castTime + 0.15) * 1000);
-  this._actionTimers.push(doneTimer);
+  }
 };
 
 // R(속박의 사슬): 직선 스킬샷. 처음 맞은 대상에게 마법 피해 + 속박, 이후

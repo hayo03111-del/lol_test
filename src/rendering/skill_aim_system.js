@@ -64,7 +64,7 @@ const SKILL_AIM = {
   mordekaiser: {
     Q: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width || 150 },                // findEnemiesInLine
     W: { type: 'instant' },
-    E: { type: 'rectAtPoint', range: (c, d) => d.range, length: (c, d) => d.areaLength || 800, width: (c, d) => d.areaWidth || 200 },
+    E: { type: 'rectAtPoint', range: (c, d) => d.range, length: (c, d) => d.areaLength || 800, width: (c, d) => d.areaWidth || 200, farExtra: (c, d) => d.areaFarExtra || 0 },
     R: { type: 'unit', range: (c, d) => d.range },
   },
   nautilus: {
@@ -196,7 +196,7 @@ function computeSkillAim(c, slot, point) {
     }
     case 'rectAtPoint': {
       aim.rangeWorld = W(V('range'));
-      const dist = Math.min(rawDist, aim.rangeWorld), len = W(V('length'));
+      const dist = Math.min(rawDist, aim.rangeWorld) + (spec.farExtra ? W(V('farExtra')) : 0), len = W(V('length')); // 81차: 끝이 지정 지점 + farExtra
       aim.segments = [{ start: dist - len, len, width: W(V('width')) }];                      // 지정 지점에서 시전자 쪽으로 length
       break;
     }

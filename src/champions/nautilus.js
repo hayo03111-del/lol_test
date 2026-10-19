@@ -398,6 +398,15 @@ CharacterController.prototype._nautilusTickRTravel = function(dt) {
     const raw = skillVal(r.damageByLevel, t.lvl) + r.apRatio * (this.stats.abilityPower || 0);
     applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     applyStatus(target, { id: 'nautilusR_knockup', type: 'KNOCKUP', duration: skillVal(r.stunByLevel, t.lvl), value: 1, source: this });
+    // 81차: 대상 위치의 마지막 폭발은 반경 300(PC 위키 "225 / 300") - 주변 적도 경로 폭발과 같은 피해·에어본(경로에서 이미 맞은 적 제외).
+    for (const u of getAllEnemyUnits()) {
+      if (!u || u === target || u.hp <= 0 || u.isStructure || t.pathHit.has(u)) continue;
+      if (!isInCircle(u, getWorldPosition(target), lolRangeToWorld(r.finalEruptionRadius || 300))) continue;
+      t.pathHit.add(u);
+      applyDamage(u, { rawDamage: pathRaw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+      applyStatus(u, { id: 'nautilusR_pathKnockup', type: 'KNOCKUP', duration: r.pathKnockupSec, value: 1, source: this });
+      debugSkillHit('Nautilus R(폭뢰 - 마지막 폭발)', u);
+    }
     vfx.spawn('r', goal.clone());
     debugSkillHit('Nautilus R(폭뢰)', target, { dmg: raw.toFixed(1) });
   }

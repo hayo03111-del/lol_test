@@ -130,6 +130,7 @@ this.canRealmInteract = canRealmInteract;
 this.constrainUnitPosition = constrainUnitPosition;
 this.clearStatus = clearStatus;
 this.getDeathRealm = getDeathRealm;
+this.chogathFeastBonus = chogathFeastBonus;
 this.getFinalAttackSpeed = getFinalAttackSpeed;
 `, context);
 const { CharacterController, CHAMPION_DATA, STATE, applyStatus, applyDamage, getStatus, getSlowPercent,
@@ -661,7 +662,7 @@ stubs.targetRing = { clear() {} };
   const inZone = place(makeEnemy(0, 3)), late = place(makeEnemy(20, 20));
   const c = makeChamp('varus', ['Spell3']);
   c._varusCastE(new Vector3(0, 0, 3), false);
-  advance(300);
+  advance(800); // 81차: 시전 0.242초 + 착탄 0.5초
   assert(getSlowPercent(inZone) > 0 && getSlowPercent(late) === 0, '바루스 E: 착탄 지대 안의 적만 둔화');
   assert(stubs.skillTelegraphs.spawned.some((o) => o.shape === 'circle' && o.duration === 4 && o.radius === 300), '바루스 E: 반경 300·4초 지대 표시(모두에게 보이는 예고)');
   late.mesh.position.set(0, 0, 3);
@@ -698,7 +699,7 @@ stubs.targetRing = { clear() {} };
   assert(t.hp < hp0[0] && behind.hp < hp0[1], '초가스 E(79차): 평타 대상 뒤 직선 위 적도 가시에 맞는다');
   assert(wide.hp === hp0[2] && far.hp === hp0[3], '초가스 E(79차): 폭(반폭 170)·사거리(650) 밖은 빗나감');
   assert(c._chogath.eChargesRemaining === 2, '초가스 E(79차): 여러 명을 맞혀도 충전은 1회만 소모');
-  c._chogath.predationStacks = 6; // 폭 340+180=520 → 최대 500(반폭 250)
+  c._chogath.predationStacks = 17; // 81차: 추가 크기 100%(17×6%, 상한) → 폭 500(반폭 250)
   c._chogathEOnHit(t);
   assert(wide.hp < hp0[2], '초가스 E(79차): 크기 중첩으로 폭이 넓어진다(최대 500)');
 }
@@ -746,4 +747,50 @@ stubs.targetRing = { clear() {} };
   const c = makeChamp('sett');
   c._sett.qUsesRemaining = 2; c.comboIndex = 1;
   assert(near(c._settLeftHandRangeBonusWorld(), lolRangeToWorld(50)), '세트 Q(80차): 오른손 공격도 사거리 +50');
+}
+
+// --- 81차: 보류 항목 전부 ---
+{
+  const L = lolRangeToWorld, tiny = { collisionRadius: 0.001 };
+  // 바루스 E: 시전 0.242초 뒤가 아니라 그 뒤 0.5초에 착탄
+  timers = []; clearPlaced();
+  stubs.skillTelegraphs = { spawned: [], spawn(o) { this.spawned.push(o); return o; } };
+  const t = place(makeEnemy(0, 3));
+  const c = makeChamp('varus', ['Spell3']);
+  const hp0 = t.hp;
+  c._varusCastE(new Vector3(0, 0, 3), false);
+  advance(500);
+  assert(t.hp === hp0, '바루스 E(81차): 0.5초 착탄 지연 전에는 피해 없음');
+  advance(300);
+  assert(t.hp < hp0, '바루스 E(81차): 착탄 후 피해');
+}
+{
+  const L = lolRangeToWorld, tiny = { collisionRadius: 0.001 };
+  // 모데카이저 E: 판정 끝 = 지정 지점 + 200(최대 900)
+  timers = []; clearPlaced();
+  const c = makeChamp('mordekaiser');
+  const beyond = place(makeEnemy(0, L(880), tiny)), tooFar = place(makeEnemy(0, L(950), tiny));
+  const hits = c._mordeEAreaHits(new Vector3(0, 0, 0), new Vector3(0, 0, 1), L(700));
+  assert(hits.includes(beyond) && !hits.includes(tooFar), '모데 E(81차): 700 지점 시전 시 880은 닿고 950은 안 닿는다');
+}
+{
+  // 초가스: 포식 중첩 → 크기·평타 사거리(R 레벨별, 상한)
+  const c = makeChamp('chogath');
+  c.skillLevels.R = 3; c._chogath.predationStacks = 5;
+  const b = context.chogathFeastBonus ? context.chogathFeastBonus(c) : null;
+  if (b) {
+    assert(near(b.attackRangeLol, 38.5) && b.sizePercent === 50, '초가스 R(81차): 3레벨 5중첩 = 사거리 +38.5, 크기 +50%');
+    c._chogath.predationStacks = 30; const b2 = context.chogathFeastBonus(c);
+    assert(b2.attackRangeLol === 75 && b2.sizePercent === 100, '초가스 R(81차): 사거리 +75, 크기 100%에서 상한');
+  }
+}
+{
+  const L = lolRangeToWorld, tiny = { collisionRadius: 0.001 };
+  // 리 신 Q2: 표식 대상이 1250 밖이면 재시전 불가(기력 소모 없음)
+  timers = []; clearPlaced();
+  const c = makeChamp('leesin');
+  const t = place(makeEnemy(0, L(1400), tiny));
+  c._leesin.qMarkTarget = t; c._leesin.qMarkExpiresAt = now + 3000; c.mp = 200;
+  c._leesinCastQ(null, false);
+  assert(c.mp === 200 && c._leesin.qMarkTarget === t, '리 신 Q2(81차): 1250 밖 표식 대상에게는 재시전되지 않는다');
 }

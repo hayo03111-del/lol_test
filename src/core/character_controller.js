@@ -1420,7 +1420,8 @@ class CharacterController {
     this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? lolRangeToWorld(getFlatMoveSpeedBuff(this)) : 0;
     // 레넥톤 R(강신): 지속 중 사거리 +25(PC 위키).
     const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
-    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange);
+    const chogathRange = (this.championId === 'chogath' && typeof chogathFeastBonus === 'function') ? chogathFeastBonus(this).attackRangeLol : 0; // 81차: 포식 중첩 평타 사거리
+    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange);
     this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0) + (typeof runeAttackSpeedBonus === 'function' ? runeAttackSpeedBonus(this) : 0)
       + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
     if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
