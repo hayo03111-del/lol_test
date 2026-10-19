@@ -625,6 +625,9 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   // 기준 증폭(itemSpellDamageAmpPercent, 위)과 반대로 "대상"이 받는 모든
   // 피해(물리/마법/고정 전부)에 적용되는 VULNERABLE 상태이상이다.
   if (typeof getVulnerablePercent === 'function') dmg *= (1 + getVulnerablePercent(target));
+  // 71차: 심연의 가면(받는 마법 피해 증가), 실체화 장비(강화 중 스킬 피해 증가)
+  if (damageType === DAMAGE_TYPE.MAGICAL && typeof getMagicVulnerablePercent === 'function') dmg *= (1 + getMagicVulnerablePercent(target));
+  if (typeof getItemExtraOutgoingAmp === 'function') dmg *= (1 + getItemExtraOutgoingAmp(ampSource, isBasicAttack));
   // 36차: 소환사 주문 탈진 - 탈진에 걸린 공격자가 입히는 모든 피해 감소(summoner_spells.js).
   if (typeof getOutgoingDamageReductionPercent === 'function') dmg *= 1 - getOutgoingDamageReductionPercent(ampSource);
   return dmg;
@@ -734,7 +737,7 @@ function applyDamage(target, result) {
   }
   // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만"
   // 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 그대로 넘긴다.
-  if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
+  if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isCritical: !!result.isCritical });
   else damageEnemy(target, finalDmg, result);
   return finalDmg;
 }

@@ -294,6 +294,7 @@ function getAttackSpeedBuffPercent(target) {
   // 적용돼, 예컨대 마스터 이 R 중에는 아이템 공속 버프가 통째로 무시됐다.
   // 같은 버프의 재적용은 applyStatus가 같은 id를 덮어쓰므로 중복 합산되지 않는다.
   for (const e of target.statusEffects) if ((e.type === 'MASTERYI_R_AS' || e.type === 'AS_BUFF') && e.expiresAt > now) v += e.value;
+  for (const e of target.statusEffects) if (e.type === 'AS_REDUCTION' && e.expiresAt > now) v -= e.value; // 71차: 얼어붙은 심장(혹한의 포옹)
   return v;
 }
 

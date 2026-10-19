@@ -68,6 +68,7 @@ function shieldAlly(source, target, amount, durationSec, { decay = false, id = n
 // 아군이 피해를 받을 때(damageEnemy가 호출) - 꿈 생성기 파란 거품(미니언이
 // 아닌 출처의 다음 피해 감소)과 보호막 흡수를 처리하고 남은 피해를 돌려준다.
 function allyAbsorbIncoming(a, dmg, result) {
+  if (typeof itemExtraAllyIncoming === 'function') dmg = itemExtraAllyIncoming(a, dmg, result); // 71차: 기사의 맹세
   let remaining = dmg;
   const now = performance.now();
   const src = result && result.source;

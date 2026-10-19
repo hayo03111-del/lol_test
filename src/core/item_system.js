@@ -161,6 +161,7 @@ function recomputeItemStats(ctrl) {
   };
   for (const slot of (ctrl.items || [])) applyOne(ITEM_DATA[slot.id]);
   if (ctrl.boots) applyOne(ITEM_DATA[ctrl.boots.id]);
+  if (typeof itemExtraAfterStats === 'function') itemExtraAfterStats(ctrl); // 71차: 새 아이템(경탄·태초의 빛·큰손) + 시간 버프
   // 약간 신비한 신발에서 넘어온 이동속도 보너스(carryoverMoveSpeedOnUpgrade) -
   // 신발을 "신고 있을 때만" 적용된다(둘 다 벗으면 당연히 0, _buyBoots()에서
   // 영구 플래그로 못박아뒀으므로 지금 신은 신발 종류와 무관하게 계속 더해진다).
@@ -464,6 +465,7 @@ function useItem(ctrl, slotIndex, opts = {}) {
   if (!item) return false;
   // 활성 사용 아이템(티아맷의 "초승달" 등) - 중첩/충전 소모가 없는 대신
   // 아이템 자체 쿨다운이 있다. 소비 아이템과 분기를 분리한다.
+  if (typeof itemExtraUse === 'function') { const r = itemExtraUse(ctrl, slotIndex, item, opts); if (r !== undefined) return r; } // 71차
   if (item.activeAbility) return _useActiveAbilityItem(ctrl, item);
   // 거대한히드라(거대한 초승달) - 즉시 피해가 아니라 "다음 쪼개기 한 번"을
   // 강화하는 무장형 액티브.
@@ -831,6 +833,7 @@ function itemSystemTick(ctrl, dt) {
   _itemTickTrinketRecharge(ctrl, dt);
   _itemTickWardExpiry(ctrl, dt);
   if (typeof _itemTickElixirExpiry === 'function') _itemTickElixirExpiry(ctrl);
+  if (typeof itemExtraTick === 'function') itemExtraTick(ctrl, dt); // 71차
   const now = performance.now();
   // 아이템을 팔아도(인벤토리에서 이미 사라짐) 이미 걸린 보호막/흡혈
   // 버프는 실제 LoL처럼 원래 지속시간만큼 유지되므로, 인벤토리 유무와
@@ -1379,6 +1382,7 @@ function _itemThornsOnStruck(ctrl, source, meta) {
 }
 // 40차: 악마사냥꾼의 화살(폭격 개시) - 궁극기를 쓰면(controller_casting.js _dispatchCast가 부름) 8초 동안 다음 3회 평타 강화.
 function itemOnUltimateCast(ctrl) {
+  if (typeof itemExtraOnUltimateCast === 'function') itemExtraOnUltimateCast(ctrl); // 71차: 지크의 융합·실험적 마공학판
   const slot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].openingBarragePassive);
   if (!slot) return;
   const p = ITEM_DATA[slot.id].openingBarragePassive;
@@ -1398,6 +1402,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
   if (!ctrl) return incomingDamage;
   let remaining = incomingDamage;
   if (typeof runeOnTakeDamage === 'function') remaining = runeOnTakeDamage(ctrl, remaining, damageType, source, meta); // 52차: 뼈 방패 등
+  if (typeof itemExtraOnTakeDamage === 'function') remaining = itemExtraOnTakeDamage(ctrl, remaining, damageType, source, meta); // 71차
   const now = performance.now();
   _itemThornsOnStruck(ctrl, source, meta);
 
@@ -1578,6 +1583,7 @@ function _itemIsAbilityDamage(meta) {
 
 function itemOnDamageDealt(ctrl, target, finalDmg, damageType, meta = null) {
   if (typeof runeOnDamageDealt === 'function') runeOnDamageDealt(ctrl, target, finalDmg, damageType, meta);
+  if (typeof itemExtraOnDamageDealt === 'function') itemExtraOnDamageDealt(ctrl, target, finalDmg, damageType, meta); // 71차
   const isAbility = _itemIsAbilityDamage(meta);
   // 처형인의 대검 - 챔피언 대상 물리 피해에 그리버스(고통스러운 상처)를 건다.
   if (target.isChampion && damageType === DAMAGE_TYPE.PHYSICAL && ctrl.itemGrievousOnHitPercent > 0 && typeof applyStatus === 'function') {
@@ -2038,6 +2044,7 @@ function itemOnMinionKillByPlayer(ctrl) {
 // 이 훅을 타지 않는다 - 스킬 가속(abilityHasteCooldown)과 동일한 한계.
 function itemOnManaSpent(ctrl, manaSpent) {
   if (!ctrl || !manaSpent || manaSpent <= 0) return;
+  if (typeof itemExtraOnManaSpent === 'function') itemExtraOnManaSpent(ctrl, manaSpent); // 71차: 실체화 장비
   // 버그 수정(QA) - 'catalystOfAeons' id로 하드코딩돼 있었다. 영겁의지팡이가
   // 억겁의 카탈리스트와 완전히 동일한 "영원" 패시브(manaSpentToHealPercent)를
   // 갖게 되면서, 암흑의 인장(영광)/마나무네(마나순환) 때와 동일한 하드코딩
@@ -2147,6 +2154,7 @@ function itemOnSlowOrImmobilize(ctrl, target, effectType) {
 // (source가 자기 자신이 아닌 아군 챔피언 target을 회복/보호막했을 때).
 function itemOnAllyHealOrShield(source, target, kind, amount, opts = {}) {
   if (!source || !target || target === source || !target.isChampion || !(amount > 0)) return;
+  if (typeof itemExtraOnAllyHealOrShield === 'function') itemExtraOnAllyHealOrShield(source, target, kind, amount); // 71차
   const now = performance.now();
   // 꿈 생성기 - 들고 있던 파란/보라 거품을 3초 동안 그 아군에게 넘긴다.
   const dreamSlot = (source.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].dreamBubblePassive);
@@ -2177,6 +2185,7 @@ function itemOnAllyHealOrShield(source, target, kind, amount, opts = {}) {
 function itemOnChampionTakedown(ctrl) {
   if (!ctrl) return;
   if (typeof runeOnTakedown === 'function') runeOnTakedown(ctrl);
+  if (typeof itemExtraOnTakedown === 'function') itemExtraOnTakedown(ctrl); // 71차
   let changed = false;
   // 버그 수정(메자이의 영혼약탈자 추가 전 QA): 이 블록이 'darkSeal' id로
   // 하드코딩돼 있었다 - 암흑의 인장을 메자이의 영혼약탈자로 조합(업그레이드)한
@@ -2591,6 +2600,7 @@ function _itemCleaveOnHit(ctrl, target) {
 // 스킬로는 발동하지 않음") - 나머지 적중 시 효과는 그대로 적용된다.
 function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
   if (typeof runeOnBasicAttackHit === 'function' && !opts.fromAbility) runeOnBasicAttackHit(ctrl, target);
+  if (typeof itemExtraOnBasicAttackHit === 'function') itemExtraOnBasicAttackHit(ctrl, target, isCritical, opts); // 71차(주문 검이 아직 무장된 시점)
   // 세계지도집/룬 나침반(재물 공유 - 미니언 처형) - "일정 체력(근거리
   // 챔피언은 50%, 원거리 챔피언은 30%) 이하인 미니언을 평타로 치면 스택을
   // 하나 소모하여 골드를 같이 받는다"(원문 93~95줄). 위 itemOnDamageDealt()의

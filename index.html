@@ -599,6 +599,67 @@
   .sb-spells{ display:flex; flex-direction:column; gap:2px; flex:none; }
   .sb-spells .spell-icon-img{ position:relative; width:19px; height:19px; font-size:7px; border:1px solid var(--line); }
 
+  /* ============================================================
+     71차: 원작식 스코어보드 - 헥스테크 색(짙은 남색·금테), 위쪽 줄(팀 처치·포탑·골드 / 가운데 시간),
+     우리 팀 위·상대 팀 아래, 줄마다 초상화·소환사 주문·룬·이름·아이템·K/D/A·CS. 이전 규칙을 덮어쓴다.
+     ============================================================ */
+  #scoreboardPanel{
+    --sb-gold:#c8aa6e; --sb-gold-d:#785a28; --sb-txt:#a09b8c; --sb-hi:#f0e6d2; --sb-blue:#0ac8b9; --sb-blue2:#2d8bd8; --sb-red:#e84057;
+    width:min(1080px,100%); background:linear-gradient(180deg,#0a1428 0%,#010a13 100%); border:2px solid var(--sb-gold-d); color:var(--sb-txt);
+    box-shadow:0 0 0 1px #000, inset 0 0 0 1px rgba(200,170,110,0.15), 0 22px 70px rgba(0,0,0,0.75);
+  }
+  #scoreboardPanel .sb-top{ grid-template-columns:1fr 160px 1fr; height:54px; padding:0 20px; background:linear-gradient(180deg,#0f1d2c,#06101b); border-bottom:1px solid var(--sb-gold-d); }
+  #scoreboardPanel .sb-team-sum{ gap:18px; }
+  #scoreboardPanel .sb-sum-kills{ font-size:26px; }
+  #scoreboardPanel .sb-team-sum.blue .sb-sum-kills{ color:var(--sb-blue2); }
+  #scoreboardPanel .sb-team-sum.red .sb-sum-kills{ color:var(--sb-red); }
+  .sb-stat{ display:flex; align-items:center; gap:5px; font-family:var(--font-num); font-size:13px; color:var(--sb-hi); }
+  .sb-stat.gold{ color:#f0b232; }
+  .sb-ico{ display:inline-block; width:13px; height:13px; }
+  .sb-ico.tower{ background:var(--sb-txt); clip-path:polygon(30% 0,70% 0,70% 15%,85% 15%,85% 30%,70% 30%,80% 100%,20% 100%,30% 30%,15% 30%,15% 15%,30% 15%); }
+  .sb-ico.coin{ border-radius:50%; background:radial-gradient(circle at 35% 35%,#fff3b0,#f0b232 45%,#8a5a12); }
+  .sb-mid{ display:flex; flex-direction:column; align-items:center; line-height:1.15; }
+  #scoreboardPanel .sb-clock{ font-size:17px; color:var(--sb-hi); }
+  .sb-mode{ font-size:9.5px; letter-spacing:0.14em; color:var(--sb-gold); }
+  #scoreboardPanel .sb-team{ padding:2px 0 6px; }
+  #scoreboardPanel .sb-team + .sb-team{ border-top:1px solid var(--sb-gold-d); }
+  #scoreboardPanel .sb-head, #scoreboardPanel .sb-row{ grid-template-columns:44px 22px 22px minmax(120px,170px) 1fr 96px 52px 72px; gap:8px; padding:0 16px; }
+  #scoreboardPanel .sb-head{ height:28px; color:#5b5a56; }
+  #scoreboardPanel .sb-head .sb-team-name{ grid-column:1 / span 4; }
+  #scoreboardPanel .sb-head span:nth-child(n+3){ text-align:center; }
+  #scoreboardPanel .sb-head span:last-child{ text-align:right; }
+  #scoreboardPanel .sb-team.blue .sb-team-name{ color:var(--sb-blue2); }
+  #scoreboardPanel .sb-team.red .sb-team-name{ color:var(--sb-red); }
+  #scoreboardPanel .sb-row{ height:50px; border-top:1px solid rgba(120,90,40,0.25); box-shadow:none !important; }
+  #scoreboardPanel .sb-team.blue .sb-row{ background:linear-gradient(90deg,rgba(45,139,216,0.10),transparent 40%); }
+  #scoreboardPanel .sb-team.red .sb-row{ background:linear-gradient(90deg,rgba(232,64,87,0.10),transparent 40%); }
+  #scoreboardPanel .sb-row.me{ background:linear-gradient(90deg,rgba(200,170,110,0.22),rgba(200,170,110,0.04) 60%,transparent); box-shadow:inset 3px 0 0 var(--sb-gold) !important; }
+  #scoreboardPanel .sb-row.empty{ opacity:0.35; background:none; }
+  #scoreboardPanel .sb-portrait{ width:40px; height:40px; border:1px solid var(--sb-gold-d); background:#010a13; color:var(--sb-txt); overflow:visible; }
+  #scoreboardPanel .sb-portrait img{ width:100%; height:100%; object-fit:cover; display:block; }
+  #scoreboardPanel .sb-row.me .sb-portrait{ border-color:var(--sb-gold); }
+  #scoreboardPanel .sb-row.dead .sb-portrait img{ filter:grayscale(1) brightness(0.5); }
+  #scoreboardPanel .sb-portrait.dummy-face{ font-size:10px; color:#5b5a56; }
+  #scoreboardPanel .sb-lv{ left:-5px; right:auto; bottom:-5px; min-width:17px; height:17px; line-height:15px; border-radius:50%; border-color:var(--sb-gold-d); background:#010a13; color:var(--sb-hi); font-size:9.5px; }
+  #scoreboardPanel .sb-spells{ display:flex; flex-direction:column; gap:2px; }
+  #scoreboardPanel .sb-spells .spell-icon-img{ width:20px; height:20px; border-color:var(--sb-gold-d); }
+  .sb-runes{ display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .sb-runes img{ display:block; border-radius:50%; background:#010a13; }
+  .sb-keystone{ width:20px; height:20px; box-shadow:0 0 0 1px var(--sb-gold-d, #785a28); }
+  .sb-subtree{ width:16px; height:16px; opacity:0.85; }
+  #scoreboardPanel .sb-name b{ color:var(--sb-hi); font-size:13px; }
+  #scoreboardPanel .sb-name small{ color:#5b5a56; }
+  #scoreboardPanel .sb-item{ width:30px; height:30px; background:#010a13; border:1px solid #3c3c41; }
+  #scoreboardPanel .sb-item.trinket{ border-radius:50%; overflow:hidden; border-color:var(--sb-gold-d); }
+  #scoreboardPanel .sb-item.trinket .shop-icon{ border-radius:50%; }
+  #scoreboardPanel .sb-hpbar{ border-color:#3c3c41; background:#010a13; }
+  #scoreboardPanel .sb-team.blue .sb-hpbar div{ background:var(--sb-blue2); }
+  #scoreboardPanel .sb-team.red .sb-hpbar div{ background:var(--sb-red); }
+  #scoreboardPanel .sb-kda{ color:var(--sb-hi); letter-spacing:0.02em; }
+  #scoreboardPanel .sb-cs{ color:var(--sb-txt); }
+  #scoreboardPanel .sb-gold{ color:#f0b232; }
+  @media (max-width:900px){ #scoreboardPanel .sb-head, #scoreboardPanel .sb-row{ grid-template-columns:40px 20px 20px 100px 1fr 80px 40px 56px; gap:5px; padding:0 8px; } #scoreboardPanel .sb-item{ width:24px; height:24px; } }
+
   /* 하단 HUD 아이템 칸(원작 배치: 1·2·3 / 5·6·7 + 장신구 4 + 신발) */
   #hudItems{ display:flex; align-items:center; gap:6px; padding:0 14px; border-right:1px solid var(--line-soft); pointer-events:auto; }
   .hud-item-grid{ display:grid; grid-template-columns:repeat(3,42px); grid-template-rows:repeat(2,42px); gap:4px; }
@@ -617,7 +678,7 @@
   #hud{ left:50% !important; right:auto !important; transform:translateX(-50%); height:auto; min-height:0; padding:8px 12px 8px 8px; gap:0;
     background:linear-gradient(180deg,#1a1d22 0%,#0c0f13 100%); border:1px solid #463714; border-bottom:none;
     box-shadow:0 0 0 1px #000, inset 0 1px 0 rgba(200,170,110,0.35), 0 -6px 24px rgba(0,0,0,0.65);
-    clip-path:polygon(14px 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%,0 14px); }
+    border-radius:12px 12px 0 0; } /* 71차: 예전 clip-path(모서리 자르기)가 칸 위의 레벨 업 버튼까지 잘라 보이지도 눌리지도 않았다 */
   #hud::before{ content:''; position:absolute; left:14px; right:14px; top:0; height:2px; background:linear-gradient(90deg,transparent,#c8aa6e 20%,#f0e6d2 50%,#c8aa6e 80%,transparent); opacity:.8; pointer-events:none; }
   body.practice-tools:has(#championPanel:not(.collapsed)) #hud{ left:calc((100% - 280px) / 2) !important; }
   #hudStats{ border-right:1px solid #2b2618; }
@@ -1881,6 +1942,9 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   // 기준 증폭(itemSpellDamageAmpPercent, 위)과 반대로 "대상"이 받는 모든
   // 피해(물리/마법/고정 전부)에 적용되는 VULNERABLE 상태이상이다.
   if (typeof getVulnerablePercent === 'function') dmg *= (1 + getVulnerablePercent(target));
+  // 71차: 심연의 가면(받는 마법 피해 증가), 실체화 장비(강화 중 스킬 피해 증가)
+  if (damageType === DAMAGE_TYPE.MAGICAL && typeof getMagicVulnerablePercent === 'function') dmg *= (1 + getMagicVulnerablePercent(target));
+  if (typeof getItemExtraOutgoingAmp === 'function') dmg *= (1 + getItemExtraOutgoingAmp(ampSource, isBasicAttack));
   // 36차: 소환사 주문 탈진 - 탈진에 걸린 공격자가 입히는 모든 피해 감소(summoner_spells.js).
   if (typeof getOutgoingDamageReductionPercent === 'function') dmg *= 1 - getOutgoingDamageReductionPercent(ampSource);
   return dmg;
@@ -1990,7 +2054,7 @@ function applyDamage(target, result) {
   }
   // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만"
   // 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 그대로 넘긴다.
-  if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
+  if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isCritical: !!result.isCritical });
   else damageEnemy(target, finalDmg, result);
   return finalDmg;
 }
@@ -2308,6 +2372,7 @@ function getAttackSpeedBuffPercent(target) {
   // 적용돼, 예컨대 마스터 이 R 중에는 아이템 공속 버프가 통째로 무시됐다.
   // 같은 버프의 재적용은 applyStatus가 같은 id를 덮어쓰므로 중복 합산되지 않는다.
   for (const e of target.statusEffects) if ((e.type === 'MASTERYI_R_AS' || e.type === 'AS_BUFF') && e.expiresAt > now) v += e.value;
+  for (const e of target.statusEffects) if (e.type === 'AS_REDUCTION' && e.expiresAt > now) v -= e.value; // 71차: 얼어붙은 심장(혹한의 포옹)
   return v;
 }
 
@@ -2751,6 +2816,7 @@ function shieldAlly(source, target, amount, durationSec, { decay = false, id = n
 // 아군이 피해를 받을 때(damageEnemy가 호출) - 꿈 생성기 파란 거품(미니언이
 // 아닌 출처의 다음 피해 감소)과 보호막 흡수를 처리하고 남은 피해를 돌려준다.
 function allyAbsorbIncoming(a, dmg, result) {
+  if (typeof itemExtraAllyIncoming === 'function') dmg = itemExtraAllyIncoming(a, dmg, result); // 71차: 기사의 맹세
   let remaining = dmg;
   const now = performance.now();
   const src = result && result.source;
@@ -5705,6 +5771,218 @@ ITEM_DATA.fiendhunterBolts = {
   openingBarragePassive: { attacks: 3, durationSec: 8, attackSpeedPercent: 0.5, critDamageFactor: 0.8, onNaturalCritTruePercent: 0.15 },
 };
 
+// ============================================================
+// 71차: 원작(Data Dragon 16.20, 칼바람 나락에서 살 수 있는 것) 중 아직 없던 아이템 49종.
+// 능력치·가격·조합 경로는 Data Dragon ko_KR item.json 그대로다. 효과 수치는 같은 자료의 설명에서 가져오고,
+// 설명에 수치가 비어 있는(레벨·능력치 비례라 0으로 나오는) 것은 원작 위키 값을 쓰고 valuesGuessed: true로 표시했다
+// (item_data.js의 priceGuessed/durationGuessed와 같은 관례). 효과 처리는 src/core/item_extra_system.js가 맡는다.
+// ============================================================
+Object.assign(ITEM_DATA, {
+  // --- 칼바람 전용 시작 아이템(수호자 4종) + 소모품 ---
+  guardiansHorn: { id: 'guardiansHorn', nameKo: '수호자의 뿔피리', cost: 950, stats: { maxHp: 150 },
+    regenPassive: { hpPerTick: 20, tickSec: 5 }, // 회복: 5초마다 20
+    flatChampDamageBlock: { flat: 15, dotFactor: 0.25 } }, // 불굴의 의지: 적 챔피언 기본 공격·스킬 피해 15 감소(지속 피해 25%)
+  guardiansOrb: { id: 'guardiansOrb', nameKo: '수호자의 보주', cost: 950, stats: { abilityPower: 50, maxHp: 150 },
+    // 회복: 5초마다 마나 10, 마나를 얻을 수 없으면 체력 15 - 도란의 반지(흡수)와 같은 처리(초당 값으로 환산)
+    manaRegenPassive: { baseManaPerSec: 2, combatManaPerSec: 2, combatWindowSec: 0, noManaHpRegenPercent: 1.5 } },
+  guardiansBlade: { id: 'guardiansBlade', nameKo: '수호자의 검', cost: 950, stats: { attackDamage: 30, maxHp: 150, abilityHaste: 15 } },
+  guardiansHammer: { id: 'guardiansHammer', nameKo: '수호자의 망치', cost: 950, stats: { attackDamage: 25, maxHp: 150 }, physicalVampPercent: 0.05 },
+  cappaJuice: { id: 'cappaJuice', nameKo: '카파 주스', cost: 300, maxStack: 5, noEffectConsumable: true }, // "이 주스에는 아무 효과가 없습니다."
+
+  // --- 서사급 ---
+  oblivionOrb: { id: 'oblivionOrb', nameKo: '망각의 구', cost: 800, recipe: ['amplifyingTome'], stats: { abilityPower: 25 },
+    magicGrievousPassive: { percent: 0.40, durationSec: 3 } },
+  glacialBuckler: { id: 'glacialBuckler', nameKo: '얼음 방패', cost: 900, recipe: ['chainVest', 'sapphireCrystal', 'glowingMote'], stats: { armor: 25, mana: 300, abilityHaste: 10 } },
+  bamisCinder: { id: 'bamisCinder', nameKo: '바미의 불씨', cost: 900, recipe: ['rubyCrystal', 'glowingMote'], stats: { maxHp: 150, abilityHaste: 5 },
+    immolatePassive: { baseDps: 12, bonusHpDps: 0.01, minionMult: 1.5, radius: 325, durationSec: 3, valuesGuessed: true } },
+  wardensMail: { id: 'wardensMail', nameKo: '파수꾼의 갑옷', cost: 1000, recipe: ['chainVest', 'chainVest'], stats: { armor: 40 },
+    rockSolidPassive: { flat: 5, perThousandHp: 3.5, maxPercent: 0.40, valuesGuessed: true } },
+  quicksilverSash: { id: 'quicksilverSash', nameKo: '수은 장식띠', cost: 1300, recipe: ['negatronCloak'], stats: { magicResist: 30 },
+    cleanseActive: { nameKo: '수은', cooldownSec: 90 } },
+  lifeline: { id: 'lifeline', nameKo: '생명선', cost: 1600, recipe: ['tailFeather', 'longSword'], stats: { attackDamage: 25, moveSpeedPercent: 0.04 }, armorPenFlat: 5,
+    soulAnchorActive: { nameKo: '영혼의 닻', returnSec: 4, cooldownSec: 60, valuesGuessed: true } },
+
+  // --- 전설급 ---
+  zekesConvergence: { id: 'zekesConvergence', nameKo: '지크의 융합', cost: 2200, recipe: ['kircheisShard', 'chainVest', 'negatronCloak'],
+    stats: { maxHp: 300, armor: 25, magicResist: 25, abilityHaste: 10 },
+    frostfireStormPassive: { durationSec: 5, dps: 30, slowPercent: 0.30, radius: 350, valuesGuessed: true } },
+  ardentCenser: { id: 'ardentCenser', nameKo: '불타는 향로', cost: 2200, recipe: ['aetherialWisp', 'forbiddenIdol'],
+    stats: { abilityPower: 45, mpRegenPercent: 1.25, moveSpeedPercent: 0.04 }, healingReceivedBonusPercent: 0.10,
+    consecratePassive: { durationSec: 6, attackSpeedPercent: 0.25, onHitMagic: 20 } },
+  echoesOfHelia: { id: 'echoesOfHelia', nameKo: '헬리아의 메아리', cost: 2200, recipe: ['kircheisShard', 'bandleglassMirror'],
+    stats: { abilityPower: 35, maxHp: 200, abilityHaste: 20, mpRegenPercent: 1.25 },
+    soulSiphonPassive: { chargePercent: 0.30, maxCharge: 300, valuesGuessed: true } },
+  whisperingCirclet: { id: 'whisperingCirclet', nameKo: '속삭이는 머리띠', cost: 2250, recipe: ['forbiddenIdol', 'rubyCrystal', 'tearOfGoddess'],
+    stats: { maxHp: 200, mpRegenPercent: 0.75, mana: 300 }, healingReceivedBonusPercent: 0.08, uniqueGroup: 'manaCirculation',
+    // 마나순환(8초, 최대 5회 충전): 적중 시 최대 마나 4(챔피언 두 배), 360까지. 변신 대상(악곡의 왕관)은 칼바람 상점에 없어 변신은 생략.
+    manaCirculationPassive: { maxManaPerHit: 4, maxManaPerChampionHit: 8, maxManaCap: 360, maxCharges: 5, rechargeSec: 8 } },
+  staffOfFlowingWater: { id: 'staffOfFlowingWater', nameKo: '흐르는 물의 지팡이', cost: 2250, recipe: ['fiendishCodex', 'forbiddenIdol'],
+    stats: { abilityPower: 35, mpRegenPercent: 1.25, abilityHaste: 10 }, healingReceivedBonusPercent: 0.10,
+    rapidsPassive: { durationSec: 6, abilityPower: 40, abilityHaste: 15 } },
+  redemption: { id: 'redemption', nameKo: '구원', cost: 2300, recipe: ['fiendishCodex', 'forbiddenIdol'],
+    stats: { abilityPower: 30, abilityHaste: 15, mpRegenPercent: 1.0 }, healingReceivedBonusPercent: 0.10,
+    interventionActive: { nameKo: '중재', cooldownSec: 90, delaySec: 2.5, radius: 550, healMin: 150, healMax: 350, enemyMaxHpTruePercent: 0.10, valuesGuessed: true } },
+  knightsVow: { id: 'knightsVow', nameKo: '기사의 맹세', cost: 2300, recipe: ['kircheisShard', 'chainmailVest', 'rejuvenationBead'],
+    stats: { maxHp: 200, armor: 40, abilityHaste: 10, hpRegenPercent: 1.0 },
+    vowActive: { nameKo: '맹세', cooldownSec: 60, range: 1000, redirectPercent: 0.14, healPercentOfAllyDamage: 0.12, linkRadius: 1000, valuesGuessed: true } },
+  mikaelsBlessing: { id: 'mikaelsBlessing', nameKo: '미카엘의 축복', cost: 2300, recipe: ['kircheisShard', 'forbiddenIdol'],
+    stats: { maxHp: 250, mpRegenPercent: 1.0, abilityHaste: 15 }, healingReceivedBonusPercent: 0.12,
+    purifyActive: { nameKo: '정화', cooldownSec: 120, range: 650, healMin: 100, healMax: 250 } },
+  wintersApproach: { id: 'wintersApproach', nameKo: '혹한의 손길', cost: 2400, recipe: ['tearOfGoddess', 'giantsBelt', 'kircheisShard'],
+    stats: { maxHp: 550, mana: 500, abilityHaste: 15 }, uniqueGroup: 'manaCirculation',
+    aweBonusHpPercentOfMana: 0.15, valuesGuessed: true, // 경탄: 추가 마나의 15%만큼 체력(설명엔 0으로 나옴 - 위키 값)
+    manaCirculationPassive: { maxManaPerHit: 3, maxManaPerChampionHit: 6, maxManaCap: 360, maxCharges: 4, rechargeSec: 8 } },
+  frozenHeart: { id: 'frozenHeart', nameKo: '얼어붙은 심장', cost: 2500, recipe: ['wardensMail', 'glacialBuckler'],
+    stats: { armor: 75, mana: 400, abilityHaste: 20 },
+    rockSolidPassive: { flat: 5, perThousandHp: 3.5, maxPercent: 0.40, valuesGuessed: true },
+    wintersCaressAura: { radius: 700, attackSpeedReductionPercent: 0.20 } },
+  dawncore: { id: 'dawncore', nameKo: '새벽심장', cost: 2500, recipe: ['blastingWand', 'forbiddenIdol', 'forbiddenIdol'],
+    stats: { abilityPower: 45, mpRegenPercent: 1.0 }, healingReceivedBonusPercent: 0.16,
+    firstLightPassive: { healShieldPerFullRegen: 0.02, apPerFullRegen: 10 } },
+  serpentsFang: { id: 'serpentsFang', nameKo: '독사의 송곳니', cost: 2500, recipe: ['serratedDirk', 'pickaxe'], stats: { attackDamage: 55 }, armorPenFlat: 15,
+    shieldReaverPassive: { meleePercent: 0.50, rangedPercent: 0.35, durationSec: 3, valuesGuessed: true } },
+  protoplasmHarness: { id: 'protoplasmHarness', nameKo: '원형질 안전벨트', cost: 2600, recipe: ['kircheisShard', 'giantsBelt'],
+    stats: { maxHp: 600, abilityHaste: 20 },
+    protoLifelinePassive: { hpThresholdPercent: 0.30, icdSec: 90, durationSec: 5, bonusHpMin: 200, bonusHpMax: 450, healBase: 150, healBonusHpPercent: 0.25,
+      moveSpeedPercent: 0.10, tenacityPercent: 0.25, valuesGuessed: true } },
+  runaansHurricane: { id: 'runaansHurricane', nameKo: '루난의 허리케인', cost: 2650, recipe: ['zealSword', 'scoutsSlingshot'],
+    stats: { attackSpeedPercent: 0.40, critChance: 0.25, moveSpeedPercent: 0.05 },
+    windsFuryPassive: { bolts: 2, adPercent: 0.55, range: 600, rangedOnly: true, valuesGuessed: true } },
+  abyssalVisage: { id: 'abyssalVisage', nameKo: '심연의 가면', cost: 2650, recipe: ['kircheisShard', 'negatronMantle'],
+    stats: { maxHp: 350, magicResist: 45, abilityHaste: 15 },
+    unmakeAura: { radius: 550, magicDamageTakenPercent: 0.12 } },
+  randuinsOmen: { id: 'randuinsOmen', nameKo: '란두인의 예언', cost: 2700, recipe: ['wardensMail', 'giantsBelt'],
+    stats: { maxHp: 350, armor: 75 }, critDamageTakenReduction: 0.30,
+    humilityActive: { nameKo: '억제', cooldownSec: 90, radius: 500, slowPercent: 0.70, durationSec: 2, valuesGuessed: true } },
+  horizonFocus: { id: 'horizonFocus', nameKo: '지평선의 초점', cost: 2700, recipe: ['fiendishCodex', 'fiendishCodex', 'amplifyingTome'],
+    stats: { abilityPower: 75, abilityHaste: 25 },
+    hypershotPassive: { minDistanceLol: 600, revealSec: 6, damageAmpPercent: 0.10, valuesGuessed: true } },
+  axiomArc: { id: 'axiomArc', nameKo: '원칙의 원형낫', cost: 2750, recipe: ['feralization', 'caulfieldsWarhammer'],
+    stats: { attackDamage: 55, abilityHaste: 20 }, armorPenFlat: 18,
+    fluxPassive: { windowSec: 3, refundPercent: 0.15, valuesGuessed: true } },
+  manaRealizer: { id: 'manaRealizer', nameKo: '실체화 장비', cost: 2800, recipe: ['lostChapter', 'blastingWand'],
+    stats: { abilityPower: 90, mana: 300, abilityHaste: 10 },
+    manaRealizeActive: { nameKo: '마나 실현', cooldownSec: 60, durationSec: 8, manaCostMult: 2, damageAmpPercent: 0.15, cooldownTickBonus: 0.30, valuesGuessed: true } },
+  sunfireAegis: { id: 'sunfireAegis', nameKo: '태양불꽃 방패', cost: 2800, recipe: ['bamisCinder', 'chainmailVest', 'rubyCrystal'],
+    stats: { maxHp: 350, armor: 50, abilityHaste: 10 },
+    immolatePassive: { baseDps: 20, bonusHpDps: 0.01, minionMult: 1.5, radius: 325, durationSec: 3, valuesGuessed: true } },
+  umbralGlaive: { id: 'umbralGlaive', nameKo: '그림자 검', cost: 2800, recipe: ['serratedDirk', 'caulfieldsWarhammer'],
+    stats: { attackDamage: 60, abilityHaste: 15 }, armorPenFlat: 18,
+    nightstalkerPassive: { unseenSec: 3, trueDamage: 30, lethalityRatio: 1.0, valuesGuessed: true } },
+  spectralCutlass: { id: 'spectralCutlass', nameKo: '망령 해적검', cost: 2800, recipe: ['lifeline', 'serratedDirk'],
+    stats: { attackDamage: 50, moveSpeedPercent: 0.04 }, armorPenFlat: 15,
+    soulAnchorActive: { nameKo: '영혼의 닻', returnSec: 4, cooldownSec: 60, valuesGuessed: true } },
+  forceOfNature: { id: 'forceOfNature', nameKo: '대자연의 힘', cost: 2800, recipe: ['negatronMantle', 'rubyCrystal', 'ascendedPauldrons'],
+    stats: { maxHp: 400, magicResist: 55, moveSpeedPercent: 0.04 },
+    steadfastPassive: { stacksNeeded: 8, stackSec: 6, bonusMr: 70, bonusMsPercent: 0.06, perHitIcdSec: 0.5 } },
+  hollowRadiance: { id: 'hollowRadiance', nameKo: '공허한 광휘', cost: 2800, recipe: ['bamisCinder', 'ghostlyHood'],
+    stats: { maxHp: 400, magicResist: 40, abilityHaste: 10, hpRegenPercent: 1.0 },
+    immolatePassive: { baseDps: 20, bonusHpDps: 0.01, minionMult: 1.5, radius: 325, durationSec: 3, valuesGuessed: true },
+    desolatePassive: { base: 25, bonusHpRatio: 0.03, radius: 400, valuesGuessed: true } },
+  morellonomicon: { id: 'morellonomicon', nameKo: '모렐로노미콘', cost: 2850, recipe: ['oblivionOrb', 'blastingWand', 'kircheisShard'],
+    stats: { abilityPower: 75, maxHp: 350, abilityHaste: 15 },
+    magicGrievousPassive: { percent: 0.40, durationSec: 3 } },
+  profaneHydra: { id: 'profaneHydra', nameKo: '불경한 히드라', cost: 2850, recipe: ['tiamat', 'feralization'],
+    stats: { attackDamage: 55, abilityHaste: 10 }, armorPenFlat: 18, uniqueGroup: 'hydra',
+    extraCleavePassive: { meleePercent: 0.40, rangedPercent: 0.20, radius: 250 },
+    activeAbility: { nameKo: '이단의 가르기', cooldownSec: 10, percentAD: 0.80, radius: 450, executeBelowHpPercent: 0.5, executeBonusPercent: 0.5, valuesGuessed: true } },
+  kaenicRookern: { id: 'kaenicRookern', nameKo: '케이닉 루컨', cost: 2900, recipe: ['ghostlyHood', 'negatronMantle'],
+    stats: { maxHp: 400, magicResist: 80, hpRegenPercent: 1.0 },
+    magebanePassive: { outOfMagicSec: 15, maxHpPercent: 0.18 } },
+  atmasReckoning: { id: 'atmasReckoning', nameKo: '아트마의 심판', cost: 2900, recipe: ['giantsBelt', 'cloakOfAgility', 'giantsBelt'],
+    stats: { maxHp: 700, critChance: 0.20, abilityHaste: 10 },
+    bigHandsPassive: { critPerBonusHp: 0.0001, maxCrit: 0.30, valuesGuessed: true } },
+  deadMansPlate: { id: 'deadMansPlate', nameKo: '망자의 갑옷', cost: 2900, recipe: ['ascendedPauldrons', 'rubyCrystal', 'chainmailVest'],
+    stats: { maxHp: 350, armor: 55, moveSpeedPercent: 0.04 }, slowResistPercent: 0.15,
+    shipwreckerPassive: { maxMsFlat: 20, buildSec: 3, bonusDamage: 40, baseAdPercent: 1.0, valuesGuessed: true } },
+  frozenGauntlet: { id: 'frozenGauntlet', nameKo: '얼어붙은 건틀릿', cost: 2900, recipe: ['sheen', 'rubyCrystal', 'chainmailVest'],
+    stats: { maxHp: 300, armor: 50, abilityHaste: 15 },
+    spellbladePassive: { procCooldownSec: 1.5, bonusAdPercent: 1.0 },
+    frostFieldOnSpellblade: { durationSec: 2, radius: 300, slowPercent: 0.25, valuesGuessed: true } },
+  bloodlettersCurse: { id: 'bloodlettersCurse', nameKo: '핏빛 저주', cost: 2900, recipe: ['hauntingGuise', 'fiendishCodex'],
+    stats: { abilityPower: 65, maxHp: 400, abilityHaste: 15 },
+    decayingRotPassive: { mrPercentPerStack: 0.075, maxStacks: 4, durationSec: 6 } },
+  experimentalHexplate: { id: 'experimentalHexplate', nameKo: '실험적 마공학판', cost: 3000, recipe: ['tunnelers', 'dagger', 'devourerAxe'],
+    stats: { attackDamage: 40, attackSpeedPercent: 0.20, maxHp: 450 }, ultimateHasteFlat: 30,
+    overdrivePassive: { durationSec: 8, attackSpeedPercent: 0.30, moveSpeedPercent: 0.15, cooldownSec: 30, valuesGuessed: true } },
+  statikkShiv: { id: 'statikkShiv', nameKo: '스태틱의 단검', cost: 3000, recipe: ['scoutsSlingshot', 'aetherialWisp', 'pickaxe'],
+    stats: { attackDamage: 45, abilityPower: 45, attackSpeedPercent: 0.30, moveSpeedPercent: 0.04 },
+    electrosparkPassive: { chargeTimeSec: 2.0, attackChargeSec: 0.4, damage: 60, apRatio: 0.30, bounces: 5, radius: 500, minionMult: 2.0, valuesGuessed: true } },
+  cryptbloom: { id: 'cryptbloom', nameKo: '무덤꽃', cost: 3000, recipe: ['plagueGem', 'fiendishCodex', 'fiendishCodex'],
+    stats: { abilityPower: 75, abilityHaste: 20 }, magicPenPercent: 0.30,
+    lifeFromDeathPassive: { windowSec: 3, healBase: 100, healApRatio: 0.40, radius: 800, valuesGuessed: true } },
+  edgeOfNight: { id: 'edgeOfNight', nameKo: '밤의 끝자락', cost: 3000, recipe: ['serratedDirk', 'tunnelers'],
+    stats: { attackDamage: 50, maxHp: 250 }, armorPenFlat: 15,
+    nullifyPassive: { icdSec: 40 } },
+  chempunkChainsword: { id: 'chempunkChainsword', nameKo: '화공 펑크 사슬검', cost: 3000, recipe: ['executionersCalling', 'giantsBelt', 'caulfieldsWarhammer'],
+    stats: { attackDamage: 45, maxHp: 450, abilityHaste: 15 },
+    grievousOnHitPassive: { percent: 0.40, durationSec: 3.0 } },
+  mercurialScimitar: { id: 'mercurialScimitar', nameKo: '헤르메스의 시미터', cost: 3200, recipe: ['quicksilverSash', 'pickaxe', 'vampiricScepter'],
+    stats: { attackDamage: 50, magicResist: 35 }, physicalVampPercent: 0.10,
+    cleanseActive: { nameKo: '수은', cooldownSec: 90, moveSpeedPercent: 0.50, moveSpeedSec: 1 } },
+  ravenousHydra: { id: 'ravenousHydra', nameKo: '굶주린 히드라', cost: 3300, recipe: ['tiamat', 'vampiricScepter', 'caulfieldsWarhammer'],
+    stats: { attackDamage: 65, abilityHaste: 15 }, physicalVampPercent: 0.12, uniqueGroup: 'hydra',
+    extraCleavePassive: { meleePercent: 0.40, rangedPercent: 0.20, radius: 250 },
+    activeAbility: { nameKo: '굶주린 초승달', cooldownSec: 10, percentAD: 0.80, radius: 450, lifestealApplies: true, valuesGuessed: true } },
+});
+const ITEM_EXTRA_71_IDS = {
+  starter: ['guardiansHorn', 'guardiansOrb', 'guardiansBlade', 'guardiansHammer'],
+  consumable: ['cappaJuice'],
+  epic: ['oblivionOrb', 'glacialBuckler', 'bamisCinder', 'wardensMail', 'quicksilverSash', 'lifeline'],
+  legendary: ['zekesConvergence', 'ardentCenser', 'echoesOfHelia', 'whisperingCirclet', 'staffOfFlowingWater', 'redemption', 'knightsVow', 'mikaelsBlessing',
+    'wintersApproach', 'frozenHeart', 'dawncore', 'serpentsFang', 'protoplasmHarness', 'runaansHurricane', 'abyssalVisage', 'randuinsOmen', 'horizonFocus',
+    'axiomArc', 'manaRealizer', 'sunfireAegis', 'umbralGlaive', 'spectralCutlass', 'forceOfNature', 'hollowRadiance', 'morellonomicon', 'profaneHydra',
+    'kaenicRookern', 'atmasReckoning', 'deadMansPlate', 'frozenGauntlet', 'bloodlettersCurse', 'experimentalHexplate', 'statikkShiv', 'cryptbloom',
+    'edgeOfNight', 'chempunkChainsword', 'mercurialScimitar', 'ravenousHydra'],
+};
+
+// 71차 상점 설명(효과 줄) - Data Dragon 설명을 줄여 옮기고, 비어 있던 수치는 위 데이터 값으로 채웠다.
+const ITEM_EXTRA_71_DESC = {
+  guardiansHorn: ['불굴의 의지: 적 챔피언의 기본 공격·스킬 피해 15 감소(지속 피해는 25%)'],
+  cappaJuice: ['사용 시: 이 주스에는 아무 효과가 없습니다'],
+  oblivionOrb: ['고통스러운 상처: 챔피언에게 마법 피해 시 3초 동안 40% 상처'],
+  bamisCinder: ['불사르기: 피해를 받거나 입히면 3초 동안 주변 적에게 매초 마법 피해(12 + 추가 체력 1%)'],
+  wardensMail: ['견고: 기본 공격으로 받는 피해 5 + 최대 체력 1000당 3.5 감소(최대 40%)'],
+  quicksilverSash: ['사용 시 "수은": 모든 군중 제어 제거(공중에 뜸 제외) - 재사용 대기시간 90초'],
+  lifeline: ['사용 시 "영혼의 닻": 표식을 남기고 4초 뒤 돌아옴(다시 사용하면 바로 돌아옴)'],
+  zekesConvergence: ['서리불꽃 폭풍: 궁극기 사용 시 5초 동안 주변 적 챔피언에게 매초 30 마법 피해 + 30% 둔화'],
+  ardentCenser: ['축성: 아군을 회복·보호하면 6초 동안 자신의 공격 속도 25% + 적중 시 20 마법 피해'],
+  echoesOfHelia: ['영혼 흡수: 챔피언 피해의 30%를 영혼 충전으로 모음(최대 300)', '아군을 회복·보호하면 충전을 모두 써서 그 아군 회복'],
+  staffOfFlowingWater: ['급류: 아군을 회복·보호하면 6초 동안 주문력 40 · 스킬 가속 15'],
+  redemption: ['사용 시 "중재": 마우스 위치에 2.5초 뒤 아군 체력 150~350 회복 + 적 챔피언 최대 체력 10% 고정 피해 - 90초'],
+  knightsVow: ['사용 시 "맹세": 가까운 아군을 보호 대상으로 지정', '희생: 보호 대상이 받는 피해의 14%를 대신 받음'],
+  mikaelsBlessing: ['사용 시 "정화": 가까운 아군의 군중 제어 제거 + 체력 100~250 회복 - 120초'],
+  wintersApproach: ['경탄: 아이템 마나의 15%만큼 체력'],
+  frozenHeart: ['견고: 기본 공격으로 받는 피해 감소', '혹한의 포옹: 주변 챔피언의 공격 속도 20% 감소'],
+  dawncore: ['태초의 빛: 기본 마나 재생 100%마다 체력 회복·보호막 2%, 주문력 10'],
+  serpentsFang: ['보호막 파괴자: 적 챔피언에게 피해를 입히면 대상 보호막 근접 50%｜원거리 35% 감소'],
+  protoplasmHarness: ['생명선: 체력이 30% 아래로 떨어지면 5초 동안 최대 체력 200~450 + 체력 회복 + 이동 속도 10% + 강인함 25% - 90초'],
+  runaansHurricane: ['바람의 분노(원거리): 기본 공격 시 대상 근처 적 2명에게 탄환(공격력 55% 물리 피해)'],
+  abyssalVisage: ['파괴: 주변 적 챔피언이 받는 마법 피해 12% 증가'],
+  randuinsOmen: ['저항: 치명타로 받는 피해 30% 감소', '견고: 기본 공격으로 받는 피해 감소', '사용 시 "억제": 주변 적 2초 동안 70% 둔화 - 90초'],
+  horizonFocus: ['초강력 사격: 600 이상 거리에서 스킬로 챔피언에게 피해를 입히면 위치를 드러냄'],
+  axiomArc: ['전이 표식: 피해를 입힌 챔피언이 3초 안에 죽으면 궁극기 전체 재사용 대기시간의 15% 반환'],
+  manaRealizer: ['사용 시 "마나 실현": 8초 동안 스킬 마나 소모 2배, 스킬 피해 15% 증가, 기본 스킬 재사용 대기시간 30% 빨리 흐름 - 60초'],
+  sunfireAegis: ['불사르기: 피해를 받거나 입히면 3초 동안 주변 적에게 매초 마법 피해(20 + 추가 체력 1%)'],
+  umbralGlaive: ['밤의 추적자: 3초 동안 전투하지 않았으면 챔피언 대상 다음 기본 공격에 30 + 물리 관통력 고정 피해'],
+  spectralCutlass: ['사용 시 "영혼의 닻": 표식을 남기고 4초 뒤 돌아옴(다시 사용하면 바로 돌아옴)'],
+  forceOfNature: ['굳건함: 챔피언에게 마법 피해를 8회 받으면 6초 동안 마법 저항력 70 + 이동 속도 6%'],
+  hollowRadiance: ['불사르기: 피해를 받거나 입히면 3초 동안 주변 적에게 매초 마법 피해', '황폐: 미니언을 처치하면 주변에 25 + 추가 체력 3% 마법 피해'],
+  morellonomicon: ['고통스러운 상처: 챔피언에게 마법 피해 시 3초 동안 40% 상처'],
+  profaneHydra: ['쪼개기: 기본 공격 시 주변 적에게 근접 40%｜원거리 20% 물리 피해'],
+  kaenicRookern: ['마법사의 파멸: 15초 동안 마법 피해를 받지 않으면 최대 체력 18% 마법 보호막'],
+  atmasReckoning: ['큰손: 추가 체력 100마다 치명타 확률 1%(최대 30%)'],
+  deadMansPlate: ['침몰시키는 자: 이동하면 최대 20의 추가 이동 속도, 다음 기본 공격에 40 + 기본 공격력 100% 물리 피해(탄력 비례)', '굴하지 않는 자: 둔화 15% 감소'],
+  frozenGauntlet: ['서리 영역: 주문 검이 발동하면 2초 동안 대상 주변 25% 둔화'],
+  bloodlettersCurse: ['썩은 부식: 챔피언에게 스킬·지속 마법 피해 시 6초 동안 마법 저항력 7.5% 감소(4회 중첩)'],
+  experimentalHexplate: ['폭주: 궁극기 사용 후 8초 동안 공격 속도 30% · 이동 속도 15% - 30초'],
+  statikkShiv: ['전기불꽃: 충전 상태 공격 시 연쇄 번개(대상 + 주변 적 최대 4명, 60 + 주문력 30% 마법 피해, 미니언 2배)', '전기충격: 기본 공격마다 충전이 더 빨리 참'],
+  cryptbloom: ['죽음에서 피어난 생명: 챔피언 처치 관여 시 자신과 주변 아군 100 + 주문력 40% 회복'],
+  mercurialScimitar: ['사용 시 "수은": 모든 군중 제어 제거(공중에 뜸 제외) + 1초 동안 이동 속도 50% - 90초'],
+  ravenousHydra: ['쪼개기: 기본 공격 시 주변 적에게 근접 40%｜원거리 20% 물리 피해'],
+};
+for (const [id, lines] of Object.entries(ITEM_EXTRA_71_DESC)) if (ITEM_DATA[id]) ITEM_DATA[id].descKo = lines;
+
 const ITEM_ORDER = [
   'doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm',
   'cull', 'darkSeal', 'tearOfGoddess', 'healthPotion', 'refillablePotion', 'stealthWard',
@@ -5731,6 +6009,7 @@ const ITEM_ORDER = [
   'worldAtlas', 'runesteelSpaulders', 'bountyOfWorlds', 'zaZaksRealmspike', 'bloodsong', 'solsticeSleigh', 'dreamMaker', 'celestialOpposition',
   'bandleglassMirror', 'forbiddenIdol', 'shurelyasBattlesong', 'moonstoneRenewer', 'ironSolariLocket', 'bandlePipe', 'imperialMandate',
   'brambleVest', 'thornmail', 'fiendhunterBolts', // 40차
+  ...Object.values(ITEM_EXTRA_71_IDS).flat(), // 71차
 ];
 // 상점 UI 카테고리 - 탭으로 묶어서 보여줄 때 쓴다(global_system_instances.js).
 const ITEM_CATEGORIES = [
@@ -5753,6 +6032,8 @@ const ITEM_CATEGORIES = [
   // "세계의 결실 업그레이드" 줄에 나온다(shop_ui.js).
   { id: 'support', nameKo: '서포터', items: ['worldAtlas'] },
 ];
+// 71차: 새 아이템을 각 분류 끝에 붙인다.
+for (const c of ITEM_CATEGORIES) if (ITEM_EXTRA_71_IDS[c.id]) c.items.push(...ITEM_EXTRA_71_IDS[c.id]);
 // 37차: 전설급 아이템 - 원작처럼 같은 전설급 아이템은 하나만 가질 수 있다(item_system.js의 _itemLegendaryDuplicate).
 // 상점 전설급 탭 전부 + 변신으로만 얻는 전설급(무라마나·대천사의포옹) + 서포터 업그레이드 5종.
 const LEGENDARY_ITEM_IDS = new Set([
@@ -30578,6 +30859,7 @@ function recomputeItemStats(ctrl) {
   };
   for (const slot of (ctrl.items || [])) applyOne(ITEM_DATA[slot.id]);
   if (ctrl.boots) applyOne(ITEM_DATA[ctrl.boots.id]);
+  if (typeof itemExtraAfterStats === 'function') itemExtraAfterStats(ctrl); // 71차: 새 아이템(경탄·태초의 빛·큰손) + 시간 버프
   // 약간 신비한 신발에서 넘어온 이동속도 보너스(carryoverMoveSpeedOnUpgrade) -
   // 신발을 "신고 있을 때만" 적용된다(둘 다 벗으면 당연히 0, _buyBoots()에서
   // 영구 플래그로 못박아뒀으므로 지금 신은 신발 종류와 무관하게 계속 더해진다).
@@ -30881,6 +31163,7 @@ function useItem(ctrl, slotIndex, opts = {}) {
   if (!item) return false;
   // 활성 사용 아이템(티아맷의 "초승달" 등) - 중첩/충전 소모가 없는 대신
   // 아이템 자체 쿨다운이 있다. 소비 아이템과 분기를 분리한다.
+  if (typeof itemExtraUse === 'function') { const r = itemExtraUse(ctrl, slotIndex, item, opts); if (r !== undefined) return r; } // 71차
   if (item.activeAbility) return _useActiveAbilityItem(ctrl, item);
   // 거대한히드라(거대한 초승달) - 즉시 피해가 아니라 "다음 쪼개기 한 번"을
   // 강화하는 무장형 액티브.
@@ -31248,6 +31531,7 @@ function itemSystemTick(ctrl, dt) {
   _itemTickTrinketRecharge(ctrl, dt);
   _itemTickWardExpiry(ctrl, dt);
   if (typeof _itemTickElixirExpiry === 'function') _itemTickElixirExpiry(ctrl);
+  if (typeof itemExtraTick === 'function') itemExtraTick(ctrl, dt); // 71차
   const now = performance.now();
   // 아이템을 팔아도(인벤토리에서 이미 사라짐) 이미 걸린 보호막/흡혈
   // 버프는 실제 LoL처럼 원래 지속시간만큼 유지되므로, 인벤토리 유무와
@@ -31796,6 +32080,7 @@ function _itemThornsOnStruck(ctrl, source, meta) {
 }
 // 40차: 악마사냥꾼의 화살(폭격 개시) - 궁극기를 쓰면(controller_casting.js _dispatchCast가 부름) 8초 동안 다음 3회 평타 강화.
 function itemOnUltimateCast(ctrl) {
+  if (typeof itemExtraOnUltimateCast === 'function') itemExtraOnUltimateCast(ctrl); // 71차: 지크의 융합·실험적 마공학판
   const slot = (ctrl.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].openingBarragePassive);
   if (!slot) return;
   const p = ITEM_DATA[slot.id].openingBarragePassive;
@@ -31815,6 +32100,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
   if (!ctrl) return incomingDamage;
   let remaining = incomingDamage;
   if (typeof runeOnTakeDamage === 'function') remaining = runeOnTakeDamage(ctrl, remaining, damageType, source, meta); // 52차: 뼈 방패 등
+  if (typeof itemExtraOnTakeDamage === 'function') remaining = itemExtraOnTakeDamage(ctrl, remaining, damageType, source, meta); // 71차
   const now = performance.now();
   _itemThornsOnStruck(ctrl, source, meta);
 
@@ -31995,6 +32281,7 @@ function _itemIsAbilityDamage(meta) {
 
 function itemOnDamageDealt(ctrl, target, finalDmg, damageType, meta = null) {
   if (typeof runeOnDamageDealt === 'function') runeOnDamageDealt(ctrl, target, finalDmg, damageType, meta);
+  if (typeof itemExtraOnDamageDealt === 'function') itemExtraOnDamageDealt(ctrl, target, finalDmg, damageType, meta); // 71차
   const isAbility = _itemIsAbilityDamage(meta);
   // 처형인의 대검 - 챔피언 대상 물리 피해에 그리버스(고통스러운 상처)를 건다.
   if (target.isChampion && damageType === DAMAGE_TYPE.PHYSICAL && ctrl.itemGrievousOnHitPercent > 0 && typeof applyStatus === 'function') {
@@ -32455,6 +32742,7 @@ function itemOnMinionKillByPlayer(ctrl) {
 // 이 훅을 타지 않는다 - 스킬 가속(abilityHasteCooldown)과 동일한 한계.
 function itemOnManaSpent(ctrl, manaSpent) {
   if (!ctrl || !manaSpent || manaSpent <= 0) return;
+  if (typeof itemExtraOnManaSpent === 'function') itemExtraOnManaSpent(ctrl, manaSpent); // 71차: 실체화 장비
   // 버그 수정(QA) - 'catalystOfAeons' id로 하드코딩돼 있었다. 영겁의지팡이가
   // 억겁의 카탈리스트와 완전히 동일한 "영원" 패시브(manaSpentToHealPercent)를
   // 갖게 되면서, 암흑의 인장(영광)/마나무네(마나순환) 때와 동일한 하드코딩
@@ -32564,6 +32852,7 @@ function itemOnSlowOrImmobilize(ctrl, target, effectType) {
 // (source가 자기 자신이 아닌 아군 챔피언 target을 회복/보호막했을 때).
 function itemOnAllyHealOrShield(source, target, kind, amount, opts = {}) {
   if (!source || !target || target === source || !target.isChampion || !(amount > 0)) return;
+  if (typeof itemExtraOnAllyHealOrShield === 'function') itemExtraOnAllyHealOrShield(source, target, kind, amount); // 71차
   const now = performance.now();
   // 꿈 생성기 - 들고 있던 파란/보라 거품을 3초 동안 그 아군에게 넘긴다.
   const dreamSlot = (source.items || []).find((s) => ITEM_DATA[s.id] && ITEM_DATA[s.id].dreamBubblePassive);
@@ -32594,6 +32883,7 @@ function itemOnAllyHealOrShield(source, target, kind, amount, opts = {}) {
 function itemOnChampionTakedown(ctrl) {
   if (!ctrl) return;
   if (typeof runeOnTakedown === 'function') runeOnTakedown(ctrl);
+  if (typeof itemExtraOnTakedown === 'function') itemExtraOnTakedown(ctrl); // 71차
   let changed = false;
   // 버그 수정(메자이의 영혼약탈자 추가 전 QA): 이 블록이 'darkSeal' id로
   // 하드코딩돼 있었다 - 암흑의 인장을 메자이의 영혼약탈자로 조합(업그레이드)한
@@ -33008,6 +33298,7 @@ function _itemCleaveOnHit(ctrl, target) {
 // 스킬로는 발동하지 않음") - 나머지 적중 시 효과는 그대로 적용된다.
 function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
   if (typeof runeOnBasicAttackHit === 'function' && !opts.fromAbility) runeOnBasicAttackHit(ctrl, target);
+  if (typeof itemExtraOnBasicAttackHit === 'function') itemExtraOnBasicAttackHit(ctrl, target, isCritical, opts); // 71차(주문 검이 아직 무장된 시점)
   // 세계지도집/룬 나침반(재물 공유 - 미니언 처형) - "일정 체력(근거리
   // 챔피언은 50%, 원거리 챔피언은 30%) 이하인 미니언을 평타로 치면 스택을
   // 하나 소모하여 골드를 같이 받는다"(원문 93~95줄). 위 itemOnDamageDealt()의
@@ -33511,6 +33802,522 @@ function _itemMuramanaShockOnHit(ctrl, target, isBasicAttack) {
   }
 }
 
+/* ===== src/core/item_extra_system.js ===== */
+/* ============================================================
+   71차: 새 아이템 49종의 효과(item_data.js의 "71차" 묶음)
+   ------------------------------------------------------------
+   item_system.js의 훅(능력치 합산·매 프레임·피해 줌/받음·기본 공격 적중·궁극기·아군 회복·처치·사용)에서
+   한 줄씩 이 파일의 함수를 부른다. 기존 아이템과 같은 필드(regenPassive·spellbladePassive·activeAbility·
+   nullifyPassive·grievousOnHitPassive·manaCirculationPassive 등)를 쓰는 효과는 기존 처리 그대로 돌고,
+   여기서는 새 필드만 처리한다.
+   - 시간 버프는 상태이상(AS_BUFF·MS_BUFF·TENACITY 등)으로 걸거나, 상태이상 종류가 없는 능력치
+     (주문력·스킬 가속·마법 저항력·최대 체력)는 ctrl._itemExtraBuffs에 두고 능력치 합산 때 더한다.
+   - 아이템 효과 피해는 isItemEffect로 넣는다(그 피해가 다시 불사르기 등을 켜지 않게 한다). 구조물은 뺀다.
+   ============================================================ */
+const ITEM_EXTRA_CC_TYPES = ['STUN', 'ROOT', 'SLOW', 'SILENCE', 'CHARM', 'FEAR', 'TAUNT', 'SUPPRESSION'];
+
+function _ixSlots(ctrl, field) {
+  const out = [];
+  for (const s of (ctrl && ctrl.items) || []) { const it = ITEM_DATA[s.id]; if (it && it[field]) out.push(it); }
+  return out;
+}
+function _ixFirst(ctrl, field) { const l = _ixSlots(ctrl, field); return l.length ? l[0] : null; }
+function _ixNow() { return performance.now(); }
+function _ixPos(u) { return u && u.root ? u.root.position : (typeof getWorldPosition === 'function' ? getWorldPosition(u) : null); }
+function _ixIsEnemyChampionSource(ctrl, src) { return !!src && src !== ctrl && (typeof src.championId === 'string' || !!src.isChampion) && !src.isAlly; }
+function _ixEnemiesNear(pos, lolRadius, { championsOnly = false, exclude = null } = {}) {
+  if (!pos || typeof findEnemiesInRadius !== 'function') return [];
+  return findEnemiesInRadius(pos, lolRadius).map((h) => h.unit)
+    .filter((u) => u && u.hp > 0 && u !== exclude && !_itemIsStructure(u) && (!championsOnly || u.isChampion));
+}
+function _ixDamage(ctrl, unit, raw, type, extra = {}) {
+  if (!(raw > 0) || !unit || unit.hp <= 0) return;
+  applyDamage(unit, { rawDamage: raw, damageType: type, isCritical: false, critMultiplier: 1, source: ctrl, isItemEffect: true, isAbility: false, ...extra });
+}
+function _ixBonusHp(ctrl) { return (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0); }
+function _ixHealSelf(ctrl, amount) {
+  if (!(amount > 0) || !(ctrl.hp > 0)) return;
+  const mult = typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(ctrl) : 1;
+  ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + amount * mult);
+}
+function _ixBuff(ctrl, key, durationSec, stats) {
+  ctrl._itemExtraBuffs = ctrl._itemExtraBuffs || {};
+  ctrl._itemExtraBuffs[key] = { until: _ixNow() + durationSec * 1000, stats };
+  recomputeItemStats(ctrl);
+}
+function _ixCooldownReady(ctrl, item, sec) {
+  ctrl._itemActiveCooldownUntil = ctrl._itemActiveCooldownUntil || {};
+  const now = _ixNow(), readyAt = ctrl._itemActiveCooldownUntil[item.id] || 0;
+  if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
+  ctrl._itemActiveCooldownUntil[item.id] = now + sec * 1000;
+  return true;
+}
+function _ixRemoveCc(unit, keepKnockup = true) {
+  if (!unit || !Array.isArray(unit.statusEffects)) return 0;
+  const before = unit.statusEffects.length;
+  unit.statusEffects = unit.statusEffects.filter((e) => !(ITEM_EXTRA_CC_TYPES.includes(e.type) || (!keepKnockup && e.type === 'KNOCKUP')));
+  return before - unit.statusEffects.length;
+}
+function _ixToast(msg) { if (typeof showSkillToast === 'function') showSkillToast(msg); }
+
+// ---------- 능력치 합산(recomputeItemStats의 applyOne 루프 뒤) ----------
+function itemExtraAfterStats(ctrl) {
+  const items = ((ctrl && ctrl.items) || []).map((s) => ITEM_DATA[s.id]).filter(Boolean);
+  for (const it of items) {
+    // 혹한의 손길(경탄): 아이템 마나의 15%만큼 체력.
+    if (it.aweBonusHpPercentOfMana) ctrl.itemBonusMaxHp += (ctrl.itemBonusMana || 0) * it.aweBonusHpPercentOfMana;
+    // 새벽심장(태초의 빛): 기본 마나 재생 100%마다 체력 회복·보호막 2%, 주문력 10.
+    if (it.firstLightPassive) {
+      const units = Math.max(0, ctrl.itemBonusMpRegenPercent || 0);
+      ctrl.itemBonusAP += units * it.firstLightPassive.apPerFullRegen;
+      ctrl.itemHealingReceivedBonusPercent += units * it.firstLightPassive.healShieldPerFullRegen;
+      ctrl.itemShieldReceivedBonusPercent += units * it.firstLightPassive.healShieldPerFullRegen;
+    }
+    // 아트마의 심판(큰손): 추가 체력에 비례해 치명타 확률(최대 30%).
+    if (it.bigHandsPassive) ctrl.itemBonusCritChance += Math.min(it.bigHandsPassive.maxCrit, _ixBonusHp(ctrl) * it.bigHandsPassive.critPerBonusHp);
+  }
+  const now = _ixNow();
+  for (const [k, b] of Object.entries(ctrl._itemExtraBuffs || {})) {
+    if (b.until <= now) continue;
+    const s = b.stats || {};
+    ctrl.itemBonusAP += s.abilityPower || 0;
+    ctrl.itemBonusAbilityHaste += s.abilityHaste || 0;
+    ctrl.itemBonusMr += s.magicResist || 0;
+    ctrl.itemBonusMaxHp += s.maxHp || 0;
+    ctrl.itemBonusMoveSpeedPercent += s.moveSpeedPercent || 0;
+    void k;
+  }
+}
+
+// ---------- 사용 아이템 ----------
+function itemExtraIsUsable(item) {
+  return !!(item && (item.cleanseActive || item.soulAnchorActive || item.interventionActive || item.vowActive || item.purifyActive
+    || item.humilityActive || item.manaRealizeActive || item.noEffectConsumable));
+}
+// 처리했으면 true/false, 이 파일 담당이 아니면 undefined.
+function itemExtraUse(ctrl, slotIndex, item) {
+  const now = _ixNow();
+  if (item.noEffectConsumable) { // 카파 주스
+    const slot = ctrl.items[slotIndex];
+    slot.count = (slot.count || 1) - 1;
+    if (slot.count <= 0) ctrl.items.splice(slotIndex, 1);
+    _ixToast(`${item.nameKo}: 아무 효과가 없습니다.`);
+    if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+    return true;
+  }
+  if (item.soulAnchorActive) { // 생명선 / 망령 해적검 - 영혼의 닻(다시 쓰면 바로 돌아감)
+    const a = ctrl._itemSoulAnchor;
+    if (a && a.returnAt > now) { _ixAnchorReturn(ctrl); return true; }
+    if (!_ixCooldownReady(ctrl, item, item.soulAnchorActive.cooldownSec)) return false;
+    ctrl._itemSoulAnchor = { pos: ctrl.root.position.clone(), returnAt: now + item.soulAnchorActive.returnSec * 1000 };
+    _ixToast(`${item.soulAnchorActive.nameKo}: ${item.soulAnchorActive.returnSec}초 뒤 이 자리로 돌아옵니다`);
+    return true;
+  }
+  if (item.cleanseActive) { // 수은 장식띠 / 헤르메스의 시미터
+    const p = item.cleanseActive;
+    if (!_ixCooldownReady(ctrl, item, p.cooldownSec)) return false;
+    const n = _ixRemoveCc(ctrl);
+    if (p.moveSpeedPercent) applyStatus(ctrl, { id: 'itemMercurialMs', type: 'MS_BUFF', duration: p.moveSpeedSec, value: p.moveSpeedPercent, decayLinear: true });
+    _ixToast(`${p.nameKo}: 군중 제어 ${n}개 제거`);
+    return true;
+  }
+  if (item.humilityActive) { // 란두인의 예언 - 억제
+    const p = item.humilityActive;
+    if (!_ixCooldownReady(ctrl, item, p.cooldownSec)) return false;
+    for (const u of _ixEnemiesNear(ctrl.root.position, p.radius)) applyStatus(u, { id: 'itemRanduinSlow', type: 'SLOW', duration: p.durationSec, value: p.slowPercent, source: ctrl });
+    return true;
+  }
+  if (item.purifyActive) { // 미카엘의 축복 - 가장 가까운 아군 정화 + 회복
+    const p = item.purifyActive;
+    const ally = typeof findAlliesInRadius === 'function' ? findAlliesInRadius(ctrl.root.position, p.range, { exclude: [ctrl] })[0] : null;
+    if (!ally) { itemWarn('주변에 대상 아군이 없습니다.'); return false; }
+    if (!_ixCooldownReady(ctrl, item, p.cooldownSec)) return false;
+    _ixRemoveCc(ally.unit);
+    healAlly(ctrl, ally.unit, _itemScaleByLevel(ctrl, p.healMin, p.healMax, 1, 18));
+    return true;
+  }
+  if (item.vowActive) { // 기사의 맹세 - 가장 가까운 아군을 보호 대상으로
+    const p = item.vowActive;
+    const ally = typeof findAlliesInRadius === 'function' ? findAlliesInRadius(ctrl.root.position, p.range, { exclude: [ctrl] })[0] : null;
+    if (!ally) { itemWarn('주변에 대상 아군이 없습니다.'); return false; }
+    if (!_ixCooldownReady(ctrl, item, p.cooldownSec)) return false;
+    ctrl._itemVowAlly = ally.unit;
+    _ixToast(`${p.nameKo}: 아군을 보호합니다`);
+    return true;
+  }
+  if (item.interventionActive) { // 구원 - 마우스 위치(없으면 제자리)에 2.5초 뒤 회복 + 적 챔피언 고정 피해
+    const p = item.interventionActive;
+    if (!_ixCooldownReady(ctrl, item, p.cooldownSec)) return false;
+    const pos = (typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : ctrl.root.position.clone();
+    ctrl._itemRedemption = { at: now + p.delaySec * 1000, pos, p };
+    if (typeof spawnRangeRingAt === 'function') spawnRangeRingAt(pos, p.radius, p.delaySec);
+    return true;
+  }
+  if (item.manaRealizeActive) { // 실체화 장비 - 마나 실현
+    const p = item.manaRealizeActive;
+    if (!_ixCooldownReady(ctrl, item, p.cooldownSec)) return false;
+    ctrl._itemManaRealizeUntil = now + p.durationSec * 1000;
+    _ixToast(`${p.nameKo}: ${p.durationSec}초 동안 스킬 강화`);
+    return true;
+  }
+  return undefined;
+}
+function _ixAnchorReturn(ctrl) {
+  const a = ctrl._itemSoulAnchor;
+  if (!a) return;
+  ctrl._itemSoulAnchor = null;
+  if (!(ctrl.hp > 0)) return;
+  ctrl.root.position.x = a.pos.x; ctrl.root.position.z = a.pos.z;
+  ctrl.targetPos = null;
+  if (typeof ctrl.setState === 'function' && ctrl.state === 'MOVE') ctrl.setState('IDLE');
+}
+
+// ---------- 매 프레임 ----------
+function itemExtraTick(ctrl, dt) {
+  if (!ctrl) return;
+  const now = _ixNow();
+  // 끝난 시간 버프 정리
+  const buffs = ctrl._itemExtraBuffs;
+  if (buffs) {
+    let changed = false;
+    for (const k of Object.keys(buffs)) if (buffs[k].until <= now) { delete buffs[k]; changed = true; }
+    if (changed) recomputeItemStats(ctrl);
+  }
+  if (ctrl._itemSoulAnchor && ctrl._itemSoulAnchor.returnAt <= now) _ixAnchorReturn(ctrl);
+  // 구원 착지
+  const red = ctrl._itemRedemption;
+  if (red && red.at <= now) {
+    ctrl._itemRedemption = null;
+    const heal = _itemScaleByLevel(ctrl, red.p.healMin, red.p.healMax, 1, 18);
+    const rWorld = lolRangeToWorld(red.p.radius);
+    if (getHorizontalDistance(ctrl.root.position, red.pos) <= rWorld) _ixHealSelf(ctrl, heal);
+    if (typeof findAlliesInRadius === 'function') for (const { unit } of findAlliesInRadius(red.pos, red.p.radius, { exclude: [ctrl] })) healAlly(ctrl, unit, heal);
+    for (const u of _ixEnemiesNear(red.pos, red.p.radius, { championsOnly: true })) _ixDamage(ctrl, u, (u.maxHp || 0) * red.p.enemyMaxHpTruePercent, DAMAGE_TYPE.TRUE);
+  }
+  if (!ctrl.items || !ctrl.items.length) return;
+  // 실체화 장비: 강화 중 기본 스킬 재사용 대기시간이 30% 더 빨리 흐른다
+  if ((ctrl._itemManaRealizeUntil || 0) > now && ctrl.cooldowns) {
+    const p = _ixFirst(ctrl, 'manaRealizeActive');
+    if (p) for (const k of ['Q', 'W', 'E']) if (ctrl.cooldowns[k] > 0) ctrl.cooldowns[k] = Math.max(0, ctrl.cooldowns[k] - dt * p.manaRealizeActive.cooldownTickBonus);
+  }
+  // 원칙의 원형낫: R 재사용 대기시간 전체 길이를 기억(처치 시 일부 돌려받음)
+  if (ctrl.cooldowns) {
+    const r = ctrl.cooldowns.R || 0;
+    if (r <= 0) ctrl._itemAxiomRTotal = 0; else if (r > (ctrl._itemAxiomRTotal || 0)) ctrl._itemAxiomRTotal = r;
+  }
+  // 불사르기(바미의 불씨·태양불꽃 방패·공허한 광휘): 켜져 있는 동안 1초마다 주변 적에게 마법 피해
+  const imm = _ixSlots(ctrl, 'immolatePassive').map((it) => it.immolatePassive).sort((a, b) => b.baseDps - a.baseDps)[0];
+  if (imm && (ctrl._itemImmolateUntil || 0) > now) {
+    ctrl._itemImmolateAcc = (ctrl._itemImmolateAcc || 0) + dt;
+    while (ctrl._itemImmolateAcc >= 1) {
+      ctrl._itemImmolateAcc -= 1;
+      const dps = imm.baseDps + _ixBonusHp(ctrl) * imm.bonusHpDps;
+      for (const u of _ixEnemiesNear(ctrl.root.position, imm.radius)) _ixDamage(ctrl, u, dps * (u.isMinion ? imm.minionMult : 1), DAMAGE_TYPE.MAGICAL);
+    }
+  } else ctrl._itemImmolateAcc = 0;
+  // 지크의 융합: 궁극기 뒤 폭풍(1초마다 피해 + 둔화)
+  const storm = ctrl._itemZekeStorm;
+  if (storm && storm.until > now) {
+    storm.acc += dt;
+    while (storm.acc >= 1) {
+      storm.acc -= 1;
+      for (const u of _ixEnemiesNear(ctrl.root.position, storm.p.radius, { championsOnly: true })) {
+        _ixDamage(ctrl, u, storm.p.dps, DAMAGE_TYPE.MAGICAL);
+        applyStatus(u, { id: 'itemZekeSlow', type: 'SLOW', duration: 1.0, value: storm.p.slowPercent, source: ctrl });
+      }
+    }
+  } else if (storm) ctrl._itemZekeStorm = null;
+  // 오라(심연의 가면: 주변 적 챔피언이 받는 마법 피해 증가 / 얼어붙은 심장: 주변 챔피언 공격 속도 감소)
+  ctrl._itemAuraAcc = (ctrl._itemAuraAcc || 0) + dt;
+  if (ctrl._itemAuraAcc >= 0.25) {
+    ctrl._itemAuraAcc = 0;
+    const mask = _ixFirst(ctrl, 'unmakeAura');
+    if (mask) for (const u of _ixEnemiesNear(ctrl.root.position, mask.unmakeAura.radius, { championsOnly: true })) applyStatus(u, { id: 'itemUnmake', type: 'MAGIC_VULNERABLE', duration: 0.5, value: mask.unmakeAura.magicDamageTakenPercent, source: ctrl });
+    const heart = _ixFirst(ctrl, 'wintersCaressAura');
+    if (heart) for (const u of _ixEnemiesNear(ctrl.root.position, heart.wintersCaressAura.radius, { championsOnly: true })) applyStatus(u, { id: 'itemWintersCaress', type: 'AS_REDUCTION', duration: 0.5, value: heart.wintersCaressAura.attackSpeedReductionPercent, source: ctrl });
+  }
+  // 망자의 갑옷: 움직이면 탄력이 쌓여 추가 이동 속도(최대 20)
+  const dmp = _ixFirst(ctrl, 'shipwreckerPassive');
+  if (dmp) {
+    const p = dmp.shipwreckerPassive;
+    const moving = ctrl.state === 'MOVE' || ctrl.state === 'CHASE';
+    ctrl._itemMomentum = Math.max(0, Math.min(1, (ctrl._itemMomentum || 0) + (moving ? dt / p.buildSec : -dt / p.buildSec)));
+    if (ctrl._itemMomentum > 0.01) applyStatus(ctrl, { id: 'itemShipwreckerMs', type: 'MS_BUFF_FLAT', duration: 0.25, value: p.maxMsFlat * ctrl._itemMomentum });
+  } else ctrl._itemMomentum = 0;
+  // 스태틱의 단검: 시간이 지나면 충전
+  const shiv = _ixFirst(ctrl, 'electrosparkPassive');
+  if (shiv) ctrl._itemShivCharge = Math.min(shiv.electrosparkPassive.chargeTimeSec, (ctrl._itemShivCharge || 0) + dt);
+  // 케이닉 루컨: 15초 동안 마법 피해를 안 받으면 마법 보호막
+  const rook = _ixFirst(ctrl, 'magebanePassive');
+  if (rook) {
+    if (!(ctrl._itemRookernShield > 0) && now - (ctrl._itemLastMagicTakenAt || -1e9) >= rook.magebanePassive.outOfMagicSec * 1000) {
+      ctrl._itemRookernShield = (ctrl.maxHp || 0) * rook.magebanePassive.maxHpPercent;
+    }
+  } else ctrl._itemRookernShield = 0;
+}
+
+// ---------- 피해를 받을 때(보호막 흡수 전) ----------
+function itemExtraOnTakeDamage(ctrl, remaining, damageType, source, meta) {
+  if (!ctrl || !(remaining > 0)) return remaining;
+  meta = meta || {};
+  const now = _ixNow();
+  const fromChamp = _ixIsEnemyChampionSource(ctrl, source);
+  const fromEnemy = !!source && source !== ctrl && !source.isAlly;
+  if (fromEnemy) ctrl._itemLastCombatAt = now;
+  // 불사르기: 피해를 받으면 켜진다
+  if (fromEnemy && !meta.isItemEffect && _ixFirst(ctrl, 'immolatePassive')) ctrl._itemImmolateUntil = now + 3000;
+  // 란두인의 예언(저항): 치명타 피해 30% 감소
+  if (meta.isCritical) { const r = _ixFirst(ctrl, 'critDamageTakenReduction'); if (r) remaining *= 1 - r.critDamageTakenReduction; }
+  // 파수꾼의 갑옷·얼어붙은 심장(견고): 기본 공격 피해 감소(구조물 제외)
+  if (meta.isBasicAttack && !(source && _itemIsStructure(source))) {
+    let best = 0;
+    for (const it of _ixSlots(ctrl, 'rockSolidPassive')) {
+      const p = it.rockSolidPassive;
+      best = Math.max(best, Math.min(remaining * p.maxPercent, p.flat + p.perThousandHp * (ctrl.maxHp || 0) / 1000));
+    }
+    remaining = Math.max(0, remaining - best);
+  }
+  // 수호자의 뿔피리(불굴의 의지): 적 챔피언 피해 15 감소(지속 피해는 25%)
+  if (fromChamp) {
+    const horn = _ixFirst(ctrl, 'flatChampDamageBlock');
+    if (horn) remaining = Math.max(0, remaining - horn.flatChampDamageBlock.flat * (meta.isStatusTick ? horn.flatChampDamageBlock.dotFactor : 1));
+  }
+  if (damageType === DAMAGE_TYPE.MAGICAL) {
+    // 케이닉 루컨: 마법 보호막이 마법 피해를 먼저 흡수
+    if (ctrl._itemRookernShield > 0) {
+      const take = Math.min(ctrl._itemRookernShield, remaining);
+      ctrl._itemRookernShield -= take; remaining -= take;
+    }
+    ctrl._itemLastMagicTakenAt = now;
+    // 대자연의 힘(굳건함): 챔피언에게 마법 피해 8회 → 마법 저항력 70 + 이동 속도 6%
+    const fon = _ixFirst(ctrl, 'steadfastPassive');
+    if (fon && fromChamp && now - (ctrl._itemSteadfastLastAt || 0) >= fon.steadfastPassive.perHitIcdSec * 1000) {
+      const p = fon.steadfastPassive;
+      if (now - (ctrl._itemSteadfastLastAt || 0) > p.stackSec * 1000) ctrl._itemSteadfastStacks = 0;
+      ctrl._itemSteadfastLastAt = now;
+      ctrl._itemSteadfastStacks = (ctrl._itemSteadfastStacks || 0) + 1;
+      if (ctrl._itemSteadfastStacks >= p.stacksNeeded) {
+        ctrl._itemSteadfastStacks = 0;
+        _ixBuff(ctrl, 'steadfast', p.stackSec, { magicResist: p.bonusMr, moveSpeedPercent: p.bonusMsPercent });
+      }
+    }
+  }
+  // 원형질 안전벨트(생명선): 체력이 30% 아래로 떨어질 만큼 맞으면 최대 체력 + 회복 + 이동 속도 + 강인함
+  const proto = _ixFirst(ctrl, 'protoLifelinePassive');
+  if (proto && (ctrl._itemProtoIcdUntil || 0) <= now) {
+    const p = proto.protoLifelinePassive;
+    const hpAfter = (ctrl.hp || 0) - Math.max(0, remaining - (ctrl.shield || 0));
+    if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
+      ctrl._itemProtoIcdUntil = now + p.icdSec * 1000;
+      const bonus = _itemScaleByLevel(ctrl, p.bonusHpMin, p.bonusHpMax, 1, 18);
+      _ixBuff(ctrl, 'protoplasm', p.durationSec, { maxHp: bonus });
+      ctrl.hp = Math.min(ctrl.maxHp, ctrl.hp + bonus); // 늘어난 최대 체력만큼 현재 체력도
+      const total = p.healBase + _ixBonusHp(ctrl) * p.healBonusHpPercent;
+      ctrl._itemActiveHeals = ctrl._itemActiveHeals || [];
+      ctrl._itemActiveHeals.push({ perSec: total / p.durationSec, remainingSec: p.durationSec });
+      applyStatus(ctrl, { id: 'itemProtoMs', type: 'MS_BUFF', duration: p.durationSec, value: p.moveSpeedPercent });
+      applyStatus(ctrl, { id: 'itemProtoTenacity', type: 'TENACITY', duration: p.durationSec, value: p.tenacityPercent });
+      console.log('[ITEM] 원형질 안전벨트 - 생명선 발동');
+    }
+  }
+  return remaining;
+}
+
+// ---------- 피해를 줄 때 ----------
+function itemExtraOnDamageDealt(ctrl, target, finalDmg, damageType, meta) {
+  if (!ctrl || !target || !ctrl.items || !ctrl.items.length) return;
+  meta = meta || {};
+  const now = _ixNow();
+  const isStructure = _itemIsStructure(target);
+  const prevCombatAt = ctrl._itemLastCombatAt || -1e9;
+  if (!isStructure) ctrl._itemLastCombatAt = now;
+  // 불사르기: 피해를 입히면 켜진다(자기 피해로는 다시 켜지지 않게 아이템 효과 피해는 뺀다)
+  if (!meta.isItemEffect && !isStructure && _ixFirst(ctrl, 'immolatePassive')) ctrl._itemImmolateUntil = now + 3000;
+  if (target.isChampion && finalDmg > 0) {
+    // 망각의 구·모렐로노미콘: 마법 피해에 고통스러운 상처
+    const orb = _ixFirst(ctrl, 'magicGrievousPassive');
+    if (orb && damageType === DAMAGE_TYPE.MAGICAL) applyStatus(target, { id: 'itemGrievousWounds', type: 'GRIEVOUS', duration: orb.magicGrievousPassive.durationSec, value: orb.magicGrievousPassive.percent, source: ctrl, isItemEffect: true });
+    // 핏빛 저주(썩은 부식): 스킬·지속 효과 마법 피해마다 마법 저항력 7.5% 감소(4회 중첩)
+    const curse = _ixFirst(ctrl, 'decayingRotPassive');
+    if (curse && damageType === DAMAGE_TYPE.MAGICAL && !meta.isBasicAttack) {
+      const p = curse.decayingRotPassive;
+      const fresh = (target._itemRotUntil || 0) > now;
+      target._itemRotStacks = Math.min(p.maxStacks, (fresh ? target._itemRotStacks || 0 : 0) + 1);
+      target._itemRotUntil = now + p.durationSec * 1000;
+      const baseMr = (target.magicResist ?? (target.stats && target.stats.magicResist)) || 0;
+      applyStatus(target, { id: 'itemBloodletterRot', type: 'MR_SHRED', duration: p.durationSec, value: Math.max(0, baseMr) * p.mrPercentPerStack * target._itemRotStacks, source: ctrl });
+    }
+    // 독사의 송곳니(보호막 파괴자): 대상 보호막 감소(대상마다 3초에 한 번)
+    const fang = _ixFirst(ctrl, 'shieldReaverPassive');
+    if (fang && (target._itemReavedUntil || 0) <= now && Array.isArray(target.shieldEntries) && target.shieldEntries.length) {
+      const p = fang.shieldReaverPassive;
+      const cut = _itemIsMelee(ctrl) ? p.meleePercent : p.rangedPercent;
+      for (const e of target.shieldEntries) e.amount *= 1 - cut;
+      target._itemReavedUntil = now + p.durationSec * 1000;
+      if (typeof recomputeShield === 'function') recomputeShield(target); else if (typeof _allyRecomputeShield === 'function') _allyRecomputeShield(target);
+    }
+    // 헬리아의 메아리(영혼 흡수): 챔피언 피해의 30%를 영혼 충전으로
+    const helia = _ixFirst(ctrl, 'soulSiphonPassive');
+    if (helia && !meta.isItemEffect) ctrl._itemSoulCharge = Math.min(helia.soulSiphonPassive.maxCharge, (ctrl._itemSoulCharge || 0) + finalDmg * helia.soulSiphonPassive.chargePercent);
+    // 그림자 검(밤의 추적자): 3초 동안 전투하지 않았으면 다음 기본 공격에 추가 고정 피해
+    const glaive = _ixFirst(ctrl, 'nightstalkerPassive');
+    if (glaive && meta.isBasicAttack && now - prevCombatAt >= glaive.nightstalkerPassive.unseenSec * 1000) {
+      const p = glaive.nightstalkerPassive;
+      _ixDamage(ctrl, target, p.trueDamage + p.lethalityRatio * (ctrl.itemBonusArmorPenFlat || 0), DAMAGE_TYPE.TRUE);
+    }
+  }
+  // 공허한 광휘(황폐): 적을 처치하면 그 자리에 마법 피해
+  const hollow = _ixFirst(ctrl, 'desolatePassive');
+  if (hollow && target.isMinion && !target._itemDesolated && (target.hp <= 0 || target.hp <= finalDmg)) {
+    target._itemDesolated = true;
+    const p = hollow.desolatePassive;
+    const pos = _ixPos(target);
+    for (const u of _ixEnemiesNear(pos, p.radius, { exclude: target })) _ixDamage(ctrl, u, p.base + _ixBonusHp(ctrl) * p.bonusHpRatio, DAMAGE_TYPE.MAGICAL);
+  }
+}
+
+// ---------- 기본 공격 적중(item_system.js itemOnBasicAttackHit 맨 앞 - 주문 검이 아직 무장된 상태) ----------
+function itemExtraOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
+  if (!ctrl || !target || !ctrl.items || !ctrl.items.length) return;
+  const now = _ixNow();
+  const targetPos = _ixPos(target);
+  // 얼어붙은 건틀릿: 주문 검 발동 때 대상 주변 둔화(서리 영역)
+  if (ctrl._itemSheenArmed && !opts.fromAbility) {
+    const sb = typeof _itemSpellbladeSlot === 'function' ? _itemSpellbladeSlot(ctrl) : null;
+    const it = sb && ITEM_DATA[sb.id];
+    if (it && it.frostFieldOnSpellblade) {
+      const p = it.frostFieldOnSpellblade;
+      for (const u of _ixEnemiesNear(targetPos, p.radius)) applyStatus(u, { id: 'itemFrostField', type: 'SLOW', duration: p.durationSec, value: p.slowPercent, source: ctrl });
+    }
+  }
+  if (_itemIsStructure(target)) return;
+  // 불경한 히드라·굶주린 히드라(쪼개기)
+  const hydra = _ixFirst(ctrl, 'extraCleavePassive');
+  if (hydra) {
+    const p = hydra.extraCleavePassive;
+    const raw = (_itemIsMelee(ctrl) ? p.meleePercent : p.rangedPercent) * (ctrl.stats.attackDamage || 0);
+    for (const u of _ixEnemiesNear(targetPos, p.radius, { exclude: target })) _ixDamage(ctrl, u, raw, DAMAGE_TYPE.PHYSICAL);
+  }
+  // 루난의 허리케인(바람의 분노): 원거리 챔피언 기본 공격 시 근처 적 2명에게 추가 탄환
+  const runaan = _ixFirst(ctrl, 'windsFuryPassive');
+  if (runaan && !opts.fromAbility && (!runaan.windsFuryPassive.rangedOnly || _itemIsRanged(ctrl))) {
+    const p = runaan.windsFuryPassive;
+    const list = _ixEnemiesNear(targetPos, p.range, { exclude: target })
+      .sort((a, b) => getHorizontalDistance(_ixPos(a), targetPos) - getHorizontalDistance(_ixPos(b), targetPos)).slice(0, p.bolts);
+    for (const u of list) _ixDamage(ctrl, u, p.adPercent * (ctrl.stats.attackDamage || 0), DAMAGE_TYPE.PHYSICAL);
+  }
+  // 불타는 향로(축성): 켜져 있으면 적중 시 마법 피해
+  if ((ctrl._itemCenserUntil || 0) > now) {
+    const c = _ixFirst(ctrl, 'consecratePassive');
+    if (c) _ixDamage(ctrl, target, c.consecratePassive.onHitMagic, DAMAGE_TYPE.MAGICAL);
+  }
+  // 망자의 갑옷: 탄력만큼 추가 물리 피해, 탄력 소모
+  const dmp = _ixFirst(ctrl, 'shipwreckerPassive');
+  if (dmp && (ctrl._itemMomentum || 0) > 0.05) {
+    const p = dmp.shipwreckerPassive;
+    const baseStats = (ctrl.championId && typeof computeChampionStats === 'function') ? computeChampionStats(ctrl.championId, ctrl.champLevel) : null;
+    const baseAd = baseStats ? baseStats.attackDamage : (ctrl.stats.attackDamage || 0);
+    _ixDamage(ctrl, target, ctrl._itemMomentum * (p.bonusDamage + p.baseAdPercent * baseAd), DAMAGE_TYPE.PHYSICAL);
+    ctrl._itemMomentum = 0;
+    clearStatus(ctrl, 'itemShipwreckerMs');
+  }
+  // 스태틱의 단검: 충전 상태면 연쇄 번개(대상 + 주변 적 최대 4명), 기본 공격마다 충전이 더 쌓인다
+  const shiv = _ixFirst(ctrl, 'electrosparkPassive');
+  if (shiv) {
+    const p = shiv.electrosparkPassive;
+    if ((ctrl._itemShivCharge || 0) >= p.chargeTimeSec) {
+      ctrl._itemShivCharge = 0;
+      const dmg = p.damage + p.apRatio * ((ctrl.stats && ctrl.stats.abilityPower) || 0);
+      const chain = [target, ..._ixEnemiesNear(targetPos, p.radius, { exclude: target })].slice(0, p.bounces);
+      for (const u of chain) _ixDamage(ctrl, u, dmg * (u.isMinion ? p.minionMult : 1), DAMAGE_TYPE.MAGICAL);
+    } else ctrl._itemShivCharge = Math.min(p.chargeTimeSec, (ctrl._itemShivCharge || 0) + p.attackChargeSec);
+  }
+}
+
+// ---------- 궁극기 사용 ----------
+function itemExtraOnUltimateCast(ctrl) {
+  if (!ctrl) return;
+  const now = _ixNow();
+  const zeke = _ixFirst(ctrl, 'frostfireStormPassive');
+  if (zeke) ctrl._itemZekeStorm = { until: now + zeke.frostfireStormPassive.durationSec * 1000, acc: 1, p: zeke.frostfireStormPassive };
+  const hex = _ixFirst(ctrl, 'overdrivePassive');
+  if (hex && (ctrl._itemOverdriveReadyAt || 0) <= now) {
+    const p = hex.overdrivePassive;
+    ctrl._itemOverdriveReadyAt = now + p.cooldownSec * 1000;
+    applyStatus(ctrl, { id: 'itemOverdriveAs', type: 'AS_BUFF', duration: p.durationSec, value: p.attackSpeedPercent });
+    applyStatus(ctrl, { id: 'itemOverdriveMs', type: 'MS_BUFF', duration: p.durationSec, value: p.moveSpeedPercent });
+  }
+}
+
+// ---------- 아군을 회복시키거나 보호막을 씌울 때 ----------
+function itemExtraOnAllyHealOrShield(source, target, kind, amount) {
+  if (!source || !source.items) return;
+  const censer = _ixFirst(source, 'consecratePassive');
+  if (censer) {
+    const p = censer.consecratePassive;
+    applyStatus(source, { id: 'itemCenserAs', type: 'AS_BUFF', duration: p.durationSec, value: p.attackSpeedPercent });
+    source._itemCenserUntil = _ixNow() + p.durationSec * 1000;
+  }
+  const staff = _ixFirst(source, 'rapidsPassive');
+  if (staff) _ixBuff(source, 'rapids', staff.rapidsPassive.durationSec, { abilityPower: staff.rapidsPassive.abilityPower, abilityHaste: staff.rapidsPassive.abilityHaste });
+  // 헬리아의 메아리: 모은 영혼 충전을 모두 써서 그 아군을 회복
+  if (_ixFirst(source, 'soulSiphonPassive') && (source._itemSoulCharge || 0) > 0 && typeof healAlly === 'function') {
+    const amt = source._itemSoulCharge; source._itemSoulCharge = 0;
+    healAlly(source, target, amt, { noItemHook: true });
+  }
+  void kind; void amount;
+}
+
+// ---------- 챔피언 처치 관여 ----------
+function itemExtraOnTakedown(ctrl) {
+  if (!ctrl || !ctrl.items) return;
+  const axiom = _ixFirst(ctrl, 'fluxPassive');
+  if (axiom && ctrl.cooldowns && ctrl.cooldowns.R > 0) ctrl.cooldowns.R = Math.max(0, ctrl.cooldowns.R - (ctrl._itemAxiomRTotal || ctrl.cooldowns.R) * axiom.fluxPassive.refundPercent);
+  const bloom = _ixFirst(ctrl, 'lifeFromDeathPassive');
+  if (bloom) {
+    const p = bloom.lifeFromDeathPassive;
+    const heal = p.healBase + p.healApRatio * ((ctrl.stats && ctrl.stats.abilityPower) || 0);
+    _ixHealSelf(ctrl, heal);
+    if (typeof findAlliesInRadius === 'function') for (const { unit } of findAlliesInRadius(ctrl.root.position, p.radius, { exclude: [ctrl] })) healAlly(ctrl, unit, heal);
+  }
+}
+
+// ---------- 마나를 쓸 때(실체화 장비: 강화 중 마나 100% 더 소모) ----------
+function itemExtraOnManaSpent(ctrl, manaSpent) {
+  if (!ctrl || (ctrl._itemManaRealizeUntil || 0) <= _ixNow()) return;
+  const p = _ixFirst(ctrl, 'manaRealizeActive');
+  if (p) ctrl.mp = Math.max(0, (ctrl.mp || 0) - manaSpent * (p.manaRealizeActive.manaCostMult - 1));
+}
+
+// ---------- 피해 계산(calculateDamage) ----------
+// 실체화 장비 강화 중: 스킬 피해 증가(기본 공격 제외).
+function getItemExtraOutgoingAmp(src, isBasicAttack) {
+  if (!src || isBasicAttack || (src._itemManaRealizeUntil || 0) <= _ixNow()) return 0;
+  const p = _ixFirst(src, 'manaRealizeActive');
+  return p ? p.manaRealizeActive.damageAmpPercent : 0;
+}
+// 심연의 가면(파괴): 받는 마법 피해 증가(MAGIC_VULNERABLE).
+function getMagicVulnerablePercent(target) {
+  if (!target || !target.statusEffects) return 0;
+  const now = _ixNow();
+  let v = 0;
+  for (const e of target.statusEffects) if (e.type === 'MAGIC_VULNERABLE' && e.expiresAt > now) v = Math.max(v, e.value);
+  return v;
+}
+
+// ---------- 아군이 피해를 받을 때(기사의 맹세: 일부를 대신 받음) ----------
+function itemExtraAllyIncoming(a, dmg) {
+  const c = typeof controller !== 'undefined' ? controller : null;
+  if (!c || c._itemVowAlly !== a || !(dmg > 0) || !(c.hp > 0)) return dmg;
+  const vow = _ixFirst(c, 'vowActive');
+  if (!vow) { c._itemVowAlly = null; return dmg; }
+  const p = vow.vowActive;
+  if (getHorizontalDistance(c.root.position, getWorldPosition(a)) > lolRangeToWorld(p.linkRadius)) return dmg;
+  const part = dmg * p.redirectPercent;
+  c.takeDamage(part, null, DAMAGE_TYPE.TRUE, { isItemEffect: true });
+  return dmg - part;
+}
+
 /* ===== src/core/summoner_spells.js ===== */
 /* ============================================================
    SUMMONER SPELLS (소환사 주문 - 36차)
@@ -33940,13 +34747,13 @@ const SHOP_ICON_TONES = [
 const SHOP_RECOMMENDED = {
   mage: { starter: ['doransRing', 'darkSeal', 'healthPotion'], boots: ['sorcerersShoes', 'ionianBootsOfLucidity'],
     core: ['ludensEcho', 'malignance', 'liandrysTorment', 'shadowflame', 'rabadonsDeathcap', 'voidStaff'],
-    situational: ['zhonyasHourglass', 'banshees', 'rylaisCrystalScepter', 'archangelsStaff', 'lichBane', 'cosmicDrive'] },
+    situational: ['zhonyasHourglass', 'banshees', 'rylaisCrystalScepter', 'archangelsStaff', 'morellonomicon', 'cosmicDrive'] },
   marksman: { starter: ['doransBlade', 'doransBow', 'healthPotion'], boots: ['berserkersGreaves', 'bootsOfSwiftness'],
     core: ['krakenSlayer', 'infinityEdge', 'collector', 'phantomDancer', 'lordDominiksRegards', 'bloodthirster'],
-    situational: ['guardianAngel', 'immortalShieldbow', 'mortalReminder', 'rapidFireCannon', 'rageblade', 'youmuusGhostblade'] },
+    situational: ['guardianAngel', 'immortalShieldbow', 'mortalReminder', 'rapidFireCannon', 'runaansHurricane', 'rageblade'] },
   fighter: { starter: ['doransBlade', 'doransShield', 'healthPotion'], boots: ['platedSteelcaps', 'mercurysTreads'],
     core: ['trinityForce', 'blackCleaver', 'sterakssGage', 'deathsDance', 'eclipse', 'titanicHydra'],
-    situational: ['guardianAngel', 'maw', 'spiritVisage', 'thornmail', 'hullbreaker', 'warmogsArmor'] },
+    situational: ['guardianAngel', 'maw', 'spiritVisage', 'thornmail', 'randuinsOmen', 'hullbreaker'] },
 };
 const SHOP_REC_SECTIONS = [['starter', '시작 아이템'], ['boots', '신발'], ['core', '핵심 아이템'], ['situational', '상황별 아이템']];
 const SHOP_ROLE_NAMES = { mage: '마법사', marksman: '원거리 딜러', fighter: '전사' };
@@ -34392,6 +35199,8 @@ function isShopOpen() { return _shopOpen; }
    - 처치·어시스트: 적 챔피언이 아직 없어 0이다. 나중에 적 챔피언이 생기면 recordChampionTakedown()만 부르면 된다.
    - 아군 더미·적 더미는 "연습 상대" 줄로 체력만 보여 준다. 남는 자리는 빈 자리로 5칸까지 채운다.
    맨 위에는 팀별 처치 합계·부순 포탑 수, 가운데 게임 시간(포탑 시스템의 게임 시계)을 보여 준다.
+   71차: 원작 모양으로 다시 그림 - 헥스테크 색, 위쪽 줄(팀 처치·포탑·골드 / 가운데 시간), 우리 팀 위·상대 팀 아래,
+   줄마다 챔피언 초상화(레벨) · 소환사 주문 2개 · 룬(핵심 + 보조 빌드) · 이름 · 아이템 6칸 + 장신구 · K/D/A · CS.
    ============================================================ */
 const SCOREBOARD_TEAM_SIZE = 5;
 let _scoreboardHeld = false;   // Tab 누르는 동안
@@ -34438,18 +35247,33 @@ function _sbItemsHtml(ctrl) {
   if (b) html += `<div class="sb-item boots" title="${_sbEsc(b.nameKo)}">${_shopIconHtml(b)}</div>`;
   return `<div class="sb-items">${html}</div>`;
 }
-// 36차: 소환사 주문 두 칸(D/F) - 원작 스코어보드처럼 이름 앞에 작게.
+// 36차: 소환사 주문 두 칸(D/F) - 원작 스코어보드처럼 초상화 옆에 위아래로.
 function _sbSpellsHtml(ctrl) {
-  if (typeof ensureSummoners !== 'function' || typeof _summonerIconHtml !== 'function') return '';
+  if (typeof ensureSummoners !== 'function' || typeof _summonerIconHtml !== 'function') return '<div class="sb-spells"></div>';
   const s = ensureSummoners(ctrl);
   return `<div class="sb-spells">${SUMMONER_SLOTS.map((k) => _summonerIconHtml(s[k].id)).join('')}</div>`;
+}
+// 71차: 룬(핵심 룬 + 보조 빌드) - 원작처럼 소환사 주문 옆에 위아래로.
+function _sbRunesHtml(ctrl) {
+  const p = ctrl && ctrl.runePage;
+  if (!p) return '<div class="sb-runes"></div>';
+  const name = (id) => { const f = typeof runeFind === 'function' ? runeFind(id) : null; return f ? f.rune.name : ''; };
+  return `<div class="sb-runes"><img class="sb-keystone" src="assets/runes/${p.keystone}.png" title="${_sbEsc(name(p.keystone))}" alt=""><img class="sb-subtree" src="assets/runes/tree_${p.secondary}.png" alt=""></div>`;
+}
+// 71차: 초상화 - 챔피언 아이콘(없으면 이름 두 글자) + 왼쪽 아래 레벨.
+function _sbPortraitHtml(ctrl) {
+  const id = ctrl && ctrl.championId;
+  const hasIcon = id && typeof CHAMPION_ICON_META !== 'undefined' && CHAMPION_ICON_META[id];
+  const img = hasIcon ? `<img src="assets/champion_icons/${id}/icon.png" alt="">` : _sbEsc(String(id || '-').slice(0, 2).toUpperCase());
+  return `<div class="sb-portrait">${img}<span class="sb-lv">${(ctrl && ctrl.champLevel) || 1}</span></div>`;
 }
 function _sbPlayerRow(ctrl) {
   const s = ensureScore(ctrl);
   const champ = _sbChampName(ctrl.championId);
-  return `<div class="sb-row me">
-    <div class="sb-portrait bevel-s">${_sbEsc(String(ctrl.championId || '-').slice(0, 2).toUpperCase())}<span class="sb-lv">${ctrl.champLevel || 1}</span></div>
-    <div class="sb-name-wrap">${_sbSpellsHtml(ctrl)}<div class="sb-name"><b>${_sbEsc(champ)}</b><small>플레이어 (나)</small></div></div>
+  const dead = ctrl.state === 'DEAD' || !(ctrl.hp > 0);
+  return `<div class="sb-row me${dead ? ' dead' : ''}">
+    ${_sbPortraitHtml(ctrl)}${_sbSpellsHtml(ctrl)}${_sbRunesHtml(ctrl)}
+    <div class="sb-name"><b>${_sbEsc(champ)}</b><small>나</small></div>
     ${_sbItemsHtml(ctrl)}
     <div class="sb-kda">${s.kills} / ${s.deaths} / ${s.assists}</div>
     <div class="sb-cs">${s.cs}</div>
@@ -34459,24 +35283,24 @@ function _sbPlayerRow(ctrl) {
 function _sbDummyRow(unit, label) {
   const pct = unit.maxHp ? Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100)) : 0;
   return `<div class="sb-row dummy">
-    <div class="sb-portrait bevel-s">더미</div>
-    <div class="sb-name"><b>${_sbEsc(label)}</b><small>연습 상대</small></div>
+    <div class="sb-portrait dummy-face">허수</div><div class="sb-spells"></div><div class="sb-runes"></div>
+    <div class="sb-name"><b>${_sbEsc(label)}</b><small>연습 상대 · 레벨 ${unit.champLevel || 1}</small></div>
     <div class="sb-items sb-hp"><div class="sb-hpbar"><div style="width:${pct.toFixed(0)}%"></div></div><span>${Math.ceil(unit.hp || 0).toLocaleString()} / ${Math.ceil(unit.maxHp || 0).toLocaleString()}</span></div>
     <div class="sb-kda">-</div><div class="sb-cs">-</div><div class="sb-gold">-</div>
   </div>`;
 }
 function _sbEmptyRow() {
-  return '<div class="sb-row empty"><div class="sb-portrait bevel-s"></div><div class="sb-name"><small>빈 자리</small></div><div class="sb-items"></div><div class="sb-kda"></div><div class="sb-cs"></div><div class="sb-gold"></div></div>';
+  return '<div class="sb-row empty"><div class="sb-portrait"></div><div class="sb-spells"></div><div class="sb-runes"></div><div class="sb-name"><small>빈 자리</small></div><div class="sb-items"></div><div class="sb-kda"></div><div class="sb-cs"></div><div class="sb-gold"></div></div>';
 }
 function _sbTeamRows(team, ctrl) {
   const rows = [];
   if (ctrl && (ctrl.team || PLAYER_TEAM) === team) rows.push(_sbPlayerRow(ctrl));
   const playerTeam = (ctrl && ctrl.team) || PLAYER_TEAM;
   if (team === playerTeam) {
-    if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbDummyRow(a, '아군 더미'));
+    if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbDummyRow(a, '아군 허수아비'));
   } else {
     const enemies = typeof dummy !== 'undefined' && dummy ? [dummy, ...(typeof placedDummies !== 'undefined' ? placedDummies : [])] : (typeof placedDummies !== 'undefined' ? placedDummies : []);
-    for (const d of enemies) if (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbDummyRow(d, '더미 타겟'));
+    for (const d of enemies) if (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbDummyRow(d, '허수아비'));
   }
   while (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbEmptyRow());
   return rows.join('');
@@ -34484,19 +35308,37 @@ function _sbTeamRows(team, ctrl) {
 function _sbTeamKills(team, ctrl) {
   return ctrl && (ctrl.team || PLAYER_TEAM) === team ? ensureScore(ctrl).kills : 0;
 }
+// 71차: 팀이 번 골드 합계(원작 위쪽 줄의 "12.3k") - 지금은 플레이어가 번 골드(시작 골드 포함)뿐이다.
+function _sbTeamGold(team, ctrl) {
+  if (!ctrl || (ctrl.team || PLAYER_TEAM) !== team) return 0;
+  const s = ensureScore(ctrl);
+  return s.goldEarned || Math.floor(ctrl.gold || 0);
+}
+function _sbK(n) { return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.floor(n)); }
+function _sbSumHtml(team, ctrl, cls) {
+  const parts = [
+    `<span class="sb-sum-kills">${_sbTeamKills(team, ctrl)}</span>`,
+    `<span class="sb-stat" title="부순 포탑"><i class="sb-ico tower"></i>${_sbTowersDestroyedBy(team)}</span>`,
+    `<span class="sb-stat gold" title="팀 골드"><i class="sb-ico coin"></i>${_sbK(_sbTeamGold(team, ctrl))}</span>`,
+  ];
+  if (cls === 'red') parts.reverse();
+  return `<div class="sb-team-sum ${cls}">${parts.join('')}</div>`;
+}
 function renderScoreboard() {
   const box = _sbEl('scoreboardPanel');
   if (!box) return;
   const ctrl = typeof controller !== 'undefined' ? controller : null;
-  const teams = [{ id: 'BLUE', nameKo: '블루 팀', cls: 'blue' }, { id: 'RED', nameKo: '레드 팀', cls: 'red' }];
+  const mine = (ctrl && ctrl.team) || PLAYER_TEAM;
+  // 원작처럼 우리 팀을 위에, 상대 팀을 아래에.
+  const teams = [{ id: 'BLUE', nameKo: '블루 팀', cls: 'blue' }, { id: 'RED', nameKo: '레드 팀', cls: 'red' }].sort((a, b) => (a.id === mine ? -1 : b.id === mine ? 1 : 0));
   let html = `<div class="sb-top">
-    <div class="sb-team-sum blue"><span class="sb-sum-kills">${_sbTeamKills('BLUE', ctrl)}</span><span class="sb-sum-tower" title="부순 포탑">▲ ${_sbTowersDestroyedBy('BLUE')}</span></div>
-    <div class="sb-clock">${_sbClock()}</div>
-    <div class="sb-team-sum red"><span class="sb-sum-tower" title="부순 포탑">▲ ${_sbTowersDestroyedBy('RED')}</span><span class="sb-sum-kills">${_sbTeamKills('RED', ctrl)}</span></div>
+    ${_sbSumHtml('BLUE', ctrl, 'blue')}
+    <div class="sb-mid"><div class="sb-clock">${_sbClock()}</div><div class="sb-mode">칼바람 나락</div></div>
+    ${_sbSumHtml('RED', ctrl, 'red')}
   </div>`;
   for (const t of teams) {
     html += `<div class="sb-team ${t.cls}">
-      <div class="sb-head uc"><span class="sb-team-name">${t.nameKo}</span><span></span><span>아이템</span><span>K / D / A</span><span>CS</span><span>골드</span></div>
+      <div class="sb-head uc"><span class="sb-team-name">${t.nameKo}${t.id === mine ? ' · 아군' : ' · 적'}</span><span>아이템</span><span>K / D / A</span><span>CS</span><span>골드</span></div>
       ${_sbTeamRows(t.id, ctrl)}
     </div>`;
   }
@@ -35939,6 +36781,7 @@ function _itemStatsSummary(item) {
   // 유일 아이템(QA 요청) - 티아맷/히드라류, 여신의 눈물/마나무네/무라마나처럼
   // 같은 계열을 하나만 보유할 수 있는 아이템임을 상점 설명 맨 앞에 표시한다.
   if (item.uniqueGroup) parts.push('유일 아이템(같은 계열 하나만 보유 가능)');
+  const extraDesc = item.descKo || []; // 71차: 새 아이템 효과 줄(능력치 줄 뒤에 붙인다)
   const s = item.stats || {};
   if (s.attackDamage) parts.push(`공격력 +${s.attackDamage}`);
   if (s.abilityPower) parts.push(`주문력 +${s.abilityPower}`);
@@ -36140,6 +36983,7 @@ function _itemStatsSummary(item) {
     const compNames = Object.entries(counts).map(([id, n]) => `${(ITEM_DATA[id] && ITEM_DATA[id].nameKo) || id}${n > 1 ? ' x' + n : ''}`);
     parts.push(`하위템: ${compNames.join(', ')}`);
   }
+  parts.push(...extraDesc);
   return parts.join(' · ');
 }
 
@@ -36150,6 +36994,7 @@ function _itemIsUsable(data) {
     data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect
     || data.empoweredCleaveActive || data.shockwaveActive || data.ghostStepActive
     || data.rocketbeltActive || data.teamMoveSpeedActive || data.noxiousBladeActive || data.stasisActive || data.devotionActive
+    || (typeof itemExtraIsUsable === 'function' && itemExtraIsUsable(data))
   );
   return usable;
 }

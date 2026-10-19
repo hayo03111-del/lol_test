@@ -48,13 +48,13 @@ const SHOP_ICON_TONES = [
 const SHOP_RECOMMENDED = {
   mage: { starter: ['doransRing', 'darkSeal', 'healthPotion'], boots: ['sorcerersShoes', 'ionianBootsOfLucidity'],
     core: ['ludensEcho', 'malignance', 'liandrysTorment', 'shadowflame', 'rabadonsDeathcap', 'voidStaff'],
-    situational: ['zhonyasHourglass', 'banshees', 'rylaisCrystalScepter', 'archangelsStaff', 'lichBane', 'cosmicDrive'] },
+    situational: ['zhonyasHourglass', 'banshees', 'rylaisCrystalScepter', 'archangelsStaff', 'morellonomicon', 'cosmicDrive'] },
   marksman: { starter: ['doransBlade', 'doransBow', 'healthPotion'], boots: ['berserkersGreaves', 'bootsOfSwiftness'],
     core: ['krakenSlayer', 'infinityEdge', 'collector', 'phantomDancer', 'lordDominiksRegards', 'bloodthirster'],
-    situational: ['guardianAngel', 'immortalShieldbow', 'mortalReminder', 'rapidFireCannon', 'rageblade', 'youmuusGhostblade'] },
+    situational: ['guardianAngel', 'immortalShieldbow', 'mortalReminder', 'rapidFireCannon', 'runaansHurricane', 'rageblade'] },
   fighter: { starter: ['doransBlade', 'doransShield', 'healthPotion'], boots: ['platedSteelcaps', 'mercurysTreads'],
     core: ['trinityForce', 'blackCleaver', 'sterakssGage', 'deathsDance', 'eclipse', 'titanicHydra'],
-    situational: ['guardianAngel', 'maw', 'spiritVisage', 'thornmail', 'hullbreaker', 'warmogsArmor'] },
+    situational: ['guardianAngel', 'maw', 'spiritVisage', 'thornmail', 'randuinsOmen', 'hullbreaker'] },
 };
 const SHOP_REC_SECTIONS = [['starter', '시작 아이템'], ['boots', '신발'], ['core', '핵심 아이템'], ['situational', '상황별 아이템']];
 const SHOP_ROLE_NAMES = { mage: '마법사', marksman: '원거리 딜러', fighter: '전사' };

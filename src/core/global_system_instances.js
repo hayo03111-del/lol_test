@@ -78,6 +78,7 @@ function _itemStatsSummary(item) {
   // 유일 아이템(QA 요청) - 티아맷/히드라류, 여신의 눈물/마나무네/무라마나처럼
   // 같은 계열을 하나만 보유할 수 있는 아이템임을 상점 설명 맨 앞에 표시한다.
   if (item.uniqueGroup) parts.push('유일 아이템(같은 계열 하나만 보유 가능)');
+  const extraDesc = item.descKo || []; // 71차: 새 아이템 효과 줄(능력치 줄 뒤에 붙인다)
   const s = item.stats || {};
   if (s.attackDamage) parts.push(`공격력 +${s.attackDamage}`);
   if (s.abilityPower) parts.push(`주문력 +${s.abilityPower}`);
@@ -279,6 +280,7 @@ function _itemStatsSummary(item) {
     const compNames = Object.entries(counts).map(([id, n]) => `${(ITEM_DATA[id] && ITEM_DATA[id].nameKo) || id}${n > 1 ? ' x' + n : ''}`);
     parts.push(`하위템: ${compNames.join(', ')}`);
   }
+  parts.push(...extraDesc);
   return parts.join(' · ');
 }
 
@@ -289,6 +291,7 @@ function _itemIsUsable(data) {
     data.consumable || data.activeAbility || data.wardPlacement || data.elixirEffect
     || data.empoweredCleaveActive || data.shockwaveActive || data.ghostStepActive
     || data.rocketbeltActive || data.teamMoveSpeedActive || data.noxiousBladeActive || data.stasisActive || data.devotionActive
+    || (typeof itemExtraIsUsable === 'function' && itemExtraIsUsable(data))
   );
   return usable;
 }
