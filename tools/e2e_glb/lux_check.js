@@ -80,7 +80,9 @@ const startServer = require('./server.js');
     const E = window.__e2e, c = window.controller, L = E.lolRangeToWorld, d = E.dummies[0];
     c.castAbility('E', new E.THREE.Vector3(0, 0, -L(700))); await new Promise((res) => setTimeout(res, 200));
     const flying = !!(c._lux.zone && !c._lux.zone.ready);
-    await new Promise((res) => setTimeout(res, 1000));
+    // 59차: 구조물 GLB가 들어가 헤드리스(CPU 렌더러) 프레임이 낮아지면 게임 시간이 실제보다 느리게 흐른다 - 넉넉히 기다린다.
+    for (let i = 0; i < 40 && !(c._lux.zone && c._lux.zone.ready); i++) await new Promise((res) => setTimeout(res, 100));
+    await new Promise((res) => setTimeout(res, 400));
     const z = c._lux.zone; const zoneDistLol = z ? Math.round(E.worldDistanceToLol(z.end.length())) : null;
     const slowed = (d.statusEffects || []).some((e) => e.type === 'SLOW');
     const hpBefore = d.hp; const mpBefore = c.mp;
@@ -98,8 +100,9 @@ const startServer = require('./server.js');
   await reset(700);
   r.eExpire = await page.evaluate(async () => {
     const E = window.__e2e, c = window.controller, L = E.lolRangeToWorld, d = E.dummies[0];
-    c.castAbility('E', new E.THREE.Vector3(0, 0, -L(700))); await new Promise((res) => setTimeout(res, 1000));
-    c._lux.zone.expiresAt = performance.now() + 100; await new Promise((res) => setTimeout(res, 400));
+    c.castAbility('E', new E.THREE.Vector3(0, 0, -L(700)));
+    for (let i = 0; i < 40 && !(c._lux.zone && c._lux.zone.ready); i++) await new Promise((res) => setTimeout(res, 100));
+    c._lux.zone.expiresAt = performance.now() + 100; await new Promise((res) => setTimeout(res, 800));
     return { dmg: Math.round(d.maxHp - d.hp), zoneGone: !c._lux.zone };
   });
   // R: 1초 시전 - 그 전엔 피해 없음, 뒤에 직선 전체(멀리 있는 대상 포함) 피해
