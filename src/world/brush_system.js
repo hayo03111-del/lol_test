@@ -33,7 +33,7 @@ const BRUSH_CONFIG = {
   howlingAbyssLayout: [
     { side: -1, z: -17, widthLol: 450, depthLol: 900 },   // 다리 가운데 왼쪽(위) - 파랑 쪽
     { side: -1, z: 17, widthLol: 450, depthLol: 900 },    // 다리 가운데 왼쪽(위) - 빨강 쪽
-    { side: 1, z: 4.5, widthLol: 450, depthLol: 900 },    // 다리 가운데 오른쪽(아래) - 원래 1곳
+    { side: 1, z: 0, widthLol: 450, depthLol: 900 },      // 다리 가운데 오른쪽(아래) - 원래 1곳. 74차: 13.5 패치 "다리 가운데 부쉬 3개 간격을 똑같이" - 정가운데로(왼쪽 ±17과 같은 간격)
     { side: 1, z: -16, widthLol: 450, depthLol: 700 },    // 다리 가운데 아래쪽 - 12.23 추가
     { side: 1, betweenTurrets: 'BLUE', widthLol: 450, depthLol: 1100 },  // 파랑 진영 외곽~억제기 포탑 사이(12.23 확대)
     { side: -1, betweenTurrets: 'RED', widthLol: 450, depthLol: 1100 },  // 빨강 진영 외곽~억제기 포탑 사이(12.23 확대)
@@ -43,7 +43,7 @@ const BRUSH_CONFIG = {
 // 칼바람 나락 배치 항목 → 월드 좌표(다리 가장자리에서 0.3 안쪽, z는 맵 배율 적용).
 function howlingAbyssBrushPlacement(b, map) {
   const halfW = lolRangeToWorld(b.widthLol) / 2;
-  const z = b.betweenTurrets && typeof haTurretGapZ === 'function' ? haTurretGapZ(b.betweenTurrets) : b.z * (map.scale || 1);
+  const z = b.betweenTurrets && typeof haTurretGapZ === 'function' ? haTurretGapZ(b.betweenTurrets) : b.z * (map.scale || 1) * (map.lengthScale || 1); // 74차: 맵 길이 배율
   return { x: b.side * (map.laneMaxX - halfW - 0.3), z, widthLol: b.widthLol, depthLol: b.depthLol };
 }
 

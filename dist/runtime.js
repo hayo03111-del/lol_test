@@ -6318,11 +6318,15 @@ const HA_MAP_CONFIG = {
   // 25차(원작 이동 격자 대조): 걸을 수 있는 끝이 원작은 가운데에서 ±약 8,115 LoL(LeagueSandbox Map12 AIPath.aimesh_ngrid
   // - 블루 -8,167 / 레드 +8,062)인데 이 맵은 ±125(약 9,105)까지 갔다. 8,115 LoL = 111.4(줄이기 전 단위, 1 = 72.84 LoL).
   // 맵 배율(HA_MAP_SCALE)은 아래처럼 고정 길이(HA_MAP_SPAN_UNITS)로 정하므로 이 값을 바꿔도 맵 크기는 그대로다.
-  laneMinZ: -111.4, laneMaxZ: 111.4,
-  blueBaseZ: -106.5, redBaseZ: 106.5,
-  blueNexusZ: -94.5, redNexusZ: 94.5,
-  blueTurretZ: -66, redTurretZ: 66,
+  // 74차: 다리 방향 길이를 HA_LENGTH_SCALE배로 늘린다(사용자 요청 "맵 좀 더 길게").
+  laneMinZ: -111.4 * 1.3, laneMaxZ: 111.4 * 1.3,
+  blueBaseZ: -106.5 * 1.3, redBaseZ: 106.5 * 1.3,
+  blueNexusZ: -94.5 * 1.3, redNexusZ: 94.5 * 1.3,
+  blueTurretZ: -66 * 1.3, redTurretZ: 66 * 1.3,
 };
+// 74차: 맵을 다리 방향으로만 늘리는 배율(폭·구조물 크기·사거리는 그대로). 원작 좌표의 다리 방향 성분, 이동 격자 모양의
+// 넓어지는 자리, 이동 끝(laneMinZ/MaxZ), 부쉬 위치가 전부 이 배율을 따른다 - 포탑 사이·넥서스까지 거리가 30% 길어진다.
+const HA_LENGTH_SCALE = 1.3;
 
 // 원작 크기 맞춤(19차 요청 "실제 맵과 챔피언의 크기를 비교하여 여기 크기도 맞춰줘"): 챔피언 사거리·이동속도는
 // WORLD_DISTANCE_SCALE로 LoL 단위와 정확히 맞춰져 있는데, 맵은 손으로 늘린 값이라 원작보다 1.6배쯤 길었다
@@ -6383,7 +6387,7 @@ const HA_SPAWN_LOL = { BLUE: [936.9515, 1060.61426], RED: [11860.0889, 11596.157
 // 상점 자리(왼쪽)와 맞는다.
 function haLolToWorld(xz) {
   const dx = xz[0] - HA_LEVEL_CENTER_LOL[0], dz = xz[1] - HA_LEVEL_CENTER_LOL[1];
-  return new THREE.Vector3(-lolRangeToWorld((dz - dx) / Math.SQRT2), 0, lolRangeToWorld((dx + dz) / Math.SQRT2));
+  return new THREE.Vector3(-lolRangeToWorld((dz - dx) / Math.SQRT2), 0, lolRangeToWorld((dx + dz) / Math.SQRT2) * HA_LENGTH_SCALE);
 }
 // 외곽 포탑과 억제기 포탑 사이 한가운데의 z(월드) - 부쉬 배치용.
 function haTurretGapZ(team) {
@@ -6413,7 +6417,7 @@ function createHowlingAbyssMap(scene) {
   const LOL_PER_UNIT = 1 / (lolRangeToWorld(1) / S); // 줄이기 전 1단위 = 약 72.84 LoL
   const WIDEN_EXTRA_X = HA_WALK_SHAPE_LOL.baseHalf / LOL_PER_UNIT - cfg.laneMaxX;
   function widenExtraForZ(z) {
-    const a = Math.abs(z) * LOL_PER_UNIT, W = HA_WALK_SHAPE_LOL;
+    const a = Math.abs(z) * LOL_PER_UNIT / HA_LENGTH_SCALE, W = HA_WALK_SHAPE_LOL; // 74차: 늘린 길이만큼 넓어지는 자리도 뒤로
     if (a < W.widenStart) return 0;
     if (a < W.widenFull) return WIDEN_EXTRA_X * (a - W.widenStart) / (W.widenFull - W.widenStart);
     if (a < W.taperStart) return WIDEN_EXTRA_X;
@@ -6482,15 +6486,35 @@ function createHowlingAbyssMap(scene) {
   const snowMat = std({ map: snowTex, color: 0xb9c9d6, roughness: 1 });
   const iceMat = std({ color: 0x9fd8f2, roughness: .25, metalness: .05, emissive: 0x2a6f99, emissiveIntensity: .35, transparent: true, opacity: .9, flatShading: true });
   const darkMat = std({ color: 0x101c25, roughness: 1 });
-  // 원작 텍스처(CommunityDragon)에 닿으면 바꿔 끼운다(실패하면 위 텍스처 그대로).
-  const ASSET = 'https://raw.communitydragon.org/latest/game/assets/maps/kitpieces/howling_abyss/textures/';
+  // 74차: 원작 텍스처(CommunityDragon howling_abyss kitpiece 텍스처). 저장소에 받아 둔 사본(assets/maps/howling_abyss/,
+  // tools/fetch_ha_textures.py)을 먼저 찾고, 없으면 CommunityDragon에서 바로 받는다. 둘 다 안 되면 위에서 코드로 그린 텍스처가
+  // 그대로 남는다(어느 환경에서도 바닥·벽이 보인다).
+  const HA_TEX_LOCAL = 'assets/maps/howling_abyss/';
+  const HA_TEX_REMOTE = 'https://raw.communitydragon.org/latest/game/assets/maps/kitpieces/howling_abyss/textures/';
   const loader = new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
-  function tryRemote(material, name) {
-    loader.load(ASSET + name, (t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; material.map = t; material.color.setHex(0xffffff); material.needsUpdate = true; }, undefined, () => {});
+  function useOriginal(material, name, repeat = 1) {
+    const apply = (t) => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat, repeat); t.colorSpace = THREE.SRGBColorSpace;
+      if (typeof renderer !== 'undefined' && renderer.capabilities) t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      material.map = t; if (!material.vertexColors) material.color.setHex(0xffffff); material.needsUpdate = true;
+      material.userData.textureSource = t.image && t.image.src;
+    };
+    loader.load(HA_TEX_LOCAL + name, apply, undefined, () => loader.load(HA_TEX_REMOTE + name, apply, undefined, () => {}));
   }
-  tryRemote(laneMat, 'structure_lane_ground.png');
-  tryRemote(baseMat, 'structure_base_ground.png');
-  tryRemote(wallMat, 'structure_lane_walls.png');
+  const pillarMat = std({ map: wallTex, color: 0xb0bdc6, roughness: .85 });
+  const cliffMat = std({ map: rockTex, color: 0xa8b8c4, flatShading: true });
+  useOriginal(laneMat, 'structure_lane_ground.png');
+  useOriginal(baseMat, 'structure_base_ground.png');
+  useOriginal(wallMat, 'structure_lane_walls.png');
+  useOriginal(pillarMat, 'structure_lane_walls2.png');
+  useOriginal(snowMat, 'basesnow.png');
+  useOriginal(rockMat, 'prop_icecliff_h.png');
+  useOriginal(cliffMat, 'prop_icecliff_f.png');
+  useOriginal(iceMat, 'prop_ice_chunksa.png');
+  // 지형 텍스처를 쓰는 재질 목록(점검용)
+  const slopeMat = std({ vertexColors: true, flatShading: true, roughness: .95 });
+  useOriginal(slopeMat, 'prop_icecliff_snowtransition.png');
+  const HA_TEXTURED = { slopeMat, laneMat, baseMat, wallMat, pillarMat, snowMat, rockMat, cliffMat, iceMat };
 
   function mesh(geo, material, pos = [0, 0, 0], rot = [0, 0, 0], scl = null, parent = group) {
     const o = new THREE.Mesh(geo, material); o.position.set(...pos); o.rotation.set(...rot); if (scl) o.scale.set(...scl);
@@ -6514,7 +6538,7 @@ function createHowlingAbyssMap(scene) {
   const floor = mesh(floorGeo, laneMat, [0, FLOOR_Y, 0], [-Math.PI / 2, 0, 0]);
   floor.name = 'HA_FLOOR';
   for (const sign of [-1, 1]) {
-    const z0 = HA_WALK_SHAPE_LOL.widenStart / LOL_PER_UNIT - 3, sh = new THREE.Shape(), pts = [];
+    const z0 = HA_WALK_SHAPE_LOL.widenStart * HA_LENGTH_SCALE / LOL_PER_UNIT - 3, sh = new THREE.Shape(), pts = [];
     for (let z = z0; z <= cfg.laneMaxZ + 1e-6; z += STEP) pts.push([halfW(z), sign * Math.min(z, cfg.laneMaxZ)]);
     for (let i = pts.length - 1; i >= 0; i--) pts.push([-pts[i][0], pts[i][1]]);
     pts.forEach(([x, z], i) => (i ? sh.lineTo(x, -z) : sh.moveTo(x, -z)));
@@ -6535,7 +6559,7 @@ function createHowlingAbyssMap(scene) {
       mesh(new THREE.BoxGeometry(RAIL_T + .18, .22, len + .05), snowMat, [mid.x, FLOOR_Y + RAIL_H + .05, mid.z], [0, yaw, 0]);
       if (i % 6 === 0) { // 기둥
         const px = a.x + side * .1;
-        mesh(new THREE.BoxGeometry(1.7, 2.6, 1.7), wallMat, [px, FLOOR_Y + 1.25, a.z]);
+        mesh(new THREE.BoxGeometry(1.7, 2.6, 1.7), pillarMat, [px, FLOOR_Y + 1.25, a.z]);
         mesh(new THREE.ConeGeometry(1.35, 1.0, 4), snowMat, [px, FLOOR_Y + 3.05, a.z], [0, Math.PI / 4, 0]);
         mesh(new THREE.BoxGeometry(1.95, .3, 1.95), wallMat, [px, FLOOR_Y + .15, a.z]);
       }
@@ -6547,7 +6571,7 @@ function createHowlingAbyssMap(scene) {
     const zEnd = sign * (cfg.laneMaxZ + 3.2), w = halfW(cfg.laneMaxZ) + 4;
     for (let x = -w; x <= w; x += 2.2) {
       const h = 3.5 + rnd() * 3.5;
-      mesh(new THREE.DodecahedronGeometry(1.8 + rnd() * .7, 0), rockMat, [x, FLOOR_Y + h * .35, zEnd + sign * rnd() * 1.4], [rnd(), rnd() * 3, rnd()], [1.15, h / 2.4, .95]);
+      mesh(new THREE.DodecahedronGeometry(1.8 + rnd() * .7, 0), cliffMat, [x, FLOOR_Y + h * .35, zEnd + sign * rnd() * 1.4], [rnd(), rnd() * 3, rnd()], [1.15, h / 2.4, .95]);
       if (rnd() < .5) mesh(new THREE.ConeGeometry(.5 + rnd() * .4, 2 + rnd() * 2.5, 5), iceMat, [x + rnd(), FLOOR_Y + 1, zEnd - sign * 1.6], [0, rnd() * 3, (rnd() - .5) * .4]);
     }
   }
@@ -6576,7 +6600,10 @@ function createHowlingAbyssMap(scene) {
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     g.setIndex(idx); g.computeVertexNormals();
-    mesh(g, std({ vertexColors: true, flatShading: true, roughness: .95 }));
+    // 비탈 UV(월드 좌표) - 원작 눈 절벽 텍스처가 늘어나지 않게
+    const uvs = []; for (let i = 0; i < pos.length; i += 3) uvs.push(pos[i + 2] / 8, pos[i + 1] / 8 + pos[i] / 8);
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    mesh(g, slopeMat);
     // 비탈 위 바위(눈 모자)와 얼음 결정
     for (let z = cfg.laneMinZ; z <= cfg.laneMaxZ; z += 3.2) {
       const edge = halfW(z) + RAIL_OFF + 2.5 + rnd() * 7, h = 1.2 + rnd() * 2.8;
@@ -6587,7 +6614,7 @@ function createHowlingAbyssMap(scene) {
     }
   }
   // 다리 가운데 양쪽의 거대한 프렐요드 수호자 석상(원작 다리 옆 석상 실루엣을 단순화)
-  for (const z of [-26, 26]) for (const side of [-1, 1]) {
+  for (const z of [-26 * HA_LENGTH_SCALE, 26 * HA_LENGTH_SCALE]) for (const side of [-1, 1]) {
     const g = new THREE.Group(); g.position.set(side * (halfW(z) + 5.5), FLOOR_Y - .5, z); g.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; group.add(g);
     mesh(new THREE.BoxGeometry(4.2, 1.2, 4.2), wallMat, [0, .6, 0], [0, 0, 0], null, g);
     mesh(new THREE.CylinderGeometry(1.2, 1.6, 5.5, 6), rockMat, [0, 3.9, 0], [0, 0, 0], null, g);
@@ -6600,9 +6627,9 @@ function createHowlingAbyssMap(scene) {
     mesh(new THREE.BoxGeometry(3.7, .35, 1.7), snowMat, [0, 6.95, 0], [0, 0, 0], null, g);
   }
   // 심연 바닥과 먼 산 능선
-  mesh(new THREE.PlaneGeometry(260, 420), std({ color: 0x050d14, roughness: 1 }), [0, -22, 0], [-Math.PI / 2, 0, 0]);
+  mesh(new THREE.PlaneGeometry(260, 420 * HA_LENGTH_SCALE), std({ color: 0x050d14, roughness: 1 }), [0, -22, 0], [-Math.PI / 2, 0, 0]);
   for (const side of [-1, 1]) for (let i = 0; i < 14; i++) {
-    const z = -150 + i * 23 + rnd() * 10, h = 22 + rnd() * 26;
+    const z = (-150 + i * 23 + rnd() * 10) * HA_LENGTH_SCALE, h = 22 + rnd() * 26;
     mesh(new THREE.ConeGeometry(14 + rnd() * 10, h, 5), std({ color: 0x1b2c39, roughness: 1, flatShading: true }), [side * (70 + rnd() * 30), -20 + h / 2, z], [0, rnd() * 3, 0]);
     mesh(new THREE.ConeGeometry(5 + rnd() * 3, h * .3, 5), snowMat, [side * (70 + rnd() * 30), -20 + h * .9, z], [0, rnd() * 3, 0]);
   }
@@ -6678,7 +6705,7 @@ function createHowlingAbyssMap(scene) {
   // 이동 범위: 바닥 외곽선과 같은 widenExtraForZ()(판정은 월드 좌표 → 줄이기 전 단위).
   function clampPosition(p) { const maxX = (cfg.laneMaxX + widenExtraForZ(p.z / S)) * S; p.x = THREE.MathUtils.clamp(p.x, -maxX, maxX); p.z = THREE.MathUtils.clamp(p.z, cfg.laneMinZ * S, cfg.laneMaxZ * S); return p; }
   function isInsidePlayableArea(p) { const maxX = (cfg.laneMaxX + widenExtraForZ(p.z / S)) * S; return p.x >= -maxX && p.x <= maxX && p.z >= cfg.laneMinZ * S && p.z <= cfg.laneMaxZ * S; }
-  return { group, scale: S, laneMinX: cfg.laneMinX * S, laneMaxX: cfg.laneMaxX * S, laneMinZ: cfg.laneMinZ * S, laneMaxZ: cfg.laneMaxZ * S,
+  return { group, scale: S, lengthScale: HA_LENGTH_SCALE, texturedMaterials: HA_TEXTURED, laneMinX: cfg.laneMinX * S, laneMaxX: cfg.laneMaxX * S, laneMinZ: cfg.laneMinZ * S, laneMaxZ: cfg.laneMaxZ * S,
     spawnBlue: haLolToWorld(HA_SPAWN_LOL.BLUE), spawnRed: haLolToWorld(HA_SPAWN_LOL.RED),
     blueNexus: null, redNexus: null, blueTurret: null, redTurret: null,
     pathBlueToRed, pathRedToBlue, clampPosition, isInsidePlayableArea, updateSnow };
@@ -8939,7 +8966,7 @@ const BRUSH_CONFIG = {
   howlingAbyssLayout: [
     { side: -1, z: -17, widthLol: 450, depthLol: 900 },   // 다리 가운데 왼쪽(위) - 파랑 쪽
     { side: -1, z: 17, widthLol: 450, depthLol: 900 },    // 다리 가운데 왼쪽(위) - 빨강 쪽
-    { side: 1, z: 4.5, widthLol: 450, depthLol: 900 },    // 다리 가운데 오른쪽(아래) - 원래 1곳
+    { side: 1, z: 0, widthLol: 450, depthLol: 900 },      // 다리 가운데 오른쪽(아래) - 원래 1곳. 74차: 13.5 패치 "다리 가운데 부쉬 3개 간격을 똑같이" - 정가운데로(왼쪽 ±17과 같은 간격)
     { side: 1, z: -16, widthLol: 450, depthLol: 700 },    // 다리 가운데 아래쪽 - 12.23 추가
     { side: 1, betweenTurrets: 'BLUE', widthLol: 450, depthLol: 1100 },  // 파랑 진영 외곽~억제기 포탑 사이(12.23 확대)
     { side: -1, betweenTurrets: 'RED', widthLol: 450, depthLol: 1100 },  // 빨강 진영 외곽~억제기 포탑 사이(12.23 확대)
@@ -8949,7 +8976,7 @@ const BRUSH_CONFIG = {
 // 칼바람 나락 배치 항목 → 월드 좌표(다리 가장자리에서 0.3 안쪽, z는 맵 배율 적용).
 function howlingAbyssBrushPlacement(b, map) {
   const halfW = lolRangeToWorld(b.widthLol) / 2;
-  const z = b.betweenTurrets && typeof haTurretGapZ === 'function' ? haTurretGapZ(b.betweenTurrets) : b.z * (map.scale || 1);
+  const z = b.betweenTurrets && typeof haTurretGapZ === 'function' ? haTurretGapZ(b.betweenTurrets) : b.z * (map.scale || 1) * (map.lengthScale || 1); // 74차: 맵 길이 배율
   return { x: b.side * (map.laneMaxX - halfW - 0.3), z, widthLol: b.widthLol, depthLol: b.depthLol };
 }
 
@@ -27781,6 +27808,169 @@ function getMinionGoldValue(minion, gameTimeSec) {
 }
 
 
+/* ===== src/world/aram_features.js ===== */
+/* ============================================================
+   74차: 최신 칼바람 나락 맵 장치 - 회복 유물(Health Relic)과 서리 관문(Frost Gate, 협곡의 마법공학 관문에 해당)
+   ------------------------------------------------------------
+   출처(2026년 확인, LoL 위키 Health Relic 문서를 인용한 공략 글들 - 위키 자체는 이 환경에서 열리지 않았다):
+   - 회복 유물: 양 팀 2개씩 모두 4개, 다리 아래쪽(가까운) 벽 옆. "바깥 유물"은 외곽 포탑 앞(다리 가운데 쪽), "안쪽 유물"은
+     외곽 포탑과 억제기 포탑 사이. 처음 등장 바깥 1:45, 안쪽 2:30. 먹은 챔피언은 잃은 체력·마나의 8%를 바로 회복하고,
+     약 2.5초 뒤 그 자리에 빛줄기가 떨어져 850 범위 안 아군 챔피언이 잃은 체력·마나의 16%를 회복한다. 빛줄기 90초 뒤 다시 생긴다.
+   - 서리 관문: 각 팀 넥서스 옆. 게임 시작부터 자기 외곽 포탑으로 이어지고, 외곽 포탑이 부서지면 억제기 포탑으로 이어진다.
+     기지 → 다리 방향 한쪽으로만 간다(반대로는 못 온다).
+   이 맵은 "아래쪽"을 +x로 둔다(brush_system.js 칼바람 부쉬 배치와 같은 약속). 관문의 정확한 자리·이동 시간·재사용 대기는
+   자료가 없어 근사값이다(ARAM_GATE_*).
+   ============================================================ */
+const ARAM_RELIC_PICKUP_LOL = 150;      // 이 거리 안(챔피언 충돌 반경 더해서)으로 들어오면 먹는다(근사)
+const ARAM_RELIC_BEAM_DELAY_SEC = 2.5;
+const ARAM_RELIC_BEAM_RADIUS_LOL = 850;
+const ARAM_RELIC_RESPAWN_SEC = 90;
+const ARAM_RELIC_INSTANT_PCT = 0.08;
+const ARAM_RELIC_BEAM_PCT = 0.16;
+const ARAM_GATE_RADIUS_LOL = 170;        // 관문 발판 반경(근사)
+const ARAM_GATE_TRAVEL_SEC = 0.9;        // 관문 이동 시간(근사)
+const ARAM_GATE_LOCKOUT_SEC = 3;         // 같은 챔피언이 다시 타기까지(연속 발동 방지, 근사)
+const ARAM_GATE_EXIT_BEHIND_LOL = 350;   // 도착 지점: 이어진 포탑에서 자기 기지 쪽으로 이만큼 뒤
+
+const aramRelics = [];
+const aramGates = [];
+let aramFeaturesBuilt = false;
+
+function _aramMat(color, intensity = 1, extra = {}) {
+  return new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: intensity, roughness: .35, ...extra });
+}
+function _aramChampions() {
+  const list = [];
+  if (typeof controller !== 'undefined' && controller && controller.root) list.push(controller);
+  if (typeof placedAllies !== 'undefined') list.push(...placedAllies);
+  return list.filter((u) => u && u.hp > 0);
+}
+function _aramPos(u) { return u.root ? u.root.position : getWorldPosition(u); }
+function _aramHealMissing(u, pct) {
+  if (!u || !(u.hp > 0)) return;
+  const mult = typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(u) : 1;
+  u.hp = Math.min(u.maxHp, u.hp + (u.maxHp - u.hp) * pct * mult);
+  if (typeof u.mp === 'number' && u.maxMp > 0) u.mp = Math.min(u.maxMp, u.mp + (u.maxMp - u.mp) * pct);
+}
+
+function buildAramFeatures() {
+  if (aramFeaturesBuilt || typeof howlingAbyssMap === 'undefined' || !howlingAbyssMap || !howlingAbyssMap.group) return false;
+  aramFeaturesBuilt = true;
+  const map = howlingAbyssMap;
+  const edgeX = (z) => map.clampPosition(new THREE.Vector3(1e6, 0, z)).x; // 아래쪽 벽(+x) 안쪽 끝
+  for (const team of ['BLUE', 'RED']) {
+    const s = HA_STRUCTURES_LOL[team];
+    const outerZ = haLolToWorld(s.outer).z, gapZ = haTurretGapZ(team);
+    // 바깥 유물: 외곽 포탑과 다리 가운데 사이 / 안쪽 유물: 외곽~억제기 포탑 사이(그 자리 부쉬보다 조금 외곽 포탑 쪽)
+    const spots = [{ kind: 'outer', z: outerZ * 0.55, firstSec: 105 }, { kind: 'inner', z: gapZ + (outerZ - gapZ) * 0.35, firstSec: 150 }];
+    for (const sp of spots) {
+      const x = edgeX(sp.z) - lolRangeToWorld(170);
+      const pos = new THREE.Vector3(x, 0, sp.z);
+      const g = new THREE.Group(); g.position.copy(pos); scene.add(g);
+      const pad = new THREE.Mesh(new THREE.RingGeometry(lolRangeToWorld(70), lolRangeToWorld(95), 32), _aramMat(0x7be08a, .5, { transparent: true, opacity: .55, side: THREE.DoubleSide }));
+      pad.rotation.x = -Math.PI / 2; pad.position.y = .03; g.add(pad);
+      const orb = new THREE.Group(); orb.position.y = lolRangeToWorld(110); g.add(orb);
+      orb.add(new THREE.Mesh(new THREE.OctahedronGeometry(lolRangeToWorld(40), 0), _aramMat(0x9dffb0, 1.4)));
+      const cross = _aramMat(0xffffff, 1.2);
+      orb.add(new THREE.Mesh(new THREE.BoxGeometry(lolRangeToWorld(14), lolRangeToWorld(48), lolRangeToWorld(14)), cross));
+      orb.add(new THREE.Mesh(new THREE.BoxGeometry(lolRangeToWorld(48), lolRangeToWorld(14), lolRangeToWorld(14)), cross));
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(lolRangeToWorld(ARAM_RELIC_BEAM_RADIUS_LOL), lolRangeToWorld(ARAM_RELIC_BEAM_RADIUS_LOL), .05, 48, 1, true),
+        _aramMat(0x9dffb0, .8, { transparent: true, opacity: .0, side: THREE.DoubleSide, depthWrite: false }));
+      beam.position.y = .05; g.add(beam);
+      aramRelics.push({ team, kind: sp.kind, pos, group: g, orb, beam, nextSpawnAt: sp.firstSec, active: false, beamAt: null, picker: null, pickedTeam: null });
+    }
+    // 서리 관문: 넥서스 옆(아래쪽 +x), 넥서스 가장자리 바로 바깥
+    const nexus = haLolToWorld(s.nexus), sign = team === 'RED' ? -1 : 1; // 다리 쪽 방향
+    const gp = new THREE.Vector3(nexus.x + lolRangeToWorld(HA_STRUCTURE_RADIUS_LOL.nexus + 420), 0, nexus.z + sign * lolRangeToWorld(150));
+    map.clampPosition(gp);
+    const color = team === 'BLUE' ? 0x5fd2ff : 0xff6a7a;
+    const g = new THREE.Group(); g.position.copy(gp); scene.add(g);
+    const disk = new THREE.Mesh(new THREE.CircleGeometry(lolRangeToWorld(ARAM_GATE_RADIUS_LOL), 40), _aramMat(color, .9, { transparent: true, opacity: .45, side: THREE.DoubleSide }));
+    disk.rotation.x = -Math.PI / 2; disk.position.y = .04; g.add(disk);
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(lolRangeToWorld(ARAM_GATE_RADIUS_LOL), lolRangeToWorld(16), 8, 40, Math.PI), _aramMat(0xcfeeff, .6));
+    arch.rotation.y = Math.PI / 2; g.add(arch);
+    const swirl = new THREE.Mesh(new THREE.RingGeometry(lolRangeToWorld(40), lolRangeToWorld(ARAM_GATE_RADIUS_LOL - 20), 6), _aramMat(color, 1.2, { transparent: true, opacity: .5, side: THREE.DoubleSide }));
+    swirl.rotation.x = -Math.PI / 2; swirl.position.y = .06; g.add(swirl);
+    aramGates.push({ team, pos: gp, group: g, swirl, sign, lastUse: new WeakMap() });
+  }
+  return true;
+}
+
+// 관문이 지금 이어진 포탑: 외곽 포탑 → (부서지면) 억제기 포탑 → (둘 다 부서지면) 닫힘
+function aramGateTarget(team) {
+  if (typeof turrets === 'undefined') return null;
+  const alive = (type) => turrets.find((t) => t.team === team && t.type === type && !t.destroyed);
+  return alive(TURRET_TYPE.OUTER1) || alive(TURRET_TYPE.INHIBITOR) || null;
+}
+function aramGateExit(gate) {
+  const t = aramGateTarget(gate.team);
+  if (!t) return null;
+  const p = t.mesh.position.clone(); p.y = 0;
+  p.z -= gate.sign * lolRangeToWorld(ARAM_GATE_EXIT_BEHIND_LOL);
+  return howlingAbyssMap.clampPosition(p);
+}
+
+function updateAramFeatures(dt) {
+  if (!aramFeaturesBuilt && !buildAramFeatures()) return;
+  const gameSec = typeof getTurretGameTimeSec === 'function' ? getTurretGameTimeSec() : 0;
+  const now = performance.now();
+  const champs = _aramChampions();
+  for (const r of aramRelics) {
+    if (!r.active && r.beamAt == null && gameSec >= r.nextSpawnAt) r.active = true;
+    r.orb.visible = r.active;
+    if (r.active) {
+      r.orb.position.y = lolRangeToWorld(110) + Math.sin(now / 400) * lolRangeToWorld(12);
+      r.orb.rotation.y += dt * 1.6;
+      const reach = lolRangeToWorld(ARAM_RELIC_PICKUP_LOL);
+      const picker = champs.find((u) => getHorizontalDistance(_aramPos(u), r.pos) <= reach + (getCollisionRadius(u) || 0));
+      if (picker) {
+        r.active = false; r.picker = picker; r.pickedTeam = picker.team || PLAYER_TEAM;
+        _aramHealMissing(picker, ARAM_RELIC_INSTANT_PCT);
+        r.beamAt = gameSec + ARAM_RELIC_BEAM_DELAY_SEC;
+        if (picker === (typeof controller !== 'undefined' ? controller : null) && typeof showSkillToast === 'function') showSkillToast('회복 유물: 잃은 체력·마나 8% 회복 - 잠시 뒤 주변 아군에게 빛줄기');
+      }
+    }
+    // 빛줄기: 떨어지기 전엔 바닥 원이 차오르고, 떨어지면 범위 안 아군을 회복
+    if (r.beamAt != null) {
+      const left = r.beamAt - gameSec;
+      r.beam.material.opacity = left > 0 ? .12 + .25 * (1 - left / ARAM_RELIC_BEAM_DELAY_SEC) : Math.max(0, .6 + left * 1.5);
+      r.beam.scale.y = 1;
+      if (left <= 0 && !r._beamDone) {
+        r._beamDone = true;
+        const rad = lolRangeToWorld(ARAM_RELIC_BEAM_RADIUS_LOL);
+        for (const u of champs) if ((u.team || PLAYER_TEAM) === r.pickedTeam && getHorizontalDistance(_aramPos(u), r.pos) <= rad + (getCollisionRadius(u) || 0)) _aramHealMissing(u, ARAM_RELIC_BEAM_PCT);
+        r.nextSpawnAt = r.beamAt + ARAM_RELIC_RESPAWN_SEC;
+      }
+      if (left < -0.4) { r.beamAt = null; r._beamDone = false; r.beam.material.opacity = 0; }
+    }
+  }
+  for (const gate of aramGates) {
+    const exit = aramGateExit(gate);
+    gate.group.visible = true;
+    gate.swirl.rotation.z += dt * (exit ? 1.8 : 0.2);
+    gate.swirl.material.opacity = exit ? .5 : .12;
+    if (!exit) continue;
+    const reach = lolRangeToWorld(ARAM_GATE_RADIUS_LOL);
+    for (const u of champs) {
+      if (u !== controller || u._dashState || u.state === 'DEAD') continue; // 지금은 직접 조작하는 챔피언만 탄다
+      // 원작처럼 관문을 "찍어서"(우클릭 이동 목표가 관문 안) 들어갈 때만 탄다 - 그냥 옆을 지나가면 타지 않는다.
+      if (u.targetPos && getHorizontalDistance(u.targetPos, gate.pos) <= reach) u._aramGateIntent = gate;
+      else if (u.targetPos) u._aramGateIntent = null;
+      if (u._aramGateIntent !== gate) continue;
+      const last = gate.lastUse.get(u) || 0;
+      if (now - last < ARAM_GATE_LOCKOUT_SEC * 1000) continue;
+      if (getHorizontalDistance(_aramPos(u), gate.pos) > reach) continue;
+      u._aramGateIntent = null;
+      gate.lastUse.set(u, now);
+      const from = u.root.position.clone();
+      const dir = exit.clone().sub(from); dir.y = 0;
+      u._dashState = { from, to: exit.clone(), duration: ARAM_GATE_TRAVEL_SEC, elapsed: 0, faceDir: dir.lengthSq() > 1e-6 ? dir.normalize() : null };
+      u.targetPos = null;
+      if (typeof showSkillToast === 'function') showSkillToast('서리 관문');
+    }
+  }
+}
+
 /* ===== src/core/exp_level_system.js ===== */
 /* ============================================================
    EXP / LEVEL SYSTEM (요청: "LoL 경험치 및 레벨 시스템 구현")
@@ -37646,6 +37836,7 @@ function animate() {
     updateDummyAI(dt);
     updateDyingMinions(dt);
     if (typeof updateMinions === 'function') updateMinions(dt);
+    if (typeof updateAramFeatures === 'function') updateAramFeatures(dt); // 74차: 회복 유물·서리 관문
     if (typeof rewardTick === 'function') rewardTick(dt);
     if (typeof tickHudItemCooldowns === 'function') tickHudItemCooldowns(controller); // 63차: HUD 아이템 재사용 대기 표시
     if (typeof tickChampionBars === 'function') tickChampionBars(); // 67차: 허수아비 체력바(회복·보호막·리스폰 즉시 반영)

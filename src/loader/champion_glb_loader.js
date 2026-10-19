@@ -1637,6 +1637,7 @@ function animate() {
     updateDummyAI(dt);
     updateDyingMinions(dt);
     if (typeof updateMinions === 'function') updateMinions(dt);
+    if (typeof updateAramFeatures === 'function') updateAramFeatures(dt); // 74차: 회복 유물·서리 관문
     if (typeof rewardTick === 'function') rewardTick(dt);
     if (typeof tickHudItemCooldowns === 'function') tickHudItemCooldowns(controller); // 63차: HUD 아이템 재사용 대기 표시
     if (typeof tickChampionBars === 'function') tickChampionBars(); // 67차: 허수아비 체력바(회복·보호막·리스폰 즉시 반영)

@@ -39,11 +39,15 @@ const HA_MAP_CONFIG = {
   // 25차(원작 이동 격자 대조): 걸을 수 있는 끝이 원작은 가운데에서 ±약 8,115 LoL(LeagueSandbox Map12 AIPath.aimesh_ngrid
   // - 블루 -8,167 / 레드 +8,062)인데 이 맵은 ±125(약 9,105)까지 갔다. 8,115 LoL = 111.4(줄이기 전 단위, 1 = 72.84 LoL).
   // 맵 배율(HA_MAP_SCALE)은 아래처럼 고정 길이(HA_MAP_SPAN_UNITS)로 정하므로 이 값을 바꿔도 맵 크기는 그대로다.
-  laneMinZ: -111.4, laneMaxZ: 111.4,
-  blueBaseZ: -106.5, redBaseZ: 106.5,
-  blueNexusZ: -94.5, redNexusZ: 94.5,
-  blueTurretZ: -66, redTurretZ: 66,
+  // 74차: 다리 방향 길이를 HA_LENGTH_SCALE배로 늘린다(사용자 요청 "맵 좀 더 길게").
+  laneMinZ: -111.4 * 1.3, laneMaxZ: 111.4 * 1.3,
+  blueBaseZ: -106.5 * 1.3, redBaseZ: 106.5 * 1.3,
+  blueNexusZ: -94.5 * 1.3, redNexusZ: 94.5 * 1.3,
+  blueTurretZ: -66 * 1.3, redTurretZ: 66 * 1.3,
 };
+// 74차: 맵을 다리 방향으로만 늘리는 배율(폭·구조물 크기·사거리는 그대로). 원작 좌표의 다리 방향 성분, 이동 격자 모양의
+// 넓어지는 자리, 이동 끝(laneMinZ/MaxZ), 부쉬 위치가 전부 이 배율을 따른다 - 포탑 사이·넥서스까지 거리가 30% 길어진다.
+const HA_LENGTH_SCALE = 1.3;
 
 // 원작 크기 맞춤(19차 요청 "실제 맵과 챔피언의 크기를 비교하여 여기 크기도 맞춰줘"): 챔피언 사거리·이동속도는
 // WORLD_DISTANCE_SCALE로 LoL 단위와 정확히 맞춰져 있는데, 맵은 손으로 늘린 값이라 원작보다 1.6배쯤 길었다
@@ -104,7 +108,7 @@ const HA_SPAWN_LOL = { BLUE: [936.9515, 1060.61426], RED: [11860.0889, 11596.157
 // 상점 자리(왼쪽)와 맞는다.
 function haLolToWorld(xz) {
   const dx = xz[0] - HA_LEVEL_CENTER_LOL[0], dz = xz[1] - HA_LEVEL_CENTER_LOL[1];
-  return new THREE.Vector3(-lolRangeToWorld((dz - dx) / Math.SQRT2), 0, lolRangeToWorld((dx + dz) / Math.SQRT2));
+  return new THREE.Vector3(-lolRangeToWorld((dz - dx) / Math.SQRT2), 0, lolRangeToWorld((dx + dz) / Math.SQRT2) * HA_LENGTH_SCALE);
 }
 // 외곽 포탑과 억제기 포탑 사이 한가운데의 z(월드) - 부쉬 배치용.
 function haTurretGapZ(team) {
@@ -134,7 +138,7 @@ function createHowlingAbyssMap(scene) {
   const LOL_PER_UNIT = 1 / (lolRangeToWorld(1) / S); // 줄이기 전 1단위 = 약 72.84 LoL
   const WIDEN_EXTRA_X = HA_WALK_SHAPE_LOL.baseHalf / LOL_PER_UNIT - cfg.laneMaxX;
   function widenExtraForZ(z) {
-    const a = Math.abs(z) * LOL_PER_UNIT, W = HA_WALK_SHAPE_LOL;
+    const a = Math.abs(z) * LOL_PER_UNIT / HA_LENGTH_SCALE, W = HA_WALK_SHAPE_LOL; // 74차: 늘린 길이만큼 넓어지는 자리도 뒤로
     if (a < W.widenStart) return 0;
     if (a < W.widenFull) return WIDEN_EXTRA_X * (a - W.widenStart) / (W.widenFull - W.widenStart);
     if (a < W.taperStart) return WIDEN_EXTRA_X;
@@ -203,15 +207,35 @@ function createHowlingAbyssMap(scene) {
   const snowMat = std({ map: snowTex, color: 0xb9c9d6, roughness: 1 });
   const iceMat = std({ color: 0x9fd8f2, roughness: .25, metalness: .05, emissive: 0x2a6f99, emissiveIntensity: .35, transparent: true, opacity: .9, flatShading: true });
   const darkMat = std({ color: 0x101c25, roughness: 1 });
-  // 원작 텍스처(CommunityDragon)에 닿으면 바꿔 끼운다(실패하면 위 텍스처 그대로).
-  const ASSET = 'https://raw.communitydragon.org/latest/game/assets/maps/kitpieces/howling_abyss/textures/';
+  // 74차: 원작 텍스처(CommunityDragon howling_abyss kitpiece 텍스처). 저장소에 받아 둔 사본(assets/maps/howling_abyss/,
+  // tools/fetch_ha_textures.py)을 먼저 찾고, 없으면 CommunityDragon에서 바로 받는다. 둘 다 안 되면 위에서 코드로 그린 텍스처가
+  // 그대로 남는다(어느 환경에서도 바닥·벽이 보인다).
+  const HA_TEX_LOCAL = 'assets/maps/howling_abyss/';
+  const HA_TEX_REMOTE = 'https://raw.communitydragon.org/latest/game/assets/maps/kitpieces/howling_abyss/textures/';
   const loader = new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
-  function tryRemote(material, name) {
-    loader.load(ASSET + name, (t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; material.map = t; material.color.setHex(0xffffff); material.needsUpdate = true; }, undefined, () => {});
+  function useOriginal(material, name, repeat = 1) {
+    const apply = (t) => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat, repeat); t.colorSpace = THREE.SRGBColorSpace;
+      if (typeof renderer !== 'undefined' && renderer.capabilities) t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      material.map = t; if (!material.vertexColors) material.color.setHex(0xffffff); material.needsUpdate = true;
+      material.userData.textureSource = t.image && t.image.src;
+    };
+    loader.load(HA_TEX_LOCAL + name, apply, undefined, () => loader.load(HA_TEX_REMOTE + name, apply, undefined, () => {}));
   }
-  tryRemote(laneMat, 'structure_lane_ground.png');
-  tryRemote(baseMat, 'structure_base_ground.png');
-  tryRemote(wallMat, 'structure_lane_walls.png');
+  const pillarMat = std({ map: wallTex, color: 0xb0bdc6, roughness: .85 });
+  const cliffMat = std({ map: rockTex, color: 0xa8b8c4, flatShading: true });
+  useOriginal(laneMat, 'structure_lane_ground.png');
+  useOriginal(baseMat, 'structure_base_ground.png');
+  useOriginal(wallMat, 'structure_lane_walls.png');
+  useOriginal(pillarMat, 'structure_lane_walls2.png');
+  useOriginal(snowMat, 'basesnow.png');
+  useOriginal(rockMat, 'prop_icecliff_h.png');
+  useOriginal(cliffMat, 'prop_icecliff_f.png');
+  useOriginal(iceMat, 'prop_ice_chunksa.png');
+  // 지형 텍스처를 쓰는 재질 목록(점검용)
+  const slopeMat = std({ vertexColors: true, flatShading: true, roughness: .95 });
+  useOriginal(slopeMat, 'prop_icecliff_snowtransition.png');
+  const HA_TEXTURED = { slopeMat, laneMat, baseMat, wallMat, pillarMat, snowMat, rockMat, cliffMat, iceMat };
 
   function mesh(geo, material, pos = [0, 0, 0], rot = [0, 0, 0], scl = null, parent = group) {
     const o = new THREE.Mesh(geo, material); o.position.set(...pos); o.rotation.set(...rot); if (scl) o.scale.set(...scl);
@@ -235,7 +259,7 @@ function createHowlingAbyssMap(scene) {
   const floor = mesh(floorGeo, laneMat, [0, FLOOR_Y, 0], [-Math.PI / 2, 0, 0]);
   floor.name = 'HA_FLOOR';
   for (const sign of [-1, 1]) {
-    const z0 = HA_WALK_SHAPE_LOL.widenStart / LOL_PER_UNIT - 3, sh = new THREE.Shape(), pts = [];
+    const z0 = HA_WALK_SHAPE_LOL.widenStart * HA_LENGTH_SCALE / LOL_PER_UNIT - 3, sh = new THREE.Shape(), pts = [];
     for (let z = z0; z <= cfg.laneMaxZ + 1e-6; z += STEP) pts.push([halfW(z), sign * Math.min(z, cfg.laneMaxZ)]);
     for (let i = pts.length - 1; i >= 0; i--) pts.push([-pts[i][0], pts[i][1]]);
     pts.forEach(([x, z], i) => (i ? sh.lineTo(x, -z) : sh.moveTo(x, -z)));
@@ -256,7 +280,7 @@ function createHowlingAbyssMap(scene) {
       mesh(new THREE.BoxGeometry(RAIL_T + .18, .22, len + .05), snowMat, [mid.x, FLOOR_Y + RAIL_H + .05, mid.z], [0, yaw, 0]);
       if (i % 6 === 0) { // 기둥
         const px = a.x + side * .1;
-        mesh(new THREE.BoxGeometry(1.7, 2.6, 1.7), wallMat, [px, FLOOR_Y + 1.25, a.z]);
+        mesh(new THREE.BoxGeometry(1.7, 2.6, 1.7), pillarMat, [px, FLOOR_Y + 1.25, a.z]);
         mesh(new THREE.ConeGeometry(1.35, 1.0, 4), snowMat, [px, FLOOR_Y + 3.05, a.z], [0, Math.PI / 4, 0]);
         mesh(new THREE.BoxGeometry(1.95, .3, 1.95), wallMat, [px, FLOOR_Y + .15, a.z]);
       }
@@ -268,7 +292,7 @@ function createHowlingAbyssMap(scene) {
     const zEnd = sign * (cfg.laneMaxZ + 3.2), w = halfW(cfg.laneMaxZ) + 4;
     for (let x = -w; x <= w; x += 2.2) {
       const h = 3.5 + rnd() * 3.5;
-      mesh(new THREE.DodecahedronGeometry(1.8 + rnd() * .7, 0), rockMat, [x, FLOOR_Y + h * .35, zEnd + sign * rnd() * 1.4], [rnd(), rnd() * 3, rnd()], [1.15, h / 2.4, .95]);
+      mesh(new THREE.DodecahedronGeometry(1.8 + rnd() * .7, 0), cliffMat, [x, FLOOR_Y + h * .35, zEnd + sign * rnd() * 1.4], [rnd(), rnd() * 3, rnd()], [1.15, h / 2.4, .95]);
       if (rnd() < .5) mesh(new THREE.ConeGeometry(.5 + rnd() * .4, 2 + rnd() * 2.5, 5), iceMat, [x + rnd(), FLOOR_Y + 1, zEnd - sign * 1.6], [0, rnd() * 3, (rnd() - .5) * .4]);
     }
   }
@@ -297,7 +321,10 @@ function createHowlingAbyssMap(scene) {
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     g.setIndex(idx); g.computeVertexNormals();
-    mesh(g, std({ vertexColors: true, flatShading: true, roughness: .95 }));
+    // 비탈 UV(월드 좌표) - 원작 눈 절벽 텍스처가 늘어나지 않게
+    const uvs = []; for (let i = 0; i < pos.length; i += 3) uvs.push(pos[i + 2] / 8, pos[i + 1] / 8 + pos[i] / 8);
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    mesh(g, slopeMat);
     // 비탈 위 바위(눈 모자)와 얼음 결정
     for (let z = cfg.laneMinZ; z <= cfg.laneMaxZ; z += 3.2) {
       const edge = halfW(z) + RAIL_OFF + 2.5 + rnd() * 7, h = 1.2 + rnd() * 2.8;
@@ -308,7 +335,7 @@ function createHowlingAbyssMap(scene) {
     }
   }
   // 다리 가운데 양쪽의 거대한 프렐요드 수호자 석상(원작 다리 옆 석상 실루엣을 단순화)
-  for (const z of [-26, 26]) for (const side of [-1, 1]) {
+  for (const z of [-26 * HA_LENGTH_SCALE, 26 * HA_LENGTH_SCALE]) for (const side of [-1, 1]) {
     const g = new THREE.Group(); g.position.set(side * (halfW(z) + 5.5), FLOOR_Y - .5, z); g.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; group.add(g);
     mesh(new THREE.BoxGeometry(4.2, 1.2, 4.2), wallMat, [0, .6, 0], [0, 0, 0], null, g);
     mesh(new THREE.CylinderGeometry(1.2, 1.6, 5.5, 6), rockMat, [0, 3.9, 0], [0, 0, 0], null, g);
@@ -321,9 +348,9 @@ function createHowlingAbyssMap(scene) {
     mesh(new THREE.BoxGeometry(3.7, .35, 1.7), snowMat, [0, 6.95, 0], [0, 0, 0], null, g);
   }
   // 심연 바닥과 먼 산 능선
-  mesh(new THREE.PlaneGeometry(260, 420), std({ color: 0x050d14, roughness: 1 }), [0, -22, 0], [-Math.PI / 2, 0, 0]);
+  mesh(new THREE.PlaneGeometry(260, 420 * HA_LENGTH_SCALE), std({ color: 0x050d14, roughness: 1 }), [0, -22, 0], [-Math.PI / 2, 0, 0]);
   for (const side of [-1, 1]) for (let i = 0; i < 14; i++) {
-    const z = -150 + i * 23 + rnd() * 10, h = 22 + rnd() * 26;
+    const z = (-150 + i * 23 + rnd() * 10) * HA_LENGTH_SCALE, h = 22 + rnd() * 26;
     mesh(new THREE.ConeGeometry(14 + rnd() * 10, h, 5), std({ color: 0x1b2c39, roughness: 1, flatShading: true }), [side * (70 + rnd() * 30), -20 + h / 2, z], [0, rnd() * 3, 0]);
     mesh(new THREE.ConeGeometry(5 + rnd() * 3, h * .3, 5), snowMat, [side * (70 + rnd() * 30), -20 + h * .9, z], [0, rnd() * 3, 0]);
   }
@@ -399,7 +426,7 @@ function createHowlingAbyssMap(scene) {
   // 이동 범위: 바닥 외곽선과 같은 widenExtraForZ()(판정은 월드 좌표 → 줄이기 전 단위).
   function clampPosition(p) { const maxX = (cfg.laneMaxX + widenExtraForZ(p.z / S)) * S; p.x = THREE.MathUtils.clamp(p.x, -maxX, maxX); p.z = THREE.MathUtils.clamp(p.z, cfg.laneMinZ * S, cfg.laneMaxZ * S); return p; }
   function isInsidePlayableArea(p) { const maxX = (cfg.laneMaxX + widenExtraForZ(p.z / S)) * S; return p.x >= -maxX && p.x <= maxX && p.z >= cfg.laneMinZ * S && p.z <= cfg.laneMaxZ * S; }
-  return { group, scale: S, laneMinX: cfg.laneMinX * S, laneMaxX: cfg.laneMaxX * S, laneMinZ: cfg.laneMinZ * S, laneMaxZ: cfg.laneMaxZ * S,
+  return { group, scale: S, lengthScale: HA_LENGTH_SCALE, texturedMaterials: HA_TEXTURED, laneMinX: cfg.laneMinX * S, laneMaxX: cfg.laneMaxX * S, laneMinZ: cfg.laneMinZ * S, laneMaxZ: cfg.laneMaxZ * S,
     spawnBlue: haLolToWorld(HA_SPAWN_LOL.BLUE), spawnRed: haLolToWorld(HA_SPAWN_LOL.RED),
     blueNexus: null, redNexus: null, blueTurret: null, redTurret: null,
     pathBlueToRed, pathRedToBlue, clampPosition, isInsidePlayableArea, updateSnow };
