@@ -54,7 +54,7 @@ const startServer = require('./server.js');
   r.fountain = await page.evaluate(() => new Promise((res) => {
     const E = window.__e2e, c = window.controller, w = E.turrets.find((x) => x.team === 'BLUE' && x.type === 'nexusWell'), wp = E.getWorldPosition(w);
     c.root.position.set(wp.x, 0, wp.z); c.hp = Math.round(c.maxHp * 0.3); const hp0 = c.hp;
-    setTimeout(() => res({ healed: c.hp > hp0, hpPct: Math.round(c.hp / c.maxHp * 100) }), 1500);
+    setTimeout(() => res({ noFountainHeal: c.hp - hp0 < c.maxHp * 0.05, hpPct: Math.round(c.hp / c.maxHp * 100) }), 1500); // 83차: 칼바람 우물은 회복하지 않는다(자연 회복만)
   }));
   // 가운데(허수아비 자리)는 어느 포탑 사거리에도 들지 않는다
   r.centerSafe = await page.evaluate(() => { const E = window.__e2e, R = E.lolRangeToWorld(775); return E.turrets.filter((t) => t.type !== 'nexusWell').every((t) => Math.hypot(E.getWorldPosition(t).x, E.getWorldPosition(t).z) > R + E.lolRangeToWorld(800)); });
