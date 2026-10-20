@@ -413,6 +413,9 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
       this.phaseCancelable = false;
       this.pendingMove = null;
       this._dispatchCast(slot, mouseWorldPoint, false);
+      // 88차: 평타를 끊었는데 스킬이 실제로 시작되지 않았으면(예: 레넥톤 변신 중 R 재입력) 공격 끝 자세에 멈춰 있지 않게
+      // 평소 행동 종료 경로(재교전·대기)로 돌려놓는다.
+      if (!this.currentActionKey && !this._dashState && this.state === STATE.ATTACK) this._resumeAfterAction();
       return;
     }
 

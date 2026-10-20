@@ -13128,8 +13128,26 @@ CharacterController.prototype.attackMoveTo = function(point, opts = {}) {
     return null;
 };
 // 매 프레임: 평타 타이머 대기, 공격 이동 중 적 탐색, 대기 중 자동 공격(사거리 안), 행동 불가 중 받아 둔 이동 명령.
+// 88차 안전장치(전 챔피언 모션 점검): 행동 키가 비었는데 상태는 공격/스킬 시전으로 남고 재생 클립도 끝나 멈춰 있으면
+// (행동을 끊은 뒤 새 행동이 시작되지 않은 경로), 또는 대기(IDLE)인데 끝난 동작 클립에 멈춰 있으면 0.3초 뒤 평소 행동 종료 경로로 돌려놓는다 - 끝 자세로 굳어 있지 않게.
+const ORPHAN_ACTION_STATES = new Set(['IDLE', 'ATTACK', 'Q_CAST', 'W_CAST', 'E_CAST', 'R_CAST']);
+CharacterController.prototype._recoverOrphanActionState = function() {
+    const a = this.currentAction;
+    const orphan = ORPHAN_ACTION_STATES.has(this.state) && !this.currentActionKey && !this._dashState
+      && !(this.sequencePlayer && this.sequencePlayer.isPlaying) && !!a && !a.isRunning()
+      && !(this.championId === 'rammus' && this._rammusRolling()); // 람머스 Q 공 자세는 일부러 멈춰 둔다
+    if (!orphan) { this._orphanSince = 0; return; }
+    const now = performance.now();
+    if (!this._orphanSince) { this._orphanSince = now; return; }
+    if (now - this._orphanSince < 300) return;
+    this._orphanSince = 0;
+    this._resumeAfterAction();
+    const b = this.currentAction;
+    if (ORPHAN_ACTION_STATES.has(this.state) && !this.currentActionKey && !(b && b.isRunning())) this._returnToLocomotion();
+};
 CharacterController.prototype._updateAttackTimerWait = function() {
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
+    this._recoverOrphanActionState();
     const cc = typeof isCrowdControlled === 'function' && (isCrowdControlled(this) || (typeof isRooted === 'function' && isRooted(this)));
     if (this._ccBufferedMove && !cc && !this.currentActionKey) { const p = this._ccBufferedMove; this._ccBufferedMove = null; this.moveTo(p); return; }
     // 평타 후딜(선딜 이후) 중 대상이 사거리를 벗어나면 곧바로 추격한다(타이머는 계속 돈다).
@@ -14716,6 +14734,9 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
       this.phaseCancelable = false;
       this.pendingMove = null;
       this._dispatchCast(slot, mouseWorldPoint, false);
+      // 88차: 평타를 끊었는데 스킬이 실제로 시작되지 않았으면(예: 레넥톤 변신 중 R 재입력) 공격 끝 자세에 멈춰 있지 않게
+      // 평소 행동 종료 경로(재교전·대기)로 돌려놓는다.
+      if (!this.currentActionKey && !this._dashState && this.state === STATE.ATTACK) this._resumeAfterAction();
       return;
     }
 
@@ -17860,8 +17881,8 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
 CharacterController.prototype._renektonCastR = function(free=false) { 
     const r=this._renektonData().R;
     if(!free && (this.cooldowns.R>0 || this.state===STATE.DEAD || isSilenced(this))) return;
+    if(this._renekton.rActive)return; // 88차: 변신 중 재입력은 재사용 대기시간을 쓰지 않는다(예전엔 쿨다운만 먼저 걸고 돌아갔다)
     if(!free)this.cooldowns.R=abilityHasteCooldown(this, skillVal(r.cooldown,this.skillLevels.R||1));
-    if(this._renekton.rActive)return;
     const lvl=this.skillLevels.R||1;
     // 28차: 모션 테스트(free) 시전도 실제로 변신한다 - 예전엔 free면 변신 자체를 건너뛰어 크기가 안 바뀌었다(재사용 대기시간만 free가 면제).
     {

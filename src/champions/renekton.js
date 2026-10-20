@@ -281,8 +281,8 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
 CharacterController.prototype._renektonCastR = function(free=false) { 
     const r=this._renektonData().R;
     if(!free && (this.cooldowns.R>0 || this.state===STATE.DEAD || isSilenced(this))) return;
+    if(this._renekton.rActive)return; // 88차: 변신 중 재입력은 재사용 대기시간을 쓰지 않는다(예전엔 쿨다운만 먼저 걸고 돌아갔다)
     if(!free)this.cooldowns.R=abilityHasteCooldown(this, skillVal(r.cooldown,this.skillLevels.R||1));
-    if(this._renekton.rActive)return;
     const lvl=this.skillLevels.R||1;
     // 28차: 모션 테스트(free) 시전도 실제로 변신한다 - 예전엔 free면 변신 자체를 건너뛰어 크기가 안 바뀌었다(재사용 대기시간만 free가 면제).
     {

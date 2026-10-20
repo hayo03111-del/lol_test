@@ -85,7 +85,10 @@ const startServer = require('./server.js');
       report[scen] = { clips: clipsSeen.slice(0, 14), endState: arr[arr.length - 1].state, endClip: arr[arr.length - 1].clip, idleStuck, moveWrong, frozen, maxPelvisOffsetWorld: maxOff };
     }
   
-    all[id] = { issues: [...new Set(issues)], errors: errors.slice(0, 5), stuckSummary: Object.fromEntries(Object.entries(report).filter(([, v]) => v.idleStuck || v.moveWrong || v.frozen).map(([k, v]) => [k, { endState: v.endState, endClip: v.endClip, clips: v.clips.slice(0, 10) }])) };
+    // 일부러 그런 동작(오탐): 람머스 Q 구르기(공 자세 Spell1을 멈춰 두고 이동), 레넥톤 Q 회전(이동 중에도 Spell1을 끝까지 재생)
+    const EXPECTED = { rammus: /Spell1/, renekton: /이동 중 엉뚱한 동작 Spell1/ };
+    const realIssues = issues.filter((m) => !(EXPECTED[id] && EXPECTED[id].test(m)));
+    all[id] = { issues: [...new Set(realIssues)], errors: errors.slice(0, 5), stuckSummary: Object.fromEntries(Object.entries(report).filter(([, v]) => v.idleStuck || v.moveWrong || v.frozen).map(([k, v]) => [k, { endState: v.endState, endClip: v.endClip, clips: v.clips.slice(0, 10) }])) };
     await page.close();
   }
   console.log(JSON.stringify(all, null, 1));
