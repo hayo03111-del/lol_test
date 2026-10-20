@@ -175,7 +175,36 @@ function groundModelOnIdlePose(ctrl) {
   return drop;
 }
 
+// 90차(QA): 챔피언을 바꿔도 골드·아이템·신발·장신구·점수·소환사 주문(재사용 대기 포함)·아이템 영구 누적과 죽음 상태를 그대로 넘긴다.
+// 생성자·주석은 예전부터 "챔피언을 바꿔도 유지"라고 적혀 있었지만 새 CharacterController를 만들면서 전부 초기값이 됐다
+// (골드 5000 → 1400, 아이템 사라짐, 점수 0, 유령/점화 → 점멸/회복, 죽은 채 바꾸면 즉시 부활).
+const CHAMPION_CARRY_KEYS = ['gold', 'items', 'boots', 'trinket', 'summoners', 'score', '_startingGoldGiven', '_itemBootsExtraMoveSpeedLol',
+  '_itemTearState', '_itemGloryStacks', '_itemTimelessStacks', '_itemCullGold', '_itemSlaughterStacks', '_itemHeartsteelPermanentHpGain', '_itemHeartsteelScale'];
+function captureChampionCarry(c) {
+  if (!c) return null;
+  const out = {};
+  for (const k of CHAMPION_CARRY_KEYS) if (c[k] !== undefined) out[k] = c[k] && typeof c[k] === 'object' ? JSON.parse(JSON.stringify(c[k])) : c[k];
+  if (typeof lobbyState !== 'undefined' && lobbyState && lobbyState.pendingSpells) delete out.summoners; // 로비에서 새로 고른 주문이 우선
+  const dead = c.state === STATE.DEAD || c.hp <= 0;
+  if (dead && c._respawnAt) out._deadLeftMs = Math.max(0, c._respawnAt - performance.now());
+  return out;
+}
+function applyChampionCarry(c, carry) {
+  if (!c || !carry) return;
+  for (const k of CHAMPION_CARRY_KEYS) if (carry[k] !== undefined) c[k] = carry[k];
+  if (typeof recomputeItemStats === 'function') recomputeItemStats(c);
+  c.recomputeStats(); c.hp = c.maxHp; c.mp = c.maxMp;
+  if (carry._deadLeftMs > 0) { // 죽은 채로 바꾸면 남은 부활 시간 동안 죽어 있다(새 챔피언이 공짜로 부활하지 않게)
+    c.hp = 0; c.setState(STATE.DEAD); c._respawnAt = performance.now() + carry._deadLeftMs;
+    if (c.actionData && c.actionData.death) c.playFirstAvailable(c.actionData.death.clips, { loop: THREE.LoopOnce, fade: 0, clampWhenFinished: true });
+    const t = setTimeout(() => c._respawn(), carry._deadLeftMs);
+    c._pendingTimeouts.push(t);
+  }
+}
+
 async function bootstrapChampion(gltf, fileName) {
+  const carry = window.__resetNoCarry ? null : captureChampionCarry(typeof controller !== 'undefined' ? controller : null);
+  window.__resetNoCarry = false; // resetGame(): 이전 챔피언 상태를 넘기지 않고 처음 상태로
   disposeCurrentChampion();
   // 요청("이 glb들 상시로 적용되있게 해줘") - 포탑/억제기/넥서스를 만들기
   // 전에 내장 GLB 디코딩이 끝났는지 반드시 기다린다(둘 다 비동기라 순서가
@@ -350,6 +379,9 @@ async function bootstrapChampion(gltf, fileName) {
     controller.recomputeStats(); controller.hp = controller.maxHp; controller.mp = controller.maxMp;
     updateBars(controller); if (typeof updateExpUI === 'function') updateExpUI(controller);
   }
+  applyChampionCarry(controller, carry); // 90차: 이전 챔피언의 골드·아이템·점수·소환사 주문·죽음 상태
+  updateGoldDisplay(); if (typeof updateItemUI === 'function') updateItemUI(controller); updateBars(controller);
+  if (typeof updateSummonerUI === 'function') updateSummonerUI(controller);
 
   // 요청("게임을 시작하면 자기 진영 우물에서 시작하게") - 실제 LoL처럼
   // 챔피언은 자기 팀 기지의 우물(분수)에서 스폰한다. 플레이어는 기존
@@ -375,7 +407,15 @@ function applyCameraDistanceForChampion() {
   cameraRig.distance = max;
 }
 
+// 90차: 게임 초기화(resetGame)가 지금 챔피언을 처음 상태로 다시 불러올 수 있게 마지막으로 읽은 GLB를 기억한다(저장소 모델·직접 고른 파일 모두).
+let lastChampionGlb = null;
+function reloadCurrentChampion() {
+  if (!lastChampionGlb) return false;
+  loadFromArrayBuffer(lastChampionGlb.buffer.slice(0), lastChampionGlb.fileName);
+  return true;
+}
 function loadFromArrayBuffer(buffer, fileName) {
+  lastChampionGlb = { buffer: buffer.slice(0), fileName };
   const loader = new GLTFLoader();
   loader.parse(buffer, '', (gltf) => bootstrapChampion(gltf, fileName),
     (err) => { console.error(err); loadingEl.classList.remove('show'); glbErrMsgEl.textContent = 'GLB 파싱 실패: ' + (err?.message || err); glbEntryEl.classList.add('show'); });

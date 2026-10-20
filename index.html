@@ -32578,10 +32578,29 @@ function combineCost(item) {
 // 상점과 동일한 UX) - 하위템을 전부 갖고 있으면 그것들을 소모하고 차액만
 // 받고, 아니면 완제품 가격 그대로 받는다(buyItem()으로 위임, 6칸 한도
 // 등 기존 검증을 그대로 재사용).
+// 90차(QA): 원작 상점은 하위템을 "일부만" 갖고 있어도 그만큼 깎아 주고 그 하위템을 소모한다(하위템의 하위템까지 재귀).
+// 예전엔 하위템을 전부 가져야만 조합했고, 하나만 있으면 완제품 값을 다 받고 그 하위템은 가방에 남았다.
+// 돌려주는 값: { cost: 실제로 낼 골드, consume: 소모할 인벤토리 아이템 id 목록 }.
+function itemPurchasePlan(ctrl, item) {
+  const pool = {};
+  for (const s of (ctrl && ctrl.items) || []) pool[s.id] = (pool[s.id] || 0) + 1;
+  const consume = [];
+  let discount = 0;
+  const walk = (it, depth) => {
+    for (const id of it.recipe || []) {
+      if (pool[id] > 0) { pool[id]--; consume.push(id); discount += (ITEM_DATA[id] && ITEM_DATA[id].cost) || 0; }
+      else if (depth < 6 && ITEM_DATA[id] && ITEM_DATA[id].recipe) walk(ITEM_DATA[id], depth + 1);
+    }
+  };
+  if (item && item.recipe && item.recipe.length && !item.isBoots) walk(item, 0);
+  return { cost: Math.max(0, (item ? item.cost : 0) - discount), consume };
+}
 function buildOrBuyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
-  if (!item.recipe || !item.recipe.length || !hasComponents(ctrl, item.recipe)) {
+  const plan = itemPurchasePlan(ctrl, item);
+  // 세계의 결실 업그레이드처럼 "하위템을 다 갖춰야만" 되는 것은 예전 규칙 그대로
+  if (!plan.consume.length || (item.upgradeOnly && !hasComponents(ctrl, item.recipe))) {
     return buyItem(ctrl, itemId);
   }
   if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM) && !(ctrl.hp <= 0 || ctrl.state === STATE.DEAD)) { // 83차: 죽어 있는 동안에도 구매·판매 가능(원작)
@@ -32591,17 +32610,17 @@ function buildOrBuyItem(ctrl, itemId) {
   // 유일 아이템 검사 - 이번 조합이 소모할 하위템(item.recipe)은 충돌
   // 판정에서 제외한다(예: 티아맷을 소모해 거대한히드라가 되는 건 "같은
   // 계열을 이미 들고 있다"고 막으면 안 된다 - 자연스러운 업그레이드이므로).
-  if (_itemUniqueGroupConflict(ctrl, item, new Set(item.recipe))) {
+  if (_itemUniqueGroupConflict(ctrl, item, new Set(plan.consume))) {
     itemWarn(`${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
   if (_itemLegendaryDuplicate(ctrl, item)) { itemWarn(`${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
-  const cost = combineCost(item);
+  const cost = plan.cost;
   if ((ctrl.gold || 0) < cost) { itemWarn('골드가 부족합니다(조합 비용).'); return false; }
   // 하위템 소모 - 개수만큼 각 id의 슬롯을 하나씩 제거한다. 소모(N개) 후
   // 완제품(1개)을 더하므로 칸 수는 절대 늘지 않는다(N>=1) - 인벤토리
   // 한도를 별도로 확인할 필요가 없다.
-  const counts = _recipeCounts(item.recipe);
+  const counts = _recipeCounts(plan.consume);
   for (const id in counts) {
     for (let i = 0; i < counts[id]; i++) {
       const idx = ctrl.items.findIndex((s) => s.id === id);
@@ -32617,14 +32636,27 @@ function buildOrBuyItem(ctrl, itemId) {
   return true;
 }
 
-// 판매가 70%(실제 LoL과 동일한 근사치) - 중첩된 소비 아이템은 칸 전체(개수만큼)를 한 번에 판다.
+// 판매가: 원작 - 일반 아이템 70%, 시작 아이템(도란 시리즈·수확의 낫·어둠의 인장)과 소모품 40%.
+// 90차(QA): 예전엔 전부 70%였고, 350×0.7 같은 부동소수 오차로 1골드 덜 줬다(244 → 245).
+const ITEM_SELL_RATIO_40 = new Set(['doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm', 'cull', 'darkSeal', 'healthPotion', 'refillablePotion', 'controlWard', 'elixirOfIron', 'elixirOfSorcery', 'elixirOfWrath']);
+function itemSellValue(itemId, count = 1) {
+  const item = ITEM_DATA[itemId];
+  if (!item) return 0;
+  const ratio = item.sellRatio ?? (ITEM_SELL_RATIO_40.has(itemId) ? 0.4 : 0.7);
+  return Math.floor((item.cost || 0) * (count || 1) * ratio + 1e-6);
+}
+// 90차(QA): 판매도 구매와 같은 조건(기지 안이거나 죽어 있을 때)에서만 - 예전엔 살아서 기지 밖에서도 팔렸다.
+function itemShopAvailable(ctrl) {
+  return !(typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM) && !(ctrl.hp <= 0 || ctrl.state === STATE.DEAD));
+}
 function sellItem(ctrl, slotIndex) {
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot) return false;
   const item = ITEM_DATA[slot.id];
   if (!item) return false;
+  if (!itemShopAvailable(ctrl)) { itemWarn('기지(상점 구역) 안에서만 팔 수 있습니다.'); return false; }
   ctrl.items.splice(slotIndex, 1);
-  ctrl.gold = (ctrl.gold || 0) + Math.floor((item.cost || 0) * (slot.count || 1) * 0.7);
+  ctrl.gold = (ctrl.gold || 0) + itemSellValue(slot.id, slot.count || 1);
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
@@ -32637,6 +32669,8 @@ function sellItem(ctrl, slotIndex) {
 // (판매가 아니라 업그레이드 개념이므로 70%가 아니라 100%).
 function _buyBoots(ctrl, item) {
   if (ctrl.boots && ctrl.boots.id === item.id) { itemWarn('이미 장착 중인 신발입니다.'); return false; }
+  const blockBoots = itemBootsBlockReason(ctrl, item);
+  if (blockBoots) { itemWarn(blockBoots); return false; }
   if ((ctrl.gold || 0) < item.cost) { itemWarn('골드가 부족합니다.'); return false; }
   if (ctrl.boots) {
     const old = ITEM_DATA[ctrl.boots.id];
@@ -32657,13 +32691,23 @@ function _buyBoots(ctrl, item) {
   return true;
 }
 
+// 90차(QA): 원작은 1단계 신발(장화·약간 신비한 신발)을 2단계로 "업그레이드"할 때만 기존 신발 값을 빼 준다.
+// 2단계 신발을 신은 채 다른 2단계 신발을 사는 것(예: 광전사의 군화 → 마법사의 신발 무료 교체)은 막는다 - 팔고 사야 한다.
+function itemBootsBlockReason(ctrl, item) {
+  if (!ctrl || !ctrl.boots || !item || !item.isBoots) return null;
+  const tier1 = (id) => id === 'boots' || id === 'slightlyMagicalBoots';
+  if (!tier1(ctrl.boots.id)) return '이미 완성 신발을 신고 있습니다(팔고 다시 사야 합니다)';
+  if (tier1(item.id)) return '이미 신발을 신고 있습니다';
+  return null;
+}
 // 신발 판매(70%, 다른 일반 아이템과 동일한 판매 규칙) - 교체가 아니라
 // 그냥 벗어서 파는 경우(버튼/슬롯 클릭)에 쓴다.
 function sellBoots(ctrl) {
   if (!ctrl || !ctrl.boots) return false;
-  const item = ITEM_DATA[ctrl.boots.id];
+  if (!itemShopAvailable(ctrl)) { itemWarn('기지(상점 구역) 안에서만 팔 수 있습니다.'); return false; }
+  const bootsId = ctrl.boots.id;
   ctrl.boots = null;
-  ctrl.gold = (ctrl.gold || 0) + Math.floor(((item && item.cost) || 0) * 0.7);
+  ctrl.gold = (ctrl.gold || 0) + itemSellValue(bootsId, 1);
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
@@ -32674,7 +32718,13 @@ function sellBoots(ctrl) {
 // 클릭으로 호출된다. 중첩/충전 소모 로직만 여기서 처리하고, 실제 회복은
 // 공용 지속 회복(HoT) 목록(_itemActiveHeals)에 등록해 itemSystemTick이
 // 매 프레임 진행한다.
+// 90차(QA): 아이템을 쓰면(물약 등) 상점 되돌리기 기록을 비운다(원작) - 예전엔 물약을 마시고 되돌리기로 값을 돌려받았다.
 function useItem(ctrl, slotIndex, opts = {}) {
+  const ok = _useItemImpl(ctrl, slotIndex, opts);
+  if (ok && typeof shopClearUndo === 'function') shopClearUndo();
+  return ok;
+}
+function _useItemImpl(ctrl, slotIndex, opts = {}) {
   if (!ctrl) return false;
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot) return false;
@@ -33045,6 +33095,7 @@ function _itemTickTearRecharge(ctrl, item, dt) {
 // 비용이 0이다.
 function itemSystemTick(ctrl, dt) {
   if (!ctrl) return;
+  if (typeof shopTickUndoZone === 'function') shopTickUndoZone(ctrl); // 90차(QA): 상점이 닫혀 있어도 기지를 벗어나면 되돌리기 기록을 비운다
   if (typeof runeTick === 'function') runeTick(ctrl, dt); // 52차: 룬(같은 훅을 쓴다)
   _itemTickActiveHeals(ctrl, dt);
   _itemTickActiveManaRestores(ctrl, dt);
@@ -36337,11 +36388,15 @@ function _shopInBase(ctrl) {
   if (ctrl.hp <= 0 || (typeof STATE !== 'undefined' && ctrl.state === STATE.DEAD)) return true; // 83차: 죽어 있으면 어디서든 상점 이용(원작)
   return typeof isPositionInBaseZone !== 'function' || isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM);
 }
+// 90차(QA): 하위템 일부만 있어도 그만큼 깎인 값(itemPurchasePlan)을 보여 주고 받는다 - buildOrBuyItem과 같은 계산.
+function _shopPlan(ctrl, item) { return ctrl && typeof itemPurchasePlan === 'function' ? itemPurchasePlan(ctrl, item) : { cost: item.cost, consume: [] }; }
 function _shopCanBuild(ctrl, item) {
-  return !!(ctrl && item.recipe && item.recipe.length && typeof hasComponents === 'function' && hasComponents(ctrl, item.recipe));
+  if (!ctrl || !item.recipe || !item.recipe.length) return false;
+  if (item.upgradeOnly) return typeof hasComponents === 'function' && hasComponents(ctrl, item.recipe);
+  return _shopPlan(ctrl, item).consume.length > 0;
 }
 function _shopPayCost(ctrl, item) {
-  return _shopCanBuild(ctrl, item) ? combineCost(item) : item.cost;
+  return _shopCanBuild(ctrl, item) ? _shopPlan(ctrl, item).cost : item.cost;
 }
 // buyItem()/buildOrBuyItem()이 거절하는 조건을 같은 순서로 미리 따진다. null이면 살 수 있다.
 function shopBlockReason(ctrl, itemId) {
@@ -36351,8 +36406,9 @@ function shopBlockReason(ctrl, itemId) {
   if (item.trinket) return '기본 장착(구매 불필요)';
   if (!_shopInBase(ctrl)) return '기지 안에서만 구매 가능';
   const build = _shopCanBuild(ctrl, item);
-  if (typeof _itemUniqueGroupConflict === 'function' && _itemUniqueGroupConflict(ctrl, item, build ? new Set(item.recipe) : null)) return '같은 계열 유일 아이템 보유 중';
+  if (typeof _itemUniqueGroupConflict === 'function' && _itemUniqueGroupConflict(ctrl, item, build ? new Set(_shopPlan(ctrl, item).consume) : null)) return '같은 계열 유일 아이템 보유 중';
   if (item.isBoots && ctrl.boots && ctrl.boots.id === itemId) return '이미 착용 중';
+  if (item.isBoots && typeof itemBootsBlockReason === 'function') { const r = itemBootsBlockReason(ctrl, item); if (r) return r; }
   if (item.upgradeOnly && !build) return '세계의 결실을 업그레이드해서만 얻음';
   if (typeof _itemLegendaryDuplicate === 'function' && _itemLegendaryDuplicate(ctrl, item)) return '같은 전설급 아이템 보유 중';
   const cost = _shopPayCost(ctrl, item);
@@ -36376,19 +36432,28 @@ function _shopSnapshot(label) {
   const c = controller;
   if (!c) return;
   _shopUndoStack.push({
-    ctrl: c, label, gold: c.gold || 0,
+    ctrl: c, label, gold: c.gold || 0, hp: c.hp, mp: c.mp,
     items: (c.items || []).map((s) => ({ ...s })),
     boots: c.boots ? { ...c.boots } : null,
     bootsExtra: c._itemBootsExtraMoveSpeedLol || 0,
   });
   if (_shopUndoStack.length > 20) _shopUndoStack.shift();
 }
+function _shopMarkAfter() { const t = _shopUndoStack[_shopUndoStack.length - 1], c = controller; if (t && c) { t.goldAfter = c.gold || 0; t.hpAfter = c.hp; t.mpAfter = c.mp; } }
+function shopClearUndo() { _shopUndoStack = []; if (_shopOpen) renderShopPanel(true); }
+function shopTickUndoZone(ctrl) { if (_shopUndoStack.length && ctrl && ctrl === controller && !_shopInBase(ctrl)) shopClearUndo(); }
 function shopUndo() {
   const snap = _shopUndoStack.pop();
   if (!snap || snap.ctrl !== controller) { _shopUndoStack = []; renderShopPanel(true); return false; }
   const c = controller;
-  c.gold = snap.gold; c.items = snap.items; c.boots = snap.boots; c._itemBootsExtraMoveSpeedLol = snap.bootsExtra;
+  // 90차(QA): 거래 뒤에 번 골드는 지킨다 - 그 거래로 바뀐 골드(after - before)만 되돌린다(예전엔 거래 직전 값으로 덮어써 그 사이 번 골드가 사라졌다).
+  // 체력·마나도 그 거래로 늘어난 만큼만 빼서, 사고 되돌리기로 공짜 회복이 되지 않게 한다.
+  const goldDelta = (snap.goldAfter ?? c.gold) - snap.gold, hpDelta = (snap.hpAfter ?? c.hp) - snap.hp, mpDelta = (snap.mpAfter ?? c.mp) - snap.mp;
+  c.gold = (c.gold || 0) - goldDelta; c.items = snap.items; c.boots = snap.boots; c._itemBootsExtraMoveSpeedLol = snap.bootsExtra;
   if (typeof recomputeItemStats === 'function') recomputeItemStats(c);
+  if (c.hp > 0) c.hp = Math.max(1, Math.min(c.maxHp, c.hp - Math.max(0, hpDelta)));
+  if (typeof c.mp === 'number') c.mp = Math.max(0, Math.min(c.maxMp ?? c.mp, c.mp - Math.max(0, mpDelta)));
+  if (typeof updateBars === 'function') updateBars(c);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(c);
   _shopSelectedSlot = null;
@@ -36401,7 +36466,7 @@ function _shopBuy(itemId) {
   if (reason) { if (typeof showSkillToast === 'function') showSkillToast(reason); return false; }
   _shopSnapshot(`${(ITEM_DATA[itemId] || {}).nameKo || itemId} 구매`);
   const ok = typeof buildOrBuyItem === 'function' && buildOrBuyItem(controller, itemId);
-  if (!ok) _shopUndoStack.pop();
+  if (!ok) _shopUndoStack.pop(); else _shopMarkAfter();
   if (ok) {
     const tile = document.querySelector(`#shopGrid .shop-tile[data-id="${itemId}"]`);
     if (tile) { tile.classList.remove('bought'); void tile.offsetWidth; tile.classList.add('bought'); }
@@ -36415,7 +36480,8 @@ function _shopSell() {
   _shopSnapshot(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
   const ok = _shopSelectedSlot === 'boots' ? (typeof sellBoots === 'function' && sellBoots(controller)) : (typeof sellItem === 'function' && sellItem(controller, _shopSelectedSlot));
   if (!ok) _shopUndoStack.pop();
-  else if (typeof showSkillToast === 'function') showSkillToast(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
+  else _shopMarkAfter();
+  if (ok && typeof showSkillToast === 'function') showSkillToast(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
   _shopSelectedSlot = null;
   renderShopPanel(true);
 }
@@ -36603,11 +36669,11 @@ function _shopRenderInventory() {
   const sellBtn = _shopEl('shopSellBtn');
   const info = _shopEl('shopSlotInfo');
   let sel = null, price = 0;
-  if (ctrl && _shopSelectedSlot === 'boots' && boots) { sel = boots; price = Math.floor(boots.cost * 0.7); }
+  if (ctrl && _shopSelectedSlot === 'boots' && boots) { sel = boots; price = typeof itemSellValue === 'function' ? itemSellValue(boots.id, 1) : Math.floor(boots.cost * 0.7); }
   else if (ctrl && typeof _shopSelectedSlot === 'number' && items[_shopSelectedSlot]) {
     const s = items[_shopSelectedSlot];
     sel = ITEM_DATA[s.id];
-    price = sel ? Math.floor((sel.cost || 0) * (s.count || 1) * 0.7) : 0;
+    price = sel ? (typeof itemSellValue === 'function' ? itemSellValue(s.id, s.count || 1) : Math.floor((sel.cost || 0) * (s.count || 1) * 0.7)) : 0;
   } else _shopSelectedSlot = null;
   if (sellBtn) { sellBtn.disabled = !sel; sellBtn.textContent = sel ? `판매 +${price.toLocaleString()}` : '판매'; }
   const undoBtn = _shopEl('shopUndoBtn');
@@ -39000,7 +39066,7 @@ window.addEventListener('keydown', (e) => {
     // (R도 Q/W/E와 같은 조준 경로 - onSkillKeyDown)
     case 'KeyR': onSkillKeyDown('R', e.code, mousePoint); break;
     case 'KeyB': controller.startRecall(); break;
-    case 'KeyA': attackMoveArmed = true; renderer.domElement.style.cursor = 'crosshair'; break; // 64차 공격 이동
+    case 'KeyA': attackMoveArmed = true; renderer.domElement.style.cursor = 'crosshair'; requestAnimationFrame(() => { if (attackMoveArmed) renderer.domElement.style.cursor = 'crosshair'; }); break; // 64차 공격 이동 (90차: 위 커서 숨김 복원이 크로스헤어를 덮어써 안 보이던 것 수정)
     // 36차: 소환사 주문(원작 기본 키 D/F).
     case 'KeyD': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'D', mousePoint, lastPointerClient); break;
     case 'KeyF': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'F', mousePoint, lastPointerClient); break;
@@ -39067,7 +39133,15 @@ window.addEventListener('keyup', (e) => {
   if (e.code === 'Space' || e.code === 'F1') cameraRig.centerHeld = false;
   if (!paused) onSkillKeyUp(e.code);
 });
-window.addEventListener('blur', () => { if (skillAim.aiming && skillAim.mode === 'indicator') skillAim.cancel(); });
+// 90차(QA): 창 포커스를 잃으면 눌린 키를 모두 뗀 것으로 본다(포커스 밖에서 뗀 키의 keyup은 오지 않는다).
+// 예전엔 표시기 모드 조준만 풀어서 일반 모드 조준·공격 이동 대기·바루스 Q 충전이 남았다(돌아와 첫 클릭이 공격 이동, Q 충전이 몇 초 뒤 저절로 발사).
+window.addEventListener('blur', () => {
+  if (skillAim.aiming && skillAim.heldKey) onSkillKeyUp(skillAim.heldKey); // 충전형(바루스 Q)은 키를 뗀 것처럼 발사
+  if (skillAim.aiming) skillAim.cancel();
+  if (controller && controller._varus && controller._varus.qCharge && !paused) controller.castAbility('Q', lastGroundPoint || controller.root.position.clone()); // 표시기 모드 충전
+  if (attackMoveArmed) { attackMoveArmed = false; renderer.domElement.style.cursor = ''; }
+  cameraRig.centerHeld = false;
+});
 
 function togglePause() {
   paused = !paused;
@@ -39204,6 +39278,8 @@ function _minimapInit() {
   };
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
+  canvas.addEventListener('lostpointercapture', release);
+  window.addEventListener('blur', release); // 90차(QA): 미니맵을 끌던 중 포커스를 잃으면 pointerup이 오지 않아 카메라가 미니맵에 묶여 있었다
   return _mm;
 }
 function _mmPt(p) {
@@ -39459,7 +39535,36 @@ function groundModelOnIdlePose(ctrl) {
   return drop;
 }
 
+// 90차(QA): 챔피언을 바꿔도 골드·아이템·신발·장신구·점수·소환사 주문(재사용 대기 포함)·아이템 영구 누적과 죽음 상태를 그대로 넘긴다.
+// 생성자·주석은 예전부터 "챔피언을 바꿔도 유지"라고 적혀 있었지만 새 CharacterController를 만들면서 전부 초기값이 됐다
+// (골드 5000 → 1400, 아이템 사라짐, 점수 0, 유령/점화 → 점멸/회복, 죽은 채 바꾸면 즉시 부활).
+const CHAMPION_CARRY_KEYS = ['gold', 'items', 'boots', 'trinket', 'summoners', 'score', '_startingGoldGiven', '_itemBootsExtraMoveSpeedLol',
+  '_itemTearState', '_itemGloryStacks', '_itemTimelessStacks', '_itemCullGold', '_itemSlaughterStacks', '_itemHeartsteelPermanentHpGain', '_itemHeartsteelScale'];
+function captureChampionCarry(c) {
+  if (!c) return null;
+  const out = {};
+  for (const k of CHAMPION_CARRY_KEYS) if (c[k] !== undefined) out[k] = c[k] && typeof c[k] === 'object' ? JSON.parse(JSON.stringify(c[k])) : c[k];
+  if (typeof lobbyState !== 'undefined' && lobbyState && lobbyState.pendingSpells) delete out.summoners; // 로비에서 새로 고른 주문이 우선
+  const dead = c.state === STATE.DEAD || c.hp <= 0;
+  if (dead && c._respawnAt) out._deadLeftMs = Math.max(0, c._respawnAt - performance.now());
+  return out;
+}
+function applyChampionCarry(c, carry) {
+  if (!c || !carry) return;
+  for (const k of CHAMPION_CARRY_KEYS) if (carry[k] !== undefined) c[k] = carry[k];
+  if (typeof recomputeItemStats === 'function') recomputeItemStats(c);
+  c.recomputeStats(); c.hp = c.maxHp; c.mp = c.maxMp;
+  if (carry._deadLeftMs > 0) { // 죽은 채로 바꾸면 남은 부활 시간 동안 죽어 있다(새 챔피언이 공짜로 부활하지 않게)
+    c.hp = 0; c.setState(STATE.DEAD); c._respawnAt = performance.now() + carry._deadLeftMs;
+    if (c.actionData && c.actionData.death) c.playFirstAvailable(c.actionData.death.clips, { loop: THREE.LoopOnce, fade: 0, clampWhenFinished: true });
+    const t = setTimeout(() => c._respawn(), carry._deadLeftMs);
+    c._pendingTimeouts.push(t);
+  }
+}
+
 async function bootstrapChampion(gltf, fileName) {
+  const carry = window.__resetNoCarry ? null : captureChampionCarry(typeof controller !== 'undefined' ? controller : null);
+  window.__resetNoCarry = false; // resetGame(): 이전 챔피언 상태를 넘기지 않고 처음 상태로
   disposeCurrentChampion();
   // 요청("이 glb들 상시로 적용되있게 해줘") - 포탑/억제기/넥서스를 만들기
   // 전에 내장 GLB 디코딩이 끝났는지 반드시 기다린다(둘 다 비동기라 순서가
@@ -39634,6 +39739,9 @@ async function bootstrapChampion(gltf, fileName) {
     controller.recomputeStats(); controller.hp = controller.maxHp; controller.mp = controller.maxMp;
     updateBars(controller); if (typeof updateExpUI === 'function') updateExpUI(controller);
   }
+  applyChampionCarry(controller, carry); // 90차: 이전 챔피언의 골드·아이템·점수·소환사 주문·죽음 상태
+  updateGoldDisplay(); if (typeof updateItemUI === 'function') updateItemUI(controller); updateBars(controller);
+  if (typeof updateSummonerUI === 'function') updateSummonerUI(controller);
 
   // 요청("게임을 시작하면 자기 진영 우물에서 시작하게") - 실제 LoL처럼
   // 챔피언은 자기 팀 기지의 우물(분수)에서 스폰한다. 플레이어는 기존
@@ -39659,7 +39767,15 @@ function applyCameraDistanceForChampion() {
   cameraRig.distance = max;
 }
 
+// 90차: 게임 초기화(resetGame)가 지금 챔피언을 처음 상태로 다시 불러올 수 있게 마지막으로 읽은 GLB를 기억한다(저장소 모델·직접 고른 파일 모두).
+let lastChampionGlb = null;
+function reloadCurrentChampion() {
+  if (!lastChampionGlb) return false;
+  loadFromArrayBuffer(lastChampionGlb.buffer.slice(0), lastChampionGlb.fileName);
+  return true;
+}
 function loadFromArrayBuffer(buffer, fileName) {
+  lastChampionGlb = { buffer: buffer.slice(0), fileName };
   const loader = new GLTFLoader();
   loader.parse(buffer, '', (gltf) => bootstrapChampion(gltf, fileName),
     (err) => { console.error(err); loadingEl.classList.remove('show'); glbErrMsgEl.textContent = 'GLB 파싱 실패: ' + (err?.message || err); glbEntryEl.classList.add('show'); });
@@ -41161,7 +41277,8 @@ function lobbyStart() {
 }
 // 챔피언을 다 불러온 뒤(로더가 부른다): 로비에서 고른 소환사 주문을 넣고 로비를 닫는다.
 function lobbyApplyPending(ctrl, spells = null) {
-  const s = spells || lobbyState.pendingSpells || (lobbyState.champ ? null : null);
+  // 90차(QA): 로비를 거치지 않고(챔피언 목록·GLB·?champ=) 불러와도 저장해 둔 소환사 주문을 쓴다(예전엔 늘 점멸/회복으로 돌아갔다).
+  const s = spells || lobbyState.pendingSpells || _lobbyLoad(LOBBY_SPELLS_KEY, null);
   if (ctrl && s && typeof setSummonerSpell === 'function') { setSummonerSpell(ctrl, 'D', s[0]); setSummonerSpell(ctrl, 'F', s[1]); }
   lobbyState.pendingSpells = null;
   closeLobby();
@@ -41302,6 +41419,7 @@ function _optBuild() {
     <div class="opt-foot">
       <button class="opt-btn" id="optPauseBtn">일시정지</button>
       <button class="opt-btn" id="optResetBtn">기본값 복원</button>
+      <button class="opt-btn" id="optRestartBtn" title="미니언·구조물·게임 시계·허수아비·챔피언을 처음 상태로">게임 다시 시작</button>
       <span class="opt-spacer"></span>
       <button class="opt-btn primary" id="optOkBtn">확인</button>
     </div></div>`;
@@ -41310,6 +41428,7 @@ function _optBuild() {
   ov.querySelector('#optCloseX').addEventListener('click', () => setOptionsOpen(false));
   ov.querySelector('#optOkBtn').addEventListener('click', () => setOptionsOpen(false));
   ov.querySelector('#optResetBtn').addEventListener('click', () => { optionsState = { ...OPTIONS_DEFAULTS }; _optSave(); applyOptions(); _optRenderBody(); });
+  ov.querySelector('#optRestartBtn').addEventListener('click', () => { if (typeof resetGame === 'function' && confirm('게임을 처음부터 다시 시작할까요? (골드·아이템·레벨·미니언·포탑이 처음 상태로 돌아갑니다)')) { setOptionsOpen(false); resetGame(); } }); // 90차
   ov.querySelector('#optPauseBtn').addEventListener('click', () => { if (typeof togglePause === 'function') togglePause(); _optRenderBody(); });
   ov.querySelector('#optTabs').addEventListener('click', (e) => { const t = e.target.closest('[data-tab]'); if (t) { _optTab = t.dataset.tab; _optRenderBody(); } });
   const body = ov.querySelector('#optBody');
@@ -41358,6 +41477,50 @@ function isOptionsOpen() { return _optOpen; }
   document.body.appendChild(gear);
   applyOptions();
 })();
+
+/* ===== src/core/game_reset.js ===== */
+/* game_reset.js — 90차(QA "게임을 초기화하면 미니언·허수아비·구조물·타이머까지 원하는 상태로 돌아가는가?")
+ * 예전엔 초기화 기능 자체가 없었다(설정의 "기본값 복원"은 설정값만, 챔피언을 다시 골라도 게임 시계·미니언·포탑은 그대로).
+ * resetGame(): 게임을 처음 시작한 상태로 되돌린다.
+ *  - 미니언: 살아 있는 것·죽는 중인 것을 모두 지우고 웨이브 시계·예약 소환·웨이브 번호를 처음으로.
+ *  - 구조물: 포탑·억제기·넥서스·분수를 지우고 원작 좌표에 새로 세운다(체력·파괴·가열·재생성 타이머 모두 처음), 게임 시계 0, 승리 배너 제거.
+ *  - 와드·날아가는 투사체·원작 파티클 엔진 이펙트를 지운다.
+ *  - 챔피언: 지금 챔피언을 처음 상태(골드 1400·3레벨·아이템 없음·점수 0)로 다시 불러온다 - 허수아비 3개도 그때 새로 놓인다.
+ * 직접 놓은 아군·부쉬는 사용자가 만든 연습 배치라 남겨 두고 체력만 채운다.
+ */
+function _resetDisposeObject3D(obj) {
+  if (!obj) return;
+  obj.traverse((o) => { if (o.isCSS2DObject && o.element && o.element.parentNode) o.element.parentNode.removeChild(o.element); });
+  if (obj.parent) obj.parent.remove(obj);
+}
+function resetGame() {
+  // 1) 미니언
+  for (const m of [...minions, ...dyingMinions]) { if (typeof disposeMinionHealthBar === 'function') disposeMinionHealthBar(m); m.isDead = true; m.destroyed = true; _resetDisposeObject3D(m.mesh); }
+  minions = []; dyingMinions = []; pendingMinionSpawns = [];
+  minionWaveCounter = 0; redMinionWaveCounter = 0; lastMinionWaveSec = -Infinity; minionSimTime = 0;
+  // 2) 구조물(첫 생성 때와 같은 함수로 다시 세운다) + 게임 시계
+  if (typeof projectiles !== 'undefined' && projectiles && projectiles.projectiles) { // 포탑 포탄까지 모두(projectiles.clear()는 포탑 것은 남긴다)
+    for (const p of projectiles.projectiles) { p.done = true; if (p._meshEntry && projectiles._releaseArrowMesh) projectiles._releaseArrowMesh(p._meshEntry); else if (p.mesh) _resetDisposeObject3D(p.mesh); }
+    projectiles.projectiles.length = 0;
+  }
+  for (const s of [...turrets, ...inhibitorBuildings, ...nexusBuildings]) _resetDisposeObject3D(s.mesh);
+  turrets.length = 0; inhibitorBuildings.length = 0; nexusBuildings.length = 0;
+  if (typeof howlingAbyssStructuresSpawned !== 'undefined') howlingAbyssStructuresSpawned = false;
+  gameEnded = false;
+  document.querySelectorAll('body > div').forEach((d) => { if (/^(BLUE|RED) WINS$/.test(d.textContent || '')) d.remove(); });
+  if (typeof spawnHowlingAbyssStructures === 'function') spawnHowlingAbyssStructures();
+  if (typeof resetTurretGameClock === 'function') resetTurretGameClock();
+  // 3) 와드·파티클
+  if (typeof wardSystem !== 'undefined' && wardSystem && wardSystem.clear) wardSystem.clear();
+  if (typeof lolVfx !== 'undefined' && lolVfx) { for (const s of lolVfx.systems) s.dispose(); lolVfx.systems = []; }
+  if (typeof placedAllies !== 'undefined') for (const a of placedAllies) { a.hp = a.maxHp; a.statusEffects = []; }
+  // 4) 챔피언을 처음 상태로 다시 불러온다(이전 챔피언 상태를 넘기지 않음)
+  window.__resetNoCarry = true;
+  const reloaded = typeof reloadCurrentChampion === 'function' && reloadCurrentChampion();
+  if (!reloaded) window.__resetNoCarry = false;
+  if (typeof showSkillToast === 'function') showSkillToast('게임을 처음부터 다시 시작했습니다');
+  return true;
+}
 
 </script>
 </body>

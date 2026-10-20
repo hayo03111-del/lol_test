@@ -91,11 +91,15 @@ function _shopInBase(ctrl) {
   if (ctrl.hp <= 0 || (typeof STATE !== 'undefined' && ctrl.state === STATE.DEAD)) return true; // 83차: 죽어 있으면 어디서든 상점 이용(원작)
   return typeof isPositionInBaseZone !== 'function' || isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM);
 }
+// 90차(QA): 하위템 일부만 있어도 그만큼 깎인 값(itemPurchasePlan)을 보여 주고 받는다 - buildOrBuyItem과 같은 계산.
+function _shopPlan(ctrl, item) { return ctrl && typeof itemPurchasePlan === 'function' ? itemPurchasePlan(ctrl, item) : { cost: item.cost, consume: [] }; }
 function _shopCanBuild(ctrl, item) {
-  return !!(ctrl && item.recipe && item.recipe.length && typeof hasComponents === 'function' && hasComponents(ctrl, item.recipe));
+  if (!ctrl || !item.recipe || !item.recipe.length) return false;
+  if (item.upgradeOnly) return typeof hasComponents === 'function' && hasComponents(ctrl, item.recipe);
+  return _shopPlan(ctrl, item).consume.length > 0;
 }
 function _shopPayCost(ctrl, item) {
-  return _shopCanBuild(ctrl, item) ? combineCost(item) : item.cost;
+  return _shopCanBuild(ctrl, item) ? _shopPlan(ctrl, item).cost : item.cost;
 }
 // buyItem()/buildOrBuyItem()이 거절하는 조건을 같은 순서로 미리 따진다. null이면 살 수 있다.
 function shopBlockReason(ctrl, itemId) {
@@ -105,8 +109,9 @@ function shopBlockReason(ctrl, itemId) {
   if (item.trinket) return '기본 장착(구매 불필요)';
   if (!_shopInBase(ctrl)) return '기지 안에서만 구매 가능';
   const build = _shopCanBuild(ctrl, item);
-  if (typeof _itemUniqueGroupConflict === 'function' && _itemUniqueGroupConflict(ctrl, item, build ? new Set(item.recipe) : null)) return '같은 계열 유일 아이템 보유 중';
+  if (typeof _itemUniqueGroupConflict === 'function' && _itemUniqueGroupConflict(ctrl, item, build ? new Set(_shopPlan(ctrl, item).consume) : null)) return '같은 계열 유일 아이템 보유 중';
   if (item.isBoots && ctrl.boots && ctrl.boots.id === itemId) return '이미 착용 중';
+  if (item.isBoots && typeof itemBootsBlockReason === 'function') { const r = itemBootsBlockReason(ctrl, item); if (r) return r; }
   if (item.upgradeOnly && !build) return '세계의 결실을 업그레이드해서만 얻음';
   if (typeof _itemLegendaryDuplicate === 'function' && _itemLegendaryDuplicate(ctrl, item)) return '같은 전설급 아이템 보유 중';
   const cost = _shopPayCost(ctrl, item);
@@ -130,19 +135,28 @@ function _shopSnapshot(label) {
   const c = controller;
   if (!c) return;
   _shopUndoStack.push({
-    ctrl: c, label, gold: c.gold || 0,
+    ctrl: c, label, gold: c.gold || 0, hp: c.hp, mp: c.mp,
     items: (c.items || []).map((s) => ({ ...s })),
     boots: c.boots ? { ...c.boots } : null,
     bootsExtra: c._itemBootsExtraMoveSpeedLol || 0,
   });
   if (_shopUndoStack.length > 20) _shopUndoStack.shift();
 }
+function _shopMarkAfter() { const t = _shopUndoStack[_shopUndoStack.length - 1], c = controller; if (t && c) { t.goldAfter = c.gold || 0; t.hpAfter = c.hp; t.mpAfter = c.mp; } }
+function shopClearUndo() { _shopUndoStack = []; if (_shopOpen) renderShopPanel(true); }
+function shopTickUndoZone(ctrl) { if (_shopUndoStack.length && ctrl && ctrl === controller && !_shopInBase(ctrl)) shopClearUndo(); }
 function shopUndo() {
   const snap = _shopUndoStack.pop();
   if (!snap || snap.ctrl !== controller) { _shopUndoStack = []; renderShopPanel(true); return false; }
   const c = controller;
-  c.gold = snap.gold; c.items = snap.items; c.boots = snap.boots; c._itemBootsExtraMoveSpeedLol = snap.bootsExtra;
+  // 90차(QA): 거래 뒤에 번 골드는 지킨다 - 그 거래로 바뀐 골드(after - before)만 되돌린다(예전엔 거래 직전 값으로 덮어써 그 사이 번 골드가 사라졌다).
+  // 체력·마나도 그 거래로 늘어난 만큼만 빼서, 사고 되돌리기로 공짜 회복이 되지 않게 한다.
+  const goldDelta = (snap.goldAfter ?? c.gold) - snap.gold, hpDelta = (snap.hpAfter ?? c.hp) - snap.hp, mpDelta = (snap.mpAfter ?? c.mp) - snap.mp;
+  c.gold = (c.gold || 0) - goldDelta; c.items = snap.items; c.boots = snap.boots; c._itemBootsExtraMoveSpeedLol = snap.bootsExtra;
   if (typeof recomputeItemStats === 'function') recomputeItemStats(c);
+  if (c.hp > 0) c.hp = Math.max(1, Math.min(c.maxHp, c.hp - Math.max(0, hpDelta)));
+  if (typeof c.mp === 'number') c.mp = Math.max(0, Math.min(c.maxMp ?? c.mp, c.mp - Math.max(0, mpDelta)));
+  if (typeof updateBars === 'function') updateBars(c);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(c);
   _shopSelectedSlot = null;
@@ -155,7 +169,7 @@ function _shopBuy(itemId) {
   if (reason) { if (typeof showSkillToast === 'function') showSkillToast(reason); return false; }
   _shopSnapshot(`${(ITEM_DATA[itemId] || {}).nameKo || itemId} 구매`);
   const ok = typeof buildOrBuyItem === 'function' && buildOrBuyItem(controller, itemId);
-  if (!ok) _shopUndoStack.pop();
+  if (!ok) _shopUndoStack.pop(); else _shopMarkAfter();
   if (ok) {
     const tile = document.querySelector(`#shopGrid .shop-tile[data-id="${itemId}"]`);
     if (tile) { tile.classList.remove('bought'); void tile.offsetWidth; tile.classList.add('bought'); }
@@ -169,7 +183,8 @@ function _shopSell() {
   _shopSnapshot(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
   const ok = _shopSelectedSlot === 'boots' ? (typeof sellBoots === 'function' && sellBoots(controller)) : (typeof sellItem === 'function' && sellItem(controller, _shopSelectedSlot));
   if (!ok) _shopUndoStack.pop();
-  else if (typeof showSkillToast === 'function') showSkillToast(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
+  else _shopMarkAfter();
+  if (ok && typeof showSkillToast === 'function') showSkillToast(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
   _shopSelectedSlot = null;
   renderShopPanel(true);
 }
@@ -357,11 +372,11 @@ function _shopRenderInventory() {
   const sellBtn = _shopEl('shopSellBtn');
   const info = _shopEl('shopSlotInfo');
   let sel = null, price = 0;
-  if (ctrl && _shopSelectedSlot === 'boots' && boots) { sel = boots; price = Math.floor(boots.cost * 0.7); }
+  if (ctrl && _shopSelectedSlot === 'boots' && boots) { sel = boots; price = typeof itemSellValue === 'function' ? itemSellValue(boots.id, 1) : Math.floor(boots.cost * 0.7); }
   else if (ctrl && typeof _shopSelectedSlot === 'number' && items[_shopSelectedSlot]) {
     const s = items[_shopSelectedSlot];
     sel = ITEM_DATA[s.id];
-    price = sel ? Math.floor((sel.cost || 0) * (s.count || 1) * 0.7) : 0;
+    price = sel ? (typeof itemSellValue === 'function' ? itemSellValue(s.id, s.count || 1) : Math.floor((sel.cost || 0) * (s.count || 1) * 0.7)) : 0;
   } else _shopSelectedSlot = null;
   if (sellBtn) { sellBtn.disabled = !sel; sellBtn.textContent = sel ? `판매 +${price.toLocaleString()}` : '판매'; }
   const undoBtn = _shopEl('shopUndoBtn');

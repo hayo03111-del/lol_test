@@ -362,10 +362,29 @@ function combineCost(item) {
 // 상점과 동일한 UX) - 하위템을 전부 갖고 있으면 그것들을 소모하고 차액만
 // 받고, 아니면 완제품 가격 그대로 받는다(buyItem()으로 위임, 6칸 한도
 // 등 기존 검증을 그대로 재사용).
+// 90차(QA): 원작 상점은 하위템을 "일부만" 갖고 있어도 그만큼 깎아 주고 그 하위템을 소모한다(하위템의 하위템까지 재귀).
+// 예전엔 하위템을 전부 가져야만 조합했고, 하나만 있으면 완제품 값을 다 받고 그 하위템은 가방에 남았다.
+// 돌려주는 값: { cost: 실제로 낼 골드, consume: 소모할 인벤토리 아이템 id 목록 }.
+function itemPurchasePlan(ctrl, item) {
+  const pool = {};
+  for (const s of (ctrl && ctrl.items) || []) pool[s.id] = (pool[s.id] || 0) + 1;
+  const consume = [];
+  let discount = 0;
+  const walk = (it, depth) => {
+    for (const id of it.recipe || []) {
+      if (pool[id] > 0) { pool[id]--; consume.push(id); discount += (ITEM_DATA[id] && ITEM_DATA[id].cost) || 0; }
+      else if (depth < 6 && ITEM_DATA[id] && ITEM_DATA[id].recipe) walk(ITEM_DATA[id], depth + 1);
+    }
+  };
+  if (item && item.recipe && item.recipe.length && !item.isBoots) walk(item, 0);
+  return { cost: Math.max(0, (item ? item.cost : 0) - discount), consume };
+}
 function buildOrBuyItem(ctrl, itemId) {
   const item = ITEM_DATA[itemId];
   if (!item) { console.warn('[ITEM] 알 수 없는 아이템:', itemId); return false; }
-  if (!item.recipe || !item.recipe.length || !hasComponents(ctrl, item.recipe)) {
+  const plan = itemPurchasePlan(ctrl, item);
+  // 세계의 결실 업그레이드처럼 "하위템을 다 갖춰야만" 되는 것은 예전 규칙 그대로
+  if (!plan.consume.length || (item.upgradeOnly && !hasComponents(ctrl, item.recipe))) {
     return buyItem(ctrl, itemId);
   }
   if (typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM) && !(ctrl.hp <= 0 || ctrl.state === STATE.DEAD)) { // 83차: 죽어 있는 동안에도 구매·판매 가능(원작)
@@ -375,17 +394,17 @@ function buildOrBuyItem(ctrl, itemId) {
   // 유일 아이템 검사 - 이번 조합이 소모할 하위템(item.recipe)은 충돌
   // 판정에서 제외한다(예: 티아맷을 소모해 거대한히드라가 되는 건 "같은
   // 계열을 이미 들고 있다"고 막으면 안 된다 - 자연스러운 업그레이드이므로).
-  if (_itemUniqueGroupConflict(ctrl, item, new Set(item.recipe))) {
+  if (_itemUniqueGroupConflict(ctrl, item, new Set(plan.consume))) {
     itemWarn(`${item.nameKo}: 유일 아이템(같은 계열)을 이미 보유하고 있습니다.`);
     return false;
   }
   if (_itemLegendaryDuplicate(ctrl, item)) { itemWarn(`${item.nameKo}: 같은 전설급 아이템은 하나만 가질 수 있습니다.`); return false; }
-  const cost = combineCost(item);
+  const cost = plan.cost;
   if ((ctrl.gold || 0) < cost) { itemWarn('골드가 부족합니다(조합 비용).'); return false; }
   // 하위템 소모 - 개수만큼 각 id의 슬롯을 하나씩 제거한다. 소모(N개) 후
   // 완제품(1개)을 더하므로 칸 수는 절대 늘지 않는다(N>=1) - 인벤토리
   // 한도를 별도로 확인할 필요가 없다.
-  const counts = _recipeCounts(item.recipe);
+  const counts = _recipeCounts(plan.consume);
   for (const id in counts) {
     for (let i = 0; i < counts[id]; i++) {
       const idx = ctrl.items.findIndex((s) => s.id === id);
@@ -401,14 +420,27 @@ function buildOrBuyItem(ctrl, itemId) {
   return true;
 }
 
-// 판매가 70%(실제 LoL과 동일한 근사치) - 중첩된 소비 아이템은 칸 전체(개수만큼)를 한 번에 판다.
+// 판매가: 원작 - 일반 아이템 70%, 시작 아이템(도란 시리즈·수확의 낫·어둠의 인장)과 소모품 40%.
+// 90차(QA): 예전엔 전부 70%였고, 350×0.7 같은 부동소수 오차로 1골드 덜 줬다(244 → 245).
+const ITEM_SELL_RATIO_40 = new Set(['doransBlade', 'doransRing', 'doransShield', 'doransBow', 'doransHelm', 'cull', 'darkSeal', 'healthPotion', 'refillablePotion', 'controlWard', 'elixirOfIron', 'elixirOfSorcery', 'elixirOfWrath']);
+function itemSellValue(itemId, count = 1) {
+  const item = ITEM_DATA[itemId];
+  if (!item) return 0;
+  const ratio = item.sellRatio ?? (ITEM_SELL_RATIO_40.has(itemId) ? 0.4 : 0.7);
+  return Math.floor((item.cost || 0) * (count || 1) * ratio + 1e-6);
+}
+// 90차(QA): 판매도 구매와 같은 조건(기지 안이거나 죽어 있을 때)에서만 - 예전엔 살아서 기지 밖에서도 팔렸다.
+function itemShopAvailable(ctrl) {
+  return !(typeof isPositionInBaseZone === 'function' && !isPositionInBaseZone(ctrl.root.position, ctrl.team || PLAYER_TEAM) && !(ctrl.hp <= 0 || ctrl.state === STATE.DEAD));
+}
 function sellItem(ctrl, slotIndex) {
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot) return false;
   const item = ITEM_DATA[slot.id];
   if (!item) return false;
+  if (!itemShopAvailable(ctrl)) { itemWarn('기지(상점 구역) 안에서만 팔 수 있습니다.'); return false; }
   ctrl.items.splice(slotIndex, 1);
-  ctrl.gold = (ctrl.gold || 0) + Math.floor((item.cost || 0) * (slot.count || 1) * 0.7);
+  ctrl.gold = (ctrl.gold || 0) + itemSellValue(slot.id, slot.count || 1);
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
@@ -421,6 +453,8 @@ function sellItem(ctrl, slotIndex) {
 // (판매가 아니라 업그레이드 개념이므로 70%가 아니라 100%).
 function _buyBoots(ctrl, item) {
   if (ctrl.boots && ctrl.boots.id === item.id) { itemWarn('이미 장착 중인 신발입니다.'); return false; }
+  const blockBoots = itemBootsBlockReason(ctrl, item);
+  if (blockBoots) { itemWarn(blockBoots); return false; }
   if ((ctrl.gold || 0) < item.cost) { itemWarn('골드가 부족합니다.'); return false; }
   if (ctrl.boots) {
     const old = ITEM_DATA[ctrl.boots.id];
@@ -441,13 +475,23 @@ function _buyBoots(ctrl, item) {
   return true;
 }
 
+// 90차(QA): 원작은 1단계 신발(장화·약간 신비한 신발)을 2단계로 "업그레이드"할 때만 기존 신발 값을 빼 준다.
+// 2단계 신발을 신은 채 다른 2단계 신발을 사는 것(예: 광전사의 군화 → 마법사의 신발 무료 교체)은 막는다 - 팔고 사야 한다.
+function itemBootsBlockReason(ctrl, item) {
+  if (!ctrl || !ctrl.boots || !item || !item.isBoots) return null;
+  const tier1 = (id) => id === 'boots' || id === 'slightlyMagicalBoots';
+  if (!tier1(ctrl.boots.id)) return '이미 완성 신발을 신고 있습니다(팔고 다시 사야 합니다)';
+  if (tier1(item.id)) return '이미 신발을 신고 있습니다';
+  return null;
+}
 // 신발 판매(70%, 다른 일반 아이템과 동일한 판매 규칙) - 교체가 아니라
 // 그냥 벗어서 파는 경우(버튼/슬롯 클릭)에 쓴다.
 function sellBoots(ctrl) {
   if (!ctrl || !ctrl.boots) return false;
-  const item = ITEM_DATA[ctrl.boots.id];
+  if (!itemShopAvailable(ctrl)) { itemWarn('기지(상점 구역) 안에서만 팔 수 있습니다.'); return false; }
+  const bootsId = ctrl.boots.id;
   ctrl.boots = null;
-  ctrl.gold = (ctrl.gold || 0) + Math.floor(((item && item.cost) || 0) * 0.7);
+  ctrl.gold = (ctrl.gold || 0) + itemSellValue(bootsId, 1);
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
@@ -458,7 +502,13 @@ function sellBoots(ctrl) {
 // 클릭으로 호출된다. 중첩/충전 소모 로직만 여기서 처리하고, 실제 회복은
 // 공용 지속 회복(HoT) 목록(_itemActiveHeals)에 등록해 itemSystemTick이
 // 매 프레임 진행한다.
+// 90차(QA): 아이템을 쓰면(물약 등) 상점 되돌리기 기록을 비운다(원작) - 예전엔 물약을 마시고 되돌리기로 값을 돌려받았다.
 function useItem(ctrl, slotIndex, opts = {}) {
+  const ok = _useItemImpl(ctrl, slotIndex, opts);
+  if (ok && typeof shopClearUndo === 'function') shopClearUndo();
+  return ok;
+}
+function _useItemImpl(ctrl, slotIndex, opts = {}) {
   if (!ctrl) return false;
   const slot = ctrl.items && ctrl.items[slotIndex];
   if (!slot) return false;
@@ -829,6 +879,7 @@ function _itemTickTearRecharge(ctrl, item, dt) {
 // 비용이 0이다.
 function itemSystemTick(ctrl, dt) {
   if (!ctrl) return;
+  if (typeof shopTickUndoZone === 'function') shopTickUndoZone(ctrl); // 90차(QA): 상점이 닫혀 있어도 기지를 벗어나면 되돌리기 기록을 비운다
   if (typeof runeTick === 'function') runeTick(ctrl, dt); // 52차: 룬(같은 훅을 쓴다)
   _itemTickActiveHeals(ctrl, dt);
   _itemTickActiveManaRestores(ctrl, dt);

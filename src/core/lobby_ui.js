@@ -183,7 +183,8 @@ function lobbyStart() {
 }
 // 챔피언을 다 불러온 뒤(로더가 부른다): 로비에서 고른 소환사 주문을 넣고 로비를 닫는다.
 function lobbyApplyPending(ctrl, spells = null) {
-  const s = spells || lobbyState.pendingSpells || (lobbyState.champ ? null : null);
+  // 90차(QA): 로비를 거치지 않고(챔피언 목록·GLB·?champ=) 불러와도 저장해 둔 소환사 주문을 쓴다(예전엔 늘 점멸/회복으로 돌아갔다).
+  const s = spells || lobbyState.pendingSpells || _lobbyLoad(LOBBY_SPELLS_KEY, null);
   if (ctrl && s && typeof setSummonerSpell === 'function') { setSummonerSpell(ctrl, 'D', s[0]); setSummonerSpell(ctrl, 'F', s[1]); }
   lobbyState.pendingSpells = null;
   closeLobby();

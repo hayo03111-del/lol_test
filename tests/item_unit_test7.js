@@ -117,7 +117,8 @@ assert(c5.boots.id === 'berserkersGreaves', 'boots slot now holds the new pair')
 assert(c5._itemBootsExtraMoveSpeedLol === 10, 'swapping away from slightly magical boots locks in the +10 carryover bonus');
 assert(c5.stats.moveSpeed === 340 + 45 + 10, 'new boots stats + the carried-over +10 move speed both apply');
 
-_buyBoots(c5, ITEM_DATA.sorcerersShoes); // swap again to a third pair
+assert(_buyBoots(c5, ITEM_DATA.sorcerersShoes) === false && c5.boots.id === 'berserkersGreaves', '90차: 완성 신발끼리 무료 교체는 막힌다(원작)');
+sellBoots(c5); buyItem(c5, 'sorcerersShoes'); // 팔고 다른 완성 신발을 산다
 assert(c5._itemBootsExtraMoveSpeedLol === 10, 'the carryover bonus persists through a second boots swap');
 assert(c5.stats.moveSpeed === 340 + 45 + 10, 'carryover bonus still applies after swapping to yet another pair');
 

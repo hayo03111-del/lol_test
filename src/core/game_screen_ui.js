@@ -119,6 +119,8 @@ function _minimapInit() {
   };
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
+  canvas.addEventListener('lostpointercapture', release);
+  window.addEventListener('blur', release); // 90차(QA): 미니맵을 끌던 중 포커스를 잃으면 pointerup이 오지 않아 카메라가 미니맵에 묶여 있었다
   return _mm;
 }
 function _mmPt(p) {

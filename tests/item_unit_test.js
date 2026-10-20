@@ -143,7 +143,7 @@ const goldAfterBuy = c8.gold;
 const sold = sellItem(c8, 0);
 assert(sold === true, 'sellItem succeeds');
 assert(c8.items.length === 0, 'item removed from inventory');
-assert(c8.gold === goldAfterBuy + Math.floor(450 * 0.7), 'sell refunds 70% of cost');
+assert(c8.gold === goldAfterBuy + Math.floor(450 * 0.4), 'starter item (Doran) sells for 40% (90차: 원작 시작 아이템 판매가)');
 assert(c8.stats.attackDamage === 50, 'AD bonus removed after sell');
 
 console.log(process.exitCode ? '\nSOME CHECKS FAILED' : '\nALL CHECKS PASSED');

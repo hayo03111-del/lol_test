@@ -749,7 +749,7 @@ window.addEventListener('keydown', (e) => {
     // (R도 Q/W/E와 같은 조준 경로 - onSkillKeyDown)
     case 'KeyR': onSkillKeyDown('R', e.code, mousePoint); break;
     case 'KeyB': controller.startRecall(); break;
-    case 'KeyA': attackMoveArmed = true; renderer.domElement.style.cursor = 'crosshair'; break; // 64차 공격 이동
+    case 'KeyA': attackMoveArmed = true; renderer.domElement.style.cursor = 'crosshair'; requestAnimationFrame(() => { if (attackMoveArmed) renderer.domElement.style.cursor = 'crosshair'; }); break; // 64차 공격 이동 (90차: 위 커서 숨김 복원이 크로스헤어를 덮어써 안 보이던 것 수정)
     // 36차: 소환사 주문(원작 기본 키 D/F).
     case 'KeyD': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'D', mousePoint, lastPointerClient); break;
     case 'KeyF': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'F', mousePoint, lastPointerClient); break;
@@ -816,7 +816,15 @@ window.addEventListener('keyup', (e) => {
   if (e.code === 'Space' || e.code === 'F1') cameraRig.centerHeld = false;
   if (!paused) onSkillKeyUp(e.code);
 });
-window.addEventListener('blur', () => { if (skillAim.aiming && skillAim.mode === 'indicator') skillAim.cancel(); });
+// 90차(QA): 창 포커스를 잃으면 눌린 키를 모두 뗀 것으로 본다(포커스 밖에서 뗀 키의 keyup은 오지 않는다).
+// 예전엔 표시기 모드 조준만 풀어서 일반 모드 조준·공격 이동 대기·바루스 Q 충전이 남았다(돌아와 첫 클릭이 공격 이동, Q 충전이 몇 초 뒤 저절로 발사).
+window.addEventListener('blur', () => {
+  if (skillAim.aiming && skillAim.heldKey) onSkillKeyUp(skillAim.heldKey); // 충전형(바루스 Q)은 키를 뗀 것처럼 발사
+  if (skillAim.aiming) skillAim.cancel();
+  if (controller && controller._varus && controller._varus.qCharge && !paused) controller.castAbility('Q', lastGroundPoint || controller.root.position.clone()); // 표시기 모드 충전
+  if (attackMoveArmed) { attackMoveArmed = false; renderer.domElement.style.cursor = ''; }
+  cameraRig.centerHeld = false;
+});
 
 function togglePause() {
   paused = !paused;

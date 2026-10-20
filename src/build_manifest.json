@@ -86,6 +86,7 @@
     "src/core/game_screen_ui.js",
     "src/loader/champion_glb_loader.js",
     "src/core/lobby_ui.js",
-    "src/core/options_ui.js"
+    "src/core/options_ui.js",
+    "src/core/game_reset.js"
   ]
 }

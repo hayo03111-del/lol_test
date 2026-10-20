@@ -166,6 +166,6 @@ const c7 = makeFakeCtrl();
 buyItem(c7, 'healthPotion'); buyItem(c7, 'healthPotion'); buyItem(c7, 'healthPotion');
 const goldBeforeSell = c7.gold;
 sellItem(c7, 0);
-assert(c7.gold === goldBeforeSell + Math.floor(50 * 3 * 0.7), 'selling a stacked slot refunds 70% of (cost * count)');
+assert(c7.gold === goldBeforeSell + Math.floor(50 * 3 * 0.4), 'selling a stacked consumable slot refunds 40% of (cost * count) (90차: 원작 소모품 판매가)');
 
 console.log(process.exitCode ? '\nSOME CHECKS FAILED' : '\nALL CHECKS PASSED');

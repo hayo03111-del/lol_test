@@ -123,6 +123,7 @@ function _optBuild() {
     <div class="opt-foot">
       <button class="opt-btn" id="optPauseBtn">일시정지</button>
       <button class="opt-btn" id="optResetBtn">기본값 복원</button>
+      <button class="opt-btn" id="optRestartBtn" title="미니언·구조물·게임 시계·허수아비·챔피언을 처음 상태로">게임 다시 시작</button>
       <span class="opt-spacer"></span>
       <button class="opt-btn primary" id="optOkBtn">확인</button>
     </div></div>`;
@@ -131,6 +132,7 @@ function _optBuild() {
   ov.querySelector('#optCloseX').addEventListener('click', () => setOptionsOpen(false));
   ov.querySelector('#optOkBtn').addEventListener('click', () => setOptionsOpen(false));
   ov.querySelector('#optResetBtn').addEventListener('click', () => { optionsState = { ...OPTIONS_DEFAULTS }; _optSave(); applyOptions(); _optRenderBody(); });
+  ov.querySelector('#optRestartBtn').addEventListener('click', () => { if (typeof resetGame === 'function' && confirm('게임을 처음부터 다시 시작할까요? (골드·아이템·레벨·미니언·포탑이 처음 상태로 돌아갑니다)')) { setOptionsOpen(false); resetGame(); } }); // 90차
   ov.querySelector('#optPauseBtn').addEventListener('click', () => { if (typeof togglePause === 'function') togglePause(); _optRenderBody(); });
   ov.querySelector('#optTabs').addEventListener('click', (e) => { const t = e.target.closest('[data-tab]'); if (t) { _optTab = t.dataset.tab; _optRenderBody(); } });
   const body = ov.querySelector('#optBody');

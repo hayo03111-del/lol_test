@@ -109,13 +109,13 @@ buildOrBuyItem(c3, 'tiamat');
 assert(c3.items.length === 1 && c3.items[0].id === 'tiamat', 'combining Tiamat consumes both Long Swords, net slot count decreases');
 assert(c3.gold === goldBeforeTiamat - (1200 - 700), 'Tiamat combine cost is 500 (1200 - 2x350)');
 
-// Partial components (only 1 of 2 Long Swords) should NOT trigger combine - falls back to direct buy.
+// 90차(원작 규칙): 하위템 일부(Long Sword 1/2)만 있어도 그 값만큼 깎고 그 하위템을 소모한다.
 const c4 = makeFakeCtrl();
 buildOrBuyItem(c4, 'longSword');
 const goldBeforePartial = c4.gold;
 buildOrBuyItem(c4, 'tiamat');
-assert(c4.items.length === 2, 'with only 1/2 components, buying Tiamat direct-buys instead (now 2 items: longSword + tiamat)');
-assert(c4.gold === goldBeforePartial - 1200, 'partial components -> full price charged, not combine price');
+assert(c4.items.length === 1 && c4.items[0].id === 'tiamat', 'with 1/2 components, Tiamat consumes the owned Long Sword');
+assert(c4.gold === goldBeforePartial - (1200 - 350), 'partial components -> price minus the owned component (850)');
 
 // Selling a combined item refunds 70% of its FULL price (not combine cost).
 const c5 = makeFakeCtrl();
