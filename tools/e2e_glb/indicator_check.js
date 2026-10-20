@@ -11,7 +11,7 @@ const startServer = require('./server.js');
   await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__e2e, null, { timeout: 30000 });
   const wait = (ms) => page.waitForTimeout(ms);
-  const load = async (id) => { await page.evaluate((id) => { const s = document.getElementById('libraryChampSelect'); s.value = id; s.dispatchEvent(new Event('change')); }, id); // 84차: 선택 상자가 숨겨진 UI라 직접 바꾼다 await page.waitForFunction((id) => window.controller && window.controller.championId === id, id, { timeout: 30000 }); await wait(700); };
+  const load = async (id) => { await page.evaluate((id) => { const s = document.getElementById('libraryChampSelect'); s.value = id; s.dispatchEvent(new Event('change')); }, id); /* 84차: 선택 상자가 숨겨진 UI라 직접 바꾼다 */ await page.waitForFunction((id) => window.controller && window.controller.championId === id, id, { timeout: 30000 }); await wait(700); };
   // 허수아비 바로 앞에 세우고 쿨다운·마나를 채운다
   const setup = () => page.evaluate(() => { const E = window.__e2e, c = window.controller, d = E.dummies[0]; d.hp = d.maxHp = 1e6; d.statusEffects = []; for (const x of E.dummies.slice(1)) x.mesh.position.set(40, 0, 40); const p = E.getWorldPosition(d); c.root.position.set(p.x, 0, p.z + E.lolRangeToWorld(150)); c.cooldowns = { Q: 0, W: 0, E: 0, R: 0 }; c.mp = c.maxMp; c.currentTarget = null; c.targetPos = null; });
   const castQ = () => page.evaluate(() => { const E = window.__e2e, c = window.controller; c.cooldowns.Q = 0; c.castAbility('Q', E.getWorldPosition(E.dummies[0]).clone()); });
