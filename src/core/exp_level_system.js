@@ -488,13 +488,9 @@ function minionTargetRank(minion, u, now) {
   }
   if (u.isTurret) return (u.attackTarget && u.attackTarget.isMinion && u.attackTarget.team === minion.team) ? 4 : 8;
   if (u.isStructure) return 8;
-  if (isChampionLike(u)) {
-    // 85차: "주변" 아군 미니언(인식 범위 안)을 때린 챔피언만 5순위 - 예전엔 맵 어디든 아군 미니언을 때렸으면 해당됐다.
-    const near = lolRangeToWorld(1000);
-    const hitAlly = minions.some((m) => m.team === minion.team && !m.isDead && m._lastChampionAttacker === u && now - (m._lastChampionAttackedAt || 0) < MINION_CHAMPION_ATTACKED_MINION_MS
-      && getHorizontalDistance(m.mesh.position, minion.mesh.position) <= near);
-    return hitAlly ? 5 : 7;
-  }
+  // 86차(26.10 패치): 챔피언이 "미니언"을 때리는 것은 더 이상 미니언 어그로를 끌지 않는다(옛 5순위 삭제).
+  // 챔피언은 도움 요청(아군 챔피언을 공격 - 1순위)이거나, 다른 대상이 없을 때 가장 가까운 챔피언(7순위)일 때만 노린다.
+  if (isChampionLike(u)) return 7;
   return 9;
 }
 function getMinionAttackTarget(minion) {

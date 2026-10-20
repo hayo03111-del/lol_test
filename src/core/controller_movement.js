@@ -423,7 +423,15 @@ CharacterController.prototype._tryEngageTarget = function() {
     const nowA = performance.now();
     if (nowA < (this._attackReadyAt || 0) - 15) {
       this._awaitingAttackTimer = true;
-      if (this.state === STATE.MOVE) { this.targetPos = null; this.setState(STATE.IDLE); this.playFirstAvailable(this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.12 }); }
+      // 86차 버그 수정(요네 등 "스킬 끝 자세로 굳음"): 스킬이 끝나고 대상이 남아 있을 때 여기로 오는데, 예전엔 이동 상태만 대기로
+      // 바꿔서 Q_CAST/W_CAST 같은 시전 상태가 그대로 남았다 - 대기 루프는 IDLE에서만 돌아 영영 다음 평타를 못 하고 마지막 동작에 멈췄다.
+      if (this.state === STATE.MOVE || (this.state !== STATE.IDLE && !this.currentActionKey)) {
+        const wasMove = this.state === STATE.MOVE;
+        this.targetPos = null; this.setState(STATE.IDLE);
+        const a = this.currentAction, clipDone = !a || a.loop === THREE.LoopRepeat || !a.getClip || a.time >= a.getClip().duration - 0.05 || a.paused;
+        if (wasMove || clipDone) this.playFirstAvailable(this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.15 });
+        else this._pendingIdleAfterClip = true; // 마무리 동작(ToIdle 등)이 끝나면 대기 자세로
+      }
       const tp = getWorldPosition(this.currentTarget);
       if (tp) { const d = new THREE.Vector3(tp.x - this.root.position.x, 0, tp.z - this.root.position.z); if (d.lengthSq() > 1e-6) this.faceDirectionInstant(d.normalize()); }
       return;
@@ -510,6 +518,10 @@ CharacterController.prototype._updateAttackTimerWait = function() {
     if (!this.currentTarget || this.currentTarget.hp <= 0) { this._awaitingAttackTimer = false; return; }
     if (this.state !== STATE.IDLE || this.currentActionKey) return;
     if (typeof isCrowdControlled === 'function' && isCrowdControlled(this)) return;
+    if (this._pendingIdleAfterClip) {
+      const a = this.currentAction;
+      if (!a || !a.getClip || a.loop === THREE.LoopRepeat || a.time >= a.getClip().duration - 0.05 || a.paused) { this._pendingIdleAfterClip = false; this.playFirstAvailable(this._idleClips(), { loop: THREE.LoopRepeat, fade: 0.15 }); }
+    }
     const ready = performance.now() >= (this._attackReadyAt || 0) - 15;
     const inRangeNow = this._isInAttackRangeWithBonus(this.currentTarget);
     if (!inRangeNow && this._autoAcquired) { this.currentTarget = null; this._awaitingAttackTimer = false; this._autoAcquired = false; if (typeof targetRing !== 'undefined') targetRing.clear(); return; } // 자동 공격은 쫓아가지 않는다
