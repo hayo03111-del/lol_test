@@ -1667,6 +1667,7 @@ function animate() {
     if (typeof tickAllyUnits === 'function') tickAllyUnits(dt);
     vfx.update(dt);
     nilahVfx2.update(dt);
+    lolVfx.update(dt, camera); // 89차: 원작 파티클 엔진
     if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.update(dt);
     if (typeof brushSystem !== 'undefined') brushSystem.update(controller);
     projectiles.update(dt);

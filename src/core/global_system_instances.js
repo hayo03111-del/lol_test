@@ -6,6 +6,9 @@ const vfx = new VFXSystem(scene);
 // 기존 vfx(VFXSystem)와 완전히 별개로 동작하며, nilah.js의 Q/W/E/R 시전
 // 함수에서 playQLoL/playWLoL/playELoL/playRLoL을 직접 호출한다.
 const nilahVfx2 = new NilahVFXManagerV2(scene);
+// 89차: 원작 파티클 엔진(src/vfx) - 게임 파일의 VfxSystemDefinitionData를 그대로 재생한다. lolVfx.register(skin0.bin 텍스트/JSON) 후 lolVfx.spawn(이름, { attach }).
+const lolVfx = new LolVfxManager(scene, {});
+if (typeof window !== 'undefined') window.lolVfx = lolVfx;
 const projectiles = new ProjectileSystem(scene, vfx);
 const targetRing = new TargetRing(scene);
 const rangeIndicators = new RangeIndicatorSystem(scene);

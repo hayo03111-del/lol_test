@@ -8449,6 +8449,1103 @@ const VFX_TEXTURES = {
 };
 
 
+/* ===== src/vfx/lol_vfx_defaults.js ===== */
+// 89차: tools/gen_lol_vfx_defaults.py가 lol-meta-wiki의 meta.db.json에서 만든 표 - 손으로 고치지 말 것.
+// 원작 VFX 클래스별 필드 기본값(defaults)과 필드 종류(types: [종류, 참조 클래스, 원소 종류])와 부모 클래스(bases).
+const LOL_VFX_SCHEMA = {"FlexTypeFloat":{"bases":[],"defaults":{"mFlexID":0,"mValue":0.0},"types":{"mFlexID":["U32",null,null],"mValue":["F32",null,null]}},"FlexValueFloat":{"bases":[],"defaults":{"mFlexID":0,"mValue":{"constantValue":0.0,"dynamics":null}},"types":{"mFlexID":["U32",null,null],"mValue":["Embed","ValueFloat",null]}},"FlexValueVector2":{"bases":[],"defaults":{"mFlexID":0,"mValue":{"constantValue":[0.0,0.0],"dynamics":null}},"types":{"mFlexID":["U32",null,null],"mValue":["Embed","ValueVector2",null]}},"FlexValueVector3":{"bases":[],"defaults":{"mFlexID":0,"mValue":{"constantValue":[0.0,0.0,0.0],"dynamics":null}},"types":{"mFlexID":["U32",null,null],"mValue":["Embed","ValueVector3",null]}},"IntegratedValueFloat":{"bases":["ValueFloat"],"defaults":{"constantValue":0.0,"dynamics":null},"types":{"constantValue":["F32",null,null],"dynamics":["Pointer","VfxFloatBase",null]}},"IntegratedValueVector2":{"bases":["ValueVector2"],"defaults":{"constantValue":[0.0,0.0],"dynamics":null},"types":{"constantValue":["Vec2",null,null],"dynamics":["Pointer","VfxVector2fBase",null]}},"IntegratedValueVector3":{"bases":["ValueVector3"],"defaults":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"types":{"constantValue":["Vec3",null,null],"dynamics":["Pointer","VfxVector3fBase",null]}},"ValueArrayFloatDriver":{"bases":["ILogicFloatDriver"],"defaults":{"ArrayIndexDriver":null,"ValueArray":[]},"types":{"ArrayIndexDriver":["Pointer","ILogicFloatDriver",null],"ValueArray":["List2","ILogicFloatDriver","Pointer"]}},"ValueColor":{"bases":[],"defaults":{"constantValue":[0.0,0.0,0.0,0.0],"dynamics":null},"types":{"constantValue":["Vec4",null,null],"dynamics":["Pointer","VfxColorBase",null]}},"ValueColorRgb":{"bases":[],"defaults":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"types":{"constantValue":["Vec3",null,null],"dynamics":["Pointer","VfxColorRgbBase",null]}},"ValueFloat":{"bases":[],"defaults":{"constantValue":0.0,"dynamics":null},"types":{"constantValue":["F32",null,null],"dynamics":["Pointer","VfxFloatBase",null]}},"ValueProcessorData":{"bases":[],"defaults":{},"types":{}},"ValueVector2":{"bases":[],"defaults":{"constantValue":[0.0,0.0],"dynamics":null},"types":{"constantValue":["Vec2",null,null],"dynamics":["Pointer","VfxVector2fBase",null]}},"ValueVector3":{"bases":[],"defaults":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"types":{"constantValue":["Vec3",null,null],"dynamics":["Pointer","VfxVector3fBase",null]}},"VfxAbsFloatDriver":{"bases":["IVfxFloatDriver"],"defaults":{"Param":null},"types":{"Param":["Pointer","IVfxFloatDriver",null]}},"VfxAbsVector2Driver":{"bases":["IVfxVector2Driver"],"defaults":{"Param":null},"types":{"Param":["Pointer","IVfxVector2Driver",null]}},"VfxAbsVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"Param":null},"types":{"Param":["Pointer","IVfxVector3Driver",null]}},"VfxAbsVector4Driver":{"bases":["IVfxVector4Driver"],"defaults":{"Param":null},"types":{"Param":["Pointer","IVfxVector4Driver",null]}},"VfxAddFloatDriver":{"bases":["IVfxFloatDriver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxFloatDriver","Pointer"]}},"VfxAddVector2Driver":{"bases":["IVfxVector2Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector2Driver","Pointer"]}},"VfxAddVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector3Driver","Pointer"]}},"VfxAddVector4Driver":{"bases":["IVfxVector4Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector4Driver","Pointer"]}},"VfxAlphaErosionDefinitionData":{"bases":[],"defaults":{"LingerErosionDriveCurve":{"constantValue":1.0,"dynamics":null},"UseLingerErosionDriveCurve":false,"erosionDriveCurve":{"constantValue":1.0,"dynamics":null},"erosionDriveSource":0,"erosionFeatherIn":0.10000000149011612,"erosionFeatherOut":0.10000000149011612,"erosionMapAddressMode":2,"erosionMapChannelMixer":{"constantValue":[0.0,0.0,0.0,1.0],"dynamics":null},"erosionMapName":"","erosionSliceWidth":1.5},"types":{"LingerErosionDriveCurve":["Embed","ValueFloat",null],"UseLingerErosionDriveCurve":["Bool",null,null],"erosionDriveCurve":["Embed","ValueFloat",null],"erosionDriveSource":["U8",null,null],"erosionFeatherIn":["F32",null,null],"erosionFeatherOut":["F32",null,null],"erosionMapAddressMode":["U8",null,null],"erosionMapChannelMixer":["Embed","ValueColor",null],"erosionMapName":["String",null,null],"erosionSliceWidth":["F32",null,null]}},"VfxAnimatedColor":{"bases":["VfxColorBase"],"defaults":{"InterpModes":[],"probabilityTables":[null,null,null,null],"times":[],"values":[]},"types":{"InterpModes":["List2",null,"U8"],"probabilityTables":["List",null,"Pointer"],"times":["List2",null,"F32"],"values":["List2",null,"Vec4"]}},"VfxAnimatedColorVariableData":{"bases":["VfxColorBase"],"defaults":{"probabilityTables":[null,null,null,null],"times":[],"values":[]},"types":{"probabilityTables":["List",null,"Pointer"],"times":["List",null,"F32"],"values":["List",null,"Vec4"]}},"VfxAnimatedFloat":{"bases":["VfxFloatBase"],"defaults":{"InterpModes":[],"probabilityTables":[null],"times":[],"values":[]},"types":{"InterpModes":["List2",null,"U8"],"probabilityTables":["List",null,"Pointer"],"times":["List2",null,"F32"],"values":["List2",null,"F32"]}},"VfxAnimatedFloatVariableData":{"bases":["VfxFloatBase"],"defaults":{"probabilityTables":[null],"times":[],"values":[]},"types":{"probabilityTables":["List",null,"Pointer"],"times":["List",null,"F32"],"values":["List",null,"F32"]}},"VfxAnimatedVector2f":{"bases":["VfxVector2fBase"],"defaults":{"InterpModes":[],"probabilityTables":[null,null],"times":[],"values":[]},"types":{"InterpModes":["List2",null,"U8"],"probabilityTables":["List",null,"Pointer"],"times":["List2",null,"F32"],"values":["List2",null,"Vec2"]}},"VfxAnimatedVector2fVariableData":{"bases":["VfxVector2fBase"],"defaults":{"probabilityTables":[null,null],"times":[],"values":[]},"types":{"probabilityTables":["List",null,"Pointer"],"times":["List",null,"F32"],"values":["List",null,"Vec2"]}},"VfxAnimatedVector3f":{"bases":["VfxVector3fBase"],"defaults":{"InterpModes":[],"probabilityTables":[null,null,null],"times":[],"values":[]},"types":{"InterpModes":["List2",null,"U8"],"probabilityTables":["List",null,"Pointer"],"times":["List2",null,"F32"],"values":["List2",null,"Vec3"]}},"VfxAnimatedVector3fVariableData":{"bases":["VfxVector3fBase"],"defaults":{"probabilityTables":[null,null,null],"times":[],"values":[]},"types":{"probabilityTables":["List",null,"Pointer"],"times":["List",null,"F32"],"values":["List",null,"Vec3"]}},"VfxAssetRemap":{"bases":[],"defaults":{"newAsset":"","oldAsset":"0x0","type":0},"types":{"newAsset":["String",null,null],"oldAsset":["File",null,null],"type":["U32",null,null]}},"VfxBeamBaseDefinitionData":{"bases":[],"defaults":{"mLocalSpaceSourceOffset":[0.0,0.0,0.0],"mLocalSpaceTargetOffset":[0.0,0.0,0.0]},"types":{"mLocalSpaceSourceOffset":["Vec3",null,null],"mLocalSpaceTargetOffset":["Vec3",null,null]}},"VfxBeamDefinitionData":{"bases":["VfxBeamBaseDefinitionData"],"defaults":{"mAnimatedColorWithDistance":{"constantValue":[1.0,1.0,1.0,1.0],"dynamics":null},"mBirthTilingSize":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"mIsColorBindedWithDistance":false,"mLocalSpaceSourceOffset":[0.0,0.0,0.0],"mLocalSpaceTargetOffset":[0.0,0.0,0.0],"mMode":0,"mSegments":0,"mTrailMode":0},"types":{"mAnimatedColorWithDistance":["Embed","ValueColor",null],"mBirthTilingSize":["Embed","ValueVector3",null],"mIsColorBindedWithDistance":["Bool",null,null],"mLocalSpaceSourceOffset":["Vec3",null,null],"mLocalSpaceTargetOffset":["Vec3",null,null],"mMode":["U8",null,null],"mSegments":["I32",null,null],"mTrailMode":["U8",null,null]}},"VfxBreakVector2ToFloatsDriver":{"bases":["IVfxVector2Driver"],"defaults":{"X":null,"Y":null},"types":{"X":["Pointer","IVfxFloatDriver",null],"Y":["Pointer","IVfxFloatDriver",null]}},"VfxBreakVector3ToFloatsDriver":{"bases":["IVfxVector3Driver"],"defaults":{"X":null,"Y":null,"Z":null},"types":{"X":["Pointer","IVfxFloatDriver",null],"Y":["Pointer","IVfxFloatDriver",null],"Z":["Pointer","IVfxFloatDriver",null]}},"VfxBreakVector4ToFloatsDriver":{"bases":["IVfxVector4Driver"],"defaults":{"W":null,"X":null,"Y":null,"Z":null},"types":{"W":["Pointer","IVfxFloatDriver",null],"X":["Pointer","IVfxFloatDriver",null],"Y":["Pointer","IVfxFloatDriver",null],"Z":["Pointer","IVfxFloatDriver",null]}},"VfxBreakVector4ToVector2sDriver":{"bases":["IVfxVector4Driver"],"defaults":{"Zw":null,"xy":null},"types":{"Zw":["Pointer","IVfxVector2Driver",null],"xy":["Pointer","IVfxVector2Driver",null]}},"VfxBurstSpawn":{"bases":["VfxSpawnBehavior"],"defaults":{"0x10498eed":{"Float":{}}},"types":{"0x10498eed":["Embed","VfxFloatDynamicProperty",null]}},"VfxChildComponent":{"bases":["VfxComponentBase"],"defaults":{"0x36a938e0":null},"types":{"0x36a938e0":["Pointer","VfxChildParticleSetDefinitionData",null]}},"VfxChildIdentifier":{"bases":[],"defaults":{"effect":"0x0","effectKey":"0x0","effectName":""},"types":{"effect":["Link","VfxSystemDefinitionData",null],"effectKey":["Hash",null,null],"effectName":["String",null,null]}},"VfxChildParticleSetDefinitionData":{"bases":[],"defaults":{"ParentInheritanceDefinition":null,"boneToSpawnAt":[],"childEmitOnDeath":false,"childrenIdentifiers":[],"childrenProbability":{"constantValue":0.0,"dynamics":null}},"types":{"ParentInheritanceDefinition":["Pointer","VfxParentInheritanceParams",null],"boneToSpawnAt":["List",null,"String"],"childEmitOnDeath":["Bool",null,null],"childrenIdentifiers":["List","VfxChildIdentifier","Embed"],"childrenProbability":["Embed","ValueFloat",null]}},"VfxClampFloatDriver":{"bases":["IVfxFloatDriver"],"defaults":{"High":1.0,"Low":0.0,"Param":null},"types":{"High":["F32",null,null],"Low":["F32",null,null],"Param":["Pointer","IVfxFloatDriver",null]}},"VfxClampVector2Driver":{"bases":["IVfxVector2Driver"],"defaults":{"High":[1.0,1.0],"Low":[0.0,0.0],"Param":null},"types":{"High":["Vec2",null,null],"Low":["Vec2",null,null],"Param":["Pointer","IVfxVector2Driver",null]}},"VfxClampVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"High":[1.0,1.0,1.0],"Low":[0.0,0.0,0.0],"Param":null},"types":{"High":["Vec3",null,null],"Low":["Vec3",null,null],"Param":["Pointer","IVfxVector3Driver",null]}},"VfxClampVector4Driver":{"bases":["IVfxVector4Driver"],"defaults":{"High":[1.0,1.0,1.0,1.0],"Low":[0.0,0.0,0.0,0.0],"Param":null},"types":{"High":["Vec4",null,null],"Low":["Vec4",null,null],"Param":["Pointer","IVfxVector4Driver",null]}},"VfxColorBase":{"bases":[],"defaults":{},"types":{}},"VfxColorConstantDriver":{"bases":["IVfxVector4Driver"],"defaults":{"Color":[0.0,0.0,0.0,1.0]},"types":{"Color":["Vec4",null,null]}},"VfxColorContainer":{"bases":[],"defaults":{"0x39340876":[1.0,1.0,1.0,1.0],"ColorOverLife":{"Vector4":{}},"InitialColor":{"Vector4":{}}},"types":{"0x39340876":["Vec4",null,null],"ColorOverLife":["Embed","VfxVector4DynamicProperty",null],"InitialColor":["Embed","VfxVector4DynamicProperty",null]}},"VfxColorOverLifeMaterialDriver":{"bases":["IVfxMaterialDriver"],"defaults":{"colors":{"probabilityTables":[null,null,null,null],"times":[],"values":[]},"frequency":0},"types":{"colors":["Embed","VfxAnimatedColorVariableData",null],"frequency":["U8",null,null]}},"VfxColorRgbBase":{"bases":[],"defaults":{},"types":{}},"VfxColorRgbConstantDriver":{"bases":["IVfxVector3Driver"],"defaults":{"Color":[0.0,0.0,0.0]},"types":{"Color":["Vec3",null,null]}},"VfxColorRgbaDriver":{"bases":["IVfxVector4Driver"],"defaults":{"Alpha":null,"Rgb":null},"types":{"Alpha":["Pointer","IVfxFloatDriver",null],"Rgb":["Pointer","IVfxVector3Driver",null]}},"VfxComponentBase":{"bases":[],"defaults":{},"types":{}},"VfxComponents":{"bases":[],"defaults":{"ChildComponent":null,"GeometryComponent":null,"LifetimeComponent":null,"PhysicsComponent":null,"RenderComponent":null,"components":[]},"types":{"ChildComponent":["Pointer","VfxChildComponent",null],"GeometryComponent":["Pointer","VfxGeometryComponentBase",null],"LifetimeComponent":["Pointer","VfxLifetimeComponentBase",null],"PhysicsComponent":["Pointer","VfxPhysicsComponentBase",null],"RenderComponent":["Pointer","VfxRenderComponentBase",null],"components":["List2","VfxComponentBase","Pointer"]}},"VfxConditionFloatDriver":{"bases":["IVfxFloatDriver"],"defaults":{"Comparator":0,"Left":null,"Right":null},"types":{"Comparator":["U8",null,null],"Left":["Pointer","IVfxFloatDriver",null],"Right":["Pointer","IVfxFloatDriver",null]}},"VfxConditionVector2Driver":{"bases":["IVfxVector2Driver"],"defaults":{"Comparator":0,"Left":null,"Right":null},"types":{"Comparator":["U8",null,null],"Left":["Pointer","IVfxVector2Driver",null],"Right":["Pointer","IVfxVector2Driver",null]}},"VfxConditionVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"Comparator":0,"Left":null,"Right":null},"types":{"Comparator":["U8",null,null],"Left":["Pointer","IVfxVector3Driver",null],"Right":["Pointer","IVfxVector3Driver",null]}},"VfxConditionVector4Driver":{"bases":["IVfxVector4Driver"],"defaults":{"Comparator":0,"Left":null,"Right":null},"types":{"Comparator":["U8",null,null],"Left":["Pointer","IVfxVector4Driver",null],"Right":["Pointer","IVfxVector4Driver",null]}},"VfxDistanceBasedTransparencyParams":{"bases":[],"defaults":{"AlphaAtClosestDistance":1.0,"AlphaAtFarthestDistance":0.10000000149011612,"ClosestDistance":0.0,"FarthestDistance":3.4028234663852886e+38},"types":{"AlphaAtClosestDistance":["F32",null,null],"AlphaAtFarthestDistance":["F32",null,null],"ClosestDistance":["F32",null,null],"FarthestDistance":["F32",null,null]}},"VfxDistortionDefinitionData":{"bases":[],"defaults":{"distortion":0.0,"distortionMode":1,"normalMapTexture":""},"types":{"distortion":["F32",null,null],"distortionMode":["U8",null,null],"normalMapTexture":["String",null,null]}},"VfxDivideByComponentVector2Driver":{"bases":["IVfxVector2Driver"],"defaults":{"Divisor":null,"Vector2":null},"types":{"Divisor":["Pointer","IVfxVector2Driver",null],"Vector2":["Pointer","IVfxVector2Driver",null]}},"VfxDivideByComponentVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"Divisor":null,"Vector3":null},"types":{"Divisor":["Pointer","IVfxVector3Driver",null],"Vector3":["Pointer","IVfxVector3Driver",null]}},"VfxDivideByComponentVector4Driver":{"bases":["IVfxVector4Driver"],"defaults":{"Divisor":null,"Vector4":null},"types":{"Divisor":["Pointer","IVfxVector4Driver",null],"Vector4":["Pointer","IVfxVector4Driver",null]}},"VfxDivideByFactorFloatDriver":{"bases":["IVfxFloatDriver"],"defaults":{"Divisor":null,"value":null},"types":{"Divisor":["Pointer","IVfxFloatDriver",null],"value":["Pointer","IVfxFloatDriver",null]}},"VfxDivideByFactorVector2Driver":{"bases":["IVfxVector2Driver"],"defaults":{"Divisor":null,"Vector2":null},"types":{"Divisor":["Pointer","IVfxFloatDriver",null],"Vector2":["Pointer","IVfxVector2Driver",null]}},"VfxDivideByFactorVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"Divisor":null,"Vector3":null},"types":{"Divisor":["Pointer","IVfxFloatDriver",null],"Vector3":["Pointer","IVfxVector3Driver",null]}},"VfxDivideByFactorVector4Driver":{"bases":["IVfxVector4Driver"],"defaults":{"Divisor":null,"Vector4":null},"types":{"Divisor":["Pointer","IVfxFloatDriver",null],"Vector4":["Pointer","IVfxVector4Driver",null]}},"VfxDriverContainer":{"bases":[],"defaults":{"0x8ed7a68f":{},"materialDrivers":{}},"types":{"0x8ed7a68f":["Map","0x9999dd64","Pointer"],"materialDrivers":["Map","IVfxVector4Driver","Pointer"]}},"VfxDynamicParameterAddModifier":{"bases":["IVfxDynamicParameterModifier"],"defaults":{"value":[0.0,0.0,0.0,0.0]},"types":{"value":["Vec4",null,null]}},"VfxDynamicParameterCeilModifier":{"bases":["IVfxDynamicParameterModifier"],"defaults":{},"types":{}},"VfxDynamicParameterFloorModifier":{"bases":["IVfxDynamicParameterModifier"],"defaults":{},"types":{}},"VfxDynamicParameterMultiplierModifier":{"bases":["IVfxDynamicParameterModifier"],"defaults":{"value":[1.0,1.0,1.0,1.0]},"types":{"value":["Vec4",null,null]}},"VfxDynamicParameterRoundModifier":{"bases":["IVfxDynamicParameterModifier"],"defaults":{},"types":{}},"VfxDynamicParametersData":{"bases":[],"defaults":{"0x1dcc5270":[]},"types":{"0x1dcc5270":["List2","0xd5c9eb1","Embed"]}},"VfxEffectorDefinition":{"bases":[],"defaults":{"0x608eac63":false,"EffectorData":"0x0"},"types":{"0x608eac63":["Bool",null,null],"EffectorData":["Link","EnvironmentEffectorBase",null]}},"VfxEmbeddedMaterial":{"bases":["VfxMaterialContainer"],"defaults":{"Material":{"SharedTextureSets":[],"childTechniques":[],"dynamicMaterial":null,"name":"","paramValues":[],"samplerValues":[],"shaderMacros":{},"switches":[],"techniques":[],"type":1}},"types":{"Material":["Embed","StaticMaterialDef",null]}},"VfxEmissionBox":{"bases":["IVfxEmissionSource"],"defaults":{"BoxSize":{"Vector3":{}},"Distribution":null,"DistributionMode":0,"FillMode":0,"ShapeCenter":null,"rotation":null,"scale":null},"types":{"BoxSize":["Embed","VfxVector3DynamicProperty",null],"Distribution":["Pointer","0x2d42ea41",null],"DistributionMode":["U8",null,null],"FillMode":["U8",null,null],"ShapeCenter":["Embed","VfxVector3DynamicProperty",null],"rotation":["Embed","VfxVector3DynamicProperty",null],"scale":["Embed","VfxVector3DynamicProperty",null]}},"VfxEmissionCylinder":{"bases":["IVfxEmissionSource"],"defaults":{"0x654153c3":null,"DistributionMode":0,"IncludeCaps":false,"ShapeCenter":null,"height":{"Float":{}},"radius":{"Float":{}},"rotation":null,"scale":null},"types":{"0x654153c3":["Pointer","0x3eb74cbe",null],"DistributionMode":["U8",null,null],"IncludeCaps":["Flag",null,null],"ShapeCenter":["Embed","VfxVector3DynamicProperty",null],"height":["Embed","VfxFloatDynamicProperty",null],"radius":["Embed","VfxFloatDynamicProperty",null],"rotation":["Embed","VfxVector3DynamicProperty",null],"scale":["Embed","VfxVector3DynamicProperty",null]}},"VfxEmissionLinkedMeshData":{"bases":["IVfxEmissionSurface"],"defaults":{},"types":{}},"VfxEmissionMesh":{"bases":["IVfxEmissionSource"],"defaults":{"ShapeCenter":null,"meshName":"","rotation":null,"scale":null},"types":{"ShapeCenter":["Embed","VfxVector3DynamicProperty",null],"meshName":["String",null,null],"rotation":["Embed","VfxVector3DynamicProperty",null],"scale":["Embed","VfxVector3DynamicProperty",null]}},"VfxEmissionMeshData":{"bases":["IVfxEmissionSurface"],"defaults":{"AnimationName":"","Submeshes":[],"maxJointWeights":4,"meshName":"","meshScale":1.0,"skeletonName":"","useSurfaceNormalForBirthPhysics":true},"types":{"AnimationName":["String",null,null],"Submeshes":["List",null,"Hash"],"maxJointWeights":["U16",null,null],"meshName":["String",null,null],"meshScale":["F32",null,null],"skeletonName":["String",null,null],"useSurfaceNormalForBirthPhysics":["Bool",null,null]}},"VfxEmissionPoint":{"bases":["IVfxEmissionSource"],"defaults":{"ShapeCenter":null,"rotation":null,"scale":null},"types":{"ShapeCenter":["Embed","VfxVector3DynamicProperty",null],"rotation":["Embed","VfxVector3DynamicProperty",null],"scale":["Embed","VfxVector3DynamicProperty",null]}},"VfxEmissionSkeleton":{"bases":["IVfxEmissionSource"],"defaults":{"ShapeCenter":null,"SkeletonData":{"JointMask":[],"skeletonName":""},"rotation":null,"scale":null},"types":{"ShapeCenter":["Embed","VfxVector3DynamicProperty",null],"SkeletonData":["Embed","VfxEmissionSkeletonData",null],"rotation":["Embed","VfxVector3DynamicProperty",null],"scale":["Embed","VfxVector3DynamicProperty",null]}},"VfxEmissionSkeletonData":{"bases":["IVfxEmissionSurface"],"defaults":{"JointMask":[],"skeletonName":""},"types":{"JointMask":["List2",null,"Hash"],"skeletonName":["String",null,null]}},"VfxEmissionSkin":{"bases":["IVfxEmissionSource"],"defaults":{"ShapeCenter":null,"SkinData":{"AnimationName":"","Submeshes":[],"maxJointWeights":4,"meshName":"","meshScale":1.0,"skeletonName":"","useSurfaceNormalForBirthPhysics":true},"rotation":null,"scale":null},"types":{"ShapeCenter":["Embed","VfxVector3DynamicProperty",null],"SkinData":["Embed","VfxEmissionMeshData",null],"rotation":["Embed","VfxVector3DynamicProperty",null],"scale":["Embed","VfxVector3DynamicProperty",null]}},"VfxEmissionSphere":{"bases":["IVfxEmissionSource"],"defaults":{"0x654153c3":null,"DistributionMode":0,"ShapeCenter":null,"radius":{"Float":{}},"rotation":null,"scale":null},"types":{"0x654153c3":["Pointer","0x3eb74cbe",null],"DistributionMode":["U8",null,null],"ShapeCenter":["Embed","VfxVector3DynamicProperty",null],"radius":["Embed","VfxFloatDynamicProperty",null],"rotation":["Embed","VfxVector3DynamicProperty",null],"scale":["Embed","VfxVector3DynamicProperty",null]}},"VfxEmissionSurfaceData":{"bases":[],"defaults":{"EmissionSurface":null,"ParticleSpawnDataGenerator":null},"types":{"EmissionSurface":["Pointer","IVfxEmissionSurface",null],"ParticleSpawnDataGenerator":["Pointer","IParticleSpawnDataGenerator",null]}},"VfxEmitterAudio":{"bases":[],"defaults":{"SoundOnCreate":"","SoundPersistent":""},"types":{"SoundOnCreate":["String",null,null],"SoundPersistent":["String",null,null]}},"VfxEmitterDefinitionData":{"bases":[],"defaults":{"0xd1ee8634":false,"Audio":null,"ChanceToNotExist":0.0,"Color":{"constantValue":[1.0,1.0,1.0,1.0],"dynamics":null},"CustomMaterial":null,"DepthPushPull":0.0,"EmitterPosition":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"Filtering":null,"FlexInstanceScale":null,"FlexShapeDefinition":null,"HasVariableStartTime":false,"IsEmitterSpace":false,"LegacySimple":null,"Linger":null,"MaximumRateByVelocity":null,"ParticlesShareRandomValue":false,"SortEmittersByPos":false,"SpawnShape":null,"StencilReferenceId":"0x0","TextureFlipU":false,"TextureFlipV":false,"WriteAlphaOnly":false,"acceleration":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"alphaErosionDefinition":null,"alphaRef":5,"bindWeight":{"constantValue":0.0,"dynamics":null},"birthAcceleration":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthColor":{"constantValue":[1.0,1.0,1.0,1.0],"dynamics":null},"birthDrag":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthFrameRate":{"constantValue":1.0,"dynamics":null},"birthOrbitalVelocity":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthRotation0":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthRotationalAcceleration":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthRotationalVelocity0":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthScale0":{"constantValue":[1.0,1.0,1.0],"dynamics":null},"birthUVOffset":{"constantValue":[0.0,0.0],"dynamics":null},"birthUvRotateRate":{"constantValue":0.0,"dynamics":null},"birthUvScrollRate":{"constantValue":[0.0,0.0],"dynamics":null},"birthVelocity":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"blendMode":0,"censorModulateValue":[1.0,1.0,1.0,1.0],"childParticleSetDefinition":null,"colorLookUpOffsets":[0.0,0.0],"colorLookUpScales":[1.0,1.0],"colorLookUpTypeX":1,"colorLookUpTypeY":0,"colorRenderFlags":0,"colorblindVisibility":0,"depthBiasFactors":[0.0,0.0],"directionVelocityMinScale":1.0,"directionVelocityScale":0.0,"disableBackfaceCull":false,"disabled":false,"distortionDefinition":null,"doesCastShadow":false,"doesLifetimeScale":false,"doesParticleLifetimeScale":false,"drag":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"emissionMeshName":"","emissionMeshScale":1.0,"emissionSurfaceDefinition":null,"emitterLinger":0.0,"emitterName":"","emitterUvScrollRate":[0.0,0.0],"falloffTexture":"ASSETS/Shared/Particles/DefaultFalloff.png","fieldCollectionDefinition":null,"flexBirthRotationalVelocity0":null,"flexBirthUVOffset":null,"flexBirthUVScrollRate":null,"flexBirthVelocity":null,"flexParticleLifetime":null,"flexRate":null,"flexScaleBirthScale":null,"frameRate":0.0,"hasPostRotateOrientation":false,"importance":2,"isDirectionOriented":false,"isFollowingTerrain":false,"isGroundLayer":false,"isLocalOrientation":true,"isRandomStartFrame":false,"isRotationEnabled":false,"isSingleParticle":false,"isTexturePixelated":false,"isUniformScale":false,"lifetime":null,"materialOverrideDefinitions":[],"meshRenderFlags":1,"miscRenderFlags":0,"modulationFactor":[1.0,1.0,1.0,1.0],"numFrames":1,"offsetLifeScalingSymmetryMode":0,"offsetLifetimeScaling":[0.0,0.0,0.0],"paletteDefinition":null,"particleColorTexture":"ASSETS/Shared/Particles/DefaultColorOverlifetime.png","particleIsLocalOrientation":false,"particleLifetime":{"constantValue":3.0,"dynamics":null},"particleLinger":0.0,"particleLingerType":0,"particleUVRotateRate":{"constantValue":0.0,"dynamics":null},"particleUVScrollRate":{"constantValue":[0.0,0.0],"dynamics":null},"pass":0,"period":null,"postRotateOrientationAxis":[0.0,0.0,0.0],"primitive":{},"rate":{"constantValue":0.0,"dynamics":null},"rateByVelocityFunction":{"constantValue":[0.0,0.0],"dynamics":null},"reflectionDefinition":null,"renderPhaseOverride":7,"rotation0":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"rotationOverride":[0.0,0.0,0.0],"scale0":{"constantValue":[1.0,1.0,1.0],"dynamics":null},"scaleOverride":[1.0,1.0,1.0],"sliceTechniqueRange":0.0,"softParticleParams":null,"startFrame":0,"stencilMode":0,"stencilRef":0,"texAddressModeBase":0,"texDiv":[1.0,1.0],"texture":"","textureMult":null,"timeActiveDuringPeriod":null,"timeBeforeFirstEmission":0.0,"translationOverride":[0.0,0.0,0.0],"useEmissionMeshNormalForBirth":true,"useNavmeshMask":false,"uvMode":0,"uvParallaxScale":0.0,"uvRotation":{"constantValue":0.0,"dynamics":null},"uvScale":{"constantValue":[1.0,1.0],"dynamics":null},"uvScrollClamp":false,"uvTransformCenter":[0.5,0.5],"velocity":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"worldAcceleration":{"constantValue":[0.0,0.0,0.0],"dynamics":null}},"types":{"0xd1ee8634":["Flag",null,null],"Audio":["Pointer","VfxEmitterAudio",null],"ChanceToNotExist":["F32",null,null],"Color":["Embed","ValueColor",null],"CustomMaterial":["Pointer","VfxMaterialDefinitionData",null],"DepthPushPull":["F32",null,null],"EmitterPosition":["Embed","ValueVector3",null],"Filtering":["Pointer","VfxEmitterFiltering",null],"FlexInstanceScale":["Pointer","FlexTypeFloat",null],"FlexShapeDefinition":["Pointer","VfxFlexShapeDefinitionData",null],"HasVariableStartTime":["Flag",null,null],"IsEmitterSpace":["Flag",null,null],"LegacySimple":["Pointer","VfxEmitterLegacySimple",null],"Linger":["Pointer","VfxLingerDefinitionData",null],"MaximumRateByVelocity":["Option",null,"F32"],"ParticlesShareRandomValue":["Flag",null,null],"SortEmittersByPos":["Flag",null,null],"SpawnShape":["Pointer","IVfxShape",null],"StencilReferenceId":["Hash",null,null],"TextureFlipU":["Flag",null,null],"TextureFlipV":["Flag",null,null],"WriteAlphaOnly":["Flag",null,null],"acceleration":["Embed","ValueVector3",null],"alphaErosionDefinition":["Pointer","VfxAlphaErosionDefinitionData",null],"alphaRef":["U8",null,null],"bindWeight":["Embed","ValueFloat",null],"birthAcceleration":["Embed","ValueVector3",null],"birthColor":["Embed","ValueColor",null],"birthDrag":["Embed","ValueVector3",null],"birthFrameRate":["Embed","ValueFloat",null],"birthOrbitalVelocity":["Embed","ValueVector3",null],"birthRotation0":["Embed","ValueVector3",null],"birthRotationalAcceleration":["Embed","ValueVector3",null],"birthRotationalVelocity0":["Embed","ValueVector3",null],"birthScale0":["Embed","ValueVector3",null],"birthUVOffset":["Embed","ValueVector2",null],"birthUvRotateRate":["Embed","ValueFloat",null],"birthUvScrollRate":["Embed","ValueVector2",null],"birthVelocity":["Embed","ValueVector3",null],"blendMode":["U8",null,null],"censorModulateValue":["Vec4",null,null],"childParticleSetDefinition":["Pointer","VfxChildParticleSetDefinitionData",null],"colorLookUpOffsets":["Vec2",null,null],"colorLookUpScales":["Vec2",null,null],"colorLookUpTypeX":["U8",null,null],"colorLookUpTypeY":["U8",null,null],"colorRenderFlags":["U8",null,null],"colorblindVisibility":["U8",null,null],"depthBiasFactors":["Vec2",null,null],"directionVelocityMinScale":["F32",null,null],"directionVelocityScale":["F32",null,null],"disableBackfaceCull":["Bool",null,null],"disabled":["Bool",null,null],"distortionDefinition":["Pointer","VfxDistortionDefinitionData",null],"doesCastShadow":["Flag",null,null],"doesLifetimeScale":["Flag",null,null],"doesParticleLifetimeScale":["Flag",null,null],"drag":["Embed","ValueVector3",null],"emissionMeshName":["String",null,null],"emissionMeshScale":["F32",null,null],"emissionSurfaceDefinition":["Pointer","VfxEmissionSurfaceData",null],"emitterLinger":["Option",null,"F32"],"emitterName":["String",null,null],"emitterUvScrollRate":["Vec2",null,null],"falloffTexture":["String",null,null],"fieldCollectionDefinition":["Pointer","VfxFieldCollectionDefinitionData",null],"flexBirthRotationalVelocity0":["Pointer","FlexValueVector3",null],"flexBirthUVOffset":["Pointer","FlexValueVector2",null],"flexBirthUVScrollRate":["Pointer","FlexValueVector2",null],"flexBirthVelocity":["Pointer","FlexValueVector3",null],"flexParticleLifetime":["Pointer","FlexValueFloat",null],"flexRate":["Pointer","FlexValueFloat",null],"flexScaleBirthScale":["Pointer","FlexTypeFloat",null],"frameRate":["F32",null,null],"hasPostRotateOrientation":["Flag",null,null],"importance":["U8",null,null],"isDirectionOriented":["Flag",null,null],"isFollowingTerrain":["Flag",null,null],"isGroundLayer":["Flag",null,null],"isLocalOrientation":["Flag",null,null],"isRandomStartFrame":["Flag",null,null],"isRotationEnabled":["Flag",null,null],"isSingleParticle":["Flag",null,null],"isTexturePixelated":["Bool",null,null],"isUniformScale":["Flag",null,null],"lifetime":["Option",null,"F32"],"materialOverrideDefinitions":["List","VfxMaterialOverrideDefinitionData","Embed"],"meshRenderFlags":["U8",null,null],"miscRenderFlags":["U8",null,null],"modulationFactor":["Vec4",null,null],"numFrames":["U16",null,null],"offsetLifeScalingSymmetryMode":["U8",null,null],"offsetLifetimeScaling":["Vec3",null,null],"paletteDefinition":["Pointer","VfxPaletteDefinitionData",null],"particleColorTexture":["String",null,null],"particleIsLocalOrientation":["Flag",null,null],"particleLifetime":["Embed","ValueFloat",null],"particleLinger":["Option",null,"F32"],"particleLingerType":["U8",null,null],"particleUVRotateRate":["Embed","IntegratedValueFloat",null],"particleUVScrollRate":["Embed","IntegratedValueVector2",null],"pass":["I16",null,null],"period":["Option",null,"F32"],"postRotateOrientationAxis":["Vec3",null,null],"primitive":["Pointer","VfxLegacyPrimitiveBase",null],"rate":["Embed","ValueFloat",null],"rateByVelocityFunction":["Embed","ValueVector2",null],"reflectionDefinition":["Pointer","VfxReflectionDefinitionData",null],"renderPhaseOverride":["U8",null,null],"rotation0":["Embed","IntegratedValueVector3",null],"rotationOverride":["Vec3",null,null],"scale0":["Embed","ValueVector3",null],"scaleOverride":["Vec3",null,null],"sliceTechniqueRange":["F32",null,null],"softParticleParams":["Pointer","VfxSoftParticleDefinitionData",null],"startFrame":["U16",null,null],"stencilMode":["U8",null,null],"stencilRef":["U8",null,null],"texAddressModeBase":["U8",null,null],"texDiv":["Vec2",null,null],"texture":["String",null,null],"textureMult":["Pointer","VfxTextureMultDefinitionData",null],"timeActiveDuringPeriod":["Option",null,"F32"],"timeBeforeFirstEmission":["F32",null,null],"translationOverride":["Vec3",null,null],"useEmissionMeshNormalForBirth":["Flag",null,null],"useNavmeshMask":["Flag",null,null],"uvMode":["U8",null,null],"uvParallaxScale":["F32",null,null],"uvRotation":["Embed","ValueFloat",null],"uvScale":["Embed","ValueVector2",null],"uvScrollClamp":["Flag",null,null],"uvTransformCenter":["Vec2",null,null],"velocity":["Embed","ValueVector3",null],"worldAcceleration":["Embed","IntegratedValueVector3",null]}},"VfxEmitterFiltering":{"bases":[],"defaults":{"censorPolicy":0,"keywordsExcluded":[],"keywordsIncluded":[],"keywordsRequired":[],"spectatorPolicy":0},"types":{"censorPolicy":["U8",null,null],"keywordsExcluded":["List",null,"String"],"keywordsIncluded":["List",null,"String"],"keywordsRequired":["List",null,"String"],"spectatorPolicy":["U8",null,null]}},"VfxEmitterLegacySimple":{"bases":[],"defaults":{"birthRotation":{"constantValue":0.0,"dynamics":null},"birthRotationalVelocity":{"constantValue":0.0,"dynamics":null},"birthScale":{"constantValue":1.0,"dynamics":null},"fixedOrbitType":1,"hasFixedOrbit":false,"lockedToEmitter":false,"orientation":0,"particleBind":[0.0,0.0],"rotation":{"constantValue":0.0,"dynamics":null},"scale":{"constantValue":1.0,"dynamics":null},"scaleBias":[1.0,1.0],"scaleUpFromOrigin":false,"uvScrollRate":[0.0,0.0]},"types":{"birthRotation":["Embed","ValueFloat",null],"birthRotationalVelocity":["Embed","ValueFloat",null],"birthScale":["Embed","ValueFloat",null],"fixedOrbitType":["U8",null,null],"hasFixedOrbit":["Bool",null,null],"lockedToEmitter":["Bool",null,null],"orientation":["U8",null,null],"particleBind":["Vec2",null,null],"rotation":["Embed","ValueFloat",null],"scale":["Embed","ValueFloat",null],"scaleBias":["Vec2",null,null],"scaleUpFromOrigin":["Bool",null,null],"uvScrollRate":["Vec2",null,null]}},"VfxEmitterVelocityDriver":{"bases":["IVfxVector3Driver"],"defaults":{},"types":{}},"VfxEntity":{"bases":["LolGameEntity"],"defaults":{},"types":{}},"VfxEntityTemplate":{"bases":["GameEntityTemplate"],"defaults":{"0xbbe68da1":null,"IsReplicated":true,"Networking":{},"Sequencer":{},"StateMachine":null,"Team":{"Team":100,"TeamDefinition":"0x0"},"Vfx":{"0x63176011":false,"0x658b896a":[],"0x9d9b6793":false,"0x9f499a15":false,"0xf718ab13":false,"AllDimensions":false,"TextureOverride":null,"colorModulate":[1.0,1.0,1.0,1.0],"eyeCandy":false,"system":"0x0"},"inheritedTags":null,"name":null,"tags":null,"transform":null},"types":{"0xbbe68da1":["Bool",null,null],"IsReplicated":["Bool",null,null],"Networking":["Embed","NetworkingGeComponentDef",null],"Sequencer":["Embed","SequencerGeComponentDef",null],"StateMachine":["Pointer","StateMachineGeComponentDef",null],"Team":["Embed","TeamGeComponentDef",null],"Vfx":["Embed","VfxGeComponentDef",null],"inheritedTags":["List2",null,"Hash"],"name":["Hash",null,null],"tags":["List2",null,"Hash"],"transform":["Mtx44",null,null]}},"VfxFacingModeCameraAligned":{"bases":["VfxShimmerFacingMode"],"defaults":{},"types":{}},"VfxFacingModeCameraFacing":{"bases":["VfxShimmerFacingMode"],"defaults":{},"types":{}},"VfxFacingModeViewAligned":{"bases":["VfxShimmerFacingMode"],"defaults":{},"types":{}},"VfxFieldAccelerationDefinitionData":{"bases":[],"defaults":{"acceleration":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"isLocalSpace":true},"types":{"acceleration":["Embed","ValueVector3",null],"isLocalSpace":["Bool",null,null]}},"VfxFieldAttractionDefinitionData":{"bases":[],"defaults":{"Position":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"acceleration":{"constantValue":0.0,"dynamics":null},"radius":{"constantValue":0.0,"dynamics":null}},"types":{"Position":["Embed","ValueVector3",null],"acceleration":["Embed","ValueFloat",null],"radius":["Embed","ValueFloat",null]}},"VfxFieldCollectionDefinitionData":{"bases":[],"defaults":{"fieldAccelerationDefinitions":[],"fieldAttractionDefinitions":[],"fieldDragDefinitions":[],"fieldNoiseDefinitions":[],"fieldOrbitalDefinitions":[]},"types":{"fieldAccelerationDefinitions":["List","VfxFieldAccelerationDefinitionData","Embed"],"fieldAttractionDefinitions":["List","VfxFieldAttractionDefinitionData","Embed"],"fieldDragDefinitions":["List","VfxFieldDragDefinitionData","Embed"],"fieldNoiseDefinitions":["List","VfxFieldNoiseDefinitionData","Embed"],"fieldOrbitalDefinitions":["List","VfxFieldOrbitalDefinitionData","Embed"]}},"VfxFieldDragDefinitionData":{"bases":[],"defaults":{"Position":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"radius":{"constantValue":0.0,"dynamics":null},"strength":{"constantValue":0.0,"dynamics":null}},"types":{"Position":["Embed","ValueVector3",null],"radius":["Embed","ValueFloat",null],"strength":["Embed","ValueFloat",null]}},"VfxFieldNoiseDefinitionData":{"bases":[],"defaults":{"Position":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"axisFraction":[0.0,0.0,0.0],"frequency":{"constantValue":0.0,"dynamics":null},"radius":{"constantValue":0.0,"dynamics":null},"velocityDelta":{"constantValue":0.0,"dynamics":null}},"types":{"Position":["Embed","ValueVector3",null],"axisFraction":["Vec3",null,null],"frequency":["Embed","ValueFloat",null],"radius":["Embed","ValueFloat",null],"velocityDelta":["Embed","ValueFloat",null]}},"VfxFieldOrbitalDefinitionData":{"bases":[],"defaults":{"direction":{"constantValue":[0.0,1.0,0.0],"dynamics":null},"isLocalSpace":true},"types":{"direction":["Embed","ValueVector3",null],"isLocalSpace":["Bool",null,null]}},"VfxFlexShapeDefinitionData":{"bases":[],"defaults":{"ScaleBirthTranslationByBoundObjectSize":0.0,"flexBirthTranslation":null,"flexScaleEmitOffset":null,"scaleBirthScaleByBoundObjectHeight":0.0,"scaleBirthScaleByBoundObjectRadius":0.0,"scaleBirthScaleByBoundObjectSize":0.0,"scaleEmitOffsetByBoundObjectHeight":0.0,"scaleEmitOffsetByBoundObjectRadius":0.0,"scaleEmitOffsetByBoundObjectSize":0.0},"types":{"ScaleBirthTranslationByBoundObjectSize":["F32",null,null],"flexBirthTranslation":["Pointer","FlexValueVector3",null],"flexScaleEmitOffset":["Pointer","FlexTypeFloat",null],"scaleBirthScaleByBoundObjectHeight":["F32",null,null],"scaleBirthScaleByBoundObjectRadius":["F32",null,null],"scaleBirthScaleByBoundObjectSize":["F32",null,null],"scaleEmitOffsetByBoundObjectHeight":["F32",null,null],"scaleEmitOffsetByBoundObjectRadius":["F32",null,null],"scaleEmitOffsetByBoundObjectSize":["F32",null,null]}},"VfxFloatBase":{"bases":[],"defaults":{},"types":{}},"VfxFloatConstantDriver":{"bases":["IVfxFloatDriver"],"defaults":{"Float":0.0},"types":{"Float":["F32",null,null]}},"VfxFloatDynamicProperty":{"bases":[],"defaults":{"Float":null},"types":{"Float":["Pointer","IVfxFloatDriver",null]}},"VfxFloatEasingDriver":{"bases":["IVfxFloatDriver"],"defaults":{"EasingFunction":0,"duration":1.0,"frequency":0,"looping":false},"types":{"EasingFunction":["U8",null,null],"duration":["F32",null,null],"frequency":["U8",null,null],"looping":["Bool",null,null]}},"VfxFloatFromVector2Driver":{"bases":["IVfxFloatDriver"],"defaults":{"Input":null,"Select":0},"types":{"Input":["Pointer","IVfxVector2Driver",null],"Select":["U8",null,null]}},"VfxFloatFromVector3Driver":{"bases":["IVfxFloatDriver"],"defaults":{"Input":null,"Select":0},"types":{"Input":["Pointer","IVfxVector3Driver",null],"Select":["U8",null,null]}},"VfxFloatFromVector4Driver":{"bases":["IVfxFloatDriver"],"defaults":{"Select":0,"Vector4Input":null},"types":{"Select":["U8",null,null],"Vector4Input":["Pointer","IVfxVector4Driver",null]}},"VfxFloatLerpDriver":{"bases":["IVfxFloatDriver"],"defaults":{"Factor":null,"From":null,"To":null},"types":{"Factor":["Pointer","IVfxFloatDriver",null],"From":["Pointer","IVfxFloatDriver",null],"To":["Pointer","IVfxFloatDriver",null]}},"VfxFloatLogicDriver":{"bases":["IVfxFloatDriver"],"defaults":{"LogicDriver":null,"Source":0},"types":{"LogicDriver":["Pointer","ILogicFloatDriver",null],"Source":["U8",null,null]}},"VfxFloatOverLifeMaterialDriver":{"bases":["IVfxMaterialDriver"],"defaults":{"frequency":0,"graph":{"probabilityTables":[null],"times":[],"values":[]}},"types":{"frequency":["U8",null,null],"graph":["Embed","VfxAnimatedFloatVariableData",null]}},"VfxFloatSineDriver":{"bases":["IVfxFloatDriver"],"defaults":{"0xfecf7b3c":0,"Remap":[0.0,1.0],"Time":null,"period":null},"types":{"0xfecf7b3c":["U8",null,null],"Remap":["Vec2",null,null],"Time":["Pointer","IVfxFloatDriver",null],"period":["Pointer","IVfxFloatDriver",null]}},"VfxFloatTimeDriver":{"bases":["IVfxFloatDriver"],"defaults":{"Time":7,"offset":null},"types":{"Time":["U8",null,null],"offset":["Pointer","IVfxFloatDriver",null]}},"VfxGeComponent":{"bases":["0x129e311","0x2576b4fc","GameEntityComponent"],"defaults":{},"types":{}},"VfxGeComponentDef":{"bases":["IGeComponentDef"],"defaults":{"0x63176011":false,"0x658b896a":[],"0x9d9b6793":false,"0x9f499a15":false,"0xf718ab13":false,"AllDimensions":false,"TextureOverride":null,"colorModulate":[1.0,1.0,1.0,1.0],"eyeCandy":false,"system":"0x0"},"types":{"0x63176011":["Bool",null,null],"0x658b896a":["List2","ITeam","Pointer"],"0x9d9b6793":["Bool",null,null],"0x9f499a15":["Bool",null,null],"0xf718ab13":["Bool",null,null],"AllDimensions":["Bool",null,null],"TextureOverride":["Pointer","0x3e265091",null],"colorModulate":["Vec4",null,null],"eyeCandy":["Bool",null,null],"system":["Link","VfxSystemDefinitionData",null]}},"VfxGeometryComponent":{"bases":["VfxGeometryComponentBase"],"defaults":{"primitive":null},"types":{"primitive":["Pointer","VfxShimmerPrimitiveBase",null]}},"VfxGeometryComponentBase":{"bases":["VfxComponentBase"],"defaults":{},"types":{}},"VfxLaserDefinitionData":{"bases":["VfxBeamBaseDefinitionData"],"defaults":{"0x2190d6c4":0,"0x52f5ac93":1,"0xa9305f86":1,"0xd7aefac9":{"constantValue":100.0,"dynamics":null},"mLocalSpaceSourceOffset":[0.0,0.0,0.0],"mLocalSpaceTargetOffset":[0.0,0.0,0.0]},"types":{"0x2190d6c4":["U8",null,null],"0x52f5ac93":["U8",null,null],"0xa9305f86":["U8",null,null],"0xd7aefac9":["Embed","ValueFloat",null],"mLocalSpaceSourceOffset":["Vec3",null,null],"mLocalSpaceTargetOffset":["Vec3",null,null]}},"VfxLegacyGeometryComponent":{"bases":["VfxGeometryComponentBase"],"defaults":{"primitive":null},"types":{"primitive":["Pointer","VfxLegacyPrimitiveBase",null]}},"VfxLegacyLifetimeComponent":{"bases":["VfxLifetimeComponentBase"],"defaults":{"0x1440dec2":null,"0x7e88cd49":false,"0xc1251a31":{"constantValue":[0.0,0.0],"dynamics":null},"0xdcad4b02":false,"0xddee6cc6":null,"0xf0bff897":0.0,"EmissionRate":{"constantValue":0.0,"dynamics":null},"EmitterLifetime":null,"EmitterPeriod":null,"HasVariableStartTime":false,"MaximumRateByVelocity":null,"emitterLinger":null,"flexParticleLifetime":null,"particleLifetime":{"constantValue":3.0,"dynamics":null},"particleLinger":null,"particleLingerType":0,"timeBeforeFirstEmission":0.0},"types":{"0x1440dec2":["Pointer","FlexValueFloat",null],"0x7e88cd49":["Flag",null,null],"0xc1251a31":["Embed","ValueVector2",null],"0xdcad4b02":["Flag",null,null],"0xddee6cc6":["Option",null,"F32"],"0xf0bff897":["F32",null,null],"EmissionRate":["Embed","ValueFloat",null],"EmitterLifetime":["Option",null,"F32"],"EmitterPeriod":["Option",null,"F32"],"HasVariableStartTime":["Flag",null,null],"MaximumRateByVelocity":["Option",null,"F32"],"emitterLinger":["Option",null,"F32"],"flexParticleLifetime":["Pointer","FlexValueFloat",null],"particleLifetime":["Embed","ValueFloat",null],"particleLinger":["Option",null,"F32"],"particleLingerType":["U8",null,null],"timeBeforeFirstEmission":["F32",null,null]}},"VfxLegacyPhysicsComponent":{"bases":["VfxPhysicsComponentBase"],"defaults":{"0x2d19f1a4":false,"0x469f89dc":false,"EmitterPosition":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"FlexInstanceScale":null,"FlexShapeDefinition":null,"IsEmitterSpace":false,"Linger":null,"SpawnShape":null,"acceleration":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"bindWeight":{"constantValue":0.0,"dynamics":null},"birthAcceleration":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthDrag":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthOrbitalVelocity":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthRotation0":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthRotationalAcceleration":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthRotationalVelocity":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"birthScale":{"constantValue":[1.0,1.0,1.0],"dynamics":null},"birthVelocity":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"drag":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"emissionMeshName":"","emissionMeshScale":1.0,"fieldCollectionDefinition":null,"flexBirthRotationalVelocity":null,"flexBirthVelocity":null,"flexScaleBirthScale":null,"hasPostRotateOrientation":false,"isDirectionOriented":false,"isFollowingTerrain":false,"postRotateOrientationAxis":[0.0,0.0,0.0],"rotation0":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"rotationOverride":[0.0,0.0,0.0],"scale":{"constantValue":[1.0,1.0,1.0],"dynamics":null},"scaleOverride":[1.0,1.0,1.0],"translationOverride":[0.0,0.0,0.0],"useEmissionMeshNormalForBirth":false,"velocity":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"worldAcceleration":{"constantValue":[0.0,0.0,0.0],"dynamics":null}},"types":{"0x2d19f1a4":["Flag",null,null],"0x469f89dc":["Flag",null,null],"EmitterPosition":["Embed","ValueVector3",null],"FlexInstanceScale":["Pointer","FlexTypeFloat",null],"FlexShapeDefinition":["Pointer","VfxFlexShapeDefinitionData",null],"IsEmitterSpace":["Flag",null,null],"Linger":["Pointer","VfxPhysicsLingerDefinitionData",null],"SpawnShape":["Pointer","IVfxShape",null],"acceleration":["Embed","ValueVector3",null],"bindWeight":["Embed","ValueFloat",null],"birthAcceleration":["Embed","ValueVector3",null],"birthDrag":["Embed","ValueVector3",null],"birthOrbitalVelocity":["Embed","ValueVector3",null],"birthRotation0":["Embed","ValueVector3",null],"birthRotationalAcceleration":["Embed","ValueVector3",null],"birthRotationalVelocity":["Embed","ValueVector3",null],"birthScale":["Embed","ValueVector3",null],"birthVelocity":["Embed","ValueVector3",null],"drag":["Embed","ValueVector3",null],"emissionMeshName":["String",null,null],"emissionMeshScale":["F32",null,null],"fieldCollectionDefinition":["Pointer","VfxFieldCollectionDefinitionData",null],"flexBirthRotationalVelocity":["Pointer","FlexValueVector3",null],"flexBirthVelocity":["Pointer","FlexValueVector3",null],"flexScaleBirthScale":["Pointer","FlexTypeFloat",null],"hasPostRotateOrientation":["Flag",null,null],"isDirectionOriented":["Flag",null,null],"isFollowingTerrain":["Flag",null,null],"postRotateOrientationAxis":["Vec3",null,null],"rotation0":["Embed","ValueVector3",null],"rotationOverride":["Vec3",null,null],"scale":["Embed","ValueVector3",null],"scaleOverride":["Vec3",null,null],"translationOverride":["Vec3",null,null],"useEmissionMeshNormalForBirth":["Flag",null,null],"velocity":["Embed","ValueVector3",null],"worldAcceleration":["Embed","IntegratedValueVector3",null]}},"VfxLegacyPrimitiveBase":{"bases":["VfxPrimitiveBase"],"defaults":{},"types":{}},"VfxLegacyRenderComponent":{"bases":["VfxRenderComponentBase"],"defaults":{"0x19ebd492":false,"0x38059ffe":[0.0,0.0],"0x471a88ae":{"constantValue":[0.0,0.0],"dynamics":null},"0x50fa6131":{"constantValue":0.0,"dynamics":null},"0x53ff5986":0.0,"0x5b82c164":[1.0,1.0],"0x71164c40":[0.0,0.0],"0x73fc541d":0,"0x79bdd6bb":{"constantValue":0.0,"dynamics":null},"0x7aa0b8b1":false,"0x7c04e863":false,"0x7db9efd5":0,"0x968b3967":null,"0x9e2fcfac":1,"0xb16d3f70":{"constantValue":[0.0,0.0],"dynamics":null},"0xbdee5d67":[1.0,1.0,1.0,1.0],"0xd1ee8634":false,"0xda39bec":[1.0,1.0,1.0,1.0],"0xdcac8e0d":false,"0xe2db74aa":null,"0xe962973c":[0.0,0.0],"0xf34f9bf8":false,"0xfe3746b":[1.0,1.0],"AlphaCutoff":5,"AlphaSliceRange":0.0,"ApplyTeamColorCorrection":false,"BirthRandomStartFrame":false,"ColorOverLife":{"constantValue":[1.0,1.0,1.0,1.0],"dynamics":null},"ColorTexture":"ASSETS/Shared/Particles/DefaultColorOverlifetime.png","DepthPushPull":0.0,"DisableFogOfWar":false,"FalloffTexturePath":"","InitialColor":{"constantValue":[1.0,1.0,1.0,1.0],"dynamics":null},"InitialFrameRate":{"constantValue":1.0,"dynamics":null},"InitialUvOffset":{"constantValue":[0.0,0.0],"dynamics":null},"Pixelate":false,"Projected":false,"RenderOrder":0,"SeparateLingerColor":{"constantValue":[1.0,1.0,1.0,1.0],"dynamics":null},"StencilReferenceId":"0x0","TextureFlipU":false,"TextureFlipV":false,"UseSeparateLingerColor":false,"WriteAlphaOnly":false,"alphaErosionDefinition":null,"blendMode":0,"distortionDefinition":null,"doesCastShadow":false,"frameRate":0.0,"isGroundLayer":false,"materialOverrideDefinitions":[],"numFrames":1,"paletteDefinition":null,"reflectionDefinition":null,"softParticleParams":null,"startFrame":0,"stencilMode":0,"stencilRef":0,"texture":"","textureMult":null,"useNavmeshMask":false,"uvMode":0,"uvRotation":{"constantValue":0.0,"dynamics":null},"uvScale":{"constantValue":[1.0,1.0],"dynamics":null},"uvScrollClamp":false,"uvTransformCenter":[0.5,0.5]},"types":{"0x19ebd492":["Flag",null,null],"0x38059ffe":["Vec2",null,null],"0x471a88ae":["Embed","IntegratedValueVector2",null],"0x50fa6131":["Embed","ValueFloat",null],"0x53ff5986":["F32",null,null],"0x5b82c164":["Vec2",null,null],"0x71164c40":["Vec2",null,null],"0x73fc541d":["U8",null,null],"0x79bdd6bb":["Embed","IntegratedValueFloat",null],"0x7aa0b8b1":["Flag",null,null],"0x7c04e863":["Flag",null,null],"0x7db9efd5":["U8",null,null],"0x968b3967":["Pointer","FlexValueVector2",null],"0x9e2fcfac":["U8",null,null],"0xb16d3f70":["Embed","ValueVector2",null],"0xbdee5d67":["Vec4",null,null],"0xd1ee8634":["Flag",null,null],"0xda39bec":["Vec4",null,null],"0xdcac8e0d":["Flag",null,null],"0xe2db74aa":["Pointer","FlexValueVector2",null],"0xe962973c":["Vec2",null,null],"0xf34f9bf8":["Flag",null,null],"0xfe3746b":["Vec2",null,null],"AlphaCutoff":["U8",null,null],"AlphaSliceRange":["F32",null,null],"ApplyTeamColorCorrection":["Flag",null,null],"BirthRandomStartFrame":["Flag",null,null],"ColorOverLife":["Embed","ValueColor",null],"ColorTexture":["String",null,null],"DepthPushPull":["F32",null,null],"DisableFogOfWar":["Flag",null,null],"FalloffTexturePath":["String",null,null],"InitialColor":["Embed","ValueColor",null],"InitialFrameRate":["Embed","ValueFloat",null],"InitialUvOffset":["Embed","ValueVector2",null],"Pixelate":["Flag",null,null],"Projected":["Flag",null,null],"RenderOrder":["I16",null,null],"SeparateLingerColor":["Embed","ValueColor",null],"StencilReferenceId":["Hash",null,null],"TextureFlipU":["Flag",null,null],"TextureFlipV":["Flag",null,null],"UseSeparateLingerColor":["Flag",null,null],"WriteAlphaOnly":["Flag",null,null],"alphaErosionDefinition":["Pointer","VfxAlphaErosionDefinitionData",null],"blendMode":["U8",null,null],"distortionDefinition":["Pointer","VfxDistortionDefinitionData",null],"doesCastShadow":["Flag",null,null],"frameRate":["F32",null,null],"isGroundLayer":["Flag",null,null],"materialOverrideDefinitions":["List2","VfxMaterialOverrideDefinitionData","Embed"],"numFrames":["U16",null,null],"paletteDefinition":["Pointer","VfxPaletteDefinitionData",null],"reflectionDefinition":["Pointer","VfxReflectionDefinitionData",null],"softParticleParams":["Pointer","VfxSoftParticleDefinitionData",null],"startFrame":["U16",null,null],"stencilMode":["U8",null,null],"stencilRef":["U8",null,null],"texture":["String",null,null],"textureMult":["Pointer","VfxTextureMultDefinitionData",null],"useNavmeshMask":["Flag",null,null],"uvMode":["U8",null,null],"uvRotation":["Embed","ValueFloat",null],"uvScale":["Embed","ValueVector2",null],"uvScrollClamp":["Flag",null,null],"uvTransformCenter":["Vec2",null,null]}},"VfxLengthVector2Driver":{"bases":["IVfxFloatDriver"],"defaults":{"Vector2Input":null},"types":{"Vector2Input":["Pointer","IVfxVector2Driver",null]}},"VfxLengthVector3Driver":{"bases":["IVfxFloatDriver"],"defaults":{"Vector3Input":null},"types":{"Vector3Input":["Pointer","IVfxVector3Driver",null]}},"VfxLifetimeComponent":{"bases":["VfxLifetimeComponentBase"],"defaults":{"LifetimeBehavior":{},"SpawnBehavior":{}},"types":{"LifetimeBehavior":["Pointer","0x709be6c3",null],"SpawnBehavior":["Pointer","VfxSpawnBehavior",null]}},"VfxLifetimeComponentBase":{"bases":["VfxComponentBase"],"defaults":{},"types":{}},"VfxLightComponent":{"bases":["VfxComponentBase"],"defaults":{"HdrScale":5.0,"Impacts":3,"LightChannels":1,"UseFirstParticlePosition":false,"lightColor":{"Vector4":{}},"radius":{"Float":{}},"type":1},"types":{"HdrScale":["F32",null,null],"Impacts":["U8",null,null],"LightChannels":["U8",null,null],"UseFirstParticlePosition":["Bool",null,null],"lightColor":["Embed","VfxVector4DynamicProperty",null],"radius":["Embed","VfxFloatDynamicProperty",null],"type":["U8",null,null]}},"VfxLingerDefinitionData":{"bases":[],"defaults":{"KeyedLingerAcceleration":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"KeyedLingerDrag":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"KeyedLingerVelocity":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"LingerRotation":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"LingerScale":{"constantValue":[1.0,1.0,1.0],"dynamics":null},"SeparateLingerColor":{"constantValue":[1.0,1.0,1.0,1.0],"dynamics":null},"UseKeyedLingerAcceleration":false,"UseKeyedLingerDrag":false,"UseKeyedLingerVelocity":false,"UseLingerRotation":false,"UseLingerScale":false,"UseSeparateLingerColor":false},"types":{"KeyedLingerAcceleration":["Embed","ValueVector3",null],"KeyedLingerDrag":["Embed","ValueVector3",null],"KeyedLingerVelocity":["Embed","ValueVector3",null],"LingerRotation":["Embed","ValueVector3",null],"LingerScale":["Embed","ValueVector3",null],"SeparateLingerColor":["Embed","ValueColor",null],"UseKeyedLingerAcceleration":["Flag",null,null],"UseKeyedLingerDrag":["Flag",null,null],"UseKeyedLingerVelocity":["Flag",null,null],"UseLingerRotation":["Flag",null,null],"UseLingerScale":["Flag",null,null],"UseSeparateLingerColor":["Flag",null,null]}},"VfxMaterialContainer":{"bases":[],"defaults":{},"types":{}},"VfxMaterialDefinitionData":{"bases":[],"defaults":{"Material":"0x0","materialDrivers":{}},"types":{"Material":["Link","IMaterialDef",null],"materialDrivers":["Map","IVfxMaterialDriver","Pointer"]}},"VfxMaterialOverrideDefinitionData":{"bases":[],"defaults":{"0x639b28d0":"0x0","Material":"0x0","baseTexture":"0x0","glossTexture":"0x0","overrideBlendMode":0,"priority":0,"subMeshName":null,"transitionSample":0.0,"transitionSource":0,"transitionTexture":"0x0"},"types":{"0x639b28d0":["Link","IMaterialDef",null],"Material":["Link","IMaterialDef",null],"baseTexture":["File",null,null],"glossTexture":["File",null,null],"overrideBlendMode":["U32",null,null],"priority":["I32",null,null],"subMeshName":["Option",null,"String"],"transitionSample":["F32",null,null],"transitionSource":["U32",null,null],"transitionTexture":["File",null,null]}},"VfxMaterialRenderComponent":{"bases":["VfxRenderComponentBase"],"defaults":{"CastShadow":false,"Color":{"0x39340876":[1.0,1.0,1.0,1.0],"ColorOverLife":{"Vector4":{}},"InitialColor":{"Vector4":{}}},"DepthPushPull":0.0,"Drivers":{"0x8ed7a68f":{},"materialDrivers":{}},"MaterialContainer":null,"RenderOrder":0,"RenderPhase":4,"StencilReferenceId":"0x0","UvAnimation":{"0x3ddab580":{"Float":null},"0xf5ffae5b":{"Float":null},"AnimCurve":{"Float":null},"AnimationDimensions":[1.0,1.0]},"blendMode":3,"stencilMode":0},"types":{"CastShadow":["Flag",null,null],"Color":["Embed","VfxColorContainer",null],"DepthPushPull":["F32",null,null],"Drivers":["Embed","VfxDriverContainer",null],"MaterialContainer":["Pointer","VfxMaterialContainer",null],"RenderOrder":["I16",null,null],"RenderPhase":["U8",null,null],"StencilReferenceId":["Hash",null,null],"UvAnimation":["Embed","0x32952395",null],"blendMode":["U8",null,null],"stencilMode":["U8",null,null]}},"VfxMaxFloatDriver":{"bases":["IVfxFloatDriver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxFloatDriver","Pointer"]}},"VfxMaxVector2Driver":{"bases":["IVfxVector2Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector2Driver","Pointer"]}},"VfxMaxVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector3Driver","Pointer"]}},"VfxMaxVector4Driver":{"bases":["IVfxVector4Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector4Driver","Pointer"]}},"VfxMeshDefinitionData":{"bases":[],"defaults":{"mAnimationName":"","mAnimationVariants":[],"mLockMeshToAttachment":false,"mMeshName":"","mMeshSkeletonName":"","mSimpleMeshName":"","mSubmeshesToDraw":[],"mSubmeshesToDrawAlways":[]},"types":{"mAnimationName":["String",null,null],"mAnimationVariants":["List",null,"String"],"mLockMeshToAttachment":["Bool",null,null],"mMeshName":["String",null,null],"mMeshSkeletonName":["String",null,null],"mSimpleMeshName":["String",null,null],"mSubmeshesToDraw":["List",null,"Hash"],"mSubmeshesToDrawAlways":["List",null,"Hash"]}},"VfxMigrationResources":{"bases":[],"defaults":{"resourceMap":{}},"types":{"resourceMap":["Map","VfxSystemDefinitionData","Link"]}},"VfxMinFloatDriver":{"bases":["IVfxFloatDriver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxFloatDriver","Pointer"]}},"VfxMinVector2Driver":{"bases":["IVfxVector2Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector2Driver","Pointer"]}},"VfxMinVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector3Driver","Pointer"]}},"VfxMinVector4Driver":{"bases":["IVfxVector4Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector4Driver","Pointer"]}},"VfxModularPhysicsComponent":{"bases":["VfxPhysicsComponentBase"],"defaults":{"0x1064c2a8":false,"0x1fd12444":{"Float":{}},"0x2debe213":false,"0x44aa0ead":{"Float":{}},"0xb5d23158":1,"0xb95926b1":false,"0xf35c764c":true,"Modifiers":[]},"types":{"0x1064c2a8":["Flag",null,null],"0x1fd12444":["Embed","VfxFloatDynamicProperty",null],"0x2debe213":["Flag",null,null],"0x44aa0ead":["Embed","VfxFloatDynamicProperty",null],"0xb5d23158":["U8",null,null],"0xb95926b1":["Flag",null,null],"0xf35c764c":["Flag",null,null],"Modifiers":["List2","VfxPhysicsModifierBase","Pointer"]}},"VfxMultiplyFloatDriver":{"bases":["IVfxFloatDriver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxFloatDriver","Pointer"]}},"VfxMultiplyVector2Driver":{"bases":["IVfxVector2Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector2Driver","Pointer"]}},"VfxMultiplyVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector3Driver","Pointer"]}},"VfxMultiplyVector4Driver":{"bases":["IVfxVector4Driver"],"defaults":{"params":[]},"types":{"params":["List2","IVfxVector4Driver","Pointer"]}},"VfxNormalizeVector2Driver":{"bases":["IVfxVector2Driver"],"defaults":{"Vector2Input":null},"types":{"Vector2Input":["Pointer","IVfxVector2Driver",null]}},"VfxNormalizeVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"Vector3Input":null},"types":{"Vector3Input":["Pointer","IVfxVector3Driver",null]}},"VfxPaletteDefinitionData":{"bases":[],"defaults":{"PaletteTextureAddressMode":1,"PaletteUAnimationCurve":{"constantValue":0.0,"dynamics":null},"PaletteVAnimationCurve":{"constantValue":0.0,"dynamics":null},"paletteCount":1,"paletteSelector":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"paletteTexture":"","palleteSrcMixColor":{"constantValue":[0.29899999499320984,0.5870000123977661,0.11400000005960464,0.0],"dynamics":null}},"types":{"PaletteTextureAddressMode":["U8",null,null],"PaletteUAnimationCurve":["Embed","ValueFloat",null],"PaletteVAnimationCurve":["Embed","ValueFloat",null],"paletteCount":["I32",null,null],"paletteSelector":["Embed","ValueVector3",null],"paletteTexture":["String",null,null],"palleteSrcMixColor":["Embed","ValueColor",null]}},"VfxParentInheritanceParams":{"bases":[],"defaults":{"Mode":0,"RelativeOffset":{"constantValue":[0.0,0.0,0.0],"dynamics":null}},"types":{"Mode":["U8",null,null],"RelativeOffset":["Embed","ValueVector3",null]}},"VfxPhysicsAccelerationModifier":{"bases":["VfxPhysicsModifierBase"],"defaults":{"0x64ba2252":{"Vector3":{}},"0xc7245e17":{"Vector3":{}},"0xd4fc9cd1":{"Vector3":{}},"0xf6f3a934":{"Vector3":{}}},"types":{"0x64ba2252":["Embed","VfxVector3DynamicProperty",null],"0xc7245e17":["Embed","VfxVector3DynamicProperty",null],"0xd4fc9cd1":["Embed","VfxVector3DynamicProperty",null],"0xf6f3a934":["Embed","VfxVector3DynamicProperty",null]}},"VfxPhysicsAttractionDefinitionData":{"bases":[],"defaults":{"AttractionAcceleration":{"Float":{}},"AttractionRadius":{"Float":{}},"Position":{"Vector3":{}}},"types":{"AttractionAcceleration":["Embed","VfxFloatDynamicProperty",null],"AttractionRadius":["Embed","VfxFloatDynamicProperty",null],"Position":["Embed","VfxVector3DynamicProperty",null]}},"VfxPhysicsComponentBase":{"bases":["VfxComponentBase"],"defaults":{},"types":{}},"VfxPhysicsDragModifier":{"bases":["VfxPhysicsModifierBase"],"defaults":{"InitialDrag":{"Vector3":{}},"IsUniform":false,"KeyedDrag":{"Vector3":{}}},"types":{"InitialDrag":["Embed","VfxVector3DynamicProperty",null],"IsUniform":["Flag",null,null],"KeyedDrag":["Embed","VfxVector3DynamicProperty",null]}},"VfxPhysicsFollowTerrainModifier":{"bases":["VfxPhysicsModifierBase"],"defaults":{"0xc3c071f0":false,"HeightOffset":{"Float":{}}},"types":{"0xc3c071f0":["Flag",null,null],"HeightOffset":["Embed","VfxFloatDynamicProperty",null]}},"VfxPhysicsGroundCollisionModifier":{"bases":["VfxPhysicsModifierBase"],"defaults":{"0x3363663d":{"Float":{}},"0xbfefeba":{"Float":{}},"0xc3c071f0":true,"Friction":{"Float":{}}},"types":{"0x3363663d":["Embed","VfxFloatDynamicProperty",null],"0xbfefeba":["Embed","VfxFloatDynamicProperty",null],"0xc3c071f0":["Flag",null,null],"Friction":["Embed","VfxFloatDynamicProperty",null]}},"VfxPhysicsLingerDefinitionData":{"bases":[],"defaults":{"KeyedLingerAcceleration":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"KeyedLingerDrag":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"KeyedLingerVelocity":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"LingerRotation":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"LingerScale":{"constantValue":[1.0,1.0,1.0],"dynamics":null},"UseKeyedLingerAcceleration":false,"UseKeyedLingerDrag":false,"UseKeyedLingerVelocity":false,"UseLingerRotation":false,"UseLingerScale":false},"types":{"KeyedLingerAcceleration":["Embed","ValueVector3",null],"KeyedLingerDrag":["Embed","ValueVector3",null],"KeyedLingerVelocity":["Embed","ValueVector3",null],"LingerRotation":["Embed","ValueVector3",null],"LingerScale":["Embed","ValueVector3",null],"UseKeyedLingerAcceleration":["Flag",null,null],"UseKeyedLingerDrag":["Flag",null,null],"UseKeyedLingerVelocity":["Flag",null,null],"UseLingerRotation":["Flag",null,null],"UseLingerScale":["Flag",null,null]}},"VfxPhysicsModifierBase":{"bases":[],"defaults":{},"types":{}},"VfxPhysicsNoiseDefinitionData":{"bases":[],"defaults":{"NoiseVector":{"Vector3":{}},"Position":{"Vector3":{}},"frequency":{"Float":{}},"radius":{"Float":{}}},"types":{"NoiseVector":["Embed","VfxVector3DynamicProperty",null],"Position":["Embed","VfxVector3DynamicProperty",null],"frequency":["Embed","VfxFloatDynamicProperty",null],"radius":["Embed","VfxFloatDynamicProperty",null]}},"VfxPhysicsOrbitModifier":{"bases":["VfxPhysicsModifierBase"],"defaults":{"0x23662b14":1.0,"0x2fe3404c":{"Vector3":{}},"0x6767262":{"Vector3":{}},"0x75f4cf52":{"Vector3":null},"0xa69848a1":{"Vector3":{}},"0xdadd3881":1,"0xe0a6507":{"Vector3":{}},"0xf26d7c01":false,"ApplyDrag":true},"types":{"0x23662b14":["F32",null,null],"0x2fe3404c":["Embed","VfxVector3DynamicProperty",null],"0x6767262":["Embed","VfxVector3DynamicProperty",null],"0x75f4cf52":["Embed","VfxVector3DynamicProperty",null],"0xa69848a1":["Embed","VfxVector3DynamicProperty",null],"0xdadd3881":["U8",null,null],"0xe0a6507":["Embed","VfxVector3DynamicProperty",null],"0xf26d7c01":["Flag",null,null],"ApplyDrag":["Flag",null,null]}},"VfxPhysicsPositionModifier":{"bases":["VfxPhysicsModifierBase"],"defaults":{"0x2ae87cd1":{"Vector3":null},"0x2b7d1e76":{"Vector3":{}},"0x69e9c2b8":{"Vector3":null},"0xb4d94af5":{"Vector3":{}},"EmissionSource":null},"types":{"0x2ae87cd1":["Embed","VfxVector3DynamicProperty",null],"0x2b7d1e76":["Embed","VfxVector3DynamicProperty",null],"0x69e9c2b8":["Embed","VfxVector3DynamicProperty",null],"0xb4d94af5":["Embed","VfxVector3DynamicProperty",null],"EmissionSource":["Pointer","IVfxEmissionSource",null]}},"VfxPhysicsRotationModifier":{"bases":["VfxPhysicsModifierBase"],"defaults":{"0x37d2fea0":false,"0x831231db":{"Vector3":{}},"0x8eed5411":{"Vector3":{}},"0x8fd57237":{"Vector3":null},"0xf26d7c01":false,"InitialRotation":{"Vector3":{}}},"types":{"0x37d2fea0":["Flag",null,null],"0x831231db":["Embed","VfxVector3DynamicProperty",null],"0x8eed5411":["Embed","VfxVector3DynamicProperty",null],"0x8fd57237":["Embed","VfxVector3DynamicProperty",null],"0xf26d7c01":["Flag",null,null],"InitialRotation":["Embed","VfxVector3DynamicProperty",null]}},"VfxPhysicsScaleModifier":{"bases":["VfxPhysicsModifierBase"],"defaults":{"0x3583aec3":{"0x29bb1fe":{"Vector3":null},"0x4e06a418":{"Vector3":null},"Enabled":false,"VelocityThreshold":0.0},"InitialScale":{"Vector3":{}},"IsUniform":false,"KeyedScale":{"Vector3":{}}},"types":{"0x3583aec3":["Embed","0xef7e7bb1",null],"InitialScale":["Embed","VfxVector3DynamicProperty",null],"IsUniform":["Flag",null,null],"KeyedScale":["Embed","VfxVector3DynamicProperty",null]}},"VfxPhysicsVelocityModifier":{"bases":["VfxPhysicsModifierBase"],"defaults":{"0x47fa9d7e":{"Vector3":{}},"0xb732476c":{"Vector3":{}},"0xc9a224bb":{"Float":{}},"0xd3804733":{"Vector3":{}},"0xd7dec099":{"Vector3":{}},"0xe7a3cf2b":{"Vector3":null},"0xef751fb5":{"Float":{}}},"types":{"0x47fa9d7e":["Embed","VfxVector3DynamicProperty",null],"0xb732476c":["Embed","VfxVector3DynamicProperty",null],"0xc9a224bb":["Embed","VfxFloatDynamicProperty",null],"0xd3804733":["Embed","VfxVector3DynamicProperty",null],"0xd7dec099":["Embed","VfxVector3DynamicProperty",null],"0xe7a3cf2b":["Embed","VfxVector3DynamicProperty",null],"0xef751fb5":["Embed","VfxFloatDynamicProperty",null]}},"VfxPrimitiveArbitraryQuad":{"bases":["VfxLegacyPrimitiveBase"],"defaults":{},"types":{}},"VfxPrimitiveArbitraryTrail":{"bases":["VfxPrimitiveTrailBase"],"defaults":{"mTrail":null},"types":{"mTrail":["Embed","VfxTrailDefinitionData",null]}},"VfxPrimitiveAttachedMesh":{"bases":["VfxPrimitiveMeshBase"],"defaults":{"0x6aec9e7a":null,"AlignPitchToCamera":null,"AlignYawToCamera":null,"UseAvatarSpecificSubmeshMask":false,"mMesh":null},"types":{"0x6aec9e7a":["Bool",null,null],"AlignPitchToCamera":["Bool",null,null],"AlignYawToCamera":["Bool",null,null],"UseAvatarSpecificSubmeshMask":["Bool",null,null],"mMesh":["Embed","VfxMeshDefinitionData",null]}},"VfxPrimitiveBase":{"bases":[],"defaults":{},"types":{}},"VfxPrimitiveBeam":{"bases":["VfxLegacyPrimitiveBase","IVfxShimmerGeometry"],"defaults":{"mBeam":{"mAnimatedColorWithDistance":{"constantValue":[1.0,1.0,1.0,1.0],"dynamics":null},"mBirthTilingSize":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"mIsColorBindedWithDistance":false,"mLocalSpaceSourceOffset":[0.0,0.0,0.0],"mLocalSpaceTargetOffset":[0.0,0.0,0.0],"mMode":0,"mSegments":0,"mTrailMode":0},"mMesh":{"mAnimationName":"","mAnimationVariants":[],"mLockMeshToAttachment":false,"mMeshName":"","mMeshSkeletonName":"","mSimpleMeshName":"","mSubmeshesToDraw":[],"mSubmeshesToDrawAlways":[]}},"types":{"mBeam":["Embed","VfxBeamDefinitionData",null],"mMesh":["Embed","VfxMeshDefinitionData",null]}},"VfxPrimitiveBeamBase":{"bases":["VfxLegacyPrimitiveBase"],"defaults":{"mBeam":null},"types":{"mBeam":["Embed","VfxBeamDefinitionData",null]}},"VfxPrimitiveCameraQuad":{"bases":["VfxLegacyPrimitiveBase","IVfxShimmerGeometry"],"defaults":{},"types":{}},"VfxPrimitiveCameraSegmentBeam":{"bases":["VfxPrimitiveBeamBase"],"defaults":{"mBeam":null},"types":{"mBeam":["Embed","VfxBeamDefinitionData",null]}},"VfxPrimitiveCameraTrail":{"bases":["VfxPrimitiveTrailBase"],"defaults":{"mTrail":null},"types":{"mTrail":["Embed","VfxTrailDefinitionData",null]}},"VfxPrimitiveCameraUnitQuad":{"bases":["VfxPrimitiveCameraQuad"],"defaults":{},"types":{}},"VfxPrimitiveLaser":{"bases":["VfxShimmerPrimitiveBase"],"defaults":{"Laser":{"0x2190d6c4":0,"0x52f5ac93":1,"0xa9305f86":1,"0xd7aefac9":{"constantValue":100.0,"dynamics":null},"mLocalSpaceSourceOffset":[0.0,0.0,0.0],"mLocalSpaceTargetOffset":[0.0,0.0,0.0]}},"types":{"Laser":["Embed","VfxLaserDefinitionData",null]}},"VfxPrimitiveMesh":{"bases":["VfxPrimitiveMeshBase"],"defaults":{"0x6aec9e7a":null,"AlignPitchToCamera":null,"AlignYawToCamera":null,"mMesh":null},"types":{"0x6aec9e7a":["Bool",null,null],"AlignPitchToCamera":["Bool",null,null],"AlignYawToCamera":["Bool",null,null],"mMesh":["Embed","VfxMeshDefinitionData",null]}},"VfxPrimitiveMeshBase":{"bases":["VfxLegacyPrimitiveBase"],"defaults":{"0x6aec9e7a":null,"AlignPitchToCamera":null,"AlignYawToCamera":null,"mMesh":null},"types":{"0x6aec9e7a":["Bool",null,null],"AlignPitchToCamera":["Bool",null,null],"AlignYawToCamera":["Bool",null,null],"mMesh":["Embed","VfxMeshDefinitionData",null]}},"VfxPrimitiveNonRenderable":{"bases":["VfxLegacyPrimitiveBase","IVfxShimmerGeometry"],"defaults":{},"types":{}},"VfxPrimitivePlanarProjection":{"bases":["VfxPrimitiveProjectionBase"],"defaults":{"mProjection":null},"types":{"mProjection":["Embed","VfxProjectionDefinitionData",null]}},"VfxPrimitiveProjectionBase":{"bases":["VfxLegacyPrimitiveBase"],"defaults":{"mProjection":null},"types":{"mProjection":["Embed","VfxProjectionDefinitionData",null]}},"VfxPrimitiveRay":{"bases":["VfxLegacyPrimitiveBase","IVfxShimmerGeometry"],"defaults":{},"types":{}},"VfxPrimitiveRibbon":{"bases":["VfxShimmerPrimitiveBase"],"defaults":{"Ribbon":{"0x27abb06d":0,"0x6b16b5e6":0,"0x6b62f120":0.0,"0xa4b83760":false,"0xb8ec3a49":1,"0xfd674e81":0,"birthTilingSize":{"constantValue":[100.0,100.0],"dynamics":null}}},"types":{"Ribbon":["Embed","VfxRibbonDefinitionData",null]}},"VfxPrimitiveTrailBase":{"bases":["VfxLegacyPrimitiveBase"],"defaults":{"mTrail":null},"types":{"mTrail":["Embed","VfxTrailDefinitionData",null]}},"VfxProbabilityTableData":{"bases":[],"defaults":{"keyTimes":[],"keyValues":[],"singleValue":1.0},"types":{"keyTimes":["List",null,"F32"],"keyValues":["List",null,"F32"],"singleValue":["F32",null,null]}},"VfxProjectionDefinitionData":{"bases":[],"defaults":{"colorModulate":{"constantValue":[1.0,1.0,1.0,1.0],"dynamics":null},"mFading":200.0,"mYRange":5.0},"types":{"colorModulate":["Embed","ValueColor",null],"mFading":["F32",null,null],"mYRange":["F32",null,null]}},"VfxPropertyFloatDriver":{"bases":["IVfxFloatDriver"],"defaults":{"FloatProperty":0},"types":{"FloatProperty":["U8",null,null]}},"VfxPropertyVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"Vector3Property":0},"types":{"Vector3Property":["U8",null,null]}},"VfxPropertyVector4Driver":{"bases":["IVfxVector4Driver"],"defaults":{"Vector4Property":0},"types":{"Vector4Property":["U8",null,null]}},"VfxReflectionDefinitionData":{"bases":[],"defaults":{"fresnel":1.0,"fresnelColor":[0.0,0.0,0.0,0.0],"reflectionFresnel":1.0,"reflectionFresnelColor":[1.0,1.0,1.0,1.0],"reflectionMapTexture":"","reflectionOpacityDirect":0.0,"reflectionOpacityGlancing":1.0},"types":{"fresnel":["F32",null,null],"fresnelColor":["Vec4",null,null],"reflectionFresnel":["F32",null,null],"reflectionFresnelColor":["Vec4",null,null],"reflectionMapTexture":["String",null,null],"reflectionOpacityDirect":["F32",null,null],"reflectionOpacityGlancing":["F32",null,null]}},"VfxRenderComponentBase":{"bases":["VfxComponentBase"],"defaults":{},"types":{}},"VfxRibbonDefinitionData":{"bases":[],"defaults":{"0x27abb06d":0,"0x6b16b5e6":0,"0x6b62f120":0.0,"0xa4b83760":false,"0xb8ec3a49":1,"0xfd674e81":0,"birthTilingSize":{"constantValue":[100.0,100.0],"dynamics":null}},"types":{"0x27abb06d":["I32",null,null],"0x6b16b5e6":["U8",null,null],"0x6b62f120":["F32",null,null],"0xa4b83760":["Bool",null,null],"0xb8ec3a49":["U8",null,null],"0xfd674e81":["U8",null,null],"birthTilingSize":["Embed","ValueVector2",null]}},"VfxScaleVector2Driver":{"bases":["IVfxVector2Driver"],"defaults":{"ScaleFactor":null,"Vector2":null},"types":{"ScaleFactor":["Pointer","IVfxFloatDriver",null],"Vector2":["Pointer","IVfxVector2Driver",null]}},"VfxScaleVector3Driver":{"bases":["IVfxVector3Driver"],"defaults":{"ScaleFactor":null,"Vector3":null},"types":{"ScaleFactor":["Pointer","IVfxFloatDriver",null],"Vector3":["Pointer","IVfxVector3Driver",null]}},"VfxShapeBox":{"bases":["VfxShapeVolume"],"defaults":{"Size":[0.0,0.0,0.0],"flags":null},"types":{"Size":["Vec3",null,null],"flags":["U8",null,null]}},"VfxShapeCylinder":{"bases":["VfxShapeVolume"],"defaults":{"flags":null,"height":0.0,"radius":0.0},"types":{"flags":["U8",null,null],"height":["F32",null,null],"radius":["F32",null,null]}},"VfxShapeLegacy":{"bases":["IVfxShape"],"defaults":{"emitOffset":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"emitRotationAngles":[],"emitRotationAxes":[]},"types":{"emitOffset":["Embed","ValueVector3",null],"emitRotationAngles":["List","ValueFloat","Embed"],"emitRotationAxes":["List",null,"Vec3"]}},"VfxShapePointDoNotUse":{"bases":["IVfxShape"],"defaults":{"emitOffset":[0.0,0.0,0.0]},"types":{"emitOffset":["Vec3",null,null]}},"VfxShapeSphere":{"bases":["VfxShapeVolume"],"defaults":{"flags":null,"radius":0.0},"types":{"flags":["U8",null,null],"radius":["F32",null,null]}},"VfxShapeVolume":{"bases":["IVfxShape"],"defaults":{"flags":null},"types":{"flags":["U8",null,null]}},"VfxShimmerEmitterDefinitionData":{"bases":[],"defaults":{"ChanceToNotExist":0.0,"Filtering":null,"ParticleScale":[1.0,1.0,1.0],"VfxComponents":null,"colorblindVisibility":0,"disabled":false,"emitterName":"","importance":2,"isUniformScale":false},"types":{"ChanceToNotExist":["F32",null,null],"Filtering":["Pointer","VfxEmitterFiltering",null],"ParticleScale":["Vec3",null,null],"VfxComponents":["Pointer","VfxComponents",null],"colorblindVisibility":["U8",null,null],"disabled":["Bool",null,null],"emitterName":["String",null,null],"importance":["U8",null,null],"isUniformScale":["Bool",null,null]}},"VfxShimmerFacingMode":{"bases":[],"defaults":{},"types":{}},"VfxShimmerMeshBeamDefinitionData":{"bases":["VfxBeamBaseDefinitionData"],"defaults":{"mLocalSpaceSourceOffset":[0.0,0.0,0.0],"mLocalSpaceTargetOffset":[0.0,0.0,0.0]},"types":{"mLocalSpaceSourceOffset":["Vec3",null,null],"mLocalSpaceTargetOffset":["Vec3",null,null]}},"VfxShimmerPrimitiveAttachedMesh":{"bases":["VfxShimmerPrimitiveMeshBase"],"defaults":{"FacingMode":null,"Mesh":null,"UseAvatarSpecificSubmeshMask":false},"types":{"FacingMode":["Pointer","VfxShimmerFacingMode",null],"Mesh":["Embed","VfxMeshDefinitionData",null],"UseAvatarSpecificSubmeshMask":["Bool",null,null]}},"VfxShimmerPrimitiveBase":{"bases":["IVfxShimmerGeometry","VfxPrimitiveBase"],"defaults":{},"types":{}},"VfxShimmerPrimitiveMesh":{"bases":["VfxShimmerPrimitiveMeshBase"],"defaults":{"FacingMode":null,"Mesh":null},"types":{"FacingMode":["Pointer","VfxShimmerFacingMode",null],"Mesh":["Embed","VfxMeshDefinitionData",null]}},"VfxShimmerPrimitiveMeshBase":{"bases":["VfxShimmerPrimitiveBase"],"defaults":{"FacingMode":null,"Mesh":null},"types":{"FacingMode":["Pointer","VfxShimmerFacingMode",null],"Mesh":["Embed","VfxMeshDefinitionData",null]}},"VfxShimmerPrimitiveMeshBeam":{"bases":["VfxShimmerPrimitiveBase"],"defaults":{"Beam":{"mLocalSpaceSourceOffset":[0.0,0.0,0.0],"mLocalSpaceTargetOffset":[0.0,0.0,0.0]},"Mesh":{"mAnimationName":"","mAnimationVariants":[],"mLockMeshToAttachment":false,"mMeshName":"","mMeshSkeletonName":"","mSimpleMeshName":"","mSubmeshesToDraw":[],"mSubmeshesToDrawAlways":[]}},"types":{"Beam":["Embed","VfxShimmerMeshBeamDefinitionData",null],"Mesh":["Embed","VfxMeshDefinitionData",null]}},"VfxShimmerPrimitiveQuad":{"bases":["VfxShimmerPrimitiveBase"],"defaults":{"0x4fe2b16f":[0.5,0.5],"FacingMode":null},"types":{"0x4fe2b16f":["Vec2",null,null],"FacingMode":["Pointer","VfxShimmerFacingMode",null]}},"VfxSineMaterialDriver":{"bases":["IVfxMaterialDriver"],"defaults":{"mBias":0.0,"mFrequency":1.0,"mScale":1.0},"types":{"mBias":["F32",null,null],"mFrequency":["F32",null,null],"mScale":["F32",null,null]}},"VfxSoftParticleDefinitionData":{"bases":[],"defaults":{"0x3bf176bc":0,"beginIn":0.0,"beginOut":0.0,"deltaIn":0.0,"deltaOut":0.0},"types":{"0x3bf176bc":["U8",null,null],"beginIn":["F32",null,null],"beginOut":["F32",null,null],"deltaIn":["F32",null,null],"deltaOut":["F32",null,null]}},"VfxSpawnBehavior":{"bases":[],"defaults":{},"types":{}},"VfxSquareRootRangedRandomDriver":{"bases":["IVfxFloatDriver"],"defaults":{"Range":[0.0,1.0]},"types":{"Range":["Vec2",null,null]}},"VfxSwitchVector4LogicDriver":{"bases":["IVfxVector4Driver"],"defaults":{"False":null,"Source":0,"Switch":null,"True":null},"types":{"False":["Pointer","IVfxVector4Driver",null],"Source":["U8",null,null],"Switch":["Pointer","ILogicBoolDriver",null],"True":["Pointer","IVfxVector4Driver",null]}},"VfxSystemDefinitionData":{"bases":["IResource"],"defaults":{"0x9836cd87":5,"ClockToUse":0,"DistanceBasedTransparencyParams":null,"DynamicParameterData":null,"EffectorDefinition":null,"HudLayerAspect":1.3333333730697632,"PointLight":null,"ShimmerEmitterDefinitionData":[],"assetRemappingTable":[],"audioParameterFlexID":-1,"audioParameterTimeScaledDuration":0.0,"buildUpTime":0.0,"complexEmitterDefinitionData":[],"drawingLayer":0,"flags":212,"hudAnchorPositionFromWorldProjection":true,"hudLayerDimension":1024.0,"mEyeCandy":false,"mIsPoseAfterimage":false,"materialOverrideDefinitions":[],"objectPath":"0x0","overrideScaleCap":null,"particleName":"","particlePath":"","scaleDynamicallyWithAttachedBone":false,"selfIllumination":-1.0,"simpleEmitterDefinitionData":[],"soundOnCreateDefault":"","soundPersistentDefault":"","transform":[[1.0,0.0,0.0,0.0],[0.0,1.0,0.0,0.0],[0.0,0.0,1.0,0.0],[0.0,0.0,0.0,1.0]],"visibilityRadius":250.0,"voiceOverOnCreateDefault":"","voiceOverPersistentDefault":""},"types":{"0x9836cd87":["U8",null,null],"ClockToUse":["U8",null,null],"DistanceBasedTransparencyParams":["Pointer","VfxDistanceBasedTransparencyParams",null],"DynamicParameterData":["Pointer","VfxDynamicParametersData",null],"EffectorDefinition":["Pointer","VfxEffectorDefinition",null],"HudLayerAspect":["F32",null,null],"PointLight":["Pointer","ParticlePointLightInfo",null],"ShimmerEmitterDefinitionData":["List","VfxShimmerEmitterDefinitionData","Pointer"],"assetRemappingTable":["List","VfxAssetRemap","Embed"],"audioParameterFlexID":["I32",null,null],"audioParameterTimeScaledDuration":["F32",null,null],"buildUpTime":["F32",null,null],"complexEmitterDefinitionData":["List","VfxEmitterDefinitionData","Pointer"],"drawingLayer":["U8",null,null],"flags":["U16",null,null],"hudAnchorPositionFromWorldProjection":["Bool",null,null],"hudLayerDimension":["F32",null,null],"mEyeCandy":["Bool",null,null],"mIsPoseAfterimage":["Bool",null,null],"materialOverrideDefinitions":["List","VfxMaterialOverrideDefinitionData","Embed"],"objectPath":["Hash",null,null],"overrideScaleCap":["Option",null,"F32"],"particleName":["String",null,null],"particlePath":["String",null,null],"scaleDynamicallyWithAttachedBone":["Bool",null,null],"selfIllumination":["F32",null,null],"simpleEmitterDefinitionData":["List","VfxEmitterDefinitionData","Pointer"],"soundOnCreateDefault":["String",null,null],"soundPersistentDefault":["String",null,null],"transform":["Mtx44",null,null],"visibilityRadius":["F32",null,null],"voiceOverOnCreateDefault":["String",null,null],"voiceOverPersistentDefault":["String",null,null]}},"VfxTextureMultDefinitionData":{"bases":[],"defaults":{"ParticleIntegratedUvRotateMult":{"constantValue":0.0,"dynamics":null},"ParticleIntegratedUvScrollMult":{"constantValue":[0.0,0.0],"dynamics":null},"TextureMultFilpU":false,"TextureMultFilpV":false,"UvRotationMult":{"constantValue":0.0,"dynamics":null},"birthUVOffsetMult":{"constantValue":[0.0,0.0],"dynamics":null},"birthUvRotateRateMult":{"constantValue":0.0,"dynamics":null},"birthUvScrollRateMult":{"constantValue":[0.0,0.0],"dynamics":null},"emitterUvScrollRateMult":[0.0,0.0],"flexBirthUVScrollRateMult":null,"isRandomStartFrameMult":false,"texAddressModeMult":0,"texDivMult":[1.0,1.0],"textureMult":"","uvScaleMult":{"constantValue":[1.0,1.0],"dynamics":null},"uvScrollAlphaMult":true,"uvScrollClampMult":false,"uvTransformCenterMult":[0.5,0.5]},"types":{"ParticleIntegratedUvRotateMult":["Embed","IntegratedValueFloat",null],"ParticleIntegratedUvScrollMult":["Embed","IntegratedValueVector2",null],"TextureMultFilpU":["Flag",null,null],"TextureMultFilpV":["Flag",null,null],"UvRotationMult":["Embed","ValueFloat",null],"birthUVOffsetMult":["Embed","ValueVector2",null],"birthUvRotateRateMult":["Embed","ValueFloat",null],"birthUvScrollRateMult":["Embed","ValueVector2",null],"emitterUvScrollRateMult":["Vec2",null,null],"flexBirthUVScrollRateMult":["Pointer","FlexValueVector2",null],"isRandomStartFrameMult":["Flag",null,null],"texAddressModeMult":["U8",null,null],"texDivMult":["Vec2",null,null],"textureMult":["String",null,null],"uvScaleMult":["Embed","ValueVector2",null],"uvScrollAlphaMult":["Flag",null,null],"uvScrollClampMult":["Flag",null,null],"uvTransformCenterMult":["Vec2",null,null]}},"VfxTrailDefinitionData":{"bases":[],"defaults":{"mBirthTilingSize":{"constantValue":[0.0,0.0,0.0],"dynamics":null},"mCutoff":0.0,"mMaxAddedPerFrame":0,"mMode":0,"mSmoothingMode":0},"types":{"mBirthTilingSize":["Embed","ValueVector3",null],"mCutoff":["F32",null,null],"mMaxAddedPerFrame":["I32",null,null],"mMode":["U8",null,null],"mSmoothingMode":["U8",null,null]}},"VfxUniformRangedRandomDriver":{"bases":["IVfxFloatDriver"],"defaults":{"Range":[0.0,1.0]},"types":{"Range":["Vec2",null,null]}},"VfxVector2ConstantDriver":{"bases":["IVfxVector2Driver"],"defaults":{"Vector2":[0.0,0.0]},"types":{"Vector2":["Vec2",null,null]}},"VfxVector2DynamicProperty":{"bases":[],"defaults":{"Vector2":null},"types":{"Vector2":["Pointer","IVfxVector2Driver",null]}},"VfxVector2FromVector3Driver":{"bases":["IVfxVector2Driver"],"defaults":{"Input":null,"Select":0},"types":{"Input":["Pointer","IVfxVector3Driver",null],"Select":["U8",null,null]}},"VfxVector2FromVector4Driver":{"bases":["IVfxVector2Driver"],"defaults":{"Input":null,"Select":0},"types":{"Input":["Pointer","IVfxVector4Driver",null],"Select":["U8",null,null]}},"VfxVector2LerpDriver":{"bases":["IVfxVector2Driver"],"defaults":{"Factor":null,"From":null,"To":null},"types":{"Factor":["Pointer","IVfxFloatDriver",null],"From":["Pointer","IVfxVector2Driver",null],"To":["Pointer","IVfxVector2Driver",null]}},"VfxVector2LogicDriver":{"bases":["IVfxVector2Driver"],"defaults":{"LogicDriver":null,"Source":0},"types":{"LogicDriver":["Pointer","0xac0fb04b",null],"Source":["U8",null,null]}},"VfxVector2fBase":{"bases":[],"defaults":{},"types":{}},"VfxVector3ConstantDriver":{"bases":["IVfxVector3Driver"],"defaults":{"Vector3":[0.0,0.0,0.0]},"types":{"Vector3":["Vec3",null,null]}},"VfxVector3DynamicProperty":{"bases":[],"defaults":{"Vector3":null},"types":{"Vector3":["Pointer","IVfxVector3Driver",null]}},"VfxVector3FromVector2Driver":{"bases":["IVfxVector3Driver"],"defaults":{"Fill":0.0,"Input":null},"types":{"Fill":["F32",null,null],"Input":["Pointer","IVfxVector2Driver",null]}},"VfxVector3FromVector4Driver":{"bases":["IVfxVector3Driver"],"defaults":{"Input":null,"Select":0},"types":{"Input":["Pointer","IVfxVector4Driver",null],"Select":["U8",null,null]}},"VfxVector3LerpDriver":{"bases":["IVfxVector3Driver"],"defaults":{"Factor":null,"From":null,"To":null},"types":{"Factor":["Pointer","IVfxFloatDriver",null],"From":["Pointer","IVfxVector3Driver",null],"To":["Pointer","IVfxVector3Driver",null]}},"VfxVector3LogicDriver":{"bases":["IVfxVector3Driver"],"defaults":{"LogicDriver":null,"Source":0},"types":{"LogicDriver":["Pointer","ILogicVector3Driver",null],"Source":["U8",null,null]}},"VfxVector3fBase":{"bases":[],"defaults":{},"types":{}},"VfxVector4DynamicProperty":{"bases":[],"defaults":{"Vector4":null},"types":{"Vector4":["Pointer","IVfxVector4Driver",null]}},"VfxVector4FromVector2Driver":{"bases":["IVfxVector4Driver"],"defaults":{"Fill":[0.0,0.0],"Input":null},"types":{"Fill":["Vec2",null,null],"Input":["Pointer","IVfxVector2Driver",null]}},"VfxVector4FromVector3Driver":{"bases":["IVfxVector4Driver"],"defaults":{"Fill":0.0,"Input":null},"types":{"Fill":["F32",null,null],"Input":["Pointer","IVfxVector3Driver",null]}},"VfxVector4LerpDriver":{"bases":["IVfxVector4Driver"],"defaults":{"Factor":null,"From":null,"To":null},"types":{"Factor":["Pointer","IVfxFloatDriver",null],"From":["Pointer","IVfxVector4Driver",null],"To":["Pointer","IVfxVector4Driver",null]}},"VfxVector4LogicDriver":{"bases":["IVfxVector4Driver"],"defaults":{"LogicDriver":null,"Source":0},"types":{"LogicDriver":["Pointer","ILogicDriver",null],"Source":["U8",null,null]}}};
+
+/* ===== src/vfx/lol_vfx_bin_text.js ===== */
+/* lol_vfx_bin_text.js — 89차: 원작 bin 데이터 읽기
+ * 게임 파일의 skinN.bin을 사람이 읽을 수 있게 바꾼 두 형식을 같은 JS 객체로 읽는다.
+ *  1) ritobin 텍스트(#PROP_text, `이름: 종류 = 값` 줄) - LtMAO·ritobin으로 변환한 .py/.txt
+ *  2) CommunityDragon의 .bin.json - 객체에 "__type"이 붙은 JSON
+ * 결과: 클래스 객체는 { __type: '클래스명', 필드: 값 }, 빈 pointer는 null, list/list2는 배열, option은 값 하나나 null,
+ * map은 일반 객체(키는 문자열), vec2/3/4·rgba·mtx44는 숫자 배열, hash/link/file은 문자열.
+ * 문법은 ritobin(moonshadow565/ritobin)의 bin_io_text_read.cpp와 같다: 공백·탭, 줄바꿈 또는 쉼표가 구분자, #부터 줄 끝은 주석.
+ */
+const LOL_BIN_PRIMITIVE_TYPES = new Set(['none', 'bool', 'i8', 'u8', 'i16', 'u16', 'i32', 'u32', 'i64', 'u64', 'f32', 'vec2', 'vec3', 'vec4', 'mtx44', 'rgba', 'string', 'hash', 'file', 'link', 'flag']);
+const LOL_BIN_CONTAINER_TYPES = new Set(['list', 'list2', 'option', 'map', 'pointer', 'embed']);
+
+class LolBinTextReader {
+  constructor(text) { this.s = text; this.i = 0; }
+  fail(msg) {
+    const before = this.s.slice(0, this.i), line = before.split('\n').length, col = this.i - before.lastIndexOf('\n');
+    throw new Error(`ritobin 텍스트 ${line}행 ${col}열: ${msg} (근처: ${JSON.stringify(this.s.slice(this.i, this.i + 40))})`);
+  }
+  eof() { return this.i >= this.s.length; }
+  skipSpace() { while (!this.eof() && ' \t\r'.includes(this.s[this.i])) this.i++; }
+  // 빈 줄·주석을 건너뛰고, 줄바꿈을 하나라도 지났으면 true
+  skipNewlines() {
+    let comment = false, nl = false;
+    while (!this.eof()) {
+      const c = this.s[this.i];
+      if (c === ' ' || c === '\t' || c === '\r') this.i++;
+      else if (c === '\n') { comment = false; nl = true; this.i++; }
+      else if (c === '#') { comment = true; this.i++; }
+      else if (comment) this.i++;
+      else break;
+    }
+    return nl;
+  }
+  symbol(ch) { this.skipSpace(); if (this.s[this.i] === ch) { this.i++; return true; } return false; }
+  expect(ch) { if (!this.symbol(ch)) this.fail(`'${ch}'가 와야 한다`); }
+  word() {
+    this.skipSpace();
+    const b = this.i;
+    while (!this.eof() && /[A-Za-z0-9_+\-.]/.test(this.s[this.i])) this.i++;
+    return this.s.slice(b, this.i);
+  }
+  string() {
+    this.skipSpace();
+    const q = this.s[this.i];
+    if (q !== '"' && q !== "'") return null;
+    this.i++;
+    let out = '';
+    while (!this.eof()) {
+      const c = this.s[this.i++];
+      if (c === q) return out;
+      if (c === '\\') {
+        const e = this.s[this.i++];
+        if (e === 'n') out += '\n'; else if (e === 't') out += '\t'; else if (e === 'r') out += '\r'; else if (e === '0') out += '\0';
+        else if (e === 'x') { out += String.fromCharCode(parseInt(this.s.substr(this.i, 2), 16)); this.i += 2; }
+        else if (e === 'u') { out += String.fromCharCode(parseInt(this.s.substr(this.i, 4), 16)); this.i += 4; }
+        else out += e;
+      } else out += c;
+    }
+    this.fail('따옴표가 닫히지 않았다');
+  }
+  // 종류: "f32", "list[pointer]", "map[hash,embed]", "option[f32]"
+  type() {
+    const name = this.word().toLowerCase();
+    if (!LOL_BIN_PRIMITIVE_TYPES.has(name) && !LOL_BIN_CONTAINER_TYPES.has(name)) this.fail(`모르는 종류 '${name}'`);
+    if (name === 'list' || name === 'list2' || name === 'option') { this.expect('['); const v = this.word().toLowerCase(); this.expect(']'); return { name, value: v }; }
+    if (name === 'map') { this.expect('['); const k = this.word().toLowerCase(); this.expect(','); const v = this.word().toLowerCase(); this.expect(']'); return { name, key: k, value: v }; }
+    return { name };
+  }
+  number() {
+    const w = this.word();
+    if (w === '') this.fail('숫자가 와야 한다');
+    const n = /^[-+]?0x/i.test(w) ? parseInt(w, 16) : Number(w);
+    if (!Number.isFinite(n) && !/^[-+]?(inf|nan)/i.test(w)) this.fail(`숫자가 아니다: ${w}`);
+    return Number.isFinite(n) ? n : (/nan/i.test(w) ? NaN : (w.startsWith('-') ? -Infinity : Infinity));
+  }
+  numberArray(count) {
+    this.expect('{'); this.skipNewlines();
+    const arr = [];
+    for (let k = 0; k < count; k++) {
+      arr.push(this.number());
+      this.skipSpace();
+      if (this.s[this.i] === ',') this.i++;
+      this.skipNewlines();
+    }
+    this.expect('}');
+    return arr;
+  }
+  hashLike() {
+    const s = this.string();
+    if (s !== null) return s;
+    const w = this.word();
+    if (!/^0x[0-9a-f]+$/i.test(w)) this.fail(`해시는 따옴표 문자열이나 0x16진수여야 한다: ${w}`);
+    return w.toLowerCase();
+  }
+  // { 항목들 } - 항목 사이는 줄바꿈이나 쉼표
+  items(readItem) {
+    this.expect('{'); this.skipNewlines();
+    const out = [];
+    if (this.symbol('}')) return out;
+    for (;;) {
+      out.push(readItem());
+      if (this.symbol('}')) return out;
+      const nl = this.skipNewlines();
+      const comma = this.symbol(',');
+      if (comma) this.skipNewlines();
+      if (this.symbol('}')) return out;
+      if (!nl && !comma) this.fail('항목 사이에 줄바꿈이나 쉼표가 와야 한다');
+    }
+  }
+  fields() {
+    const obj = {};
+    for (const [k, v] of this.items(() => { const key = this.word() || this.hashLike(); this.expect(':'); const t = this.type(); this.expect('='); return [key, this.value(t)]; })) obj[k] = v;
+    return obj;
+  }
+  value(t) {
+    switch (t.name) {
+      case 'none': this.word(); return null;
+      case 'bool': case 'flag': { const w = this.word(); if (w !== 'true' && w !== 'false') this.fail(`true/false가 와야 한다: ${w}`); return w === 'true'; }
+      case 'i8': case 'u8': case 'i16': case 'u16': case 'i32': case 'u32': case 'i64': case 'u64': case 'f32': return this.number();
+      case 'vec2': return this.numberArray(2);
+      case 'vec3': return this.numberArray(3);
+      case 'vec4': return this.numberArray(4);
+      case 'rgba': return this.numberArray(4);
+      case 'mtx44': return this.numberArray(16);
+      case 'string': { const s = this.string(); if (s === null) this.fail('문자열이 와야 한다'); return s; }
+      case 'hash': case 'file': case 'link': return this.hashLike();
+      case 'list': case 'list2': return this.items(() => this.value({ name: t.value }));
+      case 'option': { const arr = this.items(() => this.value({ name: t.value })); return arr.length ? arr[0] : null; }
+      case 'map': { const obj = {}; for (const [k, v] of this.items(() => { const key = this.value({ name: t.key }); this.expect('='); return [String(key), this.value({ name: t.value })]; })) obj[k] = v; return obj; }
+      case 'pointer': case 'embed': {
+        const name = this.word() || this.hashLike();
+        if (t.name === 'pointer' && name === 'null') return null;
+        const obj = this.fields();
+        return Object.assign({ __type: name }, obj);
+      }
+      default: this.fail(`처리하지 못하는 종류 ${t.name}`);
+    }
+  }
+  document() {
+    const root = {};
+    this.skipNewlines();
+    while (!this.eof()) {
+      const key = this.word() || this.hashLike();
+      this.expect(':'); const t = this.type(); this.expect('=');
+      root[key] = this.value(t);
+      if (!this.skipNewlines() && !this.eof()) this.fail('최상위 항목 뒤에 줄바꿈이 와야 한다');
+    }
+    return root;
+  }
+}
+
+// CommunityDragon JSON: 클래스 객체는 "__type"을 이미 갖고 있고, 해시 키는 "{1234abcd}" 꼴일 수 있다 - "0x1234abcd"로 맞춘다.
+function lolBinNormalizeJson(v) {
+  if (Array.isArray(v)) return v.map(lolBinNormalizeJson);
+  if (v && typeof v === 'object') {
+    const o = {};
+    for (const [k, val] of Object.entries(v)) {
+      const m = /^\{([0-9a-f]{8})\}$/i.exec(k);
+      o[m ? '0x' + m[1].toLowerCase() : k] = lolBinNormalizeJson(val);
+    }
+    return o;
+  }
+  if (typeof v === 'string') { const m = /^\{([0-9a-f]{8})\}$/i.exec(v); return m ? '0x' + m[1].toLowerCase() : v; }
+  return v;
+}
+
+// 텍스트든 JSON이든 받아서 { entries: { 경로: 객체 } } 모양으로 돌려준다.
+function lolBinParse(textOrObject) {
+  let root;
+  if (typeof textOrObject === 'string') {
+    const t = textOrObject.replace(/^﻿/, '');
+    const head = t.trimStart();
+    if (head.startsWith('{') || head.startsWith('[')) root = lolBinNormalizeJson(JSON.parse(t));
+    else root = new LolBinTextReader(t).document();
+  } else root = lolBinNormalizeJson(textOrObject);
+  // ritobin 텍스트는 entries 아래에, CommunityDragon JSON은 최상위에 항목이 있다.
+  const entries = root.entries && typeof root.entries === 'object' && !root.entries.__type ? root.entries : root;
+  return { root, entries };
+}
+
+// 항목 중 VfxSystemDefinitionData만 이름(particleName·경로 끝·경로 전체)으로 찾을 수 있게 모은다.
+function lolBinCollectVfxSystems(parsed) {
+  const map = {};
+  for (const [path, obj] of Object.entries(parsed.entries)) {
+    if (!obj || obj.__type !== 'VfxSystemDefinitionData') continue;
+    map[path] = obj;
+    const last = path.split('/').pop();
+    if (last && !(last in map)) map[last] = obj;
+    if (obj.particleName && !(obj.particleName in map)) map[obj.particleName] = obj;
+  }
+  return map;
+}
+
+/* ===== src/vfx/lol_vfx_values.js ===== */
+/* lol_vfx_values.js — 89차: 원작 파티클 값 계산(THREE 없이 순수 계산 - 단위 테스트 대상)
+ * 의미는 lol-meta-wiki의 VfxEmitterDefinitionData 문서("Animated values", "Clocks", 각 필드 설명)를 그대로 따른다.
+ *  - 값(ValueFloat/Vector2/3/Color): dynamics가 있으면 곡선(times/values, 선형 보간, 양끝 고정)이 값이고 scalar의 constantValue는 무시,
+ *    없으면 constantValue. 곡선 결과에 채널별 확률표(probabilityTables)를 곱한다(무작위 수로 keyTimes→keyValues 보간, 표가 비면 singleValue).
+ *  - 적분값(IntegratedValue*: rotation0, worldAcceleration, particleUVScrollRate, particleUVRotateRate): dynamics 곡선만 수명에 걸쳐 적분한다.
+ *    constantValue만 있으면 "평생 고정량"(constantValue × 수명, 가속은 × 수명²)이다.
+ */
+// 확률표 하나: 무작위 수 r(0..1)로 곱할 값을 찾는다.
+function lolVfxProbability(table, r) {
+  if (!table) return 1;
+  const kt = table.keyTimes || [], kv = table.keyValues || [];
+  if (!kt.length || !kv.length) return table.singleValue != null ? table.singleValue : 1;
+  return lolVfxCurve1(kt, kv, r);
+}
+// 스칼라 곡선 보간(양끝 고정)
+function lolVfxCurve1(times, values, t) {
+  const n = Math.min(times.length, values.length);
+  if (n === 0) return 0;
+  if (n === 1 || t <= times[0]) return values[0];
+  if (t >= times[n - 1]) return values[n - 1];
+  for (let i = 1; i < n; i++) {
+    if (t <= times[i]) {
+      const t0 = times[i - 1], t1 = times[i], f = t1 > t0 ? (t - t0) / (t1 - t0) : 1;
+      return values[i - 1] + (values[i] - values[i - 1]) * f;
+    }
+  }
+  return values[n - 1];
+}
+// 값의 채널 수(0이면 스칼라)
+function lolVfxDims(v) {
+  const c = v && v.constantValue;
+  if (Array.isArray(c)) return c.length;
+  const d = v && v.dynamics && v.dynamics.values && v.dynamics.values[0];
+  return Array.isArray(d) ? d.length : 0;
+}
+// 값 하나를 t에서 샘플링. rnd: 채널별 무작위 수를 주는 함수(i => 0..1). 스칼라는 숫자, 벡터는 배열을 돌려준다.
+function lolVfxSample(v, t, rnd, fallback) {
+  if (v == null) return fallback;
+  const dyn = v.dynamics;
+  const dims = lolVfxDims(v);
+  if (dyn && dyn.values && dyn.values.length) {
+    const times = dyn.times || [], tables = dyn.probabilityTables || [];
+    if (dims === 0) {
+      const base = lolVfxCurve1(times, dyn.values, t);
+      return base * (tables[0] ? lolVfxProbability(tables[0], rnd ? rnd(0) : Math.random()) : 1);
+    }
+    const out = new Array(dims);
+    for (let c = 0; c < dims; c++) {
+      const col = dyn.values.map((x) => x[c]);
+      out[c] = lolVfxCurve1(times, col, t) * (tables[c] ? lolVfxProbability(tables[c], rnd ? rnd(c) : Math.random()) : 1);
+    }
+    return out;
+  }
+  const c = v.constantValue;
+  if (c == null) return fallback;
+  return Array.isArray(c) ? c.slice() : c;
+}
+// 적분값: 수명 lifeSec 동안 age 비율 t까지 누적한 양(속도 곡선의 적분, 단위는 원래 값 × 초).
+// dynamics가 없으면 constantValue × lifeSec(고정량, 움직이지 않는다).
+function lolVfxIntegrate(v, t, lifeSec, rnd) {
+  const dims = lolVfxDims(v);
+  const zero = dims ? new Array(dims).fill(0) : 0;
+  if (v == null) return zero;
+  const dyn = v.dynamics;
+  if (!(dyn && dyn.values && dyn.values.length)) {
+    const c = v.constantValue;
+    if (c == null) return zero;
+    return Array.isArray(c) ? c.map((x) => x * lifeSec) : c * lifeSec;
+  }
+  if (!(lifeSec > 0) || !Number.isFinite(lifeSec)) return zero; // 수명이 무한이면 적분값은 쓰지 않는다(문서: 유한 수명이 필요)
+  const times = dyn.times || [], tables = dyn.probabilityTables || [];
+  const integ1 = (vals) => { // 구간별 사다리꼴 적분(곡선 자체가 선형이라 정확)
+    const n = Math.min(times.length, vals.length);
+    const f = (x) => lolVfxCurve1(times, vals, x);
+    const pts = [0];
+    for (let i = 0; i < n; i++) if (times[i] > 0 && times[i] < t) pts.push(times[i]);
+    pts.push(t);
+    let s = 0;
+    for (let i = 1; i < pts.length; i++) s += (f(pts[i - 1]) + f(pts[i])) * 0.5 * (pts[i] - pts[i - 1]);
+    return s * lifeSec;
+  };
+  if (dims === 0) return integ1(dyn.values) * (tables[0] ? lolVfxProbability(tables[0], rnd ? rnd(0) : Math.random()) : 1);
+  const out = new Array(dims);
+  for (let c = 0; c < dims; c++) out[c] = integ1(dyn.values.map((x) => x[c])) * (tables[c] ? lolVfxProbability(tables[c], rnd ? rnd(c) : Math.random()) : 1);
+  return out;
+}
+// 두 번 적분(worldAcceleration → 변위). dynamics가 없으면 constantValue × 수명²의 고정 변위.
+function lolVfxIntegrate2(v, t, lifeSec) {
+  const dims = lolVfxDims(v) || 3;
+  if (v == null) return new Array(dims).fill(0);
+  const dyn = v.dynamics;
+  if (!(dyn && dyn.values && dyn.values.length)) {
+    const c = v.constantValue || [0, 0, 0];
+    return c.map((x) => x * lifeSec * lifeSec);
+  }
+  if (!(lifeSec > 0) || !Number.isFinite(lifeSec)) return new Array(dims).fill(0);
+  const steps = 32, out = new Array(dims).fill(0);
+  for (let c = 0; c < dims; c++) {
+    const vals = dyn.values.map((x) => x[c]);
+    let vel = 0, pos = 0, prevA = lolVfxCurve1(dyn.times, vals, 0);
+    for (let k = 1; k <= steps; k++) {
+      const x = t * k / steps, a = lolVfxCurve1(dyn.times, vals, x), dx = (t / steps) * lifeSec;
+      const newVel = vel + (prevA + a) * 0.5 * dx;
+      pos += (vel + newVel) * 0.5 * dx; vel = newVel; prevA = a;
+    }
+    out[c] = pos;
+  }
+  return out;
+}
+
+// 에미터 위상: (시스템 시각 - timeBeforeFirstEmission) / D, D는 lifetime·timeActiveDuringPeriod·period 중 설정된 가장 작은 값(없으면 0).
+function lolVfxEmitterPhase(em, systemTime) {
+  const cands = [em.lifetime, em.timeActiveDuringPeriod, em.period].filter((x) => x != null && x > 0);
+  if (!cands.length) return 0;
+  return (systemTime - (em.timeBeforeFirstEmission || 0)) / Math.min(...cands);
+}
+// 이 시각에 방출할 수 있는가(문서 "Emission"): 첫 방출 전·끝난 뒤·주기 밖이면 안 된다.
+function lolVfxCanEmit(em, systemTime) {
+  if (systemTime < (em.timeBeforeFirstEmission || 0)) return false;
+  if (em.lifetime != null && em.lifetime >= 0 && systemTime > em.lifetime) return false;
+  if (em.timeActiveDuringPeriod != null) {
+    if (!(em.timeActiveDuringPeriod > 0)) return false;
+    const local = em.period != null && em.period > 0 ? systemTime % em.period : systemTime;
+    if (local >= em.timeActiveDuringPeriod) return false;
+  }
+  return true;
+}
+// 한 단계에 낼 입자 수: (지난 방출 뒤 흐른 시간 × rate)를 내림, 한 단계 최대 rate*0.33+1, 전체 1000.
+function lolVfxEmitCount(rate, accumSec, firstEmission, hasVariableStartTime) {
+  let n = Math.floor(accumSec * rate);
+  n = Math.min(n, Math.floor(rate * 0.33 + 1), 1000);
+  if (firstEmission && n <= 0 && !hasVariableStartTime) n = 1;
+  return Math.max(0, n);
+}
+// EffectsQuality(0 아주 낮음 … 4 아주 높음)별 importance 존재 여부·방출 배율(문서 표 그대로).
+function lolVfxImportanceExists(importance, quality) {
+  const none = [[0, 1, 5], [0, 1, 5], [0, 1], [0, 4], [4]][quality];
+  return !none.includes(importance);
+}
+function lolVfxImportanceRate(importance, quality) {
+  const table = [[0.05, 0.10, 0.20], [0.10, 0.20, 0.40], [0.20, 0.40, 0.60], [0.50, 1, 1], [1, 1, 1]][quality];
+  return importance <= 2 ? table[importance] : 1;
+}
+// 회전 합성: Z → X → Y 순서(도). 3x3 행렬(행 우선)로 돌려준다.
+function lolVfxEulerZXY(deg) {
+  const r = Math.PI / 180, [ax, ay, az] = [deg[0] * r, deg[1] * r, deg[2] * r];
+  const cx = Math.cos(ax), sx = Math.sin(ax), cy = Math.cos(ay), sy = Math.sin(ay), cz = Math.cos(az), sz = Math.sin(az);
+  const Rz = [cz, -sz, 0, sz, cz, 0, 0, 0, 1], Rx = [1, 0, 0, 0, cx, -sx, 0, sx, cx], Ry = [cy, 0, sy, 0, 1, 0, -sy, 0, cy];
+  return lolVfxMat3Mul(Ry, lolVfxMat3Mul(Rx, Rz)); // 먼저 Z, 다음 X, 마지막 Y
+}
+function lolVfxMat3Mul(a, b) {
+  const o = new Array(9);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) o[i * 3 + j] = a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j];
+  return o;
+}
+function lolVfxMat3Apply(m, v) { return [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]]; }
+function lolVfxAxisAngle(axis, deg) {
+  const l = Math.hypot(axis[0], axis[1], axis[2]) || 1, x = axis[0] / l, y = axis[1] / l, z = axis[2] / l, a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a), t = 1 - c;
+  return [t * x * x + c, t * x * y - s * z, t * x * z + s * y, t * x * y + s * z, t * y * y + c, t * y * z - s * x, t * x * z - s * y, t * y * z + s * x, t * z * z + c];
+}
+// 생성 모양(SpawnShape): { offset:[x,y,z], rot: 3x3 } - 회전은 오프셋·속도·가속을 함께 돌린다. rand()는 0..1.
+function lolVfxSampleShape(shape, phase, rand) {
+  const I = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  if (!shape) return { offset: [0, 0, 0], raw: [0, 0, 0], rot: I };
+  const fill = ((shape.flags || 0) & 1) !== 0;
+  const t = shape.__type;
+  if (t === 'VfxShapeLegacy') {
+    const off = lolVfxSample(shape.emitOffset, phase, () => rand(), [0, 0, 0]) || [0, 0, 0];
+    let rot = I;
+    const angles = shape.emitRotationAngles || [], axes = shape.emitRotationAxes || [];
+    for (let i = 0; i < angles.length && i < axes.length; i++) rot = lolVfxMat3Mul(lolVfxAxisAngle(axes[i], lolVfxSample(angles[i], phase, () => rand(), 0) || 0), rot);
+    return { offset: lolVfxMat3Apply(rot, off), raw: off, rot };
+  }
+  if (t === 'VfxShapeBox') {
+    const s = shape.Size || [0, 0, 0];
+    const off = [(rand() * 2 - 1) * s[0], (rand() * 2 - 1) * s[1], fill ? (rand() * 2 - 1) * s[2] : s[2]];
+    let rot = I;
+    if (!fill) rot = lolVfxMat3Mul(lolVfxAxisAngle([0, 0, 1], 90 * Math.floor(rand() * 4)), lolVfxAxisAngle([0, 1, 0], 90 * Math.floor(rand() * 4)));
+    return { offset: lolVfxMat3Apply(rot, off), raw: off, rot };
+  }
+  if (t === 'VfxShapeCylinder') {
+    const r = fill ? rand() * (shape.radius || 0) : (shape.radius || 0);
+    const off = [r, rand() * (shape.height || 0), 0];
+    const rot = lolVfxAxisAngle([0, 1, 0], rand() * 360);
+    return { offset: lolVfxMat3Apply(rot, off), raw: off, rot };
+  }
+  if (t === 'VfxShapeSphere') {
+    const r = fill ? rand() * (shape.radius || 0) : (shape.radius || 0);
+    const off = [r, 0, 0];
+    const rot = lolVfxMat3Mul(lolVfxAxisAngle([0, 1, 0], rand() * 360), lolVfxAxisAngle([0, 0, 1], rand() * 360)); // Y 다음 Z
+    return { offset: lolVfxMat3Apply(rot, off), raw: off, rot };
+  }
+  return { offset: [0, 0, 0], raw: [0, 0, 0], rot: I };
+}
+// 색 조회 좌표(colorLookUpType 0 상수, 1 수명, 2 속도, 3 태어날 때 무작위)
+function lolVfxColorLookup(type, scale, offset, ageFrac, speed, birthRand) {
+  switch (type) {
+    case 1: return scale * ageFrac + offset;
+    case 2: return scale * speed + offset;
+    case 3: return scale * birthRand + offset;
+    default: return scale;
+  }
+}
+// 플립북 칸 번호(문서: startFrame부터 numFrames 고리, 무작위 시작은 numFrames × 공유 무작위 수만큼 연속 오프셋)
+function lolVfxFrame(em, ageSec, birthFrameRateMul, sharedRand) {
+  const n = Math.max(1, em.numFrames || 1), start = em.startFrame || 0;
+  if (n <= 1) return start;
+  const rate = (em.frameRate || 0) * (birthFrameRateMul == null ? 1 : birthFrameRateMul);
+  let f = rate > 0 ? ageSec * rate : 0;
+  if (em.isRandomStartFrame) f += n * sharedRand;
+  return start + (Math.floor(f) % n + n) % n;
+}
+
+/* ===== src/vfx/lol_vfx_engine.js ===== */
+/* lol_vfx_engine.js — 89차: 원작 파티클 엔진(three.js 런타임)
+ * 게임 파일의 VfxSystemDefinitionData(lol_vfx_bin_text.js로 읽은 것)를 lol-meta-wiki 문서에 적힌 클라이언트 동작대로 재생한다.
+ * 문서 순서를 그대로 따른다:
+ *  - 시뮬레이션: 고정 단계(EffectsQuality 아주 높음 = 초당 30단계), 단계가 없으면 SimulateEveryFrame(flags 0x40)로 한 단계.
+ *  - 방출: timeBeforeFirstEmission·lifetime(시스템 시각 기준 끝)·period/timeActiveDuringPeriod, (지난 방출 뒤 시간 × rate) 내림,
+ *    단계당 최대 rate×0.33+1, 첫 방출은 최소 1개(HasVariableStartTime이면 아님), isSingleParticle은 한 번만 rate개.
+ *  - 입자 갱신: 저장 속도 += (birthAcceleration + acceleration)·dt → 단계 속도 = 저장 속도 + velocity → 저항 → 힘 마당 → 위치 이동,
+ *    회전(birth 회전 + 회전 속도·가속 + isRotationEnabled면 rotation0 적분), 행렬 = 회전 → postRotate → 위치 → 붙은 대상 방향
+ *    (particleIsLocalOrientation) → 공전(birthOrbitalVelocity) → 시스템 transform → 태어날 때 잡은 생성 좌표계, bindWeight·worldAcceleration.
+ *  - 색 = Color × birthColor × 시스템 색 × modulationFactor, Add/Subtract는 RGB에 알파를 곱하고 알파 1.
+ *  - UV: 회전 → 크기 → 이동(birthUVOffset + age×birthUvScrollRate, 감기/고정) + 적분 스크롤 → 뒤집기 → emitterUvScrollRate, 플립북 칸 안에서.
+ * 좌표: 엔진 안은 원작(왼손, LoL 단위) 그대로 계산하고, 장면에 붙일 때 X를 뒤집고 lolRangeToWorld 배율을 곱한다(루트 그룹의 scale).
+ * 아직 재현하지 않는 기능(메시 프리미티브, 왜곡, 침식, 팔레트, 반사, 소프트 파티클, textureMult, 셰이머 에미터, Linger 대체값 등)은
+ * lolVfxCoverage()가 정의마다 목록으로 알려준다 - 그 목록이 비어 있는 정의만 "원작과 같은 방식"으로 그려진다.
+ */
+const LOL_VFX_STEP = 1 / 30;
+const LOL_VFX_MAX_PARTICLES = 4000;
+const LOL_VFX_BLEND_RANK = { 3: 0, 0: 1, 2: 1, 1: 2, 4: 2, 5: 2, 6: 2, 7: 2, 8: 3 };
+
+function lolVfxDefaultsOf(cls) { const c = typeof LOL_VFX_SCHEMA !== 'undefined' && LOL_VFX_SCHEMA[cls]; return c ? c.defaults : {}; }
+// bin에는 기본값과 다른 필드만 있다 - 클래스 기본값 위에 덮어쓴 얕은 사본.
+function lolVfxWithDefaults(obj, cls) {
+  const out = Object.assign({}, lolVfxDefaultsOf(cls || (obj && obj.__type)));
+  if (obj) for (const k of Object.keys(obj)) out[k] = obj[k];
+  return out;
+}
+
+// ---------- 정의가 쓰는 기능 중 엔진이 아직 재현하지 않는 것 ----------
+function lolVfxCoverage(sys, registry) {
+  const missing = new Set();
+  const visit = (s, depth) => {
+    if (!s || depth > 6) return;
+    if ((s.ShimmerEmitterDefinitionData || []).length) missing.add('ShimmerEmitterDefinitionData(컴포넌트 에미터)');
+    if (s.drawingLayer === 1) missing.add('HUD 레이어(drawingLayer 1)');
+    const all = [...(s.complexEmitterDefinitionData || []), ...(s.simpleEmitterDefinitionData || [])];
+    for (const raw of all) {
+      if (!raw) continue;
+      const e = raw;
+      const p = e.primitive && e.primitive.__type;
+      if (p === 'VfxPrimitiveMesh' || p === 'VfxPrimitiveAttachedMesh') missing.add(`${p}(메시 입자)`);
+      if (p === 'VfxPrimitiveCameraSegmentBeam') missing.add('VfxPrimitiveCameraSegmentBeam');
+      if (p === 'VfxPrimitivePlanarProjection') missing.add('VfxPrimitivePlanarProjection(원작 기하가 문서에 없어 바닥 판으로 근사)');
+      if (p === 'VfxPrimitiveBeam' && e.primitive.mMesh && e.primitive.mMesh.mMeshName) missing.add('VfxPrimitiveBeam의 mMesh');
+      if (e.distortionDefinition && (e.distortionDefinition.distortionMode ?? 1) !== 0) missing.add('distortionDefinition(화면 왜곡)');
+      if (e.alphaErosionDefinition) missing.add('alphaErosionDefinition(알파 침식)');
+      if (e.paletteDefinition) missing.add('paletteDefinition(팔레트)');
+      if (e.reflectionDefinition) missing.add('reflectionDefinition(반사)');
+      if (e.softParticleParams) missing.add('softParticleParams(소프트 파티클)');
+      if (e.textureMult) missing.add('textureMult(둘째 텍스처 층)');
+      if (e.CustomMaterial) missing.add('CustomMaterial');
+      if (e.Linger) missing.add('Linger 대체값');
+      if (e.emissionMeshName) missing.add('emissionMeshName(메시 표면 생성)');
+      if (e.emissionSurfaceDefinition) missing.add('emissionSurfaceDefinition(스킨 표면 생성)');
+      if (e.FlexShapeDefinition) missing.add('FlexShapeDefinition(붙은 대상 크기 배율)');
+      if (e.uvMode && e.uvMode !== 0) missing.add(`uvMode ${e.uvMode}`);
+      if (e.sliceTechniqueRange > 0) missing.add('sliceTechniqueRange(슬라이스 셰이더)');
+      if (e.stencilMode) missing.add('stencilMode');
+      if (e.materialOverrideDefinitions && e.materialOverrideDefinitions.length) missing.add('materialOverrideDefinitions(붙은 대상 재질 덮어쓰기)');
+      if (e.uvParallaxScale) missing.add('uvParallaxScale');
+      if (e.flexBirthUVOffset || e.flexBirthUVScrollRate || e.flexBirthRotationalVelocity0) missing.add('flex UV/회전 값');
+      const c = e.childParticleSetDefinition;
+      if (c && registry) for (const id of c.childrenIdentifiers || []) { const child = lolVfxFindChild(registry, id); if (child) visit(child, depth + 1); else missing.add(`자식 이펙트 정의 없음: ${id.effectName || id.effectKey || id.effect}`); }
+    }
+    if (s.materialOverrideDefinitions && s.materialOverrideDefinitions.length) missing.add('materialOverrideDefinitions(붙은 대상 재질 덮어쓰기)');
+  };
+  visit(sys, 0);
+  return [...missing];
+}
+function lolVfxFindChild(registry, id) {
+  if (!id) return null;
+  return registry[id.effectName] || registry[id.effect] || registry[id.effectKey] || null;
+}
+
+// ---------- 셰이더: 텍스처(플립북 칸·주소 방식) × 입자 색 × 색 조회 텍스처 ----------
+const LOL_VFX_VERT = `
+attribute vec4 aColor; attribute vec2 aUv; attribute vec4 aCell; attribute vec2 aLookup;
+varying vec4 vColor; varying vec2 vUv; varying vec4 vCell; varying vec2 vLookup;
+void main(){ vColor = aColor; vUv = aUv; vCell = aCell; vLookup = aLookup; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const LOL_VFX_FRAG = `
+uniform sampler2D map; uniform sampler2D colorMap; uniform float useColorMap; uniform float addressMode; uniform float alphaRef;
+varying vec4 vColor; varying vec2 vUv; varying vec4 vCell; varying vec2 vLookup;
+float lolAddr(float x){
+  if (addressMode < 0.5) return fract(x);
+  if (addressMode < 1.5) { float m = mod(x, 2.0); return m > 1.0 ? 2.0 - m : m; }
+  return clamp(x, 0.0, 1.0);
+}
+void main(){
+  if (addressMode > 2.5 && (vUv.x < 0.0 || vUv.x > 1.0 || vUv.y < 0.0 || vUv.y > 1.0)) discard; // Border: 투명
+  vec2 c = vCell.xy + vec2(lolAddr(vUv.x), lolAddr(vUv.y)) * vCell.zw; // 원작 UV는 v가 아래로 - 텍스처는 위가 v=1이라 뒤집어 읽는다
+  vec2 g = vec2(vUv.x, -vUv.y) * vCell.zw; // 감기 전 좌표의 미분으로 밉맵을 고른다(fract 경계에서 가장 작은 밉이 찍혀 생기는 선 방지)
+  vec4 tex = textureGrad(map, vec2(c.x, 1.0 - c.y), dFdx(g), dFdy(g));
+  vec4 col = vColor * tex;
+  if (useColorMap > 0.5) col *= texture2D(colorMap, vec2(clamp(vLookup.x, 0.0, 1.0), 1.0 - clamp(vLookup.y, 0.0, 1.0)));
+  if (alphaRef > 0.0 && col.a < alphaRef) discard;
+  gl_FragColor = col;
+}`;
+
+class LolVfxTextureCache {
+  constructor(resolve) { this.resolve = resolve; this.cache = new Map(); this.loader = new THREE.TextureLoader(); this.loader.crossOrigin = undefined; this.failed = new Set(); }
+  get(path) {
+    if (!path) return null;
+    const key = path.toLowerCase();
+    if (this.cache.has(key)) return this.cache.get(key);
+    const url = this.resolve(path);
+    let tex = null;
+    if (url) {
+      tex = this.loader.load(url, undefined, undefined, () => { this.failed.add(path); console.warn('[LOL VFX] 텍스처를 못 읽음:', path, '→', url); });
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; // 주소 방식은 셰이더가 칸 안에서 처리한다
+    }
+    this.cache.set(key, tex);
+    return tex;
+  }
+}
+// 원작 텍스처가 없을 때 쓰는 "투명한 검정"(문서: 이름이 비었거나 못 읽으면 투명 검정을 묶는다)
+const LOL_VFX_BLACK = (() => { const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1); t.needsUpdate = true; return t; })();
+const LOL_VFX_WHITE = (() => { const t = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); t.needsUpdate = true; return t; })();
+
+function lolVfxMakeMaterial(em, map, colorMap) {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { map: { value: map || LOL_VFX_BLACK }, colorMap: { value: colorMap || LOL_VFX_WHITE }, useColorMap: { value: colorMap ? 1 : 0 },
+      addressMode: { value: [0, 1, 2, 3].includes(em.texAddressModeBase) ? em.texAddressModeBase : 0 }, alphaRef: { value: (em.alphaRef || 0) / 255 } },
+    vertexShader: LOL_VFX_VERT, fragmentShader: LOL_VFX_FRAG, transparent: em.blendMode !== 3, side: THREE.DoubleSide,
+    depthWrite: em.blendMode === 3, depthTest: !((em.miscRenderFlags || 0) & 1), toneMapped: false,
+  });
+  switch (em.blendMode) {
+    case 0: case 4: mat.blending = THREE.AdditiveBlending; break; // Add(색에 알파를 미리 곱함)·AlphaAdd: 원본×알파 + 대상
+    case 1: mat.blending = THREE.NormalBlending; break; // Alpha
+    case 2: mat.blending = THREE.CustomBlending; mat.blendEquation = THREE.AddEquation; mat.blendSrc = THREE.ZeroFactor; mat.blendDst = THREE.OneMinusSrcColorFactor; break; // Subtract: 대상 × (1 - 색×알파)
+    case 3: mat.blending = THREE.NoBlending; break; // None
+    case 5: mat.blending = THREE.CustomBlending; mat.blendEquation = THREE.AddEquation; mat.blendSrc = THREE.OneFactor; mat.blendDst = THREE.OneMinusSrcAlphaFactor; break; // PremultipliedAlpha
+    case 6: mat.blending = THREE.CustomBlending; mat.blendEquation = THREE.MinEquation; break;
+    case 7: mat.blending = THREE.CustomBlending; mat.blendEquation = THREE.MaxEquation; break;
+    case 8: mat.blending = THREE.CustomBlending; mat.blendEquation = THREE.AddEquation; mat.blendSrc = THREE.OneMinusDstAlphaFactor; mat.blendDst = THREE.DstAlphaFactor; break; // TargetAlpha
+    default: mat.blending = THREE.AdditiveBlending;
+  }
+  return mat;
+}
+
+// 배치 그리기용 동적 기하(정점 4개 = 쿼드 하나, 트레일·빔도 쿼드 띠로 만든다)
+class LolVfxBatch {
+  constructor(material) {
+    this.cap = 0; this.count = 0; this.geo = new THREE.BufferGeometry();
+    this.mesh = new THREE.Mesh(this.geo, material); this.mesh.frustumCulled = false;
+    this.ensure(64);
+  }
+  ensure(quads) {
+    if (quads <= this.cap) return;
+    const cap = Math.max(quads, this.cap * 2), v = cap * 4;
+    const grow = (old, n) => { const a = new Float32Array(n); if (old) a.set(old.subarray(0, Math.min(old.length, n))); return a; }; // 이번 프레임에 이미 쓴 쿼드는 지키며 늘린다
+    this.pos = grow(this.pos, v * 3); this.col = grow(this.col, v * 4); this.uv = grow(this.uv, v * 2); this.cell = grow(this.cell, v * 4); this.lk = grow(this.lk, v * 2);
+    const idx = new Uint32Array(cap * 6);
+    for (let q = 0; q < cap; q++) { const b = q * 4, o = q * 6; idx[o] = b; idx[o + 1] = b + 1; idx[o + 2] = b + 2; idx[o + 3] = b; idx[o + 4] = b + 2; idx[o + 5] = b + 3; }
+    this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    this.geo.setAttribute('aColor', new THREE.BufferAttribute(this.col, 4));
+    this.geo.setAttribute('aUv', new THREE.BufferAttribute(this.uv, 2));
+    this.geo.setAttribute('aCell', new THREE.BufferAttribute(this.cell, 4));
+    this.geo.setAttribute('aLookup', new THREE.BufferAttribute(this.lk, 2));
+    this.geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    this.cap = cap;
+  }
+  begin() { this.count = 0; }
+  // 꼭짓점 4개(p: [x,y,z]×4), 꼭짓점별 uv와 색, 칸(cell), 조회 좌표
+  quad(p, uvs, colors, cell, lookup) {
+    this.ensure(this.count + 1);
+    const q = this.count++;
+    const perCell = Array.isArray(cell[0]), perLk = Array.isArray(lookup[0]);
+    for (let k = 0; k < 4; k++) {
+      const v = q * 4 + k, c = colors[k] || colors[0];
+      this.pos.set(p[k], v * 3); this.col.set(c, v * 4); this.uv.set(uvs[k], v * 2); this.cell.set(perCell ? cell[k] : cell, v * 4); this.lk.set(perLk ? lookup[k] : lookup, v * 2);
+    }
+  }
+  end() {
+    for (const n of ['position', 'aColor', 'aUv', 'aCell', 'aLookup']) this.geo.attributes[n].needsUpdate = true;
+    this.geo.setDrawRange(0, this.count * 6);
+    this.mesh.visible = this.count > 0;
+  }
+  dispose() { this.geo.dispose(); }
+}
+
+const LOL_VFX_I3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+const lolV = {
+  add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+  sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+  mul: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
+  hmul: (a, b) => [a[0] * b[0], a[1] * b[1], a[2] * b[2]],
+  dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+  cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+  len: (a) => Math.hypot(a[0], a[1], a[2]),
+  norm: (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
+};
+function lolVfxTranspose(m) { return [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]; }
+function lolVfxRandArr(n) { const a = new Array(n); for (let i = 0; i < n; i++) a[i] = Math.random(); return a; }
+
+// ---------- 에미터 ----------
+class LolVfxEmitter {
+  constructor(system, raw, isSimple) {
+    this.system = system; this.isSimple = isSimple;
+    this.def = lolVfxWithDefaults(raw, 'VfxEmitterDefinitionData');
+    const e = this.def;
+    this.prim = e.primitive && e.primitive.__type ? e.primitive : null;
+    this.primType = this.prim ? this.prim.__type : 'VfxPrimitiveCameraQuad';
+    this.particles = []; this.accum = 0; this.emittedOnce = false; this.singleDone = false; this.finished = false; this.lingerStart = null;
+    this.sharedRand = Math.random();
+    this.isTrail = this.primType === 'VfxPrimitiveArbitraryTrail' || this.primType === 'VfxPrimitiveCameraTrail';
+    this.trail = this.isTrail ? lolVfxWithDefaults(this.prim.mTrail, 'VfxTrailDefinitionData') : null;
+    this.trailTravel = 0; this.lastSpawnPos = null;
+    const tc = system.manager.textures;
+    const map = tc.get(e.texture);
+    const cpath = e.particleColorTexture || '';
+    const colorMap = cpath && !/defaultcoloroverlifetime/i.test(cpath) ? tc.get(cpath) : null; // 기본 색 텍스처는 흰색
+    this.material = lolVfxMakeMaterial(e, map, colorMap);
+    this.batch = new LolVfxBatch(this.material);
+    const pass = e.pass || 0, phase = e.isGroundLayer ? 0 : (pass < 0 ? 1 : 2);
+    this.batch.mesh.renderOrder = 1000 + phase * 100000 + pass * 10 + (LOL_VFX_BLEND_RANK[e.blendMode] ?? 1);
+    system.group.add(this.batch.mesh);
+    // 문서 "lifetime": 단일 입자 에미터는 lifetime이 없거나 particleLifetime보다 10초 넘게 길면 particleLifetime으로 바뀐다
+    if (e.isSingleParticle && !isSimple) {
+      const pl = lolVfxSample(e.particleLifetime, 0, null, 3);
+      if (e.lifetime == null || e.lifetime > pl + 10) this.endTime = pl; else this.endTime = e.lifetime;
+    } else this.endTime = e.lifetime;
+    if (e.doesLifetimeScale && this.endTime != null) this.endTime *= system.opts.lifetimeScale || 1;
+  }
+  get emitDef() { return { lifetime: this.endTime, period: this.def.period, timeActiveDuringPeriod: this.def.timeActiveDuringPeriod, timeBeforeFirstEmission: this.def.timeBeforeFirstEmission }; }
+  flex(f) { if (!f) return 0; const id = f.mFlexID || 0; return id >= 0 && id <= 2 ? (this.system.opts.flex || [0, 0, 0])[id] || 0 : 0; }
+
+  step(dt, sysT, prevSysPos) {
+    const e = this.def, sys = this.system, ed = this.emitDef;
+    // 1) 방출
+    const ended = ed.lifetime != null && ed.lifetime >= 0 && sysT > ed.lifetime;
+    const stopping = sys.stopping && sysT > (e.emitterLinger ?? 0);
+    if (!this.finished && (ended || stopping || (this.singleDone && !this.isSimple))) { this.finished = true; this.onFinish(sysT); }
+    if (!this.finished && lolVfxCanEmit(ed, sysT)) {
+      const phase = lolVfxEmitterPhase(ed, sysT);
+      let n;
+      if (e.isSingleParticle) {
+        if (!this.singleDone) { n = Math.max(1, Math.floor(lolVfxSample(e.rate, phase, null, 0))); this.singleDone = true; } else n = 0;
+      } else {
+        this.accum += dt;
+        let rate;
+        const rv = lolVfxSample(e.rateByVelocityFunction, phase, null, [0, 0]);
+        if (rv && (rv[0] || rv[1])) rate = Math.min(e.MaximumRateByVelocity ?? 300, sys.speed * rv[0] + rv[1]);
+        else rate = lolVfxSample(e.rate, phase, null, 0) + (e.flexRate ? this.flex(e.flexRate) * lolVfxSample(e.flexRate.mValue, phase, null, 0) : 0);
+        rate *= lolVfxImportanceRate(e.importance ?? 2, sys.manager.quality);
+        n = lolVfxEmitCount(rate, this.accum, !this.emittedOnce, e.HasVariableStartTime);
+        if (n > 0) this.accum = 0;
+      }
+      if (this.isTrail && this.trail.mMaxAddedPerFrame > 0) n = Math.min(n, this.trail.mMaxAddedPerFrame);
+      if (n > 0) {
+        this.emittedOnce = true;
+        for (let k = 0; k < n; k++) {
+          if (this.particles.length >= LOL_VFX_MAX_PARTICLES) break;
+          const f = n > 1 ? (k + 1) / n : 1; // 한 단계 안에 고르게 - 먼저 난 입자는 조금 더 늙고 시스템 이동 경로상 앞 위치
+          const p = this.spawn(sysT - dt * (1 - f), phase, prevSysPos ? lolV.add(prevSysPos, lolV.mul(lolV.sub(sys.pos, prevSysPos), f)) : sys.pos);
+          if (p) { this.simulate(p, dt * (1 - f), sysT); this.particles.push(p); }
+        }
+      }
+    }
+    // 2) 입자 갱신
+    const sysDelta = prevSysPos ? lolV.sub(sys.pos, prevSysPos) : [0, 0, 0];
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      // 링거: 0·1은 시스템이 멈출 때, 2는 에미터가 끝나면(문서 particleLingerType)
+      if (this.lingerStart != null) {
+        const L = this.lingerCap();
+        const type = this.isSimple ? 0 : (e.particleLingerType || 0);
+        if (type === 0 && sys.stopping) p.life = Math.min(p.life, L);
+        else if ((type === 1 && sys.stopping) || type === 2) { if (!p.lingered) { p.life = p.age + L; p.lingered = true; } }
+      }
+      if (p.life >= 0 && p.age + dt >= p.life) { this.kill(p); this.particles.splice(i, 1); continue; }
+      const bw = lolVfxSample(e.bindWeight, p.life > 0 ? p.age / p.life : 0, null, 0);
+      if (bw) p.bind = lolV.add(p.bind, lolV.mul(sysDelta, bw));
+      this.simulate(p, dt, sysT);
+    }
+  }
+  lingerCap() { const e = this.def; const cap = this.isSimple ? 10 : lolVfxSample(e.particleLifetime, 0, null, 3) + 10; return Math.min(e.particleLinger == null ? cap : e.particleLinger, cap); }
+  onFinish(sysT) { this.lingerStart = sysT; }
+  kill(p) { if (p.child) p.child.stop(false); const c = this.def.childParticleSetDefinition; if (c && c.childEmitOnDeath) this.system.spawnChild(this, p, true); }
+
+  spawn(birthT, phase, sysPos) {
+    const e = this.def, sys = this.system;
+    const rnd = (n) => lolVfxRandArr(n);
+    const r3 = rnd(3), r4 = rnd(4);
+    const shared = e.ParticlesShareRandomValue ? this.sharedRand : Math.random();
+    let life = lolVfxSample(e.particleLifetime, phase, () => Math.random(), 3);
+    if (e.flexParticleLifetime) { const fv = this.flex(e.flexParticleLifetime); life = (life + fv * lolVfxSample(e.flexParticleLifetime.mValue, phase, null, 0)) * (1 + fv); }
+    if (e.doesParticleLifetimeScale) life *= sys.opts.lifetimeScale || 1;
+    const shape = lolVfxSampleShape(e.SpawnShape, phase, Math.random);
+    const sysScale = sys.scale;
+    const ols = e.offsetLifetimeScaling || [0, 0, 0];
+    if (e.SpawnShape && (ols[0] || ols[1] || ols[2])) {
+      const sm = e.offsetLifeScalingSymmetryMode || 0, raw = shape.raw;
+      const o = [sm & 1 ? Math.abs(raw[0]) : raw[0], sm & 2 ? Math.abs(raw[1]) : raw[1], sm & 4 ? Math.abs(raw[2]) : raw[2]];
+      life = Math.max(0, life + o[0] * ols[0] + o[1] * ols[1] + o[2] * ols[2]);
+    }
+    const emitPos = e.IsEmitterSpace ? [0, 0, 0] : lolVfxSample(e.EmitterPosition, phase, null, [0, 0, 0]);
+    const local = lolV.add(emitPos, lolV.mul(shape.offset, sysScale));
+    let vel = lolVfxSample(e.birthVelocity, phase, (i) => r3[i], [0, 0, 0]);
+    if (e.flexBirthVelocity) { const fv = this.flex(e.flexBirthVelocity), m = lolVfxSample(e.flexBirthVelocity.mValue, phase, null, [0, 0, 0]); vel = lolV.mul(lolV.add(vel, lolV.mul(m, fv)), 1 + fv); }
+    vel = lolVfxMat3Apply(shape.rot, vel);
+    const acc = lolVfxMat3Apply(shape.rot, lolVfxSample(e.birthAcceleration, phase, () => Math.random(), [0, 0, 0]));
+    let bscale = lolVfxSample(e.birthScale0, phase, () => Math.random(), [1, 1, 1]);
+    if (e.flexScaleBirthScale) { const k = this.flex(e.flexScaleBirthScale) * (e.flexScaleBirthScale.mValue || 0); if (k > 0) bscale = lolV.mul(bscale, k); }
+    // 생성 좌표계: 태어날 때의 시스템 위치(+ isLocalOrientation이면 붙은 대상의 방향)
+    const frameRot = e.isLocalOrientation ? sys.rot.slice() : LOL_VFX_I3;
+    const p = {
+      age: 0, life: life < 0 ? -1 : life, birthT, local, vel, acc, shared,
+      spawnPos: sysPos.slice(), spawnRot: frameRot, bind: [0, 0, 0],
+      drag: lolVfxSample(e.birthDrag, phase, () => Math.random(), [0, 0, 0]),
+      bscale, bcolor: lolVfxSample(e.birthColor, phase, (i) => r4[i], [1, 1, 1, 1]),
+      brot: lolVfxSample(e.birthRotation0, phase, () => Math.random(), [0, 0, 0]),
+      brotv: lolVfxSample(e.birthRotationalVelocity0, phase, () => Math.random(), [0, 0, 0]),
+      brota: lolVfxSample(e.birthRotationalAcceleration, phase, () => Math.random(), [0, 0, 0]),
+      borbit: lolVfxSample(e.birthOrbitalVelocity, phase, () => Math.random(), [0, 0, 0]),
+      buvOff: lolVfxSample(e.birthUVOffset, phase, () => shared, [0, 0]),
+      buvScroll: lolVfxSample(e.birthUvScrollRate, phase, () => shared, [0, 0]),
+      buvRot: lolVfxSample(e.birthUvRotateRate, phase, () => shared, 0),
+      bframe: lolVfxSample(e.birthFrameRate, phase, () => shared, 1),
+      tiling: this.isTrail ? lolVfxSample(this.trail.mBirthTilingSize, phase, null, [0, 0, 0]) : (this.primType === 'VfxPrimitiveBeam' ? lolVfxSample(((this.prim.mBeam) || {}).mBirthTilingSize, phase, null, [0, 0, 0]) : null),
+      world: null, prevWorld: null, speed: 0, rot: LOL_VFX_I3, scale: [1, 1, 1], color: [1, 1, 1, 1],
+    };
+    if (this.isTrail) { // 웨이크 모드: 태어난 순간까지 생성 지점이 움직인 거리
+      if (this.lastSpawnPos) this.trailTravel += lolV.len(lolV.sub(sysPos, this.lastSpawnPos));
+      this.lastSpawnPos = sysPos.slice(); p.trailU = this.trailTravel;
+    }
+    const c = e.childParticleSetDefinition;
+    if (c && !c.childEmitOnDeath) this.system.spawnChild(this, p, false);
+    return p;
+  }
+
+  // 한 입자를 dt만큼 진행(문서 "Particle update" 1~9)
+  simulate(p, dt, sysT) {
+    const e = this.def, sys = this.system;
+    p.age += dt;
+    const t = p.life > 0 ? Math.min(1, p.age / p.life) : 0;
+    if (dt > 0) {
+      const accel = lolV.add(p.acc, lolVfxSample(e.acceleration, t, null, [0, 0, 0]));
+      const analytic = (sys.flags & 0x100) && (p.drag[0] || p.drag[1] || p.drag[2]);
+      if (analytic) { // UseCalculusForPhysics: 닫힌 식으로 고정 오프셋까지 감속
+        p.anOff = p.anOff || [0, 0, 0];
+        const v0 = p.v0 || (p.v0 = p.vel.slice());
+        p.anOff = [0, 1, 2].map((i) => (p.drag[i] ? (v0[i] / p.drag[i]) * (1 - Math.exp(-p.drag[i] * p.age)) : 0));
+      } else {
+        p.vel = lolV.add(p.vel, lolV.mul(accel, dt));
+        let sv = lolV.add(p.vel, lolVfxSample(e.velocity, t, null, [0, 0, 0]));
+        const drag = lolV.add(p.drag, lolVfxSample(e.drag, t, null, [0, 0, 0]));
+        for (let i = 0; i < 3; i++) if (drag[i]) { const dv = drag[i] * sv[i] * dt; const nv = Math.abs(dv) >= Math.abs(sv[i]) ? 0 : sv[i] - dv; p.vel[i] -= sv[i] - nv; sv[i] = nv; }
+        sv = this.applyFields(p, sv, dt, sysT);
+        p.local = lolV.add(p.local, lolV.mul(sv, dt));
+      }
+    }
+    // 회전(도): birth + 속도·가속 + rotation0 적분(초당 60배, isRotationEnabled 필요)
+    let ang = lolV.add(p.brot, lolV.add(lolV.mul(p.brotv, p.age), lolV.mul(p.brota, 0.5 * p.age * p.age)));
+    if (e.isRotationEnabled && p.life > 0) ang = lolV.add(ang, lolV.mul(lolVfxIntegrate(e.rotation0, t, p.life), 60));
+    p.ang = ang;
+    let rot = lolVfxEulerZXY(ang);
+    if (e.hasPostRotateOrientation) rot = lolVfxMat3Mul(lolVfxEulerZXY(e.postRotateOrientationAxis || [0, 0, 0]), rot);
+    let pos = p.anOff ? lolV.add(p.local, p.anOff) : p.local.slice();
+    if (e.IsEmitterSpace) pos = lolV.add(pos, lolVfxSample(e.EmitterPosition, lolVfxEmitterPhase(this.emitDef, sysT), null, [0, 0, 0]));
+    if (p.borbit[0] || p.borbit[1] || p.borbit[2]) { const o = lolVfxEulerZXY(lolV.mul(p.borbit, p.age * 180 / Math.PI)); pos = lolVfxMat3Apply(o, pos); rot = lolVfxMat3Mul(o, rot); }
+    // 에미터 좌표계 덮어쓰기(크기 → 회전 → 이동)와 시스템 transform
+    const so = e.scaleOverride || [1, 1, 1], ro = e.rotationOverride || [0, 0, 0], to = e.translationOverride || [0, 0, 0];
+    const roM = lolVfxEulerZXY(ro);
+    let frameRot = p.spawnRot;
+    if (e.particleIsLocalOrientation) frameRot = sys.rot; // 매 단계 현재 방향(생성 좌표계는 위치만)
+    else { pos = lolV.add(to, lolVfxMat3Apply(roM, lolV.hmul(so, pos))); rot = lolVfxMat3Mul(roM, rot); }
+    if (sys.transform) { pos = lolV.add(sys.transform.t, lolVfxMat3Apply(sys.transform.r, pos)); rot = lolVfxMat3Mul(sys.transform.r, rot); }
+    let world = lolV.add(p.spawnPos, lolVfxMat3Apply(frameRot, pos));
+    rot = lolVfxMat3Mul(frameRot, rot);
+    world = lolV.add(world, p.bind);
+    if (p.life > 0) world = lolV.add(world, lolVfxIntegrate2(e.worldAcceleration, t, p.life));
+    p.prevWorld = p.world || world; p.world = world; p.rot = rot;
+    p.speed = dt > 0 ? lolV.len(lolV.sub(world, p.prevWorld)) / dt : p.speed;
+    // 크기: scale0 × birthScale0 (isUniformScale면 X를 모든 축에), 시스템 배율
+    let sc = lolV.hmul(lolVfxSample(e.scale0, t, null, [1, 1, 1]), p.bscale);
+    if (this.isSimple) { // 단순 에미터: LegacySimple의 균일 크기(birthScale × scale)와 평면 회전
+      const ls = lolVfxWithDefaults(e.LegacySimple, 'VfxEmitterLegacySimple');
+      p.sbs = p.sbs ?? lolVfxSample(ls.birthScale, 0, null, 1);
+      const k = p.sbs * lolVfxSample(ls.scale, t, null, 1), bias = ls.scaleBias || [1, 1];
+      sc = [k * bias[0], k * bias[1], k];
+      p.sbr = p.sbr ?? lolVfxSample(ls.birthRotation, 0, null, 0);
+      p.ang = [e.isRotationEnabled ? lolVfxSample(ls.rotation, t, null, 0) : p.sbr + lolVfxSample(ls.birthRotationalVelocity, 0, null, 0) * p.age, 0, 0];
+    }
+    if (e.FlexInstanceScale) { const fv = this.flex(e.FlexInstanceScale); if (fv > 0) sc = lolV.mul(sc, fv); }
+    if (e.isUniformScale) sc = [sc[0], sc[0], sc[0]];
+    p.scale = lolV.mul(sc, sys.scale);
+    // 색: Color × birthColor × 시스템 색 × modulationFactor (+ Add/Subtract 미리 곱하기)
+    const cc = lolVfxSample(e.Color, t, null, [1, 1, 1, 1]), mf = e.modulationFactor || [1, 1, 1, 1], sc4 = sys.color;
+    const col = [0, 1, 2, 3].map((i) => cc[i] * p.bcolor[i] * sc4[i] * mf[i]);
+    if (e.blendMode === 0 || e.blendMode === 2) { col[0] *= col[3]; col[1] *= col[3]; col[2] *= col[3]; col[3] = 1; }
+    p.color = col;
+    p.t = t;
+  }
+
+  applyFields(p, sv, dt, sysT) {
+    const fc = this.def.fieldCollectionDefinition;
+    if (!fc) return sv;
+    const phase = lolVfxEmitterPhase(this.emitDef, sysT);
+    let v = sv.slice();
+    const pos = p.local;
+    for (const f of fc.fieldAccelerationDefinitions || []) v = lolV.add(v, lolV.mul(lolVfxSample(f.acceleration, phase, null, [0, 0, 0]), dt));
+    for (const f of fc.fieldAttractionDefinitions || []) {
+      const c = lolVfxSample(f.Position, phase, null, [0, 0, 0]), r = lolVfxSample(f.radius, phase, null, 0), a = lolVfxSample(f.acceleration, phase, null, 0);
+      const d = lolV.sub(c, pos), dl = lolV.len(d);
+      if (dl > 1e-6 && dl <= r) v = lolV.add(v, lolV.mul(d, a * dt / dl));
+    }
+    for (const f of fc.fieldNoiseDefinitions || []) {
+      const c = lolVfxSample(f.Position, phase, null, [0, 0, 0]), r = lolVfxSample(f.radius, phase, null, 0), freq = lolVfxSample(f.frequency, phase, null, 0), dvel = lolVfxSample(f.velocityDelta, phase, null, 0), ax = f.axisFraction || [0, 0, 0];
+      if (lolV.len(lolV.sub(pos, c)) <= r && Math.random() < freq * dt) v = lolV.add(v, [0, 1, 2].map((i) => (Math.random() * 2 - 1) * dvel * ax[i]));
+    }
+    for (const f of fc.fieldDragDefinitions || []) {
+      const c = lolVfxSample(f.Position, phase, null, [0, 0, 0]), r = lolVfxSample(f.radius, phase, null, 0), s = lolVfxSample(f.strength, phase, null, 0);
+      if (lolV.len(lolV.sub(pos, c)) <= r) v = v.map((x) => { const d = Math.abs(x) * s * dt; return Math.abs(x) <= d ? 0 : x - Math.sign(x) * d; });
+    }
+    for (const f of fc.fieldOrbitalDefinitions || []) {
+      const axis = lolV.norm(lolVfxSample(f.direction, phase, null, [0, 1, 0]));
+      const along = lolV.mul(axis, lolV.dot(v, axis)), perp = lolV.sub(v, along), sp = lolV.len(perp);
+      if (sp > 1e-6) { const radial = lolV.norm(lolV.sub(pos, lolV.mul(axis, lolV.dot(pos, axis)))); const tang = lolV.norm(lolV.cross(axis, radial)); v = lolV.add(along, lolV.mul(tang, sp)); }
+    }
+    p.vel = lolV.add(p.vel, lolV.sub(v, sv)); // 마당이 바꾼 양은 저장 속도에 남는다
+    return v;
+  }
+
+  // ---------- 그리기 ----------
+  uvTransform(p, uv, sysT) {
+    const e = this.def;
+    const ctr = e.uvTransformCenter || [0.5, 0.5];
+    const t = p.t || 0;
+    let a = (lolVfxSample(e.uvRotation, t, null, 0) + p.age * p.buvRot + (p.life > 0 ? lolVfxIntegrate(e.particleUVRotateRate, t, p.life) : 0)) * Math.PI / 180;
+    let u = uv[0] - ctr[0], v = uv[1] - ctr[1];
+    const ca = Math.cos(a), sa = Math.sin(a);
+    [u, v] = [u * ca - v * sa, u * sa + v * ca];
+    const s = lolVfxSample(e.uvScale, t, null, [1, 1]);
+    u = u * s[0] + ctr[0]; v = v * s[1] + ctr[1];
+    let off = [p.buvOff[0] + p.age * p.buvScroll[0], p.buvOff[1] + p.age * p.buvScroll[1]];
+    off = e.uvScrollClamp ? off.map((x) => Math.max(-1, Math.min(1, x))) : off.map((x) => x - Math.floor(x));
+    const integ = p.life > 0 ? lolVfxIntegrate(e.particleUVScrollRate, t, p.life) : [0, 0];
+    u += off[0] + integ[0]; v += off[1] + integ[1];
+    if (e.TextureFlipU) u = 1 - u;
+    if (e.TextureFlipV) v = 1 - v;
+    if (this.isSimple) { const sr = ((e.LegacySimple || {}).uvScrollRate) || [0, 0]; u += (sr[0] * p.age) % 1; v += (sr[1] * p.age) % 1; }
+    const es = e.emitterUvScrollRate || [0, 0];
+    return [u + es[0] * sysT, v + es[1] * sysT];
+  }
+  cellOf(p) {
+    const e = this.def, div = e.texDiv || [1, 1], cols = Math.max(1, Math.round(div[0])), rows = Math.max(1, Math.round(div[1]));
+    const f = lolVfxFrame(e, p.age, p.bframe, p.shared);
+    return [(f % cols) / cols, (Math.floor(f / cols) % rows) / rows, 1 / cols, 1 / rows];
+  }
+  lookupOf(p) {
+    const e = this.def, s = e.colorLookUpScales || [1, 1], o = e.colorLookUpOffsets || [0, 0];
+    return [lolVfxColorLookup(e.colorLookUpTypeX ?? 1, s[0], o[0], p.t || 0, p.speed, p.shared), lolVfxColorLookup(e.colorLookUpTypeY ?? 0, s[1], o[1], p.t || 0, p.speed, p.shared)];
+  }
+  draw(cam, sysT) {
+    const b = this.batch; b.begin();
+    const e = this.def, type = this.primType;
+    if (type === 'VfxPrimitiveNonRenderable' || type === 'VfxPrimitiveMesh' || type === 'VfxPrimitiveAttachedMesh' || type === 'VfxPrimitiveCameraSegmentBeam') { b.end(); return; }
+    if (this.isTrail) { this.drawTrail(cam, sysT); b.end(); return; }
+    for (const p of this.particles) {
+      if (!p.world) continue;
+      const cell = this.cellOf(p), lk = this.lookupOf(p);
+      const uvq = [[0, 0], [1, 0], [1, 1], [0, 1]].map((q) => this.uvTransform(p, q, sysT));
+      let corners;
+      const P = p.world, S = p.scale;
+      if (type === 'VfxPrimitiveCameraQuad' || type === 'VfxPrimitiveCameraUnitQuad' || this.isSimple) {
+        const half = type === 'VfxPrimitiveCameraUnitQuad' ? 0.5 : 1;
+        let right = cam.right, up = cam.up;
+        if (this.isSimple) { const o = (this.def.LegacySimple || {}).orientation || 0; if (o === 1) { right = [0, 0, 1]; up = [0, 1, 0]; } else if (o === 2) { right = [1, 0, 0]; up = [0, 0, 1]; } else if (o === 3) { right = [1, 0, 0]; up = [0, 1, 0]; } }
+        let sx = S[0] * half, sy = S[1] * half;
+        if (e.isDirectionOriented && p.speed > 1e-4) { // 화면에 투영한 이동 방향이 scale0.y 축
+          const d = lolV.sub(p.world, p.prevWorld), dr = lolV.dot(d, cam.right), du = lolV.dot(d, cam.up), l = Math.hypot(dr, du);
+          if (l > 1e-6) { up = lolV.add(lolV.mul(cam.right, dr / l), lolV.mul(cam.up, du / l)); right = lolV.cross(up, cam.forward); right = lolV.norm(right); }
+        } else { const roll = Math.trunc(p.ang ? p.ang[0] : 0) * Math.PI / 180, c = Math.cos(roll), s = Math.sin(roll); const r2 = lolV.add(lolV.mul(right, c), lolV.mul(up, s)), u2 = lolV.add(lolV.mul(up, c), lolV.mul(right, -s)); right = r2; up = u2; }
+        if (e.directionVelocityScale) sy *= Math.max(e.directionVelocityMinScale ?? 1, p.speed * e.directionVelocityScale);
+        const R = lolV.mul(right, sx), U = lolV.mul(up, sy);
+        corners = [lolV.add(lolV.sub(P, R), U), lolV.add(lolV.add(P, R), U), lolV.sub(lolV.add(P, R), U), lolV.sub(lolV.sub(P, R), U)]; // 왼위·오른위·오른아래·왼아래(u 0→1, v 0 위 →1 아래)
+      } else if (type === 'VfxPrimitiveArbitraryQuad' || type === 'VfxPrimitivePlanarProjection') {
+        let rot = p.rot;
+        if (e.isDirectionOriented && p.speed > 1e-4) { const z = lolV.norm(lolV.sub(p.world, p.prevWorld)); const x = lolV.norm(lolV.cross([0, 1, 0], z)); const y = lolV.cross(z, x); rot = [x[0], y[0], z[0], x[1], y[1], z[1], x[2], y[2], z[2]]; }
+        let X = [rot[0], rot[3], rot[6]], Y = [rot[1], rot[4], rot[7]];
+        let sx = S[0], sy = S[1];
+        if (type === 'VfxPrimitivePlanarProjection') { X = [1, 0, 0]; Y = [0, 0, 1]; sy = S[2] || S[0]; } // 문서에 기하가 없어 바닥에 눕힌 판으로 근사
+        if (e.directionVelocityScale) sx *= Math.max(e.directionVelocityMinScale ?? 1, p.speed * e.directionVelocityScale);
+        const XX = lolV.mul(X, sx), YY = lolV.mul(Y, sy);
+        // 문서: u = y + 0.5(로컬 +Y 방향), v = 0.5 - x(로컬 +X 반대) → 꼭짓점 순서를 그 매핑에 맞춘다
+        corners = [lolV.sub(lolV.add(P, XX), YY), lolV.add(lolV.add(P, XX), YY), lolV.add(lolV.sub(P, XX), YY), lolV.sub(lolV.sub(P, XX), YY)];
+        if (type === 'VfxPrimitivePlanarProjection') corners = corners.map((c) => [c[0], (this.system.groundY ?? 0) + 2, c[2]]);
+      } else if (type === 'VfxPrimitiveRay') {
+        const axis = lolV.norm([p.rot[2], p.rot[5], p.rot[8]]);
+        const near = lolV.add(P, lolV.mul(axis, S[2])), far = lolV.add(P, lolV.mul(axis, S[2] + S[1]));
+        const side = lolV.mul(lolV.norm(lolV.cross(axis, cam.forward)), S[0] * 0.5);
+        corners = [lolV.sub(far, side), lolV.add(far, side), lolV.add(near, side), lolV.sub(near, side)];
+      } else if (type === 'VfxPrimitiveBeam') {
+        corners = this.beamCorners(p, cam);
+        if (!corners) continue;
+      } else continue;
+      let color = p.color;
+      if (type === 'VfxPrimitivePlanarProjection') { const pd = this.prim.mProjection; if (pd && pd.colorModulate) color = lolVfxSample(pd.colorModulate, p.t || 0, null, [1, 1, 1, 1]); }
+      if (type === 'VfxPrimitiveBeam') { const bd = this.prim.mBeam || {}; if (bd.mIsColorBindedWithDistance) { const k = lolVfxSample(bd.mAnimatedColorWithDistance, this.beamLen || 0, null, [1, 1, 1, 1]); color = color.map((x, i) => x * k[i]); } }
+      b.quad(corners, type === 'VfxPrimitiveBeam' ? this.beamUv(p, uvq) : uvq, [color], cell, lk);
+    }
+    b.end();
+  }
+  beamCorners(p, cam) {
+    const sys = this.system, bd = (this.prim && this.prim.mBeam) || {};
+    const tgt = sys.targetPos(); if (!tgt) return null;
+    const so = bd.mLocalSpaceSourceOffset || [0, 0, 0], to = bd.mLocalSpaceTargetOffset || [0, 0, 0];
+    const src = lolV.add(sys.pos, lolVfxMat3Apply(sys.rot, so)), dst = lolV.add(tgt, lolVfxMat3Apply(sys.rot, to));
+    const d = lolV.sub(dst, src); this.beamLen = lolV.len(lolV.sub(tgt, sys.pos)); if (lolV.len(d) < 1e-6) return null;
+    const S = p.scale, a = lolV.add(src, lolV.mul(d, S[1] || 0)), z = lolV.sub(dst, lolV.mul(d, S[2] || 0));
+    let w;
+    if ((bd.mMode || 0) === 1) { const flat = lolV.norm(lolV.cross([0, 1, 0], d)); w = lolV.mul(lolVfxMat3Apply(p.rot, flat), S[0] * 0.5); }
+    else w = lolV.mul(lolV.norm(lolV.cross(d, cam.forward)), S[0] * 0.5);
+    this.beamWidth = S[0]; this.beamFull = lolV.len(d);
+    return [lolV.sub(a, w), lolV.add(a, w), lolV.add(z, w), lolV.sub(z, w)];
+  }
+  beamUv(p, uvq) {
+    // 빔: 텍스처 v가 빔 길이 방향, u가 폭 방향. 반복 수 = 폭/x, 길이/y(0 이하면 한 번). UV 변환의 첫 축이 길이 방향.
+    const tl = p.tiling || [0, 0, 0];
+    const ru = tl[0] > 0 ? this.beamWidth / tl[0] : 1, rv = tl[1] > 0 ? this.beamFull / tl[1] : 1;
+    return uvq.map(([u, v]) => [v * ru, u * rv]);
+  }
+  drawTrail(cam, sysT) {
+    const b = this.batch, e = this.def, tr = this.trail;
+    let pts = this.particles.filter((p) => p.world);
+    if (pts.length < 2) return;
+    pts = (tr.mSmoothingMode || 0) === 2 ? pts.slice() : pts.slice().reverse(); // 0·1: 새것→옛것, 2: 옛것→새것
+    const arbitrary = this.primType === 'VfxPrimitiveArbitraryTrail';
+    // 길이 자르기(mCutoff)와 u 좌표
+    let dist = 0; const ds = [0];
+    for (let i = 1; i < pts.length; i++) { dist += lolV.len(lolV.sub(pts[i].world, pts[i - 1].world)); ds.push(dist); }
+    let n = pts.length;
+    if (tr.mCutoff > 0) { n = 1; while (n < pts.length && ds[n] <= tr.mCutoff) n++; }
+    const side = [];
+    for (let i = 0; i < n; i++) {
+      const p = pts[i];
+      if (arbitrary) side.push([p.rot[0], p.rot[3], p.rot[6]]);
+      else {
+        const dir = i === 0 ? lolV.sub(pts[1].world, p.world) : lolV.sub(p.world, pts[i - 1].world);
+        side.push(lolV.norm(lolV.cross(dir, cam.forward)));
+      }
+    }
+    for (let i = 0; i < n - 1; i++) {
+      const A = pts[i], B = pts[i + 1];
+      const wa = A.scale[0], wb = B.scale[0];
+      const ua = this.trailU(A, ds[i]), ub = this.trailU(B, ds[i + 1]);
+      const va = this.trailV(A, wa), vb = this.trailV(B, wb);
+      const corners = [lolV.add(A.world, lolV.mul(side[i], wa)), lolV.sub(A.world, lolV.mul(side[i], wa)), lolV.sub(B.world, lolV.mul(side[i + 1], wb)), lolV.add(B.world, lolV.mul(side[i + 1], wb))];
+      const uvs = [this.uvTransform(A, [ua, va[0]], sysT), this.uvTransform(A, [ua, va[1]], sysT), this.uvTransform(B, [ub, vb[1]], sysT), this.uvTransform(B, [ub, vb[0]], sysT)];
+      b.quad(corners, uvs, [A.color, A.color, B.color, B.color], [this.cellOf(A), this.cellOf(A), this.cellOf(B), this.cellOf(B)], [this.lookupOf(A), this.lookupOf(A), this.lookupOf(B), this.lookupOf(B)]);
+    }
+  }
+  trailU(p, distAlong) { const tx = (p.tiling || [0])[0]; if (!(tx > 0)) return 0; return ((this.trail.mMode || 0) !== 0 ? (this.trailTravel - p.trailU) : distAlong) / tx; }
+  trailV(p, halfWidth) { const ty = (p.tiling || [0, 0])[1]; if (!ty) return [0, 1]; const span = ty > 0 ? halfWidth / ty : -ty; return [0.5 - span / 2, 0.5 + span / 2]; }
+  dispose() { this.system.group.remove(this.batch.mesh); this.batch.dispose(); this.material.dispose(); for (const p of this.particles) if (p.child) p.child.stop(true); this.particles = []; }
+}
+
+// ---------- 시스템(인스턴스 하나) ----------
+class LolVfxSystem {
+  constructor(manager, def, opts = {}) {
+    this.manager = manager; this.def = lolVfxWithDefaults(def, 'VfxSystemDefinitionData'); this.opts = opts;
+    this.group = manager.root; this.time = 0; this.acc = 0; this.stopping = false; this.done = false;
+    this.flags = this.def.flags ?? 212; this.scale = opts.scale ?? 1; this.color = opts.color || [1, 1, 1, 1];
+    this.pos = [0, 0, 0]; this.rot = LOL_VFX_I3; this.speed = 0; this.groundY = 0;
+    const m = this.def.transform;
+    if (Array.isArray(m) && m.length === 16 && !m.every((x, i) => x === [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1][i])) this.transform = { r: [m[0], m[4], m[8], m[1], m[5], m[9], m[2], m[6], m[10]], t: [m[12], m[13], m[14]] };
+    this.readAttachment();
+    this.emitters = [];
+    const q = manager.quality, cb = manager.colorblind;
+    const passes = (raw, simple) => {
+      if (!raw) return false;
+      const e = lolVfxWithDefaults(raw, 'VfxEmitterDefinitionData');
+      if (e.disabled) return false;
+      if (!(lolVfxSample(e.rate, 0, null, 0) > 0) && !e.isSingleParticle && !e.flexRate && !(e.materialOverrideDefinitions || []).length && !(e.rate && e.rate.dynamics)) return false;
+      if (!lolVfxImportanceExists(e.importance ?? 2, q)) return false;
+      if (!simple) { if ((e.ChanceToNotExist || 0) > Math.random()) return false; const cv = e.colorblindVisibility || 0; if (cv >= 3 || (cv === 1 && cb) || (cv === 2 && !cb)) return false; }
+      const f = e.Filtering;
+      if (f) { const kw = opts.keywords || []; if ((f.keywordsExcluded || []).some((k) => kw.includes(k)) || !(f.keywordsRequired || []).every((k) => kw.includes(k)) || ((f.keywordsIncluded || []).length && !(f.keywordsIncluded || []).some((k) => kw.includes(k)))) return false; }
+      return true;
+    };
+    for (const raw of this.def.complexEmitterDefinitionData || []) if (passes(raw, false)) this.emitters.push(new LolVfxEmitter(this, raw, false));
+    if (this.def.drawingLayer !== 1) for (const raw of this.def.simpleEmitterDefinitionData || []) if (passes(raw, true)) this.emitters.push(new LolVfxEmitter(this, raw, true));
+    if (this.def.buildUpTime > 0) this.advance(this.def.buildUpTime);
+  }
+  // 붙은 대상(Object3D 또는 함수)에서 위치·방향을 원작 좌표(왼손, X 뒤집기)로 읽는다
+  readAttachment() {
+    const a = this.opts.attach;
+    let wp = null, wq = null;
+    if (typeof a === 'function') { const r = a(); wp = r && (r.position || r); wq = r && r.quaternion; }
+    else if (a && a.isObject3D) { wp = new THREE.Vector3(); a.getWorldPosition(wp); wq = new THREE.Quaternion(); a.getWorldQuaternion(wq); }
+    else if (this.opts.position) { wp = this.opts.position; wq = this.opts.quaternion; }
+    if (wp) this.pos = this.manager.toLol(wp);
+    if (wq) this.rot = this.manager.rotToLol(wq);
+    if (this.opts.groundY != null) this.groundY = this.opts.groundY / this.manager.unit;
+  }
+  targetPos() {
+    const t = this.opts.target;
+    if (!t) return null;
+    if (typeof t === 'function') { const v = t(); return v ? this.manager.toLol(v) : null; }
+    if (t.isObject3D) { const v = new THREE.Vector3(); t.getWorldPosition(v); return this.manager.toLol(v); }
+    return this.manager.toLol(t);
+  }
+  spawnChild(emitter, p, onDeath) {
+    const c = emitter.def.childParticleSetDefinition, ids = c.childrenIdentifiers || [];
+    if (!ids.length) return;
+    let list;
+    if ((c.boneToSpawnAt || []).length) { if (c.boneToSpawnAt.length < ids.length) return; list = ids; }
+    else { const idx = Math.max(0, Math.min(ids.length - 1, Math.floor(lolVfxSample(c.childrenProbability, 0, null, 0)))); list = [ids[idx]]; }
+    for (const id of list) {
+      const def = lolVfxFindChild(this.manager.registry, id);
+      if (!def) continue;
+      const mgr = this.manager;
+      const getter = () => ({ position: mgr.fromLol(p.world || p.spawnPos), quaternion: null });
+      const child = mgr.spawn(def, { attach: onDeath ? null : getter, position: onDeath ? mgr.fromLol(p.world || p.spawnPos) : undefined, scale: this.scale, flex: [0, 0, 0] }); // 자식은 flex 값을 받지 않는다(문서)
+      if (!onDeath) p.child = child;
+    }
+  }
+  stop(hard) { if (hard) { this.done = true; } else this.stopping = true; }
+  advance(dt) {
+    this.acc += dt;
+    let steps = Math.floor(this.acc / LOL_VFX_STEP);
+    const stepDt = [];
+    if (steps > 0) { steps = Math.min(steps, 8); for (let i = 0; i < steps; i++) stepDt.push(LOL_VFX_STEP); this.acc -= steps * LOL_VFX_STEP; if (this.acc > LOL_VFX_STEP) this.acc = 0; }
+    else if (this.flags & 0x40 && this.acc > 0) { stepDt.push(this.acc); this.acc = 0; } // SimulateEveryFrame
+    if (this.flags & 0x8) { stepDt.length = 0; stepDt.push(dt); this.acc = 0; } // SimulateOncePerFrame
+    for (const sdt of stepDt) {
+      const prev = this.pos.slice();
+      this.readAttachment();
+      this.speed = lolV.len(lolV.sub(this.pos, prev)) / sdt;
+      this.time += sdt;
+      for (const em of this.emitters) em.step(sdt, this.time, prev);
+    }
+    if (this.emitters.every((em) => em.finished && em.particles.length === 0)) this.done = true;
+  }
+  draw(cam) { for (const em of this.emitters) em.draw(cam, this.time); }
+  dispose() { for (const em of this.emitters) em.dispose(); this.emitters = []; }
+}
+
+// ---------- 관리자 ----------
+class LolVfxManager {
+  constructor(scene, opts = {}) {
+    this.scene = scene; this.unit = opts.unitScale ?? (typeof lolRangeToWorld === 'function' ? lolRangeToWorld(1) : 0.01);
+    this.quality = opts.quality ?? 4; this.colorblind = !!opts.colorblind; this.registry = {};
+    this.textures = new LolVfxTextureCache(opts.resolveTexture || lolVfxDefaultTexturePath);
+    this.root = new THREE.Group(); this.root.name = 'lolVfxRoot';
+    this.root.scale.set(-this.unit, this.unit, this.unit); // 원작 좌표 → 장면: X 뒤집기 + LoL 단위 배율
+    scene.add(this.root);
+    this.systems = []; this.timeScale = 1;
+  }
+  register(parsedOrText) { const p = typeof parsedOrText === 'string' || !parsedOrText.entries ? lolBinParse(parsedOrText) : parsedOrText; Object.assign(this.registry, lolBinCollectVfxSystems(p)); return p; }
+  find(name) { return this.registry[name] || null; }
+  toLol(v) { return [-v.x / this.unit, v.y / this.unit, v.z / this.unit]; }
+  fromLol(a) { return new THREE.Vector3(-a[0] * this.unit, a[1] * this.unit, a[2] * this.unit); }
+  rotToLol(q) { const m = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q)).elements; // 열 우선
+    const r = [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]], s = [-1, 1, 1];
+    return r.map((x, i) => x * s[Math.floor(i / 3)] * s[i % 3]); }
+  spawn(defOrName, opts = {}) {
+    const def = typeof defOrName === 'string' ? this.find(defOrName) : defOrName;
+    if (!def) { console.warn('[LOL VFX] 정의를 찾지 못함:', defOrName); return null; }
+    const s = new LolVfxSystem(this, def, opts);
+    this.systems.push(s);
+    return s;
+  }
+  update(dt, camera) {
+    dt *= this.timeScale;
+    for (let i = this.systems.length - 1; i >= 0; i--) {
+      const s = this.systems[i];
+      if (!s.done) s.advance(dt);
+      if (s.done) { s.dispose(); this.systems.splice(i, 1); }
+    }
+    if (camera) {
+      const e = camera.matrixWorld.elements;
+      const conv = (x, y, z) => lolV.norm([-x, y, z]);
+      const cam = { right: conv(e[0], e[1], e[2]), up: conv(e[4], e[5], e[6]), forward: conv(-e[8], -e[9], -e[10]) };
+      for (const s of this.systems) s.draw(cam);
+    }
+  }
+}
+// 원작 경로("ASSETS/Characters/Nilah/Skins/Base/Particles/Nilah_Base_Q_Water.tex") → 저장소 assets/lolvfx/(소문자 경로, 확장자 .png)
+function lolVfxDefaultTexturePath(path) {
+  if (!path) return null;
+  return 'assets/lolvfx/' + path.replace(/\\/g, '/').toLowerCase().replace(/^\/+/, '').replace(/\.(tex|dds|tga)$/i, '.png');
+}
+
 /* ===== src/champions/nilah_vfx_assets_and_runtime.js ===== */
 /* ============================================================
    0-D. VFX SYSTEM (챔피언과 무관하게 동일하게 재사용)
@@ -37160,6 +38257,9 @@ const vfx = new VFXSystem(scene);
 // 기존 vfx(VFXSystem)와 완전히 별개로 동작하며, nilah.js의 Q/W/E/R 시전
 // 함수에서 playQLoL/playWLoL/playELoL/playRLoL을 직접 호출한다.
 const nilahVfx2 = new NilahVFXManagerV2(scene);
+// 89차: 원작 파티클 엔진(src/vfx) - 게임 파일의 VfxSystemDefinitionData를 그대로 재생한다. lolVfx.register(skin0.bin 텍스트/JSON) 후 lolVfx.spawn(이름, { attach }).
+const lolVfx = new LolVfxManager(scene, {});
+if (typeof window !== 'undefined') window.lolVfx = lolVfx;
 const projectiles = new ProjectileSystem(scene, vfx);
 const targetRing = new TargetRing(scene);
 const rangeIndicators = new RangeIndicatorSystem(scene);
@@ -39851,6 +40951,7 @@ function animate() {
     if (typeof tickAllyUnits === 'function') tickAllyUnits(dt);
     vfx.update(dt);
     nilahVfx2.update(dt);
+    lolVfx.update(dt, camera); // 89차: 원작 파티클 엔진
     if (typeof skillTelegraphs !== 'undefined') skillTelegraphs.update(dt);
     if (typeof brushSystem !== 'undefined') brushSystem.update(controller);
     projectiles.update(dt);

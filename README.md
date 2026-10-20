@@ -2071,3 +2071,35 @@ PC 위키 Minion 기준이다(검색 요약 대조).
   - 행동 키가 비었는데 상태가 공격·스킬 시전(또는 대기)으로 남아 있고, 재생 클립도 끝나 멈춰 있으면 0.3초 뒤 재교전 또는 대기·이동 자세로 돌려놓는다.
   - 람머스 Q 구르기는 일부러 자세를 멈춰 두므로 제외한다.
 - **결과:** 전 챔피언 실제 문제 1건(레넥톤) → 0건. combat83·yone_motion 점검과 단위 테스트(42개 파일)는 모두 통과.
+
+## 89차: 원작 파티클 엔진(src/vfx) + 닐라 이펙트 초안 보관
+
+- **닐라 이펙트 초안 보관(사이트 미반영):**
+  - 원작 텍스처와 영상을 보고 맞춘 초안이 원작과 똑같지 않아 반영하지 않았다.
+  - `wip/nilah_vfx_draft_89.patch`로 보관했다(`git apply`로 되살림).
+- **원작 파티클 엔진** - 게임 파일의 `VfxSystemDefinitionData`를 클라이언트 동작 그대로 재생한다. 근거는 LeagueToolkit/lol-meta-wiki의 클래스 문서와 meta.db다.
+  - `src/vfx/lol_vfx_bin_text.js`: ritobin 텍스트(`#PROP_text`)와 CommunityDragon `.bin.json`을 같은 객체로 읽는다. 문법 오류는 행·열을 알려준다.
+  - `src/vfx/lol_vfx_defaults.js`: meta.db에서 뽑은 242개 VFX 클래스의 필드 기본값이다(예: 입자 수명 3초, alphaRef 5, isLocalOrientation 켜짐). `tools/gen_lol_vfx_defaults.py`로 다시 만든다.
+  - `src/vfx/lol_vfx_values.js`: 순수 계산.
+    - 곡선(선형, 양끝 고정, 곡선이 있으면 상수 무시)과 채널별 확률표 배율.
+    - 적분값(rotation0 ×60, worldAcceleration 두 번 적분, 상수만 있으면 평생 고정량).
+    - 에미터 위상, 방출 가능 조건, 방출 수(단계당 rate×0.33+1, 첫 방출 최소 1개), importance 표.
+    - Z→X→Y 회전 합성, 생성 모양(Legacy/Box/Cylinder/Sphere), 플립북, 색 조회.
+  - `src/vfx/lol_vfx_engine.js`: three.js 런타임.
+    - 초당 30 고정 단계(SimulateEveryFrame·SimulateOncePerFrame 포함)로 돌린다.
+    - 입자 갱신 순서: 가속 → velocity → 저항(UseCalculusForPhysics 닫힌 식 포함) → 힘 마당 5종 → 이동 → 회전 → 좌표계(rotation/scale/translationOverride, 시스템 transform, isLocalOrientation·particleIsLocalOrientation) → 공전 → bindWeight·worldAcceleration.
+    - 색 = Color×birthColor×시스템 색×modulationFactor, Add·Subtract는 미리 곱한다.
+    - UV는 회전 → 크기 → 이동(감기/고정) → 뒤집기 → emitterUvScrollRate 순서이고, 플립북 칸 안에서 Wrap·Mirror·Clamp·Border로 읽는다.
+    - 프리미티브: 카메라 쿼드·유닛 쿼드·임의 쿼드·레이·카메라/임의 트레일(웨이크 모드, mCutoff, 타일링)·빔.
+    - 블렌드 9종, alphaRef, pass·블렌드 순 그리기 순서를 지원한다.
+    - 시스템 흐름: 단일 입자 버스트, 링거(type 0~2), 멈춤, 자식 이펙트(태어날 때·죽을 때).
+    - 존재 조건: importance, ChanceToNotExist, 색약 표시, Filtering 키워드.
+    - flex: rate·수명·속도·크기.
+  - 좌표: 엔진 안은 원작(왼손, LoL 단위)으로 계산하고, 장면에 붙일 때 X를 뒤집고 lolRangeToWorld 배율을 곱한다.
+  - `lolVfxCoverage(정의)`: 정의가 쓰는 기능 중 아직 재현하지 않는 것을 목록으로 돌려준다. 목록이 비어야 원작과 같은 방식으로 그려진다.
+    - 아직 재현하지 않는 것: 메시 입자, 화면 왜곡, 알파 침식, 팔레트, 반사, 소프트 파티클, textureMult, 셰이머 에미터, Linger 대체값, 바닥 투영의 원작 기하(문서에 없음).
+  - 쓰는 법(브라우저 콘솔): `lolVfx.register(skin0 텍스트나 JSON)` 다음 `lolVfx.spawn('파티클 이름', { attach: controller.root, target })`.
+    - 텍스처는 원작 경로를 소문자로 바꾼 `assets/lolvfx/<경로>.png`에서 읽는다.
+- **점검:**
+  - `tests/lol_vfx_engine_test.js`(63개): 파서, 곡선·확률표·적분, 방출 규칙, 회전 순서, 모양, 플립북, 기본값, 방출 수·수명, 단일 버스트, 속도·저항, 블렌드별 색, 쿼드 크기·UV·칸, 생성 좌표계, 멈춤, 트레일, 정의 점검.
+  - `tools/e2e_glb/lol_vfx_check.js`: 시험 정의 재생 결과 오류 0, 빔 끝점이 닐라→허수아비임을 숫자로 확인했다.
