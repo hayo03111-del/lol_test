@@ -805,6 +805,8 @@ function updateMinionAttack(minion, dt) {
   const applyHit = (target) => {
     if (!target || target.hp <= 0 || target.isDead || target.destroyed) return;
     const dmg = { rawDamage: minion.attackDamage, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, source: minion };
+    // 84차: PC 위키 Minion - 미니언은 챔피언과 "구조물"에 60% 피해만 준다(예전엔 구조물엔 100%).
+    const structDmg = { ...dmg, rawDamage: dmg.rawDamage * MINION_CHAMPION_DAMAGE_PERCENT };
     if (target.isTurret) {
       minion.hasAttackedStructure = true;
       // 버그 수정: getTurretDamage()는 "포탑이 미니언에게 주는 피해"(포탑
@@ -814,15 +816,15 @@ function updateMinionAttack(minion, dt) {
       // 쓰이게 된다). 미니언→포탑 피해는 그냥 미니언 자신의 AD를 일반
       // 물리 피해로 적용한다 - 포탑 쪽 방어(방패/이중갑옷/요새화)는
       // applyDamageToTurret()이 이미 전부 처리해준다.
-      applyDamageToTurret(target, dmg, { isMinion: true, source: minion });
+      applyDamageToTurret(target, structDmg, { isMinion: true, source: minion });
     } else if (target.isInhibitor) {
       // 요청 12절: 억제기 포탑이 전부 파괴되면 억제기를 공격한다.
       minion.hasAttackedStructure = true;
-      applyDamageToInhibitor(target, dmg);
+      applyDamageToInhibitor(target, structDmg);
     } else if (target.isNexus) {
       // 요청 12절: 억제기가 파괴되면 넥서스를 공격한다.
       minion.hasAttackedStructure = true;
-      applyDamageToNexus(target, dmg);
+      applyDamageToNexus(target, structDmg);
     } else if (target.isMinion) {
       applyDamageToMinion(target, dmg);
     } else {

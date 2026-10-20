@@ -35,7 +35,7 @@ const SKILL_AIM = {
   sett: {
     Q: { type: 'instant' },
     W: { type: 'trapezoid', range: (c, d) => d.range, centerHalfWidth: (c, d) => d.centerHalfWidth, startHalfWidth: (c, d) => d.startHalfWidth ?? d.centerHalfWidth, endHalfWidth: (c, d) => d.endHalfWidth },
-    E: { type: 'selfAim', radius: (c, d) => d.range },                                              // 반경 안 적을 커서 방향 기준 좌우로 나눔
+    E: { type: 'selfAim', radius: (c, d) => d.range, depth: (c, d) => d.width || 0 },                 // 84차: 좌우 사거리 × 앞뒤 폭 직사각형, 커서 방향 기준 좌우로 나눔
     R: { type: 'unit', range: (c, d) => d.range },
   },
   renekton: {
@@ -216,7 +216,7 @@ function computeSkillAim(c, slot, point) {
       break;
     }
     case 'unit': case 'ally': aim.rangeWorld = W(V('range')); aim.pickWorld = spec.pickLol ? W(spec.pickLol) : 0; break;
-    case 'selfAim': aim.radiusWorld = W(V('radius')); aim.rangeWorld = aim.radiusWorld; break;
+    case 'selfAim': aim.radiusWorld = W(V('radius')); aim.rangeWorld = aim.radiusWorld; aim.depthWorld = spec.depth ? W(V('depth')) : 0; break;
     default: return null;
   }
   return aim;
@@ -308,6 +308,11 @@ class SkillAimSystem {
         break;
       case 'wall': this._rect(aim.origin, yaw, aim.wall.dist - aim.wall.thickness / 2, aim.wall.dist + aim.wall.thickness / 2, aim.wall.length / 2); break;
       case 'selfAim':
+        if (aim.depthWorld > 0) { // 84차: 세트 E - 판정과 같은 직사각형(좌우 ±사거리, 앞뒤 ±폭/2)과 좌우를 가르는 기준선
+          this._rect(aim.origin, yaw, -aim.depthWorld / 2, aim.depthWorld / 2, aim.radiusWorld);
+          this._rect(aim.origin, yaw, -aim.depthWorld / 2, aim.depthWorld / 2, lolRangeToWorld(6));
+          break;
+        }
         this._disc(aim.origin, aim.radiusWorld);
         this._ring(aim.origin, aim.radiusWorld, ringW, S.edge, S.edgeOpacity);
         this._rect(aim.origin, yaw, -aim.radiusWorld, aim.radiusWorld, lolRangeToWorld(6));   // 좌우를 가르는 기준선(커서 방향)

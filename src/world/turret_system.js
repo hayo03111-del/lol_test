@@ -38,9 +38,11 @@ const TURRET_ARMOR_PEN_PERCENT = 0.30; // 요청 12
 // 59차 가열(충전): 원작 - 같은 챔피언을 연속으로 맞힐 때마다 +40%, 3단계(+120%)까지. 대상이 바뀌거나 5초 동안 챔피언을
 // 맞히지 않으면 처음(0단계)부터 다시 쌓는다. 예전엔 플레이어 챔피언에 isChampion 표시가 없어 포탑이 플레이어를 챔피언으로
 // 보지 않았다 - 가열과 30% 방어구 관통이 한 번도 적용되지 않아 "포탑 딜이 계속 약한" 원인이었다.
-const TURRET_HEAT_RESET_SEC = 5;       // 요청 16
-const TURRET_HEAT_STEP = 0.4;
-const TURRET_HEAT_MAX_STACKS = 3;      // +40%*3 = +120% 상한
+// 84차(PC 위키 Turret, 현재): 가열은 챔피언을 맞힐 때마다 +50%, 최대 +150%. 마지막으로 챔피언을 맞히고 5초 뒤 초기화.
+// 대상을 바꿔도 초기화되지 않는다(예전 40%/120%·대상 변경 시 초기화는 옛 규칙).
+const TURRET_HEAT_RESET_SEC = 5;
+const TURRET_HEAT_STEP = 0.5;
+const TURRET_HEAT_MAX_STACKS = 3;      // +50%*3 = +150% 상한
 const TURRET_BASTION_DURATION_SEC = 20;      // 요청 28
 const TURRET_BASTION_ARMOR_PER_ENEMY = 20;   // 요청 26
 // 명세에 "방패가 정확히 언제 파괴되는가"의 수치(예: 몇 대 맞으면
@@ -56,44 +58,49 @@ const TURRET_MINION_DAMAGE_PERCENT = { melee: 0.45, caster: 0.70, siege: 0.14, s
 // 흩어놓지 않는다. destroyGoldOverride: 사용자가 이번에 추가로 지시한
 // 규칙("방패/요새화가 없는 포탑은 파괴 시 150골드") - 문서 29절의
 // 기본 보상표보다 이 값이 있으면 그것을 우선한다.
+// 84차: 칼바람 나락 포탑(PC 위키 Turret - 칼바람 항목, 25.21·13.6 패치). 체력은 "기본 + 적 챔피언 1명당 250"(5명 기준 +1250).
+// 방어력·마법 저항력은 모든 칼바람 포탑이 60에서 분당 +1씩 81까지. 협곡 전용 특성(요새화·방패·방벽)은 없다.
+// 공격력 증가 간격은 위키에 범위만 있어(외곽 185~293, 넥서스 195~375) 분당 일정하게 18분에 걸쳐 오르도록 나눴다.
+const HA_TURRET_ENEMY_COUNT = 5;
+const HA_TURRET_HP_PER_ENEMY = 250;
 const TURRET_DATA = {
   [TURRET_TYPE.OUTER1]: {
-    name: '1차 외곽 포탑', maxHp: 5000, hpRegenPerSec: 0,
-    adMin: 182, adMax: 350, adGrowthStartSec: 30, adGrowthEndSec: 810, adGrowthStepSec: 60, adGrowthPerStep: 12,
-    attackSpeed: 0.83, armor: 40, magicResist: 40,
+    name: '외곽 포탑', maxHp: 1300 + HA_TURRET_HP_PER_ENEMY * HA_TURRET_ENEMY_COUNT, hpRegenPerSec: 0,
+    adMin: 185, adMax: 293, adGrowthStartSec: 60, adGrowthEndSec: 1080, adGrowthStepSec: 60, adGrowthPerStep: 6,
+    attackSpeed: 0.83,
+    armorMin: 60, armorMax: 81, mrMin: 60, mrMax: 81,
+    armorMrGrowthStartSec: 60, armorMrGrowthEndSec: 1260, armorMrGrowthStepSec: 60, armorMrGrowthPerStep: 1,
     goldReward: 250, xpReward: 0, destroyGoldOverride: null,
-    hasFortification: true, fortificationEndSec: 300, fortificationReduction: 0.85,
-    hasShield: true, shieldDamageReductionPercent: 0.17, hasBastion: true,
+    hasFortification: false, hasShield: false, hasBastion: false,
   },
-  [TURRET_TYPE.OUTER2]: {
+  [TURRET_TYPE.OUTER2]: { // 칼바람 맵에는 없는 포탑(예전 협곡 데이터 - 참조만 남겨 둠)
     name: '2차 외곽 포탑', maxHp: 4000, hpRegenPerSec: 0,
     adMin: 187, adMax: 427, adGrowthStartSec: 180, adGrowthEndSec: 1020, adGrowthStepSec: 60, adGrowthPerStep: 16,
     attackSpeed: 0.83,
     armorMin: 55, armorMax: 70, mrMin: 55, mrMax: 70,
     armorMrGrowthStartSec: 960, armorMrGrowthEndSec: 1800, armorMrGrowthStepSec: 60, armorMrGrowthPerStep: 1,
     goldReward: 675, xpReward: 0, destroyGoldOverride: null,
-    hasFortification: false,
-    hasShield: true, shieldDamageReductionPercent: 0.17, hasBastion: true,
+    hasFortification: false, hasShield: false, hasBastion: false,
   },
   [TURRET_TYPE.INHIBITOR]: {
-    name: '억제기 포탑', maxHp: 3500, hpRegenPerSec: 3,
-    adMin: 187, adMax: 427, adGrowthStartSec: 180, adGrowthEndSec: 1020, adGrowthStepSec: 60, adGrowthPerStep: 16,
-    attackSpeed: 0.83, armor: 70, magicResist: 70,
+    name: '억제기 포탑', maxHp: 3900 + HA_TURRET_HP_PER_ENEMY * HA_TURRET_ENEMY_COUNT, hpRegenPerSec: 3,
+    adMin: 185, adMax: 293, adGrowthStartSec: 60, adGrowthEndSec: 1080, adGrowthStepSec: 60, adGrowthPerStep: 6, // 위키에 따로 없어 외곽과 같게
+    attackSpeed: 0.83,
+    armorMin: 60, armorMax: 81, mrMin: 60, mrMax: 81,
+    armorMrGrowthStartSec: 60, armorMrGrowthEndSec: 1260, armorMrGrowthStepSec: 60, armorMrGrowthPerStep: 1,
     goldReward: 375, xpReward: 0,
     hasFortification: false, hasShield: false, hasBastion: false,
-    // 사용자 요청: "방패나 요새화 효과가 없으며, 파괴 시 아군 전원에
-    // 150골드" - 억제기 포탑은 위 hasFortification/hasShield가 둘 다
-    // false라 이 규칙과 정확히 일치한다. 원래 명세(375골드) 대신 이
-    // 값을 사용한다.
+    outerFallenDamageReduction: 0.35, outerFallenDurationSec: 60, // 84차: 외곽 포탑이 무너진 뒤 60초 동안 받는 피해 35% 감소(칼바람)
     destroyGoldOverride: 150,
   },
   [TURRET_TYPE.NEXUS_TWIN]: {
-    name: '쌍둥이 포탑', maxHp: 3000, hpRegenPerSec: 6,
-    adMin: 165, adMax: 405, adGrowthStartSec: 180, adGrowthEndSec: 1020, adGrowthStepSec: 60, adGrowthPerStep: 16,
-    attackSpeed: 0.83, armor: 70, magicResist: 70,
+    name: '넥서스 포탑', maxHp: 1800 + HA_TURRET_HP_PER_ENEMY * HA_TURRET_ENEMY_COUNT, hpRegenPerSec: 6,
+    adMin: 195, adMax: 375, adGrowthStartSec: 60, adGrowthEndSec: 1080, adGrowthStepSec: 60, adGrowthPerStep: 10,
+    attackSpeed: 0.83,
+    armorMin: 60, armorMax: 81, mrMin: 60, mrMax: 81,
+    armorMrGrowthStartSec: 60, armorMrGrowthEndSec: 1260, armorMrGrowthStepSec: 60, armorMrGrowthPerStep: 1,
     goldReward: 50, xpReward: 0,
     hasFortification: false, hasShield: false, hasBastion: false,
-    // 쌍둥이 포탑도 방패/요새화가 둘 다 없으므로 동일 규칙 적용(50골드 대신 150골드).
     destroyGoldOverride: 150,
   },
   [TURRET_TYPE.NEXUS_WELL]: {
@@ -303,7 +310,7 @@ function getBastionBonus(turret) {
 // 책임을 명확히 한다).
 function getTurretHeatMultiplierAndRegister(turret, target = null) {
   const now = performance.now();
-  if (!turret.heatStacks || (now - (turret.lastChampionHitAt || 0)) / 1000 > TURRET_HEAT_RESET_SEC || (target && turret._heatTarget && turret._heatTarget !== target)) turret.heatStacks = 0;
+  if (!turret.heatStacks || (now - (turret.lastChampionHitAt || 0)) / 1000 > TURRET_HEAT_RESET_SEC) turret.heatStacks = 0; // 84차: 대상 변경으로는 초기화 안 됨
   if (target) turret._heatTarget = target;
   const multiplier = 1 + Math.min(turret.heatStacks, TURRET_HEAT_MAX_STACKS) * TURRET_HEAT_STEP;
   turret.heatStacks = Math.min(turret.heatStacks + 1, TURRET_HEAT_MAX_STACKS);
@@ -366,6 +373,11 @@ function applyDamageToTurret(turret, result, sourceInfo = {}) {
   }
   if (isDoubleArmorActive(turret)) finalDmg *= 0.20; // 요청 18: 80% 감소
   if (isFortificationActive(turret)) finalDmg *= (1 - data.fortificationReduction); // 요청 23
+  // 84차: 칼바람 억제기 포탑 - 같은 팀 외곽 포탑이 무너진 뒤 60초 동안 받는 피해 35% 감소.
+  if (data.outerFallenDamageReduction) {
+    const outer = turrets.find((t) => t.team === turret.team && t.type === TURRET_TYPE.OUTER1);
+    if (outer && outer.destroyed && outer._destroyedAt && performance.now() - outer._destroyedAt < data.outerFallenDurationSec * 1000) finalDmg *= 1 - data.outerFallenDamageReduction;
+  }
   // 구조물 HP는 외부 애니메이션/렌더링 상태와 분리한다.
   // 실제 피해가 적용된 뒤의 HP를 명확히 기록해 '한 번 맞자마자 사라짐'
   // 현상을 게임 로직/모델 가시성 중 어느 쪽에서도 조용히 삼키지 않게 한다.
@@ -386,6 +398,7 @@ function applyDamageToTurret(turret, result, sourceInfo = {}) {
 function destroyTurret(turret) {
   if (turret.destroyed) return;
   turret.destroyed = true;
+  turret._destroyedAt = performance.now(); // 84차: 억제기 포탑 피해 감소(60초) 기준 시각
   const data = TURRET_DATA[turret.type];
   // 62차: 보상은 reward_system.js(칼바람 값 - 팀 전체 + 파괴자 몫)로 옮겼다. 예전엔 어디서 부서지든 고정값 전액을 줬다.
   if (typeof controller !== 'undefined' && controller && isEnemyUnit(turret, controller)) {
@@ -649,7 +662,7 @@ function updateTurretAggroBeam(turret, target) {
   const b = getWorldPosition(target).clone().add(new THREE.Vector3(0, 0.9, 0));
   const pos = turret._aggroBeam.geometry.attributes.position;
   pos.setXYZ(0, a.x, a.y, a.z); pos.setXYZ(1, b.x, b.y, b.z); pos.needsUpdate = true;
-  const recent = (performance.now() - (turret.lastChampionHitAt || 0)) / 1000 <= TURRET_HEAT_RESET_SEC && turret._heatTarget === target;
+  const recent = (performance.now() - (turret.lastChampionHitAt || 0)) / 1000 <= TURRET_HEAT_RESET_SEC;
   const stacks = recent ? (turret.heatStacks || 0) : 0;
   turret._aggroBeam.material.opacity = 0.45 + 0.17 * stacks;
   turret._aggroBeam.material.color.setHex([0xff3a2a, 0xff5a1a, 0xff7a10, 0xffa000][Math.min(3, stacks)]);

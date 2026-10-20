@@ -106,7 +106,7 @@ const SKILL_HITBOX_SHAPE = {
     E: { type: 'cone', angleField: 'coneAngleDeg' }, // 부채꼴 50°(findEnemiesInRadius maxAngleDeg = 절반)
   },
   sett: {
-    E: { type: 'circle' }, // 좌우 판정용 범위 탐색(findEnemiesInRadius) - 형태 자체는 원
+    E: { type: 'selfRect' }, // 84차: 판정 그대로 좌우 450 × 앞뒤 폭 280 직사각형(79차부터 판정은 직사각형)
     W: { type: 'trapezoid' }, // isPointInsideSettWTrapezoid와 동일한 사다리꼴(centerHalfWidth/endHalfWidth는 CHAMPION_DATA에서 직접 읽음)
   },
   mordekaiser: { Q: { type: 'line', widthField: 'width' }, E: { type: 'circle' } }, // Q 전방 직사각형, E 지점형(캐스트 가능 거리 원)
@@ -167,6 +167,7 @@ function resolveShapeParams(championId, slot, cd, ctrl = null) {
     return { type: 'trapezoid', centerHalfWidth: data.centerHalfWidth, startHalfWidth: data.startHalfWidth, endHalfWidth: data.endHalfWidth };
   }
   if (!data) return shape;
+  if (shape.type === 'selfRect') return { type: 'selfRect', halfDepthWorld: lolRangeToWorld((data.width || 0) / 2) };
   if (shape.type === 'line') {
     let hw = shape.halfWidthWorld;
     if (shape.widthField && data[shape.widthField] != null) hw = lolRangeToWorld(data[shape.widthField]) * 0.5;
@@ -188,7 +189,10 @@ function resolveShapeParams(championId, slot, cd, ctrl = null) {
 // facing 방향으로 회전시키기만 하면 된다.
 function buildRangeShapeGeometry(desc, worldRange) {
   const shape = new THREE.Shape();
-  if (desc.type === 'line') {
+  if (desc.type === 'selfRect') { // 시전자 중심 - 좌우로 사거리, 앞뒤로 폭/2
+    const hd = desc.halfDepthWorld || 0;
+    shape.moveTo(-worldRange, -hd); shape.lineTo(-worldRange, hd); shape.lineTo(worldRange, hd); shape.lineTo(worldRange, -hd); shape.closePath();
+  } else if (desc.type === 'line') {
     const hw = desc.halfWidthWorld;
     shape.moveTo(-hw, 0); shape.lineTo(-hw, worldRange); shape.lineTo(hw, worldRange); shape.lineTo(hw, 0); shape.closePath();
   } else if (desc.type === 'cone') {
