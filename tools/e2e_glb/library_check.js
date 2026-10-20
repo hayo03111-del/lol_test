@@ -20,7 +20,7 @@ const startServer = require('./server.js');
   // 2) 패널 "챔피언 바꾸기"로 나머지 16명 차례로
   r.panel = {};
   for (const id of r.entryButtons.filter((x) => x !== 'garen')) {
-    await page.selectOption('#libraryChampSelect', id);
+    await page.evaluate((v) => { const s = document.getElementById('libraryChampSelect'); s.value = v; s.dispatchEvent(new Event('change')); }, id); /* 85차: 숨겨진 선택 상자 */
     try { await page.waitForFunction((id) => window.controller && window.controller.championId === id, id, { timeout: 30000 }); r.panel[id] = true; }
     catch (e) { r.panel[id] = false; }
   }

@@ -11,7 +11,7 @@ const startServer = require('./server.js');
   await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__e2e, null, { timeout: 30000 });
   if (process.argv[2]) await page.evaluate(() => { window.__e2eShowMap = true; });
-  await page.selectOption('#libraryChampSelect', 'garen');
+  await page.evaluate((v) => { const s = document.getElementById('libraryChampSelect'); s.value = v; s.dispatchEvent(new Event('change')); }, 'garen'); /* 85차: 숨겨진 선택 상자 */
   await page.waitForFunction(() => window.controller && window.controller.championId === 'garen', null, { timeout: 30000 });
   await page.waitForTimeout(800);
   // 플레이어 위치와 각 팀 우물(분수 포탑)·원작 출현 지점 사이 거리(LoL 단위)
@@ -28,18 +28,21 @@ const startServer = require('./server.js');
   const r = {};
   r.before = await where();
   r.deadState = await kill();
-  await page.waitForTimeout(3300); // RESPAWN_WAIT 3초
+  // 83차: 칼바람 부활 대기는 레벨별(3레벨 11초) - 그 시간 + 여유만큼 기다린다
+  const respawnWait = async () => { const ms = await page.evaluate(() => Math.max(0, (window.controller._respawnAt || 0) - performance.now())); await page.waitForTimeout(ms + 600); };
+  await respawnWait();
   r.blueRespawn = await where();
   await page.evaluate(() => { const c = window.controller; c.root.position.set(0, 0, 0); c.setState('IDLE'); c._returnToLocomotion(); });
   await page.waitForTimeout(1500);
   await page.keyboard.press('KeyB');
-  await page.waitForTimeout(4400); // RECALL_DURATION 4초
-  r.blueRecall = await where();
+  await page.waitForTimeout(4400);
+  r.blueRecall = await where(); // 83차: 칼바람에는 귀환이 없다 - 제자리(IDLE)여야 맞다
+  r.noRecallInAram = r.blueRecall.state !== 'RECALL' && !r.blueRecall.inBlueBase;
   if (process.argv[2]) { await page.waitForTimeout(800); await page.screenshot({ path: process.argv[2] }); }
   await page.evaluate(() => { window.controller.team = 'RED'; });
   await page.waitForTimeout(1500);
   r.redDeadState = await kill();
-  await page.waitForTimeout(3300);
+  await respawnWait();
   r.redRespawn = await where();
   await page.evaluate(() => { window.controller.team = window.__e2e.PLAYER_TEAM; });
   r.errors = errors.slice(0, 5);

@@ -14,7 +14,7 @@ const startServer = require('./server.js');
   await page.waitForFunction(() => window.__e2e, null, { timeout: 30000 });
   const res = {};
   for (const id of ids) {
-    await page.selectOption('#libraryChampSelect', id);
+    await page.evaluate((v) => { const s = document.getElementById('libraryChampSelect'); s.value = v; s.dispatchEvent(new Event('change')); }, id); /* 85차: 숨겨진 선택 상자 */
     await page.waitForFunction((id) => window.controller && window.controller.championId === id, id, { timeout: 30000 });
     await page.waitForTimeout(600);
     res[id] = {};
