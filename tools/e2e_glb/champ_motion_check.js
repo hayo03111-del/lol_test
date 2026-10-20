@@ -50,6 +50,12 @@ const startServer = require('./server.js');
     await run('attack', `(() => { window.controller.selectTarget(window.__e2e.dummies[0]); })()`, 3000);
     await run('attackThenMove', `(() => { const c = window.controller; c.selectTarget(window.__e2e.dummies[0]); setTimeout(() => c.moveTo(${V}(4, 0, 2)), 900); })()`, 2200);
     await run('move', `(() => { window.controller.moveTo(${V}(5, 0, 5)); })()`, 2000);
+    // 88차: 실제 플레이에서 자주 나오는 조작
+    await run('moveSpam', `(() => { const c = window.controller; let k = 0; const iv = setInterval(() => { c.moveTo(${V}(Math.sin(k) * 4, 0, Math.cos(k) * 4)); if (++k > 12) clearInterval(iv); }, 120); })()`, 2400);
+    await run('stop', `(() => { const c = window.controller; c.selectTarget(window.__e2e.dummies[0]); setTimeout(() => { c.moveTo(c.root.position.clone()) }, 200); })()`, 2000);
+    await run('flashDuringAttack', `(() => { const c = window.controller; c.selectTarget(window.__e2e.dummies[0]); setTimeout(() => { if (window.__e2e.castSummonerSpell) window.__e2e.castSummonerSpell(c, 'D', ${V}(-3, 0, 2)); }, 150); })()`, 2400);
+    await run('attackMove', `(() => { window.controller.attackMoveTo(${V}(0, 0, -6), {}); })()`, 2600);
+    await run('chainQWER', `(() => { const c = window.controller; const tg = ${T0}; c.castAbility('Q', tg); setTimeout(() => c.castAbility('W', tg), 250); setTimeout(() => c.castAbility('E', tg), 500); setTimeout(() => c.castAbility('R', ${T1}), 750); })()`, 3600);
     for (const slot of ['Q', 'W', 'E', 'R']) {
       const tgt = slot === 'R' ? T1 : T0;
       await run(slot, `(() => { const c = window.controller; c.currentTarget = window.__e2e.dummies[0]; c.castAbility('${slot}', ${tgt}); })()`, 2600);
