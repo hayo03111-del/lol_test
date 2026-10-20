@@ -92,7 +92,7 @@ const startServer = require('./server.js');
     const bm = E.createMinion('melee', tp.clone().add(V(0.8, -L(350))), 0, 'BLUE'); bm.hp = bm.maxHp = 1e6; E.minions.push(bm);
     const rc = E.createMinion('caster', tp.clone().add(V(-1.5, -L(150))), 0, 'RED'); rc.hp = rc.maxHp = 1e6; E.minions.push(rc);
     window.__resetPlayer(tp.clone().add(V(-0.8, -L(600))));
-    const d = E.dummies[0]; d.hp = d.maxHp = 1e5; d.mesh.position.copy(tp.clone().add(V(-0.8, -L(450))));
+    const d = E.dummies[0]; d.hp = d.maxHp = 1e5; d.mesh.position.copy(tp.clone().add(V(-0.8, -L(250)))); // 83차: 플레이어 평타 사거리 밖(자동 공격이 먼저 도움 요청을 일으키지 않게)
     await new Promise((res) => setTimeout(res, 1500));
     const before = { turret: t.attackTarget === bm ? 'blueMinion' : (t.attackTarget === c ? 'player' : String(t.attackTarget && t.attackTarget.type)), redCaster: rc.attackTarget === bm ? 'blueMinion' : (rc.attackTarget === c ? 'player' : null) };
     E.applyDamage(d, { rawDamage: 50, damageType: 'PHYSICAL', isCritical: false, critMultiplier: 1, isBasicAttack: true, source: c });
