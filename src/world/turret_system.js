@@ -229,15 +229,14 @@ function getTurretAttackTarget(turret) {
   const cfh = turret._callForHelp;
   if (cfh && getTurretGameTimeSec() < cfh.until && isValidTurretTarget(turret, cfh.target) && canRealmInteract(turret, cfh.target)) return cfh.target;
   if (turret.attackTarget && isValidTurretTarget(turret, turret.attackTarget)) return turret.attackTarget;
-  const priorityGroups = [
-    findShacoBoxesNear(turret), findChampionSummonsNear(turret),
-    findSuperOrSiegeMinionsNear(turret), findYorickMistWalkersNear(turret),
-    findMeleeMinionsNear(turret), findCasterMinionsNear(turret),
-    findYorickMistMaidenNear(turret),
-  ];
-  for (const group of priorityGroups) {
-    if (group.length) { turret._lastMinionSeenAt = getTurretGameTimeSec(); return group[0]; }
-  }
+  // 85차(PC 위키 Turret): 미니언끼리는 종류 순위가 아니라 "가장 가까운" 미니언을 노린다(도움 요청이 우선).
+  // 예전엔 공성/슈퍼 → 근거리 → 원거리 순으로, 같은 종류 안에서도 배열 순서(가까운 순 아님)대로 골랐다.
+  const summons = findShacoBoxesNear(turret).concat(findChampionSummonsNear(turret));
+  const minionCands = findSuperOrSiegeMinionsNear(turret).concat(findMeleeMinionsNear(turret), findCasterMinionsNear(turret), findYorickMistWalkersNear(turret), findYorickMistMaidenNear(turret));
+  const tpos = getWorldPosition(turret);
+  const nearest = (arr) => arr.reduce((best, u) => { const d = getHorizontalDistance(tpos, getWorldPosition(u)); return (!best || d < best.d) ? { u, d } : best; }, null);
+  const pick = nearest(summons) || nearest(minionCands);
+  if (pick) { turret._lastMinionSeenAt = getTurretGameTimeSec(); return pick.u; }
   // 버그 수정(사용자 지적 "미니언과 포탑을 같이 때리고 있는데 포탑을
   // 공격하면 그 어그로가 바로 나에게 오는것") - 우선순위 자체는 이미
   // 미니언이 챔피언보다 항상 먼저였다(동일한 사거리 기준). 문제는 "찰나의

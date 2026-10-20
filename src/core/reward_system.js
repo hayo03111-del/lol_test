@@ -13,6 +13,7 @@
    ============================================================ */
 const ARAM_STARTING_GOLD = 1400;
 const ARAM_PASSIVE_GOLD_PER_10S = 60; // 83차: PC 위키 Gold/ARAM - 1:00부터 10초당 60(예전 55)
+const ARAM_NEARBY_GOLD_RANGE_LOL = 1250; // 85차: 주변 미니언 사망 골드 범위 1250(PC 위키 칼바람 오라, 예전엔 경험치 범위 1300 재사용)
 const ARAM_PASSIVE_GOLD_START_SEC = 60;
 const ARAM_NEARBY_MINION_GOLD = 6;
 const TURRET_GOLD_HA = {
@@ -53,7 +54,7 @@ function rewardMinionDeath(minion) {
     return;
   }
   if (controller.hp <= 0 || controller.state === STATE.DEAD || !minion.mesh) return;
-  if (getHorizontalDistance(controller.root.position, minion.mesh.position) > lolRangeToWorld(EXP_RANGE_LOL)) return;
+  if (getHorizontalDistance(controller.root.position, minion.mesh.position) > lolRangeToWorld(ARAM_NEARBY_GOLD_RANGE_LOL)) return;
   grantGold(controller, ARAM_NEARBY_MINION_GOLD, { at, color: '#d9c27a', small: true });
 }
 

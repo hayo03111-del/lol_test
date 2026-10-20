@@ -20,12 +20,18 @@
      실제로 2팀 대결 구조가 추가되면 그 지점만 채우면 된다.
    ============================================================ */
 const MINION_TYPE = { MELEE: 'melee', CASTER: 'caster', SIEGE: 'siege', SUPER: 'super' };
-const MINION_WAVE_INTERVAL_SEC = 30;
+const MINION_WAVE_INTERVAL_SEC = 25; // 85차: 칼바람(협곡 30초)
+// 85차: 칼바람 웨이브 간격 - 15:00까지 25초, 이후 25:00까지 점점 줄어 13초(PC 위키 ARAM "25-13 (based on minutes)",
+// 2019 개발 노트 "15분 뒤부터 선형 감소"). 첫 웨이브는 0:50.
+function getMinionWaveIntervalSec(gameTimeSec) {
+  if (gameTimeSec <= 900) return 25;
+  return 25 - 12 * Math.min(1, (gameTimeSec - 900) / 600);
+}
 // 30초 간격 웨이브가 "2:05(125초)"에 정확히 3의 배수 웨이브가 되려면
 // 첫 웨이브가 1:05(65초)여야 한다(65, 95, 125=3번째 웨이브) - 명세에
 // 첫 웨이브 시각이 명시돼 있지 않지만, 2:05가 30초 간격과 딱 맞아떨어지는
 // 유일한 시작점이 65초라 이 값을 채택했다.
-const MINION_FIRST_WAVE_SEC = 65;
+const MINION_FIRST_WAVE_SEC = 50; // 85차: 칼바람 첫 웨이브 0:50(협곡 1:05)
 const MINION_SIEGE_WINDOWS = [
   { fromSec: 125, toSec: 845, everyNWaves: 3 },       // 2:05~14:05: 3웨이브마다
   { fromSec: 845, toSec: 1505, everyNWaves: 2 },      // 14:05~25:05: 2웨이브마다
@@ -98,46 +104,32 @@ function getMinionLaneWaypoints(team) {
 // 완전히 명시, 원거리/공성/슈퍼는 구간 범위나 검증 체크포인트만 given)
 // 아래에서 타입별로 다르게 해석한다 - 각 선택의 근거는 getMinionStats()
 // 주석에 적어둔다.
+// 85차: 칼바람 나락 미니언(PC 위키 Minion·각 미니언 문서·ARAM 패치 기록, 25.S1.1 이후 - 검색 요약 대조).
+// 칼바람은 첫 웨이브(0:50) 뒤 60초마다 강화된다(협곡 90초). 강화 단계 n = floor((게임 시간 - 50) / 60).
+// 범위(최소→최대)는 위키 값, 단계별 증가량은 근거리 체력 가속 수열(기존 구조)·공성 체력 +85(위키)를 빼면 최대치까지 일정하게 나눴다.
+// 골드는 칼바람 값(근거리 20 / 원거리 17 / 공성·슈퍼 45, 90초마다 +0.125 / +0.35)이고 "게임 시간" 기준이다.
+const MINION_UPGRADE_START_SEC = 50, MINION_UPGRADE_STEP_SEC = 60;
 const MINION_STATS = {
   [MINION_TYPE.MELEE]: {
-    // 요청("아직도 미니언딜이 이상할정도로 강해") - 실제 LoL 위키 재확인
-    // 결과 근거리 AD 12 -> 11, 방어력 상한 16 -> 20으로 최신 패치값 반영.
-    hpBase: 477, hpMax: 1300, hpStepSec: 90, hpStepBase: 22, hpStepAccel: 0.3, hpGrowStartSec: 165, hpGrowCapSec: 2235,
-    adBase: 11, adMax: 80, adStepSec: 90, adStep: 3.4, adGrowStartSec: 525, adGrowCapSec: 2235,
-    armorMax: 20, armorStepSec: 180, armorStep: 1, armorGrowStartSec: 795, armorGrowCapSec: 2236,
-    mr: 0, attackSpeed: 1.25, range: 110, gold: 21, xp: 61.75, turretDamagePercent: 0.45,
+    hpBase: 465, hpMax: 1500, hpStepBase: 22, hpStepAccel: 0.3,
+    adBase: 11, adMax: 80, adStep: 3.4,
+    armorMax: 20, armorEveryUpgrades: 3,
+    mr: 0, attackSpeed: 1.25, range: 110, gold: 20, goldPer90: 0.125, xp: 61.75, turretDamagePercent: 0.45,
   },
   [MINION_TYPE.CASTER]: {
-    // 버그 수정(사용자 지적 "미니언딜이 이상할정도로 강해") - 실제 LoL
-    // 위키를 다시 찾아보니 원거리 미니언 AD는 시작 21, 상한 125다. 예전
-    // 코드는 시작값을 51로 잘못 역산해뒀었다(상한만 given이라고 착각해서
-    // 등차수열을 거꾸로 계산한 결과) - 초반부터 실제보다 2배 넘게 강했다.
-    // HP도 최신 패치 기준 284~600으로 같이 바로잡았다.
-    hpBase: 284, hpMax: 600, hpStepSec: 90, hpGrowStartSec: 165, hpGrowCapSec: 2235,
-    adBase: 21, adMax: 125, adStepSec: 90, adGrowStartSec: 165, adGrowCapSec: 2235,
-    mr: 0, attackSpeed: 0.667, range: 550, gold: 14, xp: 30.4, turretDamagePercent: 0.70,
+    hpBase: 284, hpMax: 600, adBase: 21, adMax: 125, linearUpgrades: 35, // 35단계(약 35분)에 걸쳐 최대치
+    mr: 0, attackSpeed: 0.667, range: 550, gold: 17, goldPer90: 0.125, xp: 30.4, turretDamagePercent: 0.70,
+    minionOnHitCurrentHpPercent: 0.035, // 원거리 미니언 평타는 미니언에게 현재 체력 3.5% 추가(25.S1.1 4% → 3.5%)
   },
   [MINION_TYPE.SIEGE]: {
-    // 공성/슈퍼는 상한이 없다(명세 "무한히 증가") - 대신 37:15 체크포인트
-    // (HP 2900)가 given이라 그 값을 정확히 지나가도록 증가량을 역산했다:
-    // (2900-900)/23틱 ≈ 86.96/틱. AD는 "+1.5"가 직접 given이라 그대로 쓴다.
-    hpBase: 900, hpStepSec: 90, hpStep: (2900 - 900) / 23, hpGrowStartSec: 165,
-    adBase: 41, adStepSec: 90, adStep: 1.5, adGrowStartSec: 165,
-    mr: 0, attackSpeed: 0.667, range: 300,
-    goldBase: 60, goldPerWave: 3, goldMax: 90, xp: 95, turretDamagePercent: 0.14,
+    hpBase: 835, hpMax: 5850, hpStep: 85, adBase: 37.5, adMax: 126, adStep: 1.5,
+    mr: 0, attackSpeed: 1.0, range: 300, // 공속 1.0(PC 위키, 예전 0.667)
+    gold: 45, goldPer90: 0.35, xp: 95, turretDamagePercent: 0.14,
   },
   [MINION_TYPE.SUPER]: {
-    // 요청("미니언 능력치들 맞는지 확인해줘") - 실제 LoL 위키 재확인 결과
-    // 슈퍼 미니언은 예전에 성장 상한이 아예 없었는데(무한 성장, 옛날 값
-    // 기준 최종 HP 11500/AD 1225까지 감), 이후 패치로 HP 7500 / AD 510
-    // 로 상한이 생겼다 - 예전 코드는 이 상한을 반영 못 해서 게임을 오래
-    // 하면 할수록 실제보다 훨씬 강해지는 구조였다. AD 시작값도 230→215,
-    // 경험치 97→75, 포탑이 슈퍼 미니언에게 주는 피해%(Super Mech Armor)
-    // 도 5%→7%로 같이 바로잡았다.
-    hpBase: 1600, hpMax: 7500, hpStepSec: 90, hpStep: 100, hpGrowStartSec: 0,
-    adBase: 215, adMax: 510, adStepSec: 90, adStep: 5, adGrowStartSec: 0,
+    hpBase: 1600, hpMax: 7500, hpStep: 100, adBase: 215, adMax: 510, adStep: 5,
     armor: 100, mr: -30, attackSpeed: 0.850, range: 170,
-    goldBase: 60, goldStepSec: 90, goldStep: 3, goldMax: 90, xp: 75, turretDamagePercent: 0.07,
+    gold: 45, goldPer90: 0.35, xp: 75, turretDamagePercent: 0.07,
   },
 };
 // 이동속도는 4종 전부 공통(요청 10) - 게임 전체 타이머 기준 구간표.
@@ -158,39 +150,29 @@ function minionGrowthTicks(gameTimeSec, startSec, capSec, stepSec) {
 // 계산하지 않음) - 실제 LoL도 이미 필드에 나가 있는 미니언이 매 프레임
 // 눈에 띄게 강해지진 않고, 이 데모의 미니언 수명(대개 90초 성장 주기보다
 // 훨씬 짧음)을 감안하면 차이가 미미해 불필요한 복잡도를 줄였다.
+function minionUpgradeCount(gameTimeSec) { return Math.max(0, Math.floor((gameTimeSec - MINION_UPGRADE_START_SEC) / MINION_UPGRADE_STEP_SEC)); }
 function getMinionStats(type, gameTimeSec) {
   const d = MINION_STATS[type];
-  let hp, maxHp, ad, armor = d.armor || 0;
+  const n = minionUpgradeCount(gameTimeSec);
+  let maxHp, ad, armor = d.armor || 0;
   if (type === MINION_TYPE.MELEE) {
-    const n = minionGrowthTicks(gameTimeSec, d.hpGrowStartSec, d.hpGrowCapSec, d.hpStepSec);
-    // 가속 등차수열: n번째 틱 증가량 = hpStepBase + hpStepAccel*(n-1), 1~n항의 합.
-    const hpGain = n * d.hpStepBase + d.hpStepAccel * n * (n - 1) / 2;
-    maxHp = Math.min(d.hpBase + hpGain, d.hpMax);
-    const adTicks = minionGrowthTicks(gameTimeSec, d.adGrowStartSec, d.adGrowCapSec, d.adStepSec);
-    ad = Math.min(d.adBase + adTicks * d.adStep, d.adMax);
-    const armorTicks = minionGrowthTicks(gameTimeSec, d.armorGrowStartSec, d.armorGrowCapSec, d.armorStepSec);
-    armor = Math.min(armorTicks * d.armorStep, d.armorMax);
+    maxHp = Math.min(d.hpBase + n * d.hpStepBase + d.hpStepAccel * n * (n - 1) / 2, d.hpMax); // 가속 등차수열
+    ad = Math.min(d.adBase + n * d.adStep, d.adMax);
+    armor = Math.min(Math.floor(n / d.armorEveryUpgrades), d.armorMax);
   } else if (type === MINION_TYPE.CASTER) {
-    const totalTicks = Math.floor((d.hpGrowCapSec - d.hpGrowStartSec) / d.hpStepSec);
-    const n = minionGrowthTicks(gameTimeSec, d.hpGrowStartSec, d.hpGrowCapSec, d.hpStepSec);
-    const frac = totalTicks > 0 ? n / totalTicks : 0;
-    maxHp = d.hpBase + (d.hpMax - d.hpBase) * frac;
-    ad = d.adBase + (d.adMax - d.adBase) * frac;
-  } else { // SIEGE(상한 미확정, 기존대로 유지) / SUPER(요청 - 상한 새로 적용)
-    const n = minionGrowthTicks(gameTimeSec, d.hpGrowStartSec, null, d.hpStepSec);
-    maxHp = d.hpBase + n * d.hpStep;
-    if (d.hpMax != null) maxHp = Math.min(maxHp, d.hpMax);
-    ad = d.adBase + n * d.adStep;
-    if (d.adMax != null) ad = Math.min(ad, d.adMax);
+    const f = Math.min(1, n / d.linearUpgrades);
+    maxHp = d.hpBase + (d.hpMax - d.hpBase) * f;
+    ad = d.adBase + (d.adMax - d.adBase) * f;
+  } else {
+    maxHp = Math.min(d.hpBase + n * d.hpStep, d.hpMax);
+    ad = Math.min(d.adBase + n * d.adStep, d.adMax);
   }
-  hp = maxHp;
-  return { hp, maxHp, ad, armor, magicResist: d.mr, attackSpeed: d.attackSpeed, range: d.range, moveSpeedLol: getMinionMoveSpeedLol(gameTimeSec) };
+  return { hp: maxHp, maxHp, ad, armor, magicResist: d.mr, attackSpeed: d.attackSpeed, range: d.range, moveSpeedLol: getMinionMoveSpeedLol(gameTimeSec) };
 }
+// 85차: 칼바람 미니언 골드 = 기본 + 90초마다 증가분(게임 시간 기준). 예전엔 협곡 값에, 공성·슈퍼는 "스폰 뒤 지난 웨이브/시간" 기준이었다.
 function getMinionGoldValue(minion, gameTimeSec) {
   const d = MINION_STATS[minion.type];
-  if (minion.type === MINION_TYPE.MELEE || minion.type === MINION_TYPE.CASTER) return d.gold;
-  if (minion.type === MINION_TYPE.SIEGE) { const curWave = minion.team === 'RED' ? redMinionWaveCounter : minionWaveCounter; return Math.min(d.goldMax, d.goldBase + Math.max(0, minion.spawnWaveIndex ? (curWave - minion.spawnWaveIndex) : 0) * d.goldPerWave); }
-  if (minion.type === MINION_TYPE.SUPER) return Math.min(d.goldMax, d.goldBase + minionGrowthTicks(gameTimeSec, minion.spawnedAt, null, d.goldStepSec) * d.goldStep);
-  return 0;
+  if (!d) return 0;
+  return d.gold + (d.goldPer90 || 0) * Math.floor(Math.max(0, gameTimeSec) / 90);
 }
 

@@ -14,7 +14,7 @@
 const EXP_MAX_LEVEL = 18; // 요청 1
 const EXP_BASE_REQUIRED = 180;      // 요청 2: 필요 경험치 = 180 + (현재 레벨 * 100)
 const EXP_PER_LEVEL_INCREMENT = 100;
-const EXP_RANGE_LOL = 1300; // 요청 3: 경험치 획득 판정 사거리(LoL 기준 수치)
+const EXP_RANGE_LOL = 1400; // 85차: 경험치 획득 범위 1400(PC 위키 Experience, 예전 1300)
 // 요청 4: "추후 3명 이상 공유가 필요할 경우 쉽게 수정할 수 있도록" 인원수
 // -> 배율 표로 분리했다. 정의 안 된 인원수(6명+)는 5인 배율을 그대로 쓴다.
 const EXP_SHARE_MULTIPLIER = { 1: 1.0, 2: 0.666, 3: 0.6, 4: 0.55, 5: 0.5 };
@@ -139,10 +139,10 @@ let minions = [];
 let minionWaveCounter = 0; // BLUE 웨이브 카운터(기존 이름 유지 - 하위 호환)
 let redMinionWaveCounter = 0;
 let lastMinionWaveSec = -Infinity;
+// 85차: 칼바람 - 공성 미니언은 3번째 웨이브부터 2웨이브마다(3, 5, 7, …) 게임 내내(PC 위키 ARAM·Siege minion).
+// 예전엔 협곡 규칙(2:05부터 3웨이브마다 → 14:05 2웨이브 → 25:05 매 웨이브)이었다.
 function shouldSpawnSiegeThisWave(waveIndex, gameTimeSec) {
-  const window = MINION_SIEGE_WINDOWS.find((w) => gameTimeSec >= w.fromSec && gameTimeSec < w.toSec);
-  if (!window) return false; // 2:05 이전
-  return waveIndex % window.everyNWaves === 0;
+  return waveIndex >= 3 && (waveIndex - 3) % 2 === 0;
 }
 // 8-G절 - 대포 미니언 조건을 별도 함수로 분리(기존 shouldSpawnSiegeThisWave
 // 로직을 그대로 재사용, 새 규칙을 만들지 않는다).
@@ -491,7 +491,10 @@ function minionTargetRank(minion, u, now) {
   if (u.isTurret) return (u.attackTarget && u.attackTarget.isMinion && u.attackTarget.team === minion.team) ? 4 : 8;
   if (u.isStructure) return 8;
   if (isChampionLike(u)) {
-    const hitAlly = minions.some((m) => m.team === minion.team && !m.isDead && m._lastChampionAttacker === u && now - (m._lastChampionAttackedAt || 0) < MINION_CHAMPION_ATTACKED_MINION_MS);
+    // 85차: "주변" 아군 미니언(인식 범위 안)을 때린 챔피언만 5순위 - 예전엔 맵 어디든 아군 미니언을 때렸으면 해당됐다.
+    const near = lolRangeToWorld(1000);
+    const hitAlly = minions.some((m) => m.team === minion.team && !m.isDead && m._lastChampionAttacker === u && now - (m._lastChampionAttackedAt || 0) < MINION_CHAMPION_ATTACKED_MINION_MS
+      && getHorizontalDistance(m.mesh.position, minion.mesh.position) <= near);
     return hitAlly ? 5 : 7;
   }
   return 9;
@@ -528,7 +531,11 @@ function getMinionAttackTarget(minion) {
   if (cur && !(ignoreChamps && isChampionLike(cur))) {
     const curOk = cur.isStructure ? isValidMinionTarget(minion, cur) : canMinionAcquire(minion, cur);
     if (curOk && minionTargetRank(minion, cur, now) <= bestRank) return cur;
+    // 85차(원작): 미니언은 대상이 죽거나 사라질 때까지 붙잡고, 도움 요청(1·2순위)이 아니면 0.5초에 한 번만 더 나은 대상을 다시 본다.
+    // 예전엔 매 프레임 순위를 다시 매겨, 맞붙은 미니언들이 대상을 계속 바꾸며 공격 동작을 끊었다.
+    if (curOk && bestRank > 2 && now < (minion._nextRetargetAt || 0)) return cur;
   }
+  if (best && best !== cur) minion._nextRetargetAt = now + 500;
   if (best) return best;
   // 구조물: 가장 가까운 적 포탑 → 억제기 → 넥서스(공격 사거리 안일 때)
   return findNearestValidTurret(minion) || findNearestValidInhibitor(minion) || findNearestValidNexus(minion) || null;
@@ -714,9 +721,18 @@ function updateMinionMovement(minion, dt) {
   if (target && isValidMinionTarget(minion, target)) {
     // 사거리 안 - 공격 위치는 유지하되, 아군이 너무 가까워지면 그 자리에서
     // 살짝만 밀려난다(요청 문서 16절 "전투 중에도 Separation 계속 적용").
+    // 85차: 공격 중엔 대상 쪽으로 멀어지게 밀지 않고 옆으로만 비켜선다 - 예전엔 분리력에 사거리 밖으로 밀렸다가 다시 걸어
+    // 들어오기를 반복해 사거리 경계에서 떨었다.
     if (sepLen > 0.01) {
-      minion.mesh.position.x += (sep.x / sepLen) * MINION_SEPARATION_WEIGHT * dt;
-      minion.mesh.position.z += (sep.z / sepLen) * MINION_SEPARATION_WEIGHT * dt;
+      const tp0 = getWorldPosition(target);
+      let tx = tp0.x - minion.mesh.position.x, tz = tp0.z - minion.mesh.position.z; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+      let sx = sep.x / sepLen, sz = sep.z / sepLen;
+      const along = sx * tx + sz * tz; sx -= along * tx; sz -= along * tz; // 대상 방향 성분 제거(옆으로만)
+      const sl = Math.hypot(sx, sz);
+      if (sl > 1e-3) {
+        minion.mesh.position.x += (sx / sl) * MINION_SEPARATION_WEIGHT * 0.6 * dt;
+        minion.mesh.position.z += (sz / sl) * MINION_SEPARATION_WEIGHT * 0.6 * dt;
+      }
     }
     if (!inHitFlash && minion.usingRealModel && minion.attackCooldown > (1 / minion.attackSpeed) * 0.4) playAssetClip(minion, `${minion.team} ${minion.type} minion`, MINION_IDLE_CLIP);
     return; // 공격은 updateMinionAttack이 처리
@@ -826,7 +842,9 @@ function updateMinionAttack(minion, dt) {
       minion.hasAttackedStructure = true;
       applyDamageToNexus(target, structDmg);
     } else if (target.isMinion) {
-      applyDamageToMinion(target, dmg);
+      // 85차: 원거리 미니언 평타는 미니언에게 대상 현재 체력 3.5% 추가 피해(25.S1.1~, 4% → 3.5%).
+      const onHitPct = (MINION_STATS[minion.type] && MINION_STATS[minion.type].minionOnHitCurrentHpPercent) || 0;
+      applyDamageToMinion(target, onHitPct ? { ...dmg, rawDamage: dmg.rawDamage + target.hp * onHitPct } : dmg);
     } else {
       // 챔피언(플레이어) 대상 - 실제 LoL 규칙대로 60%만 적용.
       // 31차: 공격자(미니언)와 평타임을 넘긴다 - 예전엔 출처가 비어 있어 야스오 결의 보호막이 미니언 공격에도
@@ -970,6 +988,10 @@ function updateMinionCombat(minion, dt) {
 // 사라지고 골드/경험치를 줘야 하므로(killMinion) 그 경로를 타면 안 된다.
 function applyDamageToMinion(minion, result, fromPlayer = false) {
   if (!minion || minion.isDead) return 0;
+  // 85차: 칼바람 오라 - 근접 챔피언의 기본 공격은 공성·슈퍼 미니언에게 20% 추가 피해(PC 위키 Howling Abyss aura).
+  if (fromPlayer && result && result.isBasicAttack && (minion.type === 'siege' || minion.type === 'super')
+      && typeof controller !== 'undefined' && controller && typeof isRangedAttacker === 'function' && !isRangedAttacker(controller)
+      && typeof isAramRulesActive === 'function' && isAramRulesActive()) result = { ...result, rawDamage: (result.rawDamage || 0) * 1.2 };
   const finalDmg = calculateDamage({ ...result, target: minion });
   minion._lastDamageTakenAmount = finalDmg;
   minion.hp = Math.max(0, minion.hp - finalDmg);
@@ -1040,8 +1062,11 @@ function updateMinionVisual(minion) {
 function updateMinionWaveSpawner(gameTimeSec) {
   if (gameTimeSec < MINION_FIRST_WAVE_SEC || gameEnded) return;
   if (typeof howlingAbyssStructuresSpawned !== 'undefined' && !howlingAbyssStructuresSpawned) return; // 59차: 맵·넥서스가 없는 연습 공간에서는 웨이브가 없다
-  if (gameTimeSec - lastMinionWaveSec >= MINION_WAVE_INTERVAL_SEC) {
-    lastMinionWaveSec = gameTimeSec;
+  // 85차: 다음 웨이브 시각을 일정표로 잡는다(예전엔 "지금"을 기준으로 다시 세서 웨이브마다 한 프레임씩 밀렸다).
+  if (!isFinite(lastMinionWaveSec) || gameTimeSec < lastMinionWaveSec) lastMinionWaveSec = MINION_FIRST_WAVE_SEC - getMinionWaveIntervalSec(MINION_FIRST_WAVE_SEC);
+  if (gameTimeSec - lastMinionWaveSec >= getMinionWaveIntervalSec(lastMinionWaveSec)) {
+    lastMinionWaveSec += getMinionWaveIntervalSec(lastMinionWaveSec);
+    if (gameTimeSec - lastMinionWaveSec > 5) lastMinionWaveSec = gameTimeSec; // 시간을 크게 건너뛰면(연습 도구) 밀린 웨이브를 몰아 내지 않는다
     // 요청 문서 13절: 게임 시작 → RED 웨이브 생성 / BLUE 웨이브 생성이
     // 동시에 일어난다 - 같은 타이머에서 양 팀을 함께 스폰한다.
     spawnMinionWave('BLUE', gameTimeSec);
@@ -1060,6 +1085,25 @@ function updateMinions(dt) {
   const gameTimeSec = getTurretGameTimeSec();
   updateMinionWaveSpawner(gameTimeSec);
   for (const m of [...minions]) updateMinionCombat(m, dt);
+  resolveMinionMinionOverlaps(); // 85차
+}
+// 85차: 미니언끼리 몸통이 파고들지 않게 매 프레임 겹친 만큼 서로 밀어낸다(양 팀 모두). 예전엔 같은 팀 분리 "힘"만 있어
+// 빽빽한 웨이브·두 팀 전열이 서로 겹쳐 보였다. 겹친 양의 절반씩 양쪽으로(공격 중인 쪽은 덜 밀리게 가중치).
+function resolveMinionMinionOverlaps() {
+  const list = minions.filter((m) => !m.isDead && m.mesh);
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i], pa = a.mesh.position, ra = getCollisionRadius(a);
+    for (let j = i + 1; j < list.length; j++) {
+      const b = list[j], pb = b.mesh.position, rb = getCollisionRadius(b);
+      let dx = pb.x - pa.x, dz = pb.z - pa.z; const need = (ra + rb) * 0.9;
+      const d2 = dx * dx + dz * dz; if (d2 >= need * need) continue;
+      let d = Math.sqrt(d2); if (d < 1e-4) { dx = (i % 2 ? 1 : -1) * 0.01; dz = 0.01; d = Math.hypot(dx, dz); }
+      const push = need - d, nx = dx / d, nz = dz / d;
+      const wa = a._pullState ? 0 : (b._pullState ? 1 : 0.5), wb = 1 - wa;
+      pa.x -= nx * push * wa; pa.z -= nz * push * wa;
+      pb.x += nx * push * wb; pb.z += nz * push * wb;
+    }
+  }
 }
 
 let dummy = null;
