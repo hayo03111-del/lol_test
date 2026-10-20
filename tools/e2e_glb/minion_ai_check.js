@@ -24,15 +24,17 @@ const startServer = require('./server.js');
   const wait = (ms) => page.waitForTimeout(ms);
   const r = {};
   // 1) 웨이브 대형
+  // 86차: 원작처럼 0.792초 간격으로 한 마리씩(근거리 3 → (공성) → 원거리 3) 같은 자리에서 나와 한 줄로 걷는다.
   r.formation = await page.evaluate(async () => {
     const E = window.__e2e; window.__clear(); window.__player(30, 0);
+    const seen = []; const t0 = performance.now();
     E.spawnMinionWave('BLUE', E.getTurretGameTimeSec());
-    await new Promise((res) => setTimeout(res, 2500));
-    const ms = E.minions.filter((m) => m.team === 'BLUE');
+    await new Promise((res) => { const iv = setInterval(() => { for (const m of E.minions) if (m.team === 'BLUE' && !seen.find((x) => x.m === m)) seen.push({ m, t: performance.now() - t0 }); if (performance.now() - t0 > 6500) { clearInterval(iv); res(); } }, 30); });
+    const gaps = seen.slice(1).map((x, i) => +((x.t - seen[i].t) / 1000).toFixed(2));
+    const ms = seen.map((x) => x.m);
     const by = (t) => ms.filter((m) => m.type === t);
-    return { count: ms.length, meleeOffsets: by('melee').map((m) => +m.laneOffset.toFixed(2)).sort((a, b) => a - b), casterOffsets: by('caster').map((m) => +m.laneOffset.toFixed(2)).sort((a, b) => a - b),
-      meleeAheadOfCasters: Math.min(...by('melee').map((m) => m.mesh.position.z)) > Math.max(...by('caster').map((m) => m.mesh.position.z)),
-      meleeXSpread: +(Math.max(...by('melee').map((m) => m.mesh.position.x)) - Math.min(...by('melee').map((m) => m.mesh.position.x))).toFixed(2) };
+    return { count: ms.length, order: ms.map((m) => m.type[0]).join(''), spawnGapsSec: gaps, singleFile: ms.every((m) => Math.abs(m.laneOffset || 0) < 1e-6),
+      meleeAheadOfCasters: Math.min(...by('melee').map((m) => m.mesh.position.z)) > Math.max(...by('caster').map((m) => m.mesh.position.z)) };
   });
   // 2) 플레이어를 치던 레드 미니언 → 블루 미니언이 들어오면 갈아탐
   r.retarget = await page.evaluate(async () => {

@@ -163,7 +163,8 @@ function shouldSpawnSuperMinion(team) {
 // 스폰한다. 좌표는 그 팀의 실제 웨이포인트 진행 방향(전진 방향 단위벡터)을
 // 그대로 읽어서 자동으로 결정한다(하드코딩 금지 - 요청 8-D 단서).
 const MINION_SPAWN_STAGGER_MS = 650; // (59~64차 한 마리씩 소환 간격 - 65차부터 줄 단위 MINION_ROW_STAGGER_SEC)
-const MINION_ROW_STAGGER_SEC = 0.55;
+const MINION_ROW_STAGGER_SEC = 0.55; // (65~85차 줄 대형 - 86차부터 한 줄 소환)
+const MINION_SPAWN_INTERVAL_SEC = 0.792; // 86차: 원작 웨이브 안 미니언 소환 간격(PC 위키 Minion)
 const MINION_FORMATION_SPACING = 0.8; // 가로 간격(월드, 약 LoL 92) - 근거리 몸 반경 48 두 개 + 여유
 // 60차: 미니언 소환 간격·공격 타격 시점을 실제 시간(setTimeout)이 아니라 게임 루프 시간(minionSimTime, dt 누적)으로 잰다.
 // 예전엔 일시정지 중에도 미니언이 나오고 예약된 타격이 들어갔으며, 공격 도중 죽은 미니언의 타격도 그대로 들어갔다.
@@ -191,13 +192,10 @@ function spawnMinionWave(team, gameTimeSec) {
   rows.push([MINION_TYPE.MELEE, MINION_TYPE.MELEE, MINION_TYPE.MELEE]);
   if (spawnCannon) rows.push([MINION_TYPE.SIEGE]);
   rows.push([MINION_TYPE.CASTER, MINION_TYPE.CASTER, MINION_TYPE.CASTER]);
-  const side = new THREE.Vector3(-forward.z, 0, forward.x);
-  rows.forEach((row, ri) => {
-    row.forEach((type, si) => {
-      const laneOffset = (si - (row.length - 1) / 2) * MINION_FORMATION_SPACING;
-      const pos = spawnPoint.clone().addScaledVector(side, laneOffset);
-      pendingMinionSpawns.push({ at: minionSimTime + ri * MINION_ROW_STAGGER_SEC, type, pos, gameTimeSec, team, laneOffset: side.x * laneOffset }); // 게임 시간 기준
-    });
+  // 86차(PC 위키 Minion): 원작은 한 웨이브의 미니언이 "0.792초 간격으로 한 마리씩" 같은 자리에서 나와 한 줄로 걷는다
+  // (슈퍼 → 근거리 3 → 공성 → 원거리 3). 앞줄이 적과 만나 멈추면 뒤가 따라붙어 뭉친다. 예전(65차)엔 3마리씩 가로줄 대형으로 나왔다.
+  composition.forEach((type, i) => {
+    pendingMinionSpawns.push({ at: minionSimTime + i * MINION_SPAWN_INTERVAL_SEC, type, pos: spawnPoint.clone(), gameTimeSec, team, laneOffset: 0 });
   });
   console.log(`[MINION] ${team} Wave ${waveIndex} (t=${gameTimeSec.toFixed(0)}s):`, composition.join(', '));
 }
@@ -506,15 +504,21 @@ function getMinionAttackTarget(minion) {
   if (taunter) return taunter;
   const now = performance.now();
   const pos = minion.mesh.position;
-  // 추격 제한: 챔피언을 쫓다 너무 멀리 끌려가면 포기
+  // 86차 추격 포기(원작 미니언 AI): 대상을 4초 동안 한 번도 때리지 못하면(쫓기만 하면) 그 대상을 잠시 무시한다.
+  // 예전엔 출처 없는 "700 끌려가면 포기"였다. 포탑을 치는 중이면 다른 대상(도움 요청 포함)을 보지 않는다.
   const curRaw = minion.attackTarget;
-  if (curRaw && isChampionLike(curRaw)) {
-    if (!minion._chaseAnchor) minion._chaseAnchor = pos.clone();
-    if (getHorizontalDistance(pos, minion._chaseAnchor) > lolRangeToWorld(MINION_CHASE_LEASH_LOL)) {
-      minion._ignoreChampsUntil = now + MINION_LEASH_IGNORE_MS; minion._chaseAnchor = null; minion._callForHelp = null; minion.attackTarget = null;
+  if (curRaw && curRaw.isTurret && isValidMinionTarget(minion, curRaw)) return curRaw;
+  if (curRaw && !curRaw.isStructure) {
+    if (minion._engageTarget !== curRaw) { minion._engageTarget = curRaw; minion._engageSince = now; }
+    const lastHit = Math.max(minion._engageSince || 0, minion._lastAttackAt || 0);
+    if (now - lastHit > 4000) {
+      minion._ignoreTarget = curRaw; minion._ignoreTargetUntil = now + MINION_LEASH_IGNORE_MS * 2;
+      if (minion._callForHelp && minion._callForHelp.target === curRaw) minion._callForHelp = null;
+      minion.attackTarget = null; minion._engageTarget = null;
     }
-  } else minion._chaseAnchor = null;
-  const ignoreChamps = minion._ignoreChampsUntil && now < minion._ignoreChampsUntil;
+  } else minion._engageTarget = null;
+  const ignoredNow = (u) => u && u === minion._ignoreTarget && now < (minion._ignoreTargetUntil || 0);
+  const ignoreChamps = false;
   // 후보: 인식 범위 안 적 미니언·챔피언 + 공격 사거리 안 적 포탑(4순위용)
   let best = null, bestRank = 99, bestDist = Infinity;
   const consider = (u) => {
@@ -522,20 +526,18 @@ function getMinionAttackTarget(minion) {
     const d = getHorizontalDistance(pos, getWorldPosition(u));
     if (r < bestRank || (r === bestRank && d < bestDist)) { best = u; bestRank = r; bestDist = d; }
   };
-  for (const m of minions) if (m !== minion && m.team !== minion.team && !m.isDead && canMinionAcquire(minion, m)) consider(m);
-  if (!ignoreChamps) for (const c of getMinionEnemyChampions(minion)) if (canMinionAcquire(minion, c)) consider(c);
+  for (const m of minions) if (m !== minion && m.team !== minion.team && !m.isDead && !ignoredNow(m) && canMinionAcquire(minion, m)) consider(m);
+  for (const c of getMinionEnemyChampions(minion)) if (!ignoredNow(c) && (canMinionAcquire(minion, c) || (minion._callForHelp && minion._callForHelp.target === c && now < minion._callForHelp.until))) consider(c);
   const engagedTurret = findTurretAttackingAllyMinion(minion);
   if (engagedTurret) consider(engagedTurret);
   // 지금 대상 유지(같거나 더 높은 순위면)
   const cur = minion.attackTarget;
-  if (cur && !(ignoreChamps && isChampionLike(cur))) {
-    const curOk = cur.isStructure ? isValidMinionTarget(minion, cur) : canMinionAcquire(minion, cur);
+  if (cur && !ignoredNow(cur)) {
+    // 86차: 이미 잡은 대상은 인식 범위를 벗어나도 살아 있는 동안 계속 쫓는다(4초 동안 못 때리면 위에서 포기).
+    const curOk = cur.isStructure ? isValidMinionTarget(minion, cur) : isAliveEnemyForMinion(minion, cur);
+    // 86차(PC 위키 Minion): 대상을 정하면 "더 높은 우선순위"가 나타날 때만 바꾼다(같은 순위끼리는 바꾸지 않음).
     if (curOk && minionTargetRank(minion, cur, now) <= bestRank) return cur;
-    // 85차(원작): 미니언은 대상이 죽거나 사라질 때까지 붙잡고, 도움 요청(1·2순위)이 아니면 0.5초에 한 번만 더 나은 대상을 다시 본다.
-    // 예전엔 매 프레임 순위를 다시 매겨, 맞붙은 미니언들이 대상을 계속 바꾸며 공격 동작을 끊었다.
-    if (curOk && bestRank > 2 && now < (minion._nextRetargetAt || 0)) return cur;
   }
-  if (best && best !== cur) minion._nextRetargetAt = now + 500;
   if (best) return best;
   // 구조물: 가장 가까운 적 포탑 → 억제기 → 넥서스(공격 사거리 안일 때)
   return findNearestValidTurret(minion) || findNearestValidInhibitor(minion) || findNearestValidNexus(minion) || null;
@@ -548,7 +550,9 @@ function notifyMinionsChampionAttacked(attacker, victim) {
   const until = performance.now() + MINION_CALL_FOR_HELP_MS;
   for (const m of minions) {
     if (m.isDead || m.team !== victim.team) continue;
-    if (getHorizontalDistance(m.mesh.position, getWorldPosition(attacker)) > minionAcquireRangeWorld(m, attacker)) continue;
+    // 86차(원작): 아군 챔피언이 공격받을 때의 도움 요청은 1000 범위(평소 인식 500의 두 배). 포탑을 치고 있는 미니언은 도움 요청을 무시한다.
+    if (getHorizontalDistance(m.mesh.position, getWorldPosition(victim)) > lolRangeToWorld(1000) + getCollisionRadius(m)) continue;
+    if (m.attackTarget && m.attackTarget.isTurret && isValidMinionTarget(m, m.attackTarget)) continue;
     m._callForHelp = { target: attacker, until };
   }
 }
@@ -801,6 +805,7 @@ function updateMinionAttack(minion, dt) {
   if (minion.attackCooldown > 0) return;
   const cycleTime = 1 / minion.attackSpeed;
   minion.attackCooldown = cycleTime;
+  minion._lastAttackAt = performance.now(); // 86차: 추격 포기(4초) 판정용
   const label = `${minion.team} ${minion.type} minion`;
   let hitDelaySec = 0;
   if (minion.usingRealModel && minion.attackClipSequence.length) {
