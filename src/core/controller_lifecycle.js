@@ -181,6 +181,12 @@ CharacterController.prototype._die = function() {
     // 세트 R 도중 사망: 위 _clearActionTimers()가 시퀀스를 끊으면 잡힌 대상의 제압(isGrabbedBySett)이
     // 풀리지 않고 영구히 남았다 - 정상 종료 함수로 대상을 먼저 풀어준다.
     if (this._sett?.rSeq) { this.pendingMove = null; this.pendingCast = null; this.currentTarget = null; this._settEndR(this._sett.rSeq, true); }
+    // 90차(QA): 원작은 죽으면 몸에 걸린 효과(버프·디버프)와 보호막이 모두 사라진다. 예전엔 그대로 남아 부활 직후에도
+    // 가렌 Q 이동속도·W 피해 감소, 마스터 이 R 공속·이속이 이어졌다. keepOnDeath를 붙인 효과만 남긴다.
+    if (this._nilah) { this._nilah.rSeq = null; this._nilah.eDash = null; } // 닐라 R 회전·E 돌진 중 사망(예전엔 rSeq가 남아 부활 뒤에도 R 판정이 돌았다)
+    this.statusEffects = (this.statusEffects || []).filter((st) => st && st.keepOnDeath);
+    if (typeof clearShields === 'function') clearShields(this);
+    if (typeof this.recomputeStats === 'function') this.recomputeStats();
     this.currentActionKey = null; this.currentPhase = null;
     this.targetPos = null; this.currentTarget = null; this.pendingMove = null; this.pendingCast = null;
     targetRing.clear();
