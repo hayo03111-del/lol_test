@@ -2098,6 +2098,9 @@ function applyDamage(target, result) {
   }
   if (target.isInhibitor) return applyDamageToInhibitor(target, result);
   if (target.isNexus) return applyDamageToNexus(target, result);
+  // 90차(QA): 비대상 상태이거나 죽은 대상은 피해를 받지 않는다 - 예전엔 takeDamage가 막아도 그 전에 "마지막으로 받은 피해"·
+  // "피해 받은 시각"(워모그 등 비전투 타이머)과 공격자의 흡혈·아이템 효과가 먼저 처리됐다. 이미 걸린 지속 피해(점화 등)는 원작처럼 계속 들어간다.
+  if ((target.isUntargetable && !result.isStatusTick) || (typeof target.takeDamage === 'function' && typeof STATE !== 'undefined' && target.state === STATE.DEAD)) return 0;
   const finalDmg = calculateDamage({ ...result, target });
   target._lastDamageTakenAmount = finalDmg;
   // 워모그의 갑옷(워모그의 심장) - "챔피언이 아닌 대상에게는 3초"처럼
@@ -2135,7 +2138,7 @@ function applyDamage(target, result) {
     if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(dmgSource, vampBase, dealtDamageType, !!result.isBasicAttack);
     if (target.isChampion) dmgSource._itemLastDealtChampionDamageAt = performance.now();
     if (typeof target._itemLastTookChampionDamageAt !== 'undefined') target._itemLastTookChampionDamageAt = performance.now();
-    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, vampBase, dealtDamageType, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
+    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, vampBase, dealtDamageType, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isOnHitBonus: !!result.isOnHitBonus });
   }
   // 83차: 처치(처형) 판정은 피해를 "실제로 적용한 뒤"에 한다 - 예전엔 적용 전 hp <= 피해로 판정해, 보호막·피해 감소·수호 천사
   // 때문에 살아남아도 처치 효과(아리 패시브·암흑의 인장·가렌 W·바루스)가 발동했다. 학습용 허수아비는 죽지 않고 2% 바닥에
@@ -11178,11 +11181,13 @@ class ProjectileSystem {
     }
   }
   _currentAimPoint(proj) {
-    if (proj.target && proj.target.hp > 0 && !proj.target.isDead && !proj.target.destroyed) {
+    if (proj.target && proj.target.hp > 0 && !proj.target.isDead && !proj.target.destroyed && !proj.target.isUntargetable) {
       const p = getWorldPosition(proj.target);
-      return p ? p.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)) : proj.targetPoint;
+      const aim = p ? p.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)) : proj.targetPoint;
+      if (aim) proj._lastAim = aim;
+      return aim;
     }
-    return proj.targetPoint;
+    return proj._lastAim || proj.targetPoint; // 90차: 대상이 비대상이 되면 마지막으로 본 자리로 날아가 사라진다(원작 - 대상 지정 투사체가 빗나감)
   }
   _orient(proj) {
     const aim = this._currentAimPoint(proj);
@@ -11212,7 +11217,9 @@ class ProjectileSystem {
         // 명중을 취소한다. realmId를 안 넘긴 기존 호출부는 둘 다 'main'
         // 취급이라 이 검사가 사실상 항상 통과해서 기존 동작과 동일하다.
         const realmOk = canRealmInteract({ realmId: proj.realmId }, proj.target);
-        if (proj.target && proj.target.hp > 0 && proj.onHit && realmOk) { proj.onHit(proj.target); this.totalHits++; }
+        // 90차(QA): 도착했을 때 대상이 비대상(마스터 이 Q 등)이거나 이미 죽었으면 피해·적중 효과(둔화·흡혈·아이템·룬) 없이 사라진다.
+        const t = proj.target, hittable = t && t.hp > 0 && !t.isDead && !t.destroyed && !t.isUntargetable;
+        if (hittable && proj.onHit && realmOk) { proj.onHit(t); this.totalHits++; }
         else this.totalMisses++;
         this.vfx.spawn('hit', proj.mesh.position.clone(), new THREE.Vector3(), { color: proj.color });
         proj.done = true;
@@ -16395,8 +16402,13 @@ CharacterController.prototype._consumeAttackOverrideOnConfirmedHit = function(ov
 // 가렌 Q·다리우스 W 강화 평타가 소모되지 않았다 - 포탑을 칠 때마다 계속 강화 평타 모션으로 나갔다.
 // 원작(PC 위키): 가렌 Q 추가 피해는 포탑에도 들어가고, 다리우스 W도 대상이 "적·구조물"이다. 침묵·둔화·처치 환급은
 // 구조물과 무관하므로 넣지 않는다.
-CharacterController.prototype._onStructureBasicAttackHit = function(target, overrideId, applyFn) {
-    if (!overrideId || !target) return;
+CharacterController.prototype._onStructureBasicAttackHit = function(target, overrideId, applyFn, attackHand = null) {
+    if (!target) return;
+    // 90차(QA): 기본 공격에 붙는 적중 효과 중 구조물에도 들어가는 것(세트 오른손 추가 피해, 마스터 이 E 고정 피해·평타의 Q 쿨다운 감소).
+    // 예전엔 구조물 경로가 가렌 Q·다리우스 W만 처리해서 이 둘이 포탑에 전혀 들어가지 않았다.
+    if (this.championId === 'sett' && typeof this._settOnBasicAttackHit === 'function') this._settOnBasicAttackHit(target, attackHand, applyFn);
+    if (this.championId === 'masteryi' && hasStatus(this, 'MASTERYI_E') && typeof this._masteryiApplyWujuTrueDamage === 'function') this._masteryiApplyWujuTrueDamage(target, applyFn);
+    if (!overrideId) return;
     const cd = this._champData(); if (!cd) return;
     let bonus = 0;
     if (this.championId === 'garen' && overrideId === 'Q') {
@@ -16683,7 +16695,7 @@ CharacterController.prototype._beginAttackSwing = function() {
               // (요청 문서 11절) 일반 챔피언/더미 피해 경로(applyDamage +
               // _onBasicAttackHit)로 보내지 않고 전용 함수로 분리한다 -
               // applyDamageToTurret()이 방패/이중갑옷/요새화를 전부 처리한다.
-              if (t.isTurret) { applyDamageToTurret(t, attackResult, { isRanged: true, source: this }); this._onStructureBasicAttackHit(t, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: true, source: this })); return; }
+              if (t.isTurret) { applyDamageToTurret(t, attackResult, { isRanged: true, source: this }); this._onStructureBasicAttackHit(t, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: true, source: this }), attackHand); return; }
               if (hasStatus(t, 'NILAH_W_DODGE')) { console.log('[NILAH W] 기본 공격 회피'); return; }
               if (t.isMinion) {
                 const wouldKill = t.hp > 0 && t.hp <= calculateDamage({ ...attackResult, target: t });
@@ -16691,8 +16703,8 @@ CharacterController.prototype._beginAttackSwing = function() {
                 this._onBasicAttackHit(t, overrideId, wouldKill, attackHand, willCrit);
                 return;
               }
-              if (t.isInhibitor) { applyDamageToInhibitor(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToInhibitor); return; }
-              if (t.isNexus) { applyDamageToNexus(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToNexus); return; }
+              if (t.isInhibitor) { applyDamageToInhibitor(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToInhibitor, attackHand); return; }
+              if (t.isNexus) { applyDamageToNexus(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToNexus, attackHand); return; }
               const hpB = t.hp, flB = isFlooredTrainingDummy(t); const dealtR = (applyDamage(t, attackResult) || 0) + this._applyItemExtraTrue(t, attackResult);
               const wouldKill = !flB && hpB > 0 && hpB <= dealtR; // 실제 입힌 피해(방어력·치명타 반영) 기준 처치 판정
               this._onBasicAttackHit(t, overrideId, wouldKill, null, willCrit);
@@ -16702,7 +16714,7 @@ CharacterController.prototype._beginAttackSwing = function() {
           if (target.isTurret) {
             const ranged = isRangedAttacker(this);
             applyDamageToTurret(target, attackResult, { isRanged: ranged, source: this });
-            this._onStructureBasicAttackHit(target, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: ranged, source: this }));
+            this._onStructureBasicAttackHit(target, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: ranged, source: this }), attackHand);
             return;
           }
           if (hasStatus(target, 'NILAH_W_DODGE')) { console.log('[NILAH W] 기본 공격 회피'); return; }
@@ -16712,8 +16724,8 @@ CharacterController.prototype._beginAttackSwing = function() {
             this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
             return;
           }
-          if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToInhibitor); return; }
-          if (target.isNexus) { applyDamageToNexus(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToNexus); return; }
+          if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToInhibitor, attackHand); return; }
+          if (target.isNexus) { applyDamageToNexus(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToNexus, attackHand); return; }
           // 처치 판정(버그 수정): 예전엔 방어력·치명타 적용 "전" 원본 공격력으로 판정해, 방어력이 높으면
           // 처치가 아닌데도 처치로, 치명타로 처치했는데도 처치 아님으로 판정됐다. 실제 피해 기준으로 바꿈.
           const hpBeforeAA = target.hp, flooredAA = isFlooredTrainingDummy(target);
@@ -19417,7 +19429,7 @@ CharacterController.prototype._settLeftHandRangeBonusWorld = function() {
 };
 
 // Extracted from CharacterController: _settOnBasicAttackHit
-CharacterController.prototype._settOnBasicAttackHit = function(target, attackHand) { 
+CharacterController.prototype._settOnBasicAttackHit = function(target, attackHand, applyFn = null) { 
     const cd = this._champData(); if (!cd) return;
     const p = cd.passive;
     this._sett.lastPunchAt = performance.now();
@@ -19425,9 +19437,12 @@ CharacterController.prototype._settOnBasicAttackHit = function(target, attackHan
     if (attackHand === 'RIGHT') {
       const t = Math.min(1, Math.max(0, (this.champLevel - 1) / 17));
       const dmg = p.rightPunchDamageAtLevel1 + (p.rightPunchDamageAtLevel18 - p.rightPunchDamageAtLevel1) * t + p.rightPunchBonusAdRatio * this._getBonusAD();
-      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+      // 90차(QA): 오른손 추가 피해는 기본 공격의 일부(원작 Pit Grit) - 스킬 피해 증폭·스킬 전용 아이템 효과가 붙지 않고, 생명력 흡수는 적용된다.
+      // isOnHitBonus: 같은 공격의 적중 효과(룬 공격 횟수 등)를 두 번 세지 않게 표시. 구조물이면 그 전용 피해 함수(applyFn)로.
+      const hit = { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this, armorPenPercent: this.armorPenPercent || 0 };
+      if (applyFn) applyFn(target, hit); else applyDamage(target, hit);
     }
-    if (this._settQOnHit) this._settQOnHit(target); // Q 활성 중이면 추가 타격 처리(아래)
+    if (!applyFn && this._settQOnHit) this._settQOnHit(target); // Q 활성 중이면 추가 타격 처리(아래)
   
 };
 
@@ -22998,15 +23013,19 @@ CharacterController.prototype._masteryiOnBasicAttackHit = function(target) {
 };
 
 // E(우주류 검술) 활성 중 기본 공격 적중 시 고정 피해(평타 1타/2연속 공격 2타 공용).
-CharacterController.prototype._masteryiApplyWujuTrueDamage = function(target) {
+CharacterController.prototype._masteryiApplyWujuTrueDamage = function(target, applyFn = null) {
     if (!target || target.hp <= 0 || !hasStatus(this, 'MASTERYI_E')) return;
     const cd = this._champData(); if (!cd) return;
     const e = cd.E;
     const lvl = Math.max(1, this.skillLevels.E || 1);
     const trueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * this._getBonusAD();
-    const wouldKill = target.hp > 0 && target.hp <= trueDmg;
-    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, canDamageStructures: true }); // 기본 공격 적중 효과 - 구조물에도 들어간다
-    if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
+    // 90차(QA): 우주류 검술 고정 피해는 기본 공격 적중 효과(원작) - 스킬 피해 증폭·스킬 전용 아이템 효과 없음, 생명력 흡수 적용,
+    // 구조물에도 들어간다(구조물이면 그 전용 피해 함수로). 처치 판정은 실제로 적용한 결과로(보호막에 막히면 처치가 아니다).
+    const hpBefore = target.hp;
+    const hit = { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, canDamageStructures: true, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this };
+    if (applyFn) { applyFn(target, hit); return; }
+    applyDamage(target, hit);
+    if (hpBefore > 0 && target.hp <= 0) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
 };
 
 // Extracted from CharacterController: _masteryiArmPassiveAttack
@@ -30062,7 +30081,7 @@ function updateNexusWell(well, dt) {
       if (m.isDead || m.team === well.team) continue;
       const dist = getHorizontalDistance(getWorldPosition(well), m.mesh.position);
       if (dist <= well.radius) {
-        applyDamageToMinion(m, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+        applyDamageToMinion(m, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: well }); // 90차(QA): 공격자를 우물로 - 예전엔 비워 둬서 플레이어로 대체돼 플레이어의 피해 증폭 아이템·탈진이 우물 피해를 바꿨다
       }
     }
   }
@@ -31944,6 +31963,9 @@ function updateMinionCombat(minion, dt) {
 // 사라지고 골드/경험치를 줘야 하므로(killMinion) 그 경로를 타면 안 된다.
 function applyDamageToMinion(minion, result, fromPlayer = false) {
   if (!minion || minion.isDead) return 0;
+  // 90차(QA): 플레이어 피해가 아닌데 공격자가 비어 있으면(구조물·환경 피해) 플레이어로 대체되지 않게 한다 - 대체되면 플레이어의
+  // 피해 증폭 아이템·탈진 같은 상태가 그 피해에 붙었다(예: 우물 고정 피해 1000 → 쇼진 1200, 탈진 650).
+  if (!fromPlayer && result && !result.source) result = { ...result, source: { isStructure: true } };
   // 85차: 칼바람 오라 - 근접 챔피언의 기본 공격은 공성·슈퍼 미니언에게 20% 추가 피해(PC 위키 Howling Abyss aura).
   if (fromPlayer && result && result.isBasicAttack && (minion.type === 'siege' || minion.type === 'super')
       && typeof controller !== 'undefined' && controller && typeof isRangedAttacker === 'function' && !isRangedAttacker(controller)
@@ -32163,8 +32185,9 @@ function rewardStructureDestroyed(structure) {
 let _passiveGoldAcc = 0;
 function rewardTick(dt) {
   if (rewardGameActive() && typeof controller !== 'undefined' && controller && getTurretGameTimeSec() >= ARAM_PASSIVE_GOLD_START_SEC) {
-    _passiveGoldAcc += ARAM_PASSIVE_GOLD_PER_10S / 10 * dt;
-    if (_passiveGoldAcc >= 1) { const whole = Math.floor(_passiveGoldAcc); _passiveGoldAcc -= whole; grantGold(controller, whole); }
+    // 90차: 원작처럼 0.5초마다 한 번(10초당 60 → 0.5초당 3) 들어온다. 예전엔 매 프레임 1골드씩 쪼개 넣어 골드가 쉬지 않고 올라갔다(총량은 같음).
+    _passiveGoldAcc += dt;
+    while (_passiveGoldAcc >= 0.5) { _passiveGoldAcc -= 0.5; grantGold(controller, ARAM_PASSIVE_GOLD_PER_10S / 20); }
   }
   updateRewardTexts(dt);
 }
@@ -37900,6 +37923,7 @@ function runeOnDamageDealt(ctrl, target, finalDmg, damageType, meta) {
   if (!ctrl || !ctrl.runePage || !ctrl._rune || !target || !(finalDmg > 0)) return;
   if (meta && (meta.isItemEffect || meta.isRuneEffect)) return;
   const r = ctrl._rune, now = performance.now(), champ = !!target.isChampion;
+  if (meta && meta.isOnHitBonus) return; // 90차: 같은 기본 공격의 적중 효과 추가 피해(세트 오른손·이 E)는 공격을 한 번 더 한 것으로 세지 않는다
   const isAttack = !!(meta && meta.isBasicAttack), isTick = !!(meta && meta.isStatusTick);
   if (champ) {
     if (!r.lastChampCombatAt || now - r.lastChampCombatAt > 3000) {

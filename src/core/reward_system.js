@@ -93,8 +93,9 @@ function rewardStructureDestroyed(structure) {
 let _passiveGoldAcc = 0;
 function rewardTick(dt) {
   if (rewardGameActive() && typeof controller !== 'undefined' && controller && getTurretGameTimeSec() >= ARAM_PASSIVE_GOLD_START_SEC) {
-    _passiveGoldAcc += ARAM_PASSIVE_GOLD_PER_10S / 10 * dt;
-    if (_passiveGoldAcc >= 1) { const whole = Math.floor(_passiveGoldAcc); _passiveGoldAcc -= whole; grantGold(controller, whole); }
+    // 90차: 원작처럼 0.5초마다 한 번(10초당 60 → 0.5초당 3) 들어온다. 예전엔 매 프레임 1골드씩 쪼개 넣어 골드가 쉬지 않고 올라갔다(총량은 같음).
+    _passiveGoldAcc += dt;
+    while (_passiveGoldAcc >= 0.5) { _passiveGoldAcc -= 0.5; grantGold(controller, ARAM_PASSIVE_GOLD_PER_10S / 20); }
   }
   updateRewardTexts(dt);
 }

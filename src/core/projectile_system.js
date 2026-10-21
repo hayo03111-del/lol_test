@@ -153,11 +153,13 @@ class ProjectileSystem {
     }
   }
   _currentAimPoint(proj) {
-    if (proj.target && proj.target.hp > 0 && !proj.target.isDead && !proj.target.destroyed) {
+    if (proj.target && proj.target.hp > 0 && !proj.target.isDead && !proj.target.destroyed && !proj.target.isUntargetable) {
       const p = getWorldPosition(proj.target);
-      return p ? p.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)) : proj.targetPoint;
+      const aim = p ? p.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)) : proj.targetPoint;
+      if (aim) proj._lastAim = aim;
+      return aim;
     }
-    return proj.targetPoint;
+    return proj._lastAim || proj.targetPoint; // 90차: 대상이 비대상이 되면 마지막으로 본 자리로 날아가 사라진다(원작 - 대상 지정 투사체가 빗나감)
   }
   _orient(proj) {
     const aim = this._currentAimPoint(proj);
@@ -187,7 +189,9 @@ class ProjectileSystem {
         // 명중을 취소한다. realmId를 안 넘긴 기존 호출부는 둘 다 'main'
         // 취급이라 이 검사가 사실상 항상 통과해서 기존 동작과 동일하다.
         const realmOk = canRealmInteract({ realmId: proj.realmId }, proj.target);
-        if (proj.target && proj.target.hp > 0 && proj.onHit && realmOk) { proj.onHit(proj.target); this.totalHits++; }
+        // 90차(QA): 도착했을 때 대상이 비대상(마스터 이 Q 등)이거나 이미 죽었으면 피해·적중 효과(둔화·흡혈·아이템·룬) 없이 사라진다.
+        const t = proj.target, hittable = t && t.hp > 0 && !t.isDead && !t.destroyed && !t.isUntargetable;
+        if (hittable && proj.onHit && realmOk) { proj.onHit(t); this.totalHits++; }
         else this.totalMisses++;
         this.vfx.spawn('hit', proj.mesh.position.clone(), new THREE.Vector3(), { color: proj.color });
         proj.done = true;

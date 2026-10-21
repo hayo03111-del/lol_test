@@ -8,7 +8,7 @@ CharacterController.prototype._settLeftHandRangeBonusWorld = function() {
 };
 
 // Extracted from CharacterController: _settOnBasicAttackHit
-CharacterController.prototype._settOnBasicAttackHit = function(target, attackHand) { 
+CharacterController.prototype._settOnBasicAttackHit = function(target, attackHand, applyFn = null) { 
     const cd = this._champData(); if (!cd) return;
     const p = cd.passive;
     this._sett.lastPunchAt = performance.now();
@@ -16,9 +16,12 @@ CharacterController.prototype._settOnBasicAttackHit = function(target, attackHan
     if (attackHand === 'RIGHT') {
       const t = Math.min(1, Math.max(0, (this.champLevel - 1) / 17));
       const dmg = p.rightPunchDamageAtLevel1 + (p.rightPunchDamageAtLevel18 - p.rightPunchDamageAtLevel1) * t + p.rightPunchBonusAdRatio * this._getBonusAD();
-      applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+      // 90차(QA): 오른손 추가 피해는 기본 공격의 일부(원작 Pit Grit) - 스킬 피해 증폭·스킬 전용 아이템 효과가 붙지 않고, 생명력 흡수는 적용된다.
+      // isOnHitBonus: 같은 공격의 적중 효과(룬 공격 횟수 등)를 두 번 세지 않게 표시. 구조물이면 그 전용 피해 함수(applyFn)로.
+      const hit = { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this, armorPenPercent: this.armorPenPercent || 0 };
+      if (applyFn) applyFn(target, hit); else applyDamage(target, hit);
     }
-    if (this._settQOnHit) this._settQOnHit(target); // Q 활성 중이면 추가 타격 처리(아래)
+    if (!applyFn && this._settQOnHit) this._settQOnHit(target); // Q 활성 중이면 추가 타격 처리(아래)
   
 };
 

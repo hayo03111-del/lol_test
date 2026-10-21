@@ -717,8 +717,13 @@ CharacterController.prototype._consumeAttackOverrideOnConfirmedHit = function(ov
 // 가렌 Q·다리우스 W 강화 평타가 소모되지 않았다 - 포탑을 칠 때마다 계속 강화 평타 모션으로 나갔다.
 // 원작(PC 위키): 가렌 Q 추가 피해는 포탑에도 들어가고, 다리우스 W도 대상이 "적·구조물"이다. 침묵·둔화·처치 환급은
 // 구조물과 무관하므로 넣지 않는다.
-CharacterController.prototype._onStructureBasicAttackHit = function(target, overrideId, applyFn) {
-    if (!overrideId || !target) return;
+CharacterController.prototype._onStructureBasicAttackHit = function(target, overrideId, applyFn, attackHand = null) {
+    if (!target) return;
+    // 90차(QA): 기본 공격에 붙는 적중 효과 중 구조물에도 들어가는 것(세트 오른손 추가 피해, 마스터 이 E 고정 피해·평타의 Q 쿨다운 감소).
+    // 예전엔 구조물 경로가 가렌 Q·다리우스 W만 처리해서 이 둘이 포탑에 전혀 들어가지 않았다.
+    if (this.championId === 'sett' && typeof this._settOnBasicAttackHit === 'function') this._settOnBasicAttackHit(target, attackHand, applyFn);
+    if (this.championId === 'masteryi' && hasStatus(this, 'MASTERYI_E') && typeof this._masteryiApplyWujuTrueDamage === 'function') this._masteryiApplyWujuTrueDamage(target, applyFn);
+    if (!overrideId) return;
     const cd = this._champData(); if (!cd) return;
     let bonus = 0;
     if (this.championId === 'garen' && overrideId === 'Q') {
@@ -1005,7 +1010,7 @@ CharacterController.prototype._beginAttackSwing = function() {
               // (요청 문서 11절) 일반 챔피언/더미 피해 경로(applyDamage +
               // _onBasicAttackHit)로 보내지 않고 전용 함수로 분리한다 -
               // applyDamageToTurret()이 방패/이중갑옷/요새화를 전부 처리한다.
-              if (t.isTurret) { applyDamageToTurret(t, attackResult, { isRanged: true, source: this }); this._onStructureBasicAttackHit(t, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: true, source: this })); return; }
+              if (t.isTurret) { applyDamageToTurret(t, attackResult, { isRanged: true, source: this }); this._onStructureBasicAttackHit(t, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: true, source: this }), attackHand); return; }
               if (hasStatus(t, 'NILAH_W_DODGE')) { console.log('[NILAH W] 기본 공격 회피'); return; }
               if (t.isMinion) {
                 const wouldKill = t.hp > 0 && t.hp <= calculateDamage({ ...attackResult, target: t });
@@ -1013,8 +1018,8 @@ CharacterController.prototype._beginAttackSwing = function() {
                 this._onBasicAttackHit(t, overrideId, wouldKill, attackHand, willCrit);
                 return;
               }
-              if (t.isInhibitor) { applyDamageToInhibitor(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToInhibitor); return; }
-              if (t.isNexus) { applyDamageToNexus(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToNexus); return; }
+              if (t.isInhibitor) { applyDamageToInhibitor(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToInhibitor, attackHand); return; }
+              if (t.isNexus) { applyDamageToNexus(t, attackResult); this._onStructureBasicAttackHit(t, overrideId, applyDamageToNexus, attackHand); return; }
               const hpB = t.hp, flB = isFlooredTrainingDummy(t); const dealtR = (applyDamage(t, attackResult) || 0) + this._applyItemExtraTrue(t, attackResult);
               const wouldKill = !flB && hpB > 0 && hpB <= dealtR; // 실제 입힌 피해(방어력·치명타 반영) 기준 처치 판정
               this._onBasicAttackHit(t, overrideId, wouldKill, null, willCrit);
@@ -1024,7 +1029,7 @@ CharacterController.prototype._beginAttackSwing = function() {
           if (target.isTurret) {
             const ranged = isRangedAttacker(this);
             applyDamageToTurret(target, attackResult, { isRanged: ranged, source: this });
-            this._onStructureBasicAttackHit(target, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: ranged, source: this }));
+            this._onStructureBasicAttackHit(target, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: ranged, source: this }), attackHand);
             return;
           }
           if (hasStatus(target, 'NILAH_W_DODGE')) { console.log('[NILAH W] 기본 공격 회피'); return; }
@@ -1034,8 +1039,8 @@ CharacterController.prototype._beginAttackSwing = function() {
             this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
             return;
           }
-          if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToInhibitor); return; }
-          if (target.isNexus) { applyDamageToNexus(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToNexus); return; }
+          if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToInhibitor, attackHand); return; }
+          if (target.isNexus) { applyDamageToNexus(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToNexus, attackHand); return; }
           // 처치 판정(버그 수정): 예전엔 방어력·치명타 적용 "전" 원본 공격력으로 판정해, 방어력이 높으면
           // 처치가 아닌데도 처치로, 치명타로 처치했는데도 처치 아님으로 판정됐다. 실제 피해 기준으로 바꿈.
           const hpBeforeAA = target.hp, flooredAA = isFlooredTrainingDummy(target);

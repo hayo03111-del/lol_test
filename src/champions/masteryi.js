@@ -36,15 +36,19 @@ CharacterController.prototype._masteryiOnBasicAttackHit = function(target) {
 };
 
 // E(우주류 검술) 활성 중 기본 공격 적중 시 고정 피해(평타 1타/2연속 공격 2타 공용).
-CharacterController.prototype._masteryiApplyWujuTrueDamage = function(target) {
+CharacterController.prototype._masteryiApplyWujuTrueDamage = function(target, applyFn = null) {
     if (!target || target.hp <= 0 || !hasStatus(this, 'MASTERYI_E')) return;
     const cd = this._champData(); if (!cd) return;
     const e = cd.E;
     const lvl = Math.max(1, this.skillLevels.E || 1);
     const trueDmg = skillVal(e.trueDamageByLevel, lvl) + e.bonusAdRatio * this._getBonusAD();
-    const wouldKill = target.hp > 0 && target.hp <= trueDmg;
-    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, canDamageStructures: true }); // 기본 공격 적중 효과 - 구조물에도 들어간다
-    if (wouldKill) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
+    // 90차(QA): 우주류 검술 고정 피해는 기본 공격 적중 효과(원작) - 스킬 피해 증폭·스킬 전용 아이템 효과 없음, 생명력 흡수 적용,
+    // 구조물에도 들어간다(구조물이면 그 전용 피해 함수로). 처치 판정은 실제로 적용한 결과로(보호막에 막히면 처치가 아니다).
+    const hpBefore = target.hp;
+    const hit = { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, canDamageStructures: true, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this };
+    if (applyFn) { applyFn(target, hit); return; }
+    applyDamage(target, hit);
+    if (hpBefore > 0 && target.hp <= 0) this._masteryiOnKill(target, { type: 'BASIC_ATTACK' });
 };
 
 // Extracted from CharacterController: _masteryiArmPassiveAttack

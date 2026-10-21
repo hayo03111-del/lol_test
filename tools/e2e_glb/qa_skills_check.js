@@ -4,6 +4,10 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const startServer = require('./server.js');
 const ALL = ['garen', 'darius', 'masteryi', 'leesin', 'nautilus', 'yasuo', 'yone', 'sett', 'mordekaiser', 'renekton', 'nilah', 'chogath', 'ezreal', 'ashe', 'varus', 'ahri', 'vex', 'rammus', 'lux'];
 const SLOTS = ['Q', 'W', 'E', 'R'];
+// 조준 방식(skill_aim_system.js의 skillAimSpec 결과). unit = 커서 아래 적을 대상으로 잡고 시전(실제 입력 경로 skillAim.cast와 같게 currentTarget을 잡는다)
+const UNIT = new Set(['garenR', 'dariusR', 'settR', 'yasuoE', 'yasuoR', 'nilahE', 'mordekaiserR', 'nautilusR', 'masteryiQ', 'rammusE', 'chogathR', 'leesinR', 'leesinQ2']);
+// 다음 평타를 강화하는 스킬: 시전 뒤 평타 명령까지 내려야 피해가 난다
+const EMPOWER = new Set(['garenQ', 'dariusW', 'settQ', 'renektonW', 'nautilusW', 'masteryiE', 'asheQ', 'varusW']);
 (async () => {
   const ids = process.argv.slice(2).length ? process.argv.slice(2) : ALL;
   const srv = await startServer(); const port = srv.address().port;
@@ -69,8 +73,15 @@ const SLOTS = ['Q', 'W', 'E', 'R'];
         },
         dmgTaken() { return E.dummies.map((d) => Math.round(d.maxHp - d.hp)); },
         target(slot) { return E.getWorldPosition(E.dummies[0]).clone(); },
+        cast(slot, unit, isUnit, empower) {
+          const c = window.controller; unit = unit || E.dummies[0];
+          if (isUnit) c.currentTarget = unit;
+          c.castAbility(slot, E.getWorldPosition(unit).clone());
+          if (empower) setTimeout(() => c.selectTarget(unit), 50);
+        },
       };
     });
+    await page.evaluate(({ u, e }) => { window.__QA_UNIT = new Set(u); window.__QA_EMP = new Set(e); }, { u: [...UNIT], e: [...EMPOWER] });
     const ev = (fn, arg) => page.evaluate(fn, arg);
     const wait = (ms) => page.waitForTimeout(ms);
     const res = { skills: {}, interrupts: {}, errors };
@@ -86,8 +97,7 @@ const SLOTS = ['Q', 'W', 'E', 'R'];
       const castInfo = await ev((s) => {
         const c = window.controller, Q = window.__qa;
         const tgt = Q.target(s);
-        if (s === 'W' && c.championId === 'leesin') { /* 아군 대상 스킬: 자기 위치 */ }
-        c.castAbility(s, tgt);
+        Q.cast(s, null, window.__QA_UNIT.has(c.championId + s), window.__QA_EMP.has(c.championId + s));
         return { mpAfter: c.mp, cd: c.cooldowns[s], key: c.currentActionKey, exp: Q.expectedCd(s), cost: Q.expectedCost(s) };
       }, slot);
       // 바루스 Q는 충전형 - 다시 눌러 발사
@@ -99,13 +109,13 @@ const SLOTS = ['Q', 'W', 'E', 'R'];
       r.cdSet = +castInfo.cd.toFixed(2); r.cdExpected = +castInfo.exp.expected.toFixed(2); r.ah = castInfo.exp.ah;
       r.dmg = after.dmg; r.after = after.snap;
       // (b) 쿨다운 중 재시전 막힘
-      const recast = await ev((s) => { const c = window.controller; const mp0 = c.mp, cd0 = c.cooldowns[s], key0 = c.currentActionKey; c.castAbility(s, window.__qa.target(s)); return { mpDelta: +(mp0 - c.mp).toFixed(1), cd0: +cd0.toFixed(2), cd1: +c.cooldowns[s].toFixed(2), keyChanged: c.currentActionKey !== key0 }; }, slot);
+      const recast = await ev((s) => { const c = window.controller; const mp0 = c.mp, cd0 = c.cooldowns[s], key0 = c.currentActionKey; window.__qa.cast(s, null, window.__QA_UNIT.has(c.championId + s), false); return { mpDelta: +(mp0 - c.mp).toFixed(1), cd0: +cd0.toFixed(2), cd1: +c.cooldowns[s].toFixed(2), keyChanged: c.currentActionKey !== key0 }; }, slot);
       r.recastDuringCd = recast;
       // (c) 사거리 밖: 피해 없거나 걸어감
       if (range) {
         await ev((d) => window.__qa.reset({ dist: d }), range + 450);
         await wait(200);
-        await ev((s) => { const c = window.controller; c.castAbility(s, window.__qa.target(s)); }, slot);
+        await ev((s) => { const c = window.controller; window.__qa.cast(s, null, window.__QA_UNIT.has(c.championId + s), false); }, slot);
         if (id === 'varus' && slot === 'Q') { await wait(700); await ev(() => window.controller.castAbility('Q', window.__qa.target('Q'))); }
         await wait(1500);
         r.outOfRange = await ev(() => ({ dmg0: window.__qa.dmgTaken()[0], moved: +Math.hypot(window.controller.root.position.x, window.controller.root.position.z).toFixed(2), cd: +window.controller.cooldowns[window.__e2e ? 'Q' : 'Q'].toFixed(2), snap: window.__qa.snapshot() }));
@@ -114,7 +124,7 @@ const SLOTS = ['Q', 'W', 'E', 'R'];
       // (d) 마나 부족
       await ev((d) => window.__qa.reset({ dist: d }), dist);
       await wait(150);
-      r.noMana = await ev((s) => { const c = window.controller; const cost = window.__qa.expectedCost(s); if (!(cost > 0)) return { skipped: 'no cost' }; c.mp = Math.max(0, cost - 1); c.castAbility(s, window.__qa.target(s)); return { cd: +c.cooldowns[s].toFixed(2), key: c.currentActionKey, state: c.state, mp: +c.mp.toFixed(1) }; }, slot);
+      r.noMana = await ev((s) => { const c = window.controller; const cost = window.__qa.expectedCost(s); if (!(cost > 0)) return { skipped: 'no cost' }; c.mp = Math.max(0, cost - 1); window.__qa.cast(s, null, window.__QA_UNIT.has(c.championId + s), false); return { cd: +c.cooldowns[s].toFixed(2), key: c.currentActionKey, state: c.state, mp: +c.mp.toFixed(1) }; }, slot);
       await wait(400);
       if (r.noMana && !r.noMana.skipped) r.noMana.after = await ev(() => window.__qa.snapshot());
       res.skills[slot] = r;
@@ -131,14 +141,14 @@ const SLOTS = ['Q', 'W', 'E', 'R'];
       const dist = range ? Math.max(120, Math.min(range * 0.6, range - 60)) : 150;
       // 이동 명령(시전 120ms 뒤)
       await ev((d) => window.__qa.reset({ dist: d }), dist); await wait(200);
-      await ev((s) => { const c = window.controller; c.castAbility(s, window.__qa.target(s)); setTimeout(() => c.moveTo(new window.__e2e.THREE.Vector3(1.5, 0, 1.5)), 120); }, slot);
+      await ev((s) => { const c = window.controller; window.__qa.cast(s, null, window.__QA_UNIT.has(c.championId + s), false); setTimeout(() => c.moveTo(new window.__e2e.THREE.Vector3(1.5, 0, 1.5)), 120); }, slot);
       await wait(2600);
       it.moveDuring = { snap: await ev(() => window.__qa.snapshot()), canAct: await canAct() };
       // 평타 직후 스킬(평타 캔슬)
       await ev(() => window.__qa.reset({ dist: 150 })); await wait(200);
       await ev(() => window.controller.selectTarget(window.__e2e.dummies[0]));
       await page.waitForFunction(() => window.__qa.dmgTaken()[0] > 0, null, { timeout: 4000 }).catch(() => {});
-      const ac = await ev((s) => { const c = window.controller; const cd0 = c.cooldowns[s]; c.castAbility(s, window.__qa.target(s)); return { fired: c.cooldowns[s] > cd0 || c.currentActionKey != null, key: c.currentActionKey }; }, slot);
+      const ac = await ev((s) => { const c = window.controller; const cd0 = c.cooldowns[s]; window.__qa.cast(s, null, window.__QA_UNIT.has(c.championId + s), false); return { fired: c.cooldowns[s] > cd0 || c.currentActionKey != null, key: c.currentActionKey }; }, slot);
       await wait(2400);
       it.afterAA = Object.assign(ac, { snap: await ev(() => window.__qa.snapshot()) });
       it.afterAA.canAct = await canAct();
@@ -149,7 +159,7 @@ const SLOTS = ['Q', 'W', 'E', 'R'];
         const m = E.createMinion('melee', new E.THREE.Vector3(0, 0, -L(d)), 0, 'RED'); E.minions.push(m);
         m.hp = 1; window.__qaMinion = m;
         c.selectTarget && (c.currentTarget = null);
-        c.castAbility(s, E.getWorldPosition(m).clone());
+        window.__qa.cast(s, m, window.__QA_UNIT.has(c.championId + s), false);
         return { minionHp: m.hp };
       }, { s: slot, d: dist });
       await wait(150);
@@ -158,11 +168,12 @@ const SLOTS = ['Q', 'W', 'E', 'R'];
       it.targetDies = { snap: await ev(() => window.__qa.snapshot()), canAct: await canAct(), minionDead: await ev(() => !!(window.__qaMinion && (window.__qaMinion.isDead || window.__qaMinion.hp <= 0))) };
       // 시전자 사망(시전 150ms 뒤) → 즉시 부활
       await ev((d) => window.__qa.reset({ dist: d }), dist); await wait(200);
-      await ev((s) => { const c = window.controller; c.castAbility(s, window.__qa.target(s)); setTimeout(() => { c.takeDamage(c.hp + 1e7, null); }, 150); }, slot);
+      await ev((s) => { const c = window.controller; window.__qa.cast(s, null, window.__QA_UNIT.has(c.championId + s), false); setTimeout(() => { c.takeDamage(c.hp + 1e7, null); }, 150); }, slot);
       await wait(700);
       const dead = await ev(() => window.__qa.snapshot());
       await ev(() => { const c = window.controller; if (c.state === 'DEAD') { c._clearPending && c._clearPending(); c._respawn(); } });
-      await wait(2600);
+      await page.waitForFunction(() => window.controller.state !== 'RESPAWN', null, { timeout: 15000 }).catch(() => {});
+      await wait(1200);
       const rsp = await ev(() => { const c = window.controller; return Object.assign(window.__qa.snapshot(), { cd: Object.fromEntries(Object.entries(c.cooldowns).map(([k, v]) => [k, +v.toFixed(1)])), extra: {
         mordeRealm: !!(c._morde && c._morde.isInDeathRealm), yoneSpirit: !!(c._yone && c._yone.eSpirit), ahriR: c._ahri ? c._ahri.rCharges : null, vexDash: !!(c._vex && c._vex.dashActive),
         leeQ2: !!(c._leesin && (c._leesin.qMark || c._leesin.q2Ready || c._leesin.qTarget)), nautHook: !!(c._nautilus && (c._nautilus.hook || c._nautilus.qHook)), varusCharge: !!(c._varus && c._varus.qCharge),
@@ -171,7 +182,8 @@ const SLOTS = ['Q', 'W', 'E', 'R'];
       // 부활 뒤 같은 스킬을 다시 쓸 수 있는가
       await ev(() => { const c = window.controller; c.cooldowns = { Q: 0, W: 0, E: 0, R: 0 }; c.mp = c.maxMp; });
       await ev((d) => { const E = window.__e2e, L = E.lolRangeToWorld, c = window.controller; E.dummies[0].mesh.position.set(c.root.position.x, 0, c.root.position.z - L(d)); }, dist);
-      const recast = await ev((s) => { const c = window.controller; c.castAbility(s, window.__qa.target(s)); return { cd: +c.cooldowns[s].toFixed(2), key: c.currentActionKey }; }, slot);
+      await wait(500); // 시야는 다음 프레임에 갱신된다
+      const recast = await ev((s) => { const c = window.controller; window.__qa.cast(s, null, window.__QA_UNIT.has(c.championId + s), false); return { cd: +c.cooldowns[s].toFixed(2), key: c.currentActionKey }; }, slot);
       await wait(2200);
       it.death = { dead, respawned: rsp, recastAfterRespawn: recast, afterRecast: await ev(() => window.__qa.snapshot()), canAct: await canAct() };
       res.interrupts[slot] = it;

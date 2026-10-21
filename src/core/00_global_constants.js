@@ -702,6 +702,9 @@ function applyDamage(target, result) {
   }
   if (target.isInhibitor) return applyDamageToInhibitor(target, result);
   if (target.isNexus) return applyDamageToNexus(target, result);
+  // 90차(QA): 비대상 상태이거나 죽은 대상은 피해를 받지 않는다 - 예전엔 takeDamage가 막아도 그 전에 "마지막으로 받은 피해"·
+  // "피해 받은 시각"(워모그 등 비전투 타이머)과 공격자의 흡혈·아이템 효과가 먼저 처리됐다. 이미 걸린 지속 피해(점화 등)는 원작처럼 계속 들어간다.
+  if ((target.isUntargetable && !result.isStatusTick) || (typeof target.takeDamage === 'function' && typeof STATE !== 'undefined' && target.state === STATE.DEAD)) return 0;
   const finalDmg = calculateDamage({ ...result, target });
   target._lastDamageTakenAmount = finalDmg;
   // 워모그의 갑옷(워모그의 심장) - "챔피언이 아닌 대상에게는 3초"처럼
@@ -739,7 +742,7 @@ function applyDamage(target, result) {
     if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(dmgSource, vampBase, dealtDamageType, !!result.isBasicAttack);
     if (target.isChampion) dmgSource._itemLastDealtChampionDamageAt = performance.now();
     if (typeof target._itemLastTookChampionDamageAt !== 'undefined') target._itemLastTookChampionDamageAt = performance.now();
-    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, vampBase, dealtDamageType, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
+    if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(dmgSource, target, vampBase, dealtDamageType, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isOnHitBonus: !!result.isOnHitBonus });
   }
   // 83차: 처치(처형) 판정은 피해를 "실제로 적용한 뒤"에 한다 - 예전엔 적용 전 hp <= 피해로 판정해, 보호막·피해 감소·수호 천사
   // 때문에 살아남아도 처치 효과(아리 패시브·암흑의 인장·가렌 W·바루스)가 발동했다. 학습용 허수아비는 죽지 않고 2% 바닥에

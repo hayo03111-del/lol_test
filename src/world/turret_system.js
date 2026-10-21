@@ -838,7 +838,7 @@ function updateNexusWell(well, dt) {
       if (m.isDead || m.team === well.team) continue;
       const dist = getHorizontalDistance(getWorldPosition(well), m.mesh.position);
       if (dist <= well.radius) {
-        applyDamageToMinion(m, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
+        applyDamageToMinion(m, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: well }); // 90차(QA): 공격자를 우물로 - 예전엔 비워 둬서 플레이어로 대체돼 플레이어의 피해 증폭 아이템·탈진이 우물 피해를 바꿨다
       }
     }
   }

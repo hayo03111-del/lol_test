@@ -204,6 +204,7 @@ function runeOnDamageDealt(ctrl, target, finalDmg, damageType, meta) {
   if (!ctrl || !ctrl.runePage || !ctrl._rune || !target || !(finalDmg > 0)) return;
   if (meta && (meta.isItemEffect || meta.isRuneEffect)) return;
   const r = ctrl._rune, now = performance.now(), champ = !!target.isChampion;
+  if (meta && meta.isOnHitBonus) return; // 90차: 같은 기본 공격의 적중 효과 추가 피해(세트 오른손·이 E)는 공격을 한 번 더 한 것으로 세지 않는다
   const isAttack = !!(meta && meta.isBasicAttack), isTick = !!(meta && meta.isStatusTick);
   if (champ) {
     if (!r.lastChampCombatAt || now - r.lastChampCombatAt > 3000) {

@@ -989,6 +989,9 @@ function updateMinionCombat(minion, dt) {
 // 사라지고 골드/경험치를 줘야 하므로(killMinion) 그 경로를 타면 안 된다.
 function applyDamageToMinion(minion, result, fromPlayer = false) {
   if (!minion || minion.isDead) return 0;
+  // 90차(QA): 플레이어 피해가 아닌데 공격자가 비어 있으면(구조물·환경 피해) 플레이어로 대체되지 않게 한다 - 대체되면 플레이어의
+  // 피해 증폭 아이템·탈진 같은 상태가 그 피해에 붙었다(예: 우물 고정 피해 1000 → 쇼진 1200, 탈진 650).
+  if (!fromPlayer && result && !result.source) result = { ...result, source: { isStructure: true } };
   // 85차: 칼바람 오라 - 근접 챔피언의 기본 공격은 공성·슈퍼 미니언에게 20% 추가 피해(PC 위키 Howling Abyss aura).
   if (fromPlayer && result && result.isBasicAttack && (minion.type === 'siege' || minion.type === 'super')
       && typeof controller !== 'undefined' && controller && typeof isRangedAttacker === 'function' && !isRangedAttacker(controller)
