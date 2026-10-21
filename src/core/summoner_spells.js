@@ -129,6 +129,9 @@ function _summonerFlash(ctrl, d, mousePoint) {
   to.y = from.y;
   ctrl.root.position.copy(to);
   ctrl.faceDirectionInstant(dir);
+  // 92차: 챔피언별 점멸 상호작용(요네 Q플 등) - 위치를 옮긴 뒤 챔피언 쪽에서 진행 중인 스킬을 맞춘다.
+  const onFlash = ctrl.championId && ctrl['_' + ctrl.championId + 'OnFlash'];
+  if (typeof onFlash === 'function') onFlash.call(ctrl, from, to);
   if (typeof vfx !== 'undefined') {
     vfx.groundShockwave(from, BASE_UNIT * 0.7, 0xfff3a0, 0.35);
     vfx.groundShockwave(to, BASE_UNIT * 0.7, 0xfff3a0, 0.35);

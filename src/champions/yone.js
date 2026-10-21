@@ -320,7 +320,8 @@ CharacterController.prototype._yoneTickEmpoweredQ = function(dt) {
   const q = this._champData().Q;
   const bodyHalfWidth = lolRangeToWorld(q.dashAoEWidth || 100) * 0.5;
   const missileHalfWidth = lolRangeToWorld(q.missileWidth || 160) * 0.5;
-  const bodyReach = travel.bodyElapsed / travel.bodyDuration * lolRangeToWorld(q.dashRange || 450);
+  // 92차: 돌진 중 점멸했으면 원래 선 위 본체 판정은 점멸 순간까지 간 거리에서 멈춘다(그 너머는 돌풍만).
+  const bodyReach = travel.flashedReach != null ? travel.flashedReach : travel.bodyElapsed / travel.bodyDuration * lolRangeToWorld(q.dashRange || 450);
   for (const u of getAllEnemyUnits()) {
     if (!u || u.hp <= 0 || travel.hitSet.has(u)) continue;
     const p = getWorldPosition(u);
@@ -340,6 +341,28 @@ CharacterController.prototype._yoneTickEmpoweredQ = function(dt) {
   }
   if (travel.missileElapsed >= travel.missileDuration - 1e-4) {
     this._yone.qDashTravel = null;
+  }
+};
+
+// 92차: 요네 Q플(원작) - 점멸 시 호출(summoner_spells.js). from/to = 점멸 전후 위치.
+//  - 강화 Q 돌진 중: 본체는 점멸 지점에서 돌진을 끝내고 그 자리 주변(본체 판정 폭)을 띄운다. 이미 나간 돌풍은 원래 선을
+//    따라 계속 판정한다 → 두 곳에서 에어본. 같은 대상은 한 번만 맞는다.
+//  - 강화 Q 선딜 중: 돌진이 점멸 지점에서 같은 방향으로 시작한다(_yoneStartEmpoweredQ가 시작 순간 위치를 쓴다).
+//  - 일반 Q 선딜 중: 찌르기가 점멸 지점에서 원래 조준점 쪽으로 나간다(_yoneCastQ의 aimPoint).
+CharacterController.prototype._yoneOnFlash = function(from, to) {
+  const travel = this._yone && this._yone.qDashTravel;
+  if (!travel || travel.bodyElapsed >= travel.bodyDuration) return;
+  const q = this._champData().Q;
+  travel.flashedReach = travel.bodyElapsed / travel.bodyDuration * lolRangeToWorld(q.dashRange || 450);
+  travel.bodyStart = to.clone(); travel.bodyEnd = to.clone(); travel.bodyElapsed = travel.bodyDuration;
+  const bodyHalfWidth = lolRangeToWorld(q.dashAoEWidth || 100) * 0.5;
+  for (const u of getAllEnemyUnits()) {
+    if (!u || u.hp <= 0 || travel.hitSet.has(u)) continue;
+    if (getHorizontalDistance(getWorldPosition(u), to) > bodyHalfWidth + (getCollisionRadius(u) || 0)) continue;
+    travel.hitSet.add(u);
+    this._yoneQCritRoll = travel.critRoll;
+    this._yoneApplyQHit(u, { empowered: true });
+    this._yoneQCritRoll = null;
   }
 };
 
@@ -458,9 +481,15 @@ CharacterController.prototype._yoneCastQ = function(mouseWorldPoint, free = fals
   const qMainClip = this.findAnimation(animName) || this.findAnimation('Yone_Spell1_A_01.anm');
   const qMainTimeScale = (qMainClip && qMainClip.duration > 0 && castTime > 0) ? THREE.MathUtils.clamp(qMainClip.duration / castTime, 0.3, 4.0) : 1.0;
   this.playFirstAvailable([animName, 'Yone_Spell1_A_01.anm'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true, timeScale: qMainTimeScale });
+  const castFrom = this.root.position.clone();
   const timer = this._champTimeout(() => {
     if (this.currentActionKey !== key) return;
     this.currentPhase = 'ACTIVE';
+    // 92차: 선딜 중 점멸했으면 새 위치에서 원래 조준점 쪽으로 찌른다(원작 Q플 - "찌르기 방향이 바뀐다").
+    if (mouseWorldPoint && this.root.position.distanceToSquared(castFrom) > 1e-4) {
+      const nd = new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0);
+      if (nd.lengthSq() > 1e-6) { dir.copy(nd.normalize()); this.faceDirectionInstant(dir); }
+    }
     const targets = this._yoneFindQTargets(dir, q.range);
     if (targets.length) {
       targets.sort((a, b) => this.root.position.distanceToSquared(getWorldPosition(a)) - this.root.position.distanceToSquared(getWorldPosition(b)));
