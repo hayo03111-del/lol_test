@@ -1127,7 +1127,8 @@ CharacterController.prototype.regen = function(dt) {
     // 아이템 패시브(요정의 부적/원기 회복의 구슬) - 기본 재생량에 곱해지는
     // 퍼센트 보너스. 기존 hpRegen/mpRegen 자체는 건드리지 않고(레벨업 시
     // computeChampionStats()가 다시 계산하는 기준값) 여기서만 곱한다.
-    const mpRegenMult = 1 + (this.itemBonusMpRegenPercent || 0);
+    const aramBal = typeof getAramBalance === 'function' ? getAramBalance(this) : null; // 91차: 칼바람 기력 재생 보정(리 신 +20%)
+    const mpRegenMult = (1 + (this.itemBonusMpRegenPercent || 0)) * (1 + ((aramBal && aramBal.energyRegen) || 0));
     // 정령의형상(무한한 활력) 증폭 + 그리버스 감소 - getHealReceivedMultiplier()
     // 공용 헬퍼 하나로 묶었다(챔피언 전용 회복 스킬들도 전부 이 헬퍼를 쓴다 -
     // 01_status_effect_system.js 참고). 전 챔피언 공통 기본 체력 재생이

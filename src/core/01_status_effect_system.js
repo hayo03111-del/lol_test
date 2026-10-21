@@ -310,6 +310,9 @@ function getAttackSpeedBuffPercent(target) {
   // 적용돼, 예컨대 마스터 이 R 중에는 아이템 공속 버프가 통째로 무시됐다.
   // 같은 버프의 재적용은 applyStatus가 같은 id를 덮어쓰므로 중복 합산되지 않는다.
   for (const e of target.statusEffects) if ((e.type === 'MASTERYI_R_AS' || e.type === 'AS_BUFF') && e.expiresAt > now) v += e.value;
+  // 91차: 칼바람 공격 속도 보정(야스오·요네 +2.5%) - 추가 공격 속도로 더한다.
+  const bal = typeof getAramBalance === 'function' ? getAramBalance(target) : null;
+  if (bal && bal.attackSpeed) v += bal.attackSpeed;
   return v;
 }
 // 83차: 공격 속도 감소(AS_REDUCTION - 얼어붙은 심장 혹한의 포옹 등) = 총 공격 속도 × Π(1 - 감소). 출처끼리 곱연산(위키 Cripple).

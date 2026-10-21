@@ -59,6 +59,33 @@ const startServer = require('./server.js');
     c._onStructureBasicAttackHit(t, null, null);
     return { detonateDmg: +(b - t.hp).toFixed(2), markCleared: c._ezreal.markTarget !== t };
   });
+
+  // --- 91차 보류 항목 ---
+  await load('nilah');
+  r.nilahQBladeMinion = await page.evaluate(() => {
+    const E = window.__e2e, c = window.controller;
+    const m = E.createMinion('melee', new E.THREE.Vector3(c.root.position.x + 2, 0, c.root.position.z), 60, 'RED'); E.minions.push(m);
+    m.hp = m.maxHp = 5000; m.armor = 0; const b = m.hp;
+    c.skillLevels.Q = 5; c._nilahQHit(m.mesh.position.clone().add(new E.THREE.Vector3(1, 0, 0)), true);
+    const dmg = +(b - m.hp).toFixed(2); m.hp = 0; E.minions.splice(E.minions.indexOf(m), 1);
+    return { bladeDmgOnMinion: dmg, fullFormula: +(40 + c.stats.attackDamage).toFixed(2) };
+  });
+  await load('nautilus');
+  r.nautilusW = await page.evaluate(() => new Promise((res) => {
+    const E = window.__e2e, c = window.controller, d = E.dummies[0];
+    d.hp = d.maxHp = 1e5; d.statusEffects = []; c.skillLevels.W = 1;
+    const b = d.hp; c._nautilusApplyWOnHit(d); const now0 = +(b - d.hp).toFixed(2);
+    setTimeout(() => res({ immediate: now0, after2s: +(b - d.hp).toFixed(2), passiveCd: c._champData().passive.sameTargetCooldownSec }), 2500);
+  }));
+  await load('vex');
+  r.vexRReset = await page.evaluate(() => new Promise((res) => {
+    const E = window.__e2e, c = window.controller, d = E.dummies[0];
+    c.cooldowns.R = 50; c._vexWatchRReset(d);
+    d.hp = 0; // R 맞은 뒤 다른 피해로 사망
+    setTimeout(() => { const cd = c.cooldowns.R; d.hp = d.maxHp; res({ cooldownAfterDeath: cd, isChampion: !!d.isChampion }); }, 300);
+  }));
+  await load('yasuo');
+  r.yasuoAram = await page.evaluate(() => ({ aramActive: window.isAramRulesActive ? window.isAramRulesActive() : null, bonusAs: +window.controller.stats.bonusAttackSpeedPercent.toFixed(4) }));
   r.errors = errors;
   console.log(JSON.stringify(r, null, 1));
   await browser.close(); srv.close();

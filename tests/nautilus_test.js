@@ -209,11 +209,12 @@ const mag = (lvl, arr, ratio, ap) => arr[lvl - 1] + ratio * ap;
   const t = makeEnemy(0, 1), near = makeEnemy(lolRangeToWorld(200), 1), far = makeEnemy(lolRangeToWorld(900), 1);
   stubs.placedDummies = [t, near, far];
   c._nautilusApplyWOnHit(t);
-  const dot = getStatus(t, 'nautilusW_dot');
+  const wDot = (u) => (u.statusEffects || []).find((e) => /^nautilusW_dot/.test(e.id));
+  const dot = wDot(t);
   const total = mag(1, D.W.onHitDamageByLevel, D.W.onHitApRatio, 100);
-  assert(dot && Math.abs(dot.totalDamage - total) < 1e-6 && dot.duration === 2, `W: 평타 대상에게 2초간 마법 피해 ${total}`);
-  assert(!!getStatus(near, 'nautilusW_dot'), 'W: 대상 주변(350) 적에게도 피해');
-  assert(!getStatus(far, 'nautilusW_dot'), 'W: 범위 밖 적은 제외');
+  assert(dot && Math.abs(dot.totalDamage - total / 2) < 1e-6 && dot.duration === 1.25, `W: 평타 대상에게 절반 즉시 + 절반 ${total / 2}은 1.25초 뒤(91차)`);
+  assert(!!wDot(near), 'W: 대상 주변 적에게도 피해');
+  assert(!wDot(far), 'W: 범위 밖 적은 제외');
 
   c.shield -= shield; // 보호막이 피해로 전부 깨짐
   c._nautilusTickW();

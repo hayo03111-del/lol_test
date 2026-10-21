@@ -462,14 +462,9 @@ const CHAMPION_DATA = {
       // 닐라 Q 공격 속도 증가는 스킬 랭크가 아니라 챔피언 레벨에 따라 10%에서 시작해
       // 레벨당 +2.941%씩 증가하며 최대 60%에서 제한한다.
       extraConeTotalAdRatio: 1.0, coneDuration: 4,
-      // 데이터 수정: Q 강화 평타(원뿔 범위 공격)의 몬스터(정글 몹 등) 대상
-      // 피해가 100%(1.0)로 잘못 들어가 있었다 - 실제로는 미니언 33%, 몬스터
-      // 10%(0.1)로 훨씬 낮게 감소된다. 몬스터 피해가 그대로 100%면 정글
-      // 상대 전투력이 실제 게임보다 훨씬 강하게 계산된다.
-      // (실제 bin의 MonsterMod는 1.0(=100%)로 나오지만, 이 bin 자체가
-      // 출시 초기 스냅샷으로 확인된 값들이 여럿 섞여 있어 - 위키의 "몬스터
-      // 대상 10%로 감소"가 이후 패치로 추가된 최신 값으로 보고 유지한다.)
-      minionDamageMultiplier: 0.33, monsterDamageMultiplier: 0.10, executeMinionHp: 20,
+      // 91차: 감소 배율과 처형은 Q 칼날이 아니라 강화 평타 원뿔의 "주 대상 외" 비챔피언에만 적용된다(PC 위키 현행).
+      // 미니언 33%, 몬스터 100%(25.17에 10% → 100%), 원뿔에 맞고 체력 20 이하로 남은 미니언은 처형. 예전엔 Q 칼날에 걸려 있었다.
+      coneMinionDamageMultiplier: 0.33, coneMonsterDamageMultiplier: 1.0, coneExecuteMinionHp: 20,
     },
     W: {
       name: '승리의 장막', cooldown: [26,25,24,23,22], mana: [60,45,30,15,0],
@@ -595,10 +590,10 @@ const CHAMPION_DATA = {
     // 못한 값은 옆에 "미확인"으로 표시했다 - 원문을 받으면 그 값만 바꾸면 된다.
     passive: {
       name: '강력한 일격', desc: '첫 공격이 추가 물리 피해 + 속박(동일 대상 6초 1회).',
-      // PC 위키 V13.3: 8~110 → 14~116(레벨 비례). 128이라는 값은 어떤 패치 기록에도 없어 116으로 확정.
-      bonusDamageAtLevel1: 14, bonusDamageAtLevel18: 116,
+      // 91차: PC 위키 현행 스킬 설명(게임 데이터에서 생성) 14~128(레벨 비례). 116은 V13.3 패치 기록 값.
+      bonusDamageAtLevel1: 14, bonusDamageAtLevel18: 128,
       rootByLevel: { breakpoints: [1, 6, 11, 16], values: [0.75, 1.0, 1.25, 1.5] }, // PC 위키: 0.75~1.5초(V9.12). 구간 1/6/11/16은 미확인
-      sameTargetCooldownSec: 5, // PC 위키 패치 기록 V13.24: 같은 대상 재발동 6초 → 5초(이후 되돌린 기록 없음)
+      sameTargetCooldownSec: 6, // 91차: 소환사의 협곡 6초(V9.6부터 전 레벨 6초, Leaguepedia·위키 현행). 5초는 아레나 값
     },
     Q: {
       // 사거리 1150 → 1122 (78차: PC 위키 Template:Data, 검색 요약 대조)
@@ -612,7 +607,7 @@ const CHAMPION_DATA = {
     W: {
       name: '타이탄의 분노', cooldown: 12, mana: 60, durationSec: 6,
       shieldByLevel: [50, 60, 70, 80, 90], shieldMaxHpPercentByLevel: [8, 9, 10, 11, 12],
-      onHitDamageByLevel: [30, 40, 50, 60, 70], onHitApRatio: 0.4, onHitDotDurationSec: 2, splashRadius: 250, // 주변 피해 반경 350 → 250 (79차: PC 위키 Template:Data, 검색 요약 대조)
+      onHitDamageByLevel: [30, 40, 50, 60, 70], onHitApRatio: 0.4, onHitSecondHalfDelaySec: 1.25, splashRadius: 250, // 91차: 절반 즉시 + 절반 1.25초 뒤(예전 2초 지속 피해) // 주변 피해 반경 350 → 250 (79차: PC 위키 Template:Data, 검색 요약 대조)
       damageType: 'MAGICAL',
     },
     E: {
@@ -671,7 +666,8 @@ const CHAMPION_DATA = {
     W: {
       name: '몸 말아 웅크리기', cooldown: 7, mana: 40, durationSec: 7, recastLockSec: 0.5, // 25.12: 6 → 7초. recastLockSec는 추정
       bonusArmorByLevel: [27, 32, 37, 42, 47], bonusMrByLevel: [27, 32, 37, 42, 47], // 25.13
-      armorPercentByLevel: [30, 37.5, 45, 52.5, 60], // 총 방어력 비례 추가 방어력 - 25.12 이전 기록 값(현재 값 추정)
+      // 91차: 총 방어력·총 마법 저항력의 30/37.5/45/52.5/60%를 각각 추가(PC 위키 현행 - 방어력과 마법 저항력 모두).
+      armorPercentByLevel: [30, 37.5, 45, 52.5, 60], mrPercentByLevel: [30, 37.5, 45, 52.5, 60],
       // 91차: 반사 피해 15 + 총 방어력 10% + 총 마법 저항력 10%(PC 위키 Template:Data Rammus/Defensive Ball Curl, 레벨 무관).
       // 예전 값(15~55 + 추가 방어력 10%)은 옛 버전 수치였다.
       returnDamage: 15, returnArmorRatio: 0.1, returnMrRatio: 0.1, damageType: 'MAGICAL',
@@ -963,7 +959,7 @@ const CHAMPION_DATA = {
       range: [2000, 2500, 3000], width: 260, missileSpeed: 1600, dashSpeed: 2200, damageByLevel: [75, 125, 175],
       apRatio: 0.2, recastRange: [2000, 2500, 3000],
       recastDamageByLevel: [150, 250, 350], recastApRatio: 0.5,
-      recastEnabled: true, resetOnKill: true,
+      recastEnabled: true, resetOnKill: true, resetWindowSec: 8, // 91차: 26.13에 6초 → 8초
       damageType: 'MAGICAL',
       //첫 번째로 적중한 적 챔피언에게 4초 동안 표식을 남김
       //표식이 남은 챔피언이 이 스킬로 피해를 입은 뒤 8초 이내에 사망할 경우, 재사용 대기시간이 초기화됨
@@ -1262,22 +1258,23 @@ const CHAMPION_DATA = {
       desc: '충전할수록 사거리(1.5초)와 피해량(1.25초)이 늘어나는 관통 화살을 발사한다. 충전 중에는 20% 느려진 채 움직일 수 있고, 4초 안에 다시 누르지 않으면 취소되며 마나 절반을 돌려받는다. 오한(블라이트) 표식이 있는 대상을 맞히면 표식을 함께 터뜨리며, 이때는 잃은 체력 비례 추가 마법 피해와 재사용 대기시간 감소가 충전량에 비례해 더 크게 붙는다.',
       cooldown: [16, 15, 14, 13, 12], mana: [50, 55, 60, 65, 70],
       // 75차: 사거리 925~1600 → 895~1595, 폭 75 → 140(PC 위키 Template:Data Varus/Piercing Arrow "895 – 1595", "Width 140").
-      minRange: 895, maxRange: 1595, chargeDuration: 1.25, minChargeDamageRatio: 0.667,
+      minRange: 895, maxRange: 1595, chargeDuration: 1.25, minChargeDamageRatio: 1 / 1.7, // 91차: 26.21 충전 피해 증가 최대 50% → 70%(최소 50~230 + 추가 AD 80%)
       // PC 위키: 충전 중 20% 둔화, 최대 4초 유지(넘기면 취소되고 마나 50% 환급), 사거리는 처음 1.5초·효과는 처음 1.25초 동안 증가.
       rangeChargeDuration: 1.5, maxHoldSec: 4, holdTimeoutManaRefundPercent: 50, chargeSelfSlowPercent: 20,
-      // V26.05: 최대 기본 피해 80/150/220/290/360, 현재 최대 계수 추가 AD 120%(PC 위키). 예전 값은 총 AD 130~170%.
-      damageMaxByLevel: [80, 150, 220, 290, 360], bonusAdRatioMax: 1.2,
+      // 91차: 26.21 최대 85/161.5/238/314.5/391 + 추가 AD 136%(최소 50/95/140/185/230 + 80%의 1.7배). 예전 80~360 + 120%(V26.05).
+      damageMaxByLevel: [85, 161.5, 238, 314.5, 391], bonusAdRatioMax: 1.36,
       missileSpeed: 1900, width: 140, damageType: 'PHYSICAL', // 투사체 속도 1500 → 1900 (80차: PC 위키 Template:Data, 검색 요약 대조)
     },
     W: {
       name: '오한의 화살통',
-      desc: '기본 공격이 추가 마법 피해를 입히고 오한(블라이트)을 남긴다(최대 3중첩, 중첩당 6초). 사용하면 사거리 내 오한이 남은 대상 하나를 골라 오한을 모두 터뜨려 중첩당 대상 최대 체력 비례 마법 피해를 입히고, 자신의 기본 스킬 재사용 대기시간을 중첩당 13%(최대 39%) 감소시킨다. Q로 터뜨리면 잃은 체력 비례 추가 피해와 더 큰 재사용 대기시간 감소가 함께 붙는다.',
+      desc: '기본 공격이 추가 마법 피해를 입히고 오한(블라이트)을 남긴다(최대 3중첩, 중첩당 6초). 사용하면 사거리 내 오한이 남은 대상 하나를 골라 오한을 모두 터뜨려 중첩당 대상 최대 체력 비례 마법 피해를 입히고, 자신의 기본 스킬 재사용 대기시간을 중첩당 11%(최대 33%) 감소시킨다. Q로 터뜨리면 잃은 체력 비례 추가 피해와 더 큰 재사용 대기시간 감소가 함께 붙는다.',
       cooldown: 40, range: 750, maxStacks: 3, stackDuration: 6,
-      // V26.12: 4/13/22/31/40, V26.03: 주문력 25%(예전엔 추가 AD 35%로 잘못 들어가 있었다).
-      onHitDamageByLevel: [4, 13, 22, 31, 40], onHitApRatio: 0.25,
-      detonatePercentMaxHpByLevel: [3, 3.5, 4, 4.5, 5],
-      qConsumeMissingHpPercentByLevel: [6, 8, 10, 12, 14], qConsumeMaxChargeMultiplier: 1.5,
-      cdrPerStackPercent: 13, cdrMaxBonusPercentFromCharge: 50,
+      // 91차: 26.21 적중 시 4/10/16/22/28 + 추가 AD 20% + 주문력 30%(예전 4~40 + 주문력 25%).
+      onHitDamageByLevel: [4, 10, 16, 22, 28], onHitBonusAdRatio: 0.2, onHitApRatio: 0.3,
+      detonatePercentMaxHpByLevel: [3, 3.5, 4, 4.5, 5], // 26.21에 중첩당 피해도 줄었다는 요약이 있으나 값을 확인 못 해 그대로
+      // 91차: 26.21 잃은 체력 6~14% → 6~10%, Q 충전 비례 증가 최대 50% → 70%, 재사용 대기시간 감소 중첩당 13% → 11%.
+      qConsumeMissingHpPercentByLevel: [6, 7, 8, 9, 10], qConsumeMaxChargeMultiplier: 1.7,
+      cdrPerStackPercent: 11, cdrMaxBonusPercentFromCharge: 70,
       damageType: 'MAGICAL',
     },
     E: {
@@ -1465,20 +1462,24 @@ function computeChampionStats(championId, level) {
   };
 }
 
-// 83차: 칼바람 나락 챔피언별 밸런스 보정(원작 ARAM 전용). dmgDealt/dmgTaken/healing/shielding = 증감 비율(0.05 = +5%).
-// 출처: PC 위키 ARAM 문서·패치 기록, aramnerfs.com·u.gg 26.19~26.20(위키 직접 접속 불가 - 검색 요약). 26.15에 대부분 중립으로
-// 정리됐다. 신뢰도 낮은 항목은 주석으로 표시 - 위키를 열 수 있게 되면 이 표만 고치면 된다. 없는 챔피언 = 보정 없음.
+// 83차: 칼바람 나락 챔피언별 밸런스 보정(원작 ARAM 전용). dmgDealt/dmgTaken/healing/shielding/attackSpeed/energyRegen = 증감 비율(0.05 = +5%).
+// 91차: 26.19~26.20 기준으로 다시 맞췄다(aramnerfs 26.19, u.gg·Mobalytics 26.20 검색 요약 - 위키 직접 접속 불가). 26.15 개편 뒤 값만 썼다.
+// 세트·레넥톤·모데카이저·야스오·요네·리 신 보호막/기력 추가, 람머스는 보정 없음(예전 값은 26.15 이전 기록). abilityCooldown = 스킬별 재사용 대기시간 교체.
 const ARAM_BALANCE = {
   garen: { dmgTaken: -0.05 },
-  leesin: { dmgDealt: 0.05, dmgTaken: -0.05, healing: 0.10 },
+  darius: { dmgDealt: 0.05 },
+  sett: { dmgTaken: 0.10 },
+  renekton: { healing: 0.10 },
+  mordekaiser: { dmgDealt: -0.05, dmgTaken: 0.02 },              // 신뢰도 중간
+  yasuo: { attackSpeed: 0.025, abilityCooldown: { W: [27, 25, 23, 21, 19] } },
+  yone: { dmgDealt: 0.05, dmgTaken: -0.03, attackSpeed: 0.025 },
+  leesin: { dmgDealt: 0.05, dmgTaken: -0.05, healing: 0.10, shielding: 0.20, energyRegen: 0.20 }, // 기력 재생은 위키 요약에만(신뢰도 중간)
   lux: { dmgDealt: -0.10, dmgTaken: 0.10, shielding: -0.10 },
   ashe: { dmgDealt: 0.05 },
   ahri: { healing: -0.10 },
   vex: { dmgDealt: -0.05 },
-  nautilus: { dmgDealt: -0.05, dmgTaken: 0.10 },          // u.gg 26.20(신뢰도 중간)
-  chogath: { dmgTaken: 0.10 },                             // 출처끼리 엇갈림(대난투 쪽은 -5%)
-  rammus: { dmgDealt: 0.05, dmgTaken: -0.10 },             // 옛 패치 기록(신뢰도 낮음)
-  darius: { dmgDealt: 0.05 },                              // 날짜 없는 집계(신뢰도 낮음)
+  nautilus: { dmgDealt: -0.05, dmgTaken: 0.10 },
+  chogath: { dmgTaken: 0.10 },
 };
 // 칼바람 규칙(밸런스 보정·원거리 감소·남에게 주는 치유 50%)은 칼바람 맵이 깔렸을 때만 적용한다.
 function isAramRulesActive() { return typeof howlingAbyssStructuresSpawned !== 'undefined' && !!howlingAbyssStructuresSpawned; }

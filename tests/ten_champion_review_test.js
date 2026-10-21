@@ -326,13 +326,13 @@ function clearPlaced() { stubs.placedDummies.length = 0; }
   assert(!getStatus(c, 'varusLivingVengeance') && !c.bonusAD, '바루스 패시브: 1레벨 5초 후 종료');
   const t2 = makeEnemy(0, 1); const b = t2.hp;
   c.skillLevels.W = 1; c._varusOnBasicAttackHit(t2);
-  assert(near(b - t2.hp, 4 + 0.25 * 100), '바루스 W: 적중 시 4 + 주문력 25%');
+  assert(near(b - t2.hp, 4 + 0.2 * c._getBonusAD() + 0.3 * 100), '바루스 W: 적중 시 4 + 추가 AD 20% + 주문력 30%(26.21)');
   c._varusCastW(null, false);
   assert(c._varus.wEmpowerQ === true, '바루스 W 사용: 다음 Q 강화(오한을 즉시 터뜨리지 않음)');
 }
 // --- 6차: 남은 미확인 항목 재확인 ---
 {
-  assert(CHAMPION_DATA.nautilus.passive.bonusDamageAtLevel18 === 116 && !CHAMPION_DATA.nautilus.passive.bonusDamageGuessed, '노틸러스 패시브: 14~116(V13.3) 확정');
+  assert(CHAMPION_DATA.nautilus.passive.bonusDamageAtLevel18 === 128 && CHAMPION_DATA.nautilus.passive.sameTargetCooldownSec === 6, '노틸러스 패시브: 14~128, 같은 대상 6초(91차, 위키 현행)');
   assert(CHAMPION_DATA.leesin.R.collisionAirborneSec === 1 && !CHAMPION_DATA.leesin.R.collisionAirborneGuessed, '리 신 R: 충돌 공중에 뜸 1초 확정');
   assert(!CHAMPION_DATA.yasuo.passive.flowBreakpointsGuessed, '야스오 기류 구간 1/7/13 확정');
   const dm = CHAMPION_DATA.darius.passive.empoweredAdByLevel;

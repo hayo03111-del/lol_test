@@ -80,8 +80,11 @@ CharacterController.prototype._nautilusApplyWOnHit = function(target) {
     if (!u || u === target || u.hp <= 0 || u.isStructure) continue;
     if (isInCircle(u, center, lolRangeToWorld(w.splashRadius))) units.push(u);
   }
+  // 91차(PC 위키): 피해는 두 번 - 절반은 즉시(스킬 피해), 절반은 1.25초 뒤(지속 피해). 다시 걸려도 이미 걸린 뒤 절반은 그대로 들어간다.
+  this._nautilus.wHitSeq = (this._nautilus.wHitSeq || 0) + 1;
   for (const u of units) {
-    applyStatus(u, { id: 'nautilusW_dot', type: 'DOT', duration: w.onHitDotDurationSec, tickInterval: 0.5, totalDamage: total, damageType: DAMAGE_TYPE.MAGICAL, source: this });
+    applyDamage(u, { rawDamage: total / 2, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isAbility: true, isAoE: u !== target, source: this });
+    if (u.hp > 0) applyStatus(u, { id: 'nautilusW_dot' + this._nautilus.wHitSeq, type: 'DOT', duration: w.onHitSecondHalfDelaySec, tickInterval: w.onHitSecondHalfDelaySec, totalDamage: total / 2, damageType: DAMAGE_TYPE.MAGICAL, source: this });
   }
 };
 

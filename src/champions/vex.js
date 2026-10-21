@@ -56,6 +56,7 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
         if (t && t.hp > 0 && !t.isDead && !t.destroyed) {
           const raw = skillVal(rd.recastDamageByLevel, lvl) + (rd.recastApRatio || 0) * (this.stats.abilityPower || 0);
           applyDamage(t, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1, source: this });
+          this._vexWatchRReset(t);
           vfx.spawn('r', this.root.position.clone());
           debugSkillHit('Vex R Recast', t);
           if (t.hp <= 0) {
@@ -99,6 +100,7 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
       onHit: (hitTarget) => {
         if (!hitTarget || hitTarget.hp <= 0) return;
         applyDamage(hitTarget, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1, source: this });
+        this._vexWatchRReset(hitTarget);
         vfx.spawn('r', getWorldPosition(hitTarget) || hitTarget.mesh.position.clone());
         debugSkillHit('Vex R', hitTarget);
         if (hitTarget.hp > 0) {
@@ -122,8 +124,26 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
 };
 
 // Extracted from CharacterController: _vexUpdateR
+// 91차(PC 위키, 26.13): R 피해를 입은 챔피언이 8초 안에 죽으면 R 재사용 대기시간 초기화(예전엔 R 피해로 바로 죽인 경우만).
+CharacterController.prototype._vexWatchRReset = function(t) {
+  if (!t || !t.isChampion) return;
+  const rd = this._champData().R;
+  if (!rd.resetOnKill) return;
+  this._vex.rResetWatch = { target: t, until: performance.now() + (rd.resetWindowSec || 8) * 1000 };
+};
+CharacterController.prototype._vexTickRResetWatch = function() {
+  const w = this._vex && this._vex.rResetWatch;
+  if (!w) return;
+  if (performance.now() > w.until) { this._vex.rResetWatch = null; return; }
+  const t = w.target;
+  if (t && (t.hp <= 0 || t.isDead || (typeof STATE !== 'undefined' && t.state === STATE.DEAD))) {
+    this._vex.rResetWatch = null;
+    this.cooldowns.R = 0;
+    if (!this._vex.dashActive) this._vexClearRRecast();
+  }
+};
 CharacterController.prototype._vexUpdateR = function(dt) { 
-    if (this.championId === 'vex') { this._vexTickQ(dt); this._vexTickE(dt); this._vexTickWShield(); }
+    if (this.championId === 'vex') { this._vexTickQ(dt); this._vexTickE(dt); this._vexTickWShield(); this._vexTickRResetWatch(); }
     if (!this._vex || !this._vex.dashActive) {
       if (this._vex && this._vex.recastReadyUntil && performance.now() >= this._vex.recastReadyUntil) this._vexClearRRecast();
       return;

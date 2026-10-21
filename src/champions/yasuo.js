@@ -239,7 +239,8 @@ CharacterController.prototype._yasuoCastW = function(mouseWorldPoint, free=false
     const castSec = w.castTimeSec ?? 0.013;
     this._champTimeout(()=>{ if (this.hp > 0) this._yasuoCreateWindwall(dir,width); }, castSec*1000);
     this.runAction('yasuoW',STATE.W_CAST,{startupOverride:castSec,recoveryOverride:Math.max(0.05,dur-castSec),dataOverride:{clips:[anim],startup:castSec,recovery:Math.max(0.05,dur-castSec),cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{}});
-    if(!free) this.cooldowns.W=abilityHasteCooldown(this, this._yasuoLevelValue(w.cooldown,lvl));
+    const aramW = typeof getAramBalance === 'function' && getAramBalance(this)?.abilityCooldown?.W; // 91차: 칼바람 W 27~19초
+    if(!free) this.cooldowns.W=abilityHasteCooldown(this, this._yasuoLevelValue(aramW || w.cooldown,lvl));
 
 };
 

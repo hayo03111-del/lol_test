@@ -165,7 +165,7 @@ CharacterController.prototype._chogathEOnHit = function(target) {
       const hpB = unit.hp, flB = isFlooredTrainingDummy(unit);
       const dealt = applyDamage(unit, { rawDamage: dmg, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this }) || 0;
       const wouldKill = !flB && hpB > 0 && hpB <= dealt;
-      applyStatus(unit, { id: 'chogathE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100 });
+      applyStatus(unit, { id: 'chogathE_slow', type: 'SLOW', duration: e.slowDuration, value: skillVal(e.slowPercentByLevel, lvl) / 100, decayLinear: true }); // 91차: 1.5초에 걸쳐 감소(위키)
       if (wouldKill) this._chogathOnKill(unit);
     }
     this._chogath.eChargesRemaining -= 1;

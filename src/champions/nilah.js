@@ -266,10 +266,14 @@ CharacterController.prototype._nilahOnBasicAttackHit = function(target, dealtDam
       // 이펙트가 캐릭터 발밑(this.root.position)에 생성되고 있었고,
       // 강화 상태(empowered)일 때만 나갔던 게 정확히 "발밑 반짝이"였다.
       // 원뿔 범위 데미지 판정 자체는 그대로 두고, 이 시각 효과만 제거했다.
+      const qd = this._nilahData().Q;
       for (const h of hits) {
         if (h.unit === target) continue;
-        const extra = this.stats.attackDamage * this._nilahData().Q.extraConeTotalAdRatio;
-        applyDamage(h.unit, { rawDamage: extra, damageType: DAMAGE_TYPE.PHYSICAL, isCritical:false, critMultiplier:1, armorPenPercent: this.armorPenPercent || 0 });
+        // 91차: 주 대상 외 비챔피언은 감소(미니언 33%, 몬스터 100%), 맞고 체력 20 이하로 남은 미니언은 처형.
+        const mult = h.unit.isMinion ? qd.coneMinionDamageMultiplier : (h.unit.isMonster ? qd.coneMonsterDamageMultiplier : 1);
+        const extra = this.stats.attackDamage * qd.extraConeTotalAdRatio * mult;
+        applyDamage(h.unit, { rawDamage: extra, damageType: DAMAGE_TYPE.PHYSICAL, isCritical:false, critMultiplier:1, armorPenPercent: this.armorPenPercent || 0, source: this });
+        if (h.unit.isMinion && h.unit.hp > 0 && h.unit.hp <= qd.coneExecuteMinionHp) { h.unit.hp = 0; killMinion(h.unit); }
         // 추가: 추가 피격 대상 각각에도 작은 히트 링을 남겨서 "여러 명을
         // 맞췄다"는 게 실제로 보이게 한다.
         if (typeof nilahVfx2Ring === 'function') {
@@ -324,11 +328,7 @@ CharacterController.prototype._nilahQHit = function(impactPoint, free=false, ePa
     let hitSomething = false;
     for (const u of hits) {
       if (!u || u.hp <= 0) continue;
-      if (u.isMinion && u.hp <= q.executeMinionHp) { u.hp = 0; killMinion(u); hitSomething = true; continue; }
-      let mult = 1;
-      if (u.isMinion) mult = q.minionDamageMultiplier;
-      else if (u.isMonster) mult = q.monsterDamageMultiplier;
-      applyDamage(u, { rawDamage: raw * mult, damageType:DAMAGE_TYPE.PHYSICAL, isCritical:false, critMultiplier:1, armorPenPercent:this.armorPenPercent||0 });
+      applyDamage(u, { rawDamage: raw, damageType:DAMAGE_TYPE.PHYSICAL, isCritical:false, critMultiplier:1, armorPenPercent:this.armorPenPercent||0 });
       hitSomething = true;
     }
     if (hitSomething) {

@@ -310,9 +310,9 @@ CharacterController.prototype._rammusCastW = function(free = false) {
   if (!this._payCost('W', free)) return;
   if (r.roll) this._rammusEndRoll('W'); // 원작: W를 쓰면 대회전이 끝난다
   const lvl = Math.max(1, this.skillLevels.W || 1);
-  const armorNow = this.stats.armor || 0;
+  const armorNow = this.stats.armor || 0, mrNow = this.stats.magicResist || 0;
   r.wArmor = skillVal(w.bonusArmorByLevel, lvl) + armorNow * skillVal(w.armorPercentByLevel, lvl) / 100;
-  r.wMr = skillVal(w.bonusMrByLevel, lvl);
+  r.wMr = skillVal(w.bonusMrByLevel, lvl) + mrNow * skillVal(w.mrPercentByLevel || [0, 0, 0, 0, 0], lvl) / 100; // 91차: 총 마법 저항력 30~60%도 추가(위키)
   this.bonusArmor = (this.bonusArmor || 0) + r.wArmor;
   this.bonusMr = (this.bonusMr || 0) + r.wMr;
   r.wStartedAt = performance.now();
