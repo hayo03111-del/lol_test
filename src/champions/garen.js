@@ -42,7 +42,8 @@ CharacterController.prototype._garenQOnHit = function(target) {
     const q = cd.Q;
     const lvl = Math.max(1, this.skillLevels.Q || 1);
     const dmg = skillVal(q.damageByLevel, lvl) + q.adRatio * this.stats.attackDamage;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+    // 91차: 강화 평타의 추가 피해 - 평타 피해로 분류(스킬 증폭·운명의 재 제외, 흡혈 적용), 같은 공격의 적중 효과는 두 번 세지 않음.
+    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this });
     applyStatus(target, { id: 'garenQ_silence', type: 'SILENCE', duration: q.silenceDuration, value: 1 });
   
 };

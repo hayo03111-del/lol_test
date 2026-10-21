@@ -194,8 +194,10 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
     this.runAction(`renektonAA${this.comboIndex}`,STATE.ATTACK,{faceDir:dir,startupOverride:windup,recoveryOverride:recovery,timeScaleOverride:clip&&interval>0?attackClipTimeScale(this,clip,windup,interval):1,dataOverride:{clips:[clipName],startup:windup,recovery,cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{
       if(!targetLockValid(target)) return;
       if(target.isWard){ wardSystem.hitWard(target,this); return; } // 32차: 와드는 평타 1회에 체력 1
-      const attackResult={rawDamage:this.stats.attackDamage,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,isBasicAttack:true};
-      applyDamage(target,attackResult); this._renektonOnBasicAttackHit(target);
+      // 91차: 명중 처리는 공용 근접 평타 경로(치명타·관통·아이템 적중 효과·분노 획득은 _onBasicAttackHit에서).
+      const willCrit=this._rollBasicAttackCrit();
+      const attackResult={rawDamage:this.stats.attackDamage,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:willCrit,critMultiplier:this.stats.critMultiplier,armorPenPercent:this.armorPenPercent||0,isBasicAttack:true};
+      this._applyMeleeBasicAttackHit(target,attackResult,null,null,willCrit);
     }});
     function targetLockValid(t){return t && t.hp>0;}
   
@@ -205,7 +207,7 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
 CharacterController.prototype._renektonOnBasicAttackHit = function(target) { 
     if (this.championId!=='renekton' || !target) return;
     this._renektonMarkCombat();
-    if (this._renekton.wSeq) return; // W sequence owns all its own rage/on-hit events.
+    if (this._renekton.wSeq || this._renekton.wResolving) return; // W sequence owns all its own rage events.
     this._renektonGainRage(5);
     if (target.isTurret || target.isInhibitor || target.isNexus) return;
   
@@ -228,6 +230,8 @@ CharacterController.prototype._renektonResolveWHit = function(seq) {
       // 챔피언 적중 추가 분노 10은 스킬 한 번에 1회(예전엔 타격마다 들어가 2회 = 20이었다).
       if (seq.hitIndex===0 && (target.isChampion || (!target.isMinion&&!target.isTurret&&!target.isNexus&&!target.isInhibitor))) this._renektonGainRage(10);
     }
+    // 91차: 타격마다 적중 효과(원작: 강화 평타의 각 타격이 적중 효과 적용). 분노는 W가 직접 관리(_renektonOnBasicAttackHit는 wSeq 중 건너뜀).
+    this._renekton.wResolving=true; try { this._onBasicAttackHit(target, null, false, null, false); } finally { this._renekton.wResolving=false; }
     this._renektonMarkCombat();
     if (seq.hitIndex===seq.hits-1 && !seq.empowered) applyStatus(target,{id:'renektonWstun',type:'STUN',duration:seq.stun,value:1});
     if (seq.hitIndex===seq.hits-1 && seq.empowered) applyStatus(target,{id:'renektonWstun',type:'STUN',duration:seq.stun,value:1});

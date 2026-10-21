@@ -353,8 +353,7 @@ CharacterController.prototype._vexConsumeGloom = function(unit) {
   this._vex.gloom.delete(unit);
   if (until <= performance.now() || !unit || unit.hp <= 0) return false;
   const p = this._vexPassive();
-  const lvT = Math.min(1, Math.max(0, ((this.champLevel || 1) - 1) / 17));
-  let raw = p.gloomDamageAtLevel1 + (p.gloomDamageAtLevel18 - p.gloomDamageAtLevel1) * lvT + p.gloomApRatio * (this.stats.abilityPower || 0);
+  let raw = growStat(p.gloomDamageBase, p.gloomDamageGrowth, this.champLevel || 1) + p.gloomApRatio * (this.stats.abilityPower || 0);
   if (!unit.isChampion) raw *= valueByBreakpoints(p.gloomNonChampionPercentByLevel, this.champLevel || 1) / 100;
   applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
   this._vexRefundDoom(unit.isChampion ? p.gloomRefundChampionPercent : p.gloomRefundNonChampionPercent);

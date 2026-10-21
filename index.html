@@ -1949,7 +1949,7 @@ function resolveDamageSource(source, target) {
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
 // 넘어온다 - 여기서 다시 굴리지 않는다(같은 공격 인스턴스의 결과가 명중
 // 시점에 바뀌면 안 되므로).
-function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false, isStatusTick = false, isUltimate = false }) {
+function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false, isStatusTick = false, isUltimate = false }) {
   // 무한의 대검(치명타 피해량 +30%) - 각 챔피언 스킬이 저마다 다른
   // critMultiplier를 넘기므로(공용 필드가 아님), 공격자의 아이템 보너스를
   // 여기서 한 곳에서 더해 넣는다 - 치명타가 아니면 critMultiplier 자체가
@@ -1973,6 +1973,9 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     const atkP = resolveDamageSource(source, target);
     // 벼락폭풍검(창공)의 "4초간 물리 관통력 획득"은 영구 스탯(itemBonusArmorPenFlat)과 별개의 임시 버프(itemTempArmorPenFlat).
     const flatArmorPen = ((atkP && atkP.itemBonusArmorPenFlat) || 0) + ((atkP && atkP.itemTempArmorPenFlat) || 0);
+    // 91차: % 방어구 관통(다리우스 E 패시브·닐라 Q 패시브)은 공격자 능력치라 넘기지 않은 피해(출혈 등 지속 피해 틱)에도
+    // 공격 챔피언의 값을 쓴다. 예전엔 출혈 틱에 관통이 빠졌다. 0을 직접 넘긴 경우(억제기)는 그대로 0.
+    if (armorPenPercent === undefined) armorPenPercent = (atkP && typeof atkP.championId === 'string' && atkP.armorPenPercent) || 0;
     if (armor > 0) armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등
     // 경계(빛과 어둠 - 어둠)의 임시 방어구 관통력(최대 30%) - 영구 곱연산 필드와 별개로 곱한다.
     if (armor > 0 && atkP && atkP.itemTempArmorPenPercent > 0) armor *= (1 - Math.max(0, Math.min(1, atkP.itemTempArmorPenPercent)));
@@ -3085,10 +3088,10 @@ const CHAMPION_DATA = {
     passive: {
       name: '낭인의 길',
       // 의지(Intent): 다른 모든 출처의 치명타 확률 2배(V14.10에 2.5→2), 100% 초과분
-      // 1%당 추가 공격력 0.5. 치명타 피해 감소는 V15.4에서 삭제됐다 - 치명타 배율은
-      // 다른 챔피언과 같은 기본값(stats.critMultiplier)+무한의 대검 보너스를 쓴다.
+      // 1%당 추가 공격력 0.5. 91차: 치명타 피해 감소는 26.1에 -10%로 다시 생겼고 26.17에 -5%로 줄었다
+      // → 총 치명타 피해(기본 175% + 무한의 대검) × 0.95.
       // 예전 구조는 아이템이 없어도 치명타 확률을 항상 100%로 고정했다.
-      critChanceMultiplier: 2.0, overcapCritToAd: 0.5,
+      critChanceMultiplier: 2.0, overcapCritToAd: 0.5, critDamage: 1.6625, critDamageModifier: 0.95,
       // 결의(Resolve): 이동한 거리 59/52.5/46(레벨 구간) 유닛마다 기류 1, 100에서
       // 챔피언/몬스터에게 피해를 받으면 1초 동안 보호막 125~600(레벨 비례).
       // 레벨 구간 1/7/13 확인(PC 위키 + 공략 "based on level 1 / 7 / 13").
@@ -3165,9 +3168,10 @@ const CHAMPION_DATA = {
       // (+27%p)는 위키에 나온 그대로 가산한다: 190%+27%=217%.
       // 업데이트(PC 패치 기록 대조): 위 190%는 "기본 치명타 피해 200%" 시절 기준이었다.
       // 현재 PC 기본 치명타 피해는 175%이고 요네는 치명타 피해 10% 감소(V14.20에서 -20%→-10%)
-      // → 175% × 0.9 = 157.5%. 무한의 대검 보너스는 calculateDamage/Q 계산에서 더한다.
+      // → 175% × 0.9 = 157.5%. 91차: 26.17에 감소가 -10% → -5%(175% × 0.95 = 166.25%).
+      // 무한의 대검 보너스는 감소 전에 더한다((1.75 + 대검) × 0.95, calculateDamage/Q 계산).
       critChanceMultiplier: 2.0, overcapCritToAd: 0.5,
-      critDamage: 1.575, critDamageModifier: 0.9,
+      critDamage: 1.6625, critDamageModifier: 0.95,
       // Steel and Spirit: 평타가 강철 검/아자카나의 검을 번갈아 사용하며,
       // 아자카나의 검 공격은 물리 50% + 마법 50%로 나뉘어 들어간다.
       // (요네.bin YonePassive.MagicDamageSplit=0.5로 재확인됨)
@@ -3190,7 +3194,7 @@ const CHAMPION_DATA = {
       // 75차: 돌풍 폭 80 → 160(PC 위키 Template:Data Yone/Mortal Steel "WIDTH: Edge range 80 / 160" - 3타 돌풍이 160).
       dashRange: 450, missileRange: 950, dashAoEWidth: 200, /* 81차: 돌진 본체 충돌 반경 100 = 폭 200(PC 위키 Template:Data Yone/Mortal Steel "collision radius 100") */ missileWidth: 160,
       dashSpeed: 1500,
-      damageByLevel: [25,50,75,100,125], totalAdRatio: 1.10,
+      damageByLevel: [25,50,75,100,125], totalAdRatio: 1.05, // 91차: 26.21 공격력 계수 110% → 105%
       stackDuration: 6, maxStacks: 2, knockupDuration: 0.75,
       damageType: 'PHYSICAL',
     },
@@ -3332,9 +3336,8 @@ const CHAMPION_DATA = {
     },
     R: {
       name: '데마시아의 정의', cooldown: [120, 100, 80], mana: 0, range: 400, castTime: 0.435,
-      // 원작 PC 툴팁/패치 기록: 고정 피해 150/250/350 (+ 대상 잃은 체력의 25/30/35%).
-      // 예전 125/200/275는 어떤 패치 기록에서도 확인되지 않는 값이라 바로잡았다.
-      baseDamageByLevel: [150, 250, 350], missingHpPercentByLevel: [25, 30, 35],
+      // 91차: 26.14에 고정 피해 150/250/350 → 125/200/275 (+ 대상 잃은 체력의 25/30/35%는 그대로).
+      baseDamageByLevel: [125, 200, 275], missingHpPercentByLevel: [25, 30, 35],
       damageType: 'TRUE',
     },
   },
@@ -3723,7 +3726,9 @@ const CHAMPION_DATA = {
       name: '몸 말아 웅크리기', cooldown: 7, mana: 40, durationSec: 7, recastLockSec: 0.5, // 25.12: 6 → 7초. recastLockSec는 추정
       bonusArmorByLevel: [27, 32, 37, 42, 47], bonusMrByLevel: [27, 32, 37, 42, 47], // 25.13
       armorPercentByLevel: [30, 37.5, 45, 52.5, 60], // 총 방어력 비례 추가 방어력 - 25.12 이전 기록 값(현재 값 추정)
-      returnDamageByLevel: [15, 25, 35, 45, 55], returnArmorRatio: 0.1, damageType: 'MAGICAL', // 반사 피해 - 추정(확인 못 함)
+      // 91차: 반사 피해 15 + 총 방어력 10% + 총 마법 저항력 10%(PC 위키 Template:Data Rammus/Defensive Ball Curl, 레벨 무관).
+      // 예전 값(15~55 + 추가 방어력 10%)은 옛 버전 수치였다.
+      returnDamage: 15, returnArmorRatio: 0.1, returnMrRatio: 0.1, damageType: 'MAGICAL',
     },
     E: {
       name: '광란의 도발', cooldown: 12, mana: 50, range: 325,
@@ -3735,7 +3740,7 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [30, 40, 50], slowDurationSec: 1.5, aftershockCount: 3, aftershockDurationSec: 3.5, // 여진은 둔화만(25.12에서 여진 피해 삭제)
       powerballKnockupSec: 1, // 대회전 중 사용 시 중앙 적 공중에 뜸 + 대회전 피해(1초는 검색 자료 하나 - 추정)
       radius: 400, centerRadius: 200, rangeBase: 800, // 반경 300 → 400, 중앙 150 → 200 (78차: PC 위키 Template:Data, 검색 요약 대조)
-      rangeMsRatio: 1.5, epicenterMaxRange: 1700, epicenterMaxBonusPercent: 50, // 81차: 사거리 max(800, 이동 속도 150%), 800 넘게 뛰면 중앙 피해 증가(1700에서 +50%)
+      rangeMsRatio: 1.5, // 81차: 사거리 max(800, 이동 속도 150%). 91차: 멀리 뛸수록 중앙 피해가 늘던 효과(최대 +50%)는 원작에서 삭제됨 - 거리와 무관하게 같은 피해
       jumpSec: 0.75, // 도약 시간(800 기준 약 1067/초 - 위키 속도 범위 900~2000 안)
     },
   },
@@ -3915,8 +3920,8 @@ const CHAMPION_DATA = {
     W: {
       name: '방호/강철의 의지', cooldown: 7, energy1: 50, energy2: 25,
       range1: 700, markDuration: 3,
-      // PC 위키 Template:Data Lee Sin/Safeguard: 70/115/160/205/250 (+ 주문력 80%).
-      shieldByLevel: [70, 115, 160, 205, 250], shieldApRatio: 0.8, shieldDuration: 2,
+      // 91차: 26.10에 70/115/160/205/250 → 60/105/150/195/240 (+ 주문력 80%).
+      shieldByLevel: [60, 105, 150, 195, 240], shieldApRatio: 0.8, shieldDuration: 2,
       lifestealPercentByLevel: [10, 14, 18, 22, 26], lifestealDuration: 4,
     },
     E: {
@@ -3958,8 +3963,9 @@ const CHAMPION_DATA = {
       fearSlowMin: 0.60, fearSlowMax: 0.99, fearSlowFullDistance: 800, fearSlowDistanceGuessed: true,
       // 우울: 반경 1600 안에서 돌진/점멸한 적 챔피언·몬스터에 6초 표식. E 적중도 표식. 다음 평타/기본 스킬 적중이 소모.
       gloomRadius: 1600, gloomDuration: 6,
-      // 소모 피해 40~150(레벨) + 주문력 25%. 레벨 사이 곡선은 출처에 없어 1~18 선형(위키 현행 표기는 40~162.94로 엇갈림).
-      gloomDamageAtLevel1: 40, gloomDamageAtLevel18: 150, gloomApRatio: 0.25, gloomCurveGuessed: true,
+      // 91차: 소모 피해 40~162.94(레벨) + 주문력 25%(PC 위키 현행). 162.94 = 기본 능력치 성장 곡선(growStat)으로 40 + 7.2318×17.
+      // 예전엔 40~150 선형이었다.
+      gloomDamageBase: 40, gloomDamageGrowth: 7.2318, gloomApRatio: 0.25,
       // 챔피언 이외 대상: 40/45/50/55/60% 피해, 재사용 대기시간 10% 환급(챔피언 25%). 5단계 레벨 구간은 추정.
       gloomNonChampionPercentByLevel: { breakpoints: [1, 5, 9, 13, 17], values: [40, 45, 50, 55, 60] },
       gloomRefundChampionPercent: 25, gloomRefundNonChampionPercent: 10,
@@ -14092,10 +14098,11 @@ class CharacterController {
     // 야스오와 달리 이동 누적형 Flow 보호막이 없으므로 그 부분만 제외하고
     // 크리티컬 관련 스탯만 매 tick(_yoneTick)에서 계속 갱신한다. 여기서는
     // 챔피언 교체 시 상태 초기화만 담당.
-    // 83차: 요네 치명타 피해 감소(×0.9)는 "총 치명타 피해"에 곱한다 - 무한의 대검 +30%가 먼저 더해진 뒤 ×0.9((1.75+0.3)×0.9).
+    // 83차: 요네·야스오 치명타 피해 감소(91차: 26.17부터 ×0.95)는 "총 치명타 피해"에 곱한다 - 무한의 대검 +30%가 먼저 더해진 뒤 ×0.9((1.75+0.3)×0.9).
     // 예전엔 1.575에 대검 +0.3을 더해 1.875가 됐다(실제 1.845).
     this.stats.critDamageModifier = 1;
-    if (this.championId === 'yone') { this.stats.critMultiplier = this._champData().passive.critDamage; this.stats.critDamageModifier = this._champData().passive.critDamageModifier || 1; this.mp = 0; }
+    if (this.championId === 'yone' || this.championId === 'yasuo') { const p = this._champData().passive; this.stats.critMultiplier = p.critDamage; this.stats.critDamageModifier = p.critDamageModifier || 1; }
+    if (this.championId === 'yone') this.mp = 0;
     if (this.championId === 'nilah') {
       this.armorPenPercent = 0;
       // 닐라 지형 충돌 반경 32·선택 반경 120(실제 bin 확인)은 25차부터 CHAMPION_UNIT_SIZE_LOL 표에서 위 공통 코드가 넣는다.
@@ -15805,6 +15812,41 @@ CharacterController.prototype._payCost = function(slot, free) {
 // 기본 공격이 실제로 명중했을 때 공통 진입점. overrideId는 이번 스윙이
 // attackOverride였다면 그 슬롯 id('Q'=가렌 결정타 강화평타, 'W'=다리우스
 // 마비의 일격 강화평타)이고, 일반 평타면 null이다.
+// 91차: 근접 평타 명중 처리(대상 종류별 피해 함수 + 적중 효과) - 공용 평타와 레넥톤 평타가 함께 쓴다.
+// 예전엔 레넥톤 평타가 이 경로 없이 피해만 넣어 치명타·아이템 적중 효과·추가 고정 피해·관통이 모두 빠졌다.
+CharacterController.prototype._applyMeleeBasicAttackHit = function(target, attackResult, overrideId, attackHand, willCrit) {
+    if (target.isTurret) {
+      const ranged = isRangedAttacker(this);
+      applyDamageToTurret(target, attackResult, { isRanged: ranged, source: this });
+      this._onStructureBasicAttackHit(target, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: ranged, source: this }), attackHand);
+      return;
+    }
+    if (hasStatus(target, 'NILAH_W_DODGE')) { console.log('[NILAH W] 기본 공격 회피'); return; }
+    if (target.isMinion) {
+      const wouldKill = target.hp > 0 && target.hp <= calculateDamage({ ...attackResult, target });
+      applyDamageToMinion(target, attackResult, true);
+      this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
+      return;
+    }
+    if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToInhibitor, attackHand); return; }
+    if (target.isNexus) { applyDamageToNexus(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToNexus, attackHand); return; }
+    // 처치 판정(버그 수정): 예전엔 방어력·치명타 적용 "전" 원본 공격력으로 판정해, 방어력이 높으면
+    // 처치가 아닌데도 처치로, 치명타로 처치했는데도 처치 아님으로 판정됐다. 실제 피해 기준으로 바꿈.
+    const hpBeforeAA = target.hp, flooredAA = isFlooredTrainingDummy(target);
+    if (attackResult.yoneAzakana) {
+      const dealtAz = this._yoneApplyAlternatingAttackDamage(target, attackResult) || 0;
+      const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= dealtAz;
+      this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
+    } else {
+      const dealtAA = (applyDamage(target, attackResult) || 0) + this._applyItemExtraTrue(target, attackResult);
+      const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= (dealtAA || 0);
+      // 요네 정신체(E) 중에는 강철 검(일반) 평타 피해도 표식에 쌓인다 - 예전엔 아자카나
+      // 평타만 기록돼 일반 평타 피해가 표식에서 빠졌다.
+      if (this.championId === 'yone') this._yoneRecordMark(target, dealtAA || 0);
+      this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
+    }
+};
+
 CharacterController.prototype._onBasicAttackHit = function(target, overrideId, wouldKill, attackHand, isCritical) {
     if (!target) return;
     // 아이템 패시브 "도움의 손길"(도란의 반지/방패/투구 공용) - 미니언
@@ -15869,7 +15911,7 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
       const bonus = cd.passive.apRatio * this.stats.abilityPower;
       const aaDealt = target._lastDamageTakenAmount != null ? target._lastDamageTakenAmount : this.stats.attackDamage;
       let bonusDealt = 0;
-      if (bonus > 0 && !target.isTurret) bonusDealt = applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, source: this }) || 0;
+      if (bonus > 0 && !target.isTurret) bonusDealt = applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this }) || 0; // 91차: 평타 추가 피해로 분류
       this._mordeOnDealtHit(target, aaDealt + bonusDealt); // 실제 입힌 피해 기준
     }
     if (this.championId === 'chogath') {
@@ -16408,6 +16450,7 @@ CharacterController.prototype._onStructureBasicAttackHit = function(target, over
     // 예전엔 구조물 경로가 가렌 Q·다리우스 W만 처리해서 이 둘이 포탑에 전혀 들어가지 않았다.
     if (this.championId === 'sett' && typeof this._settOnBasicAttackHit === 'function') this._settOnBasicAttackHit(target, attackHand, applyFn);
     if (this.championId === 'masteryi' && hasStatus(this, 'MASTERYI_E') && typeof this._masteryiApplyWujuTrueDamage === 'function') this._masteryiApplyWujuTrueDamage(target, applyFn);
+    if (this.championId === 'ezreal') this._ezrealDetonateMark(target, 'attack'); // 91차: 구조물의 W 표식도 평타로 터진다
     if (!overrideId) return;
     const cd = this._champData(); if (!cd) return;
     let bonus = 0;
@@ -16711,36 +16754,7 @@ CharacterController.prototype._beginAttackSwing = function() {
             },
           });
         } else if (target.hp > 0) {
-          if (target.isTurret) {
-            const ranged = isRangedAttacker(this);
-            applyDamageToTurret(target, attackResult, { isRanged: ranged, source: this });
-            this._onStructureBasicAttackHit(target, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: ranged, source: this }), attackHand);
-            return;
-          }
-          if (hasStatus(target, 'NILAH_W_DODGE')) { console.log('[NILAH W] 기본 공격 회피'); return; }
-          if (target.isMinion) {
-            const wouldKill = target.hp > 0 && target.hp <= calculateDamage({ ...attackResult, target });
-            applyDamageToMinion(target, attackResult, true);
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
-            return;
-          }
-          if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToInhibitor, attackHand); return; }
-          if (target.isNexus) { applyDamageToNexus(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToNexus, attackHand); return; }
-          // 처치 판정(버그 수정): 예전엔 방어력·치명타 적용 "전" 원본 공격력으로 판정해, 방어력이 높으면
-          // 처치가 아닌데도 처치로, 치명타로 처치했는데도 처치 아님으로 판정됐다. 실제 피해 기준으로 바꿈.
-          const hpBeforeAA = target.hp, flooredAA = isFlooredTrainingDummy(target);
-          if (attackResult.yoneAzakana) {
-            const dealtAz = this._yoneApplyAlternatingAttackDamage(target, attackResult) || 0;
-            const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= dealtAz;
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
-          } else {
-            const dealtAA = (applyDamage(target, attackResult) || 0) + this._applyItemExtraTrue(target, attackResult);
-            const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= (dealtAA || 0);
-            // 요네 정신체(E) 중에는 강철 검(일반) 평타 피해도 표식에 쌓인다 - 예전엔 아자카나
-            // 평타만 기록돼 일반 평타 피해가 표식에서 빠졌다.
-            if (this.championId === 'yone') this._yoneRecordMark(target, dealtAA || 0);
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
-          }
+          this._applyMeleeBasicAttackHit(target, attackResult, overrideId, attackHand, willCrit);
         }
       },
     });
@@ -19343,7 +19357,8 @@ CharacterController.prototype._garenQOnHit = function(target) {
     const q = cd.Q;
     const lvl = Math.max(1, this.skillLevels.Q || 1);
     const dmg = skillVal(q.damageByLevel, lvl) + q.adRatio * this.stats.attackDamage;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+    // 91차: 강화 평타의 추가 피해 - 평타 피해로 분류(스킬 증폭·운명의 재 제외, 흡혈 적용), 같은 공격의 적중 효과는 두 번 세지 않음.
+    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this });
     applyStatus(target, { id: 'garenQ_silence', type: 'SILENCE', duration: q.silenceDuration, value: 1 });
   
 };
@@ -19497,7 +19512,7 @@ CharacterController.prototype._settQOnHit = function(target) {
     // 대상 최대 체력의 (1% + 공격력 100당 1~3%) - 공격력은 총 공격력 기준(PC 위키 "per 100 AD").
     const hpPercent = q.perHitMaxHpPercent + (this.stats.attackDamage / 100) * skillVal(q.perHitMaxHpPercentPer100AdByLevel, lvl);
     const dmg = skillVal(q.perHitFlatByLevel, lvl) + (target.maxHp || 0) * (hpPercent / 100);
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this, armorPenPercent: this.armorPenPercent || 0 }); // 91차: 평타 추가 피해로 분류
     this._sett.qUsesRemaining -= 1;
     console.log(`[SETT Q] Q EMPOWERED HIT (uses left: ${this._sett.qUsesRemaining})`);
     console.log(`[SETT Q] Damage Applied: ${dmg.toFixed(1)}`);
@@ -20301,8 +20316,10 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
     this.runAction(`renektonAA${this.comboIndex}`,STATE.ATTACK,{faceDir:dir,startupOverride:windup,recoveryOverride:recovery,timeScaleOverride:clip&&interval>0?attackClipTimeScale(this,clip,windup,interval):1,dataOverride:{clips:[clipName],startup:windup,recovery,cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{
       if(!targetLockValid(target)) return;
       if(target.isWard){ wardSystem.hitWard(target,this); return; } // 32차: 와드는 평타 1회에 체력 1
-      const attackResult={rawDamage:this.stats.attackDamage,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,isBasicAttack:true};
-      applyDamage(target,attackResult); this._renektonOnBasicAttackHit(target);
+      // 91차: 명중 처리는 공용 근접 평타 경로(치명타·관통·아이템 적중 효과·분노 획득은 _onBasicAttackHit에서).
+      const willCrit=this._rollBasicAttackCrit();
+      const attackResult={rawDamage:this.stats.attackDamage,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:willCrit,critMultiplier:this.stats.critMultiplier,armorPenPercent:this.armorPenPercent||0,isBasicAttack:true};
+      this._applyMeleeBasicAttackHit(target,attackResult,null,null,willCrit);
     }});
     function targetLockValid(t){return t && t.hp>0;}
   
@@ -20312,7 +20329,7 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
 CharacterController.prototype._renektonOnBasicAttackHit = function(target) { 
     if (this.championId!=='renekton' || !target) return;
     this._renektonMarkCombat();
-    if (this._renekton.wSeq) return; // W sequence owns all its own rage/on-hit events.
+    if (this._renekton.wSeq || this._renekton.wResolving) return; // W sequence owns all its own rage events.
     this._renektonGainRage(5);
     if (target.isTurret || target.isInhibitor || target.isNexus) return;
   
@@ -20335,6 +20352,8 @@ CharacterController.prototype._renektonResolveWHit = function(seq) {
       // 챔피언 적중 추가 분노 10은 스킬 한 번에 1회(예전엔 타격마다 들어가 2회 = 20이었다).
       if (seq.hitIndex===0 && (target.isChampion || (!target.isMinion&&!target.isTurret&&!target.isNexus&&!target.isInhibitor))) this._renektonGainRage(10);
     }
+    // 91차: 타격마다 적중 효과(원작: 강화 평타의 각 타격이 적중 효과 적용). 분노는 W가 직접 관리(_renektonOnBasicAttackHit는 wSeq 중 건너뜀).
+    this._renekton.wResolving=true; try { this._onBasicAttackHit(target, null, false, null, false); } finally { this._renekton.wResolving=false; }
     this._renektonMarkCombat();
     if (seq.hitIndex===seq.hits-1 && !seq.empowered) applyStatus(target,{id:'renektonWstun',type:'STUN',duration:seq.stun,value:1});
     if (seq.hitIndex===seq.hits-1 && seq.empowered) applyStatus(target,{id:'renektonWstun',type:'STUN',duration:seq.stun,value:1});
@@ -20497,10 +20516,10 @@ CharacterController.prototype._yasuoQCastTime = function() {
     return this._yasuoLevelValue(q.castTime, lvl) * (1 - this._yasuoQReduction(q.castReductionPerBonusAs, q.castReductionMax));
 };
 
-// 치명타 배율 - 다른 챔피언과 같은 기본값(무한의 대검 보너스는 calculateDamage/아래
-// Q 계산이 따로 더한다). 치명타 확률 2배/초과분 추가 공격력은 recomputeStats()의
-// 공용 처리(applyIntentPassive)가 맡는다.
-CharacterController.prototype._yasuoCritMultiplier = function() { return this.stats.critMultiplier || 1.75; };
+// 치명타 배율(무한의 대검 포함) - 91차: 원작처럼 (기본 175% + 대검) × 치명타 피해 보정(0.95). 예전엔 보정이 없고
+// Q가 대검 보너스를 보정 뒤에 더했다(평타 경로 calculateDamage와 다른 값). 치명타 확률 2배/초과분 추가 공격력은
+// recomputeStats()의 공용 처리(applyIntentPassive)가 맡는다.
+CharacterController.prototype._yasuoCritMultiplier = function() { const mod = this.stats.critDamageModifier || 1; return ((this.stats.critMultiplier || 1.75) / mod + (this.itemBonusCritDamagePercent || 0)) * mod; };
 
 // PC 위키(V13.15): 보호막 125~600은 "레벨 성장 공식"(능력치와 같은 곡선)을 쓴다 - 예전엔 레벨당 같은 양씩 선형 증가였다(양끝 값은 같음).
 CharacterController.prototype._yasuoShieldAmount = function() {  const p = this._champData().passive; return growStat(p.shieldBase, p.shieldPerLevel, this.champLevel || 1);
@@ -20546,7 +20565,7 @@ CharacterController.prototype._yasuoApplyQHit = function(target, { tornado=false
     // 배율(+무한의 대검)을 곱한다(기본 피해는 치명타 영향 없음). 같은 Q 한 번에 맞은
     // 대상들은 한 번 굴린 결과(_yasuoQCritRoll)를 공유한다.
     const crit = this._yasuoQCritRoll != null ? this._yasuoQCritRoll : (Math.random() < (this.stats.critChance || 0));
-    const critMult = this._yasuoCritMultiplier() + (this.itemBonusCritDamagePercent || 0);
+    const critMult = this._yasuoCritMultiplier();
     const raw = base + this.stats.attackDamage * q.totalAdRatio * (crit ? critMult : 1);
     const first = !this._yasuoQHitConsumed;
     // R 이후 15초 "치명타 공격"의 추가 방어력 무시는 치명타가 실제로 터졌을 때만.
@@ -21245,8 +21264,10 @@ CharacterController.prototype._yoneBonusAD = function() { return this._getBonusA
 // 이 데모에는 아이템 시스템이 없어 항상 기본값만 사용한다).
 // 버그 수정: 예전 190%는 "기본 치명타 200%" 시절 bin 값(200%×0.95)이었다. 현재 PC는 기본
 // 치명타 175%이고 요네는 치명타 피해 10% 감소(V14.20 이후) → 175%×0.9 = 157.5%.
+// 91차: 무한의 대검 포함 총 치명타 배율 (1.75 + 대검) × 보정(0.95) - calculateDamage의 평타 경로와 같은 식.
 CharacterController.prototype._yoneCritMultiplier = function() {
-  return (this.stats.critMultiplier || 1.75);
+  const mod = this.stats.critDamageModifier || 1;
+  return ((this.stats.critMultiplier || 1.75) / mod + (this.itemBonusCritDamagePercent || 0)) * mod;
 };
 // 치명타 확률 2배/초과분 추가 공격력은 recomputeStats()의 공용 "의지" 처리(야스오와 공유).
 // Steel and Spirit: 평타가 강철 검(물리)/아자카나의 검(물리 50%+마법
@@ -21398,7 +21419,7 @@ CharacterController.prototype._yoneApplyQHit = function(target, { empowered = fa
   // 이제 패시브 "의지"(치명타 확률 2배, recomputeStats)로 계산된 확률대로 굴린다.
   const crit = this._yoneQCritRoll != null ? this._yoneQCritRoll : (Math.random() < (this.stats.critChance || 0));
   // 무한의 대검 보너스를 AD 계수 부분에만 반영한다(예전엔 isCritical로 넘겨 기본 피해까지 곱해졌다).
-  const critMult = this._yoneCritMultiplier() + (this.itemBonusCritDamagePercent || 0);
+  const critMult = this._yoneCritMultiplier();
   const ratio = crit ? q.totalAdRatio * critMult : q.totalAdRatio;
   const raw = base + this.stats.attackDamage * ratio;
   const dealt = applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;
@@ -23182,9 +23203,10 @@ CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, t
     const modifier = alpha.q.onHitModifier ?? 0.75;
     const trueDmg = fullTrueDmg * modifier;
     if (trueDmg <= 0) return;
-    const wouldKill = target.hp > 0 && target.hp <= trueDmg;
-    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
-    if (wouldKill) this._masteryiOnKill(target, { type: 'ALPHA_STRIKE' });
+    // 91차: 적중 효과 피해로 분류(스킬 증폭·스킬 룬이 걸리지 않게 - 평타에 붙는 E와 같은 플래그), 처치는 실제 적용 뒤 판정.
+    const hpBefore = target.hp;
+    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this });
+    if (hpBefore > 0 && target.hp <= 0) this._masteryiOnKill(target, { type: 'ALPHA_STRIKE' });
 
 };
 
@@ -25300,8 +25322,7 @@ CharacterController.prototype._vexConsumeGloom = function(unit) {
   this._vex.gloom.delete(unit);
   if (until <= performance.now() || !unit || unit.hp <= 0) return false;
   const p = this._vexPassive();
-  const lvT = Math.min(1, Math.max(0, ((this.champLevel || 1) - 1) / 17));
-  let raw = p.gloomDamageAtLevel1 + (p.gloomDamageAtLevel18 - p.gloomDamageAtLevel1) * lvT + p.gloomApRatio * (this.stats.abilityPower || 0);
+  let raw = growStat(p.gloomDamageBase, p.gloomDamageGrowth, this.champLevel || 1) + p.gloomApRatio * (this.stats.abilityPower || 0);
   if (!unit.isChampion) raw *= valueByBreakpoints(p.gloomNonChampionPercentByLevel, this.champLevel || 1) / 100;
   applyDamage(unit, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
   this._vexRefundDoom(unit.isChampion ? p.gloomRefundChampionPercent : p.gloomRefundNonChampionPercent);
@@ -25407,6 +25428,8 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
     line: { dir, maxDist: worldRange, halfWidth, onMiss: () => debugSkillMiss('Ezreal Q', 'no target in line') },
     onHit: (t) => {
       applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
+      // 91차: 원작 Q는 적중 시 효과를 적용하고 주문 검(광휘의 검 계열)도 발동한다(룬의 평타 효과는 제외).
+      if (typeof itemOnBasicAttackHit === 'function' && t.hp > 0) itemOnBasicAttackHit(this, t, false, { fromAbility: true, allowSpellblade: true });
       vfx.spawn('ezrealQHit', getWorldPosition(t)?.clone() || t.mesh.position.clone());
       debugSkillHit('Ezreal Q', t);
       this._ezrealGainPassiveStack();
@@ -25520,7 +25543,9 @@ CharacterController.prototype._ezrealDetonateMark = function(target, by, ability
   const w = this._champData().W;
   const lvl = this._ezreal.markWLevel || Math.max(1, this.skillLevels.W || 1);
   const raw = skillVal(w.damageByLevel, lvl) + (w.bonusAdRatio || 0) * this._getBonusAD() + (w.apRatio || 0) * (this.stats.abilityPower || 0);
-  applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+  // 91차: 구조물에 붙은 표식도 피해를 준다(원작 - 포탑 철거용). 예전엔 공용 진입점이 스킬 피해라며 막았다.
+  const onStructure = !!(target.isTurret || target.isInhibitor || target.isNexus);
+  applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: onStructure });
   vfx.spawn('hit', getWorldPosition(target)?.clone() || target.mesh.position.clone());
   debugSkillHit('Ezreal W (detonate)', target, { by });
   if (by === 'ability' && abilityManaCost != null) {
@@ -26503,7 +26528,8 @@ CharacterController.prototype._varusOnBasicAttackHit = function(target) {
     const wLvl = Math.max(1, this.skillLevels.W);
     // 적중 시 추가 마법 피해: 4~40 + 주문력 25%(PC 위키 V26.12/V26.03).
     const raw = skillVal(w.onHitDamageByLevel, wLvl) + (w.onHitApRatio || 0) * (this.stats.abilityPower || 0);
-    applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    // 91차: 적중 시 추가 피해 - 평타 피해로 분류(예전엔 스킬 피해로 잡혀 스킬 증폭·스킬 전용 아이템/룬이 걸렸다).
+    applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this });
     vfx.spawn('hit', getWorldPosition(target)?.clone() || target.mesh.position.clone(), undefined, { color: 0x8fd6ff });
     this._varusApplyBlight(target);
   }
@@ -28191,9 +28217,9 @@ CharacterController.prototype._rammusShowWRing = function(on) {
 CharacterController.prototype._rammusOnTakeDamage = function(source, meta) {
   if (!this._rammusWActive() || !meta || !meta.isBasicAttack || !source || source === this || source.isTurret || source.isStructure || !(source.hp > 0)) return;
   const w = this._champData().W;
-  const lvl = Math.max(1, this.skillLevels.W || 1);
-  const bonusArmor = Math.max(0, (this.stats.armor || 0) - (this.stats.baseArmor || 0));
-  applyDamage(source, { rawDamage: skillVal(w.returnDamageByLevel, lvl) + w.returnArmorRatio * bonusArmor, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+  // 91차: 15 + 총 방어력 10% + 총 마법 저항력 10%(위키 현행). 예전엔 15~55 + 추가 방어력 10%(옛 수치).
+  const raw = w.returnDamage + w.returnArmorRatio * (this.stats.armor || 0) + w.returnMrRatio * (this.stats.magicResist || 0);
+  applyDamage(source, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
 };
 
 /* ---------------- E - 광란의 도발 ---------------- */
@@ -28274,12 +28300,10 @@ CharacterController.prototype._rammusLand = function(j) {
   const qLvl = Math.max(1, this.skillLevels.Q || 1);
   const qRaw = skillVal(q.damageByLevel, qLvl) + q.apRatio * (this.stats.abilityPower || 0);
   const units = getTargetableEnemyUnits().filter((u) => u && u.hp > 0 && !u.isWard && isInCircle(u, center, lolRangeToWorld(rd.radius)));
-  // 81차: 800보다 멀리 뛰면 중앙(200) 피해가 거리에 비례해 늘어난다 - 1700에서 +50%로 최대(위키).
-  const farBonus = Math.max(0, Math.min(1, ((j.castDistLol || 0) - rd.rangeBase) / Math.max(1, (rd.epicenterMaxRange || 1700) - rd.rangeBase))) * ((rd.epicenterMaxBonusPercent || 50) / 100);
+  // 91차: 멀리 뛸수록 중앙 피해가 늘던 효과(최대 +50%)는 원작에서 삭제됐다 - 거리와 무관하게 같은 피해.
   for (const u of units) {
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
-    const epi = farBonus > 0 && isInCircle(u, center, lolRangeToWorld(rd.centerRadius)) ? 1 + farBonus : 1;
-    applyDamage(u, { isUltimate: true, rawDamage: raw * epi * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
+    applyDamage(u, { isUltimate: true, rawDamage: raw * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
     if (u.isStructure || u.hp <= 0) continue;
     applyStatus(u, { id: 'rammusR_slow', type: 'SLOW', duration: rd.slowDurationSec, value: slow, source: this });
     if (j.powerball && isInCircle(u, center, lolRangeToWorld(rd.centerRadius))) {
@@ -28368,18 +28392,21 @@ CharacterController.prototype._luxMark = function(u) {
   this._lux.marks.set(u, performance.now() + this._champData().passive.durationSec * 1000);
 };
 // 표식이 있으면 터뜨린다(추가 마법 피해). 기본 공격 적중과 R에서 부른다.
-CharacterController.prototype._luxDetonateMark = function(u) {
+CharacterController.prototype._luxDetonateMark = function(u, byBasicAttack = false) {
   const until = this._lux.marks.get(u);
   if (until == null) return false;
   this._lux.marks.delete(u);
   if (until <= performance.now() || !u || u.hp <= 0) return false;
   const p = this._champData().passive;
   const lvl = Math.max(1, Math.min(18, this.champLevel || 1));
-  this._luxSpellDamage(u, p.base + p.perLevel * lvl + p.apRatio * (this.stats.abilityPower || 0));
+  const raw = p.base + p.perLevel * lvl + p.apRatio * (this.stats.abilityPower || 0);
+  // 91차: 평타로 터뜨리면 평타 추가 피해로 분류(스킬 증폭 제외). R 등 스킬로 터뜨리면 스킬 피해 그대로.
+  if (byBasicAttack) { if (!u.isStructure) applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this }); }
+  else this._luxSpellDamage(u, raw);
   if (typeof vfx !== 'undefined') vfx.spawn('hit', getWorldPosition(u).clone().add(new THREE.Vector3(0, BASE_UNIT * 0.8, 0)), undefined, { color: 0xfff1a8 });
   return true;
 };
-CharacterController.prototype._luxOnBasicAttackHit = function(target) { this._luxDetonateMark(target); };
+CharacterController.prototype._luxOnBasicAttackHit = function(target) { this._luxDetonateMark(target, true); };
 
 /* ---------------- 시전 공통 ---------------- */
 // 시전 시간 동안 잠그고(clip 재생) fire()를 부른 뒤, 남은 모션은 이동으로 끊을 수 있는 후딜(이즈리얼과 같은 처리).
@@ -34921,6 +34948,7 @@ function _itemCleaveOnHit(ctrl, target) {
 // opts.fromAbility: 야스오/요네 Q처럼 "적중 시 효과를 적용하는 스킬"에서 호출할 때 true.
 // 원작 규칙상 이 경우 주문검(Sheen류) 발동은 막힌다(위키 Sheen: "적중 시 효과를 적용하는
 // 스킬로는 발동하지 않음") - 나머지 적중 시 효과는 그대로 적용된다.
+// 91차: opts.allowSpellblade - 예외로 주문 검을 발동하는 스킬(이즈리얼 Q: 원작에서 Q 시전으로 무장된 주문 검이 Q 적중에 발동).
 function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
   if (typeof runeOnBasicAttackHit === 'function' && !opts.fromAbility) runeOnBasicAttackHit(ctrl, target);
   if (typeof itemExtraOnBasicAttackHit === 'function') itemExtraOnBasicAttackHit(ctrl, target, isCritical, opts); // 71차(주문 검이 아직 무장된 시점)
@@ -34964,7 +34992,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
     ctrl._itemHeartsteelReadyTargetKey = ctrl._itemHeartsteelReadySet.size ? [...ctrl._itemHeartsteelReadySet][0] : null;
     console.log('[ITEM] 강철심장 - 거인의 흡수 발동');
   }
-  if (ctrl._itemSheenArmed && !opts.fromAbility) {
+  if (ctrl._itemSheenArmed && (!opts.fromAbility || opts.allowSpellblade)) { // 91차: 이즈리얼 Q처럼 주문 검을 발동하는 스킬
     ctrl._itemSheenArmed = false;
     const spellbladeSlot = _itemSpellbladeSlot(ctrl);
     if (spellbladeSlot) {
@@ -35807,7 +35835,7 @@ function itemExtraOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
   const now = _ixNow();
   const targetPos = _ixPos(target);
   // 얼어붙은 건틀릿: 주문 검 발동 때 대상 주변 둔화(서리 영역)
-  if (ctrl._itemSheenArmed && !opts.fromAbility) {
+  if (ctrl._itemSheenArmed && (!opts.fromAbility || opts.allowSpellblade)) {
     const sb = typeof _itemSpellbladeSlot === 'function' ? _itemSpellbladeSlot(ctrl) : null;
     const it = sb && ITEM_DATA[sb.id];
     if (it && it.frostFieldOnSpellblade) {

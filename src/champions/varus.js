@@ -92,7 +92,8 @@ CharacterController.prototype._varusOnBasicAttackHit = function(target) {
     const wLvl = Math.max(1, this.skillLevels.W);
     // 적중 시 추가 마법 피해: 4~40 + 주문력 25%(PC 위키 V26.12/V26.03).
     const raw = skillVal(w.onHitDamageByLevel, wLvl) + (w.onHitApRatio || 0) * (this.stats.abilityPower || 0);
-    applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+    // 91차: 적중 시 추가 피해 - 평타 피해로 분류(예전엔 스킬 피해로 잡혀 스킬 증폭·스킬 전용 아이템/룬이 걸렸다).
+    applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this });
     vfx.spawn('hit', getWorldPosition(target)?.clone() || target.mesh.position.clone(), undefined, { color: 0x8fd6ff });
     this._varusApplyBlight(target);
   }

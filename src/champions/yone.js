@@ -93,8 +93,10 @@ CharacterController.prototype._yoneBonusAD = function() { return this._getBonusA
 // 이 데모에는 아이템 시스템이 없어 항상 기본값만 사용한다).
 // 버그 수정: 예전 190%는 "기본 치명타 200%" 시절 bin 값(200%×0.95)이었다. 현재 PC는 기본
 // 치명타 175%이고 요네는 치명타 피해 10% 감소(V14.20 이후) → 175%×0.9 = 157.5%.
+// 91차: 무한의 대검 포함 총 치명타 배율 (1.75 + 대검) × 보정(0.95) - calculateDamage의 평타 경로와 같은 식.
 CharacterController.prototype._yoneCritMultiplier = function() {
-  return (this.stats.critMultiplier || 1.75);
+  const mod = this.stats.critDamageModifier || 1;
+  return ((this.stats.critMultiplier || 1.75) / mod + (this.itemBonusCritDamagePercent || 0)) * mod;
 };
 // 치명타 확률 2배/초과분 추가 공격력은 recomputeStats()의 공용 "의지" 처리(야스오와 공유).
 // Steel and Spirit: 평타가 강철 검(물리)/아자카나의 검(물리 50%+마법
@@ -246,7 +248,7 @@ CharacterController.prototype._yoneApplyQHit = function(target, { empowered = fa
   // 이제 패시브 "의지"(치명타 확률 2배, recomputeStats)로 계산된 확률대로 굴린다.
   const crit = this._yoneQCritRoll != null ? this._yoneQCritRoll : (Math.random() < (this.stats.critChance || 0));
   // 무한의 대검 보너스를 AD 계수 부분에만 반영한다(예전엔 isCritical로 넘겨 기본 피해까지 곱해졌다).
-  const critMult = this._yoneCritMultiplier() + (this.itemBonusCritDamagePercent || 0);
+  const critMult = this._yoneCritMultiplier();
   const ratio = crit ? q.totalAdRatio * critMult : q.totalAdRatio;
   const raw = base + this.stats.attackDamage * ratio;
   const dealt = applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this }) || 0;

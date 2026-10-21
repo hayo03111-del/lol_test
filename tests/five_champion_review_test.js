@@ -172,10 +172,10 @@ function makeEnemy(x, z, overrides = {}) {
   c3._garenOnTakedown(); c3._garenOnTakedown();
   assert(near(c3._garenCourageStacks, 30) && near(c3.bonusArmor, 50.1), '가렌 W 패시브: 상한 30은 용기 스택에만 걸리고 다른 bonusArmor는 자르지 않는다');
 
-  // R 기본 피해 150 + 잃은 체력 25%
+  // R 기본 피해 125(26.14) + 잃은 체력 25%
   const r = makeEnemy(0, 1, { hp: 2000, maxHp: 3000 });
   c._garenROnHit(r);
-  assert(near(2000 - r.hp, 150 + 0.25 * 1000), '가렌 R: 150 + 대상 잃은 체력의 25% 고정 피해');
+  assert(near(2000 - r.hp, 125 + 0.25 * 1000), '가렌 R: 125 + 대상 잃은 체력의 25% 고정 피해(26.14)');
 
   // E - 대상별 6타 방어력 감소, 미니언 제외
   const ce = makeChamp('garen', [], { stats: Object.assign({}, c.stats, { attackDamage: 100 }) });

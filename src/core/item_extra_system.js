@@ -377,7 +377,7 @@ function itemExtraOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
   const now = _ixNow();
   const targetPos = _ixPos(target);
   // 얼어붙은 건틀릿: 주문 검 발동 때 대상 주변 둔화(서리 영역)
-  if (ctrl._itemSheenArmed && !opts.fromAbility) {
+  if (ctrl._itemSheenArmed && (!opts.fromAbility || opts.allowSpellblade)) {
     const sb = typeof _itemSpellbladeSlot === 'function' ? _itemSpellbladeSlot(ctrl) : null;
     const it = sb && ITEM_DATA[sb.id];
     if (it && it.frostFieldOnSpellblade) {

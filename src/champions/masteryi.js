@@ -199,9 +199,10 @@ CharacterController.prototype._masteryiApplyAlphaStrikeOnHit = function(alpha, t
     const modifier = alpha.q.onHitModifier ?? 0.75;
     const trueDmg = fullTrueDmg * modifier;
     if (trueDmg <= 0) return;
-    const wouldKill = target.hp > 0 && target.hp <= trueDmg;
-    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1 });
-    if (wouldKill) this._masteryiOnKill(target, { type: 'ALPHA_STRIKE' });
+    // 91차: 적중 효과 피해로 분류(스킬 증폭·스킬 룬이 걸리지 않게 - 평타에 붙는 E와 같은 플래그), 처치는 실제 적용 뒤 판정.
+    const hpBefore = target.hp;
+    applyDamage(target, { rawDamage: trueDmg, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this });
+    if (hpBefore > 0 && target.hp <= 0) this._masteryiOnKill(target, { type: 'ALPHA_STRIKE' });
 
 };
 

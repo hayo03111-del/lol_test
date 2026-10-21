@@ -120,6 +120,41 @@ CharacterController.prototype._payCost = function(slot, free) {
 // 기본 공격이 실제로 명중했을 때 공통 진입점. overrideId는 이번 스윙이
 // attackOverride였다면 그 슬롯 id('Q'=가렌 결정타 강화평타, 'W'=다리우스
 // 마비의 일격 강화평타)이고, 일반 평타면 null이다.
+// 91차: 근접 평타 명중 처리(대상 종류별 피해 함수 + 적중 효과) - 공용 평타와 레넥톤 평타가 함께 쓴다.
+// 예전엔 레넥톤 평타가 이 경로 없이 피해만 넣어 치명타·아이템 적중 효과·추가 고정 피해·관통이 모두 빠졌다.
+CharacterController.prototype._applyMeleeBasicAttackHit = function(target, attackResult, overrideId, attackHand, willCrit) {
+    if (target.isTurret) {
+      const ranged = isRangedAttacker(this);
+      applyDamageToTurret(target, attackResult, { isRanged: ranged, source: this });
+      this._onStructureBasicAttackHit(target, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: ranged, source: this }), attackHand);
+      return;
+    }
+    if (hasStatus(target, 'NILAH_W_DODGE')) { console.log('[NILAH W] 기본 공격 회피'); return; }
+    if (target.isMinion) {
+      const wouldKill = target.hp > 0 && target.hp <= calculateDamage({ ...attackResult, target });
+      applyDamageToMinion(target, attackResult, true);
+      this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
+      return;
+    }
+    if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToInhibitor, attackHand); return; }
+    if (target.isNexus) { applyDamageToNexus(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToNexus, attackHand); return; }
+    // 처치 판정(버그 수정): 예전엔 방어력·치명타 적용 "전" 원본 공격력으로 판정해, 방어력이 높으면
+    // 처치가 아닌데도 처치로, 치명타로 처치했는데도 처치 아님으로 판정됐다. 실제 피해 기준으로 바꿈.
+    const hpBeforeAA = target.hp, flooredAA = isFlooredTrainingDummy(target);
+    if (attackResult.yoneAzakana) {
+      const dealtAz = this._yoneApplyAlternatingAttackDamage(target, attackResult) || 0;
+      const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= dealtAz;
+      this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
+    } else {
+      const dealtAA = (applyDamage(target, attackResult) || 0) + this._applyItemExtraTrue(target, attackResult);
+      const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= (dealtAA || 0);
+      // 요네 정신체(E) 중에는 강철 검(일반) 평타 피해도 표식에 쌓인다 - 예전엔 아자카나
+      // 평타만 기록돼 일반 평타 피해가 표식에서 빠졌다.
+      if (this.championId === 'yone') this._yoneRecordMark(target, dealtAA || 0);
+      this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
+    }
+};
+
 CharacterController.prototype._onBasicAttackHit = function(target, overrideId, wouldKill, attackHand, isCritical) {
     if (!target) return;
     // 아이템 패시브 "도움의 손길"(도란의 반지/방패/투구 공용) - 미니언
@@ -184,7 +219,7 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
       const bonus = cd.passive.apRatio * this.stats.abilityPower;
       const aaDealt = target._lastDamageTakenAmount != null ? target._lastDamageTakenAmount : this.stats.attackDamage;
       let bonusDealt = 0;
-      if (bonus > 0 && !target.isTurret) bonusDealt = applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, source: this }) || 0;
+      if (bonus > 0 && !target.isTurret) bonusDealt = applyDamage(target, { rawDamage: bonus, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, magicPenPercent: this.magicPenPercent, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this }) || 0; // 91차: 평타 추가 피해로 분류
       this._mordeOnDealtHit(target, aaDealt + bonusDealt); // 실제 입힌 피해 기준
     }
     if (this.championId === 'chogath') {
@@ -723,6 +758,7 @@ CharacterController.prototype._onStructureBasicAttackHit = function(target, over
     // 예전엔 구조물 경로가 가렌 Q·다리우스 W만 처리해서 이 둘이 포탑에 전혀 들어가지 않았다.
     if (this.championId === 'sett' && typeof this._settOnBasicAttackHit === 'function') this._settOnBasicAttackHit(target, attackHand, applyFn);
     if (this.championId === 'masteryi' && hasStatus(this, 'MASTERYI_E') && typeof this._masteryiApplyWujuTrueDamage === 'function') this._masteryiApplyWujuTrueDamage(target, applyFn);
+    if (this.championId === 'ezreal') this._ezrealDetonateMark(target, 'attack'); // 91차: 구조물의 W 표식도 평타로 터진다
     if (!overrideId) return;
     const cd = this._champData(); if (!cd) return;
     let bonus = 0;
@@ -1026,36 +1062,7 @@ CharacterController.prototype._beginAttackSwing = function() {
             },
           });
         } else if (target.hp > 0) {
-          if (target.isTurret) {
-            const ranged = isRangedAttacker(this);
-            applyDamageToTurret(target, attackResult, { isRanged: ranged, source: this });
-            this._onStructureBasicAttackHit(target, overrideId, (u, r) => applyDamageToTurret(u, r, { isRanged: ranged, source: this }), attackHand);
-            return;
-          }
-          if (hasStatus(target, 'NILAH_W_DODGE')) { console.log('[NILAH W] 기본 공격 회피'); return; }
-          if (target.isMinion) {
-            const wouldKill = target.hp > 0 && target.hp <= calculateDamage({ ...attackResult, target });
-            applyDamageToMinion(target, attackResult, true);
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
-            return;
-          }
-          if (target.isInhibitor) { applyDamageToInhibitor(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToInhibitor, attackHand); return; }
-          if (target.isNexus) { applyDamageToNexus(target, attackResult); this._onStructureBasicAttackHit(target, overrideId, applyDamageToNexus, attackHand); return; }
-          // 처치 판정(버그 수정): 예전엔 방어력·치명타 적용 "전" 원본 공격력으로 판정해, 방어력이 높으면
-          // 처치가 아닌데도 처치로, 치명타로 처치했는데도 처치 아님으로 판정됐다. 실제 피해 기준으로 바꿈.
-          const hpBeforeAA = target.hp, flooredAA = isFlooredTrainingDummy(target);
-          if (attackResult.yoneAzakana) {
-            const dealtAz = this._yoneApplyAlternatingAttackDamage(target, attackResult) || 0;
-            const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= dealtAz;
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
-          } else {
-            const dealtAA = (applyDamage(target, attackResult) || 0) + this._applyItemExtraTrue(target, attackResult);
-            const wouldKill = !flooredAA && hpBeforeAA > 0 && hpBeforeAA <= (dealtAA || 0);
-            // 요네 정신체(E) 중에는 강철 검(일반) 평타 피해도 표식에 쌓인다 - 예전엔 아자카나
-            // 평타만 기록돼 일반 평타 피해가 표식에서 빠졌다.
-            if (this.championId === 'yone') this._yoneRecordMark(target, dealtAA || 0);
-            this._onBasicAttackHit(target, overrideId, wouldKill, attackHand, willCrit);
-          }
+          this._applyMeleeBasicAttackHit(target, attackResult, overrideId, attackHand, willCrit);
         }
       },
     });

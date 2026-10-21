@@ -553,7 +553,7 @@ function resolveDamageSource(source, target) {
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
 // 넘어온다 - 여기서 다시 굴리지 않는다(같은 공격 인스턴스의 결과가 명중
 // 시점에 바뀌면 안 되므로).
-function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent = 0, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false, isStatusTick = false, isUltimate = false }) {
+function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false, isStatusTick = false, isUltimate = false }) {
   // 무한의 대검(치명타 피해량 +30%) - 각 챔피언 스킬이 저마다 다른
   // critMultiplier를 넘기므로(공용 필드가 아님), 공격자의 아이템 보너스를
   // 여기서 한 곳에서 더해 넣는다 - 치명타가 아니면 critMultiplier 자체가
@@ -577,6 +577,9 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
     const atkP = resolveDamageSource(source, target);
     // 벼락폭풍검(창공)의 "4초간 물리 관통력 획득"은 영구 스탯(itemBonusArmorPenFlat)과 별개의 임시 버프(itemTempArmorPenFlat).
     const flatArmorPen = ((atkP && atkP.itemBonusArmorPenFlat) || 0) + ((atkP && atkP.itemTempArmorPenFlat) || 0);
+    // 91차: % 방어구 관통(다리우스 E 패시브·닐라 Q 패시브)은 공격자 능력치라 넘기지 않은 피해(출혈 등 지속 피해 틱)에도
+    // 공격 챔피언의 값을 쓴다. 예전엔 출혈 틱에 관통이 빠졌다. 0을 직접 넘긴 경우(억제기)는 그대로 0.
+    if (armorPenPercent === undefined) armorPenPercent = (atkP && typeof atkP.championId === 'string' && atkP.armorPenPercent) || 0;
     if (armor > 0) armor *= (1 - Math.max(0, Math.min(1, armorPenPercent))); // 다리우스 E 패시브 방어구 관통 등
     // 경계(빛과 어둠 - 어둠)의 임시 방어구 관통력(최대 30%) - 영구 곱연산 필드와 별개로 곱한다.
     if (armor > 0 && atkP && atkP.itemTempArmorPenPercent > 0) armor *= (1 - Math.max(0, Math.min(1, atkP.itemTempArmorPenPercent)));

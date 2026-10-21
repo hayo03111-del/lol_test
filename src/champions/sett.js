@@ -70,7 +70,7 @@ CharacterController.prototype._settQOnHit = function(target) {
     // 대상 최대 체력의 (1% + 공격력 100당 1~3%) - 공격력은 총 공격력 기준(PC 위키 "per 100 AD").
     const hpPercent = q.perHitMaxHpPercent + (this.stats.attackDamage / 100) * skillVal(q.perHitMaxHpPercentPer100AdByLevel, lvl);
     const dmg = skillVal(q.perHitFlatByLevel, lvl) + (target.maxHp || 0) * (hpPercent / 100);
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this, armorPenPercent: this.armorPenPercent || 0 }); // 91차: 평타 추가 피해로 분류
     this._sett.qUsesRemaining -= 1;
     console.log(`[SETT Q] Q EMPOWERED HIT (uses left: ${this._sett.qUsesRemaining})`);
     console.log(`[SETT Q] Damage Applied: ${dmg.toFixed(1)}`);

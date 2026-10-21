@@ -2676,6 +2676,7 @@ function _itemCleaveOnHit(ctrl, target) {
 // opts.fromAbility: 야스오/요네 Q처럼 "적중 시 효과를 적용하는 스킬"에서 호출할 때 true.
 // 원작 규칙상 이 경우 주문검(Sheen류) 발동은 막힌다(위키 Sheen: "적중 시 효과를 적용하는
 // 스킬로는 발동하지 않음") - 나머지 적중 시 효과는 그대로 적용된다.
+// 91차: opts.allowSpellblade - 예외로 주문 검을 발동하는 스킬(이즈리얼 Q: 원작에서 Q 시전으로 무장된 주문 검이 Q 적중에 발동).
 function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
   if (typeof runeOnBasicAttackHit === 'function' && !opts.fromAbility) runeOnBasicAttackHit(ctrl, target);
   if (typeof itemExtraOnBasicAttackHit === 'function') itemExtraOnBasicAttackHit(ctrl, target, isCritical, opts); // 71차(주문 검이 아직 무장된 시점)
@@ -2719,7 +2720,7 @@ function itemOnBasicAttackHit(ctrl, target, isCritical, opts = {}) {
     ctrl._itemHeartsteelReadyTargetKey = ctrl._itemHeartsteelReadySet.size ? [...ctrl._itemHeartsteelReadySet][0] : null;
     console.log('[ITEM] 강철심장 - 거인의 흡수 발동');
   }
-  if (ctrl._itemSheenArmed && !opts.fromAbility) {
+  if (ctrl._itemSheenArmed && (!opts.fromAbility || opts.allowSpellblade)) { // 91차: 이즈리얼 Q처럼 주문 검을 발동하는 스킬
     ctrl._itemSheenArmed = false;
     const spellbladeSlot = _itemSpellbladeSlot(ctrl);
     if (spellbladeSlot) {

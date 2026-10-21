@@ -14,6 +14,8 @@ const ALL = ['ezreal', 'ashe', 'varus', 'ahri', 'lux'];
     const errors = [];
     await page.addInitScript(() => { try { localStorage.setItem('lolsim.options.v1', JSON.stringify({ autoAttack: false })); } catch (e) {} });
     page.on('pageerror', (e) => errors.push(e.message.slice(0, 220)));
+    let logs = [];
+    page.on('console', (m) => { const t = m.text(); if (/^\[(SKILL HIT|RUNE|ITEM)/.test(t)) logs.push(t.slice(0, 90)); });
     await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__e2e, null, { timeout: 60000 });
     await page.evaluate((id) => { const s = document.getElementById('libraryChampSelect'); s.value = id; s.dispatchEvent(new Event('change')); }, id);
@@ -46,12 +48,14 @@ const ALL = ['ezreal', 'ashe', 'varus', 'ahri', 'lux'];
     const measure = async (label, rank, r, dist, steps) => {
       await ev(({ rank, r, dist }) => window.__q.reset(rank, r, dist), { rank, r, dist });
       await wait(200);
+      logs = [];
       for (const s of steps) {
         if (s.cast) await ev((x) => window.__q.cast(x), s.cast);
         if (s.fn) await ev(s.fn);
         if (s.wait) await wait(s.wait);
       }
       const row = Object.assign({ label, rank, res: r, dmg: await ev(() => window.__q.dmg()) }, await ev(() => window.__q.info()));
+      if (process.env.QA_LOGS) row.logs = logs.slice(0, 12);
       res.rows.push(row);
     };
     const plans = {

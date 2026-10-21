@@ -218,7 +218,7 @@ stubs.scene = { add() {}, remove() {} };
 }
 // --- 리 신 / 가렌 / 노틸러스 / 야스오 ---
 {
-  assert(CHAMPION_DATA.leesin.W.shieldByLevel[0] === 70, '리 신 W: 방호 보호막 70~250(PC 위키)');
+  assert(CHAMPION_DATA.leesin.W.shieldByLevel[0] === 60 && CHAMPION_DATA.leesin.W.shieldByLevel[4] === 240, '리 신 W: 방호 보호막 60~240(26.10)');
   timers = [];
   const g = makeChamp('garen'); g._payCost = () => true;
   const t = makeEnemy(0, lolRangeToWorld(200), { hp: 2000, maxHp: 3000 });

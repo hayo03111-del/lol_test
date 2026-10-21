@@ -34,10 +34,10 @@ const CHAMPION_DATA = {
     passive: {
       name: '낭인의 길',
       // 의지(Intent): 다른 모든 출처의 치명타 확률 2배(V14.10에 2.5→2), 100% 초과분
-      // 1%당 추가 공격력 0.5. 치명타 피해 감소는 V15.4에서 삭제됐다 - 치명타 배율은
-      // 다른 챔피언과 같은 기본값(stats.critMultiplier)+무한의 대검 보너스를 쓴다.
+      // 1%당 추가 공격력 0.5. 91차: 치명타 피해 감소는 26.1에 -10%로 다시 생겼고 26.17에 -5%로 줄었다
+      // → 총 치명타 피해(기본 175% + 무한의 대검) × 0.95.
       // 예전 구조는 아이템이 없어도 치명타 확률을 항상 100%로 고정했다.
-      critChanceMultiplier: 2.0, overcapCritToAd: 0.5,
+      critChanceMultiplier: 2.0, overcapCritToAd: 0.5, critDamage: 1.6625, critDamageModifier: 0.95,
       // 결의(Resolve): 이동한 거리 59/52.5/46(레벨 구간) 유닛마다 기류 1, 100에서
       // 챔피언/몬스터에게 피해를 받으면 1초 동안 보호막 125~600(레벨 비례).
       // 레벨 구간 1/7/13 확인(PC 위키 + 공략 "based on level 1 / 7 / 13").
@@ -114,9 +114,10 @@ const CHAMPION_DATA = {
       // (+27%p)는 위키에 나온 그대로 가산한다: 190%+27%=217%.
       // 업데이트(PC 패치 기록 대조): 위 190%는 "기본 치명타 피해 200%" 시절 기준이었다.
       // 현재 PC 기본 치명타 피해는 175%이고 요네는 치명타 피해 10% 감소(V14.20에서 -20%→-10%)
-      // → 175% × 0.9 = 157.5%. 무한의 대검 보너스는 calculateDamage/Q 계산에서 더한다.
+      // → 175% × 0.9 = 157.5%. 91차: 26.17에 감소가 -10% → -5%(175% × 0.95 = 166.25%).
+      // 무한의 대검 보너스는 감소 전에 더한다((1.75 + 대검) × 0.95, calculateDamage/Q 계산).
       critChanceMultiplier: 2.0, overcapCritToAd: 0.5,
-      critDamage: 1.575, critDamageModifier: 0.9,
+      critDamage: 1.6625, critDamageModifier: 0.95,
       // Steel and Spirit: 평타가 강철 검/아자카나의 검을 번갈아 사용하며,
       // 아자카나의 검 공격은 물리 50% + 마법 50%로 나뉘어 들어간다.
       // (요네.bin YonePassive.MagicDamageSplit=0.5로 재확인됨)
@@ -139,7 +140,7 @@ const CHAMPION_DATA = {
       // 75차: 돌풍 폭 80 → 160(PC 위키 Template:Data Yone/Mortal Steel "WIDTH: Edge range 80 / 160" - 3타 돌풍이 160).
       dashRange: 450, missileRange: 950, dashAoEWidth: 200, /* 81차: 돌진 본체 충돌 반경 100 = 폭 200(PC 위키 Template:Data Yone/Mortal Steel "collision radius 100") */ missileWidth: 160,
       dashSpeed: 1500,
-      damageByLevel: [25,50,75,100,125], totalAdRatio: 1.10,
+      damageByLevel: [25,50,75,100,125], totalAdRatio: 1.05, // 91차: 26.21 공격력 계수 110% → 105%
       stackDuration: 6, maxStacks: 2, knockupDuration: 0.75,
       damageType: 'PHYSICAL',
     },
@@ -281,9 +282,8 @@ const CHAMPION_DATA = {
     },
     R: {
       name: '데마시아의 정의', cooldown: [120, 100, 80], mana: 0, range: 400, castTime: 0.435,
-      // 원작 PC 툴팁/패치 기록: 고정 피해 150/250/350 (+ 대상 잃은 체력의 25/30/35%).
-      // 예전 125/200/275는 어떤 패치 기록에서도 확인되지 않는 값이라 바로잡았다.
-      baseDamageByLevel: [150, 250, 350], missingHpPercentByLevel: [25, 30, 35],
+      // 91차: 26.14에 고정 피해 150/250/350 → 125/200/275 (+ 대상 잃은 체력의 25/30/35%는 그대로).
+      baseDamageByLevel: [125, 200, 275], missingHpPercentByLevel: [25, 30, 35],
       damageType: 'TRUE',
     },
   },
@@ -672,7 +672,9 @@ const CHAMPION_DATA = {
       name: '몸 말아 웅크리기', cooldown: 7, mana: 40, durationSec: 7, recastLockSec: 0.5, // 25.12: 6 → 7초. recastLockSec는 추정
       bonusArmorByLevel: [27, 32, 37, 42, 47], bonusMrByLevel: [27, 32, 37, 42, 47], // 25.13
       armorPercentByLevel: [30, 37.5, 45, 52.5, 60], // 총 방어력 비례 추가 방어력 - 25.12 이전 기록 값(현재 값 추정)
-      returnDamageByLevel: [15, 25, 35, 45, 55], returnArmorRatio: 0.1, damageType: 'MAGICAL', // 반사 피해 - 추정(확인 못 함)
+      // 91차: 반사 피해 15 + 총 방어력 10% + 총 마법 저항력 10%(PC 위키 Template:Data Rammus/Defensive Ball Curl, 레벨 무관).
+      // 예전 값(15~55 + 추가 방어력 10%)은 옛 버전 수치였다.
+      returnDamage: 15, returnArmorRatio: 0.1, returnMrRatio: 0.1, damageType: 'MAGICAL',
     },
     E: {
       name: '광란의 도발', cooldown: 12, mana: 50, range: 325,
@@ -684,7 +686,7 @@ const CHAMPION_DATA = {
       slowPercentByLevel: [30, 40, 50], slowDurationSec: 1.5, aftershockCount: 3, aftershockDurationSec: 3.5, // 여진은 둔화만(25.12에서 여진 피해 삭제)
       powerballKnockupSec: 1, // 대회전 중 사용 시 중앙 적 공중에 뜸 + 대회전 피해(1초는 검색 자료 하나 - 추정)
       radius: 400, centerRadius: 200, rangeBase: 800, // 반경 300 → 400, 중앙 150 → 200 (78차: PC 위키 Template:Data, 검색 요약 대조)
-      rangeMsRatio: 1.5, epicenterMaxRange: 1700, epicenterMaxBonusPercent: 50, // 81차: 사거리 max(800, 이동 속도 150%), 800 넘게 뛰면 중앙 피해 증가(1700에서 +50%)
+      rangeMsRatio: 1.5, // 81차: 사거리 max(800, 이동 속도 150%). 91차: 멀리 뛸수록 중앙 피해가 늘던 효과(최대 +50%)는 원작에서 삭제됨 - 거리와 무관하게 같은 피해
       jumpSec: 0.75, // 도약 시간(800 기준 약 1067/초 - 위키 속도 범위 900~2000 안)
     },
   },
@@ -864,8 +866,8 @@ const CHAMPION_DATA = {
     W: {
       name: '방호/강철의 의지', cooldown: 7, energy1: 50, energy2: 25,
       range1: 700, markDuration: 3,
-      // PC 위키 Template:Data Lee Sin/Safeguard: 70/115/160/205/250 (+ 주문력 80%).
-      shieldByLevel: [70, 115, 160, 205, 250], shieldApRatio: 0.8, shieldDuration: 2,
+      // 91차: 26.10에 70/115/160/205/250 → 60/105/150/195/240 (+ 주문력 80%).
+      shieldByLevel: [60, 105, 150, 195, 240], shieldApRatio: 0.8, shieldDuration: 2,
       lifestealPercentByLevel: [10, 14, 18, 22, 26], lifestealDuration: 4,
     },
     E: {
@@ -907,8 +909,9 @@ const CHAMPION_DATA = {
       fearSlowMin: 0.60, fearSlowMax: 0.99, fearSlowFullDistance: 800, fearSlowDistanceGuessed: true,
       // 우울: 반경 1600 안에서 돌진/점멸한 적 챔피언·몬스터에 6초 표식. E 적중도 표식. 다음 평타/기본 스킬 적중이 소모.
       gloomRadius: 1600, gloomDuration: 6,
-      // 소모 피해 40~150(레벨) + 주문력 25%. 레벨 사이 곡선은 출처에 없어 1~18 선형(위키 현행 표기는 40~162.94로 엇갈림).
-      gloomDamageAtLevel1: 40, gloomDamageAtLevel18: 150, gloomApRatio: 0.25, gloomCurveGuessed: true,
+      // 91차: 소모 피해 40~162.94(레벨) + 주문력 25%(PC 위키 현행). 162.94 = 기본 능력치 성장 곡선(growStat)으로 40 + 7.2318×17.
+      // 예전엔 40~150 선형이었다.
+      gloomDamageBase: 40, gloomDamageGrowth: 7.2318, gloomApRatio: 0.25,
       // 챔피언 이외 대상: 40/45/50/55/60% 피해, 재사용 대기시간 10% 환급(챔피언 25%). 5단계 레벨 구간은 추정.
       gloomNonChampionPercentByLevel: { breakpoints: [1, 5, 9, 13, 17], values: [40, 45, 50, 55, 60] },
       gloomRefundChampionPercent: 25, gloomRefundNonChampionPercent: 10,

@@ -35,18 +35,21 @@ CharacterController.prototype._luxMark = function(u) {
   this._lux.marks.set(u, performance.now() + this._champData().passive.durationSec * 1000);
 };
 // 표식이 있으면 터뜨린다(추가 마법 피해). 기본 공격 적중과 R에서 부른다.
-CharacterController.prototype._luxDetonateMark = function(u) {
+CharacterController.prototype._luxDetonateMark = function(u, byBasicAttack = false) {
   const until = this._lux.marks.get(u);
   if (until == null) return false;
   this._lux.marks.delete(u);
   if (until <= performance.now() || !u || u.hp <= 0) return false;
   const p = this._champData().passive;
   const lvl = Math.max(1, Math.min(18, this.champLevel || 1));
-  this._luxSpellDamage(u, p.base + p.perLevel * lvl + p.apRatio * (this.stats.abilityPower || 0));
+  const raw = p.base + p.perLevel * lvl + p.apRatio * (this.stats.abilityPower || 0);
+  // 91차: 평타로 터뜨리면 평타 추가 피해로 분류(스킬 증폭 제외). R 등 스킬로 터뜨리면 스킬 피해 그대로.
+  if (byBasicAttack) { if (!u.isStructure) applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this }); }
+  else this._luxSpellDamage(u, raw);
   if (typeof vfx !== 'undefined') vfx.spawn('hit', getWorldPosition(u).clone().add(new THREE.Vector3(0, BASE_UNIT * 0.8, 0)), undefined, { color: 0xfff1a8 });
   return true;
 };
-CharacterController.prototype._luxOnBasicAttackHit = function(target) { this._luxDetonateMark(target); };
+CharacterController.prototype._luxOnBasicAttackHit = function(target) { this._luxDetonateMark(target, true); };
 
 /* ---------------- 시전 공통 ---------------- */
 // 시전 시간 동안 잠그고(clip 재생) fire()를 부른 뒤, 남은 모션은 이동으로 끊을 수 있는 후딜(이즈리얼과 같은 처리).

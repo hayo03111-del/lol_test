@@ -355,9 +355,9 @@ CharacterController.prototype._rammusShowWRing = function(on) {
 CharacterController.prototype._rammusOnTakeDamage = function(source, meta) {
   if (!this._rammusWActive() || !meta || !meta.isBasicAttack || !source || source === this || source.isTurret || source.isStructure || !(source.hp > 0)) return;
   const w = this._champData().W;
-  const lvl = Math.max(1, this.skillLevels.W || 1);
-  const bonusArmor = Math.max(0, (this.stats.armor || 0) - (this.stats.baseArmor || 0));
-  applyDamage(source, { rawDamage: skillVal(w.returnDamageByLevel, lvl) + w.returnArmorRatio * bonusArmor, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+  // 91차: 15 + 총 방어력 10% + 총 마법 저항력 10%(위키 현행). 예전엔 15~55 + 추가 방어력 10%(옛 수치).
+  const raw = w.returnDamage + w.returnArmorRatio * (this.stats.armor || 0) + w.returnMrRatio * (this.stats.magicResist || 0);
+  applyDamage(source, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
 };
 
 /* ---------------- E - 광란의 도발 ---------------- */
@@ -438,12 +438,10 @@ CharacterController.prototype._rammusLand = function(j) {
   const qLvl = Math.max(1, this.skillLevels.Q || 1);
   const qRaw = skillVal(q.damageByLevel, qLvl) + q.apRatio * (this.stats.abilityPower || 0);
   const units = getTargetableEnemyUnits().filter((u) => u && u.hp > 0 && !u.isWard && isInCircle(u, center, lolRangeToWorld(rd.radius)));
-  // 81차: 800보다 멀리 뛰면 중앙(200) 피해가 거리에 비례해 늘어난다 - 1700에서 +50%로 최대(위키).
-  const farBonus = Math.max(0, Math.min(1, ((j.castDistLol || 0) - rd.rangeBase) / Math.max(1, (rd.epicenterMaxRange || 1700) - rd.rangeBase))) * ((rd.epicenterMaxBonusPercent || 50) / 100);
+  // 91차: 멀리 뛸수록 중앙 피해가 늘던 효과(최대 +50%)는 원작에서 삭제됐다 - 거리와 무관하게 같은 피해.
   for (const u of units) {
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
-    const epi = farBonus > 0 && isInCircle(u, center, lolRangeToWorld(rd.centerRadius)) ? 1 + farBonus : 1;
-    applyDamage(u, { isUltimate: true, rawDamage: raw * epi * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
+    applyDamage(u, { isUltimate: true, rawDamage: raw * (u.isStructure ? rd.structureDamageMultiplier : 1), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: true }); // 원작: 구조물에도 감소된 피해
     if (u.isStructure || u.hp <= 0) continue;
     applyStatus(u, { id: 'rammusR_slow', type: 'SLOW', duration: rd.slowDurationSec, value: slow, source: this });
     if (j.powerball && isInCircle(u, center, lolRangeToWorld(rd.centerRadius))) {

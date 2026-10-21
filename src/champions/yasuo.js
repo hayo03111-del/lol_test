@@ -23,10 +23,10 @@ CharacterController.prototype._yasuoQCastTime = function() {
     return this._yasuoLevelValue(q.castTime, lvl) * (1 - this._yasuoQReduction(q.castReductionPerBonusAs, q.castReductionMax));
 };
 
-// 치명타 배율 - 다른 챔피언과 같은 기본값(무한의 대검 보너스는 calculateDamage/아래
-// Q 계산이 따로 더한다). 치명타 확률 2배/초과분 추가 공격력은 recomputeStats()의
-// 공용 처리(applyIntentPassive)가 맡는다.
-CharacterController.prototype._yasuoCritMultiplier = function() { return this.stats.critMultiplier || 1.75; };
+// 치명타 배율(무한의 대검 포함) - 91차: 원작처럼 (기본 175% + 대검) × 치명타 피해 보정(0.95). 예전엔 보정이 없고
+// Q가 대검 보너스를 보정 뒤에 더했다(평타 경로 calculateDamage와 다른 값). 치명타 확률 2배/초과분 추가 공격력은
+// recomputeStats()의 공용 처리(applyIntentPassive)가 맡는다.
+CharacterController.prototype._yasuoCritMultiplier = function() { const mod = this.stats.critDamageModifier || 1; return ((this.stats.critMultiplier || 1.75) / mod + (this.itemBonusCritDamagePercent || 0)) * mod; };
 
 // PC 위키(V13.15): 보호막 125~600은 "레벨 성장 공식"(능력치와 같은 곡선)을 쓴다 - 예전엔 레벨당 같은 양씩 선형 증가였다(양끝 값은 같음).
 CharacterController.prototype._yasuoShieldAmount = function() {  const p = this._champData().passive; return growStat(p.shieldBase, p.shieldPerLevel, this.champLevel || 1);
@@ -72,7 +72,7 @@ CharacterController.prototype._yasuoApplyQHit = function(target, { tornado=false
     // 배율(+무한의 대검)을 곱한다(기본 피해는 치명타 영향 없음). 같은 Q 한 번에 맞은
     // 대상들은 한 번 굴린 결과(_yasuoQCritRoll)를 공유한다.
     const crit = this._yasuoQCritRoll != null ? this._yasuoQCritRoll : (Math.random() < (this.stats.critChance || 0));
-    const critMult = this._yasuoCritMultiplier() + (this.itemBonusCritDamagePercent || 0);
+    const critMult = this._yasuoCritMultiplier();
     const raw = base + this.stats.attackDamage * q.totalAdRatio * (crit ? critMult : 1);
     const first = !this._yasuoQHitConsumed;
     // R 이후 15초 "치명타 공격"의 추가 방어력 무시는 치명타가 실제로 터졌을 때만.

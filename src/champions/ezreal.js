@@ -64,6 +64,8 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
     line: { dir, maxDist: worldRange, halfWidth, onMiss: () => debugSkillMiss('Ezreal Q', 'no target in line') },
     onHit: (t) => {
       applyDamage(t, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
+      // 91차: 원작 Q는 적중 시 효과를 적용하고 주문 검(광휘의 검 계열)도 발동한다(룬의 평타 효과는 제외).
+      if (typeof itemOnBasicAttackHit === 'function' && t.hp > 0) itemOnBasicAttackHit(this, t, false, { fromAbility: true, allowSpellblade: true });
       vfx.spawn('ezrealQHit', getWorldPosition(t)?.clone() || t.mesh.position.clone());
       debugSkillHit('Ezreal Q', t);
       this._ezrealGainPassiveStack();
@@ -177,7 +179,9 @@ CharacterController.prototype._ezrealDetonateMark = function(target, by, ability
   const w = this._champData().W;
   const lvl = this._ezreal.markWLevel || Math.max(1, this.skillLevels.W || 1);
   const raw = skillVal(w.damageByLevel, lvl) + (w.bonusAdRatio || 0) * this._getBonusAD() + (w.apRatio || 0) * (this.stats.abilityPower || 0);
-  applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
+  // 91차: 구조물에 붙은 표식도 피해를 준다(원작 - 포탑 철거용). 예전엔 공용 진입점이 스킬 피해라며 막았다.
+  const onStructure = !!(target.isTurret || target.isInhibitor || target.isNexus);
+  applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this, canDamageStructures: onStructure });
   vfx.spawn('hit', getWorldPosition(target)?.clone() || target.mesh.position.clone());
   debugSkillHit('Ezreal W (detonate)', target, { by });
   if (by === 'ability' && abilityManaCost != null) {
