@@ -66,10 +66,12 @@ function setSummonerSpell(ctrl, slot, id) {
   return true;
 }
 function _summonerFail(msg) { if (typeof showSkillToast === 'function') showSkillToast(msg); return false; }
-function _summonerTargetAt(ctrl, pointerClient, rangeLol) {
+function _summonerTargetAt(ctrl, pointerClient, rangeLol, explicitTarget = null) {
   // 커서 아래 적 챔피언 → 없으면 지금 공격 대상(챔피언일 때). 사거리 밖이면 null + 이유.
+  // 93차: 명령에 담긴 대상(explicitTarget - 입력이 커서 아래 적 챔피언을 골라 ID로 넣는다)이 있으면 그것이 "커서 아래 적"이다.
   let t = null;
-  if (pointerClient && typeof getEnemyHit === 'function') { const h = getEnemyHit(pointerClient.x, pointerClient.y); if (h && h.isChampion) t = h; }
+  if (explicitTarget && explicitTarget.isChampion && explicitTarget.hp > 0) t = explicitTarget;
+  else if (pointerClient && typeof getEnemyHit === 'function') { const h = getEnemyHit(pointerClient.x, pointerClient.y); if (h && h.isChampion) t = h; }
   if (!t && ctrl.currentTarget && ctrl.currentTarget.isChampion && ctrl.currentTarget.hp > 0) t = ctrl.currentTarget;
   if (!t) return { target: null, reason: '대상 적 챔피언이 없습니다(커서를 적 챔피언 위에)' };
   if (typeof isInRange === 'function' && !isInRange(ctrl, t, rangeLol)) return { target: null, reason: '사거리 밖입니다' };
@@ -77,7 +79,8 @@ function _summonerTargetAt(ctrl, pointerClient, rangeLol) {
 }
 
 // 슬롯(D/F) 주문 시전. mousePoint: 커서 아래 지면 좌표, pointerClient: 화면 좌표(대상 지정 주문용).
-function castSummonerSpell(ctrl, slot, mousePoint, pointerClient) {
+// 93차: opts.target = 명령으로 받은 대상(화면 좌표 대신) - 탈진·점화가 쓴다.
+function castSummonerSpell(ctrl, slot, mousePoint, pointerClient, opts = {}) {
   const s = ensureSummoners(ctrl);
   if (!s || !s[slot]) return false;
   const id = s[slot].id, d = SUMMONER_SPELL_DATA[id];
@@ -101,8 +104,8 @@ function castSummonerSpell(ctrl, slot, mousePoint, pointerClient) {
       addShield(ctrl, 'summonerBarrier', _summonerLevelValue(ctrl, d.shieldMin, d.shieldMax) * getShieldReceivedMultiplier(ctrl), d.durationSec);
       if (typeof vfx !== 'undefined') vfx.groundShockwave(ctrl.root.position.clone(), BASE_UNIT * 0.9, 0xffe08a, 0.4);
       ok = true; break;
-    case 'exhaust': ok = _summonerExhaust(ctrl, d, pointerClient); break;
-    case 'ignite': ok = _summonerIgnite(ctrl, d, pointerClient); break;
+    case 'exhaust': ok = _summonerExhaust(ctrl, d, pointerClient, opts.target); break;
+    case 'ignite': ok = _summonerIgnite(ctrl, d, pointerClient, opts.target); break;
     case 'cleanse': _summonerCleanse(ctrl, d); ok = true; break;
     case 'clarity': ok = _summonerClarity(ctrl, d); break;
     case 'mark': ok = markRecast ? _summonerMarkDash(ctrl, d, slot) : _summonerMarkThrow(ctrl, d, mousePoint); break;
@@ -161,16 +164,16 @@ function _summonerHeal(ctrl, d, mousePoint) {
   }
   return true;
 }
-function _summonerExhaust(ctrl, d, pointerClient) {
-  const { target, reason } = _summonerTargetAt(ctrl, pointerClient, d.range);
+function _summonerExhaust(ctrl, d, pointerClient, explicitTarget = null) {
+  const { target, reason } = _summonerTargetAt(ctrl, pointerClient, d.range, explicitTarget);
   if (!target) return _summonerFail(`탈진 - ${reason}`);
   applyStatus(target, { id: 'summonerExhaustSlow', type: 'SLOW', duration: d.durationSec, value: d.slowPercent, source: ctrl, summonerDebuff: true });
   applyStatus(target, { id: 'summonerExhaust', type: 'EXHAUSTED', duration: d.durationSec, value: d.damageReduction, source: ctrl, summonerDebuff: true });
   if (typeof vfx !== 'undefined') vfx.spawn('hit', getWorldPosition(target).clone().add(new THREE.Vector3(0, BASE_UNIT * 0.9, 0)), undefined, { color: 0x9a8cff });
   return true;
 }
-function _summonerIgnite(ctrl, d, pointerClient) {
-  const { target, reason } = _summonerTargetAt(ctrl, pointerClient, d.range);
+function _summonerIgnite(ctrl, d, pointerClient, explicitTarget = null) {
+  const { target, reason } = _summonerTargetAt(ctrl, pointerClient, d.range, explicitTarget);
   if (!target) return _summonerFail(`점화 - ${reason}`);
   const total = _summonerLevelValue(ctrl, d.dmgMin, d.dmgMax);
   applyStatus(target, { id: 'summonerIgnite', type: 'DOT', duration: d.durationSec, totalDamage: total, damageType: DAMAGE_TYPE.TRUE, tickInterval: 1.0, source: ctrl, summonerDebuff: true });
@@ -359,7 +362,7 @@ function closeSummonerPicker() { _summonerPickerSlot = null; _renderSummonerPick
   // 칸 클릭 = 시전(원작), 칸 아래 "주문 변경" = 고르기 창.
   for (const k of SUMMONER_SLOTS) {
     const el = document.getElementById('spellSlot' + k);
-    if (el) el.addEventListener('click', () => { if (typeof controller !== 'undefined' && controller) castSummonerSpell(controller, k, typeof lastGroundPoint !== 'undefined' ? lastGroundPoint : null, null); });
+    if (el) el.addEventListener('click', () => { if (typeof controller !== 'undefined' && controller) submitSummonerFromInput(k, typeof lastGroundPoint !== 'undefined' ? lastGroundPoint : null, null); }); // 93차: 명령으로
   }
   const btn = document.getElementById('spellChangeBtn');
   if (btn) btn.addEventListener('click', () => openSummonerPicker(_summonerPickerSlot ? null : 'D'));

@@ -298,10 +298,21 @@ function _itemIsUsable(data) {
   );
   return usable;
 }
+// 93차: 소환사 주문 입력 → 명령. 대상 지정 주문(탈진·점화)이 쓸 "커서 아래 적 챔피언"을 여기서(화면 좌표로) 골라 ID로 담는다.
+function submitSummonerFromInput(slot, point, pointerClient) {
+  if (!controller || typeof castSummonerSpell !== 'function') return { ok: false };
+  let targetId = null;
+  if (pointerClient && typeof getEnemyHit === 'function') { const h = getEnemyHit(pointerClient.x, pointerClient.y); if (h && h.isChampion) targetId = entityId(h); }
+  return submitPlayerCommand({ type: 'summoner', slot, point: point ? toCommandPoint(point) : null, targetId });
+}
 // 63차: 숫자키·HUD 클릭·상점 더블클릭 공용 - 언제나 "지금" 조작 중인 챔피언(controller)으로 쓰고, 성공하면 그 칸을 번쩍인다.
+// 93차: 게임 규칙 처리는 명령(submitPlayerCommand → LocalSession → useItem)으로. 목표 좌표는 지금 커서 지면 좌표를 명령에 담는다.
 function useItemFromInput(slotIndex, opts = {}) {
   if (!controller || typeof useItem !== 'function') return false;
-  const ok = useItem(controller, slotIndex, opts);
+  const cmd = { type: 'useItem', slot: slotIndex };
+  if (opts.placeAhead) cmd.placeAhead = true;
+  else if (typeof lastGroundPoint !== 'undefined' && lastGroundPoint) cmd.point = toCommandPoint(lastGroundPoint);
+  const ok = !!submitPlayerCommand(cmd).outcome;
   if (ok) {
     const el = document.querySelectorAll('#hudItems .hud-item-grid .hud-item')[slotIndex];
     if (el) { el.classList.remove('used'); void el.offsetWidth; el.classList.add('used'); }
@@ -373,7 +384,7 @@ function updateItemUI(ctrl) {
     tEl.addEventListener('click', () => {
       if (typeof placeWard !== 'function' || !ctrl) return;
       const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
-      placeWard(ctrl, ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300))));
+      submitPlayerCommand({ type: 'placeWard', point: toCommandPoint(ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)))) });
     });
   }
   const bEl = box.querySelector('.hud-item.boots');
@@ -606,7 +617,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     if (e.button === 0) {
       const p = getGroundPoint(e.clientX, e.clientY) || lastGroundPoint;
       const slot = skillAim.slot; skillAim.cancel();
-      skillAim.cast(controller, slot, p, { x: e.clientX, y: e.clientY });
+      skillAim.cast(controller, slot, p, { x: e.clientX, y: e.clientY }); // (skill_aim_system.js가 cast 명령을 만든다)
       return;
     }
     if (e.button === 2) skillAim.cancel();
@@ -617,8 +628,9 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     // Alpha Strike 진행 중 우클릭(요청 문서 1 섹션 25): 재등장 방향만
     // 갱신하고, 일반 이동 명령(controller.moveTo)은 실행하지 않는다 -
     // "Q 상태 + 우클릭 -> 재등장 위치 변경, 이동 명령은 실행 안 함".
+    // 93차: 이 규칙은 move 명령 처리(LocalSession)로 옮겼다 - 여기서는 이동 표시만 건너뛴다.
     if (controller._masteryi && controller._masteryi.alpha) {
-      controller._masteryiSetAlphaStrikeReemergeDirection(groundPoint);
+      submitPlayerCommand({ type: 'move', point: toCommandPoint(groundPoint) });
       return;
     }
     // 64차: 원작처럼 우클릭한 자리에 적(미니언·챔피언·구조물·와드)이 있으면 이동이 아니라 공격 명령이다. 예전엔 우클릭이 항상
@@ -626,8 +638,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     attackMoveArmed = false;
     const enemyUnderCursor = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
     // 83차: "챔피언만 공격"(` 누르고 있기) 중에는 챔피언이 아닌 대상을 우클릭해도 그 자리로 이동만 한다.
-    if (enemyUnderCursor && (!window.__championsOnlyHeld || enemyUnderCursor.isChampion)) { controller.selectTarget(enemyUnderCursor); return; }
-    spawnMoveMarker(groundPoint); controller.moveTo(groundPoint);
+    if (enemyUnderCursor && (!window.__championsOnlyHeld || enemyUnderCursor.isChampion)) { submitPlayerCommand({ type: 'attack', targetId: entityId(enemyUnderCursor) }); return; }
+    spawnMoveMarker(groundPoint); submitPlayerCommand({ type: 'move', point: toCommandPoint(groundPoint) });
   } else if (e.button === 0) {
     // 64차 공격 이동(원작 A + 좌클릭): 커서 아래 적, 없으면 클릭 지점에서 가장 가까운 적(400 안)을 공격하고, 없으면 그 자리로 이동.
     if (attackMoveArmed) {
@@ -637,8 +649,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
       // 걸어가며 계속 살핀다(공격 이동 유지). ` 키를 누르고 있으면 챔피언만.
       const champsOnly = !!window.__championsOnlyHeld;
       const under = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
-      if (under && (!champsOnly || under.isChampion)) { controller._attackMoveDest = null; controller.selectTarget(under); return; }
-      if (p) { spawnMoveMarker(p); controller.attackMoveTo(p, { championsOnly: champsOnly, cursorPoint: (typeof optionsState !== 'undefined' && optionsState.attackMoveOnCursor) ? p : null }); }
+      if (under && (!champsOnly || under.isChampion)) { submitPlayerCommand({ type: 'attack', targetId: entityId(under), fromAttackMove: true }); return; }
+      if (p) { spawnMoveMarker(p); submitPlayerCommand({ type: 'attackMove', point: toCommandPoint(p), championsOnly: champsOnly, cursorPoint: (typeof optionsState !== 'undefined' && optionsState.attackMoveOnCursor) ? toCommandPoint(p) : null }); }
       return;
     }
     if (dummyPlaceMode) {
@@ -662,8 +674,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
       return;
     }
     const enemyHit = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
-    if (enemyHit) controller.selectTarget(enemyHit);
-    else { controller.currentTarget = null; targetRing.clear(); }
+    if (enemyHit) submitPlayerCommand({ type: 'attack', targetId: entityId(enemyHit) });
+    else { submitPlayerCommand({ type: 'clearTarget' }); targetRing.clear(); }
   }
 });
 
@@ -730,7 +742,7 @@ window.addEventListener('keydown', (e) => {
   // (Ctrl+W는 브라우저가 탭 닫기로 먼저 가져갈 수 있다 - 그때는 스킬 칸 위 레벨 업 버튼을 누르면 된다.)
   if (e.ctrlKey && ['KeyQ', 'KeyW', 'KeyE', 'KeyR'].includes(e.code)) {
     e.preventDefault();
-    if (controller.levelUpSkill(e.code.slice(3)) && typeof renderLevelPanel === 'function') renderLevelPanel();
+    if (submitPlayerCommand({ type: 'levelUpSkill', slot: e.code.slice(3) }).outcome && typeof renderLevelPanel === 'function') renderLevelPanel();
     return;
   }
   switch (e.code) {
@@ -748,13 +760,13 @@ window.addEventListener('keydown', (e) => {
     // 인자를 받지 않으므로 영향이 없다.
     // (R도 Q/W/E와 같은 조준 경로 - onSkillKeyDown)
     case 'KeyR': onSkillKeyDown('R', e.code, mousePoint); break;
-    case 'KeyB': controller.startRecall(); break;
+    case 'KeyB': submitPlayerCommand({ type: 'recall' }); break;
     case 'KeyA': attackMoveArmed = true; renderer.domElement.style.cursor = 'crosshair'; requestAnimationFrame(() => { if (attackMoveArmed) renderer.domElement.style.cursor = 'crosshair'; }); break; // 64차 공격 이동 (90차: 위 커서 숨김 복원이 크로스헤어를 덮어써 안 보이던 것 수정)
     // 36차: 소환사 주문(원작 기본 키 D/F).
-    case 'KeyD': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'D', mousePoint, lastPointerClient); break;
-    case 'KeyF': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'F', mousePoint, lastPointerClient); break;
+    case 'KeyD': submitSummonerFromInput('D', mousePoint, lastPointerClient); break;
+    case 'KeyF': submitSummonerFromInput('F', mousePoint, lastPointerClient); break;
     // 정지(원작 기본 키 S) - 이동·공격 명령을 멈추고 그 자리에 선다(제자리로 이동 = 정지, _commitMove 참고).
-    case 'KeyS': controller.moveTo(controller.root.position.clone()); break;
+    case 'KeyS': submitPlayerCommand({ type: 'stop' }); break;
     // 아이템 사용 - 원작 키 배치(1·2·3·5·6·7 = 인벤토리 6칸, 4 = 장신구). 사용 불가 아이템(스탯
     // 아이템)이면 useItem() 내부에서 콘솔 경고만 내고 조용히 무시된다.
     // 63차: 숫자패드(Numpad1~7)도 같은 칸 - 예전엔 위쪽 숫자 줄(Digit)만 받아서 숫자패드로는 아이템이 쓰이지 않았다.
@@ -766,7 +778,7 @@ window.addEventListener('keydown', (e) => {
     case 'Digit7': case 'Numpad7': useItemFromInput(5); break;
     case 'Numpad4':
     // 장신구(투명 와드) - 원작 기본 키 4. 현재 마우스 위치에 놓는다(설치 사거리 밖이면 사거리까지 걸어가서 놓는다 - 원작).
-    case 'Digit4': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
+    case 'Digit4': submitPlayerCommand({ type: 'placeWard', point: toCommandPoint(mousePoint) }); break;
   }
 });
 
@@ -784,7 +796,7 @@ function onSkillKeyDown(slot, code, mousePoint) {
   const spec = skillAimSpec(controller.championId, slot);
   if (spec && spec.type === 'charge' && !skillAimIsInstant(controller, slot)) {
     const charging = controller._varus && controller._varus.qCharge;
-    controller.castAbility(slot, mousePoint);
+    submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(mousePoint) });
     if (!charging && controller._varus && controller._varus.qCharge) skillAim.begin(slot, code, controller); else skillAim.cancel();
     return;
   }
@@ -798,7 +810,7 @@ function onSkillKeyDown(slot, code, mousePoint) {
     return;
   }
   // 쿨다운·마나 부족이면 조준하지 않고 원래 시전 경로로 넘겨 그쪽의 안내(토스트 등)를 그대로 쓴다.
-  if (typeof controller._canAffordAbility === 'function' && !controller._canAffordAbility(slot)) { skillAim.cancel(); controller.castAbility(slot, mousePoint); return; }
+  if (typeof controller._canAffordAbility === 'function' && !controller._canAffordAbility(slot)) { skillAim.cancel(); submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(mousePoint) }); return; }
   skillAim.begin(slot, code, controller);
 }
 function onSkillKeyUp(code) {
@@ -806,7 +818,7 @@ function onSkillKeyUp(code) {
   const slot = skillAim.slot;
   const spec = skillAimSpec(controller.championId, slot);
   const p = lastGroundPoint || controller.root.position.clone();
-  if (spec && spec.type === 'charge') { skillAim.cancel(); if (controller._varus && controller._varus.qCharge) controller.castAbility(slot, p); return; }
+  if (spec && spec.type === 'charge') { skillAim.cancel(); if (controller._varus && controller._varus.qCharge) submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(p) }); return; }
   if (skillAim.mode !== 'indicator') return; // 일반 시전은 클릭으로 시전
   skillAim.cancel();
   skillAim.cast(controller, slot, p, lastPointerClient);
@@ -821,7 +833,7 @@ window.addEventListener('keyup', (e) => {
 window.addEventListener('blur', () => {
   if (skillAim.aiming && skillAim.heldKey) onSkillKeyUp(skillAim.heldKey); // 충전형(바루스 Q)은 키를 뗀 것처럼 발사
   if (skillAim.aiming) skillAim.cancel();
-  if (controller && controller._varus && controller._varus.qCharge && !paused) controller.castAbility('Q', lastGroundPoint || controller.root.position.clone()); // 표시기 모드 충전
+  if (controller && controller._varus && controller._varus.qCharge && !paused) submitPlayerCommand({ type: 'cast', slot: 'Q', point: toCommandPoint(lastGroundPoint || controller.root.position) }); // 표시기 모드 충전
   if (attackMoveArmed) { attackMoveArmed = false; renderer.domElement.style.cursor = ''; }
   cameraRig.centerHeld = false;
 });

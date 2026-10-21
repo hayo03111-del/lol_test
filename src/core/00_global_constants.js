@@ -756,6 +756,7 @@ function applyDamage(target, result) {
   // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만" 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 넘긴다.
   if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isCritical: !!result.isCritical });
   else damageEnemy(target, finalDmg, result);
+  if (typeof _evDamage === 'function') _evDamage(dmgSource, target, finalDmg, result); // 93차: 게임 이벤트(보호막 흡수 전 피해, 적용 뒤 체력)
   const lethal = hpBefore > 0 && (target.hp <= 0 || (target.isTrainingDummy && !wasFloored && isFlooredTrainingDummy(target) && finalDmg >= hpBefore));
   if (lethal) {
     markExecute(target, finalDmg);

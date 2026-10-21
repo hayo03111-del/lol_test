@@ -331,6 +331,7 @@ function buyItem(ctrl, itemId) {
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  if (typeof emitGameEvent === 'function') emitGameEvent('itemPurchased', { entityId: _evId(ctrl), itemId }); // 93차
   return true;
 }
 
@@ -417,6 +418,7 @@ function buildOrBuyItem(ctrl, itemId) {
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
   console.log(`[ITEM] ${item.nameKo} 조합 완료 (차액 ${cost}원)`);
+  if (typeof emitGameEvent === 'function') emitGameEvent('itemPurchased', { entityId: _evId(ctrl), itemId }); // 93차(조합)
   return true;
 }
 
@@ -444,6 +446,7 @@ function sellItem(ctrl, slotIndex) {
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  if (typeof emitGameEvent === 'function') emitGameEvent('itemSold', { entityId: _evId(ctrl), itemId: slot.id }); // 93차
   return true;
 }
 
@@ -472,6 +475,7 @@ function _buyBoots(ctrl, item) {
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  if (typeof emitGameEvent === 'function') emitGameEvent('itemPurchased', { entityId: _evId(ctrl), itemId: item.id }); // 93차(신발)
   return true;
 }
 
@@ -495,6 +499,7 @@ function sellBoots(ctrl) {
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  if (typeof emitGameEvent === 'function') emitGameEvent('itemSold', { entityId: _evId(ctrl), itemId: bootsId }); // 93차(신발)
   return true;
 }
 
@@ -2498,7 +2503,8 @@ function _useControlWard(ctrl, slotIndex, item, opts = {}) {
   const p = item.wardPlacement;
   const timed = Number.isFinite(p.durationSec) && p.durationSec < 9999;
   // 63차: HUD 칸을 클릭해 쓰면 커서가 HUD 위라 그 아래 땅(화면 맨 아래)으로 걸어가 설치했다 - 그때는 챔피언 바로 앞에 놓는다(장신구 클릭과 같음).
-  let targetPoint = (!opts.placeAhead && typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : null;
+  // 93차: 명령에 담긴 목표 좌표(opts.point)가 있으면 그것을 쓴다(없으면 예전처럼 커서 좌표).
+  let targetPoint = opts.placeAhead ? null : (opts.point ? opts.point.clone() : ((typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : null));
   if (!targetPoint) {
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
     targetPoint = ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)));

@@ -220,7 +220,7 @@ function _updateSkillLevelUpButtons(champion) {
       btn.title = `Ctrl+${key}: ${key} 스킬 레벨 업`;
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (typeof controller !== 'undefined' && controller && controller.levelUpSkill(key) && typeof renderLevelPanel === 'function') renderLevelPanel();
+        if (typeof controller !== 'undefined' && controller && submitPlayerCommand({ type: 'levelUpSkill', slot: key }).outcome && typeof renderLevelPanel === 'function') renderLevelPanel(); // 93차: 명령으로
       });
       slot.appendChild(btn);
     }

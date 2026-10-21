@@ -34,6 +34,7 @@ function resetGame() {
   if (typeof lolVfx !== 'undefined' && lolVfx) { for (const s of lolVfx.systems) s.dispose(); lolVfx.systems = []; }
   if (typeof placedAllies !== 'undefined') for (const a of placedAllies) { a.hp = a.maxHp; a.statusEffects = []; }
   // 4) 챔피언을 처음 상태로 다시 불러온다(이전 챔피언 상태를 넘기지 않음)
+  if (typeof gameSession !== 'undefined' && gameSession) gameSession.reset(); // 93차: 세션 틱·시간을 처음으로(+ gameReset 이벤트)
   window.__resetNoCarry = true;
   const reloaded = typeof reloadCurrentChampion === 'function' && reloadCurrentChampion();
   if (!reloaded) window.__resetNoCarry = false;

@@ -2183,3 +2183,23 @@ PC 위키 Minion 기준이다(검색 요약 대조).
   - 분류 정리: 노틸러스 패시브·애쉬 Q 다발 화살(대상 종류 무관하게 평타 피해, 적중 효과는 다발당 한 번), 벡스 R 공격자, 미니언 경로의 적중 추가 피해 표시.
   - 확인 결과 그대로 맞았던 것: 럭스 E 주문력 80%(65%는 아레나 값), 애쉬 R 주변 피해 100%(50%는 클래식 모드), 가렌 R 재사용 대기시간 120/100/80(26.16 변경은 클래식 모드), 요네 R(26.21 변경은 아레나), 아리 W 이후 공격 40%(게임 파일 값), 초가스 패시브 회복, 벡스 공포 지속시간, 칼바람 원거리 피해 감소 규칙.
 - **점검 도구(tools/e2e_glb):** `qa_dmg_group1`(근접 1), `qa_dmg_group2`(근접 2), `qa_dmg_ranged`(원거리), `qa_dmg_group4`(벡스·노틸러스·람머스·초가스), `qa_dmg_fixes91`(이번 수정 확인).
+
+## 93차: 온라인 1:1 확장 준비 - 구조 분석과 세션 계층
+온라인 기능은 구현하지 않았다(통신·서버·매치메이킹 없음). 지금 엔진을 분석하고, 기존 동작을 그대로 둔 채 나중에 서버 권위 구조로
+옮길 수 있는 경계만 만들었다. 자세한 분석·제안은 `docs/ONLINE_1V1_ARCHITECTURE.md`.
+- **분석(코드 확인):** 메인 루프에 시뮬레이션과 렌더링이 섞여 있고, 시계가 셋(프레임 dt·`performance.now()` 약 290곳·`setTimeout`)이다.
+  유닛 고유 ID가 없었고, 공용 함수 다수가 "플레이어 챔피언은 전역 `controller` 하나"를 가정한다. 챔피언 처치 보상 함수는 연결돼 있지 않다.
+- **새 파일 `src/session/`(얇은 층 - 기존 함수만 부르거나 읽는다):**
+  - `entity_registry.js` - 유닛을 처음 조회할 때 정수 ID를 붙인다(WeakMap, 생성 함수 수정 없음). `entityId`·`entityKind`·`listEntities`·`findEntityById`.
+  - `game_events.js` - 피해·사망·부활·구조물 파괴·경기 종료·구매·판매·사용·명령 결과·초기화 이벤트(최근 500개, 직렬화 가능). 이벤트는 기록·연출용이고 상태는 확정하지 않는다.
+  - `game_snapshot.js` - 화면 객체 없는 JSON 상태(엔티티 ID·팀·위치·방향·체력·마나·보호막·상태 효과·쿨다운·레벨·능력치, 플레이어 골드·아이템·소환사 주문, 틱).
+  - `game_commands.js` - 입력 명령 13종과 `LocalSession`(`submit`·`advance`·`snapshot`·`events`·`reset`, `window.gameSession`).
+    명령은 행위·대상 ID·목표 좌표만 담고, 규칙 판정은 지금처럼 기존 함수가 한다.
+- **입력 연결:** 우클릭·좌클릭·공격 이동·Q/W/E/R(조준·즉시·바루스 충전)·D/F·B·S·아이템 키·장신구·레벨 업·상점 구매/판매·미니맵이
+  모두 명령을 거친다. 탈진·점화는 화면 좌표 대신 명령의 대상 ID를, 제어 와드·구원은 명령의 좌표를 먼저 쓴다(없으면 예전처럼 커서).
+- **이벤트 발생 지점:** `applyDamage`·`applyDamageToMinion/Turret/Inhibitor/Nexus`·`_die`·`_respawn`·`killMinion`·`destroyTurret/Inhibitor/Nexus`·
+  `checkWinCondition`·`buyItem`·`buildOrBuyItem`·`sellItem`·`sellBoots`·`resetGame`에 한 줄씩(`typeof` 보호).
+- **시간:** 메인 루프가 일시정지가 아닐 때 `gameSession.advance(dt)`로 틱·시뮬레이션 시간을 센다. 게임 규칙은 아직 이 시계를 읽지 않는다
+  (이행 방법·위험은 문서 6절).
+- **테스트:** `tests/session_layer_test.js`(ID·스냅샷 직렬화·명령 검사·명령 → 기존 함수 연결·이벤트·틱), 브라우저 `tools/e2e_glb/qa_session_check.js`
+  (실제 입력 → 명령, 피해·구매 이벤트, 스냅샷 왕복, 일시정지 중 틱 정지, 다시 시작 3회 반복 시 구조물·허수아비·장면 객체 수 유지).

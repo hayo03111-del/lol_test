@@ -90,7 +90,7 @@ function itemExtraIsUsable(item) {
     || item.humilityActive || item.manaRealizeActive || item.noEffectConsumable));
 }
 // 처리했으면 true/false, 이 파일 담당이 아니면 undefined.
-function itemExtraUse(ctrl, slotIndex, item) {
+function itemExtraUse(ctrl, slotIndex, item, opts = {}) {
   const now = _ixNow();
   if (item.noEffectConsumable) { // 카파 주스
     const slot = ctrl.items[slotIndex];
@@ -143,7 +143,8 @@ function itemExtraUse(ctrl, slotIndex, item) {
   if (item.interventionActive) { // 구원 - 마우스 위치(없으면 제자리)에 2.5초 뒤 회복 + 적 챔피언 고정 피해
     const p = item.interventionActive;
     if (!_ixCooldownReady(ctrl, item, p.cooldownSec)) return false;
-    const pos = (typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : ctrl.root.position.clone();
+    // 93차: 명령에 담긴 목표 좌표(opts.point)를 먼저 쓴다(입력이 명령을 만들 때 커서 지면 좌표를 넣는다). 없으면 예전처럼 커서 좌표.
+    const pos = opts.point ? opts.point.clone() : ((typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : ctrl.root.position.clone());
     ctrl._itemRedemption = { at: now + p.delaySec * 1000, pos, p };
     if (typeof spawnRangeRingAt === 'function') spawnRangeRingAt(pos, p.radius, p.delaySec);
     return true;

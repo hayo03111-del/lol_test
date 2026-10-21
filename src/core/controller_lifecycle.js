@@ -55,6 +55,7 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     if (this.state === STATE.DEAD) return;
     // Alpha Strike 비대상 상태 - 섹션 6: "모든 피격 판정에서 확인해야 한다".
     if (this.isUntargetable) return;
+    if (source) this._lastDamageSource = source; // 93차: 사망 이벤트의 처치자(killerId)
     // 요청(귀환 캔슬): 귀환 중 피격 -> 귀환 모션 중단 후 Idle로 전환. 그
     // 직후 이 피해로 체력이 0 이하가 되면 아래 _die()가 이어서 DEAD로
     // 다시 전환하므로, 굳이 순서를 바꾸지 않아도 "피격 -> 사망"이 자연스럽게
@@ -114,6 +115,7 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     }
 };
 CharacterController.prototype._die = function() {
+    if (typeof emitGameEvent === 'function') emitGameEvent('death', { entityId: _evId(this), kind: 'champion', killerId: _evId(this._lastDamageSource || null) }); // 93차
     // 암흑의 인장(영광) - 사망 시 중첩 소실. 이 데모는 플레이어를 공격하는
     // AI가 없어 사실상 트리거될 일이 없지만(도란의 방패 피격 회복과 동일한
     // 한계), 향후 그런 기능이 추가되면 자동으로 맞물리도록 범용 훅으로 둔다.
@@ -207,6 +209,7 @@ CharacterController.prototype._teleportToTeamSpawn = function() {
     if (typeof controller !== 'undefined' && controller === this && typeof snapCameraTo === 'function') snapCameraTo(p);
 };
 CharacterController.prototype._respawn = function() {
+    if (typeof emitGameEvent === 'function') emitGameEvent('respawn', { entityId: _evId(this) }); // 93차
     this.setState(STATE.RESPAWN);
     this._teleportToTeamSpawn();
     this.hp = this.maxHp; this.mp = this.maxMp;

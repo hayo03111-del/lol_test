@@ -168,7 +168,7 @@ function _shopBuy(itemId) {
   const reason = shopBlockReason(controller, itemId);
   if (reason) { if (typeof showSkillToast === 'function') showSkillToast(reason); return false; }
   _shopSnapshot(`${(ITEM_DATA[itemId] || {}).nameKo || itemId} 구매`);
-  const ok = typeof buildOrBuyItem === 'function' && buildOrBuyItem(controller, itemId);
+  const ok = typeof buildOrBuyItem === 'function' && !!submitPlayerCommand({ type: 'buyItem', itemId }).outcome; // 93차: 명령으로
   if (!ok) _shopUndoStack.pop(); else _shopMarkAfter();
   if (ok) {
     const tile = document.querySelector(`#shopGrid .shop-tile[data-id="${itemId}"]`);
@@ -181,7 +181,7 @@ function _shopSell() {
   const sel = _shopSelectedSlot === 'boots' ? controller.boots : controller.items[_shopSelectedSlot];
   if (!sel) { _shopSelectedSlot = null; renderShopPanel(true); return; }
   _shopSnapshot(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
-  const ok = _shopSelectedSlot === 'boots' ? (typeof sellBoots === 'function' && sellBoots(controller)) : (typeof sellItem === 'function' && sellItem(controller, _shopSelectedSlot));
+  const ok = !!submitPlayerCommand({ type: 'sellItem', slot: _shopSelectedSlot }).outcome; // 93차: 명령으로(신발 칸은 'boots')
   if (!ok) _shopUndoStack.pop();
   else _shopMarkAfter();
   if (ok && typeof showSkillToast === 'function') showSkillToast(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);

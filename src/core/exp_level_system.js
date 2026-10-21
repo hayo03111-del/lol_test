@@ -898,6 +898,7 @@ function killMinion(minion) {
   if (minion.isDead) return;
   minion.isDead = true;
   minion.destroyed = true;
+  if (typeof emitGameEvent === 'function') emitGameEvent('death', { entityId: _evId(minion), kind: 'minion', killerId: _evId(minion._lastHitBy && !minion._lastHitBy.isStructure ? minion._lastHitBy : null) }); // 93차
   minion.attackTarget = null;
   if (minion.healthBar) minion.healthBar.sprite.visible = false; // 요청 22/21-G: 사망 즉시 체력바 숨김
   rewardMinionKill(minion);
@@ -1024,6 +1025,8 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
       if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(controller, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isOnHitBonus: !!result.isOnHitBonus });
     }
   }
+  // 93차: 게임 이벤트(공격자: 플레이어 피해면 플레이어, 아니면 넘어온 공격자 - 구조물·환경은 null)
+  if (typeof _evDamage === 'function') _evDamage(fromPlayer ? controller : (result.source && !result.source.isStructure ? result.source : null), minion, finalDmg, result);
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }
   // 요청("미니언 모션 최소 요구: Idle/Move/Attack/Hit/Death, 우선순위
   // Death>Attack>Hit>Move>Idle") - 피격 애니메이션을 재생한다. 짧은 창

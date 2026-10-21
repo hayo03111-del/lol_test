@@ -2152,6 +2152,7 @@ function applyDamage(target, result) {
   // 피해 출처 메타(스킬/평타/도트 틱) - 무효화(주문 방어막)처럼 "스킬만" 반응해야 하는 피격 효과가 쓰도록 takeDamage()에 넘긴다.
   if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isCritical: !!result.isCritical });
   else damageEnemy(target, finalDmg, result);
+  if (typeof _evDamage === 'function') _evDamage(dmgSource, target, finalDmg, result); // 93차: 게임 이벤트(보호막 흡수 전 피해, 적용 뒤 체력)
   const lethal = hpBefore > 0 && (target.hp <= 0 || (target.isTrainingDummy && !wasFloored && isFlooredTrainingDummy(target) && finalDmg >= hpBefore));
   if (lethal) {
     markExecute(target, finalDmg);
@@ -12445,13 +12446,14 @@ class SkillAimSystem {
   }
 
   // 시전: 대상 지정 스킬은 커서 아래 적을 대상으로 잡고 castAbility로 넘긴다(사거리·비용 판정은 각 스킬 코드가 한다).
+  // 93차: 화면에서 고른 대상은 ID로 cast 명령에 담고, 실제 시전(대상 지정 + castAbility)은 세션이 한다. 대상 고리 표시는 화면 쪽 일.
   cast(c, slot, point, clientXY) {
     if (!c) return;
     const spec = skillAimSpec(c.championId, slot);
-    if (spec && spec.type === 'unit') {
-      const u = this.pickUnit(c, slot, point, clientXY);
-      if (u && u !== c.currentTarget) { c.currentTarget = u; if (typeof targetRing !== 'undefined') targetRing.attachTo(u); }
-    }
+    const u = (spec && spec.type === 'unit') ? this.pickUnit(c, slot, point, clientXY) : null;
+    if (u && u !== c.currentTarget && typeof targetRing !== 'undefined') targetRing.attachTo(u);
+    if (typeof submitPlayerCommand === 'function') { submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(point), targetId: u ? entityId(u) : null }); return; }
+    if (u && u !== c.currentTarget) c.currentTarget = u; // 세션이 없는 환경(단위 테스트) - 예전 경로
     c.castAbility(slot, point);
   }
 
@@ -18822,6 +18824,7 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     if (this.state === STATE.DEAD) return;
     // Alpha Strike 비대상 상태 - 섹션 6: "모든 피격 판정에서 확인해야 한다".
     if (this.isUntargetable) return;
+    if (source) this._lastDamageSource = source; // 93차: 사망 이벤트의 처치자(killerId)
     // 요청(귀환 캔슬): 귀환 중 피격 -> 귀환 모션 중단 후 Idle로 전환. 그
     // 직후 이 피해로 체력이 0 이하가 되면 아래 _die()가 이어서 DEAD로
     // 다시 전환하므로, 굳이 순서를 바꾸지 않아도 "피격 -> 사망"이 자연스럽게
@@ -18881,6 +18884,7 @@ CharacterController.prototype.takeDamage = function(dmg, source = null, damageTy
     }
 };
 CharacterController.prototype._die = function() {
+    if (typeof emitGameEvent === 'function') emitGameEvent('death', { entityId: _evId(this), kind: 'champion', killerId: _evId(this._lastDamageSource || null) }); // 93차
     // 암흑의 인장(영광) - 사망 시 중첩 소실. 이 데모는 플레이어를 공격하는
     // AI가 없어 사실상 트리거될 일이 없지만(도란의 방패 피격 회복과 동일한
     // 한계), 향후 그런 기능이 추가되면 자동으로 맞물리도록 범용 훅으로 둔다.
@@ -18974,6 +18978,7 @@ CharacterController.prototype._teleportToTeamSpawn = function() {
     if (typeof controller !== 'undefined' && controller === this && typeof snapCameraTo === 'function') snapCameraTo(p);
 };
 CharacterController.prototype._respawn = function() {
+    if (typeof emitGameEvent === 'function') emitGameEvent('respawn', { entityId: _evId(this) }); // 93차
     this.setState(STATE.RESPAWN);
     this._teleportToTeamSpawn();
     this.hp = this.maxHp; this.mp = this.maxMp;
@@ -28963,7 +28968,7 @@ function _updateSkillLevelUpButtons(champion) {
       btn.title = `Ctrl+${key}: ${key} 스킬 레벨 업`;
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (typeof controller !== 'undefined' && controller && controller.levelUpSkill(key) && typeof renderLevelPanel === 'function') renderLevelPanel();
+        if (typeof controller !== 'undefined' && controller && submitPlayerCommand({ type: 'levelUpSkill', slot: key }).outcome && typeof renderLevelPanel === 'function') renderLevelPanel(); // 93차: 명령으로
       });
       slot.appendChild(btn);
     }
@@ -29725,6 +29730,7 @@ function applyDamageToTurret(turret, result, sourceInfo = {}) {
   // 실제 피해가 적용된 뒤의 HP를 명확히 기록해 '한 번 맞자마자 사라짐'
   // 현상을 게임 로직/모델 가시성 중 어느 쪽에서도 조용히 삼키지 않게 한다.
   turret.hp = Math.max(0, turret.hp - finalDmg);
+  if (typeof _evDamage === 'function') _evDamage(sourceInfo.source || resolveDamageSource(result.source, turret), turret, finalDmg, result); // 93차: 게임 이벤트
   console.log(`[TURRET DAMAGE] ${turret.team}/${turret.type}: ${hpBefore.toFixed(2)} -> ${turret.hp.toFixed(2)} (raw=${Number(result.rawDamage||0).toFixed(2)}, final=${finalDmg.toFixed(2)})`);
   updateTurretVisual(turret);
   if (turret.hp <= 0) destroyTurret(turret);
@@ -29741,6 +29747,7 @@ function applyDamageToTurret(turret, result, sourceInfo = {}) {
 function destroyTurret(turret) {
   if (turret.destroyed) return;
   turret.destroyed = true;
+  if (typeof emitGameEvent === 'function') emitGameEvent('structureDestroyed', { entityId: _evId(turret), kind: 'turret', team: turret.team }); // 93차
   turret._destroyedAt = performance.now(); // 84차: 억제기 포탑 피해 감소(60초) 기준 시각
   const data = TURRET_DATA[turret.type];
   // 62차: 보상은 reward_system.js(칼바람 값 - 팀 전체 + 파괴자 몫)로 옮겼다. 예전엔 어디서 부서지든 고정값 전액을 줬다.
@@ -30306,6 +30313,7 @@ function applyDamageToNexus(nexus, result) {
   if (isStructureProtected(nexus)) return 0; // 60차: 넥서스 포탑·억제기가 남아 있으면 무적
   const finalDmg = calculateDamage({ ...result, target: nexus });
   nexus.hp = Math.max(0, nexus.hp - finalDmg);
+  if (typeof _evDamage === 'function') _evDamage(resolveDamageSource(result.source, nexus), nexus, finalDmg, result); // 93차
   setStructBar(nexus.labelDiv, nexus.hp / nexus.maxHp);
   if (nexus.hp <= 0) destroyNexus(nexus);
   return finalDmg;
@@ -30313,6 +30321,7 @@ function applyDamageToNexus(nexus, result) {
 function destroyNexus(nexus) {
   if (nexus.destroyed) return;
   nexus.destroyed = true;
+  if (typeof emitGameEvent === 'function') emitGameEvent('structureDestroyed', { entityId: _evId(nexus), kind: 'nexus', team: nexus.team }); // 93차
   console.log(`[NEXUS] ${nexus.team} 넥서스 파괴!`);
   if (nexus.labelDiv) { const b = nexus.labelDiv.querySelector('.lolBar'); if (b) b.style.display = 'none'; }
   if (nexus.usingRealModel) playAssetClip(nexus, `${nexus.team} nexus`, NEXUS_MODEL_CLIPS.death, { fade: 0.3, loopOnce: true });
@@ -30430,6 +30439,7 @@ function applyDamageToInhibitor(inhibitor, result) {
   // 억제기 방어력 20이 항상 그대로 적용되게 한다.
   const finalDmg = calculateDamage({ ...result, target: inhibitor, armorPenPercent: 0 });
   inhibitor.hp = Math.max(0, inhibitor.hp - finalDmg);
+  if (typeof _evDamage === 'function') _evDamage(resolveDamageSource(result.source, inhibitor), inhibitor, finalDmg, result); // 93차
   updateInhibitorVisual(inhibitor);
   if (inhibitor.hp <= 0) destroyInhibitor(inhibitor);
   return finalDmg;
@@ -30437,6 +30447,7 @@ function applyDamageToInhibitor(inhibitor, result) {
 function destroyInhibitor(inhibitor) {
   if (inhibitor.destroyed) return;
   inhibitor.destroyed = true;
+  if (typeof emitGameEvent === 'function') emitGameEvent('structureDestroyed', { entityId: _evId(inhibitor), kind: 'inhibitor', team: inhibitor.team }); // 93차
   console.log(`[INHIBITOR] ${inhibitor.team} 억제기 파괴! ${INHIBITOR_RESPAWN_SEC}초 후 재생성`);
   if (typeof rewardStructureDestroyed === 'function') rewardStructureDestroyed(inhibitor); // 62차: 팀 전체 50골드
   const labelKey = `${inhibitor.team} inhibitor`;
@@ -30503,6 +30514,7 @@ function checkWinCondition() {
   if (!dead) return;
   gameEnded = true;
   const winner = dead.team === 'RED' ? 'BLUE' : 'RED';
+  if (typeof emitGameEvent === 'function') emitGameEvent('gameOver', { winnerTeam: winner }); // 93차
   console.log(`[GAME] ${winner} 팀 승리! (${dead.team} 넥서스 파괴)`);
   const banner = document.createElement('div');
   banner.textContent = `${winner} WINS`;
@@ -31973,6 +31985,7 @@ function killMinion(minion) {
   if (minion.isDead) return;
   minion.isDead = true;
   minion.destroyed = true;
+  if (typeof emitGameEvent === 'function') emitGameEvent('death', { entityId: _evId(minion), kind: 'minion', killerId: _evId(minion._lastHitBy && !minion._lastHitBy.isStructure ? minion._lastHitBy : null) }); // 93차
   minion.attackTarget = null;
   if (minion.healthBar) minion.healthBar.sprite.visible = false; // 요청 22/21-G: 사망 즉시 체력바 숨김
   rewardMinionKill(minion);
@@ -32099,6 +32112,8 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
       if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(controller, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isOnHitBonus: !!result.isOnHitBonus });
     }
   }
+  // 93차: 게임 이벤트(공격자: 플레이어 피해면 플레이어, 아니면 넘어온 공격자 - 구조물·환경은 null)
+  if (typeof _evDamage === 'function') _evDamage(fromPlayer ? controller : (result.source && !result.source.isStructure ? result.source : null), minion, finalDmg, result);
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }
   // 요청("미니언 모션 최소 요구: Idle/Move/Attack/Hit/Death, 우선순위
   // Death>Attack>Hit>Move>Idle") - 피격 애니메이션을 재생한다. 짧은 창
@@ -32671,6 +32686,7 @@ function buyItem(ctrl, itemId) {
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  if (typeof emitGameEvent === 'function') emitGameEvent('itemPurchased', { entityId: _evId(ctrl), itemId }); // 93차
   return true;
 }
 
@@ -32757,6 +32773,7 @@ function buildOrBuyItem(ctrl, itemId) {
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
   console.log(`[ITEM] ${item.nameKo} 조합 완료 (차액 ${cost}원)`);
+  if (typeof emitGameEvent === 'function') emitGameEvent('itemPurchased', { entityId: _evId(ctrl), itemId }); // 93차(조합)
   return true;
 }
 
@@ -32784,6 +32801,7 @@ function sellItem(ctrl, slotIndex) {
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  if (typeof emitGameEvent === 'function') emitGameEvent('itemSold', { entityId: _evId(ctrl), itemId: slot.id }); // 93차
   return true;
 }
 
@@ -32812,6 +32830,7 @@ function _buyBoots(ctrl, item) {
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  if (typeof emitGameEvent === 'function') emitGameEvent('itemPurchased', { entityId: _evId(ctrl), itemId: item.id }); // 93차(신발)
   return true;
 }
 
@@ -32835,6 +32854,7 @@ function sellBoots(ctrl) {
   recomputeItemStats(ctrl);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(ctrl);
+  if (typeof emitGameEvent === 'function') emitGameEvent('itemSold', { entityId: _evId(ctrl), itemId: bootsId }); // 93차(신발)
   return true;
 }
 
@@ -34838,7 +34858,8 @@ function _useControlWard(ctrl, slotIndex, item, opts = {}) {
   const p = item.wardPlacement;
   const timed = Number.isFinite(p.durationSec) && p.durationSec < 9999;
   // 63차: HUD 칸을 클릭해 쓰면 커서가 HUD 위라 그 아래 땅(화면 맨 아래)으로 걸어가 설치했다 - 그때는 챔피언 바로 앞에 놓는다(장신구 클릭과 같음).
-  let targetPoint = (!opts.placeAhead && typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : null;
+  // 93차: 명령에 담긴 목표 좌표(opts.point)가 있으면 그것을 쓴다(없으면 예전처럼 커서 좌표).
+  let targetPoint = opts.placeAhead ? null : (opts.point ? opts.point.clone() : ((typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : null));
   if (!targetPoint) {
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
     targetPoint = ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)));
@@ -35616,7 +35637,7 @@ function itemExtraIsUsable(item) {
     || item.humilityActive || item.manaRealizeActive || item.noEffectConsumable));
 }
 // 처리했으면 true/false, 이 파일 담당이 아니면 undefined.
-function itemExtraUse(ctrl, slotIndex, item) {
+function itemExtraUse(ctrl, slotIndex, item, opts = {}) {
   const now = _ixNow();
   if (item.noEffectConsumable) { // 카파 주스
     const slot = ctrl.items[slotIndex];
@@ -35669,7 +35690,8 @@ function itemExtraUse(ctrl, slotIndex, item) {
   if (item.interventionActive) { // 구원 - 마우스 위치(없으면 제자리)에 2.5초 뒤 회복 + 적 챔피언 고정 피해
     const p = item.interventionActive;
     if (!_ixCooldownReady(ctrl, item, p.cooldownSec)) return false;
-    const pos = (typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : ctrl.root.position.clone();
+    // 93차: 명령에 담긴 목표 좌표(opts.point)를 먼저 쓴다(입력이 명령을 만들 때 커서 지면 좌표를 넣는다). 없으면 예전처럼 커서 좌표.
+    const pos = opts.point ? opts.point.clone() : ((typeof lastGroundPoint !== 'undefined' && lastGroundPoint) ? lastGroundPoint.clone() : ctrl.root.position.clone());
     ctrl._itemRedemption = { at: now + p.delaySec * 1000, pos, p };
     if (typeof spawnRangeRingAt === 'function') spawnRangeRingAt(pos, p.radius, p.delaySec);
     return true;
@@ -36108,10 +36130,12 @@ function setSummonerSpell(ctrl, slot, id) {
   return true;
 }
 function _summonerFail(msg) { if (typeof showSkillToast === 'function') showSkillToast(msg); return false; }
-function _summonerTargetAt(ctrl, pointerClient, rangeLol) {
+function _summonerTargetAt(ctrl, pointerClient, rangeLol, explicitTarget = null) {
   // 커서 아래 적 챔피언 → 없으면 지금 공격 대상(챔피언일 때). 사거리 밖이면 null + 이유.
+  // 93차: 명령에 담긴 대상(explicitTarget - 입력이 커서 아래 적 챔피언을 골라 ID로 넣는다)이 있으면 그것이 "커서 아래 적"이다.
   let t = null;
-  if (pointerClient && typeof getEnemyHit === 'function') { const h = getEnemyHit(pointerClient.x, pointerClient.y); if (h && h.isChampion) t = h; }
+  if (explicitTarget && explicitTarget.isChampion && explicitTarget.hp > 0) t = explicitTarget;
+  else if (pointerClient && typeof getEnemyHit === 'function') { const h = getEnemyHit(pointerClient.x, pointerClient.y); if (h && h.isChampion) t = h; }
   if (!t && ctrl.currentTarget && ctrl.currentTarget.isChampion && ctrl.currentTarget.hp > 0) t = ctrl.currentTarget;
   if (!t) return { target: null, reason: '대상 적 챔피언이 없습니다(커서를 적 챔피언 위에)' };
   if (typeof isInRange === 'function' && !isInRange(ctrl, t, rangeLol)) return { target: null, reason: '사거리 밖입니다' };
@@ -36119,7 +36143,8 @@ function _summonerTargetAt(ctrl, pointerClient, rangeLol) {
 }
 
 // 슬롯(D/F) 주문 시전. mousePoint: 커서 아래 지면 좌표, pointerClient: 화면 좌표(대상 지정 주문용).
-function castSummonerSpell(ctrl, slot, mousePoint, pointerClient) {
+// 93차: opts.target = 명령으로 받은 대상(화면 좌표 대신) - 탈진·점화가 쓴다.
+function castSummonerSpell(ctrl, slot, mousePoint, pointerClient, opts = {}) {
   const s = ensureSummoners(ctrl);
   if (!s || !s[slot]) return false;
   const id = s[slot].id, d = SUMMONER_SPELL_DATA[id];
@@ -36143,8 +36168,8 @@ function castSummonerSpell(ctrl, slot, mousePoint, pointerClient) {
       addShield(ctrl, 'summonerBarrier', _summonerLevelValue(ctrl, d.shieldMin, d.shieldMax) * getShieldReceivedMultiplier(ctrl), d.durationSec);
       if (typeof vfx !== 'undefined') vfx.groundShockwave(ctrl.root.position.clone(), BASE_UNIT * 0.9, 0xffe08a, 0.4);
       ok = true; break;
-    case 'exhaust': ok = _summonerExhaust(ctrl, d, pointerClient); break;
-    case 'ignite': ok = _summonerIgnite(ctrl, d, pointerClient); break;
+    case 'exhaust': ok = _summonerExhaust(ctrl, d, pointerClient, opts.target); break;
+    case 'ignite': ok = _summonerIgnite(ctrl, d, pointerClient, opts.target); break;
     case 'cleanse': _summonerCleanse(ctrl, d); ok = true; break;
     case 'clarity': ok = _summonerClarity(ctrl, d); break;
     case 'mark': ok = markRecast ? _summonerMarkDash(ctrl, d, slot) : _summonerMarkThrow(ctrl, d, mousePoint); break;
@@ -36203,16 +36228,16 @@ function _summonerHeal(ctrl, d, mousePoint) {
   }
   return true;
 }
-function _summonerExhaust(ctrl, d, pointerClient) {
-  const { target, reason } = _summonerTargetAt(ctrl, pointerClient, d.range);
+function _summonerExhaust(ctrl, d, pointerClient, explicitTarget = null) {
+  const { target, reason } = _summonerTargetAt(ctrl, pointerClient, d.range, explicitTarget);
   if (!target) return _summonerFail(`탈진 - ${reason}`);
   applyStatus(target, { id: 'summonerExhaustSlow', type: 'SLOW', duration: d.durationSec, value: d.slowPercent, source: ctrl, summonerDebuff: true });
   applyStatus(target, { id: 'summonerExhaust', type: 'EXHAUSTED', duration: d.durationSec, value: d.damageReduction, source: ctrl, summonerDebuff: true });
   if (typeof vfx !== 'undefined') vfx.spawn('hit', getWorldPosition(target).clone().add(new THREE.Vector3(0, BASE_UNIT * 0.9, 0)), undefined, { color: 0x9a8cff });
   return true;
 }
-function _summonerIgnite(ctrl, d, pointerClient) {
-  const { target, reason } = _summonerTargetAt(ctrl, pointerClient, d.range);
+function _summonerIgnite(ctrl, d, pointerClient, explicitTarget = null) {
+  const { target, reason } = _summonerTargetAt(ctrl, pointerClient, d.range, explicitTarget);
   if (!target) return _summonerFail(`점화 - ${reason}`);
   const total = _summonerLevelValue(ctrl, d.dmgMin, d.dmgMax);
   applyStatus(target, { id: 'summonerIgnite', type: 'DOT', duration: d.durationSec, totalDamage: total, damageType: DAMAGE_TYPE.TRUE, tickInterval: 1.0, source: ctrl, summonerDebuff: true });
@@ -36401,7 +36426,7 @@ function closeSummonerPicker() { _summonerPickerSlot = null; _renderSummonerPick
   // 칸 클릭 = 시전(원작), 칸 아래 "주문 변경" = 고르기 창.
   for (const k of SUMMONER_SLOTS) {
     const el = document.getElementById('spellSlot' + k);
-    if (el) el.addEventListener('click', () => { if (typeof controller !== 'undefined' && controller) castSummonerSpell(controller, k, typeof lastGroundPoint !== 'undefined' ? lastGroundPoint : null, null); });
+    if (el) el.addEventListener('click', () => { if (typeof controller !== 'undefined' && controller) submitSummonerFromInput(k, typeof lastGroundPoint !== 'undefined' ? lastGroundPoint : null, null); }); // 93차: 명령으로
   }
   const btn = document.getElementById('spellChangeBtn');
   if (btn) btn.addEventListener('click', () => openSummonerPicker(_summonerPickerSlot ? null : 'D'));
@@ -36421,6 +36446,376 @@ function closeSummonerPicker() { _summonerPickerSlot = null; _renderSummonerPick
     if (item && desc) { const d = SUMMONER_SPELL_DATA[item.dataset.spell]; desc.textContent = `${d.nameKo} · ${d.cooldown}초 - ${d.descKo}${d.estimated ? ' (일부 수치 추정)' : ''}`; }
   });
 })();
+
+/* ===== src/session/entity_registry.js ===== */
+/* entity_registry.js — 93차(온라인 1:1 준비): 엔티티 고유 ID
+ * 지금까지는 유닛을 객체 참조로만 구분했다(id 필드 없음). 명령·스냅샷·이벤트가 유닛을 "숫자 ID"로 가리킬 수 있게,
+ * 기존 객체를 건드리지 않고(필드 추가·생성 함수 수정 없음) 처음 조회할 때 ID를 붙이는 WeakMap 레지스트리를 둔다.
+ *  - entityId(unit): 그 유닛의 ID(처음이면 새로 발급). 같은 객체는 항상 같은 ID, 지워진 유닛의 ID는 재사용하지 않는다.
+ *  - entityKind(unit): 'champion' | 'dummy' | 'allyDummy' | 'minion' | 'turret' | 'inhibitor' | 'nexus' | 'ward' | 'unknown'
+ *  - listEntities(): 지금 월드에 있는 유닛 전부(기존 전역 배열을 읽기만 한다 - 새 목록을 따로 저장하지 않는다).
+ *  - findEntityById(id): ID → 유닛(없으면 null).
+ * 서버 권위 구조로 갈 때는 생성 함수(createMinion 등)에서 ID를 발급하고 객체 참조 대신 ID를 저장하는 쪽으로 옮긴다(README 93차).
+ */
+// var + 초기값 없음: 파일 순서와 무관하게 쓸 수 있게 처음 부를 때 만든다(초기값을 두면 이 줄이 늦게 실행될 때 번호가 되감긴다).
+var _entityIds;
+var _entityNextId;
+function entityId(unit) {
+  if (!unit || (typeof unit !== 'object' && typeof unit !== 'function')) return null;
+  if (!_entityIds) { _entityIds = new WeakMap(); _entityNextId = 1; }
+  let id = _entityIds.get(unit);
+  if (id == null) { id = _entityNextId++; _entityIds.set(unit, id); }
+  return id;
+}
+function entityKind(unit) {
+  if (!unit) return 'unknown';
+  if (typeof CharacterController !== 'undefined' && unit instanceof CharacterController) return 'champion';
+  if (unit.isWard) return 'ward';
+  if (unit.isMinion) return 'minion';
+  if (unit.isTurret) return 'turret';
+  if (unit.isInhibitor) return 'inhibitor';
+  if (unit.isNexus) return 'nexus';
+  if (unit.isAlly) return 'allyDummy';
+  if (unit.isTrainingDummy || unit.isChampion) return 'dummy';
+  return 'unknown';
+}
+// 기존 전역 배열들을 순서대로 모은다(중복 제거). 죽은 미니언·파괴된 와드는 목록에서 빠진다(기존 배열 규칙 그대로).
+function listEntities() {
+  const out = [], seen = new Set();
+  const add = (u) => { if (u && !seen.has(u)) { seen.add(u); out.push(u); } };
+  if (typeof controller !== 'undefined') add(controller);
+  if (typeof dummy !== 'undefined') add(dummy);
+  if (typeof placedDummies !== 'undefined' && placedDummies) placedDummies.forEach(add);
+  if (typeof placedAllies !== 'undefined' && placedAllies) placedAllies.forEach(add);
+  if (typeof minions !== 'undefined' && minions) minions.forEach(add);
+  if (typeof turrets !== 'undefined' && turrets) turrets.forEach(add);
+  if (typeof inhibitorBuildings !== 'undefined' && inhibitorBuildings) inhibitorBuildings.forEach(add);
+  if (typeof nexusBuildings !== 'undefined' && nexusBuildings) nexusBuildings.forEach(add);
+  if (typeof wardSystem !== 'undefined' && wardSystem && wardSystem.wards) wardSystem.wards.forEach((w) => { if (!w.destroyed) add(w); });
+  return out;
+}
+function findEntityById(id) {
+  if (id == null) return null;
+  for (const u of listEntities()) if (entityId(u) === id) return u;
+  return null;
+}
+
+/* ===== src/session/game_events.js ===== */
+/* game_events.js — 93차(온라인 1:1 준비): 게임 이벤트 기록
+ * "무슨 일이 일어났는가"를 화면 객체 없이 직렬화 가능한 데이터로 남긴다. 나중에 서버가 클라이언트에 연출용으로 보낼 이벤트의 모양이다.
+ * 이벤트는 연출·기록용이다 - 게임 상태(체력·골드 등)의 기준은 언제나 게임 객체 자체이고, 스냅샷(game_snapshot.js)이 그것을 옮긴다.
+ * 이벤트를 놓치거나 순서가 바뀌어도 상태가 틀어지지 않게, 이벤트로 상태를 "확정"하는 코드는 만들지 않는다.
+ *
+ * 이벤트 종류(type)와 필드(모든 유닛은 entityId 숫자로):
+ *  damage            { sourceId, targetId, amount, damageType, basicAttack, ability, dot, ultimate, targetHp }
+ *  death             { entityId, kind, killerId }
+ *  respawn           { entityId }
+ *  structureDestroyed{ entityId, kind, team }
+ *  gameOver          { winnerTeam }
+ *  itemPurchased     { entityId, itemId }
+ *  itemSold          { entityId, itemId }
+ *  itemUsed          { entityId, itemId, slot }
+ *  commandResult     { seq, type, ok, reason, outcome }   - LocalSession이 명령마다 남긴다(승인·거부)
+ *  gameReset         { }
+ * 공통 필드: seq(이벤트 번호), tick, simTimeSec(LocalSession 시뮬레이션 시간).
+ *
+ * emitGameEvent()는 게임 로직 안에서 불리므로 절대 예외를 밖으로 던지지 않는다(구독자 오류도 삼킨다).
+ */
+var __gameEventBus; // var: 파일 순서와 무관하게 쓸 수 있게(처음 쓸 때 만든다)
+function _gameEventBus() {
+  if (!__gameEventBus) __gameEventBus = { seq: 0, buffer: [], limit: 500, listeners: new Map() };
+  return __gameEventBus;
+}
+function emitGameEvent(type, data) {
+  try {
+    const bus = _gameEventBus();
+    const s = (typeof gameSession !== 'undefined' && gameSession) ? gameSession : null;
+    const ev = Object.assign({ seq: ++bus.seq, type, tick: s ? s.tick : 0, simTimeSec: s ? Math.round(s.simTimeSec * 1000) / 1000 : 0 }, data || {});
+    bus.buffer.push(ev);
+    if (bus.buffer.length > bus.limit) bus.buffer.splice(0, bus.buffer.length - bus.limit);
+    for (const key of [type, '*']) {
+      const set = bus.listeners.get(key);
+      if (set) for (const fn of set) { try { fn(ev); } catch (e) { console.warn('[EVENT] 구독자 오류', e); } }
+    }
+    return ev;
+  } catch (e) { return null; }
+}
+// 구독: type 하나 또는 '*'(전부). 해제 함수를 돌려준다.
+function onGameEvent(type, fn) {
+  const bus = _gameEventBus();
+  if (!bus.listeners.has(type)) bus.listeners.set(type, new Set());
+  bus.listeners.get(type).add(fn);
+  return () => { const set = bus.listeners.get(type); if (set) set.delete(fn); };
+}
+// 최근 이벤트(기본 전부, 최대 limit개). sinceSeq를 주면 그 뒤 것만.
+function recentGameEvents(sinceSeq = 0) {
+  return _gameEventBus().buffer.filter((e) => e.seq > sinceSeq);
+}
+function clearGameEvents() { _gameEventBus().buffer.length = 0; }
+
+// 이벤트 데이터에 넣을 유닛 ID(레지스트리가 없으면 null) - 게임 로직 파일에서 쓰는 짧은 도우미.
+function _evId(unit) { return (unit && typeof entityId === 'function') ? entityId(unit) : null; }
+function _evDamage(source, target, amount, result) {
+  emitGameEvent('damage', {
+    sourceId: _evId(source), targetId: _evId(target),
+    amount: Math.round((amount || 0) * 100) / 100,
+    damageType: (result && result.damageType) || 'PHYSICAL',
+    basicAttack: !!(result && result.isBasicAttack), ability: !!(result && result.isAbility),
+    dot: !!(result && result.isStatusTick), ultimate: !!(result && result.isUltimate),
+    targetHp: target && Number.isFinite(target.hp) ? Math.round(target.hp * 100) / 100 : null,
+  });
+}
+
+/* ===== src/session/game_snapshot.js ===== */
+/* game_snapshot.js — 93차(온라인 1:1 준비): 게임 상태 스냅샷
+ * 지금 게임 객체(컨트롤러·허수아비·미니언·구조물·와드)를 읽어 "화면 객체가 없는" 순수 데이터로 옮긴다.
+ * 나중에 서버가 클라이언트로 보낼 상태의 모양이다. Vector3·Object3D·Material·클래스 인스턴스는 넣지 않는다 -
+ * 숫자·문자열·불리언·배열·평범한 객체만 있어서 JSON.stringify → JSON.parse 해도 그대로다(테스트로 확인).
+ * 읽기 전용이다: 게임 상태를 바꾸지 않고, 새 상태 저장소도 만들지 않는다(매번 기존 객체에서 새로 만든다).
+ *
+ * 좌표는 이 엔진의 월드 단위(x, y, z)다(서버도 같은 엔진 좌표계를 쓴다는 가정 - LoL 거리 단위는 worldDistanceToLol로 바꿀 수 있다).
+ * 방향(yaw)은 +Z를 0으로 한 라디안(atan2(x, z)).
+ */
+const SNAPSHOT_VERSION = 1;
+function _snapNum(v, digits = 3) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null; // Infinity(우물 체력 등)·NaN은 null
+  const m = Math.pow(10, digits);
+  return Math.round(v * m) / m;
+}
+function _snapPos(unit) {
+  const p = typeof getWorldPosition === 'function' ? getWorldPosition(unit) : null;
+  return p ? { x: _snapNum(p.x), y: _snapNum(p.y), z: _snapNum(p.z) } : null;
+}
+// 바라보는 방향: 컨트롤러는 root, 미니언은 body(GLB 회전), 그 밖은 mesh의 회전.
+function _snapYaw(unit) {
+  const obj = unit.root || unit.body || unit.mesh;
+  if (!obj || !obj.quaternion || typeof THREE === 'undefined' || !THREE.Vector3) return null;
+  const f = new THREE.Vector3(0, 0, 1).applyQuaternion(obj.quaternion);
+  return _snapNum(Math.atan2(f.x, f.z), 4);
+}
+function _snapAlive(unit, kind) {
+  if (kind === 'champion') return unit.state !== STATE.DEAD && unit.hp > 0;
+  if (kind === 'dummy' || kind === 'allyDummy') return unit.hp > 0;
+  return !(unit.isDead || unit.destroyed) && unit.hp > 0;
+}
+function _snapStatus(unit, nowMs) {
+  return (unit.statusEffects || []).filter((e) => !e.expiresAt || e.expiresAt > nowMs).map((e) => ({
+    id: String(e.id || e.type), type: e.type,
+    remainingMs: e.expiresAt ? Math.max(0, Math.round(e.expiresAt - nowMs)) : null,
+    value: typeof e.value === 'number' ? _snapNum(e.value, 4) : null,
+    sourceId: e.source && typeof entityId === 'function' ? entityId(e.source) : null,
+  }));
+}
+function snapshotEntity(unit, nowMs = performance.now()) {
+  const kind = entityKind(unit);
+  const s = {
+    id: entityId(unit), kind, team: unit.team || null,
+    pos: _snapPos(unit), yaw: _snapYaw(unit),
+    hp: _snapNum(unit.hp, 2), maxHp: _snapNum(unit.maxHp, 2),
+    shield: _snapNum(unit.shield || 0, 2),
+    alive: _snapAlive(unit, kind),
+    untargetable: !!unit.isUntargetable,
+    statusEffects: _snapStatus(unit, nowMs),
+  };
+  if (kind === 'champion') {
+    s.championId = unit.championId || null;
+    s.state = unit.state || null;
+    s.level = unit.champLevel || 1;
+    s.mp = _snapNum(unit.mp, 2); s.maxMp = _snapNum(unit.maxMp, 2);
+    s.cooldowns = {};
+    for (const k of ['Q', 'W', 'E', 'R']) s.cooldowns[k] = _snapNum(Math.max(0, (unit.cooldowns && unit.cooldowns[k]) || 0), 3);
+    s.respawnInMs = unit.state === STATE.DEAD && unit._respawnAt ? Math.max(0, Math.round(unit._respawnAt - nowMs)) : null;
+    s.targetId = unit.currentTarget ? entityId(unit.currentTarget) : null;
+    const st = unit.stats || {};
+    s.stats = {
+      attackDamage: _snapNum(st.attackDamage, 2), abilityPower: _snapNum(st.abilityPower, 2),
+      armor: _snapNum(st.armor, 2), magicResist: _snapNum(st.magicResist, 2),
+      attackSpeed: typeof getFinalAttackSpeed === 'function' ? _snapNum(getFinalAttackSpeed(st), 3) : null,
+      moveSpeed: typeof getFinalMoveSpeed === 'function' && typeof worldDistanceToLol === 'function' ? _snapNum(worldDistanceToLol(getFinalMoveSpeed(st)), 1) : null,
+      critChance: _snapNum(st.critChance, 3),
+    };
+  } else {
+    if (unit.champLevel) s.level = unit.champLevel;
+    if (kind === 'minion') s.minionType = unit.minionType || unit.type || null;
+    if (kind === 'turret') s.turretType = unit.type || null;
+    if (kind === 'ward') { s.wardType = unit.wardType || null; s.ownerId = unit.owner ? entityId(unit.owner) : null; s.expiresInMs = unit.expiresAt ? Math.max(0, Math.round(unit.expiresAt - nowMs)) : null; }
+  }
+  return s;
+}
+// 플레이어(조작 챔피언) 전용 정보: 골드·인벤토리·스킬 레벨·소환사 주문. 다른 플레이어에게 숨길 정보는 서버가 걸러 보낸다.
+function snapshotPlayer(ctrl, nowMs = performance.now()) {
+  if (!ctrl) return null;
+  const slot = (it) => (it ? { itemId: it.id, count: it.count || 1, charges: typeof it.charges === 'number' ? it.charges : null } : null);
+  const summoners = {};
+  for (const k of ['D', 'F']) {
+    const sp = ctrl.summoners && ctrl.summoners[k];
+    summoners[k] = sp ? { spellId: sp.id, readyInMs: Math.max(0, Math.round((sp.readyAt || 0) - nowMs)) } : null;
+  }
+  return {
+    entityId: entityId(ctrl),
+    gold: _snapNum(ctrl.gold || 0, 2),
+    items: (ctrl.items || []).map(slot),
+    boots: slot(ctrl.boots), trinket: slot(ctrl.trinket),
+    skillLevels: Object.assign({}, ctrl.skillLevels || {}), skillPoints: ctrl.skillPoints || 0,
+    exp: _snapNum(ctrl.currentExp || 0, 2),
+    summoners,
+    score: ctrl.score ? JSON.parse(JSON.stringify(ctrl.score)) : null,
+  };
+}
+// 전체 스냅샷. 서버 틱 번호(tick)·시뮬레이션 시간은 LocalSession(game_commands.js)의 값.
+function buildGameSnapshot() {
+  const nowMs = performance.now();
+  const s = (typeof gameSession !== 'undefined' && gameSession) ? gameSession : null;
+  return {
+    v: SNAPSHOT_VERSION,
+    tick: s ? s.tick : 0,
+    simTimeSec: s ? _snapNum(s.simTimeSec, 3) : 0,
+    gameTimeSec: typeof getTurretGameTimeSec === 'function' ? _snapNum(getTurretGameTimeSec(), 3) : null,
+    gameEnded: typeof gameEnded !== 'undefined' ? !!gameEnded : false,
+    entities: listEntities().map((u) => snapshotEntity(u, nowMs)),
+    players: (typeof controller !== 'undefined' && controller) ? [snapshotPlayer(controller, nowMs)] : [],
+  };
+}
+
+/* ===== src/session/game_commands.js ===== */
+/* game_commands.js — 93차(온라인 1:1 준비): 플레이어 입력 명령 + LocalSession
+ * 입력(키·마우스·HUD·상점)은 화면 좌표·카메라를 읽어 "무엇을 하려는가"만 정한 뒤, 직렬화 가능한 명령 하나로 만들어
+ * submitPlayerCommand()에 넘긴다. 세션은 명령을 검사하고 기존 게임 함수(moveTo·castAbility·buildOrBuyItem 등)를 그대로 부른다.
+ * 규칙 판정(쿨다운·마나·사거리·골드·상점 위치)은 지금처럼 기존 함수가 한다 - 명령은 행위와 대상/목표 좌표만 담는다.
+ * 명령에 체력·피해량·골드·승패 같은 결과 값은 없고, 들어 있어도 읽지 않는다.
+ *
+ * 세션 인터페이스(나중에 RemoteSession도 같은 모양으로 만든다 - 이번에는 통신을 구현하지 않는다):
+ *   submit(cmd)        → { ok, reason, outcome }   ok=명령이 검사를 통과해 처리됐는가, outcome=기존 함수가 돌려준 값(있으면)
+ *   advance(dt)        → 시뮬레이션 틱·시간을 한 프레임만큼 진행(메인 루프가 일시정지가 아닐 때 부른다)
+ *   snapshot()         → buildGameSnapshot() 결과(game_snapshot.js)
+ *   events(sinceSeq)   → recentGameEvents(sinceSeq) 결과(game_events.js)
+ *   reset()            → 게임 초기화 때 틱·시간을 처음으로
+ * LocalSession은 같은 브라우저 안의 지금 게임(전역 controller)에 바로 적용한다. RemoteSession은 submit을 서버로 보내고
+ * snapshot/events를 서버에서 받은 것으로 채우게 된다(README 93차 "다음 단계").
+ *
+ * 명령 형식(좌표는 월드 단위 { x, y, z }, 유닛은 entityId 숫자):
+ *   move        { point }                         우클릭 이동·미니맵 이동(마스터 이 Q 중이면 재등장 방향 지정 - 기존 규칙)
+ *   stop        { }                               S 키
+ *   attack      { targetId, fromAttackMove? }     대상 지정 공격(우클릭·좌클릭 대상 선택)
+ *   clearTarget { }                               빈 곳 좌클릭(대상 해제)
+ *   attackMove  { point, championsOnly?, cursorPoint? }
+ *   cast        { slot, point?, targetId? }       Q/W/E/R(바루스 Q 충전 시작·발사도 같은 명령, 좌표가 없으면 바라보는 방향)
+ *   levelUpSkill{ slot }
+ *   recall      { }
+ *   summoner    { slot, point?, targetId? }       D/F(좌표가 없으면 바라보는 방향 - 기존 규칙)
+ *   useItem     { slot, point?, placeAhead? }     아이템 칸 0~5
+ *   placeWard   { point }                         장신구
+ *   buyItem     { itemId }
+ *   sellItem    { slot }                          0~5 또는 'boots'
+ */
+const COMMAND_TYPES = ['move', 'stop', 'attack', 'clearTarget', 'attackMove', 'cast', 'levelUpSkill', 'recall', 'summoner', 'useItem', 'placeWard', 'buyItem', 'sellItem'];
+const _CMD_SKILL_SLOTS = ['Q', 'W', 'E', 'R'];
+const _CMD_SUMMONER_SLOTS = ['D', 'F'];
+function _cmdIsPoint(p) { return !!p && typeof p === 'object' && Number.isFinite(p.x) && Number.isFinite(p.z) && (p.y == null || Number.isFinite(p.y)); }
+// 게임 좌표(Vector3 등) → 명령용 평범한 객체
+function toCommandPoint(v) { return v ? { x: v.x, y: Number.isFinite(v.y) ? v.y : 0, z: v.z } : null; }
+function _cmdVec(p) { return new THREE.Vector3(p.x, Number.isFinite(p.y) ? p.y : 0, p.z); }
+// 형식 검사(규칙 검사는 기존 함수 몫). 틀리면 이유 문자열, 맞으면 null.
+function validateCommand(cmd) {
+  if (!cmd || typeof cmd !== 'object') return '명령이 아님';
+  if (!COMMAND_TYPES.includes(cmd.type)) return `알 수 없는 명령 ${cmd.type}`;
+  const needPoint = ['move', 'attackMove', 'placeWard'];
+  if (needPoint.includes(cmd.type) && !_cmdIsPoint(cmd.point)) return '좌표가 없거나 잘못됨';
+  if (cmd.type === 'attackMove' && cmd.cursorPoint != null && !_cmdIsPoint(cmd.cursorPoint)) return '커서 좌표가 잘못됨';
+  if ((cmd.type === 'useItem' || cmd.type === 'summoner' || cmd.type === 'cast') && cmd.point != null && !_cmdIsPoint(cmd.point)) return '좌표가 잘못됨';
+  if ((cmd.type === 'cast' || cmd.type === 'levelUpSkill') && !_CMD_SKILL_SLOTS.includes(cmd.slot)) return '스킬 칸이 잘못됨';
+  if (cmd.type === 'summoner' && !_CMD_SUMMONER_SLOTS.includes(cmd.slot)) return '소환사 주문 칸이 잘못됨';
+  if (cmd.type === 'useItem' && !(Number.isInteger(cmd.slot) && cmd.slot >= 0 && cmd.slot < 6)) return '아이템 칸이 잘못됨';
+  if (cmd.type === 'sellItem' && !(cmd.slot === 'boots' || (Number.isInteger(cmd.slot) && cmd.slot >= 0 && cmd.slot < 6))) return '판매 칸이 잘못됨';
+  if (cmd.type === 'attack' && !Number.isInteger(cmd.targetId)) return '대상이 없음';
+  if (cmd.targetId != null && !Number.isInteger(cmd.targetId)) return '대상 ID가 잘못됨';
+  if (cmd.type === 'buyItem' && (typeof cmd.itemId !== 'string' || typeof ITEM_DATA === 'undefined' || !ITEM_DATA[cmd.itemId])) return '없는 아이템';
+  return null;
+}
+
+class LocalSession {
+  constructor() { this.kind = 'local'; this.tick = 0; this.simTimeSec = 0; this.commandSeq = 0; this.lastResult = null; }
+  // 명령을 보낸 플레이어의 챔피언. 1:1이 되면 플레이어 ID → 챔피언으로 고르게 된다(지금은 조작 중인 챔피언 하나).
+  _actor() { return (typeof controller !== 'undefined' && controller) ? controller : null; }
+  advance(dt) { if (dt > 0) { this.tick += 1; this.simTimeSec += dt; } }
+  reset() { this.tick = 0; this.simTimeSec = 0; emitGameEvent('gameReset', {}); }
+  snapshot() { return buildGameSnapshot(); }
+  events(sinceSeq = 0) { return recentGameEvents(sinceSeq); }
+  submit(cmd) {
+    const seq = ++this.commandSeq;
+    let res;
+    const bad = validateCommand(cmd);
+    const actor = this._actor();
+    if (bad) res = { ok: false, reason: bad };
+    else if (!actor) res = { ok: false, reason: '조작 중인 챔피언이 없음' };
+    else {
+      try { res = this._apply(actor, cmd); } catch (e) { console.error('[SESSION] 명령 처리 오류', cmd, e); res = { ok: false, reason: '처리 오류' }; }
+    }
+    this.lastResult = res;
+    emitGameEvent('commandResult', { commandSeq: seq, commandType: cmd && cmd.type, ok: !!res.ok, reason: res.reason || null, outcome: typeof res.outcome === 'boolean' ? res.outcome : null });
+    return res;
+  }
+  _target(id) {
+    if (id == null) return null;
+    const u = findEntityById(id);
+    return u || null;
+  }
+  // 기존 함수로 연결. 각 분기의 동작은 93차 이전 입력 처리 코드와 같다(입력 쪽에서 옮겨 온 게임 규칙만 여기 있다).
+  _apply(c, cmd) {
+    switch (cmd.type) {
+      case 'move': {
+        const p = _cmdVec(cmd.point);
+        // 마스터 이 Q(일격필살) 중 우클릭 = 재등장 방향만 정하고 이동하지 않는다(요청 문서 1 섹션 25).
+        if (c._masteryi && c._masteryi.alpha && typeof c._masteryiSetAlphaStrikeReemergeDirection === 'function') { c._masteryiSetAlphaStrikeReemergeDirection(p); return { ok: true, outcome: true }; }
+        return { ok: true, outcome: c.moveTo(p) };
+      }
+      case 'stop': return { ok: true, outcome: c.moveTo(c.root.position.clone()) };
+      case 'attack': {
+        const t = this._target(cmd.targetId);
+        if (!t) return { ok: false, reason: '대상이 없음' };
+        if (cmd.fromAttackMove) c._attackMoveDest = null;
+        return { ok: true, outcome: c.selectTarget(t) };
+      }
+      case 'clearTarget': c.currentTarget = null; return { ok: true, outcome: true };
+      case 'attackMove':
+        return { ok: true, outcome: c.attackMoveTo(_cmdVec(cmd.point), { championsOnly: !!cmd.championsOnly, cursorPoint: cmd.cursorPoint ? _cmdVec(cmd.cursorPoint) : null }) };
+      case 'cast': {
+        // 대상 지정 스킬: 고른 대상을 지금 대상으로 삼고 시전(사거리·비용은 각 스킬 코드가 판정 - 기존 skillAim.cast와 같다).
+        if (cmd.targetId != null) { const t = this._target(cmd.targetId); if (t && t !== c.currentTarget) c.currentTarget = t; }
+        return { ok: true, outcome: c.castAbility(cmd.slot, cmd.point ? _cmdVec(cmd.point) : null) };
+      }
+      case 'levelUpSkill': return { ok: true, outcome: c.levelUpSkill(cmd.slot) };
+      case 'recall': return { ok: true, outcome: c.startRecall() };
+      case 'summoner': {
+        if (typeof castSummonerSpell !== 'function') return { ok: false, reason: '소환사 주문 없음' };
+        const t = cmd.targetId != null ? this._target(cmd.targetId) : null;
+        return { ok: true, outcome: castSummonerSpell(c, cmd.slot, cmd.point ? _cmdVec(cmd.point) : null, null, { target: t }) };
+      }
+      case 'useItem': {
+        if (typeof useItem !== 'function') return { ok: false, reason: '아이템 시스템 없음' };
+        const opts = {};
+        if (cmd.placeAhead) opts.placeAhead = true;
+        if (cmd.point) opts.point = _cmdVec(cmd.point);
+        const before = c.items && c.items[cmd.slot];
+        const outcome = useItem(c, cmd.slot, opts);
+        if (outcome) emitGameEvent('itemUsed', { entityId: entityId(c), itemId: before ? before.id : null, slot: cmd.slot });
+        return { ok: true, outcome };
+      }
+      case 'placeWard': return typeof placeWard === 'function' ? { ok: true, outcome: placeWard(c, _cmdVec(cmd.point)) } : { ok: false, reason: '와드 없음' };
+      case 'buyItem': return typeof buildOrBuyItem === 'function' ? { ok: true, outcome: buildOrBuyItem(c, cmd.itemId) } : { ok: false, reason: '상점 없음' };
+      case 'sellItem':
+        if (cmd.slot === 'boots') return typeof sellBoots === 'function' ? { ok: true, outcome: sellBoots(c) } : { ok: false, reason: '상점 없음' };
+        return typeof sellItem === 'function' ? { ok: true, outcome: sellItem(c, cmd.slot) } : { ok: false, reason: '상점 없음' };
+    }
+    return { ok: false, reason: '처리하지 않는 명령' };
+  }
+}
+
+// 지금 게임 세션(싱글플레이 = LocalSession). var: 파일 순서와 무관하게 typeof로 확인할 수 있게.
+var gameSession = new LocalSession();
+if (typeof window !== 'undefined') window.gameSession = gameSession; // 개발자 도구·브라우저 점검용(gameSession.snapshot()/events())
+// 입력 쪽 공용 진입점. 결과({ ok, reason, outcome })를 돌려준다.
+function submitPlayerCommand(cmd) { return gameSession ? gameSession.submit(cmd) : { ok: false, reason: '세션 없음' }; }
 
 /* ===== src/core/shop_ui.js ===== */
 /* ============================================================
@@ -36593,7 +36988,7 @@ function _shopBuy(itemId) {
   const reason = shopBlockReason(controller, itemId);
   if (reason) { if (typeof showSkillToast === 'function') showSkillToast(reason); return false; }
   _shopSnapshot(`${(ITEM_DATA[itemId] || {}).nameKo || itemId} 구매`);
-  const ok = typeof buildOrBuyItem === 'function' && buildOrBuyItem(controller, itemId);
+  const ok = typeof buildOrBuyItem === 'function' && !!submitPlayerCommand({ type: 'buyItem', itemId }).outcome; // 93차: 명령으로
   if (!ok) _shopUndoStack.pop(); else _shopMarkAfter();
   if (ok) {
     const tile = document.querySelector(`#shopGrid .shop-tile[data-id="${itemId}"]`);
@@ -36606,7 +37001,7 @@ function _shopSell() {
   const sel = _shopSelectedSlot === 'boots' ? controller.boots : controller.items[_shopSelectedSlot];
   if (!sel) { _shopSelectedSlot = null; renderShopPanel(true); return; }
   _shopSnapshot(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
-  const ok = _shopSelectedSlot === 'boots' ? (typeof sellBoots === 'function' && sellBoots(controller)) : (typeof sellItem === 'function' && sellItem(controller, _shopSelectedSlot));
+  const ok = !!submitPlayerCommand({ type: 'sellItem', slot: _shopSelectedSlot }).outcome; // 93차: 명령으로(신발 칸은 'boots')
   if (!ok) _shopUndoStack.pop();
   else _shopMarkAfter();
   if (ok && typeof showSkillToast === 'function') showSkillToast(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
@@ -38744,10 +39139,21 @@ function _itemIsUsable(data) {
   );
   return usable;
 }
+// 93차: 소환사 주문 입력 → 명령. 대상 지정 주문(탈진·점화)이 쓸 "커서 아래 적 챔피언"을 여기서(화면 좌표로) 골라 ID로 담는다.
+function submitSummonerFromInput(slot, point, pointerClient) {
+  if (!controller || typeof castSummonerSpell !== 'function') return { ok: false };
+  let targetId = null;
+  if (pointerClient && typeof getEnemyHit === 'function') { const h = getEnemyHit(pointerClient.x, pointerClient.y); if (h && h.isChampion) targetId = entityId(h); }
+  return submitPlayerCommand({ type: 'summoner', slot, point: point ? toCommandPoint(point) : null, targetId });
+}
 // 63차: 숫자키·HUD 클릭·상점 더블클릭 공용 - 언제나 "지금" 조작 중인 챔피언(controller)으로 쓰고, 성공하면 그 칸을 번쩍인다.
+// 93차: 게임 규칙 처리는 명령(submitPlayerCommand → LocalSession → useItem)으로. 목표 좌표는 지금 커서 지면 좌표를 명령에 담는다.
 function useItemFromInput(slotIndex, opts = {}) {
   if (!controller || typeof useItem !== 'function') return false;
-  const ok = useItem(controller, slotIndex, opts);
+  const cmd = { type: 'useItem', slot: slotIndex };
+  if (opts.placeAhead) cmd.placeAhead = true;
+  else if (typeof lastGroundPoint !== 'undefined' && lastGroundPoint) cmd.point = toCommandPoint(lastGroundPoint);
+  const ok = !!submitPlayerCommand(cmd).outcome;
   if (ok) {
     const el = document.querySelectorAll('#hudItems .hud-item-grid .hud-item')[slotIndex];
     if (el) { el.classList.remove('used'); void el.offsetWidth; el.classList.add('used'); }
@@ -38819,7 +39225,7 @@ function updateItemUI(ctrl) {
     tEl.addEventListener('click', () => {
       if (typeof placeWard !== 'function' || !ctrl) return;
       const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(ctrl.root.quaternion);
-      placeWard(ctrl, ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300))));
+      submitPlayerCommand({ type: 'placeWard', point: toCommandPoint(ctrl.root.position.clone().add(forward.multiplyScalar(lolRangeToWorld(300)))) });
     });
   }
   const bEl = box.querySelector('.hud-item.boots');
@@ -39052,7 +39458,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     if (e.button === 0) {
       const p = getGroundPoint(e.clientX, e.clientY) || lastGroundPoint;
       const slot = skillAim.slot; skillAim.cancel();
-      skillAim.cast(controller, slot, p, { x: e.clientX, y: e.clientY });
+      skillAim.cast(controller, slot, p, { x: e.clientX, y: e.clientY }); // (skill_aim_system.js가 cast 명령을 만든다)
       return;
     }
     if (e.button === 2) skillAim.cancel();
@@ -39063,8 +39469,9 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     // Alpha Strike 진행 중 우클릭(요청 문서 1 섹션 25): 재등장 방향만
     // 갱신하고, 일반 이동 명령(controller.moveTo)은 실행하지 않는다 -
     // "Q 상태 + 우클릭 -> 재등장 위치 변경, 이동 명령은 실행 안 함".
+    // 93차: 이 규칙은 move 명령 처리(LocalSession)로 옮겼다 - 여기서는 이동 표시만 건너뛴다.
     if (controller._masteryi && controller._masteryi.alpha) {
-      controller._masteryiSetAlphaStrikeReemergeDirection(groundPoint);
+      submitPlayerCommand({ type: 'move', point: toCommandPoint(groundPoint) });
       return;
     }
     // 64차: 원작처럼 우클릭한 자리에 적(미니언·챔피언·구조물·와드)이 있으면 이동이 아니라 공격 명령이다. 예전엔 우클릭이 항상
@@ -39072,8 +39479,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     attackMoveArmed = false;
     const enemyUnderCursor = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
     // 83차: "챔피언만 공격"(` 누르고 있기) 중에는 챔피언이 아닌 대상을 우클릭해도 그 자리로 이동만 한다.
-    if (enemyUnderCursor && (!window.__championsOnlyHeld || enemyUnderCursor.isChampion)) { controller.selectTarget(enemyUnderCursor); return; }
-    spawnMoveMarker(groundPoint); controller.moveTo(groundPoint);
+    if (enemyUnderCursor && (!window.__championsOnlyHeld || enemyUnderCursor.isChampion)) { submitPlayerCommand({ type: 'attack', targetId: entityId(enemyUnderCursor) }); return; }
+    spawnMoveMarker(groundPoint); submitPlayerCommand({ type: 'move', point: toCommandPoint(groundPoint) });
   } else if (e.button === 0) {
     // 64차 공격 이동(원작 A + 좌클릭): 커서 아래 적, 없으면 클릭 지점에서 가장 가까운 적(400 안)을 공격하고, 없으면 그 자리로 이동.
     if (attackMoveArmed) {
@@ -39083,8 +39490,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
       // 걸어가며 계속 살핀다(공격 이동 유지). ` 키를 누르고 있으면 챔피언만.
       const champsOnly = !!window.__championsOnlyHeld;
       const under = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
-      if (under && (!champsOnly || under.isChampion)) { controller._attackMoveDest = null; controller.selectTarget(under); return; }
-      if (p) { spawnMoveMarker(p); controller.attackMoveTo(p, { championsOnly: champsOnly, cursorPoint: (typeof optionsState !== 'undefined' && optionsState.attackMoveOnCursor) ? p : null }); }
+      if (under && (!champsOnly || under.isChampion)) { submitPlayerCommand({ type: 'attack', targetId: entityId(under), fromAttackMove: true }); return; }
+      if (p) { spawnMoveMarker(p); submitPlayerCommand({ type: 'attackMove', point: toCommandPoint(p), championsOnly: champsOnly, cursorPoint: (typeof optionsState !== 'undefined' && optionsState.attackMoveOnCursor) ? toCommandPoint(p) : null }); }
       return;
     }
     if (dummyPlaceMode) {
@@ -39108,8 +39515,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
       return;
     }
     const enemyHit = getEnemyHit(e.clientX, e.clientY, { includeWards: true });
-    if (enemyHit) controller.selectTarget(enemyHit);
-    else { controller.currentTarget = null; targetRing.clear(); }
+    if (enemyHit) submitPlayerCommand({ type: 'attack', targetId: entityId(enemyHit) });
+    else { submitPlayerCommand({ type: 'clearTarget' }); targetRing.clear(); }
   }
 });
 
@@ -39176,7 +39583,7 @@ window.addEventListener('keydown', (e) => {
   // (Ctrl+W는 브라우저가 탭 닫기로 먼저 가져갈 수 있다 - 그때는 스킬 칸 위 레벨 업 버튼을 누르면 된다.)
   if (e.ctrlKey && ['KeyQ', 'KeyW', 'KeyE', 'KeyR'].includes(e.code)) {
     e.preventDefault();
-    if (controller.levelUpSkill(e.code.slice(3)) && typeof renderLevelPanel === 'function') renderLevelPanel();
+    if (submitPlayerCommand({ type: 'levelUpSkill', slot: e.code.slice(3) }).outcome && typeof renderLevelPanel === 'function') renderLevelPanel();
     return;
   }
   switch (e.code) {
@@ -39194,13 +39601,13 @@ window.addEventListener('keydown', (e) => {
     // 인자를 받지 않으므로 영향이 없다.
     // (R도 Q/W/E와 같은 조준 경로 - onSkillKeyDown)
     case 'KeyR': onSkillKeyDown('R', e.code, mousePoint); break;
-    case 'KeyB': controller.startRecall(); break;
+    case 'KeyB': submitPlayerCommand({ type: 'recall' }); break;
     case 'KeyA': attackMoveArmed = true; renderer.domElement.style.cursor = 'crosshair'; requestAnimationFrame(() => { if (attackMoveArmed) renderer.domElement.style.cursor = 'crosshair'; }); break; // 64차 공격 이동 (90차: 위 커서 숨김 복원이 크로스헤어를 덮어써 안 보이던 것 수정)
     // 36차: 소환사 주문(원작 기본 키 D/F).
-    case 'KeyD': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'D', mousePoint, lastPointerClient); break;
-    case 'KeyF': if (typeof castSummonerSpell === 'function') castSummonerSpell(controller, 'F', mousePoint, lastPointerClient); break;
+    case 'KeyD': submitSummonerFromInput('D', mousePoint, lastPointerClient); break;
+    case 'KeyF': submitSummonerFromInput('F', mousePoint, lastPointerClient); break;
     // 정지(원작 기본 키 S) - 이동·공격 명령을 멈추고 그 자리에 선다(제자리로 이동 = 정지, _commitMove 참고).
-    case 'KeyS': controller.moveTo(controller.root.position.clone()); break;
+    case 'KeyS': submitPlayerCommand({ type: 'stop' }); break;
     // 아이템 사용 - 원작 키 배치(1·2·3·5·6·7 = 인벤토리 6칸, 4 = 장신구). 사용 불가 아이템(스탯
     // 아이템)이면 useItem() 내부에서 콘솔 경고만 내고 조용히 무시된다.
     // 63차: 숫자패드(Numpad1~7)도 같은 칸 - 예전엔 위쪽 숫자 줄(Digit)만 받아서 숫자패드로는 아이템이 쓰이지 않았다.
@@ -39212,7 +39619,7 @@ window.addEventListener('keydown', (e) => {
     case 'Digit7': case 'Numpad7': useItemFromInput(5); break;
     case 'Numpad4':
     // 장신구(투명 와드) - 원작 기본 키 4. 현재 마우스 위치에 놓는다(설치 사거리 밖이면 사거리까지 걸어가서 놓는다 - 원작).
-    case 'Digit4': if (typeof placeWard === 'function') placeWard(controller, mousePoint); break;
+    case 'Digit4': submitPlayerCommand({ type: 'placeWard', point: toCommandPoint(mousePoint) }); break;
   }
 });
 
@@ -39230,7 +39637,7 @@ function onSkillKeyDown(slot, code, mousePoint) {
   const spec = skillAimSpec(controller.championId, slot);
   if (spec && spec.type === 'charge' && !skillAimIsInstant(controller, slot)) {
     const charging = controller._varus && controller._varus.qCharge;
-    controller.castAbility(slot, mousePoint);
+    submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(mousePoint) });
     if (!charging && controller._varus && controller._varus.qCharge) skillAim.begin(slot, code, controller); else skillAim.cancel();
     return;
   }
@@ -39244,7 +39651,7 @@ function onSkillKeyDown(slot, code, mousePoint) {
     return;
   }
   // 쿨다운·마나 부족이면 조준하지 않고 원래 시전 경로로 넘겨 그쪽의 안내(토스트 등)를 그대로 쓴다.
-  if (typeof controller._canAffordAbility === 'function' && !controller._canAffordAbility(slot)) { skillAim.cancel(); controller.castAbility(slot, mousePoint); return; }
+  if (typeof controller._canAffordAbility === 'function' && !controller._canAffordAbility(slot)) { skillAim.cancel(); submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(mousePoint) }); return; }
   skillAim.begin(slot, code, controller);
 }
 function onSkillKeyUp(code) {
@@ -39252,7 +39659,7 @@ function onSkillKeyUp(code) {
   const slot = skillAim.slot;
   const spec = skillAimSpec(controller.championId, slot);
   const p = lastGroundPoint || controller.root.position.clone();
-  if (spec && spec.type === 'charge') { skillAim.cancel(); if (controller._varus && controller._varus.qCharge) controller.castAbility(slot, p); return; }
+  if (spec && spec.type === 'charge') { skillAim.cancel(); if (controller._varus && controller._varus.qCharge) submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(p) }); return; }
   if (skillAim.mode !== 'indicator') return; // 일반 시전은 클릭으로 시전
   skillAim.cancel();
   skillAim.cast(controller, slot, p, lastPointerClient);
@@ -39267,7 +39674,7 @@ window.addEventListener('keyup', (e) => {
 window.addEventListener('blur', () => {
   if (skillAim.aiming && skillAim.heldKey) onSkillKeyUp(skillAim.heldKey); // 충전형(바루스 Q)은 키를 뗀 것처럼 발사
   if (skillAim.aiming) skillAim.cancel();
-  if (controller && controller._varus && controller._varus.qCharge && !paused) controller.castAbility('Q', lastGroundPoint || controller.root.position.clone()); // 표시기 모드 충전
+  if (controller && controller._varus && controller._varus.qCharge && !paused) submitPlayerCommand({ type: 'cast', slot: 'Q', point: toCommandPoint(lastGroundPoint || controller.root.position) }); // 표시기 모드 충전
   if (attackMoveArmed) { attackMoveArmed = false; renderer.domElement.style.cursor = ''; }
   cameraRig.centerHeld = false;
 });
@@ -39308,7 +39715,7 @@ function setPracticeToolsVisible(on) {
 (function initRecallButton() {
   if (typeof document === 'undefined') return;
   const b = document.getElementById('hudRecallBtn');
-  if (b) b.addEventListener('click', () => { if (typeof controller !== 'undefined' && controller && !paused) controller.startRecall(); });
+  if (b) b.addEventListener('click', () => { if (typeof controller !== 'undefined' && controller && !paused) submitPlayerCommand({ type: 'recall' }); }); // 93차: 명령으로
 })();
 (function initPracticeToolsToggle() {
   if (typeof document === 'undefined') return;
@@ -39395,7 +39802,7 @@ function _minimapInit() {
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault(); e.stopPropagation();
     const p = toWorld(e);
-    if (e.button === 2) { if (typeof controller !== 'undefined' && controller && !paused) { if (typeof spawnMoveMarker === 'function') spawnMoveMarker(p); controller.moveTo(p); } return; }
+    if (e.button === 2) { if (typeof controller !== 'undefined' && controller && !paused) { if (typeof spawnMoveMarker === 'function') spawnMoveMarker(p); submitPlayerCommand({ type: 'move', point: toCommandPoint(p) }); } return; } // 93차: 명령으로
     if (e.button === 0) { _mm.dragging = true; cameraRig.minimapFocus = p; canvas.setPointerCapture(e.pointerId); }
   });
   canvas.addEventListener('pointermove', (e) => { if (_mm.dragging) cameraRig.minimapFocus = toWorld(e); });
@@ -40365,7 +40772,7 @@ function renderLevelPanel() {
   const upBtn = document.getElementById('levelUpBtn');
   if (upBtn) upBtn.onclick = () => { controller.levelUp(); renderLevelPanel(); };
   levelPanelEl.querySelectorAll('[data-lvlup-skill]').forEach((btn) => {
-    btn.onclick = () => { controller.levelUpSkill(btn.getAttribute('data-lvlup-skill')); renderLevelPanel(); };
+    btn.onclick = () => { submitPlayerCommand({ type: 'levelUpSkill', slot: btn.getAttribute('data-lvlup-skill') }); renderLevelPanel(); }; // 93차: 명령으로
   });
 }
 
@@ -41176,6 +41583,8 @@ function animate() {
   if (!isFinite(dt) || dt < 0) dt = 1 / 60; // 비정상적인 값이면 안전한 기본 프레임 시간으로 대체
   dt = Math.min(dt, 0.05);
   if (!paused) {
+    // 93차: 세션 시뮬레이션 틱·시간(스냅샷·이벤트에 찍히는 번호). 아직 게임 규칙은 이 시계를 읽지 않는다(README 93차 "시간 처리").
+    if (typeof gameSession !== 'undefined' && gameSession) gameSession.advance(dt);
     if (controller) { controller.update(dt); updateCameraTransform(cameraFocusPoint(controller.root.position, dt), dt); }
     else updateCameraTransform(new THREE.Vector3(0,0,0), dt);
     updateMarkers(dt);
@@ -41644,6 +42053,7 @@ function resetGame() {
   if (typeof lolVfx !== 'undefined' && lolVfx) { for (const s of lolVfx.systems) s.dispose(); lolVfx.systems = []; }
   if (typeof placedAllies !== 'undefined') for (const a of placedAllies) { a.hp = a.maxHp; a.statusEffects = []; }
   // 4) 챔피언을 처음 상태로 다시 불러온다(이전 챔피언 상태를 넘기지 않음)
+  if (typeof gameSession !== 'undefined' && gameSession) gameSession.reset(); // 93차: 세션 틱·시간을 처음으로(+ gameReset 이벤트)
   window.__resetNoCarry = true;
   const reloaded = typeof reloadCurrentChampion === 'function' && reloadCurrentChampion();
   if (!reloaded) window.__resetNoCarry = false;

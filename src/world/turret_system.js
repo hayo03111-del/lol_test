@@ -381,6 +381,7 @@ function applyDamageToTurret(turret, result, sourceInfo = {}) {
   // 실제 피해가 적용된 뒤의 HP를 명확히 기록해 '한 번 맞자마자 사라짐'
   // 현상을 게임 로직/모델 가시성 중 어느 쪽에서도 조용히 삼키지 않게 한다.
   turret.hp = Math.max(0, turret.hp - finalDmg);
+  if (typeof _evDamage === 'function') _evDamage(sourceInfo.source || resolveDamageSource(result.source, turret), turret, finalDmg, result); // 93차: 게임 이벤트
   console.log(`[TURRET DAMAGE] ${turret.team}/${turret.type}: ${hpBefore.toFixed(2)} -> ${turret.hp.toFixed(2)} (raw=${Number(result.rawDamage||0).toFixed(2)}, final=${finalDmg.toFixed(2)})`);
   updateTurretVisual(turret);
   if (turret.hp <= 0) destroyTurret(turret);
@@ -397,6 +398,7 @@ function applyDamageToTurret(turret, result, sourceInfo = {}) {
 function destroyTurret(turret) {
   if (turret.destroyed) return;
   turret.destroyed = true;
+  if (typeof emitGameEvent === 'function') emitGameEvent('structureDestroyed', { entityId: _evId(turret), kind: 'turret', team: turret.team }); // 93차
   turret._destroyedAt = performance.now(); // 84차: 억제기 포탑 피해 감소(60초) 기준 시각
   const data = TURRET_DATA[turret.type];
   // 62차: 보상은 reward_system.js(칼바람 값 - 팀 전체 + 파괴자 몫)로 옮겼다. 예전엔 어디서 부서지든 고정값 전액을 줬다.
@@ -962,6 +964,7 @@ function applyDamageToNexus(nexus, result) {
   if (isStructureProtected(nexus)) return 0; // 60차: 넥서스 포탑·억제기가 남아 있으면 무적
   const finalDmg = calculateDamage({ ...result, target: nexus });
   nexus.hp = Math.max(0, nexus.hp - finalDmg);
+  if (typeof _evDamage === 'function') _evDamage(resolveDamageSource(result.source, nexus), nexus, finalDmg, result); // 93차
   setStructBar(nexus.labelDiv, nexus.hp / nexus.maxHp);
   if (nexus.hp <= 0) destroyNexus(nexus);
   return finalDmg;
@@ -969,6 +972,7 @@ function applyDamageToNexus(nexus, result) {
 function destroyNexus(nexus) {
   if (nexus.destroyed) return;
   nexus.destroyed = true;
+  if (typeof emitGameEvent === 'function') emitGameEvent('structureDestroyed', { entityId: _evId(nexus), kind: 'nexus', team: nexus.team }); // 93차
   console.log(`[NEXUS] ${nexus.team} 넥서스 파괴!`);
   if (nexus.labelDiv) { const b = nexus.labelDiv.querySelector('.lolBar'); if (b) b.style.display = 'none'; }
   if (nexus.usingRealModel) playAssetClip(nexus, `${nexus.team} nexus`, NEXUS_MODEL_CLIPS.death, { fade: 0.3, loopOnce: true });
@@ -1086,6 +1090,7 @@ function applyDamageToInhibitor(inhibitor, result) {
   // 억제기 방어력 20이 항상 그대로 적용되게 한다.
   const finalDmg = calculateDamage({ ...result, target: inhibitor, armorPenPercent: 0 });
   inhibitor.hp = Math.max(0, inhibitor.hp - finalDmg);
+  if (typeof _evDamage === 'function') _evDamage(resolveDamageSource(result.source, inhibitor), inhibitor, finalDmg, result); // 93차
   updateInhibitorVisual(inhibitor);
   if (inhibitor.hp <= 0) destroyInhibitor(inhibitor);
   return finalDmg;
@@ -1093,6 +1098,7 @@ function applyDamageToInhibitor(inhibitor, result) {
 function destroyInhibitor(inhibitor) {
   if (inhibitor.destroyed) return;
   inhibitor.destroyed = true;
+  if (typeof emitGameEvent === 'function') emitGameEvent('structureDestroyed', { entityId: _evId(inhibitor), kind: 'inhibitor', team: inhibitor.team }); // 93차
   console.log(`[INHIBITOR] ${inhibitor.team} 억제기 파괴! ${INHIBITOR_RESPAWN_SEC}초 후 재생성`);
   if (typeof rewardStructureDestroyed === 'function') rewardStructureDestroyed(inhibitor); // 62차: 팀 전체 50골드
   const labelKey = `${inhibitor.team} inhibitor`;
@@ -1159,6 +1165,7 @@ function checkWinCondition() {
   if (!dead) return;
   gameEnded = true;
   const winner = dead.team === 'RED' ? 'BLUE' : 'RED';
+  if (typeof emitGameEvent === 'function') emitGameEvent('gameOver', { winnerTeam: winner }); // 93차
   console.log(`[GAME] ${winner} 팀 승리! (${dead.team} 넥서스 파괴)`);
   const banner = document.createElement('div');
   banner.textContent = `${winner} WINS`;

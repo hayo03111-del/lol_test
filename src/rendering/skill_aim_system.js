@@ -263,13 +263,14 @@ class SkillAimSystem {
   }
 
   // 시전: 대상 지정 스킬은 커서 아래 적을 대상으로 잡고 castAbility로 넘긴다(사거리·비용 판정은 각 스킬 코드가 한다).
+  // 93차: 화면에서 고른 대상은 ID로 cast 명령에 담고, 실제 시전(대상 지정 + castAbility)은 세션이 한다. 대상 고리 표시는 화면 쪽 일.
   cast(c, slot, point, clientXY) {
     if (!c) return;
     const spec = skillAimSpec(c.championId, slot);
-    if (spec && spec.type === 'unit') {
-      const u = this.pickUnit(c, slot, point, clientXY);
-      if (u && u !== c.currentTarget) { c.currentTarget = u; if (typeof targetRing !== 'undefined') targetRing.attachTo(u); }
-    }
+    const u = (spec && spec.type === 'unit') ? this.pickUnit(c, slot, point, clientXY) : null;
+    if (u && u !== c.currentTarget && typeof targetRing !== 'undefined') targetRing.attachTo(u);
+    if (typeof submitPlayerCommand === 'function') { submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(point), targetId: u ? entityId(u) : null }); return; }
+    if (u && u !== c.currentTarget) c.currentTarget = u; // 세션이 없는 환경(단위 테스트) - 예전 경로
     c.castAbility(slot, point);
   }
 

@@ -876,7 +876,7 @@ function renderLevelPanel() {
   const upBtn = document.getElementById('levelUpBtn');
   if (upBtn) upBtn.onclick = () => { controller.levelUp(); renderLevelPanel(); };
   levelPanelEl.querySelectorAll('[data-lvlup-skill]').forEach((btn) => {
-    btn.onclick = () => { controller.levelUpSkill(btn.getAttribute('data-lvlup-skill')); renderLevelPanel(); };
+    btn.onclick = () => { submitPlayerCommand({ type: 'levelUpSkill', slot: btn.getAttribute('data-lvlup-skill') }); renderLevelPanel(); }; // 93차: 명령으로
   });
 }
 
@@ -1687,6 +1687,8 @@ function animate() {
   if (!isFinite(dt) || dt < 0) dt = 1 / 60; // 비정상적인 값이면 안전한 기본 프레임 시간으로 대체
   dt = Math.min(dt, 0.05);
   if (!paused) {
+    // 93차: 세션 시뮬레이션 틱·시간(스냅샷·이벤트에 찍히는 번호). 아직 게임 규칙은 이 시계를 읽지 않는다(README 93차 "시간 처리").
+    if (typeof gameSession !== 'undefined' && gameSession) gameSession.advance(dt);
     if (controller) { controller.update(dt); updateCameraTransform(cameraFocusPoint(controller.root.position, dt), dt); }
     else updateCameraTransform(new THREE.Vector3(0,0,0), dt);
     updateMarkers(dt);

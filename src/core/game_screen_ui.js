@@ -20,7 +20,7 @@ function setPracticeToolsVisible(on) {
 (function initRecallButton() {
   if (typeof document === 'undefined') return;
   const b = document.getElementById('hudRecallBtn');
-  if (b) b.addEventListener('click', () => { if (typeof controller !== 'undefined' && controller && !paused) controller.startRecall(); });
+  if (b) b.addEventListener('click', () => { if (typeof controller !== 'undefined' && controller && !paused) submitPlayerCommand({ type: 'recall' }); }); // 93차: 명령으로
 })();
 (function initPracticeToolsToggle() {
   if (typeof document === 'undefined') return;
@@ -107,7 +107,7 @@ function _minimapInit() {
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault(); e.stopPropagation();
     const p = toWorld(e);
-    if (e.button === 2) { if (typeof controller !== 'undefined' && controller && !paused) { if (typeof spawnMoveMarker === 'function') spawnMoveMarker(p); controller.moveTo(p); } return; }
+    if (e.button === 2) { if (typeof controller !== 'undefined' && controller && !paused) { if (typeof spawnMoveMarker === 'function') spawnMoveMarker(p); submitPlayerCommand({ type: 'move', point: toCommandPoint(p) }); } return; } // 93차: 명령으로
     if (e.button === 0) { _mm.dragging = true; cameraRig.minimapFocus = p; canvas.setPointerCapture(e.pointerId); }
   });
   canvas.addEventListener('pointermove', (e) => { if (_mm.dragging) cameraRig.minimapFocus = toWorld(e); });
