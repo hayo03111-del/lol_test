@@ -224,6 +224,11 @@ CharacterController.prototype._masteryiResolveAlphaStrikeHit = function(alpha, t
       vfx.spawn('hit', getWorldPosition(target).clone(), undefined, { color: willCrit ? 0xffdf6b : 0xffffff });
       if (wouldKill) this._masteryiOnKill(target, { type: 'ALPHA_STRIKE' });
       this._masteryiApplyAlphaStrikeOnHit(alpha, target);
+      // 91차: 원작 Q는 타격마다 아이템 적중 효과를 75% 효율로 적용한다(크라켄 학살자·종언 등 중첩도 쌓임, 주문 검·룬 제외).
+      if (typeof itemOnBasicAttackHit === 'function' && target.hp > 0) {
+        this._itemOnHitEffectiveness = alpha.q.onHitModifier ?? 0.75;
+        try { itemOnBasicAttackHit(this, target, willCrit, { fromAbility: true }); } finally { this._itemOnHitEffectiveness = null; }
+      }
       // 이 프로젝트엔 별도의 "damage number" 팝업 시스템이 없어(섹션 20
       // "가능하다면 재사용" - 없으므로 기존 디버그 로그 시스템을 그대로
       // 재사용) 콘솔/디버그 패널로 각 타격을 확인한다.

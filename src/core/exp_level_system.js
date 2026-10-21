@@ -1021,7 +1021,7 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
       // 운명의 재(발화)/여신의 눈물(마나순환) - 챔피언 전용 효과(그리버스/
       // 카탈리스트 마나 회복)는 itemOnDamageDealt() 내부에서 target.isChampion
       // 으로 걸러지므로 미니언 대상으로 호출해도 안전하다.
-      if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(controller, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
+      if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(controller, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isOnHitBonus: !!result.isOnHitBonus });
     }
   }
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }

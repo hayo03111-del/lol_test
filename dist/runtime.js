@@ -560,7 +560,7 @@ function resolveDamageSource(source, target) {
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
 // 넘어온다 - 여기서 다시 굴리지 않는다(같은 공격 인스턴스의 결과가 명중
 // 시점에 바뀌면 안 되므로).
-function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false, isStatusTick = false, isUltimate = false }) {
+function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false, isStatusTick = false, isUltimate = false, isItemEffect = false }) {
   // 무한의 대검(치명타 피해량 +30%) - 각 챔피언 스킬이 저마다 다른
   // critMultiplier를 넘기므로(공용 필드가 아님), 공격자의 아이템 보너스를
   // 여기서 한 곳에서 더해 넣는다 - 치명타가 아니면 critMultiplier 자체가
@@ -572,6 +572,8 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   const critMod = (critAtk && critAtk.stats && critAtk.stats.critDamageModifier) || 1;
   const critTotal = critMod !== 1 ? (critMultiplier / critMod + critBonus) * critMod : critMultiplier + critBonus;
   let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critTotal) : 1);
+  // 91차: 적중 효과를 줄여서 적용하는 스킬(마스터 이 Q 75%) - 그 스킬이 부른 아이템 적중 효과 피해에만 곱한다.
+  if (isItemEffect && critAtk && critAtk._itemOnHitEffectiveness != null) dmg *= critAtk._itemOnHitEffectiveness;
   if (damageType === DAMAGE_TYPE.PHYSICAL) {
     let armor = (target && (target.armor ?? target.stats?.armor)) || 0;
     // 83차: 원작 순서 - 방어력 감소(고정 → %) → 방어구 관통력(%) → 추가 방어구 관통(%, 추가 방어력 몫에만) → 물리 관통력(고정).
@@ -21839,6 +21841,11 @@ CharacterController.prototype._masteryiResolveAlphaStrikeHit = function(alpha, t
       vfx.spawn('hit', getWorldPosition(target).clone(), undefined, { color: willCrit ? 0xffdf6b : 0xffffff });
       if (wouldKill) this._masteryiOnKill(target, { type: 'ALPHA_STRIKE' });
       this._masteryiApplyAlphaStrikeOnHit(alpha, target);
+      // 91차: 원작 Q는 타격마다 아이템 적중 효과를 75% 효율로 적용한다(크라켄 학살자·종언 등 중첩도 쌓임, 주문 검·룬 제외).
+      if (typeof itemOnBasicAttackHit === 'function' && target.hp > 0) {
+        this._itemOnHitEffectiveness = alpha.q.onHitModifier ?? 0.75;
+        try { itemOnBasicAttackHit(this, target, willCrit, { fromAbility: true }); } finally { this._itemOnHitEffectiveness = null; }
+      }
       // 이 프로젝트엔 별도의 "damage number" 팝업 시스템이 없어(섹션 20
       // "가능하다면 재사용" - 없으므로 기존 디버그 로그 시스템을 그대로
       // 재사용) 콘솔/디버그 패널로 각 타격을 확인한다.
@@ -23635,7 +23642,7 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
         const t = this._vex.recastTarget;
         if (t && t.hp > 0 && !t.isDead && !t.destroyed) {
           const raw = skillVal(rd.recastDamageByLevel, lvl) + (rd.recastApRatio || 0) * (this.stats.abilityPower || 0);
-          applyDamage(t, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1 });
+          applyDamage(t, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1, source: this });
           vfx.spawn('r', this.root.position.clone());
           debugSkillHit('Vex R Recast', t);
           if (t.hp <= 0) {
@@ -23678,7 +23685,7 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
       realmId: this.realmId,
       onHit: (hitTarget) => {
         if (!hitTarget || hitTarget.hp <= 0) return;
-        applyDamage(hitTarget, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1 });
+        applyDamage(hitTarget, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical:false, critMultiplier:1, source: this });
         vfx.spawn('r', getWorldPosition(hitTarget) || hitTarget.mesh.position.clone());
         debugSkillHit('Vex R', hitTarget);
         if (hitTarget.hp > 0) {
@@ -25626,11 +25633,14 @@ CharacterController.prototype._asheFireFlurry = function(originalTarget, originP
       from: originPos, target: t, speed: q.flurryMissileSpeed ? lolRangeToWorld(q.flurryMissileSpeed) : this.stats.projectileSpeed * 2,
       color: 0xbfe8ff, realmId: this.realmId,
       onHit: (u) => {
-        if (u.isTurret) { applyDamageToTurret(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, { isRanged: true, source: this }); return; }
-        if (u.isMinion) { applyDamageToMinion(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: firstArrow }, true); this._asheApplyFrostShot(u, willCrit); return; }
-        if (u.isInhibitor) { applyDamageToInhibitor(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
-        if (u.isNexus) { applyDamageToNexus(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
-        applyDamage(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true });
+        // 91차: 화살은 모두 평타 피해(대상 종류와 무관하게 같은 분류). 적중 효과는 다발당 한 번이라 둘째 화살부터는
+        // isOnHitBonus로 표시해 룬·아이템이 공격 횟수를 화살마다 세지 않게 한다. 예전엔 챔피언/미니언/구조물마다 분류가 달랐다.
+        const hit = { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true, isAbility: false, isOnHitBonus: !firstArrow, armorPenPercent: this.armorPenPercent || 0 };
+        if (u.isTurret) { applyDamageToTurret(u, hit, { isRanged: true, source: this }); return; }
+        if (u.isMinion) { applyDamageToMinion(u, hit, true); this._asheApplyFrostShot(u, willCrit); return; }
+        if (u.isInhibitor) { applyDamageToInhibitor(u, hit); return; }
+        if (u.isNexus) { applyDamageToNexus(u, hit); return; }
+        applyDamage(u, hit);
         this._asheApplyFrostShot(u, willCrit);
         // 적중 시 효과(아이템·집중 중첩 등)는 다발당 한 번 - 첫 화살에서만.
         if (firstArrow && typeof itemOnBasicAttackHit === 'function') itemOnBasicAttackHit(this, u, willCrit);
@@ -26027,7 +26037,7 @@ CharacterController.prototype._nautilusOnBasicAttackHit = function(target) {
     this._nautilus.passiveReadyAt.set(target, now + p.sameTargetCooldownSec * 1000);
     const lvl = this.champLevel || 1;
     const dmg = p.bonusDamageAtLevel1 + (p.bonusDamageAtLevel18 - p.bonusDamageAtLevel1) * (Math.min(18, Math.max(1, lvl)) - 1) / 17;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true });
+    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true, isOnHitBonus: true, isAbility: false }); // 91차: 같은 평타의 적중 효과를 두 번 세지 않게
     applyStatus(target, { id: 'nautilusPassive_root', type: 'ROOT', duration: valueByBreakpoints(p.rootByLevel, lvl), value: 1, source: this });
     debugSkillHit('Nautilus 패시브(강력한 일격)', target);
   }
@@ -30639,7 +30649,7 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
       // 운명의 재(발화)/여신의 눈물(마나순환) - 챔피언 전용 효과(그리버스/
       // 카탈리스트 마나 회복)는 itemOnDamageDealt() 내부에서 target.isChampion
       // 으로 걸러지므로 미니언 대상으로 호출해도 안전하다.
-      if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(controller, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility });
+      if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(controller, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isOnHitBonus: !!result.isOnHitBonus });
     }
   }
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }

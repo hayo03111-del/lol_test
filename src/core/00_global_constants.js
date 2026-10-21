@@ -553,7 +553,7 @@ function resolveDamageSource(source, target) {
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
 // 넘어온다 - 여기서 다시 굴리지 않는다(같은 공격 인스턴스의 결과가 명중
 // 시점에 바뀌면 안 되므로).
-function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false, isStatusTick = false, isUltimate = false }) {
+function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCritical = false, critMultiplier = 1, target, source, armorPenPercent, magicPenPercent = 0, bonusArmorIgnorePercent = 0, isBasicAttack = false, isStatusTick = false, isUltimate = false, isItemEffect = false }) {
   // 무한의 대검(치명타 피해량 +30%) - 각 챔피언 스킬이 저마다 다른
   // critMultiplier를 넘기므로(공용 필드가 아님), 공격자의 아이템 보너스를
   // 여기서 한 곳에서 더해 넣는다 - 치명타가 아니면 critMultiplier 자체가
@@ -565,6 +565,8 @@ function calculateDamage({ rawDamage, damageType = DAMAGE_TYPE.PHYSICAL, isCriti
   const critMod = (critAtk && critAtk.stats && critAtk.stats.critDamageModifier) || 1;
   const critTotal = critMod !== 1 ? (critMultiplier / critMod + critBonus) * critMod : critMultiplier + critBonus;
   let dmg = Math.max(0, rawDamage) * (isCritical ? Math.max(1, critTotal) : 1);
+  // 91차: 적중 효과를 줄여서 적용하는 스킬(마스터 이 Q 75%) - 그 스킬이 부른 아이템 적중 효과 피해에만 곱한다.
+  if (isItemEffect && critAtk && critAtk._itemOnHitEffectiveness != null) dmg *= critAtk._itemOnHitEffectiveness;
   if (damageType === DAMAGE_TYPE.PHYSICAL) {
     let armor = (target && (target.armor ?? target.stats?.armor)) || 0;
     // 83차: 원작 순서 - 방어력 감소(고정 → %) → 방어구 관통력(%) → 추가 방어구 관통(%, 추가 방어력 몫에만) → 물리 관통력(고정).

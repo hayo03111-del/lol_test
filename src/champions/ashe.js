@@ -136,11 +136,14 @@ CharacterController.prototype._asheFireFlurry = function(originalTarget, originP
       from: originPos, target: t, speed: q.flurryMissileSpeed ? lolRangeToWorld(q.flurryMissileSpeed) : this.stats.projectileSpeed * 2,
       color: 0xbfe8ff, realmId: this.realmId,
       onHit: (u) => {
-        if (u.isTurret) { applyDamageToTurret(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }, { isRanged: true, source: this }); return; }
-        if (u.isMinion) { applyDamageToMinion(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: firstArrow }, true); this._asheApplyFrostShot(u, willCrit); return; }
-        if (u.isInhibitor) { applyDamageToInhibitor(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
-        if (u.isNexus) { applyDamageToNexus(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 }); return; }
-        applyDamage(u, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true });
+        // 91차: 화살은 모두 평타 피해(대상 종류와 무관하게 같은 분류). 적중 효과는 다발당 한 번이라 둘째 화살부터는
+        // isOnHitBonus로 표시해 룬·아이템이 공격 횟수를 화살마다 세지 않게 한다. 예전엔 챔피언/미니언/구조물마다 분류가 달랐다.
+        const hit = { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true, isAbility: false, isOnHitBonus: !firstArrow, armorPenPercent: this.armorPenPercent || 0 };
+        if (u.isTurret) { applyDamageToTurret(u, hit, { isRanged: true, source: this }); return; }
+        if (u.isMinion) { applyDamageToMinion(u, hit, true); this._asheApplyFrostShot(u, willCrit); return; }
+        if (u.isInhibitor) { applyDamageToInhibitor(u, hit); return; }
+        if (u.isNexus) { applyDamageToNexus(u, hit); return; }
+        applyDamage(u, hit);
         this._asheApplyFrostShot(u, willCrit);
         // 적중 시 효과(아이템·집중 중첩 등)는 다발당 한 번 - 첫 화살에서만.
         if (firstArrow && typeof itemOnBasicAttackHit === 'function') itemOnBasicAttackHit(this, u, willCrit);

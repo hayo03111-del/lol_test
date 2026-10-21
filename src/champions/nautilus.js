@@ -48,7 +48,7 @@ CharacterController.prototype._nautilusOnBasicAttackHit = function(target) {
     this._nautilus.passiveReadyAt.set(target, now + p.sameTargetCooldownSec * 1000);
     const lvl = this.champLevel || 1;
     const dmg = p.bonusDamageAtLevel1 + (p.bonusDamageAtLevel18 - p.bonusDamageAtLevel1) * (Math.min(18, Math.max(1, lvl)) - 1) / 17;
-    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true });
+    applyDamage(target, { rawDamage: dmg, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this, isBasicAttack: true, isOnHitBonus: true, isAbility: false }); // 91차: 같은 평타의 적중 효과를 두 번 세지 않게
     applyStatus(target, { id: 'nautilusPassive_root', type: 'ROOT', duration: valueByBreakpoints(p.rootByLevel, lvl), value: 1, source: this });
     debugSkillHit('Nautilus 패시브(강력한 일격)', target);
   }
