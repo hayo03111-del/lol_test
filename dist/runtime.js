@@ -41900,7 +41900,7 @@ function _netSer(v, depth = 0) {
   if (v._meshEntry && v.mesh && netState && netState.role === 'host') return { __p: _netProjId(netState, v) }; // 100차: 투사체 기록(연출이 따라간다) → 참가자 쪽 같은 투사체
   if (Array.isArray(v)) return v.map((x) => { const s = _netSer(x, depth + 1); return s === undefined ? null : s; });
   if (_netIsUnit(v)) return { __e: entityId(v) };
-  if (Object.getPrototypeOf(v) !== Object.prototype) return undefined; // 그 밖의 클래스 인스턴스(재질·텍스처 등)는 보내지 않는다
+  if (!_netIsPlain(v)) return undefined; // 그 밖의 클래스 인스턴스(재질·텍스처 등)는 보내지 않는다
   const o = {};
   for (const [k, x] of Object.entries(v)) { const s = _netSer(x, depth + 1); if (s !== undefined) o[k] = s; }
   return o;
@@ -42217,11 +42217,13 @@ function _netChampState(st, c) {
 }
 // 참가자: 받은 내부 상태를 내 챔피언에 넣는다. 시각 값(…At·…Until·…Expires)은 방장 시계 → 내 시계로 옮긴다.
 const _NET_TIME_KEY = /(At|Until|Expires|ExpiresAt)$/;
+// 평범한 객체({})인가 - 클래스 인스턴스·Map·three.js 객체는 아니다(다른 실행 환경에서 만든 {}도 맞게)
+function _netIsPlain(x) { if (!x || typeof x !== 'object' || Array.isArray(x)) return false; const p = Object.getPrototypeOf(x); return p === null || p === Object.prototype || (p.constructor && p.constructor.name === 'Object' && Object.getPrototypeOf(p) === null); }
 function _netTimeShift(v, key, off, inTime) {
   const isTime = inTime || (typeof key === 'string' && _NET_TIME_KEY.test(key));
   if (typeof v === 'number') return isTime && Number.isFinite(v) && v > 1000 ? v + off : v;
   if (Array.isArray(v)) return v.map((x) => _netTimeShift(x, null, off, isTime));
-  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) { for (const k of Object.keys(v)) v[k] = _netTimeShift(v[k], k, off, isTime); }
+  if (_netIsPlain(v)) { for (const k of Object.keys(v)) v[k] = _netTimeShift(v[k], k, off, isTime); }
   return v;
 }
 function _netApplyChampState(c, cs, hostNow) {
@@ -42229,12 +42231,12 @@ function _netApplyChampState(c, cs, hostNow) {
   for (const [k, raw] of Object.entries(cs)) {
     const val = _netTimeShift(_netDeser(raw), k, off, false);
     const cur = c[k];
-    if (val && cur && typeof val === 'object' && typeof cur === 'object' && !Array.isArray(val) && Object.getPrototypeOf(cur) === Object.prototype) {
+    if (val && cur && typeof val === 'object' && typeof cur === 'object' && !Array.isArray(val) && _netIsPlain(cur)) {
       // 방장에 없는 값(지나간 재시전 창 등)은 지운다 - 참가자 쪽에서만 쓰는 것(Map·화면 객체)은 그대로 둔다
       for (const kk of Object.keys(cur)) {
         if (kk in val) continue;
         const x = cur[kk];
-        if (x == null || typeof x !== 'object' || Array.isArray(x) || Object.getPrototypeOf(x) === Object.prototype) cur[kk] = null;
+        if (x == null || typeof x !== 'object' || Array.isArray(x) || _netIsPlain(x)) cur[kk] = null;
       }
       Object.assign(cur, val);
     } else c[k] = val;

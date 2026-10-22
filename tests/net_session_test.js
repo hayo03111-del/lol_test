@@ -8,7 +8,7 @@ function assert(cond, msg) { if (!cond) { console.error('FAIL:', msg); process.e
 
 let realNow = 1000;
 const ctx = {
-  console, Math, JSON, Object, Array, Number, String, Set, Map, WeakMap, Promise, Error,
+  console, Math, JSON, Object, Array, Number, String, Set, Map, WeakMap, Promise, Error, Uint8Array, TextEncoder, TextDecoder,
   THREE: { Vector3: class V { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; this.isVector3 = true; } set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } clone() { return new V(this.x, this.y, this.z); } } },
   lolRangeToWorld: (v) => v / 100,
   performance: { now: () => realNow },
@@ -22,8 +22,8 @@ const ctx = {
 ctx.withCombatActor = (a, fn) => { ctx.actorLog.push(a); return fn(); };
 vm.createContext(ctx);
 let src = '';
-for (const f of ['src/session/entity_registry.js', 'src/session/game_commands.js', 'src/net/net_session.js']) src += fs.readFileSync(path.join(ROOT, f), 'utf8') + '\n';
-src += ';globalThis.__t = { _netDelta, _netSer, _netDeser, _netEffectiveIntent, _netReconcile, _netNewPred: (p) => ({ pos: p, intent: null, intentSeq: 0, hist: [], corr: new THREE.Vector3(), srv: null, follow: false, corrections: 0, snaps: 0 }), _netSampleAt, RemoteSession, _netHostOnMessage, assignEntityId, reserveEntityIds, entityId, findEntityById, getGameSession: () => gameSession, setGameSession: (s) => { gameSession = s; } };';
+for (const f of ['src/session/entity_registry.js', 'src/session/game_commands.js', 'src/net/net_session.js', 'src/net/net_transport.js']) src += fs.readFileSync(path.join(ROOT, f), 'utf8') + '\n';
+src += ';globalThis.__t = { MqttWs, _mqttPacket, _mqttStr, _mqttLen, _netTimeShift, _netApplyChampState, _netStatusFrom, _netDelta, _netSer, _netDeser, _netEffectiveIntent, _netReconcile, _netNewPred: (p) => ({ pos: p, intent: null, intentSeq: 0, hist: [], corr: new THREE.Vector3(), srv: null, follow: false, corrections: 0, snaps: 0 }), _netSampleAt, RemoteSession, _netHostOnMessage, assignEntityId, reserveEntityIds, entityId, findEntityById, getGameSession: () => gameSession, setGameSession: (s) => { gameSession = s; } };';
 vm.runInContext(src, ctx);
 const T = ctx.__t;
 
@@ -106,3 +106,26 @@ assert(st2.pred.pos.x === 30 && st2.pred.snaps === 1, '보정: 크게 어긋나�
 st2.pred.intentSeq = 9; st2.pred.intent = { kind: 'move', p: new V(0, 0, 0) }; st2.own = { x: 0, y: 0, z: 0 }; st2.pred.hist = [{ t: 9800, x: 30, z: 0 }];
 T._netReconcile(st2);
 assert(st2.pred.pos.x === 30, '보정: 방장이 내 최신 명령을 받기 전에는 비교하지 않는다');
+
+// 9) 100차: MQTT 패킷 - 길이(가변 길이 정수), PUBLISH 만들기 → 받는 쪽 해석(조각으로 나뉘어 와도)
+assert(JSON.stringify(T._mqttLen(0)) === '[0]' && JSON.stringify(T._mqttLen(127)) === '[127]' && JSON.stringify(T._mqttLen(128)) === '[128,1]' && JSON.stringify(T._mqttLen(16383)) === '[255,127]', 'MQTT: 남은 길이 가변 정수');
+const big = 'x'.repeat(300) + '한글';
+const tb = T._mqttStr('lolsim/pvp1/ABCD/g'), pb = new TextEncoder().encode(big);
+const body = new Uint8Array(tb.length + pb.length); body.set(tb); body.set(pb, tb.length);
+const pkt = T._mqttPacket(0x30, body);
+const m = new T.MqttWs('ws://x', 'id'); const got = [];
+m.onmessage = (topic, payload) => got.push([topic, payload]);
+m._data(pkt.subarray(0, 5)); m._data(pkt.subarray(5, 40)); m._data(pkt.subarray(40)); // 세 조각
+let ack = null; m._onConnack = (rc) => { ack = rc; };
+m._data(Uint8Array.from([0x20, 2, 0, 0, 0xD0, 0])); // CONNACK + PINGRESP 한 덩어리
+assert(got.length === 1 && got[0][0] === 'lolsim/pvp1/ABCD/g' && got[0][1] === big && ack === 0, 'MQTT: 조각난 PUBLISH를 이어 붙여 해석, 여러 패킷이 한 덩어리로 와도');
+
+// 10) 100차: 챔피언 내부 상태 - 시각 값은 방장 시계 → 내 시계로, 방장에 없어진 값은 지우고 참가자 쪽 객체(Map)는 둔다
+realNow = 50000;
+const shifted = T._netTimeShift({ qMarkExpiresAt: 31000, qStacks: 2, castTime: 2500, cds: { readyAt: 32000 }, eRechargeAt: [30500, 31500] }, '_x', 50000 - 30000, false);
+assert(shifted.qMarkExpiresAt === 51000 && shifted.qStacks === 2 && shifted.castTime === 2500 && shifted.cds.readyAt === 52000 && shifted.eRechargeAt[1] === 51500, '내부 상태: …At·…Until·…Expires 시각만 옮긴다(지속 시간·중첩은 그대로)');
+const champ = { _leesin: { qMarkTarget: 5, qMarkExpiresAt: 1, local: new Map() }, _itemActiveCooldownUntil: {} };
+T._netApplyChampState(champ, { _leesin: { qStacks: 1 }, _itemActiveCooldownUntil: { zhonya: 31000 } }, 30000);
+assert(champ._leesin.qMarkTarget === null && champ._leesin.qStacks === 1 && champ._leesin.local instanceof Map && Math.abs(champ._itemActiveCooldownUntil.zhonya - 51000) < 1, '내부 상태: 지난 재시전 표식은 지우고, 참가자 쪽 Map은 두고, 아이템 대기 시각은 옮긴다');
+const sts = T._netStatusFrom([['stun', 'STUN', 1500, null, null, null], ['buff', 'BUFF', -1, 0.3, null, 2]], 1000);
+assert(sts[0].expiresAt === 2500 && sts[1].expiresAt === Infinity && sts[1].stacks === 2, '상태 효과: 남은 시간 → 내 시계, 끝없는 효과·중첩');
