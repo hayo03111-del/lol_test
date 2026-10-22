@@ -90,7 +90,9 @@ const startServer = require('./server.js');
     const sp = bot.root.position.clone();
     E.setGameTimeSec(44);
     let maxDist = 0, boughtBoots = false;
-    for (let i = 0; i < 60; i++) {
+    // 게임 시간 기준(느린 화면에서는 실제 시간보다 느리게 간다): 게임 115초까지, 실제로는 최대 5분.
+    const wall0 = Date.now();
+    while (E.getTurretGameTimeSec() < 115 && Date.now() - wall0 < 300000) {
       await new Promise((res) => setTimeout(res, 1500));
       maxDist = Math.max(maxDist, E.worldDistanceToLol(Math.hypot(bot.root.position.x - sp.x, bot.root.position.z - sp.z)));
       if (bot.boots && bot.boots.id) boughtBoots = true;
