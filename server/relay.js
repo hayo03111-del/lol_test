@@ -14,6 +14,7 @@
  *   → {t:'join', code, name}           방 참가(게스트)              → {t:'joined', code, host:{name}} / 호스트에게 {t:'peer-join', name}
  *   → {t:'msg', d}                     상대에게 {t:'msg', d}로 전달(호스트 → 게스트, 게스트 → 호스트)
  *   → {t:'ping', at}                   → {t:'pong', at}(지연 측정)
+ *   → {t:'kick'}                       방장만: 참가자를 방에서 내보낸다(98차)
  *   ← {t:'peer-leave'} 상대가 나감, {t:'room-closed'} 호스트가 나가 방이 닫힘, {t:'error', msg}
  */
 'use strict';
@@ -97,7 +98,8 @@ class WsConn {
 }
 
 // ---------------- 방 ----------------
-function createRelayServer({ root = ROOT, log = () => {} } = {}) {
+// lagMs: 시험용 인공 지연 - 중계하는 메시지마다 이만큼 늦게 넘긴다(한쪽 방향). 순서는 그대로다. 환경 변수 RELAY_LAG_MS로도 켤 수 있다.
+function createRelayServer({ root = ROOT, log = () => {}, lagMs = 0 } = {}) {
   const rooms = new Map(); // code → { host, guest, createdAt }
   const conns = new Set();
   const newCode = () => {
@@ -149,7 +151,13 @@ function createRelayServer({ root = ROOT, log = () => {} } = {}) {
       case 'msg': {
         const room = conn.room; if (!room) return send(conn, { t: 'error', msg: '방에 없음' });
         const to = room.host === conn ? room.guest : room.host;
+        if (lagMs > 0) { const text = JSON.stringify({ t: 'msg', d: m.d }); setTimeout(() => { if (to && !to.closed) to.send(text); }, lagMs); return; }
         return send(to, { t: 'msg', d: m.d });
+      }
+      case 'kick': { // 98차: 방장이 참가자를 내보낸다(진행 중인 대전에 다른 사람이 들어왔을 때)
+        const room = conn.room; if (!room || room.host !== conn || !room.guest) return;
+        const g = room.guest; room.guest = null; g.room = null;
+        return send(g, { t: 'error', msg: '방장이 참가를 거절했습니다' });
       }
       case 'ping': return send(conn, { t: 'pong', at: m.at });
       case 'leave': return leave(conn);
@@ -193,7 +201,7 @@ function createRelayServer({ root = ROOT, log = () => {} } = {}) {
 if (require.main === module) {
   const i = process.argv.indexOf('--port');
   const port = Number(i > 0 ? process.argv[i + 1] : process.env.PORT) || 8787;
-  const server = createRelayServer({ log: (s) => console.log(`[relay] ${s}`) });
+  const server = createRelayServer({ log: (s) => console.log(`[relay] ${s}`), lagMs: Number(process.env.RELAY_LAG_MS) || 0 });
   server.listen(port, () => console.log(`[relay] http://localhost:${port}/  (웹소켓: ws://localhost:${port}/ws)`));
 }
 module.exports = { createRelayServer };

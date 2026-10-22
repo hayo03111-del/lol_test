@@ -723,6 +723,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code === 'F1') { e.preventDefault(); cameraRig.centerHeld = true; return; }
   // 연습장 전용(원작에 없는 기능) 키는 원작 키와 겹치지 않게 F6~F9로 모았다.
   if (e.code === 'F9') { e.preventDefault(); debugPanelVisible = !debugPanelVisible; return; }
+  if ((e.code === 'F6' || e.code === 'F7' || e.code === 'F8') && typeof netMatchActive === 'function' && netMatchActive()) { e.preventDefault(); return; } // 98차: 대전 중 연습 설치 모드 잠금
   if (e.code === 'KeyV') { rangeIndicators.toggle(); const cb = document.getElementById('rangeIndicatorCheckbox'); if (cb) cb.checked = rangeIndicators.visible; return; }
   if (e.code === 'F6') { e.preventDefault(); if (allyPlaceMode) setAllyPlaceMode(false); setDummyPlaceMode(!dummyPlaceMode); if (dummyPlaceCheckboxEl) dummyPlaceCheckboxEl.checked = dummyPlaceMode; return; }
   if (e.code === 'F7') { e.preventDefault(); setAllyPlaceMode(!allyPlaceMode); return; }
@@ -839,7 +840,9 @@ window.addEventListener('blur', () => {
   cameraRig.centerHeld = false;
 });
 
-function togglePause() {
+function togglePause(force) {
+  // 98차: 온라인 대전 중에는 일시정지할 수 없다(대전 코드가 카운트다운에만 force로 쓴다).
+  if (!force && typeof netMatchActive === 'function' && netMatchActive()) { if (typeof showSkillToast === 'function') showSkillToast('온라인 대전 중에는 일시정지할 수 없습니다'); return; }
   paused = !paused;
   if (typeof gameClockSetPaused === 'function') gameClockSetPaused(paused); // 95차: 상태 효과·재사용 대기·스킬 타이머도 멈춘다
   document.getElementById('pauseOverlay').classList.toggle('show', paused);

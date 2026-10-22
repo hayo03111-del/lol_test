@@ -40,6 +40,11 @@ function assert(cond, msg) { if (!cond) { console.error('FAIL:', msg); process.e
     host.send(JSON.stringify({ t: 'msg', d: big }));
     const m2 = await next(guest, (m) => m.t === 'msg');
     assert(m2.d.ents.length === 300 && m2.d.ents[299].pos.z === -299, '중계: 큰 스냅샷(64KB 넘는 프레임)도 그대로 간다');
+    // 98차: 방장이 참가자를 내보낼 수 있다(kick) - 그 뒤 다시 참가할 수 있다.
+    host.send(JSON.stringify({ t: 'kick' }));
+    assert((await next(guest, (m) => m.t === 'error')).msg === '방장이 참가를 거절했습니다' && !server.rooms.get(created.code).guest, '내보내기: 방장이 참가자를 방에서 뺀다');
+    guest.send(JSON.stringify({ t: 'join', code: created.code, name: '친구' }));
+    await next(guest, (m) => m.t === 'joined'); await next(host, (m) => m.t === 'peer-join');
     host.send(JSON.stringify({ t: 'ping', at: 123 }));
     assert((await next(host, (m) => m.t === 'pong')).at === 123, '지연 측정: ping → pong');
     guest.close();
@@ -56,6 +61,19 @@ function assert(cond, msg) { if (!cond) { console.error('FAIL:', msg); process.e
     assert(page.code === 200 && /<html/i.test(page.b), '정적 파일: 같은 주소에서 게임 페이지(index.html)를 내보낸다');
     const bad = await new Promise((res) => http.get(`http://127.0.0.1:${port}/../../etc/passwd`, (r) => res(r.statusCode)));
     assert(bad === 403 || bad === 404, '정적 파일: 저장소 밖 경로는 내보내지 않는다');
+    // 98차: 인공 지연(lagMs) - 메시지가 그만큼 늦게, 보낸 순서대로 간다.
+    const lag = createRelayServer({ lagMs: 150 });
+    await new Promise((r) => lag.listen(0, '127.0.0.1', r));
+    const lurl = `ws://127.0.0.1:${lag.address().port}/ws`;
+    const openAt = (u) => new Promise((res, rej) => { const ws = new WebSocket(u); ws.inbox = []; ws.onmessage = (e) => { const m = JSON.parse(e.data); m._at = Date.now(); ws.inbox.push(m); if (ws.waiter && ws.waiter.pred(m)) { const w = ws.waiter; ws.waiter = null; w.res(m); } }; ws.onopen = () => res(ws); ws.onerror = rej; });
+    const h2 = await openAt(lurl), g2b = await openAt(lurl);
+    h2.send(JSON.stringify({ t: 'create' })); const c2 = await next(h2, (m) => m.t === 'created');
+    g2b.send(JSON.stringify({ t: 'join', code: c2.code })); await next(g2b, (m) => m.t === 'joined');
+    const sentAt = Date.now();
+    for (let i = 0; i < 3; i++) g2b.send(JSON.stringify({ t: 'msg', d: { n: i } }));
+    const got = [await next(h2, (m) => m.t === 'msg' && m.d.n === 0), await next(h2, (m) => m.t === 'msg' && m.d.n === 1), await next(h2, (m) => m.t === 'msg' && m.d.n === 2)];
+    assert(got[0]._at - sentAt >= 140 && got[0]._at <= got[1]._at && got[1]._at <= got[2]._at, '인공 지연: 메시지가 지연만큼 늦게, 순서대로 간다');
+    h2.close(); g2b.close(); lag.close();
   } catch (e) {
     console.error('FAIL:', e.message); process.exitCode = 1;
   } finally {
@@ -63,3 +81,4 @@ function assert(cond, msg) { if (!cond) { console.error('FAIL:', msg); process.e
     setTimeout(() => process.exit(process.exitCode || 0), 50);
   }
 })();
+
