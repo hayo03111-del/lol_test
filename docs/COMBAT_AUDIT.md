@@ -157,3 +157,16 @@
     - `movement_check`: 노틸러스 Q 뒤 이동 복귀가 "never" → 약 0.9초.
     - `minion_ai_check`: 추격 포기 전 끌려간 거리 341 → 1316(이제 게임 시간 4초 = 이동 속도 325 × 4).
   - 병렬 실행 때 `movement_check`에서 가렌 Q가 잠깐 멈춘 것으로 찍혔지만, 단독 실행과 직접 재현에서는 멈추지 않았다(16ms 표본이 같은 프레임을 두 번 본 것).
+
+## 12. 회귀 결과 (95차 최종 빌드, 헤드리스 Chromium)
+
+- Node: `node tests/run_all.js` - 51개 파일 모두 통과(assert 3224개).
+- 브라우저 점검 27개(3개씩 병렬): 페이지 오류 없음. 종료 코드는 `qa_enemy_bot` 하나만 1이었다.
+  - 원인은 그 점검의 라인 항목이 실제 90초만 기다린 것이었다. 부하로 게임 시간이 느리게 흘러 봇이 웨이브에 닿기 전에 끝났다.
+  - 게임 시간 115초까지 기다리게 고친 뒤 단독 실행으로 통과했다(CS 2·신발 구매).
+- 새 점검: `qa_bot_sweep`(19챔피언 봇 - 오류 0, 모두 스킬·피해), `qa_verify95` 통과.
+- 94차 결과와 비교(숫자·ID 가림):
+  - `aim`·`aram_features`·`game_screen`·`indicator`·`keys`·`qa_champ_switch`·`qa_combat94`·`qa_damage_class`·`qa_flash_tech`·`qa_focus`·`qa_item_shop`·
+    `qa_projectile_edge`·`qa_reset`·`qa_session`·`shop`·`structure`·`vision`·`ward`는 같다.
+  - `approach`·`combo`·`movement`·`qa_dmg_fixes91`·`structure_minion`은 시각·피해 숫자(병렬 부하 타이밍)만 다르다.
+  - `minion_ai_check`는 병렬 실행에서 허수아비 어그로·추격 포기 항목이 달랐지만, 단독 실행에서는 94차와 같다(500ms 실제 시간 대기라 부하에 민감).
