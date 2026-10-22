@@ -33,6 +33,7 @@ const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_
 function unitLabel(u) {
   if (typeof dummy !== 'undefined' && u === dummy) return '더미 타겟';
   if (typeof controller !== 'undefined' && u === controller) return controller.championId || '플레이어';
+  if (u && u.isBot) return `${u.championId}(적)`;
   return '유닛';
 }
 function ensureStatusHost(u) {
@@ -48,6 +49,9 @@ function applyStatus(target, effect) {
   // 0초 효과도 군중 제어 훅(가렌 패시브 초기화·아이템 발동)을 실행했다.
   if (!effect || !(effect.duration > 0)) { if (effect) console.warn('[STATUS] 잘못된 지속시간 - 무시', effect.id, effect.type, effect.duration); return null; }
   ensureStatusHost(target);
+  // 95차: 건 쪽(source)이 비어 있으면 지금 행동 중인 챔피언(플레이어 또는 적 봇)으로 채운다 - 피해 출처 기본값(resolveDamageSource)과
+  // 같은 규칙. 예전엔 다리우스 출혈처럼 source 없이 건 지속 피해가 틱마다 "출처 없음"이 돼, 봇이 건 출혈이 처치·관통에 잡히지 않았다.
+  if (!effect.source && typeof combatPerspective === 'function') { const a = combatPerspective(); if (a && a !== target) effect = { ...effect, source: a }; }
   // 요청 7/8/34: 세트 R 시퀀스 진행 중(캐스트~착지 완료)에는 세트 자신이
   // Unstoppable(저지불가) 상태다 - 새 CC 면역 시스템을 따로 만들지 않고,
   // CC 계열 상태이상(STUN/ROOT/SLOW/SILENCE/ARMOR_SHRED)이 "세트 자신"에게
@@ -55,7 +59,7 @@ function applyStatus(target, effect) {
   // 붙잡은 "대상"에게 거는 제압(STUN)은 target이 세트 자신이 아니라
   // 붙잡힌 상대이므로 전혀 영향받지 않는다(요청 8: "저지불가는 세트에게만
   // 적용, 주변 적은 정상 CC 상태 유지").
-  if (CC_TYPES.has(effect.type) && typeof controller !== 'undefined' && target === controller && controller._sett && controller._sett.rSeq) {
+  if (CC_TYPES.has(effect.type) && target && target._sett && target._sett.rSeq) { // 95차: 플레이어만이 아니라 세트라면 누구든(적 봇 포함)
     console.log(`[CC BLOCKED - UNSTOPPABLE] ${effect.type} 무시됨 (세트 R 진행 중)`);
     return null;
   }
@@ -113,6 +117,7 @@ function applyStatus(target, effect) {
   if (CC_TYPES.has(effect.type)) {
     console.log(`[CC]\nTarget: ${unitLabel(target)}\nType: ${effect.type}\nDuration: ${effDuration}`); // 강인함 적용 후 실제 지속시간(디버깅 혼동 방지)
     refreshUnitCcTags(target);
+    if (target.isChampion && typeof recordChampionContribution === 'function') recordChampionContribution(target, effect.source); // 95차: 행동 제한도 어시스트 관여
     // 버그 수정(가렌 패시브 "끈질긴 방어자" - 곧 추가될 멀티플레이 대비):
     // passiveState에 lastEnemySkillHitAt 필드가 이미 선언돼 있었지만
     // (생성자 참고) 실제로 이 값을 갱신하는 코드가 파일 어디에도 없었다 -
@@ -143,7 +148,7 @@ function applyStatus(target, effect) {
   // 패시브도 이 훅 하나로 처리한다.
   if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM', 'FEAR', 'TAUNT'].includes(effect.type)
       && typeof itemOnSlowOrImmobilize === 'function') {
-    const attacker = effect.source || (typeof controller !== 'undefined' ? controller : null);
+    const attacker = effect.source || (typeof combatPerspective === 'function' ? combatPerspective() : (typeof controller !== 'undefined' ? controller : null)); // 95차: 봇이 건 효과는 봇
     if (attacker && attacker !== target) itemOnSlowOrImmobilize(attacker, target, effect.type);
   }
   return rec;

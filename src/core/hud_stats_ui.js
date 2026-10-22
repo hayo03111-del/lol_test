@@ -110,6 +110,7 @@ function _hudRenderRunes(ctrl) {
   _hudPager(box);
 }
 function updateHudStats(ctrl, force = false) {
+  if (ctrl && ctrl.isBot) return; if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   if (!ctrl || !ctrl.stats || typeof document === 'undefined') return;
   const now = performance.now();
   if (!force && now - hudStatsState.lastAt < 150) return;

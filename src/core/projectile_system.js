@@ -82,6 +82,9 @@ class ProjectileSystem {
     entry.group.scale.setScalar(scale); // 59차: 포탑 가열 단계마다 탄이 굵어진다(풀에서 다시 쓸 때도 매번 새로 맞춘다)
     if (!hidden) this.scene.add(entry.group);
     const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target: line ? null : target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, team, life: 2.5, hasHit: false, done: false };
+    // 95차: 쏜 쪽 - 행위자(적 봇이면 봇, 플레이어 차례면 null)와 그 팀(팀 없는 플레이어 투사체는 플레이어 팀).
+    proj.actor = (typeof __combatActor !== 'undefined' && __combatActor) || null;
+    proj.ownerTeam = team || (proj.actor && proj.actor.team) || (typeof controller !== 'undefined' && controller && controller.team) || null;
     if (line) {
       const dir = line.dir.clone().setY(0).normalize();
       proj.line = { dir, origin: from.clone(), maxDist: line.maxDist, halfWidth: line.halfWidth, filter: line.filter || null, onMiss: line.onMiss || null, traveled: 0, pierce: !!line.pierce || line.maxHits > 1, maxHits: line.maxHits || 0, hitSet: new Set(), hits: 0 };
@@ -177,44 +180,53 @@ class ProjectileSystem {
   update(dt) {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
-      proj.life -= dt;
-      // 버그 수정(요청 27): 포탑 공격/광선은 막지 않는다 - fromTurret 발사체는
-      // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
-      // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
-      // 94차: 적 팀 투사체만 막는다(팀이 없는 투사체 = 플레이어가 쏜 것 - 예전엔 자기 표식 눈덩이도 막혔다). 장막 두께(±0.45)를
-      // 한 프레임에 건너뛰는 빠른 투사체도 막도록 지난 프레임과 이번 프레임 사이에 장막 면을 지났는지도 본다(연속 판정).
-      if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret && proj.team && proj.team !== controller.team) {
-        const wall=controller._yasuo.windwall, wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, yasuoWindwallOffsetWorld(wall)), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x);
+      // 95차: 쏜 챔피언(적 봇이면 봇)의 입장에서 판정·적중 처리를 한다(직선 스킬샷의 적 목록, 적중 콜백의 피해 출처).
+      if (proj.actor && typeof withCombatActor === 'function') withCombatActor(proj.actor, () => this._updateOne(proj, i, dt));
+      else this._updateOne(proj, i, dt);
+    }
+  }
+  _updateOne(proj, i, dt) {
+    proj.life -= dt;
+    // 버그 수정(요청 27): 포탑 공격/광선은 막지 않는다 - fromTurret 발사체는
+    // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
+    // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
+    // 94차: 적 팀 투사체만 막는다(팀이 없는 투사체 = 플레이어가 쏜 것 - 예전엔 자기 표식 눈덩이도 막혔다). 장막 두께(±0.45)를
+    // 한 프레임에 건너뛰는 빠른 투사체도 막도록 지난 프레임과 이번 프레임 사이에 장막 면을 지났는지도 본다(연속 판정).
+    // 95차: 바람 장막은 플레이어뿐 아니라 적 봇 야스오의 것도 막는다 - 쏜 쪽 팀(ownerTeam)이 장막 주인과 다른 투사체만.
+    if (proj.mesh && !proj.fromTurret && proj.ownerTeam) {
+      for (const y of (typeof listChampionUnits === 'function' ? listChampionUnits() : (typeof controller !== 'undefined' && controller ? [controller] : []))) {
+        if (y?.championId !== 'yasuo' || !y._yasuo?.windwall || proj.ownerTeam === y.team) continue;
+        const wall=y._yasuo.windwall, wp=(wall.origin||y.root.position).clone().addScaledVector(wall.dir, yasuoWindwallOffsetWorld(wall)), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x);
         const crossed = proj._wwAlong != null && Math.sign(proj._wwAlong) !== Math.sign(along) && Math.max(side, proj._wwSide ?? side) <= wall.width*0.5;
         proj._wwAlong = along; proj._wwSide = side;
-        if((Math.abs(along)<=0.45 && side<=wall.width*0.5) || crossed){ this._remove(i, true); continue; }
+        if((Math.abs(along)<=0.45 && side<=wall.width*0.5) || crossed){ this._remove(i, true); return; }
       }
-      if (proj.line) { this._updateLine(proj, i, dt); continue; }
-      const aim = this._currentAimPoint(proj);
-      if (!aim || proj.life <= 0) { this._remove(i, true); continue; }
-      const toAim = new THREE.Vector3().subVectors(aim, proj.mesh.position);
-      const dist = toAim.length();
-      const step = proj.speed * dt;
-      if (dist <= Math.max(step, 0.3)) {
-        // Phase 2 요청 17 - 발사 시점 realm과 명중 시점 target의 realm이
-        // 다르면(예: 비행 중 모데카이저 R로 target이 죽음의 세계로 끌려감)
-        // 명중을 취소한다. realmId를 안 넘긴 기존 호출부는 둘 다 'main'
-        // 취급이라 이 검사가 사실상 항상 통과해서 기존 동작과 동일하다.
-        const realmOk = canRealmInteract({ realmId: proj.realmId }, proj.target);
-        // 90차(QA): 도착했을 때 대상이 비대상(마스터 이 Q 등)이거나 이미 죽었으면 피해·적중 효과(둔화·흡혈·아이템·룬) 없이 사라진다.
-        const t = proj.target, hittable = !proj._lost && t && t.hp > 0 && !t.isDead && !t.destroyed && !t.isUntargetable;
-        if (hittable && proj.onHit && realmOk) { proj.onHit(t); this.totalHits++; }
-        else { this.totalMisses++; this._evMiss(proj); }
-        this.vfx.spawn('hit', proj.mesh.position.clone(), new THREE.Vector3(), { color: proj.color });
-        proj.done = true;
-        this._releaseArrowMesh(proj._meshEntry);
-        this.projectiles.splice(i, 1);
-        continue;
-      }
-      toAim.normalize();
-      proj.mesh.position.addScaledVector(toAim, step);
-      this._orient(proj);
     }
+    if (proj.line) { this._updateLine(proj, i, dt); return; }
+    const aim = this._currentAimPoint(proj);
+    if (!aim || proj.life <= 0) { this._remove(i, true); return; }
+    const toAim = new THREE.Vector3().subVectors(aim, proj.mesh.position);
+    const dist = toAim.length();
+    const step = proj.speed * dt;
+    if (dist <= Math.max(step, 0.3)) {
+      // Phase 2 요청 17 - 발사 시점 realm과 명중 시점 target의 realm이
+      // 다르면(예: 비행 중 모데카이저 R로 target이 죽음의 세계로 끌려감)
+      // 명중을 취소한다. realmId를 안 넘긴 기존 호출부는 둘 다 'main'
+      // 취급이라 이 검사가 사실상 항상 통과해서 기존 동작과 동일하다.
+      const realmOk = canRealmInteract({ realmId: proj.realmId }, proj.target);
+      // 90차(QA): 도착했을 때 대상이 비대상(마스터 이 Q 등)이거나 이미 죽었으면 피해·적중 효과(둔화·흡혈·아이템·룬) 없이 사라진다.
+      const t = proj.target, hittable = !proj._lost && t && t.hp > 0 && !t.isDead && !t.destroyed && !t.isUntargetable;
+      if (hittable && proj.onHit && realmOk) { proj.onHit(t); this.totalHits++; }
+      else { this.totalMisses++; this._evMiss(proj); }
+      this.vfx.spawn('hit', proj.mesh.position.clone(), new THREE.Vector3(), { color: proj.color });
+      proj.done = true;
+      this._releaseArrowMesh(proj._meshEntry);
+      this.projectiles.splice(i, 1);
+      return;
+    }
+    toAim.normalize();
+    proj.mesh.position.addScaledVector(toAim, step);
+    this._orient(proj);
   }
 }
 

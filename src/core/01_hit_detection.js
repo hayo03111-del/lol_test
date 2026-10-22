@@ -25,35 +25,31 @@ function getAllEnemyUnits(ignoreRealm = false) { // ignoreRealm: 죽음의 세�
   // 전부에 자동으로 적용되게 한다(요청 21 "같은 기능의 새 시스템을 중복으로
   // 만들지 마라"와 일치). 모데카이저가 아니거나 죽음의 세계 상태가 아니면
   // 기존 동작 그대로다 - 다른 챔피언에는 전혀 영향 없음.
-  if (!ignoreRealm && typeof controller !== 'undefined' && controller && controller.championId === 'mordekaiser'
-      && controller._morde && controller._morde.isInDeathRealm) {
-    const t = controller._morde.rTarget;
+  // 95차: "누구의 적인가"는 지금 판정하는 챔피언(플레이어 또는 행동 중인 적 챔피언 봇 - combatPerspective) 기준이다.
+  const me = typeof combatPerspective === 'function' ? combatPerspective() : (typeof controller !== 'undefined' ? controller : null);
+  if (!ignoreRealm && me && me.championId === 'mordekaiser' && me._morde && me._morde.isInDeathRealm) {
+    const t = me._morde.rTarget;
     // 구조물은 모든 세계에 존재한다(PC 위키) - 안에서도 구조물은 칠 수 있다.
     return [...((t && t.hp > 0) ? [t] : []), ...getAllEnemyUnits(true).filter((u) => u.isStructure)];
   }
+  const myTeam = (me && me.team) || PLAYER_TEAM;
+  const foe = (u) => (u.team || ENEMY_TEAM) !== myTeam; // 팀이 없던 시절의 허수아비는 적 팀으로 친다
   const list = [];
-  if (typeof dummy !== 'undefined' && dummy && dummy.hp > 0) list.push(dummy);
-  // 요청: 사용자가 직접 설치한 허수아비들. 이 배열 하나에만 추가하면
-  // findEnemiesInRadius/findFirstInLine/기본 공격 등 이 함수를 쓰는 모든
-  // 판정이 자동으로 다중 대상을 인식한다(별도 판정 로직을 새로 만들지 않음).
-  // (더미는 team===ENEMY_TEAM이라 항상 플레이어의 적이지만, 위 두 push는
-  // team이 없던 시절부터의 기존 무조건 포함 로직을 그대로 유지한다 -
-  // 아래 구조물/미니언처럼 team 비교로 걸러도 결과는 똑같다.)
+  // 연습용 허수아비(가운데 dummy + 직접 놓은 placedDummies)는 적 팀(RED) - 플레이어에게만 적이고, 적 봇에게는 아군이다.
+  if (typeof dummy !== 'undefined' && dummy && dummy.hp > 0 && foe(dummy)) list.push(dummy);
   if (typeof placedDummies !== 'undefined') {
-    for (const d of placedDummies) if (d && d.hp > 0) list.push(d);
+    for (const d of placedDummies) if (d && d.hp > 0 && foe(d)) list.push(d);
   }
-  // 아군/적군/플레이어 시스템 - 챔피언(플레이어)의 기본 공격/스킬(범위/
-  // 직선/AOE 전부 이 함수 하나를 공용으로 거친다)에 적 진영 미니언/포탑/
-  // 억제기/넥서스를 포함시킨다. 예전에는 "항상 RED와만 적대한다"는 가정을
-  // 문자열 리터럴 'RED'로 하드코딩했지만, 이제 플레이어 자신의 `.team`
-  // (PLAYER_TEAM)과 generic하게 비교한다(isEnemyUnit과 동일한 "team이
-  // 다르면 적" 원칙 - 00_global_constants.js) - controller가 아직 없으면
-  // (챔피언 로드 전) PLAYER_TEAM으로 폴백해 기존
-  // 동작을 그대로 유지한다. 아군(같은 팀) 미니언/구조물은 애초에 후보에
-  // 들어가지 않으므로 "아군은 공격 불가"(요청 20-B) 요구가 자동으로
-  // 만족된다. 새 탐색 시스템을 만들지 않고 기존 findEnemiesInRadius/
-  // findFirstInLine이 전부 이 함수만 거치는 구조를 그대로 재사용한다(요청 20-C).
-  const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM;
+  // 아군 더미(플레이어 팀)는 적 봇의 적이다.
+  if (myTeam !== PLAYER_TEAM && typeof placedAllies !== 'undefined') {
+    for (const a of placedAllies) if (a && a.hp > 0 && foe(a)) list.push(a);
+  }
+  // 챔피언(플레이어·적 챔피언 봇): 살아 있고 팀이 다르면.
+  if (typeof listChampionUnits === 'function') {
+    for (const c of listChampionUnits()) if (c !== me && foe(c) && isChampionAlive(c)) list.push(c);
+  }
+  // 아군/적군/플레이어 시스템 - 적 진영 미니언/포탑/억제기/넥서스("team이 다르면 적" - isEnemyUnit과 같은 원칙).
+  // 아군(같은 팀) 미니언/구조물은 후보에 들어가지 않으므로 "아군은 공격 불가"(요청 20-B)가 자동으로 만족된다.
   if (typeof turrets !== 'undefined') {
     for (const t of turrets) if (t.team && t.team !== myTeam && !t.destroyed && !t.isUntargetable) list.push(t);
   }
@@ -82,6 +78,7 @@ function getAllEnemyUnits(ignoreRealm = false) { // ignoreRealm: 죽음의 세�
 // 시야 시스템 추가 범위에는 포함되지 않는다(명시적 한계 - README 참고).
 function getTargetableEnemyUnits() {
   const all = getAllEnemyUnits();
+  if (typeof isBotActing === 'function' && isBotActing()) return all; // 95차: 적 봇은 시야 제한 없이 본다(간단한 AI - README 95차)
   if (typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled) return all;
   return all.filter((u) => visionSystem.isVisible(u));
 }
@@ -151,6 +148,7 @@ function debugSkillMiss(label, reason) {
 // 콘솔을 안 열어봐도 "왜 스킬이 안 나가는지" 화면에서 바로 보이도록 하는
 // 토스트. [SKILL BLOCKED]/[SKILL MISS] 두 종류 모두 여기로 모은다.
 function showSkillToast(message) {
+  if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   const el = document.getElementById('skillToast');
   if (!el) return;
   const msg = document.createElement('div');

@@ -77,29 +77,27 @@ function getMinionExpValue(minion) {
 }
 function awardMinionExperience(minion) {
   if (typeof gameEnded !== 'undefined' && gameEnded) return; // 94차: 게임 종료 뒤 경험치 없음
-  if (typeof controller === 'undefined' || !controller) return;
-  if (controller.state === STATE.DEAD || controller.hp <= 0) return;
-  if (minion.team === PLAYER_TEAM) return;
+  // 95차: 상대 팀 챔피언 모두(적 봇 포함) - 경험치 범위 안에 살아 있는 상대 팀 챔피언끼리 나눈다.
   const rangeWorld = lolRangeToWorld(EXP_RANGE_LOL);
-  const dist = getHorizontalDistance(controller.root.position, minion.mesh.position);
-  if (dist > rangeWorld) return;
+  const near = (typeof listChampionUnits === 'function' ? listChampionUnits() : []).filter((c) => c && c.team !== minion.team && isChampionAlive(c) && minion.mesh
+    && getHorizontalDistance(c.root.position, minion.mesh.position) <= rangeWorld);
+  if (!near.length) return;
   const baseExp = getMinionExpValue(minion);
-  let participants = [controller];
-  // 닐라 P: 미니언 막타를 직접 한 경우 가장 가까운 아군 챔피언과 경험치를 공유하고,
-  // 공유로 생긴 실제 손실량의 50%를 닐라에게 추가 보상한다.
-  if (controller.championId === 'nilah' && minion._lastHitBy === controller) {
-    const ally = typeof controller._nilahNearestAlly === 'function' ? controller._nilahNearestAlly(EXP_RANGE_LOL) : null;
+  // 닐라 패시브: 막타를 친 닐라는 가장 가까운 아군과 경험치를 나누고, 나눠서 줄어든 몫 일부를 돌려받는다(혼자일 때만 - 기존 규칙).
+  const nilah = near.length === 1 && near[0].championId === 'nilah' && minion._lastHitBy === near[0] ? near[0] : null;
+  if (nilah) {
+    const ally = typeof nilah._nilahNearestAlly === 'function' ? nilah._nilahNearestAlly(EXP_RANGE_LOL) : null;
     if (ally) {
-      participants = [controller, ally];
+      const participants = [nilah, ally];
       const sharedEach = shareExperience(baseExp, participants);
       const lost = Math.max(0, baseExp - sharedEach);
       for (const p of participants) gainExperience(p, applyExperienceModifiers(sharedEach, 'minion', p, null));
-      gainExperience(controller, lost * (CHAMPION_DATA.nilah.passive.xpLostCompensationPercent / 100));
+      gainExperience(nilah, lost * (CHAMPION_DATA.nilah.passive.xpLostCompensationPercent / 100));
       return;
     }
   }
-  const shared = shareExperience(baseExp, participants);
-  for (const p of participants) gainExperience(p, applyExperienceModifiers(shared, 'minion', p, null));
+  const shared = shareExperience(baseExp, near);
+  for (const p of near) gainExperience(p, applyExperienceModifiers(shared, 'minion', p, null));
 }
 
 // 요청 3: 챔피언 처치 경험치// 요청 3: 챔피언 처치 경험치 - 적 챔피언 AI가 아직 없어 실전 호출은
@@ -107,7 +105,7 @@ function awardMinionExperience(minion) {
 // 호출하면 되도록 완전한 형태로 만들어둔다.
 function awardChampionKillExperience(killer, participants, victim) {
   if (!victim || !participants || !participants.length) return;
-  const baseExp = getExpRequired(victim.champLevel || 1) * 0.5; // 처치 경험치 기본값(실제 밸런스 수치는 AI/멀티 도입 시 조정)
+  const baseExp = (typeof CHAMPION_KILL_XP_BY_LEVEL !== 'undefined' ? CHAMPION_KILL_XP_BY_LEVEL[Math.max(1, Math.min(18, victim.champLevel || 1))] : 0); // 95차: 위키 처치 경험치 표(rewardChampionKill이 실제로 쓴다)
   const shared = shareExperience(baseExp, participants);
   for (const p of participants) {
     if (p.state === STATE.DEAD || p.hp <= 0) continue; // 요청 6: 사망 중인 참가자는 제외
@@ -456,9 +454,8 @@ function canMinionAcquire(minion, target) {
   return getHorizontalDistance(minion.mesh.position, getWorldPosition(target)) <= minionAcquireRangeWorld(minion, target);
 }
 function getMinionEnemyChampions(minion) {
-  const list = [];
-  if (typeof controller !== 'undefined' && controller && controller.team && controller.team !== minion.team) list.push(controller);
-  return list;
+  // 95차: 상대 팀 챔피언 모두(적 챔피언 봇 포함). 생존·대상 지정 가능 여부는 쓰는 쪽(canMinionAcquire 등)이 본다.
+  return (typeof listChampionUnits === 'function' ? listChampionUnits() : []).filter((c) => c && c.team && c.team !== minion.team);
 }
 function closestAcquirable(minion, candidates) {
   let best = null, bestDist = Infinity;
@@ -525,7 +522,7 @@ function getMinionAttackTarget(minion) {
     const d = getHorizontalDistance(pos, getWorldPosition(u));
     if (r < bestRank || (r === bestRank && d < bestDist)) { best = u; bestRank = r; bestDist = d; }
   };
-  for (const m of minions) if (m !== minion && m.team !== minion.team && !m.isDead && !ignoredNow(m) && canMinionAcquire(minion, m)) consider(m);
+  for (const m of minionsNear(pos, _minionGridCellSize())) if (m !== minion && m.team !== minion.team && !m.isDead && !ignoredNow(m) && canMinionAcquire(minion, m)) consider(m); // 95차: 격자 후보
   for (const c of getMinionEnemyChampions(minion)) if (!ignoredNow(c) && (canMinionAcquire(minion, c) || (minion._callForHelp && minion._callForHelp.target === c && now < minion._callForHelp.until))) consider(c);
   const engagedTurret = findTurretAttackingAllyMinion(minion);
   if (engagedTurret) consider(engagedTurret);
@@ -659,7 +656,7 @@ const MINION_SEPARATION_RADIUS = 0.85; // 이 거리 안의 아군에게서 밀�
 const MINION_SEPARATION_WEIGHT = 0.55; // 목표 방향 대비 분리력의 비중
 function computeFriendlySeparation(minion) {
   let fx = 0, fz = 0;
-  for (const m of minions) {
+  for (const m of minionsNear(minion.mesh.position, lolRangeToWorld(300))) { // 95차: 격자 후보
     if (m === minion || m.isDead) continue;
     const dx = minion.mesh.position.x - m.mesh.position.x;
     const dz = minion.mesh.position.z - m.mesh.position.z;
@@ -906,29 +903,20 @@ function killMinion(minion) {
   rewardMinionKill(minion);
   grantMinionExperience(minion);
   // 34차 스코어보드 CS - 플레이어가 마지막으로 때린 미니언만 센다(원작 CS = 마지막 타격).
-  if (typeof controller !== 'undefined' && controller && minion._lastHitBy === controller && typeof ensureScore === 'function') ensureScore(controller).cs += 1;
-  // 아리 패시브(정기 흡수) - 아리가 마지막으로 때린 미니언이 죽으면 스택 1개.
-  if (typeof controller !== 'undefined' && controller && controller.championId === 'ahri'
-      && minion._lastHitBy === controller && typeof controller._ahriOnMinionKill === 'function') {
-    controller._ahriOnMinionKill();
-  }
-  // 아이템 패시브 "수확"(수확의 낫) - 플레이어가 마지막으로 때린 미니언이
-  // 죽으면 골드 누적. 챔피언 종류와 무관한 범용 아이템 훅이라 위 아리
-  // 패시브와 별개로 둔다.
-  if (typeof controller !== 'undefined' && controller && minion._lastHitBy === controller
-      && typeof itemOnMinionKillByPlayer === 'function') {
-    itemOnMinionKillByPlayer(controller);
-  }
-  // 바루스 패시브(살아있는 복수) - 유닛 처치 시 공격 속도.
-  if (typeof controller !== 'undefined' && controller && controller.championId === 'varus'
-      && minion._lastHitBy === controller && typeof controller._varusOnKill === 'function') {
-    controller._varusOnKill(minion, false);
-  }
-  // 가렌 W(용기) 패시브 - 가렌이 마지막으로 때린 미니언이 죽으면 처치 스택.
-  if (typeof controller !== 'undefined' && controller && controller.championId === 'garen'
-      && minion._lastHitBy === controller && typeof controller._garenOnTakedown === 'function') {
-    controller._garenOnTakedown();
-  }
+  const lh = minion._lastHitBy; // 95차: 막타 친 챔피언(적 봇 포함)의 CS
+  if (lh && (lh.isChampion || typeof lh.championId === 'string') && !lh.isTrainingDummy && typeof ensureScore === 'function') ensureScore(lh).cs += 1;
+  // 막타 친 챔피언의 처치 반응(95차: 플레이어만이 아니라 적 봇도 - 그 챔피언 입장에서 실행).
+  const killerChamp = lh && typeof lh._asActor === 'function' ? lh : null;
+  if (killerChamp) killerChamp._asActor(() => {
+    // 아리 패시브(정기 흡수) - 아리가 마지막으로 때린 미니언이 죽으면 스택 1개.
+    if (killerChamp.championId === 'ahri' && typeof killerChamp._ahriOnMinionKill === 'function') killerChamp._ahriOnMinionKill();
+    // 아이템 패시브 "수확"(수확의 낫) - 마지막으로 때린 미니언이 죽으면 골드 누적(챔피언 종류와 무관한 범용 아이템 훅).
+    if (typeof itemOnMinionKillByPlayer === 'function') itemOnMinionKillByPlayer(killerChamp);
+    // 바루스 패시브(살아있는 복수) - 유닛 처치 시 공격 속도.
+    if (killerChamp.championId === 'varus' && typeof killerChamp._varusOnKill === 'function') killerChamp._varusOnKill(minion, false);
+    // 가렌 W(용기) 패시브 - 가렌이 마지막으로 때린 미니언이 죽으면 처치 스택.
+    if (killerChamp.championId === 'garen' && typeof killerChamp._garenOnTakedown === 'function') killerChamp._garenOnTakedown();
+  });
   minions = minions.filter((m) => m !== minion); // 요청 18-7: 다른 AI가 더 이상 살아있는 유닛으로 인식하지 않게 즉시 목록에서 제거
   if (typeof controller !== 'undefined' && controller && controller.currentTarget === minion) {
     controller.currentTarget = null;
@@ -939,6 +927,7 @@ function killMinion(minion) {
       targetRing.clear();
     }
   }
+  if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b.currentTarget === minion) { b.currentTarget = null; b.attackOrderActive = false; } // 95차
   const deathClip = MINION_DEATH_CLIP[minion.type];
   let removeDelayMs = 900; // 폴백(모델 미로딩 시) 고정 지연
   if (minion.usingRealModel) {
@@ -995,9 +984,13 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
   // 90차(QA): 플레이어 피해가 아닌데 공격자가 비어 있으면(구조물·환경 피해) 플레이어로 대체되지 않게 한다 - 대체되면 플레이어의
   // 피해 증폭 아이템·탈진 같은 상태가 그 피해에 붙었다(예: 우물 고정 피해 1000 → 쇼진 1200, 탈진 650).
   if (!fromPlayer && result && !result.source) result = { ...result, source: { isStructure: true } };
+  // 95차: fromPlayer = "챔피언이 준 피해" - 그 챔피언은 넘어온 공격자, 없으면 지금 행동 중인 챔피언(플레이어 또는 적 봇).
+  const src0 = result && result.source;
+  const champ = fromPlayer ? ((src0 && (src0.isChampion || typeof src0.championId === 'string') && !src0.isTrainingDummy) ? src0
+    : (typeof combatPerspective === 'function' ? combatPerspective() : (typeof controller !== 'undefined' ? controller : null))) : null;
   // 85차: 칼바람 오라 - 근접 챔피언의 기본 공격은 공성·슈퍼 미니언에게 20% 추가 피해(PC 위키 Howling Abyss aura).
   if (fromPlayer && result && result.isBasicAttack && (minion.type === 'siege' || minion.type === 'super')
-      && typeof controller !== 'undefined' && controller && typeof isRangedAttacker === 'function' && !isRangedAttacker(controller)
+      && champ && typeof isRangedAttacker === 'function' && !isRangedAttacker(champ)
       && typeof isAramRulesActive === 'function' && isAramRulesActive()) result = { ...result, rawDamage: (result.rawDamage || 0) * 1.2 };
   const finalDmg = calculateDamage({ ...result, target: minion });
   minion._lastDamageTakenAmount = finalDmg;
@@ -1013,23 +1006,23 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
   if (!fromPlayer) minion._lastHitBy = result.source || null; // 59차: 마지막 타격이 미니언·포탑이면 플레이어 막타(골드·CS)가 아니다
   if (fromPlayer) {
     minion.lastAttackedByPlayerAt = minionAiNowMs();
-    if (typeof controller !== 'undefined' && controller) {
-      minion._lastHitBy = controller;
-      minion._lastChampionAttacker = controller; minion._lastChampionAttackedAt = minion.lastAttackedByPlayerAt; // 59차 미니언 어그로 5순위
+    if (champ) {
+      minion._lastHitBy = champ;
+      minion._lastChampionAttacker = champ; minion._lastChampionAttackedAt = minion.lastAttackedByPlayerAt; // 59차 미니언 어그로 5순위
       // 아이템 패시브 "모든 피해 흡혈"(도란의 검/활)/"생명력 흡수"(흡혈의
       // 낫, 물리 피해 전용) - 미니언 피해도 실제 LoL처럼 흡혈 대상에
       // 포함된다(구조물 피해만 제외).
-      if (typeof applyItemVamp === 'function') applyItemVamp(controller, finalDmg, { target: minion, isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isAoE: !!result.isAoE, isPet: !!result.isPet }); // 83차: 광역·도트 33%
-      if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(controller, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, !!result.isBasicAttack);
+      if (typeof applyItemVamp === 'function') applyItemVamp(champ, finalDmg, { target: minion, isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isAoE: !!result.isAoE, isPet: !!result.isPet }); // 83차: 광역·도트 33%
+      if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(champ, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, !!result.isBasicAttack);
       // 운명의 재(발화)/여신의 눈물(마나순환) - 챔피언 전용 효과(그리버스/
       // 카탈리스트 마나 회복)는 itemOnDamageDealt() 내부에서 target.isChampion
       // 으로 걸러지므로 미니언 대상으로 호출해도 안전하다.
-      if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(controller, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isOnHitBonus: !!result.isOnHitBonus });
+      if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(champ, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isOnHitBonus: !!result.isOnHitBonus });
     }
   }
   // 93차: 게임 이벤트(공격자: 플레이어 피해면 플레이어, 아니면 넘어온 공격자 - 구조물·환경은 null)
-  if (typeof _evDamage === 'function') _evDamage(fromPlayer ? controller : (result.source && !result.source.isStructure ? result.source : null), minion, finalDmg, result);
-  if (fromPlayer && typeof leesinOmnivampOnDamage === 'function' && typeof controller !== 'undefined') leesinOmnivampOnDamage(controller, minion, finalDmg, result); // 94차: 리 신 W2 모든 피해 흡혈
+  if (typeof _evDamage === 'function') _evDamage(fromPlayer ? champ : (result.source && !result.source.isStructure ? result.source : null), minion, finalDmg, result);
+  if (fromPlayer && champ && typeof leesinOmnivampOnDamage === 'function') leesinOmnivampOnDamage(champ, minion, finalDmg, result); // 94차: 리 신 W2 모든 피해 흡혈
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }
   // 요청("미니언 모션 최소 요구: Idle/Move/Attack/Hit/Death, 우선순위
   // Death>Attack>Hit>Move>Idle") - 피격 애니메이션을 재생한다. 짧은 창
@@ -1086,6 +1079,30 @@ function updateMinionWaveSpawner(gameTimeSec) {
 // 94차(성능): 미니언마다 프레임당 세 번씩 새로 만들던 구조물 목록을 프레임마다 한 번만 만든다.
 // 구조물은 파괴돼도 배열에 남으므로(파괴 여부는 쓰는 쪽이 본다) 프레임 번호·개수·첫 원소(초기화 때 새로 세움)로만 갱신한다.
 let _minionFrameNo = 0, _minionStructCache = null;
+// 95차(성능): 미니언 근처 찾기 - 프레임마다 한 번 만드는 격자(칸 = 인식 범위 정도)로 대상 찾기·분리·겹침 해소가 모든 미니언 쌍을
+// 보지 않게 한다(예전엔 미니언 수의 제곱 - 127마리에서 프레임당 대상 찾기 5.6ms). 후보만 줄이고 실제 거리 판정은 그대로다.
+// 미니언이 적으면(40마리 미만) 전체 목록을 그대로 쓴다 - 같은 프레임 안에서 위치를 직접 옮기는 점검 스크립트와도 결과가 같다.
+const MINION_GRID_MIN_COUNT = 40;
+let _minionGrid = null;
+function _minionGridCellSize() { return lolRangeToWorld(900); }
+function _buildMinionGrid() {
+  const cell = _minionGridCellSize(), map = new Map();
+  for (const m of minions) {
+    if (!m || m.isDead || !m.mesh) continue;
+    const key = Math.floor(m.mesh.position.x / cell) + ',' + Math.floor(m.mesh.position.z / cell);
+    let arr = map.get(key); if (!arr) { arr = []; map.set(key, arr); } arr.push(m);
+  }
+  _minionGrid = { frame: _minionFrameNo, n: minions.length, cell, map };
+}
+// pos 둘레 radius(월드) 안에 있을 수 있는 미니언들(상위 집합). radius는 칸 크기 이하로 쓴다.
+function minionsNear(pos, radius) {
+  if (minions.length < MINION_GRID_MIN_COUNT) return minions;
+  if (!_minionGrid || _minionGrid.frame !== _minionFrameNo || _minionGrid.n !== minions.length) _buildMinionGrid();
+  const g = _minionGrid, cx = Math.floor(pos.x / g.cell), cz = Math.floor(pos.z / g.cell), span = Math.max(1, Math.ceil(radius / g.cell));
+  const out = [];
+  for (let ix = cx - span; ix <= cx + span; ix++) for (let iz = cz - span; iz <= cz + span; iz++) { const a = g.map.get(ix + ',' + iz); if (a) for (const m of a) out.push(m); }
+  return out;
+}
 function minionStructureList() {
   const n = turrets.length + inhibitorBuildings.length + nexusBuildings.length;
   const c = _minionStructCache;
@@ -1113,10 +1130,13 @@ function updateMinions(dt) {
 // 빽빽한 웨이브·두 팀 전열이 서로 겹쳐 보였다. 겹친 양의 절반씩 양쪽으로(공격 중인 쪽은 덜 밀리게 가중치).
 function resolveMinionMinionOverlaps() {
   const list = minions.filter((m) => !m.isDead && m.mesh);
+  const order = new Map(list.map((m, i) => [m, i]));
   for (let i = 0; i < list.length; i++) {
     const a = list[i], pa = a.mesh.position, ra = getCollisionRadius(a);
-    for (let j = i + 1; j < list.length; j++) {
-      const b = list[j], pb = b.mesh.position, rb = getCollisionRadius(b);
+    // 95차: 격자 후보 중 순서가 뒤인 것만(각 쌍을 한 번씩) - 미니언이 적으면 예전처럼 전체.
+    for (const b of minionsNear(pa, lolRangeToWorld(300))) {
+      const j = order.get(b); if (j == null || j <= i) continue;
+      const pb = b.mesh.position, rb = getCollisionRadius(b);
       let dx = pb.x - pa.x, dz = pb.z - pa.z; const need = (ra + rb) * 0.9;
       const d2 = dx * dx + dz * dz; if (d2 >= need * need) continue;
       let d = Math.sqrt(d2); if (d < 1e-4) { dx = (i % 2 ? 1 : -1) * 0.01; dz = 0.01; d = Math.hypot(dx, dz); }

@@ -301,6 +301,7 @@ function _summonerFlushBuffered(ctrl) {
 }
 function summonerSpellTick(dt) {
   if (typeof controller !== 'undefined' && controller && controller._bufferedSummoner) _summonerFlushBuffered(controller);
+  if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b._bufferedSummoner) withCombatActor(b, () => _summonerFlushBuffered(b)); // 95차
   for (let i = _summonerSnowballs.length - 1; i >= 0; i--) {
     const b = _summonerSnowballs[i];
     if (!b.proj.done) { b.mesh.position.set(b.proj.mesh.position.x, b.mesh.position.y, b.proj.mesh.position.z); continue; }
@@ -337,6 +338,7 @@ function _summonerTitle(id) {
 }
 // 칸 그리기. 재사용 대기시간 숫자는 매 프레임이 아니라 0.1초 단위로 바뀔 때만 다시 쓴다.
 function updateSummonerUI(ctrl, force) {
+  if (ctrl && ctrl.isBot) return; if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   const bar = document.getElementById('spellBar');
   if (!bar || !ctrl) return;
   const s = ensureSummoners(ctrl);

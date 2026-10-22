@@ -1495,6 +1495,10 @@ Object.defineProperty(CharacterController.prototype, 'shield', {
   },
 });
 
+// 95차: 챔피언의 월드 오브젝트(root)를 mesh로도 읽는다 - 넉백·끌어당김·공중에 뜸·시야 등 "대상"을 다루는 공용 코드가
+// unit.mesh.position을 쓴다(허수아비·미니언과 같은 모양). 적 챔피언 봇이 생기면서 챔피언도 그런 대상이 됐다. 대입은 무시한다.
+Object.defineProperty(CharacterController.prototype, 'mesh', { configurable: true, get() { return this.root; }, set(_) {} });
+
 // 챔피언 타이머(챔피언 간 상태 격리): 챔피언 코드의 지연 실행은 이 함수로 건다. 챔피언을 바꾸면(applyChampionData)
 // "챔피언 세대(epoch)"가 바뀌고 남은 타이머가 전부 취소되며, 혹시 남은 콜백도 세대가 다르면 실행되지 않는다.
 // 예전엔 _actionTimers에 넣지 않은 지연 판정(모데카이저 E, 야스오 W 장막 등)이 교체 뒤 새 챔피언으로 실행될 수 있었다.
@@ -1504,7 +1508,7 @@ CharacterController.prototype._champTimeout = function(fn, ms) {
   const id = setTimeout(() => {
     this._championTimers.delete(id);
     if ((this._championEpoch || 0) !== epoch) return;
-    fn();
+    this._asActor(fn);
   }, ms);
   this._championTimers.add(id);
   return id;
@@ -1514,10 +1518,14 @@ CharacterController.prototype._champInterval = function(fn, ms) {
   const epoch = this._championEpoch || 0;
   const id = setInterval(() => {
     if ((this._championEpoch || 0) !== epoch) { clearInterval(id); this._championTimers.delete(id); return; }
-    fn();
+    this._asActor(fn);
   }, ms);
   this._championTimers.add(id);
   return id;
+};
+// 95차: 이 챔피언의 입장에서 실행(적 봇이면 봇, 플레이어면 플레이어) - 다른 챔피언 차례에 예약된 자기 타이머도 자기 것으로 판정한다.
+CharacterController.prototype._asActor = function(fn) {
+  return typeof withCombatActor === 'function' ? withCombatActor(this.isBot ? this : null, fn) : fn();
 };
 CharacterController.prototype._cancelChampionTimers = function() {
   this._championEpoch = (this._championEpoch || 0) + 1;

@@ -143,7 +143,7 @@ CharacterController.prototype._nautilusTickQTravel = function(dt) {
     const r = getCollisionRadius(u);
     const rel = new THREE.Vector3(up.x - t.origin.x, 0, up.z - t.origin.z);
     const along = rel.dot(t.dir);
-    if (along < 0 || along < prevTraveled - r || along > t.traveled + r) continue;
+    if (along < -r || along < prevTraveled - r || along > t.traveled + r) continue; // 95차: 닻 출발점에 몸이 걸친 대상(중심이 조금 뒤)도 맞는다 - 공용 직선 판정(findFirstInLine)과 같은 기준
     const lateral = Math.sqrt(Math.max(0, rel.lengthSq() - along * along));
     if (lateral > t.halfWidth + r) continue;
     const contact = Math.max(0, along - r); // 닻이 이 대상에 처음 닿는 진행 거리

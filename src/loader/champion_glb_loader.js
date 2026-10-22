@@ -202,6 +202,33 @@ function applyChampionCarry(c, carry) {
   }
 }
 
+// 닐라 무기(우루미) 리그 연결 - 95차: 적 챔피언 봇도 같이 쓴다.
+function attachNilahWeaponRig(ctrl, model) {
+  const findAny = (names) => { for (const n of names) { const o = model.getObjectByName(n); if (o) return o; } return null; };
+  // 요청("무기에 직접적으로 연결"): 끝 관절 2개만이 아니라 BladeA/B의
+  // 전체 뼈대 체인(각각 16개 + end)을 순서대로 모아둔다 - 이 체인을
+  // 그대로 이으면 실제 애니메이션이 만드는 채찍의 곡선을 정확히 따라
+  // 그릴 수 있다(별도 좌표계나 근사 곡선을 만들지 않는다).
+  const collectChain = (prefix) => {
+    const chain = [];
+    for (let i = 1; i <= 16; i++) { const o = model.getObjectByName(`${prefix}_${i}`); if (o) chain.push(o); }
+    const end = findAny([`${prefix}_end`]);
+    if (end) chain.push(end);
+    return chain;
+  };
+  ctrl._nilahWeaponRig = {
+    urumi: model.getObjectByName('Urumi'),
+    bladeRoot: model.getObjectByName('Blade_Root'),
+    bladeAEnd: findAny(['BladeA_end','BladeA_16','BladeA_15']),
+    bladeBEnd: findAny(['BladeB_end','BladeB_16','BladeB_15']),
+    bladeAChain: collectChain('BladeA'),
+    bladeBChain: collectChain('BladeB'),
+    trailSamples: [], lastTip: null, active: false,
+    sampleClock: 0, maxSamples: 20, trailRibbon: null
+  };
+}
+// 모델 원점 보정(아래 bootstrapChampion의 요네 설명 참고) - 95차: 적 챔피언 봇도 같이 쓴다.
+const MODEL_ORIGIN_CORRECTION = { yone: { x: -0.03977488, z: 0.12879331697463989 } };
 async function bootstrapChampion(gltf, fileName) {
   const carry = window.__resetNoCarry ? null : captureChampionCarry(typeof controller !== 'undefined' ? controller : null);
   window.__resetNoCarry = false; // resetGame(): 이전 챔피언 상태를 넘기지 않고 처음 상태로
@@ -234,7 +261,6 @@ async function bootstrapChampion(gltf, fileName) {
   // (X: +0.03977, Z: -0.15846-(-0.02966)=-0.12880)만큼 모델 전체가 밀려
   // 보인다. 1차 수정에서는 X축 차이만 잡고 더 큰 Z축 차이(약 3배 더 큼)를
   // 놓쳐서 여전히 어긋나 보였다 - 이번에 Z축까지 정확히 상쇄한다.
-  const MODEL_ORIGIN_CORRECTION = { yone: { x: -0.03977488, z: 0.12879331697463989 } };
   const originCorrection = MODEL_ORIGIN_CORRECTION[championId];
   if (originCorrection) { model.position.x += originCorrection.x; model.position.z += originCorrection.z; }
   model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -281,30 +307,7 @@ async function bootstrapChampion(gltf, fileName) {
 
   controller = new CharacterController(root, model, resolver, actionData);
   window.controller = controller;
-  if (championId === 'nilah') {
-    const findAny = (names) => { for (const n of names) { const o = model.getObjectByName(n); if (o) return o; } return null; };
-    // 요청("무기에 직접적으로 연결"): 끝 관절 2개만이 아니라 BladeA/B의
-    // 전체 뼈대 체인(각각 16개 + end)을 순서대로 모아둔다 - 이 체인을
-    // 그대로 이으면 실제 애니메이션이 만드는 채찍의 곡선을 정확히 따라
-    // 그릴 수 있다(별도 좌표계나 근사 곡선을 만들지 않는다).
-    const collectChain = (prefix) => {
-      const chain = [];
-      for (let i = 1; i <= 16; i++) { const o = model.getObjectByName(`${prefix}_${i}`); if (o) chain.push(o); }
-      const end = findAny([`${prefix}_end`]);
-      if (end) chain.push(end);
-      return chain;
-    };
-    controller._nilahWeaponRig = {
-      urumi: model.getObjectByName('Urumi'),
-      bladeRoot: model.getObjectByName('Blade_Root'),
-      bladeAEnd: findAny(['BladeA_end','BladeA_16','BladeA_15']),
-      bladeBEnd: findAny(['BladeB_end','BladeB_16','BladeB_15']),
-      bladeAChain: collectChain('BladeA'),
-      bladeBChain: collectChain('BladeB'),
-      trailSamples: [], lastTip: null, active: false,
-      sampleClock: 0, maxSamples: 20, trailRibbon: null
-    };
-  }
+  if (championId === 'nilah') attachNilahWeaponRig(controller, model);
   controller.healthBarLabelDiv = hpLabelDiv; // updateBars()에서 갱신, disposeCurrentChampion()에서 정리
   controller.skillAnimStore = skillAnimStore; // Q/W/E/R 다중 애니메이션 시퀀스 저장소(섹션 0-A2)
   controller.abilityResolver = abilityResolver; // 서브 상태/평타 오버라이드가 championAbilityDatabase를 참조하기 위함
@@ -1576,8 +1579,10 @@ function updateDummyAI(dt) {
 // 표시되고 위치가 그대로인 문제를 막기 위한 공통 지점.
 function tickPullEffects(dt) {
   // 죽음의 세계 격리와 무관하게 모든 유닛의 강제 이동을 진행한다(예전엔 모데카이저 R 중 바깥 유닛의 넉백이 멈췄다).
-  for (const u of getAllEnemyUnits(true)) {
-    const p = u._pullState;
+  // 95차: 적 챔피언 봇이 생기면서 플레이어·아군 더미도 끌려가거나 밀려날 수 있다 - 모든 챔피언과 아군 더미도 함께 진행한다.
+  const pullUnits = new Set([...getAllEnemyUnits(true), ...(typeof listChampionUnits === 'function' ? listChampionUnits() : []), ...(typeof placedAllies !== 'undefined' ? placedAllies : [])]);
+  for (const u of pullUnits) {
+    const p = u && u._pullState;
     if (!p) continue;
     // 요청("넥서스, 억제기 스킬로 안 끌어오게 하기") - 포탑/억제기/넥서스
     // 같은 구조물(isStructure)은 물리적으로 움직일 수 없는 대상이다.
@@ -1611,54 +1616,58 @@ function tickPullEffects(dt) {
     }
     if (t >= 1) { u._pullState = null; if (p.onComplete) p.onComplete(u); }
   }
-  // 플레이어 챔피언 자신에게도 같은 트윈을 쓸 수 있게 한다(요청: "돌진
-  // 스킬"이 순간이동 스냅이 아니라 실제로 이동하는 것처럼 보여야 함 - 리 신
-  // Q2 등). controller._dashState = {from, to, duration, elapsed}만 설정.
-  if (typeof controller !== 'undefined' && controller && controller._dashState) {
-    const p = controller._dashState;
-    const dashPrevPos = p.onTick ? controller.root.position.clone() : null; // 94차: 지나간 구간 판정용(onTick)
-    p.elapsed += dt;
-    let t = Math.min(1, p.elapsed / p.duration);
-    if (p.follow) {
-      // 35차: 대상을 따라가는 돌진(리 신 Q2) - 매 프레임 대상의 현재 지면 위치로 다시 겨누고, 그 프레임에 대상이
-      // 움직인 거리만큼 더 간다(날아가는 대상에게도 따라붙는다). 높이는 출발 높이(지면) 그대로.
-      const f = p.follow, tg = f.target, pos = controller.root.position;
-      const alive = tg && tg.hp > 0 && !tg.destroyed && !tg.isDead && tg.mesh;
-      if (alive) {
-        const tp = tg.mesh.position;
-        const prevTp = f.lastTargetPos.clone();
-        const moved = Math.hypot(tp.x - f.lastTargetPos.x, tp.z - f.lastTargetPos.z);
-        f.lastTargetPos.copy(tp);
-        const to = new THREE.Vector3(tp.x - pos.x, 0, tp.z - pos.z);
-        const dist = to.length();
-        const step = f.speed * dt + moved;
-        if (f.leashWorld && dist > f.leashWorld) {
-          // 81차: 대상이 사거리(리 신 Q2 2000) 밖으로 벗어나면 그 직전 위치로 마저 돌진하고 끝낸다.
-          p.follow = null; p.from = pos.clone(); p.to = new THREE.Vector3(prevTp.x, pos.y, prevTp.z);
-          p.elapsed = 0; p.duration = Math.max(0.05, getHorizontalDistance(p.from, p.to) / Math.max(1e-6, f.speed));
-          if (f.onLeash) f.onLeash();
-          t = 0;
-        } else if (dist <= f.stopDist + step) {
-          if (dist > f.stopDist) pos.addScaledVector(to.normalize(), dist - f.stopDist);
-          t = 1;
-        } else {
-          to.normalize();
-          pos.addScaledVector(to, step);
-          p.faceDir = to;
-        }
-      } else t = 1; // 대상이 죽거나 사라지면 그 자리에서 끝
-      pos.y = p.from.y;
-      if (p.follow) p.to.copy(pos); // 81차: 사거리 이탈로 일반 돌진으로 바뀐 프레임에는 목적지를 덮어쓰지 않는다
-    } else controller.root.position.lerpVectors(p.from, p.to, t);
-    if (p.faceDir && p.faceDir.lengthSq() > 1e-8) {
-      // 29차(요청 "리 신 Q2로 날아갈 때 날아가는 방향을 안 봄"): 예전엔 root.rotation.y(오일러)만 덮어썼다. 직전에
-      // faceDirectionInstant(쿼터니언)로 180° 돌아 있으면 오일러가 (π, 0, π)로 남아 있어, y만 바꾸면 정반대를 봤다.
-      controller.faceDirectionInstant(p.faceDir);
-    }
-    // 94차: 돌진 중 매 프레임 지나간 구간(이전 위치 → 지금 위치)을 알려 준다 - 레넥톤 E처럼 "지나가며 맞히는" 돌진이 쓴다.
-    if (p.onTick) { try { p.onTick(dashPrevPos, controller.root.position.clone()); } catch (e) { console.error('[DASH onTick]', e); } }
-    if (t >= 1) { controller._dashState = null; if (p.onArrive) p.onArrive(); }
+  if (typeof controller !== 'undefined' && controller) tickChampionDash(controller, dt);
+  if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b._dashState) withCombatActor(b, () => tickChampionDash(b, dt));
+}
+
+// 플레이어 챔피언 자신에게도 같은 트윈을 쓸 수 있게 한다(요청: "돌진
+// 스킬"이 순간이동 스냅이 아니라 실제로 이동하는 것처럼 보여야 함 - 리 신
+// Q2 등). ch._dashState = {from, to, duration, elapsed}만 설정. 95차: 적 챔피언 봇도 같은 함수(봇 입장에서 - onArrive 피해 출처).
+function tickChampionDash(ch, dt) {
+  if (!ch || !ch._dashState) return;
+  const p = ch._dashState;
+  const dashPrevPos = p.onTick ? ch.root.position.clone() : null; // 94차: 지나간 구간 판정용(onTick)
+  p.elapsed += dt;
+  let t = Math.min(1, p.elapsed / p.duration);
+  if (p.follow) {
+    // 35차: 대상을 따라가는 돌진(리 신 Q2) - 매 프레임 대상의 현재 지면 위치로 다시 겨누고, 그 프레임에 대상이
+    // 움직인 거리만큼 더 간다(날아가는 대상에게도 따라붙는다). 높이는 출발 높이(지면) 그대로.
+    const f = p.follow, tg = f.target, pos = ch.root.position;
+    const alive = tg && tg.hp > 0 && !tg.destroyed && !tg.isDead && tg.mesh;
+    if (alive) {
+      const tp = tg.mesh.position;
+      const prevTp = f.lastTargetPos.clone();
+      const moved = Math.hypot(tp.x - f.lastTargetPos.x, tp.z - f.lastTargetPos.z);
+      f.lastTargetPos.copy(tp);
+      const to = new THREE.Vector3(tp.x - pos.x, 0, tp.z - pos.z);
+      const dist = to.length();
+      const step = f.speed * dt + moved;
+      if (f.leashWorld && dist > f.leashWorld) {
+        // 81차: 대상이 사거리(리 신 Q2 2000) 밖으로 벗어나면 그 직전 위치로 마저 돌진하고 끝낸다.
+        p.follow = null; p.from = pos.clone(); p.to = new THREE.Vector3(prevTp.x, pos.y, prevTp.z);
+        p.elapsed = 0; p.duration = Math.max(0.05, getHorizontalDistance(p.from, p.to) / Math.max(1e-6, f.speed));
+        if (f.onLeash) f.onLeash();
+        t = 0;
+      } else if (dist <= f.stopDist + step) {
+        if (dist > f.stopDist) pos.addScaledVector(to.normalize(), dist - f.stopDist);
+        t = 1;
+      } else {
+        to.normalize();
+        pos.addScaledVector(to, step);
+        p.faceDir = to;
+      }
+    } else t = 1; // 대상이 죽거나 사라지면 그 자리에서 끝
+    pos.y = p.from.y;
+    if (p.follow) p.to.copy(pos); // 81차: 사거리 이탈로 일반 돌진으로 바뀐 프레임에는 목적지를 덮어쓰지 않는다
+  } else ch.root.position.lerpVectors(p.from, p.to, t);
+  if (p.faceDir && p.faceDir.lengthSq() > 1e-8) {
+    // 29차(요청 "리 신 Q2로 날아갈 때 날아가는 방향을 안 봄"): 예전엔 root.rotation.y(오일러)만 덮어썼다. 직전에
+    // faceDirectionInstant(쿼터니언)로 180° 돌아 있으면 오일러가 (π, 0, π)로 남아 있어, y만 바꾸면 정반대를 봤다.
+    ch.faceDirectionInstant(p.faceDir);
   }
+  // 94차: 돌진 중 매 프레임 지나간 구간(이전 위치 → 지금 위치)을 알려 준다 - 레넥톤 E처럼 "지나가며 맞히는" 돌진이 쓴다.
+  if (p.onTick) { try { p.onTick(dashPrevPos, ch.root.position.clone()); } catch (e) { console.error('[DASH onTick]', e); } }
+  if (t >= 1) { ch._dashState = null; if (p.onArrive) p.onArrive(); }
 }
 
 window.addEventListener('resize', () => {
@@ -1694,6 +1703,7 @@ function animate() {
     if (typeof gameSession !== 'undefined' && gameSession) gameSession.advance(dt);
     if (typeof advanceTurretGameClock === 'function') advanceTurretGameClock(dt); // 94차: 게임 시계 = 시뮬레이션 시간
     if (controller) { controller.update(dt); updateCameraTransform(cameraFocusPoint(controller.root.position, dt), dt); }
+    if (typeof updateEnemyBots === 'function') updateEnemyBots(dt); // 95차: 적 챔피언 봇(두뇌 → 컨트롤러)
     else updateCameraTransform(new THREE.Vector3(0,0,0), dt);
     updateMarkers(dt);
     updateDummyAI(dt);

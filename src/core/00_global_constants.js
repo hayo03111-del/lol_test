@@ -556,9 +556,31 @@ const DAMAGE_TYPE = { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' };
 // "받는" 피해에 적용되는 버그가 있었다.
 function resolveDamageSource(source, target) {
   if (source) return source;
-  if (typeof controller === 'undefined' || !controller || target === controller) return null;
-  return controller;
+  const actor = combatPerspective(); // 95차: 적 챔피언 봇의 스킬이면 봇(예전엔 항상 플레이어로 잡혀 봇 피해가 플레이어 것이 됐다)
+  if (!actor || target === actor) return null;
+  return actor;
 }
+// 95차: 적 챔피언 봇 목록(world/enemy_bot.js가 채운다) - 메인 루프가 그 파일보다 먼저 시작하므로 여기서 만든다.
+const enemyBots = [];
+// 95차: 지금 판정하는 쪽 - 적 챔피언 봇이 행동 중이면 그 봇(00_game_clock.js의 전투 행위자), 아니면 플레이어(전역 controller).
+function combatPerspective() {
+  const a = typeof __combatActor !== 'undefined' ? __combatActor : null;
+  if (a) return a;
+  return typeof controller !== 'undefined' ? controller : null;
+}
+// 95차: 플레이어 외 챔피언(적 봇)이 행동 중인가 - 플레이어 화면(HUD·대상 표시·알림)을 건드리지 않게 할 때 쓴다.
+function isBotActing() {
+  const a = typeof __combatActor !== 'undefined' ? __combatActor : null;
+  return !!(a && a.isBot);
+}
+// 95차: 전장의 모든 챔피언(플레이어 + 적 챔피언 봇). 죽은 챔피언도 들어 있다 - 쓰는 쪽이 생존을 본다.
+function listChampionUnits() {
+  const out = [];
+  if (typeof controller !== 'undefined' && controller) out.push(controller);
+  if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b) out.push(b);
+  return out;
+}
+function isChampionAlive(c) { return !!(c && c.hp > 0 && c.state !== STATE.DEAD && c.state !== STATE.RESPAWN); }
 
 // 요청 16: 방어력/마법저항 공식 100/(100+armor). TRUE 데미지는 저항 무시.
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
@@ -744,6 +766,7 @@ function applyDamage(target, result) {
   // 59차 도움 요청: 적 챔피언이 아군 챔피언(허수아비 포함)에게 피해를 주면 근처 포탑·미니언이 그 챔피언을 노린다.
   if (target.isChampion && dmgSource && dmgSource !== target && (dmgSource.isChampion || typeof dmgSource.championId === 'string')
       && typeof notifyChampionAttackedChampion === 'function') notifyChampionAttackedChampion(dmgSource, target);
+  if (target.isChampion && typeof recordChampionContribution === 'function') recordChampionContribution(target, dmgSource); // 95차: 처치·어시스트 관여
   // 83차: 흡혈은 대상의 피해 감소까지 적용된 피해(보호막 흡수 전) 기준. takeDamage가 있는 대상(플레이어)은 피해 감소를
   // takeDamage 안에서 곱하므로 여기서 같은 비율로 맞춘다(예전엔 감소 전 피해로 흡혈해 과다 회복).
   let vampBase = finalDmg;

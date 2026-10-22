@@ -201,7 +201,8 @@ CharacterController.prototype._die = function() {
     this.attackOrderActive = false; this.attackOrderAnchor = null; this._autoAcquired = false; this._approachCast = null; this._bufferedSummoner = null; this._castLock = null;
     targetRing.clear();
     this.setState(STATE.DEAD);
-    if (typeof ensureScore === 'function' && typeof controller !== 'undefined' && controller === this) ensureScore(this).deaths += 1; // 34차 스코어보드
+    if (typeof ensureScore === 'function') ensureScore(this).deaths += 1; // 34차 스코어보드(95차: 적 봇 포함)
+    if (typeof rewardChampionKill === 'function') rewardChampionKill(this); // 95차: 처치·어시스트 골드·경험치
     vfx.spawn('death', this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)));
     this.playFirstAvailable(this.actionData.death.clips, { loop:THREE.LoopOnce, fade:0.1, clampWhenFinished:true });
     const waitSec = (typeof ARAM_DEATH_TIMER_BY_LEVEL !== 'undefined' && ARAM_DEATH_TIMER_BY_LEVEL[this.champLevel]) || RESPAWN_WAIT; // 83차: 레벨별 부활 시간

@@ -4,6 +4,74 @@ import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 
+/* ===== src/core/00_game_clock.js ===== */
+/* 00_game_clock.js — 95차: 게임 시계(일시정지)와 전투 행위자 문맥
+ *
+ * 1) 게임 시계: 이 번들 안의 모든 코드는 performance.now()·setTimeout·setInterval을 이 파일의 것으로 쓴다(같은 모듈 범위에서 가린다).
+ *    - performance.now(): 실제 시간에서 "일시정지로 멈춰 있던 시간"을 뺀 값. 일시정지하지 않으면 실제 시간과 같다(브라우저 점검 스크립트의
+ *      시각과도 같음). 그래서 상태 효과 만료·재사용 대기·스킬 타이머가 일시정지 중에 흐르지 않는다(예전엔 일시정지 중에 끝났다).
+ *    - setTimeout: 예약한 게임 시각이 될 때 실행한다. 일시정지 중에 시간이 되면 풀릴 때까지 미룬다.
+ *    - setInterval: 일시정지 중의 실행은 건너뛴다.
+ *    프레임 dt가 0.05초로 잘리는 아주 느린 화면(20fps 미만)에서는 이 시계가 이동(dt)보다 빨리 간다 - 게임 규칙 시계(웨이브·포탑,
+ *    turret_system.js의 시뮬레이션 시계)는 dt 누적이고, 이 시계는 일시정지만 빼는 실제 시간이다(README 95차).
+ *
+ * 2) 전투 행위자: "지금 누구의 입장에서 판정하는가". 판정 함수(getAllEnemyUnits 등)와 피해 출처 기본값이 이것을 본다.
+ *    플레이어 차례면 null(= 전역 controller), 적 챔피언 봇이 움직이거나 스킬을 쓰는 동안에는 그 봇이다.
+ *    setTimeout/setInterval은 예약하던 순간의 행위자를 기억했다가 실행할 때 되살린다 - 봇 스킬의 지연 피해도 봇의 것이 된다.
+ *    투사체는 projectile_system.js가 발사 순간의 행위자를 기억한다.
+ */
+let __combatActor = null;
+function withCombatActor(actor, fn) {
+  const prev = __combatActor;
+  __combatActor = actor || null;
+  try { return fn(); } finally { __combatActor = prev; }
+}
+
+let __gcPausedTotalMs = 0, __gcPauseStartedAt = null;
+function gameClockSetPaused(p) {
+  const t = globalThis.performance.now();
+  if (p && __gcPauseStartedAt == null) __gcPauseStartedAt = t;
+  else if (!p && __gcPauseStartedAt != null) { __gcPausedTotalMs += t - __gcPauseStartedAt; __gcPauseStartedAt = null; }
+}
+function gameClockIsPaused() { return __gcPauseStartedAt != null; }
+const performance = {
+  now() { return (__gcPauseStartedAt != null ? __gcPauseStartedAt : globalThis.performance.now()) - __gcPausedTotalMs; },
+};
+
+// 아래 네 함수는 const로 둔다 - 함수 선언이면 일반 스크립트에서 전역(globalThis.setTimeout)을 덮어써 자기 자신을 부르게 된다.
+const __gcTimers = new Map();
+let __gcTimerSeq = 0;
+const setTimeout = function setTimeout(fn, ms = 0, ...args) {
+  if (typeof fn !== 'function') return globalThis.setTimeout(fn, ms, ...args);
+  const id = ++__gcTimerSeq, actor = __combatActor;
+  const wait = Math.max(0, Number(ms) || 0);
+  const due = performance.now() + wait;
+  const fire = () => {
+    // 일시정지 중이거나(멈춘 시간만큼 뒤로 밀렸다) 아직 게임 시각이 안 됐으면 다시 기다린다.
+    if (gameClockIsPaused()) { __gcTimers.set(id, globalThis.setTimeout(fire, 50)); return; }
+    const left = due - performance.now();
+    if (left > 1) { __gcTimers.set(id, globalThis.setTimeout(fire, left)); return; }
+    __gcTimers.delete(id);
+    withCombatActor(actor, () => fn(...args));
+  };
+  __gcTimers.set(id, globalThis.setTimeout(fire, wait));
+  return id;
+}
+const setInterval = function setInterval(fn, ms = 0, ...args) {
+  if (typeof fn !== 'function') return globalThis.setInterval(fn, ms, ...args);
+  const id = ++__gcTimerSeq, actor = __combatActor;
+  __gcTimers.set(id, globalThis.setInterval(() => { if (!gameClockIsPaused()) withCombatActor(actor, () => fn(...args)); }, ms));
+  return id;
+}
+const clearTimeout = function clearTimeout(id) {
+  const h = __gcTimers.get(id);
+  if (h !== undefined) { globalThis.clearTimeout(h); __gcTimers.delete(id); }
+}
+const clearInterval = function clearInterval(id) {
+  const h = __gcTimers.get(id);
+  if (h !== undefined) { globalThis.clearInterval(h); __gcTimers.delete(id); }
+}
+
 /* ===== src/core/00_global_constants.js ===== */
 /* ============================================================
    0. GLOBAL CONSTANTS
@@ -563,9 +631,31 @@ const DAMAGE_TYPE = { PHYSICAL: 'PHYSICAL', MAGICAL: 'MAGICAL', TRUE: 'TRUE' };
 // "받는" 피해에 적용되는 버그가 있었다.
 function resolveDamageSource(source, target) {
   if (source) return source;
-  if (typeof controller === 'undefined' || !controller || target === controller) return null;
-  return controller;
+  const actor = combatPerspective(); // 95차: 적 챔피언 봇의 스킬이면 봇(예전엔 항상 플레이어로 잡혀 봇 피해가 플레이어 것이 됐다)
+  if (!actor || target === actor) return null;
+  return actor;
 }
+// 95차: 적 챔피언 봇 목록(world/enemy_bot.js가 채운다) - 메인 루프가 그 파일보다 먼저 시작하므로 여기서 만든다.
+const enemyBots = [];
+// 95차: 지금 판정하는 쪽 - 적 챔피언 봇이 행동 중이면 그 봇(00_game_clock.js의 전투 행위자), 아니면 플레이어(전역 controller).
+function combatPerspective() {
+  const a = typeof __combatActor !== 'undefined' ? __combatActor : null;
+  if (a) return a;
+  return typeof controller !== 'undefined' ? controller : null;
+}
+// 95차: 플레이어 외 챔피언(적 봇)이 행동 중인가 - 플레이어 화면(HUD·대상 표시·알림)을 건드리지 않게 할 때 쓴다.
+function isBotActing() {
+  const a = typeof __combatActor !== 'undefined' ? __combatActor : null;
+  return !!(a && a.isBot);
+}
+// 95차: 전장의 모든 챔피언(플레이어 + 적 챔피언 봇). 죽은 챔피언도 들어 있다 - 쓰는 쪽이 생존을 본다.
+function listChampionUnits() {
+  const out = [];
+  if (typeof controller !== 'undefined' && controller) out.push(controller);
+  if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b) out.push(b);
+  return out;
+}
+function isChampionAlive(c) { return !!(c && c.hp > 0 && c.state !== STATE.DEAD && c.state !== STATE.RESPAWN); }
 
 // 요청 16: 방어력/마법저항 공식 100/(100+armor). TRUE 데미지는 저항 무시.
 // 요청 17: 치명타는 호출부(Release 시점)에서 이미 확정되어 isCritical로
@@ -751,6 +841,7 @@ function applyDamage(target, result) {
   // 59차 도움 요청: 적 챔피언이 아군 챔피언(허수아비 포함)에게 피해를 주면 근처 포탑·미니언이 그 챔피언을 노린다.
   if (target.isChampion && dmgSource && dmgSource !== target && (dmgSource.isChampion || typeof dmgSource.championId === 'string')
       && typeof notifyChampionAttackedChampion === 'function') notifyChampionAttackedChampion(dmgSource, target);
+  if (target.isChampion && typeof recordChampionContribution === 'function') recordChampionContribution(target, dmgSource); // 95차: 처치·어시스트 관여
   // 83차: 흡혈은 대상의 피해 감소까지 적용된 피해(보호막 흡수 전) 기준. takeDamage가 있는 대상(플레이어)은 피해 감소를
   // takeDamage 안에서 곱하므로 여기서 같은 비율로 맞춘다(예전엔 감소 전 피해로 흡혈해 과다 회복).
   let vampBase = finalDmg;
@@ -872,6 +963,7 @@ const CC_TYPES = new Set(['STUN', 'ROOT', 'SLOW', 'SILENCE', 'ARMOR_SHRED', 'MR_
 function unitLabel(u) {
   if (typeof dummy !== 'undefined' && u === dummy) return '더미 타겟';
   if (typeof controller !== 'undefined' && u === controller) return controller.championId || '플레이어';
+  if (u && u.isBot) return `${u.championId}(적)`;
   return '유닛';
 }
 function ensureStatusHost(u) {
@@ -887,6 +979,9 @@ function applyStatus(target, effect) {
   // 0초 효과도 군중 제어 훅(가렌 패시브 초기화·아이템 발동)을 실행했다.
   if (!effect || !(effect.duration > 0)) { if (effect) console.warn('[STATUS] 잘못된 지속시간 - 무시', effect.id, effect.type, effect.duration); return null; }
   ensureStatusHost(target);
+  // 95차: 건 쪽(source)이 비어 있으면 지금 행동 중인 챔피언(플레이어 또는 적 봇)으로 채운다 - 피해 출처 기본값(resolveDamageSource)과
+  // 같은 규칙. 예전엔 다리우스 출혈처럼 source 없이 건 지속 피해가 틱마다 "출처 없음"이 돼, 봇이 건 출혈이 처치·관통에 잡히지 않았다.
+  if (!effect.source && typeof combatPerspective === 'function') { const a = combatPerspective(); if (a && a !== target) effect = { ...effect, source: a }; }
   // 요청 7/8/34: 세트 R 시퀀스 진행 중(캐스트~착지 완료)에는 세트 자신이
   // Unstoppable(저지불가) 상태다 - 새 CC 면역 시스템을 따로 만들지 않고,
   // CC 계열 상태이상(STUN/ROOT/SLOW/SILENCE/ARMOR_SHRED)이 "세트 자신"에게
@@ -894,7 +989,7 @@ function applyStatus(target, effect) {
   // 붙잡은 "대상"에게 거는 제압(STUN)은 target이 세트 자신이 아니라
   // 붙잡힌 상대이므로 전혀 영향받지 않는다(요청 8: "저지불가는 세트에게만
   // 적용, 주변 적은 정상 CC 상태 유지").
-  if (CC_TYPES.has(effect.type) && typeof controller !== 'undefined' && target === controller && controller._sett && controller._sett.rSeq) {
+  if (CC_TYPES.has(effect.type) && target && target._sett && target._sett.rSeq) { // 95차: 플레이어만이 아니라 세트라면 누구든(적 봇 포함)
     console.log(`[CC BLOCKED - UNSTOPPABLE] ${effect.type} 무시됨 (세트 R 진행 중)`);
     return null;
   }
@@ -952,6 +1047,7 @@ function applyStatus(target, effect) {
   if (CC_TYPES.has(effect.type)) {
     console.log(`[CC]\nTarget: ${unitLabel(target)}\nType: ${effect.type}\nDuration: ${effDuration}`); // 강인함 적용 후 실제 지속시간(디버깅 혼동 방지)
     refreshUnitCcTags(target);
+    if (target.isChampion && typeof recordChampionContribution === 'function') recordChampionContribution(target, effect.source); // 95차: 행동 제한도 어시스트 관여
     // 버그 수정(가렌 패시브 "끈질긴 방어자" - 곧 추가될 멀티플레이 대비):
     // passiveState에 lastEnemySkillHitAt 필드가 이미 선언돼 있었지만
     // (생성자 참고) 실제로 이 값을 갱신하는 코드가 파일 어디에도 없었다 -
@@ -982,7 +1078,7 @@ function applyStatus(target, effect) {
   // 패시브도 이 훅 하나로 처리한다.
   if (target.isChampion && ['SLOW', 'STUN', 'ROOT', 'KNOCKUP', 'SUPPRESSION', 'CHARM', 'FEAR', 'TAUNT'].includes(effect.type)
       && typeof itemOnSlowOrImmobilize === 'function') {
-    const attacker = effect.source || (typeof controller !== 'undefined' ? controller : null);
+    const attacker = effect.source || (typeof combatPerspective === 'function' ? combatPerspective() : (typeof controller !== 'undefined' ? controller : null)); // 95차: 봇이 건 효과는 봇
     if (attacker && attacker !== target) itemOnSlowOrImmobilize(attacker, target, effect.type);
   }
   return rec;
@@ -1304,35 +1400,31 @@ function getAllEnemyUnits(ignoreRealm = false) { // ignoreRealm: 죽음의 세�
   // 전부에 자동으로 적용되게 한다(요청 21 "같은 기능의 새 시스템을 중복으로
   // 만들지 마라"와 일치). 모데카이저가 아니거나 죽음의 세계 상태가 아니면
   // 기존 동작 그대로다 - 다른 챔피언에는 전혀 영향 없음.
-  if (!ignoreRealm && typeof controller !== 'undefined' && controller && controller.championId === 'mordekaiser'
-      && controller._morde && controller._morde.isInDeathRealm) {
-    const t = controller._morde.rTarget;
+  // 95차: "누구의 적인가"는 지금 판정하는 챔피언(플레이어 또는 행동 중인 적 챔피언 봇 - combatPerspective) 기준이다.
+  const me = typeof combatPerspective === 'function' ? combatPerspective() : (typeof controller !== 'undefined' ? controller : null);
+  if (!ignoreRealm && me && me.championId === 'mordekaiser' && me._morde && me._morde.isInDeathRealm) {
+    const t = me._morde.rTarget;
     // 구조물은 모든 세계에 존재한다(PC 위키) - 안에서도 구조물은 칠 수 있다.
     return [...((t && t.hp > 0) ? [t] : []), ...getAllEnemyUnits(true).filter((u) => u.isStructure)];
   }
+  const myTeam = (me && me.team) || PLAYER_TEAM;
+  const foe = (u) => (u.team || ENEMY_TEAM) !== myTeam; // 팀이 없던 시절의 허수아비는 적 팀으로 친다
   const list = [];
-  if (typeof dummy !== 'undefined' && dummy && dummy.hp > 0) list.push(dummy);
-  // 요청: 사용자가 직접 설치한 허수아비들. 이 배열 하나에만 추가하면
-  // findEnemiesInRadius/findFirstInLine/기본 공격 등 이 함수를 쓰는 모든
-  // 판정이 자동으로 다중 대상을 인식한다(별도 판정 로직을 새로 만들지 않음).
-  // (더미는 team===ENEMY_TEAM이라 항상 플레이어의 적이지만, 위 두 push는
-  // team이 없던 시절부터의 기존 무조건 포함 로직을 그대로 유지한다 -
-  // 아래 구조물/미니언처럼 team 비교로 걸러도 결과는 똑같다.)
+  // 연습용 허수아비(가운데 dummy + 직접 놓은 placedDummies)는 적 팀(RED) - 플레이어에게만 적이고, 적 봇에게는 아군이다.
+  if (typeof dummy !== 'undefined' && dummy && dummy.hp > 0 && foe(dummy)) list.push(dummy);
   if (typeof placedDummies !== 'undefined') {
-    for (const d of placedDummies) if (d && d.hp > 0) list.push(d);
+    for (const d of placedDummies) if (d && d.hp > 0 && foe(d)) list.push(d);
   }
-  // 아군/적군/플레이어 시스템 - 챔피언(플레이어)의 기본 공격/스킬(범위/
-  // 직선/AOE 전부 이 함수 하나를 공용으로 거친다)에 적 진영 미니언/포탑/
-  // 억제기/넥서스를 포함시킨다. 예전에는 "항상 RED와만 적대한다"는 가정을
-  // 문자열 리터럴 'RED'로 하드코딩했지만, 이제 플레이어 자신의 `.team`
-  // (PLAYER_TEAM)과 generic하게 비교한다(isEnemyUnit과 동일한 "team이
-  // 다르면 적" 원칙 - 00_global_constants.js) - controller가 아직 없으면
-  // (챔피언 로드 전) PLAYER_TEAM으로 폴백해 기존
-  // 동작을 그대로 유지한다. 아군(같은 팀) 미니언/구조물은 애초에 후보에
-  // 들어가지 않으므로 "아군은 공격 불가"(요청 20-B) 요구가 자동으로
-  // 만족된다. 새 탐색 시스템을 만들지 않고 기존 findEnemiesInRadius/
-  // findFirstInLine이 전부 이 함수만 거치는 구조를 그대로 재사용한다(요청 20-C).
-  const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM;
+  // 아군 더미(플레이어 팀)는 적 봇의 적이다.
+  if (myTeam !== PLAYER_TEAM && typeof placedAllies !== 'undefined') {
+    for (const a of placedAllies) if (a && a.hp > 0 && foe(a)) list.push(a);
+  }
+  // 챔피언(플레이어·적 챔피언 봇): 살아 있고 팀이 다르면.
+  if (typeof listChampionUnits === 'function') {
+    for (const c of listChampionUnits()) if (c !== me && foe(c) && isChampionAlive(c)) list.push(c);
+  }
+  // 아군/적군/플레이어 시스템 - 적 진영 미니언/포탑/억제기/넥서스("team이 다르면 적" - isEnemyUnit과 같은 원칙).
+  // 아군(같은 팀) 미니언/구조물은 후보에 들어가지 않으므로 "아군은 공격 불가"(요청 20-B)가 자동으로 만족된다.
   if (typeof turrets !== 'undefined') {
     for (const t of turrets) if (t.team && t.team !== myTeam && !t.destroyed && !t.isUntargetable) list.push(t);
   }
@@ -1361,6 +1453,7 @@ function getAllEnemyUnits(ignoreRealm = false) { // ignoreRealm: 죽음의 세�
 // 시야 시스템 추가 범위에는 포함되지 않는다(명시적 한계 - README 참고).
 function getTargetableEnemyUnits() {
   const all = getAllEnemyUnits();
+  if (typeof isBotActing === 'function' && isBotActing()) return all; // 95차: 적 봇은 시야 제한 없이 본다(간단한 AI - README 95차)
   if (typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled) return all;
   return all.filter((u) => visionSystem.isVisible(u));
 }
@@ -1430,6 +1523,7 @@ function debugSkillMiss(label, reason) {
 // 콘솔을 안 열어봐도 "왜 스킬이 안 나가는지" 화면에서 바로 보이도록 하는
 // 토스트. [SKILL BLOCKED]/[SKILL MISS] 두 종류 모두 여기로 모은다.
 function showSkillToast(message) {
+  if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   const el = document.getElementById('skillToast');
   if (!el) return;
   const msg = document.createElement('div');
@@ -1620,16 +1714,23 @@ const placedAllies = [];
 globalThis.placedAllies = placedAllies; // 닐라 패시브(_nilahAllyCandidates)가 이 이름으로 찾는다
 
 // source(보통 플레이어)를 제외한 살아 있는 아군 챔피언.
+// 95차: 아군 후보는 판정하는 쪽(source, 없으면 지금 행동 중인 챔피언)과 같은 팀의 아군 더미·챔피언(적 챔피언 봇의 아군은 다른 적 봇).
+function _allyCandidates(source) {
+  const me = source || (typeof combatPerspective === 'function' ? combatPerspective() : null);
+  const team = (me && me.team) || PLAYER_TEAM;
+  const list = [...placedAllies, ...(typeof listChampionUnits === 'function' ? listChampionUnits() : [])];
+  return list.filter((a) => a && a !== me && (a.team || PLAYER_TEAM) === team && a.hp > 0 && a.state !== 'DEAD');
+}
 function getAllyChampions(source = null) {
   const out = [];
-  for (const a of placedAllies) if (a && a.hp > 0 && a !== source && (!source || typeof canRealmInteract !== 'function' || canRealmInteract(source, a))) out.push(a); // 죽음의 세계 안에서는 바깥 아군과 상호작용 불가
+  for (const a of _allyCandidates(source)) if (!source || typeof canRealmInteract !== 'function' || canRealmInteract(source, a)) out.push(a); // 죽음의 세계 안에서는 바깥 아군과 상호작용 불가
   return out;
 }
 
 function findAlliesInRadius(center, lolRadius, { exclude = [] } = {}) {
   const radius = lolRangeToWorld(lolRadius);
   const out = [];
-  for (const a of placedAllies) {
+  for (const a of _allyCandidates(null)) {
     if (!a || a.hp <= 0 || exclude.includes(a)) continue;
     const d = getHorizontalDistance(getWorldPosition(a), getWorldPosition(center) || center);
     if (d <= radius + getCollisionRadius(a)) out.push({ unit: a, distance: d });
@@ -1640,9 +1741,9 @@ function findAlliesInRadius(center, lolRadius, { exclude = [] } = {}) {
 
 // 아군의 보호막은 여러 출처를 따로 들고 있다가(지속시간/감쇠가 서로 다름)
 // 합계를 a.shield에 반영한다.
-function _allyRecomputeShield(a) {
-  a.shield = (a.shieldEntries || []).reduce((s, e) => s + e.amount, 0);
-}
+// 95차: 보호막 구현을 하나로 - 아군 보호막도 공용 보호막(shield_system.js: addShield·absorbShieldDamage·tickShields)을 쓴다.
+// 예전엔 아군 더미 전용 목록·흡수·감소 코드가 따로 있어 두 구현이 조금씩 달랐다(적 챔피언 봇의 아군인 봇에도 같은 경로).
+function _allyRecomputeShield(a) { recomputeShield(a); }
 
 // 아군에게 회복을 준다. 대상의 받는 회복 배율(정령의형상/그리버스)을 적용하고
 // 실제 회복량을 돌려준다. noItemHook은 월석재생기 연쇄처럼 "회복이 다시
@@ -1663,10 +1764,7 @@ function healAlly(source, target, amount, { noItemHook = false } = {}) {
 function shieldAlly(source, target, amount, durationSec, { decay = false, id = null, noItemHook = false } = {}) {
   if (!target || target.hp <= 0 || !(amount > 0)) return 0;
   const eff = amount * getShieldReceivedMultiplier(target);
-  target.shieldEntries = target.shieldEntries || [];
-  if (id) target.shieldEntries = target.shieldEntries.filter((e) => e.id !== id);
-  target.shieldEntries.push({ id, amount: eff, expiresAt: performance.now() + durationSec * 1000, decayPerSec: decay && durationSec > 0 ? eff / durationSec : 0 });
-  _allyRecomputeShield(target);
+  if (!addShield(target, id, eff, durationSec, { decay })) return 0;
   if (!noItemHook && source && typeof itemOnAllyHealOrShield === 'function') itemOnAllyHealOrShield(source, target, 'shield', eff, { durationSec, decay });
   return eff;
 }
@@ -1682,29 +1780,15 @@ function allyAbsorbIncoming(a, dmg, result) {
     remaining = Math.max(0, remaining - a._dreamBlue.amount);
     a._dreamBlue = null;
   }
-  // 83차: 먼저 만료되는 보호막부터(원작). 피해 종류 전용 보호막은 그 종류만, 같은 종류면 먼저 깎인다.
-  const dType = (result && result.damageType) || null;
-  const sorted = (a.shieldEntries || []).slice().sort((x, y) => (x.expiresAt || Infinity) - (y.expiresAt || Infinity));
-  const order = sorted.filter((e) => e.onlyType && e.onlyType === dType).concat(sorted.filter((e) => !e.onlyType));
-  for (const e of order) {
-    if (remaining <= 0) break;
-    const take = Math.min(e.amount, remaining);
-    e.amount -= take; remaining -= take;
-  }
-  if (a.shieldEntries) a.shieldEntries = a.shieldEntries.filter((e) => e.amount > 1e-6);
-  _allyRecomputeShield(a);
-  return remaining;
+  // 83차: 먼저 만료되는 보호막부터(원작). 피해 종류 전용 보호막은 그 종류만, 같은 종류면 먼저 깎인다(공용 absorbShieldDamage).
+  return absorbShieldDamage(a, remaining, (result && result.damageType) || null);
 }
 
 function tickAllyUnits(dt) {
   const now = performance.now();
   for (const a of placedAllies) {
     if (!a) continue;
-    if (a.shieldEntries && a.shieldEntries.length) {
-      for (const e of a.shieldEntries) if (e.decayPerSec > 0) e.amount = Math.max(0, e.amount - e.decayPerSec * dt);
-      a.shieldEntries = a.shieldEntries.filter((e) => e.expiresAt > now && e.amount > 1e-6);
-      _allyRecomputeShield(a);
-    }
+    tickShields(a, dt);
     if (a._dreamBlue && a._dreamBlue.expiresAt <= now) a._dreamBlue = null;
     if (a._dreamPurple && a._dreamPurple.expiresAt <= now) a._dreamPurple = null;
     if (typeof a.onTick === 'function') a.onTick(dt);
@@ -9777,6 +9861,9 @@ class ProjectileSystem {
     entry.group.scale.setScalar(scale); // 59차: 포탑 가열 단계마다 탄이 굵어진다(풀에서 다시 쓸 때도 매번 새로 맞춘다)
     if (!hidden) this.scene.add(entry.group);
     const proj = { mesh: entry.group, _meshEntry: entry, speed, damage, target: line ? null : target, targetPoint: targetPoint ? targetPoint.clone() : null, color, realmId, onHit, fromTurret, team, life: 2.5, hasHit: false, done: false };
+    // 95차: 쏜 쪽 - 행위자(적 봇이면 봇, 플레이어 차례면 null)와 그 팀(팀 없는 플레이어 투사체는 플레이어 팀).
+    proj.actor = (typeof __combatActor !== 'undefined' && __combatActor) || null;
+    proj.ownerTeam = team || (proj.actor && proj.actor.team) || (typeof controller !== 'undefined' && controller && controller.team) || null;
     if (line) {
       const dir = line.dir.clone().setY(0).normalize();
       proj.line = { dir, origin: from.clone(), maxDist: line.maxDist, halfWidth: line.halfWidth, filter: line.filter || null, onMiss: line.onMiss || null, traveled: 0, pierce: !!line.pierce || line.maxHits > 1, maxHits: line.maxHits || 0, hitSet: new Set(), hits: 0 };
@@ -9872,44 +9959,53 @@ class ProjectileSystem {
   update(dt) {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
-      proj.life -= dt;
-      // 버그 수정(요청 27): 포탑 공격/광선은 막지 않는다 - fromTurret 발사체는
-      // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
-      // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
-      // 94차: 적 팀 투사체만 막는다(팀이 없는 투사체 = 플레이어가 쏜 것 - 예전엔 자기 표식 눈덩이도 막혔다). 장막 두께(±0.45)를
-      // 한 프레임에 건너뛰는 빠른 투사체도 막도록 지난 프레임과 이번 프레임 사이에 장막 면을 지났는지도 본다(연속 판정).
-      if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret && proj.team && proj.team !== controller.team) {
-        const wall=controller._yasuo.windwall, wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, yasuoWindwallOffsetWorld(wall)), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x);
+      // 95차: 쏜 챔피언(적 봇이면 봇)의 입장에서 판정·적중 처리를 한다(직선 스킬샷의 적 목록, 적중 콜백의 피해 출처).
+      if (proj.actor && typeof withCombatActor === 'function') withCombatActor(proj.actor, () => this._updateOne(proj, i, dt));
+      else this._updateOne(proj, i, dt);
+    }
+  }
+  _updateOne(proj, i, dt) {
+    proj.life -= dt;
+    // 버그 수정(요청 27): 포탑 공격/광선은 막지 않는다 - fromTurret 발사체는
+    // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
+    // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
+    // 94차: 적 팀 투사체만 막는다(팀이 없는 투사체 = 플레이어가 쏜 것 - 예전엔 자기 표식 눈덩이도 막혔다). 장막 두께(±0.45)를
+    // 한 프레임에 건너뛰는 빠른 투사체도 막도록 지난 프레임과 이번 프레임 사이에 장막 면을 지났는지도 본다(연속 판정).
+    // 95차: 바람 장막은 플레이어뿐 아니라 적 봇 야스오의 것도 막는다 - 쏜 쪽 팀(ownerTeam)이 장막 주인과 다른 투사체만.
+    if (proj.mesh && !proj.fromTurret && proj.ownerTeam) {
+      for (const y of (typeof listChampionUnits === 'function' ? listChampionUnits() : (typeof controller !== 'undefined' && controller ? [controller] : []))) {
+        if (y?.championId !== 'yasuo' || !y._yasuo?.windwall || proj.ownerTeam === y.team) continue;
+        const wall=y._yasuo.windwall, wp=(wall.origin||y.root.position).clone().addScaledVector(wall.dir, yasuoWindwallOffsetWorld(wall)), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x);
         const crossed = proj._wwAlong != null && Math.sign(proj._wwAlong) !== Math.sign(along) && Math.max(side, proj._wwSide ?? side) <= wall.width*0.5;
         proj._wwAlong = along; proj._wwSide = side;
-        if((Math.abs(along)<=0.45 && side<=wall.width*0.5) || crossed){ this._remove(i, true); continue; }
+        if((Math.abs(along)<=0.45 && side<=wall.width*0.5) || crossed){ this._remove(i, true); return; }
       }
-      if (proj.line) { this._updateLine(proj, i, dt); continue; }
-      const aim = this._currentAimPoint(proj);
-      if (!aim || proj.life <= 0) { this._remove(i, true); continue; }
-      const toAim = new THREE.Vector3().subVectors(aim, proj.mesh.position);
-      const dist = toAim.length();
-      const step = proj.speed * dt;
-      if (dist <= Math.max(step, 0.3)) {
-        // Phase 2 요청 17 - 발사 시점 realm과 명중 시점 target의 realm이
-        // 다르면(예: 비행 중 모데카이저 R로 target이 죽음의 세계로 끌려감)
-        // 명중을 취소한다. realmId를 안 넘긴 기존 호출부는 둘 다 'main'
-        // 취급이라 이 검사가 사실상 항상 통과해서 기존 동작과 동일하다.
-        const realmOk = canRealmInteract({ realmId: proj.realmId }, proj.target);
-        // 90차(QA): 도착했을 때 대상이 비대상(마스터 이 Q 등)이거나 이미 죽었으면 피해·적중 효과(둔화·흡혈·아이템·룬) 없이 사라진다.
-        const t = proj.target, hittable = !proj._lost && t && t.hp > 0 && !t.isDead && !t.destroyed && !t.isUntargetable;
-        if (hittable && proj.onHit && realmOk) { proj.onHit(t); this.totalHits++; }
-        else { this.totalMisses++; this._evMiss(proj); }
-        this.vfx.spawn('hit', proj.mesh.position.clone(), new THREE.Vector3(), { color: proj.color });
-        proj.done = true;
-        this._releaseArrowMesh(proj._meshEntry);
-        this.projectiles.splice(i, 1);
-        continue;
-      }
-      toAim.normalize();
-      proj.mesh.position.addScaledVector(toAim, step);
-      this._orient(proj);
     }
+    if (proj.line) { this._updateLine(proj, i, dt); return; }
+    const aim = this._currentAimPoint(proj);
+    if (!aim || proj.life <= 0) { this._remove(i, true); return; }
+    const toAim = new THREE.Vector3().subVectors(aim, proj.mesh.position);
+    const dist = toAim.length();
+    const step = proj.speed * dt;
+    if (dist <= Math.max(step, 0.3)) {
+      // Phase 2 요청 17 - 발사 시점 realm과 명중 시점 target의 realm이
+      // 다르면(예: 비행 중 모데카이저 R로 target이 죽음의 세계로 끌려감)
+      // 명중을 취소한다. realmId를 안 넘긴 기존 호출부는 둘 다 'main'
+      // 취급이라 이 검사가 사실상 항상 통과해서 기존 동작과 동일하다.
+      const realmOk = canRealmInteract({ realmId: proj.realmId }, proj.target);
+      // 90차(QA): 도착했을 때 대상이 비대상(마스터 이 Q 등)이거나 이미 죽었으면 피해·적중 효과(둔화·흡혈·아이템·룬) 없이 사라진다.
+      const t = proj.target, hittable = !proj._lost && t && t.hp > 0 && !t.isDead && !t.destroyed && !t.isUntargetable;
+      if (hittable && proj.onHit && realmOk) { proj.onHit(t); this.totalHits++; }
+      else { this.totalMisses++; this._evMiss(proj); }
+      this.vfx.spawn('hit', proj.mesh.position.clone(), new THREE.Vector3(), { color: proj.color });
+      proj.done = true;
+      this._releaseArrowMesh(proj._meshEntry);
+      this.projectiles.splice(i, 1);
+      return;
+    }
+    toAim.normalize();
+    proj.mesh.position.addScaledVector(toAim, step);
+    this._orient(proj);
   }
 }
 
@@ -9930,12 +10026,13 @@ class TargetRing {
     this._t = 0;
   }
   attachTo(enemy) {
+    if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
     this.target = enemy || null;
     // 연습 더미에는 선택 표시용 타깃 링을 표시하지 않는다.
     // 더미의 HP바/피격 효과와 실제 타겟 상태는 그대로 유지한다.
     this.mesh.visible = !!enemy && !enemy.isTrainingDummy;
   }
-  clear() { this.target = null; this.mesh.visible = false; }
+  clear() { if (typeof isBotActing === 'function' && isBotActing()) return; this.target = null; this.mesh.visible = false; } // 95차: 봇이 지우지 않게
   update(dt) {
     if (!this.target) return;
     if (this.target.hp <= 0) { this.clear(); return; }
@@ -10140,6 +10237,7 @@ class VisionSystem {
     if (controller && controller.root && controller.hp > 0 && controller.state !== STATE.DEAD) blue.push({ position: controller.root.position, lolRadius: champR(controller.championId) });
     if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (a && a.hp > 0) blue.push({ position: getWorldPosition(a), lolRadius: VISION_CONFIG.championSightRange });
     if (typeof dummy !== 'undefined' && dummy && dummy.hp > 0 && !dummy.destroyed) red.push({ position: getWorldPosition(dummy), lolRadius: VISION_CONFIG.championSightRange });
+    if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b.root && b.hp > 0 && b.state !== STATE.DEAD) (b.team === VISION_TEAM_BLUE ? blue : red).push({ position: b.root.position, lolRadius: champR(b.championId) }); // 95차: 적 챔피언 봇의 시야
     if (typeof placedDummies !== 'undefined') for (const d of placedDummies) if (d && d.hp > 0 && !d.destroyed) red.push({ position: getWorldPosition(d), lolRadius: VISION_CONFIG.championSightRange });
     if (typeof minions !== 'undefined') for (const m of minions) {
       if (!m || m.isDead || !m.mesh) continue;
@@ -13787,6 +13885,10 @@ Object.defineProperty(CharacterController.prototype, 'shield', {
   },
 });
 
+// 95차: 챔피언의 월드 오브젝트(root)를 mesh로도 읽는다 - 넉백·끌어당김·공중에 뜸·시야 등 "대상"을 다루는 공용 코드가
+// unit.mesh.position을 쓴다(허수아비·미니언과 같은 모양). 적 챔피언 봇이 생기면서 챔피언도 그런 대상이 됐다. 대입은 무시한다.
+Object.defineProperty(CharacterController.prototype, 'mesh', { configurable: true, get() { return this.root; }, set(_) {} });
+
 // 챔피언 타이머(챔피언 간 상태 격리): 챔피언 코드의 지연 실행은 이 함수로 건다. 챔피언을 바꾸면(applyChampionData)
 // "챔피언 세대(epoch)"가 바뀌고 남은 타이머가 전부 취소되며, 혹시 남은 콜백도 세대가 다르면 실행되지 않는다.
 // 예전엔 _actionTimers에 넣지 않은 지연 판정(모데카이저 E, 야스오 W 장막 등)이 교체 뒤 새 챔피언으로 실행될 수 있었다.
@@ -13796,7 +13898,7 @@ CharacterController.prototype._champTimeout = function(fn, ms) {
   const id = setTimeout(() => {
     this._championTimers.delete(id);
     if ((this._championEpoch || 0) !== epoch) return;
-    fn();
+    this._asActor(fn);
   }, ms);
   this._championTimers.add(id);
   return id;
@@ -13806,10 +13908,14 @@ CharacterController.prototype._champInterval = function(fn, ms) {
   const epoch = this._championEpoch || 0;
   const id = setInterval(() => {
     if ((this._championEpoch || 0) !== epoch) { clearInterval(id); this._championTimers.delete(id); return; }
-    fn();
+    this._asActor(fn);
   }, ms);
   this._championTimers.add(id);
   return id;
+};
+// 95차: 이 챔피언의 입장에서 실행(적 봇이면 봇, 플레이어면 플레이어) - 다른 챔피언 차례에 예약된 자기 타이머도 자기 것으로 판정한다.
+CharacterController.prototype._asActor = function(fn) {
+  return typeof withCombatActor === 'function' ? withCombatActor(this.isBot ? this : null, fn) : fn();
 };
 CharacterController.prototype._cancelChampionTimers = function() {
   this._championEpoch = (this._championEpoch || 0) + 1;
@@ -17705,7 +17811,8 @@ CharacterController.prototype._die = function() {
     this.attackOrderActive = false; this.attackOrderAnchor = null; this._autoAcquired = false; this._approachCast = null; this._bufferedSummoner = null; this._castLock = null;
     targetRing.clear();
     this.setState(STATE.DEAD);
-    if (typeof ensureScore === 'function' && typeof controller !== 'undefined' && controller === this) ensureScore(this).deaths += 1; // 34차 스코어보드
+    if (typeof ensureScore === 'function') ensureScore(this).deaths += 1; // 34차 스코어보드(95차: 적 봇 포함)
+    if (typeof rewardChampionKill === 'function') rewardChampionKill(this); // 95차: 처치·어시스트 골드·경험치
     vfx.spawn('death', this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)));
     this.playFirstAvailable(this.actionData.death.clips, { loop:THREE.LoopOnce, fade:0.1, clampWhenFinished:true });
     const waitSec = (typeof ARAM_DEATH_TIMER_BY_LEVEL !== 'undefined' && ARAM_DEATH_TIMER_BY_LEVEL[this.champLevel]) || RESPAWN_WAIT; // 83차: 레벨별 부활 시간
@@ -26416,7 +26523,7 @@ CharacterController.prototype._nautilusTickQTravel = function(dt) {
     const r = getCollisionRadius(u);
     const rel = new THREE.Vector3(up.x - t.origin.x, 0, up.z - t.origin.z);
     const along = rel.dot(t.dir);
-    if (along < 0 || along < prevTraveled - r || along > t.traveled + r) continue;
+    if (along < -r || along < prevTraveled - r || along > t.traveled + r) continue; // 95차: 닻 출발점에 몸이 걸친 대상(중심이 조금 뒤)도 맞는다 - 공용 직선 판정(findFirstInLine)과 같은 기준
     const lateral = Math.sqrt(Math.max(0, rel.lengthSq() - along * along));
     if (lateral > t.halfWidth + r) continue;
     const contact = Math.max(0, along - r); // 닻이 이 대상에 처음 닿는 진행 거리
@@ -27599,7 +27706,27 @@ const _hudEls = {
   resourceLabel: document.getElementById('resourceLabel'),
 };
 const _hudLast = { hpPct: '', hpText: '', shieldLeft: '', shieldWidth: '', shieldDisplay: '', mpFlow: null, mpWidth: '', mpText: '', label: '', worldHpPct: '', worldHpText: '', worldResourceWidth: '', worldResourceDisplay: '', worldResourceMode: '' };
+// 머리 위 챔피언 바에 그릴 값(체력·보호막·레벨·자원). 95차: 적 챔피언 봇도 같은 바를 쓴다.
+function _champOverheadBarState(ch) {
+  let resourcePct = 0, resourceMode = 'hidden';
+  if (ch.championId === 'renekton') {
+    resourcePct = Math.max(0, Math.min(100, ch._renekton?.rage || 0)); resourceMode = 'rage';
+  } else if (ch.championId === 'sett') {
+    const cd = ch._champData ? ch._champData() : null;
+    const maxFlow = cd ? ch.maxHp * (cd.W.gritMaxHpPercent / 100) : 0;
+    const flow = (ch._sett && ch._sett.grit) || 0;
+    resourcePct = maxFlow ? Math.max(0, Math.min(100, flow / maxFlow * 100)) : 0;
+    resourceMode = maxFlow > 0 ? 'flow' : 'hidden';
+  } else if (ch.championId === 'yasuo') {
+    resourcePct = Math.max(0, Math.min(100, ch._yasuo ? ch._yasuo.flow : 0)); resourceMode = 'flow';
+  } else if (Number(ch.maxMp) > 0) {
+    resourcePct = Math.max(0, Math.min(100, (ch.mp / ch.maxMp) * 100)); resourceMode = 'mana';
+  }
+  return { hp: ch.hp, maxHp: ch.maxHp, shield: Math.max(0, ch.shield || 0), level: ch.champLevel ?? ch.level ?? 1, resPct: Math.round(resourcePct * 10) / 10, resMode: resourceMode };
+}
 function updateBars(ch) {
+  // 95차: 적 챔피언 봇은 머리 위 바만 갱신한다(아래 화면 HUD는 플레이어 것).
+  if (ch && ch.isBot) { if (ch.healthBarLabelDiv) updateChampBar(ch.healthBarLabelDiv, _champOverheadBarState(ch)); return; }
   const hpPct = `${(ch.hp / ch.maxHp) * 100}%`;
   // 69차: 원작 HUD처럼 체력·마나 바 오른쪽 끝에 초당 재생량(+1.6). 가득 차 있으면 숨긴다. hpRegen/mpRegen은 5초당 값이다.
   const hpRegenEl = document.getElementById('hpRegenText'), mpRegenEl = document.getElementById('mpRegenText');
@@ -27624,21 +27751,7 @@ function updateBars(ch) {
     // 67차: 머리 위 바는 원작식 공용 바(champion_healthbar.js)가 그린다 - 체력 색은 바뀌지 않고(내 챔피언 초록), 보호막 흰 구간·
     // 100/1000 눈금·피해 잔상·레벨 칸·자원 바. 자원: 마나 챔피언은 MP, 마나가 없는 챔피언은 특수 자원(레넥톤 분노 / 세트 투지 /
     // 야스오 기류), 둘 다 없으면 숨김.
-    let resourcePct = 0, resourceMode = 'hidden';
-    if (ch.championId === 'renekton') {
-      resourcePct = Math.max(0, Math.min(100, ch._renekton?.rage || 0)); resourceMode = 'rage';
-    } else if (ch.championId === 'sett') {
-      const cd = ch._champData ? ch._champData() : null;
-      const maxFlow = cd ? ch.maxHp * (cd.W.gritMaxHpPercent / 100) : 0;
-      const flow = (ch._sett && ch._sett.grit) || 0;
-      resourcePct = maxFlow ? Math.max(0, Math.min(100, flow / maxFlow * 100)) : 0;
-      resourceMode = maxFlow > 0 ? 'flow' : 'hidden';
-    } else if (ch.championId === 'yasuo') {
-      resourcePct = Math.max(0, Math.min(100, ch._yasuo ? ch._yasuo.flow : 0)); resourceMode = 'flow';
-    } else if (Number(ch.maxMp) > 0) {
-      resourcePct = Math.max(0, Math.min(100, (ch.mp / ch.maxMp) * 100)); resourceMode = 'mana';
-    }
-    updateChampBar(ch.healthBarLabelDiv, { hp: ch.hp, maxHp: ch.maxHp, shield: Math.max(0, ch.shield || 0), level: ch.champLevel ?? ch.level ?? 1, resPct: Math.round(resourcePct * 10) / 10, resMode: resourceMode });
+    updateChampBar(ch.healthBarLabelDiv, _champOverheadBarState(ch));
   }
   // 요청: 보호막이 계산은 정상인데 화면에 아무 표시가 없어 "작동 안 하는
   // 것처럼" 보였다 - HP 바 뒤에 이어 붙는 빗금 무늬 세그먼트로 실제 보호막
@@ -27692,6 +27805,7 @@ function updateBars(ch) {
   }
 }
 function updateSkillUI(cooldowns) {
+  if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   for (const key of ['Q','W','E','R']) {
     const slot = document.getElementById('slot' + key);
     let cdEl = slot.querySelector('.cd');
@@ -27762,6 +27876,7 @@ function updateSkillUI(cooldowns) {
 // 기존 updateBars() dirty-check 패턴을 그대로 따른다.
 const _expUiLast = { levelText: '', pct: '', spText: '' };
 function updateExpUI(champion) {
+  if (champion && champion.isBot) return; if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   if (!champion) return;
   const levelEl = document.getElementById('levelText');
   const fillEl = document.getElementById('xpFill');
@@ -27819,6 +27934,7 @@ function _updateSkillLevelUpButtons(champion) {
 // 깔끔하게" - 텍스트 하나가 잠깐 떴다 사라지는 정도로 제한한다.
 let _levelUpFxTimer = null;
 function showLevelUpEffect(champion) {
+  if (champion && champion.isBot) return; // 95차
   const el = document.getElementById('levelUpFx');
   if (!el) return;
   el.textContent = `LEVEL UP! Lv.${champion.champLevel}`;
@@ -28392,19 +28508,19 @@ function findEnemyChampionsNear(turret) {
   // 하드코딩했지만, 이제 플레이어 자신의 `.team`(controller.team)과
   // generic하게 비교한다 - 같은 팀(BLUE) 포탑에는 이 우선순위가 여전히
   // 적용되지 않는다(동작은 그대로, 가정만 데이터 기반으로 바뀜).
-  if (typeof controller === 'undefined' || !controller || controller.hp <= 0) return [];
-  if (!isEnemyUnit(turret, controller)) return [];
-  if (controller.state === STATE.DEAD || controller.isUntargetable) return []; // 요청 13 단서: 무적/대상 지정 불가 상태는 별도 처리
-  // 버그 수정(모데카이저 R "죽음의 세계" 명세 9절 "메인 월드 포탑은 죽음의
-  // 세계 내부의 챔피언을 대상으로 지정할 수 없다"): 포탑은 항상 메인
-  // 월드(realmId='main')에 속해 있으므로, 플레이어가 죽음의 세계로
-  // 들어가 있으면(realmId가 'main'이 아니면) canRealmInteract()가 자동으로
-  // false를 반환해 포탑이 그 플레이어를 아예 후보에서 제외한다 - 새
-  // 판정 시스템을 만들지 않고 기존 realmId 태그 하나만 재사용한다.
-  if (!canRealmInteract(turret, controller)) return [];
+  // 95차: 플레이어만이 아니라 상대 팀 챔피언 모두(적 챔피언 봇 포함) - 가까운 순.
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
-  const dist = getHorizontalDistance(getWorldPosition(turret), getWorldPosition(controller));
-  return dist <= range + getCollisionRadius(controller) ? [controller] : []; // 44차: 원작 - 포탑 중심에서 대상 가장자리까지
+  const tp = getWorldPosition(turret);
+  const out = [];
+  for (const c of (typeof listChampionUnits === 'function' ? listChampionUnits() : [])) {
+    if (!c || c.hp <= 0 || !isEnemyUnit(turret, c)) continue;
+    if (c.state === STATE.DEAD || c.isUntargetable) continue; // 요청 13 단서: 무적/대상 지정 불가 상태는 별도 처리
+    // 포탑은 메인 월드(realmId='main') - 죽음의 세계 안의 챔피언은 후보에서 뺀다(모데카이저 R 명세 9절).
+    if (!canRealmInteract(turret, c)) continue;
+    const dist = getHorizontalDistance(tp, getWorldPosition(c));
+    if (dist <= range + getCollisionRadius(c)) out.push({ c, dist }); // 44차: 원작 - 포탑 중심에서 대상 가장자리까지
+  }
+  return out.sort((x, y) => x.dist - y.dist).map((x) => x.c);
 }
 // 59차: 챔피언 판정 - 플레이어 컨트롤러(championId)와 허수아비(isChampion) 모두.
 function isTurretChampionUnit(u) { return !!(u && (u.isChampion || typeof u.championId === 'string')); }
@@ -29060,11 +29176,12 @@ function updateNexusWell(well, dt) {
   // 자기 우물(레드)에서 리스폰하자마자 공격당했다. 공격 판정은 우물 자체의
   // 좁은 충돌 반경(well.radius)만 쓴다 - 기지 전체를 위험 지대로 만들면
   // 안 되므로 회복 구역(BASE_ZONE_RADIUS)과는 의도적으로 분리했다.
-  if (typeof controller !== 'undefined' && controller && controller.hp > 0 && controller.state !== STATE.DEAD
-      && well.team !== (controller.team || PLAYER_TEAM) && canRealmInteract(well, controller)) {
-    const dist = getHorizontalDistance(getWorldPosition(well), controller.root.position);
+  // 95차: 플레이어만이 아니라 상대 팀 챔피언 모두(적 챔피언 봇 포함).
+  for (const c of (typeof listChampionUnits === 'function' ? listChampionUnits() : [])) {
+    if (!c || c.hp <= 0 || c.state === STATE.DEAD || well.team === (c.team || PLAYER_TEAM) || !canRealmInteract(well, c)) continue;
+    const dist = getHorizontalDistance(getWorldPosition(well), c.root.position);
     if (dist <= well.radius) {
-      applyDamage(controller, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: well, isStatusTick: true });
+      applyDamage(c, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: well, isStatusTick: true });
     }
   }
   // 적 미니언도 같은 원칙으로 상대 진영 우물 범위에 들어오면 공격당한다.
@@ -29080,13 +29197,13 @@ function updateNexusWell(well, dt) {
   // 요청("기지 안에 들어갈 수 있게 해서 그 범위 안에서 힐/마나회복") -
   // 우물의 좁은 충돌 반경이 아니라 기지 전체 구역(BASE_ZONE_RADIUS)
   // 안에 있으면 회복된다.
-  if (typeof controller !== 'undefined' && controller && controller.hp > 0 && controller.state !== STATE.DEAD
-      && well.team === (controller.team || PLAYER_TEAM) && canRealmInteract(well, controller)) {
+  for (const c of (typeof listChampionUnits === 'function' ? listChampionUnits() : [])) {
+    if (!c || c.hp <= 0 || c.state === STATE.DEAD || well.team !== (c.team || PLAYER_TEAM) || !canRealmInteract(well, c)) continue;
     // 83차: 칼바람 나락 우물은 회복시키지 않는다(원작 - 회복은 체력 구슬과 부활뿐).
-    if (!(typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned) && isPositionInBaseZone(controller.root.position, well.team) && (controller.hp < controller.maxHp || controller.mp < controller.maxMp)) {
-      controller.hp = Math.min(controller.maxHp, controller.hp + WELL_HEAL_HP_PER_SEC * dt);
-      controller.mp = Math.min(controller.maxMp, controller.mp + WELL_HEAL_MP_PER_SEC * dt);
-      updateBars(controller);
+    if (!(typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned) && isPositionInBaseZone(c.root.position, well.team) && (c.hp < c.maxHp || c.mp < c.maxMp)) {
+      c.hp = Math.min(c.maxHp, c.hp + WELL_HEAL_HP_PER_SEC * dt);
+      c.mp = Math.min(c.maxMp, c.mp + WELL_HEAL_MP_PER_SEC * dt);
+      updateBars(c);
     }
   }
 }
@@ -29108,6 +29225,7 @@ function updateTurrets(dt) {
 // 갱신한다. 골드가 바뀌는 지점(포탑/미니언 처치 등)에서만 호출되는
 // 이벤트 기반 함수라 매 프레임 갱신 부담이 없다.
 function updateGoldDisplay() {
+  if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   if (typeof updateDebugPanel === 'function') updateDebugPanel();
   const el = document.getElementById('goldAmount');
   if (el && controller) el.textContent = Math.floor(controller.gold || 0).toLocaleString();
@@ -29847,7 +29965,8 @@ function _aramMat(color, intensity = 1, extra = {}) {
 }
 function _aramChampions() {
   const list = [];
-  if (typeof controller !== 'undefined' && controller && controller.root) list.push(controller);
+  if (typeof listChampionUnits === 'function') list.push(...listChampionUnits().filter((c) => c && c.root && c.state !== STATE.DEAD)); // 95차: 적 챔피언 봇도
+  else if (typeof controller !== 'undefined' && controller && controller.root) list.push(controller);
   if (typeof placedAllies !== 'undefined') list.push(...placedAllies);
   return list.filter((u) => u && u.hp > 0);
 }
@@ -30064,29 +30183,27 @@ function getMinionExpValue(minion) {
 }
 function awardMinionExperience(minion) {
   if (typeof gameEnded !== 'undefined' && gameEnded) return; // 94차: 게임 종료 뒤 경험치 없음
-  if (typeof controller === 'undefined' || !controller) return;
-  if (controller.state === STATE.DEAD || controller.hp <= 0) return;
-  if (minion.team === PLAYER_TEAM) return;
+  // 95차: 상대 팀 챔피언 모두(적 봇 포함) - 경험치 범위 안에 살아 있는 상대 팀 챔피언끼리 나눈다.
   const rangeWorld = lolRangeToWorld(EXP_RANGE_LOL);
-  const dist = getHorizontalDistance(controller.root.position, minion.mesh.position);
-  if (dist > rangeWorld) return;
+  const near = (typeof listChampionUnits === 'function' ? listChampionUnits() : []).filter((c) => c && c.team !== minion.team && isChampionAlive(c) && minion.mesh
+    && getHorizontalDistance(c.root.position, minion.mesh.position) <= rangeWorld);
+  if (!near.length) return;
   const baseExp = getMinionExpValue(minion);
-  let participants = [controller];
-  // 닐라 P: 미니언 막타를 직접 한 경우 가장 가까운 아군 챔피언과 경험치를 공유하고,
-  // 공유로 생긴 실제 손실량의 50%를 닐라에게 추가 보상한다.
-  if (controller.championId === 'nilah' && minion._lastHitBy === controller) {
-    const ally = typeof controller._nilahNearestAlly === 'function' ? controller._nilahNearestAlly(EXP_RANGE_LOL) : null;
+  // 닐라 패시브: 막타를 친 닐라는 가장 가까운 아군과 경험치를 나누고, 나눠서 줄어든 몫 일부를 돌려받는다(혼자일 때만 - 기존 규칙).
+  const nilah = near.length === 1 && near[0].championId === 'nilah' && minion._lastHitBy === near[0] ? near[0] : null;
+  if (nilah) {
+    const ally = typeof nilah._nilahNearestAlly === 'function' ? nilah._nilahNearestAlly(EXP_RANGE_LOL) : null;
     if (ally) {
-      participants = [controller, ally];
+      const participants = [nilah, ally];
       const sharedEach = shareExperience(baseExp, participants);
       const lost = Math.max(0, baseExp - sharedEach);
       for (const p of participants) gainExperience(p, applyExperienceModifiers(sharedEach, 'minion', p, null));
-      gainExperience(controller, lost * (CHAMPION_DATA.nilah.passive.xpLostCompensationPercent / 100));
+      gainExperience(nilah, lost * (CHAMPION_DATA.nilah.passive.xpLostCompensationPercent / 100));
       return;
     }
   }
-  const shared = shareExperience(baseExp, participants);
-  for (const p of participants) gainExperience(p, applyExperienceModifiers(shared, 'minion', p, null));
+  const shared = shareExperience(baseExp, near);
+  for (const p of near) gainExperience(p, applyExperienceModifiers(shared, 'minion', p, null));
 }
 
 // 요청 3: 챔피언 처치 경험치// 요청 3: 챔피언 처치 경험치 - 적 챔피언 AI가 아직 없어 실전 호출은
@@ -30094,7 +30211,7 @@ function awardMinionExperience(minion) {
 // 호출하면 되도록 완전한 형태로 만들어둔다.
 function awardChampionKillExperience(killer, participants, victim) {
   if (!victim || !participants || !participants.length) return;
-  const baseExp = getExpRequired(victim.champLevel || 1) * 0.5; // 처치 경험치 기본값(실제 밸런스 수치는 AI/멀티 도입 시 조정)
+  const baseExp = (typeof CHAMPION_KILL_XP_BY_LEVEL !== 'undefined' ? CHAMPION_KILL_XP_BY_LEVEL[Math.max(1, Math.min(18, victim.champLevel || 1))] : 0); // 95차: 위키 처치 경험치 표(rewardChampionKill이 실제로 쓴다)
   const shared = shareExperience(baseExp, participants);
   for (const p of participants) {
     if (p.state === STATE.DEAD || p.hp <= 0) continue; // 요청 6: 사망 중인 참가자는 제외
@@ -30443,9 +30560,8 @@ function canMinionAcquire(minion, target) {
   return getHorizontalDistance(minion.mesh.position, getWorldPosition(target)) <= minionAcquireRangeWorld(minion, target);
 }
 function getMinionEnemyChampions(minion) {
-  const list = [];
-  if (typeof controller !== 'undefined' && controller && controller.team && controller.team !== minion.team) list.push(controller);
-  return list;
+  // 95차: 상대 팀 챔피언 모두(적 챔피언 봇 포함). 생존·대상 지정 가능 여부는 쓰는 쪽(canMinionAcquire 등)이 본다.
+  return (typeof listChampionUnits === 'function' ? listChampionUnits() : []).filter((c) => c && c.team && c.team !== minion.team);
 }
 function closestAcquirable(minion, candidates) {
   let best = null, bestDist = Infinity;
@@ -30512,7 +30628,7 @@ function getMinionAttackTarget(minion) {
     const d = getHorizontalDistance(pos, getWorldPosition(u));
     if (r < bestRank || (r === bestRank && d < bestDist)) { best = u; bestRank = r; bestDist = d; }
   };
-  for (const m of minions) if (m !== minion && m.team !== minion.team && !m.isDead && !ignoredNow(m) && canMinionAcquire(minion, m)) consider(m);
+  for (const m of minionsNear(pos, _minionGridCellSize())) if (m !== minion && m.team !== minion.team && !m.isDead && !ignoredNow(m) && canMinionAcquire(minion, m)) consider(m); // 95차: 격자 후보
   for (const c of getMinionEnemyChampions(minion)) if (!ignoredNow(c) && (canMinionAcquire(minion, c) || (minion._callForHelp && minion._callForHelp.target === c && now < minion._callForHelp.until))) consider(c);
   const engagedTurret = findTurretAttackingAllyMinion(minion);
   if (engagedTurret) consider(engagedTurret);
@@ -30646,7 +30762,7 @@ const MINION_SEPARATION_RADIUS = 0.85; // 이 거리 안의 아군에게서 밀�
 const MINION_SEPARATION_WEIGHT = 0.55; // 목표 방향 대비 분리력의 비중
 function computeFriendlySeparation(minion) {
   let fx = 0, fz = 0;
-  for (const m of minions) {
+  for (const m of minionsNear(minion.mesh.position, lolRangeToWorld(300))) { // 95차: 격자 후보
     if (m === minion || m.isDead) continue;
     const dx = minion.mesh.position.x - m.mesh.position.x;
     const dz = minion.mesh.position.z - m.mesh.position.z;
@@ -30893,29 +31009,20 @@ function killMinion(minion) {
   rewardMinionKill(minion);
   grantMinionExperience(minion);
   // 34차 스코어보드 CS - 플레이어가 마지막으로 때린 미니언만 센다(원작 CS = 마지막 타격).
-  if (typeof controller !== 'undefined' && controller && minion._lastHitBy === controller && typeof ensureScore === 'function') ensureScore(controller).cs += 1;
-  // 아리 패시브(정기 흡수) - 아리가 마지막으로 때린 미니언이 죽으면 스택 1개.
-  if (typeof controller !== 'undefined' && controller && controller.championId === 'ahri'
-      && minion._lastHitBy === controller && typeof controller._ahriOnMinionKill === 'function') {
-    controller._ahriOnMinionKill();
-  }
-  // 아이템 패시브 "수확"(수확의 낫) - 플레이어가 마지막으로 때린 미니언이
-  // 죽으면 골드 누적. 챔피언 종류와 무관한 범용 아이템 훅이라 위 아리
-  // 패시브와 별개로 둔다.
-  if (typeof controller !== 'undefined' && controller && minion._lastHitBy === controller
-      && typeof itemOnMinionKillByPlayer === 'function') {
-    itemOnMinionKillByPlayer(controller);
-  }
-  // 바루스 패시브(살아있는 복수) - 유닛 처치 시 공격 속도.
-  if (typeof controller !== 'undefined' && controller && controller.championId === 'varus'
-      && minion._lastHitBy === controller && typeof controller._varusOnKill === 'function') {
-    controller._varusOnKill(minion, false);
-  }
-  // 가렌 W(용기) 패시브 - 가렌이 마지막으로 때린 미니언이 죽으면 처치 스택.
-  if (typeof controller !== 'undefined' && controller && controller.championId === 'garen'
-      && minion._lastHitBy === controller && typeof controller._garenOnTakedown === 'function') {
-    controller._garenOnTakedown();
-  }
+  const lh = minion._lastHitBy; // 95차: 막타 친 챔피언(적 봇 포함)의 CS
+  if (lh && (lh.isChampion || typeof lh.championId === 'string') && !lh.isTrainingDummy && typeof ensureScore === 'function') ensureScore(lh).cs += 1;
+  // 막타 친 챔피언의 처치 반응(95차: 플레이어만이 아니라 적 봇도 - 그 챔피언 입장에서 실행).
+  const killerChamp = lh && typeof lh._asActor === 'function' ? lh : null;
+  if (killerChamp) killerChamp._asActor(() => {
+    // 아리 패시브(정기 흡수) - 아리가 마지막으로 때린 미니언이 죽으면 스택 1개.
+    if (killerChamp.championId === 'ahri' && typeof killerChamp._ahriOnMinionKill === 'function') killerChamp._ahriOnMinionKill();
+    // 아이템 패시브 "수확"(수확의 낫) - 마지막으로 때린 미니언이 죽으면 골드 누적(챔피언 종류와 무관한 범용 아이템 훅).
+    if (typeof itemOnMinionKillByPlayer === 'function') itemOnMinionKillByPlayer(killerChamp);
+    // 바루스 패시브(살아있는 복수) - 유닛 처치 시 공격 속도.
+    if (killerChamp.championId === 'varus' && typeof killerChamp._varusOnKill === 'function') killerChamp._varusOnKill(minion, false);
+    // 가렌 W(용기) 패시브 - 가렌이 마지막으로 때린 미니언이 죽으면 처치 스택.
+    if (killerChamp.championId === 'garen' && typeof killerChamp._garenOnTakedown === 'function') killerChamp._garenOnTakedown();
+  });
   minions = minions.filter((m) => m !== minion); // 요청 18-7: 다른 AI가 더 이상 살아있는 유닛으로 인식하지 않게 즉시 목록에서 제거
   if (typeof controller !== 'undefined' && controller && controller.currentTarget === minion) {
     controller.currentTarget = null;
@@ -30926,6 +31033,7 @@ function killMinion(minion) {
       targetRing.clear();
     }
   }
+  if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b.currentTarget === minion) { b.currentTarget = null; b.attackOrderActive = false; } // 95차
   const deathClip = MINION_DEATH_CLIP[minion.type];
   let removeDelayMs = 900; // 폴백(모델 미로딩 시) 고정 지연
   if (minion.usingRealModel) {
@@ -30982,9 +31090,13 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
   // 90차(QA): 플레이어 피해가 아닌데 공격자가 비어 있으면(구조물·환경 피해) 플레이어로 대체되지 않게 한다 - 대체되면 플레이어의
   // 피해 증폭 아이템·탈진 같은 상태가 그 피해에 붙었다(예: 우물 고정 피해 1000 → 쇼진 1200, 탈진 650).
   if (!fromPlayer && result && !result.source) result = { ...result, source: { isStructure: true } };
+  // 95차: fromPlayer = "챔피언이 준 피해" - 그 챔피언은 넘어온 공격자, 없으면 지금 행동 중인 챔피언(플레이어 또는 적 봇).
+  const src0 = result && result.source;
+  const champ = fromPlayer ? ((src0 && (src0.isChampion || typeof src0.championId === 'string') && !src0.isTrainingDummy) ? src0
+    : (typeof combatPerspective === 'function' ? combatPerspective() : (typeof controller !== 'undefined' ? controller : null))) : null;
   // 85차: 칼바람 오라 - 근접 챔피언의 기본 공격은 공성·슈퍼 미니언에게 20% 추가 피해(PC 위키 Howling Abyss aura).
   if (fromPlayer && result && result.isBasicAttack && (minion.type === 'siege' || minion.type === 'super')
-      && typeof controller !== 'undefined' && controller && typeof isRangedAttacker === 'function' && !isRangedAttacker(controller)
+      && champ && typeof isRangedAttacker === 'function' && !isRangedAttacker(champ)
       && typeof isAramRulesActive === 'function' && isAramRulesActive()) result = { ...result, rawDamage: (result.rawDamage || 0) * 1.2 };
   const finalDmg = calculateDamage({ ...result, target: minion });
   minion._lastDamageTakenAmount = finalDmg;
@@ -31000,23 +31112,23 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
   if (!fromPlayer) minion._lastHitBy = result.source || null; // 59차: 마지막 타격이 미니언·포탑이면 플레이어 막타(골드·CS)가 아니다
   if (fromPlayer) {
     minion.lastAttackedByPlayerAt = minionAiNowMs();
-    if (typeof controller !== 'undefined' && controller) {
-      minion._lastHitBy = controller;
-      minion._lastChampionAttacker = controller; minion._lastChampionAttackedAt = minion.lastAttackedByPlayerAt; // 59차 미니언 어그로 5순위
+    if (champ) {
+      minion._lastHitBy = champ;
+      minion._lastChampionAttacker = champ; minion._lastChampionAttackedAt = minion.lastAttackedByPlayerAt; // 59차 미니언 어그로 5순위
       // 아이템 패시브 "모든 피해 흡혈"(도란의 검/활)/"생명력 흡수"(흡혈의
       // 낫, 물리 피해 전용) - 미니언 피해도 실제 LoL처럼 흡혈 대상에
       // 포함된다(구조물 피해만 제외).
-      if (typeof applyItemVamp === 'function') applyItemVamp(controller, finalDmg, { target: minion, isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isAoE: !!result.isAoE, isPet: !!result.isPet }); // 83차: 광역·도트 33%
-      if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(controller, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, !!result.isBasicAttack);
+      if (typeof applyItemVamp === 'function') applyItemVamp(champ, finalDmg, { target: minion, isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isAoE: !!result.isAoE, isPet: !!result.isPet }); // 83차: 광역·도트 33%
+      if (typeof applyItemPhysicalVamp === 'function') applyItemPhysicalVamp(champ, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, !!result.isBasicAttack);
       // 운명의 재(발화)/여신의 눈물(마나순환) - 챔피언 전용 효과(그리버스/
       // 카탈리스트 마나 회복)는 itemOnDamageDealt() 내부에서 target.isChampion
       // 으로 걸러지므로 미니언 대상으로 호출해도 안전하다.
-      if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(controller, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isOnHitBonus: !!result.isOnHitBonus });
+      if (typeof itemOnDamageDealt === 'function') itemOnDamageDealt(champ, minion, finalDmg, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isOnHitBonus: !!result.isOnHitBonus });
     }
   }
   // 93차: 게임 이벤트(공격자: 플레이어 피해면 플레이어, 아니면 넘어온 공격자 - 구조물·환경은 null)
-  if (typeof _evDamage === 'function') _evDamage(fromPlayer ? controller : (result.source && !result.source.isStructure ? result.source : null), minion, finalDmg, result);
-  if (fromPlayer && typeof leesinOmnivampOnDamage === 'function' && typeof controller !== 'undefined') leesinOmnivampOnDamage(controller, minion, finalDmg, result); // 94차: 리 신 W2 모든 피해 흡혈
+  if (typeof _evDamage === 'function') _evDamage(fromPlayer ? champ : (result.source && !result.source.isStructure ? result.source : null), minion, finalDmg, result);
+  if (fromPlayer && champ && typeof leesinOmnivampOnDamage === 'function') leesinOmnivampOnDamage(champ, minion, finalDmg, result); // 94차: 리 신 W2 모든 피해 흡혈
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }
   // 요청("미니언 모션 최소 요구: Idle/Move/Attack/Hit/Death, 우선순위
   // Death>Attack>Hit>Move>Idle") - 피격 애니메이션을 재생한다. 짧은 창
@@ -31073,6 +31185,30 @@ function updateMinionWaveSpawner(gameTimeSec) {
 // 94차(성능): 미니언마다 프레임당 세 번씩 새로 만들던 구조물 목록을 프레임마다 한 번만 만든다.
 // 구조물은 파괴돼도 배열에 남으므로(파괴 여부는 쓰는 쪽이 본다) 프레임 번호·개수·첫 원소(초기화 때 새로 세움)로만 갱신한다.
 let _minionFrameNo = 0, _minionStructCache = null;
+// 95차(성능): 미니언 근처 찾기 - 프레임마다 한 번 만드는 격자(칸 = 인식 범위 정도)로 대상 찾기·분리·겹침 해소가 모든 미니언 쌍을
+// 보지 않게 한다(예전엔 미니언 수의 제곱 - 127마리에서 프레임당 대상 찾기 5.6ms). 후보만 줄이고 실제 거리 판정은 그대로다.
+// 미니언이 적으면(40마리 미만) 전체 목록을 그대로 쓴다 - 같은 프레임 안에서 위치를 직접 옮기는 점검 스크립트와도 결과가 같다.
+const MINION_GRID_MIN_COUNT = 40;
+let _minionGrid = null;
+function _minionGridCellSize() { return lolRangeToWorld(900); }
+function _buildMinionGrid() {
+  const cell = _minionGridCellSize(), map = new Map();
+  for (const m of minions) {
+    if (!m || m.isDead || !m.mesh) continue;
+    const key = Math.floor(m.mesh.position.x / cell) + ',' + Math.floor(m.mesh.position.z / cell);
+    let arr = map.get(key); if (!arr) { arr = []; map.set(key, arr); } arr.push(m);
+  }
+  _minionGrid = { frame: _minionFrameNo, n: minions.length, cell, map };
+}
+// pos 둘레 radius(월드) 안에 있을 수 있는 미니언들(상위 집합). radius는 칸 크기 이하로 쓴다.
+function minionsNear(pos, radius) {
+  if (minions.length < MINION_GRID_MIN_COUNT) return minions;
+  if (!_minionGrid || _minionGrid.frame !== _minionFrameNo || _minionGrid.n !== minions.length) _buildMinionGrid();
+  const g = _minionGrid, cx = Math.floor(pos.x / g.cell), cz = Math.floor(pos.z / g.cell), span = Math.max(1, Math.ceil(radius / g.cell));
+  const out = [];
+  for (let ix = cx - span; ix <= cx + span; ix++) for (let iz = cz - span; iz <= cz + span; iz++) { const a = g.map.get(ix + ',' + iz); if (a) for (const m of a) out.push(m); }
+  return out;
+}
 function minionStructureList() {
   const n = turrets.length + inhibitorBuildings.length + nexusBuildings.length;
   const c = _minionStructCache;
@@ -31100,10 +31236,13 @@ function updateMinions(dt) {
 // 빽빽한 웨이브·두 팀 전열이 서로 겹쳐 보였다. 겹친 양의 절반씩 양쪽으로(공격 중인 쪽은 덜 밀리게 가중치).
 function resolveMinionMinionOverlaps() {
   const list = minions.filter((m) => !m.isDead && m.mesh);
+  const order = new Map(list.map((m, i) => [m, i]));
   for (let i = 0; i < list.length; i++) {
     const a = list[i], pa = a.mesh.position, ra = getCollisionRadius(a);
-    for (let j = i + 1; j < list.length; j++) {
-      const b = list[j], pb = b.mesh.position, rb = getCollisionRadius(b);
+    // 95차: 격자 후보 중 순서가 뒤인 것만(각 쌍을 한 번씩) - 미니언이 적으면 예전처럼 전체.
+    for (const b of minionsNear(pa, lolRangeToWorld(300))) {
+      const j = order.get(b); if (j == null || j <= i) continue;
+      const pb = b.mesh.position, rb = getCollisionRadius(b);
       let dx = pb.x - pa.x, dz = pb.z - pa.z; const need = (ra + rb) * 0.9;
       const d2 = dx * dx + dz * dz; if (d2 >= need * need) continue;
       let d = Math.sqrt(d2); if (d < 1e-4) { dx = (i % 2 ? 1 : -1) * 0.01; dz = 0.01; d = Math.hypot(dx, dz); }
@@ -31126,7 +31265,7 @@ let dummyPlaceMode = false;
    ------------------------------------------------------------
    흩어져 있던 보상 지급(미니언 막타 골드, 포탑 파괴 골드)을 한곳으로 모으고 빠져 있던 원작 규칙을 채운다.
    - 시작 골드 1400, 기본 골드 수급 10초당 55(1:00부터) - 리그 위키 Gold(Howling Abyss 항목).
-   - 미니언: 골드는 막타 친 챔피언만(근거리 21·원거리 14·대포/슈퍼 60~90 - MINION_STATS). 내 막타가 아니어도 근처
+   - 미니언: 골드는 막타 친 챔피언만(MINION_STATS - 칼바람 근거리 20·원거리 17, 95차 PC 위키 확인). 내 막타가 아니어도 근처
      (경험치 범위)에서 적 미니언이 죽으면 6골드(칼바람 규칙). 경험치는 막타와 상관없이 범위 안 챔피언끼리 나눈다
      (awardMinionExperience - 기존 그대로).
    - 포탑(칼바람 값 - 공식 표를 찾지 못해 Samurai Gamers 정리값): 외곽 = 팀 전체 150 + 파괴자 250, 억제기 포탑 = 150 + 175,
@@ -31158,7 +31297,7 @@ function grantGold(ctrl, amount, opts = {}) {
   ctrl.gold = (ctrl.gold || 0) + amount;
   if (typeof ensureScore === 'function') { const s = ensureScore(ctrl); if (s) s.goldEarned = (s.goldEarned || 0) + amount; }
   if (opts.at && typeof controller !== 'undefined' && ctrl === controller) spawnRewardText(opts.at, `+${Math.round(amount)}`, opts.color || '#ffd34d', opts.small);
-  if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
+  if (typeof updateGoldDisplay === 'function' && !ctrl.isBot) updateGoldDisplay(); // 95차: 적 봇 골드는 화면 골드와 무관
   return amount;
 }
 function grantStartingGold(ctrl) {
@@ -31169,17 +31308,18 @@ function grantStartingGold(ctrl) {
 }
 
 // 미니언이 죽었을 때(killMinion에서 한 번) - 막타 골드 또는 근처 골드.
+// 95차: 플레이어만이 아니라 상대 팀 챔피언 모두(적 챔피언 봇 포함) - 막타 챔피언은 골드, 아니면 1250 안에 살아 있으면 6골드.
 function rewardMinionDeath(minion) {
   if (typeof gameEnded !== 'undefined' && gameEnded) return; // 94차: 게임 종료 뒤 멈춘 미니언을 잡아 골드를 버는 것 방지
-  if (typeof controller === 'undefined' || !controller || !minion || minion.team === controller.team) return;
+  if (!minion) return;
   const at = minion.mesh ? minion.mesh.position.clone().add(new THREE.Vector3(0, (minion.modelHeight || 0.8) + 0.3, 0)) : null;
-  if (minion._lastHitBy === controller) {
-    grantGold(controller, getMinionGoldValue(minion, getTurretGameTimeSec()), { at });
-    return;
+  for (const c of listChampionUnits()) {
+    if (!c || c.team === minion.team) continue;
+    if (minion._lastHitBy === c) { grantGold(c, getMinionGoldValue(minion, getTurretGameTimeSec()), { at }); continue; }
+    if (!isChampionAlive(c) || !minion.mesh) continue;
+    if (getHorizontalDistance(c.root.position, minion.mesh.position) > lolRangeToWorld(ARAM_NEARBY_GOLD_RANGE_LOL)) continue;
+    grantGold(c, ARAM_NEARBY_MINION_GOLD, { at, color: '#d9c27a', small: true });
   }
-  if (controller.hp <= 0 || controller.state === STATE.DEAD || !minion.mesh) return;
-  if (getHorizontalDistance(controller.root.position, minion.mesh.position) > lolRangeToWorld(ARAM_NEARBY_GOLD_RANGE_LOL)) return;
-  grantGold(controller, ARAM_NEARBY_MINION_GOLD, { at, color: '#d9c27a', small: true });
 }
 
 // 구조물 피해 기록(파괴자 판정용) - 챔피언 공격자만.
@@ -31189,37 +31329,127 @@ function recordStructureDamage(structure, source) {
   structure._championDamagers.set(source, performance.now());
 }
 function structureKillers(structure) {
+  // 95차: 상대 팀 챔피언 모두(최근 10초 안에 때렸거나 파괴 순간 1000 안에 살아 있던 챔피언).
   const out = [];
-  if (typeof controller === 'undefined' || !controller || controller.team === structure.team || controller.hp <= 0 || controller.state === STATE.DEAD) return out;
-  const last = structure._championDamagers && structure._championDamagers.get(controller);
-  const recent = last != null && (performance.now() - last) / 1000 <= STRUCTURE_PARTICIPATION_SEC;
-  const near = getHorizontalDistance(controller.root.position, getWorldPosition(structure)) <= lolRangeToWorld(STRUCTURE_PARTICIPATION_RANGE_LOL) + getCollisionRadius(structure);
-  if (recent || near) out.push(controller);
+  for (const c of listChampionUnits()) {
+    if (!c || c.team === structure.team || !isChampionAlive(c)) continue;
+    const last = structure._championDamagers && structure._championDamagers.get(c);
+    const recent = last != null && (performance.now() - last) / 1000 <= STRUCTURE_PARTICIPATION_SEC;
+    const near = getHorizontalDistance(c.root.position, getWorldPosition(structure)) <= lolRangeToWorld(STRUCTURE_PARTICIPATION_RANGE_LOL) + getCollisionRadius(structure);
+    if (recent || near) out.push(c);
+  }
   return out;
 }
-// 구조물 파괴 보상 - 반환값은 플레이어가 받은 골드(로그용).
+// 구조물 파괴 보상 - 상대 팀 챔피언마다 지급(95차: 적 봇 포함). 반환값은 플레이어가 받은 골드(로그용).
 function rewardStructureDestroyed(structure) {
-  if (typeof controller === 'undefined' || !controller || !structure || structure.team === controller.team) return 0;
+  if (!structure) return 0;
   const at = getWorldPosition(structure).clone().add(new THREE.Vector3(0, (structure.labelHeight || 3) * 0.6, 0));
-  if (structure.isInhibitor) return grantGold(controller, INHIBITOR_GLOBAL_GOLD, { at });
+  const team = listChampionUnits().filter((c) => c && c.team !== structure.team);
+  const me = typeof controller !== 'undefined' ? controller : null;
+  if (structure.isInhibitor) { let got = 0; for (const c of team) { const g = grantGold(c, INHIBITOR_GLOBAL_GOLD, { at }); if (c === me) got = g; } return got; }
   if (!structure.isTurret) return 0;
   const g = TURRET_GOLD_HA[structure.type];
   if (!g) return 0;
   const killers = structureKillers(structure);
   const local = killers.length ? g.local / killers.length : 0;
-  const mine = g.global + (killers.includes(controller) ? local : 0);
-  grantGold(controller, mine, { at });
-  if (typeof showRewardBanner === 'function') showRewardBanner(`포탑 파괴! +${Math.round(mine)} 골드${killers.includes(controller) && g.local ? ` (파괴자 ${Math.round(local)} 포함)` : ''}`);
+  let mine = 0;
+  for (const c of team) {
+    const amount = g.global + (killers.includes(c) ? local : 0);
+    grantGold(c, amount, { at });
+    if (c === me) mine = amount;
+  }
+  if (me && team.includes(me) && typeof showRewardBanner === 'function') showRewardBanner(`포탑 파괴! +${Math.round(mine)} 골드${killers.includes(me) && g.local ? ` (파괴자 ${Math.round(local)} 포함)` : ''}`);
   return mine;
+}
+
+// 95차: 챔피언 처치·어시스트 보상(칼바람 - research95: PC 위키 ARAM·Assist·Experience).
+//  - 처치 골드 180 + 현상금, 어시스트는 90골드를 어시스트한 챔피언끼리 똑같이 나눈다.
+//  - 현상금: 처치·어시스트로 번 골드 2당 1(최대 600). 현상금이 걸린 챔피언이 죽으면 나눠 준 골드 4당 1씩 줄어든다.
+//  - 관여: 죽기 전 20초 안에 피해를 주거나 행동 제한을 건 상대 챔피언. 마지막 처치가 미니언·포탑이면 가장 최근에 관여한 챔피언이 처치.
+//  - 경험치: 대상 레벨별 표(혼자 받을 때), 1600 안의 상대 팀 챔피언과 관여한 챔피언이 나눈다(나누는 비율은 미니언과 같은 표).
+//    대상이 2레벨 이상 높으면 넘는 레벨마다 +20%, 낮으면 2레벨부터 레벨당 -24%(최대 -60%).
+const CHAMPION_KILL_GOLD_ARAM = 180;
+const CHAMPION_ASSIST_GOLD_POOL = 90;
+const CHAMPION_BOUNTY_MAX = 600;
+const CHAMPION_ASSIST_WINDOW_SEC = 20;
+const CHAMPION_KILL_XP_RANGE_LOL = 1600;
+const CHAMPION_KILL_XP_BY_LEVEL = [0, 42, 114, 144, 174, 204, 234, 308, 392, 486, 590, 640, 690, 740, 790, 840, 890, 940, 990];
+// 챔피언이 챔피언에게 피해를 주거나 행동 제한을 걸 때 기록한다(applyDamage·applyStatus).
+function recordChampionContribution(victim, source) {
+  if (!victim || !source || source === victim || !victim.isChampion || !(source.isChampion || typeof source.championId === 'string') || source.isTrainingDummy) return;
+  if (source.team && victim.team && source.team === victim.team) return;
+  if (!victim._champContrib) victim._champContrib = new Map();
+  victim._champContrib.set(source, performance.now());
+}
+function championKillXp(victim, recipient, share) {
+  const base = CHAMPION_KILL_XP_BY_LEVEL[Math.max(1, Math.min(18, victim.champLevel || 1))] || 0;
+  const diff = (victim.champLevel || 1) - (recipient.champLevel || 1);
+  let mult = 1;
+  if (diff >= 2) mult += 0.2 * (diff - 1);
+  else if (diff <= -2) mult -= Math.min(0.6, 0.24 * (-diff - 1));
+  return base * share * mult;
+}
+// 플레이어 화면 알림 - 봇 차례에 일어난 일(봇이 지속 피해로 죽는 등)이라도 플레이어에게 보인다.
+function _rewardPlayerToast(msg) {
+  const show = () => { if (typeof showRewardBanner === 'function') showRewardBanner(msg); else if (typeof showSkillToast === 'function') showSkillToast(msg); };
+  if (typeof withCombatActor === 'function') withCombatActor(null, show); else show();
+}
+function rewardChampionKill(victim) {
+  if (!victim || (typeof gameEnded !== 'undefined' && gameEnded)) return null;
+  const now = performance.now();
+  const window = CHAMPION_ASSIST_WINDOW_SEC * 1000;
+  const contrib = [];
+  if (victim._champContrib) for (const [c, at] of victim._champContrib) if (c && c.team !== victim.team && now - at <= window) contrib.push({ c, at });
+  victim._champContrib = null;
+  const src = victim._lastDamageSource || null;
+  const srcIsChamp = src && src !== victim && (src.isChampion || typeof src.championId === 'string') && !src.isTrainingDummy && src.team !== victim.team;
+  let killer = srcIsChamp ? src : null;
+  if (!killer && contrib.length) killer = contrib.reduce((a, b) => (b.at > a.at ? b : a)).c; // 미니언·포탑 마무리 - 가장 최근 관여자
+  const assisters = contrib.map((x) => x.c).filter((c) => c !== killer);
+  const bounty = Math.max(0, victim._bounty || 0);
+  let paid = 0;
+  if (killer) {
+    const g = grantGold(killer, CHAMPION_KILL_GOLD_ARAM + bounty, { at: victim.root ? victim.root.position.clone().add(new THREE.Vector3(0, 2, 0)) : null });
+    paid += g;
+    killer._bounty = Math.min(CHAMPION_BOUNTY_MAX, (killer._bounty || 0) + g / 2);
+    if (typeof recordChampionTakedown === 'function') recordChampionTakedown(killer, true);
+  }
+  if (assisters.length) {
+    const each = CHAMPION_ASSIST_GOLD_POOL / assisters.length;
+    for (const a of assisters) {
+      const g = grantGold(a, each);
+      paid += g;
+      a._bounty = Math.min(CHAMPION_BOUNTY_MAX, (a._bounty || 0) + g / 2);
+      if (typeof recordChampionTakedown === 'function') recordChampionTakedown(a, false);
+    }
+  }
+  victim._bounty = Math.max(0, bounty - paid / 4);
+  // 경험치: 관여자 + 1600 안의 살아 있는 상대 팀 챔피언.
+  const at = getWorldPosition(victim);
+  const recips = new Set([killer, ...assisters].filter(Boolean));
+  for (const c of listChampionUnits()) {
+    if (!c || c.team === victim.team || !isChampionAlive(c)) continue;
+    if (getHorizontalDistance(c.root.position, at) <= lolRangeToWorld(CHAMPION_KILL_XP_RANGE_LOL)) recips.add(c);
+  }
+  const list = [...recips];
+  const share = list.length ? (typeof shareExperience === 'function' ? shareExperience(1, list) : 1 / list.length) : 0;
+  for (const c of list) if (typeof gainExperience === 'function') gainExperience(c, championKillXp(victim, c, share));
+  const me = typeof controller !== 'undefined' ? controller : null;
+  if (me && killer === me) _rewardPlayerToast(`적 챔피언 처치! +${Math.round(CHAMPION_KILL_GOLD_ARAM + bounty)} 골드`);
+  else if (me && assisters.includes(me)) _rewardPlayerToast(`어시스트! +${Math.round(CHAMPION_ASSIST_GOLD_POOL / assisters.length)} 골드`);
+  else if (me && victim === me && killer) _rewardPlayerToast(`${killer.championId || '적'}에게 처치당했습니다`);
+  if (typeof emitGameEvent === 'function') emitGameEvent('championKill', { victimId: _evId(victim), killerId: _evId(killer), assistIds: assisters.map(_evId), gold: Math.round(paid), bounty: Math.round(bounty) });
+  return { killer, assisters, paid, bounty };
 }
 
 // 매 프레임: 기본 골드 수급 + 떠오르는 숫자.
 let _passiveGoldAcc = 0;
 function rewardTick(dt) {
-  if (rewardGameActive() && typeof controller !== 'undefined' && controller && getTurretGameTimeSec() >= ARAM_PASSIVE_GOLD_START_SEC) {
+  if (rewardGameActive() && getTurretGameTimeSec() >= ARAM_PASSIVE_GOLD_START_SEC) {
     // 90차: 원작처럼 0.5초마다 한 번(10초당 60 → 0.5초당 3) 들어온다. 예전엔 매 프레임 1골드씩 쪼개 넣어 골드가 쉬지 않고 올라갔다(총량은 같음).
+    // 95차: 모든 챔피언(적 봇 포함)이 같이 받는다.
     _passiveGoldAcc += dt;
-    while (_passiveGoldAcc >= 0.5) { _passiveGoldAcc -= 0.5; grantGold(controller, ARAM_PASSIVE_GOLD_PER_10S / 20); }
+    while (_passiveGoldAcc >= 0.5) { _passiveGoldAcc -= 0.5; for (const c of listChampionUnits()) grantGold(c, ARAM_PASSIVE_GOLD_PER_10S / 20); }
   }
   updateRewardTexts(dt);
 }
@@ -35299,6 +35529,7 @@ function _summonerFlushBuffered(ctrl) {
 }
 function summonerSpellTick(dt) {
   if (typeof controller !== 'undefined' && controller && controller._bufferedSummoner) _summonerFlushBuffered(controller);
+  if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b._bufferedSummoner) withCombatActor(b, () => _summonerFlushBuffered(b)); // 95차
   for (let i = _summonerSnowballs.length - 1; i >= 0; i--) {
     const b = _summonerSnowballs[i];
     if (!b.proj.done) { b.mesh.position.set(b.proj.mesh.position.x, b.mesh.position.y, b.proj.mesh.position.z); continue; }
@@ -35335,6 +35566,7 @@ function _summonerTitle(id) {
 }
 // 칸 그리기. 재사용 대기시간 숫자는 매 프레임이 아니라 0.1초 단위로 바뀔 때만 다시 쓴다.
 function updateSummonerUI(ctrl, force) {
+  if (ctrl && ctrl.isBot) return; if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   const bar = document.getElementById('spellBar');
   if (!bar || !ctrl) return;
   const s = ensureSummoners(ctrl);
@@ -37656,6 +37888,7 @@ function _hudRenderRunes(ctrl) {
   _hudPager(box);
 }
 function updateHudStats(ctrl, force = false) {
+  if (ctrl && ctrl.isBot) return; if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   if (!ctrl || !ctrl.stats || typeof document === 'undefined') return;
   const now = performance.now();
   if (!force && now - hudStatsState.lastAt < 150) return;
@@ -38156,6 +38389,7 @@ function tickHudItemCooldowns(ctrl) {
 // (updateGoldDisplay()와 같은 원칙, 매 프레임 아님). 칸 배치는 원작과 같다: 1·2·3 / 5·6·7 + 장신구(4).
 // 사용 아이템은 클릭(또는 숫자키)으로 사용하고, 나머지는 클릭하면 상점이 열리며 그 칸이 선택된다(판매는 상점에서).
 function updateItemUI(ctrl) {
+  if (ctrl && ctrl.isBot) return; if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   if (typeof renderShopPanel === 'function') renderShopPanel(); // 골드/보유 아이템이 바뀌면 상점 창도 함께 갱신
   const box = document.getElementById('hudItems');
   if (!box || typeof ITEM_DATA === 'undefined') return;
@@ -38648,6 +38882,7 @@ window.addEventListener('blur', () => {
 
 function togglePause() {
   paused = !paused;
+  if (typeof gameClockSetPaused === 'function') gameClockSetPaused(paused); // 95차: 상태 효과·재사용 대기·스킬 타이머도 멈춘다
   document.getElementById('pauseOverlay').classList.toggle('show', paused);
   clock.getDelta();
 }
@@ -39065,6 +39300,33 @@ function applyChampionCarry(c, carry) {
   }
 }
 
+// 닐라 무기(우루미) 리그 연결 - 95차: 적 챔피언 봇도 같이 쓴다.
+function attachNilahWeaponRig(ctrl, model) {
+  const findAny = (names) => { for (const n of names) { const o = model.getObjectByName(n); if (o) return o; } return null; };
+  // 요청("무기에 직접적으로 연결"): 끝 관절 2개만이 아니라 BladeA/B의
+  // 전체 뼈대 체인(각각 16개 + end)을 순서대로 모아둔다 - 이 체인을
+  // 그대로 이으면 실제 애니메이션이 만드는 채찍의 곡선을 정확히 따라
+  // 그릴 수 있다(별도 좌표계나 근사 곡선을 만들지 않는다).
+  const collectChain = (prefix) => {
+    const chain = [];
+    for (let i = 1; i <= 16; i++) { const o = model.getObjectByName(`${prefix}_${i}`); if (o) chain.push(o); }
+    const end = findAny([`${prefix}_end`]);
+    if (end) chain.push(end);
+    return chain;
+  };
+  ctrl._nilahWeaponRig = {
+    urumi: model.getObjectByName('Urumi'),
+    bladeRoot: model.getObjectByName('Blade_Root'),
+    bladeAEnd: findAny(['BladeA_end','BladeA_16','BladeA_15']),
+    bladeBEnd: findAny(['BladeB_end','BladeB_16','BladeB_15']),
+    bladeAChain: collectChain('BladeA'),
+    bladeBChain: collectChain('BladeB'),
+    trailSamples: [], lastTip: null, active: false,
+    sampleClock: 0, maxSamples: 20, trailRibbon: null
+  };
+}
+// 모델 원점 보정(아래 bootstrapChampion의 요네 설명 참고) - 95차: 적 챔피언 봇도 같이 쓴다.
+const MODEL_ORIGIN_CORRECTION = { yone: { x: -0.03977488, z: 0.12879331697463989 } };
 async function bootstrapChampion(gltf, fileName) {
   const carry = window.__resetNoCarry ? null : captureChampionCarry(typeof controller !== 'undefined' ? controller : null);
   window.__resetNoCarry = false; // resetGame(): 이전 챔피언 상태를 넘기지 않고 처음 상태로
@@ -39097,7 +39359,6 @@ async function bootstrapChampion(gltf, fileName) {
   // (X: +0.03977, Z: -0.15846-(-0.02966)=-0.12880)만큼 모델 전체가 밀려
   // 보인다. 1차 수정에서는 X축 차이만 잡고 더 큰 Z축 차이(약 3배 더 큼)를
   // 놓쳐서 여전히 어긋나 보였다 - 이번에 Z축까지 정확히 상쇄한다.
-  const MODEL_ORIGIN_CORRECTION = { yone: { x: -0.03977488, z: 0.12879331697463989 } };
   const originCorrection = MODEL_ORIGIN_CORRECTION[championId];
   if (originCorrection) { model.position.x += originCorrection.x; model.position.z += originCorrection.z; }
   model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -39144,30 +39405,7 @@ async function bootstrapChampion(gltf, fileName) {
 
   controller = new CharacterController(root, model, resolver, actionData);
   window.controller = controller;
-  if (championId === 'nilah') {
-    const findAny = (names) => { for (const n of names) { const o = model.getObjectByName(n); if (o) return o; } return null; };
-    // 요청("무기에 직접적으로 연결"): 끝 관절 2개만이 아니라 BladeA/B의
-    // 전체 뼈대 체인(각각 16개 + end)을 순서대로 모아둔다 - 이 체인을
-    // 그대로 이으면 실제 애니메이션이 만드는 채찍의 곡선을 정확히 따라
-    // 그릴 수 있다(별도 좌표계나 근사 곡선을 만들지 않는다).
-    const collectChain = (prefix) => {
-      const chain = [];
-      for (let i = 1; i <= 16; i++) { const o = model.getObjectByName(`${prefix}_${i}`); if (o) chain.push(o); }
-      const end = findAny([`${prefix}_end`]);
-      if (end) chain.push(end);
-      return chain;
-    };
-    controller._nilahWeaponRig = {
-      urumi: model.getObjectByName('Urumi'),
-      bladeRoot: model.getObjectByName('Blade_Root'),
-      bladeAEnd: findAny(['BladeA_end','BladeA_16','BladeA_15']),
-      bladeBEnd: findAny(['BladeB_end','BladeB_16','BladeB_15']),
-      bladeAChain: collectChain('BladeA'),
-      bladeBChain: collectChain('BladeB'),
-      trailSamples: [], lastTip: null, active: false,
-      sampleClock: 0, maxSamples: 20, trailRibbon: null
-    };
-  }
+  if (championId === 'nilah') attachNilahWeaponRig(controller, model);
   controller.healthBarLabelDiv = hpLabelDiv; // updateBars()에서 갱신, disposeCurrentChampion()에서 정리
   controller.skillAnimStore = skillAnimStore; // Q/W/E/R 다중 애니메이션 시퀀스 저장소(섹션 0-A2)
   controller.abilityResolver = abilityResolver; // 서브 상태/평타 오버라이드가 championAbilityDatabase를 참조하기 위함
@@ -40439,8 +40677,10 @@ function updateDummyAI(dt) {
 // 표시되고 위치가 그대로인 문제를 막기 위한 공통 지점.
 function tickPullEffects(dt) {
   // 죽음의 세계 격리와 무관하게 모든 유닛의 강제 이동을 진행한다(예전엔 모데카이저 R 중 바깥 유닛의 넉백이 멈췄다).
-  for (const u of getAllEnemyUnits(true)) {
-    const p = u._pullState;
+  // 95차: 적 챔피언 봇이 생기면서 플레이어·아군 더미도 끌려가거나 밀려날 수 있다 - 모든 챔피언과 아군 더미도 함께 진행한다.
+  const pullUnits = new Set([...getAllEnemyUnits(true), ...(typeof listChampionUnits === 'function' ? listChampionUnits() : []), ...(typeof placedAllies !== 'undefined' ? placedAllies : [])]);
+  for (const u of pullUnits) {
+    const p = u && u._pullState;
     if (!p) continue;
     // 요청("넥서스, 억제기 스킬로 안 끌어오게 하기") - 포탑/억제기/넥서스
     // 같은 구조물(isStructure)은 물리적으로 움직일 수 없는 대상이다.
@@ -40474,54 +40714,58 @@ function tickPullEffects(dt) {
     }
     if (t >= 1) { u._pullState = null; if (p.onComplete) p.onComplete(u); }
   }
-  // 플레이어 챔피언 자신에게도 같은 트윈을 쓸 수 있게 한다(요청: "돌진
-  // 스킬"이 순간이동 스냅이 아니라 실제로 이동하는 것처럼 보여야 함 - 리 신
-  // Q2 등). controller._dashState = {from, to, duration, elapsed}만 설정.
-  if (typeof controller !== 'undefined' && controller && controller._dashState) {
-    const p = controller._dashState;
-    const dashPrevPos = p.onTick ? controller.root.position.clone() : null; // 94차: 지나간 구간 판정용(onTick)
-    p.elapsed += dt;
-    let t = Math.min(1, p.elapsed / p.duration);
-    if (p.follow) {
-      // 35차: 대상을 따라가는 돌진(리 신 Q2) - 매 프레임 대상의 현재 지면 위치로 다시 겨누고, 그 프레임에 대상이
-      // 움직인 거리만큼 더 간다(날아가는 대상에게도 따라붙는다). 높이는 출발 높이(지면) 그대로.
-      const f = p.follow, tg = f.target, pos = controller.root.position;
-      const alive = tg && tg.hp > 0 && !tg.destroyed && !tg.isDead && tg.mesh;
-      if (alive) {
-        const tp = tg.mesh.position;
-        const prevTp = f.lastTargetPos.clone();
-        const moved = Math.hypot(tp.x - f.lastTargetPos.x, tp.z - f.lastTargetPos.z);
-        f.lastTargetPos.copy(tp);
-        const to = new THREE.Vector3(tp.x - pos.x, 0, tp.z - pos.z);
-        const dist = to.length();
-        const step = f.speed * dt + moved;
-        if (f.leashWorld && dist > f.leashWorld) {
-          // 81차: 대상이 사거리(리 신 Q2 2000) 밖으로 벗어나면 그 직전 위치로 마저 돌진하고 끝낸다.
-          p.follow = null; p.from = pos.clone(); p.to = new THREE.Vector3(prevTp.x, pos.y, prevTp.z);
-          p.elapsed = 0; p.duration = Math.max(0.05, getHorizontalDistance(p.from, p.to) / Math.max(1e-6, f.speed));
-          if (f.onLeash) f.onLeash();
-          t = 0;
-        } else if (dist <= f.stopDist + step) {
-          if (dist > f.stopDist) pos.addScaledVector(to.normalize(), dist - f.stopDist);
-          t = 1;
-        } else {
-          to.normalize();
-          pos.addScaledVector(to, step);
-          p.faceDir = to;
-        }
-      } else t = 1; // 대상이 죽거나 사라지면 그 자리에서 끝
-      pos.y = p.from.y;
-      if (p.follow) p.to.copy(pos); // 81차: 사거리 이탈로 일반 돌진으로 바뀐 프레임에는 목적지를 덮어쓰지 않는다
-    } else controller.root.position.lerpVectors(p.from, p.to, t);
-    if (p.faceDir && p.faceDir.lengthSq() > 1e-8) {
-      // 29차(요청 "리 신 Q2로 날아갈 때 날아가는 방향을 안 봄"): 예전엔 root.rotation.y(오일러)만 덮어썼다. 직전에
-      // faceDirectionInstant(쿼터니언)로 180° 돌아 있으면 오일러가 (π, 0, π)로 남아 있어, y만 바꾸면 정반대를 봤다.
-      controller.faceDirectionInstant(p.faceDir);
-    }
-    // 94차: 돌진 중 매 프레임 지나간 구간(이전 위치 → 지금 위치)을 알려 준다 - 레넥톤 E처럼 "지나가며 맞히는" 돌진이 쓴다.
-    if (p.onTick) { try { p.onTick(dashPrevPos, controller.root.position.clone()); } catch (e) { console.error('[DASH onTick]', e); } }
-    if (t >= 1) { controller._dashState = null; if (p.onArrive) p.onArrive(); }
+  if (typeof controller !== 'undefined' && controller) tickChampionDash(controller, dt);
+  if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b._dashState) withCombatActor(b, () => tickChampionDash(b, dt));
+}
+
+// 플레이어 챔피언 자신에게도 같은 트윈을 쓸 수 있게 한다(요청: "돌진
+// 스킬"이 순간이동 스냅이 아니라 실제로 이동하는 것처럼 보여야 함 - 리 신
+// Q2 등). ch._dashState = {from, to, duration, elapsed}만 설정. 95차: 적 챔피언 봇도 같은 함수(봇 입장에서 - onArrive 피해 출처).
+function tickChampionDash(ch, dt) {
+  if (!ch || !ch._dashState) return;
+  const p = ch._dashState;
+  const dashPrevPos = p.onTick ? ch.root.position.clone() : null; // 94차: 지나간 구간 판정용(onTick)
+  p.elapsed += dt;
+  let t = Math.min(1, p.elapsed / p.duration);
+  if (p.follow) {
+    // 35차: 대상을 따라가는 돌진(리 신 Q2) - 매 프레임 대상의 현재 지면 위치로 다시 겨누고, 그 프레임에 대상이
+    // 움직인 거리만큼 더 간다(날아가는 대상에게도 따라붙는다). 높이는 출발 높이(지면) 그대로.
+    const f = p.follow, tg = f.target, pos = ch.root.position;
+    const alive = tg && tg.hp > 0 && !tg.destroyed && !tg.isDead && tg.mesh;
+    if (alive) {
+      const tp = tg.mesh.position;
+      const prevTp = f.lastTargetPos.clone();
+      const moved = Math.hypot(tp.x - f.lastTargetPos.x, tp.z - f.lastTargetPos.z);
+      f.lastTargetPos.copy(tp);
+      const to = new THREE.Vector3(tp.x - pos.x, 0, tp.z - pos.z);
+      const dist = to.length();
+      const step = f.speed * dt + moved;
+      if (f.leashWorld && dist > f.leashWorld) {
+        // 81차: 대상이 사거리(리 신 Q2 2000) 밖으로 벗어나면 그 직전 위치로 마저 돌진하고 끝낸다.
+        p.follow = null; p.from = pos.clone(); p.to = new THREE.Vector3(prevTp.x, pos.y, prevTp.z);
+        p.elapsed = 0; p.duration = Math.max(0.05, getHorizontalDistance(p.from, p.to) / Math.max(1e-6, f.speed));
+        if (f.onLeash) f.onLeash();
+        t = 0;
+      } else if (dist <= f.stopDist + step) {
+        if (dist > f.stopDist) pos.addScaledVector(to.normalize(), dist - f.stopDist);
+        t = 1;
+      } else {
+        to.normalize();
+        pos.addScaledVector(to, step);
+        p.faceDir = to;
+      }
+    } else t = 1; // 대상이 죽거나 사라지면 그 자리에서 끝
+    pos.y = p.from.y;
+    if (p.follow) p.to.copy(pos); // 81차: 사거리 이탈로 일반 돌진으로 바뀐 프레임에는 목적지를 덮어쓰지 않는다
+  } else ch.root.position.lerpVectors(p.from, p.to, t);
+  if (p.faceDir && p.faceDir.lengthSq() > 1e-8) {
+    // 29차(요청 "리 신 Q2로 날아갈 때 날아가는 방향을 안 봄"): 예전엔 root.rotation.y(오일러)만 덮어썼다. 직전에
+    // faceDirectionInstant(쿼터니언)로 180° 돌아 있으면 오일러가 (π, 0, π)로 남아 있어, y만 바꾸면 정반대를 봤다.
+    ch.faceDirectionInstant(p.faceDir);
   }
+  // 94차: 돌진 중 매 프레임 지나간 구간(이전 위치 → 지금 위치)을 알려 준다 - 레넥톤 E처럼 "지나가며 맞히는" 돌진이 쓴다.
+  if (p.onTick) { try { p.onTick(dashPrevPos, ch.root.position.clone()); } catch (e) { console.error('[DASH onTick]', e); } }
+  if (t >= 1) { ch._dashState = null; if (p.onArrive) p.onArrive(); }
 }
 
 window.addEventListener('resize', () => {
@@ -40557,6 +40801,7 @@ function animate() {
     if (typeof gameSession !== 'undefined' && gameSession) gameSession.advance(dt);
     if (typeof advanceTurretGameClock === 'function') advanceTurretGameClock(dt); // 94차: 게임 시계 = 시뮬레이션 시간
     if (controller) { controller.update(dt); updateCameraTransform(cameraFocusPoint(controller.root.position, dt), dt); }
+    if (typeof updateEnemyBots === 'function') updateEnemyBots(dt); // 95차: 적 챔피언 봇(두뇌 → 컨트롤러)
     else updateCameraTransform(new THREE.Vector3(0,0,0), dt);
     updateMarkers(dt);
     updateDummyAI(dt);
@@ -40599,6 +40844,573 @@ function animate() {
   labelRenderer.render(scene, camera);
 }
 animate();
+
+/* ===== src/core/bot_brain.js ===== */
+/* bot_brain.js — 95차: 적 챔피언 AI(두뇌)
+ *
+ * 봇은 플레이어와 똑같은 CharacterController다. 두뇌는 플레이어가 누르는 것과 같은 명령만 내린다
+ * (moveTo·selectTarget·castAbility·castSummonerSpell·levelUpSkill·buildOrBuyItem) - 규칙 판정은 모두 기존 코드가 한다.
+ * 판정은 봇 입장(withCombatActor)에서 돈다: 봇이 쓰는 스킬의 "적"은 플레이어 팀이다(01_hit_detection.js getAllEnemyUnits).
+ *
+ * 행동(생각 주기마다 하나):
+ *  - 후퇴: 체력이 낮거나(난이도별 기준) 상대 포탑이 나를 노리면 아군 쪽으로 물러난다. 칼바람 나락은 우물 회복이 없어서
+ *    아군 포탑 뒤에서 체력이 돌아올 때까지(재생·회복 유물) 기다린다. 아주 낮으면 점멸로 도망친다.
+ *  - 교전: 상대 챔피언이 교전 거리 안에 보이면(봇 팀 시야) 스킬 → 평타. 상대 포탑 아래로는 쫓아 들어가지 않는다
+ *    (상대가 빈사이고 내가 건강하면 예외).
+ *  - 라인: 아군 미니언 무리 바로 뒤에 서서 막타(평타 한 방이면 죽는 미니언)를 친다. 아군 미니언이 포탑을 치고 있으면 포탑도 친다.
+ *    아군 미니언이 없으면 아군 맨 앞 포탑 근처에서 기다린다. 맵·구조물이 없는 연습 공간에서는 상대 챔피언을 찾아간다.
+ *  - 레벨 업마다 스킬 포인트를 R > Q > E > W 순서로 찍고, 죽어 있거나 기지에 있을 때 역할별 추천 아이템을 산다.
+ *
+ * 스킬 사용: skill_aim_system.js의 조준 정의(SKILL_AIM - 종류·사거리)를 그대로 읽는다. 대상 지정은 대상에게, 직선·지점 스킬은
+ * 상대의 이동을 조금 앞질러(난이도별) 겨누고, 돌진은 평타 사거리 밖의 상대에게 붙을 때 쓴다. 바루스 Q는 충전 후 놓는다.
+ * 난이도: easy(생각 0.45초·스킬 50%·막타 안 함) / normal(0.25초·85%) / hard(0.12초·100%·예측 사격).
+ */
+const BOT_DIFFICULTY = {
+  easy: { thinkSec: 0.45, reactSec: 0.6, skillChance: 0.5, lead: 0, lastHit: false, retreatPct: 0.2, engageExtraLol: 250, diveHpPct: 1.1 },
+  normal: { thinkSec: 0.25, reactSec: 0.35, skillChance: 0.85, lead: 0.5, lastHit: true, retreatPct: 0.3, engageExtraLol: 400, diveHpPct: 0.25 },
+  hard: { thinkSec: 0.12, reactSec: 0.15, skillChance: 1, lead: 1, lastHit: true, retreatPct: 0.32, engageExtraLol: 550, diveHpPct: 0.35 },
+};
+const BOT_SKILL_ORDER = ['Q', 'E', 'W'];
+const BOT_LEVEL_ORDER = ['R', 'Q', 'E', 'W'];
+const BOT_SAFE_RECOVER_PCT = 0.7; // 후퇴 뒤 이만큼 회복하면 다시 라인으로
+// 직선·지점 스킬의 대략적인 탄속(LoL 단위/초) - 예측 사격용. 스킬 데이터에 speed가 있으면 그것을 쓴다.
+const BOT_DEFAULT_SKILL_SPEED_LOL = 1600;
+
+function _botW(lol) { return lolRangeToWorld(lol || 0); }
+function _botPos(u) { return getWorldPosition(u); }
+function _botDist(a, b) { return getHorizontalDistance(_botPos(a), _botPos(b)); }
+// 평타 사거리(월드, 가장자리 기준이라 시전자 반경을 더한다).
+function botAttackRangeWorld(bot) { return ((bot.stats && bot.stats.attackRange) || _botW(150)) + (getCollisionRadius(bot) || 0); }
+function _botEnemyTeam(team) { return team === 'RED' ? 'BLUE' : 'RED'; }
+
+// 봇 팀이 지금 볼 수 있는가(시야 시스템이 꺼져 있으면 항상 보임).
+function botCanSee(bot, unit) {
+  if (typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled || typeof visionSystem.isVisibleTo !== 'function') return true;
+  return visionSystem.isVisibleTo(bot.team, unit);
+}
+// 상대 팀 챔피언(살아 있고 대상 지정 가능, 봇 팀에게 보임) - 가까운 순.
+function botEnemyChampions(bot) {
+  return listChampionUnits()
+    .filter((c) => c && c !== bot && c.team !== bot.team && isChampionAlive(c) && !c.isUntargetable && botCanSee(bot, c)
+      && (typeof canRealmInteract !== 'function' || canRealmInteract(bot, c)))
+    .sort((a, b) => _botDist(bot, a) - _botDist(bot, b));
+}
+// 봇의 평타 한 방 대략 피해(방어력 반영) - 막타 판단용.
+function botEstimateAutoDamage(bot, target) {
+  const ad = (bot.stats && bot.stats.attackDamage) || 0;
+  const armor = Math.max(0, target.armor || 0);
+  return ad * (100 / (100 + armor));
+}
+// 라인 진행도: 우리 분수 → 상대 분수 축에 투영한 거리(월드). 맵이 없으면 null.
+function botLaneAxis(team) {
+  if (typeof getTeamSpawnPosition !== 'function' || typeof howlingAbyssMap === 'undefined' || !howlingAbyssMap) return null;
+  const a = getTeamSpawnPosition(team), b = getTeamSpawnPosition(_botEnemyTeam(team));
+  const dir = new THREE.Vector3(b.x - a.x, 0, b.z - a.z);
+  const len = dir.length();
+  if (len < 1e-6) return null;
+  return { origin: a, dir: dir.multiplyScalar(1 / len), len };
+}
+function botLaneProgress(axis, pos) { return (pos.x - axis.origin.x) * axis.dir.x + (pos.z - axis.origin.z) * axis.dir.z; }
+function botLanePoint(axis, progress, lateral = 0) {
+  const p = axis.origin.clone().addScaledVector(axis.dir, progress);
+  p.x += -axis.dir.z * lateral; p.z += axis.dir.x * lateral;
+  return p;
+}
+// 상대 팀의 살아 있는 포탑 중 이 위치를 사거리에 두는 것(포탑 사거리 + 여유).
+function botEnemyTurretCovering(bot, pos, extraLol = 0) {
+  if (typeof turrets === 'undefined') return null;
+  const r = _botW(TURRET_ATTACK_RANGE_LOL + extraLol);
+  for (const t of turrets) {
+    if (!t || t.destroyed || t.team === bot.team || !t.isStructure) continue;
+    if (getHorizontalDistance(getWorldPosition(t), pos) <= r) return t;
+  }
+  return null;
+}
+// 이 포탑 사거리 안에 아군(봇 팀) 미니언이 있는가 - 있으면 포탑이 미니언을 먼저 친다.
+function botAlliedMinionsUnderTurret(bot, turret) {
+  if (typeof minions === 'undefined') return 0;
+  const r = _botW(TURRET_ATTACK_RANGE_LOL);
+  let n = 0;
+  for (const m of minions) if (m && !m.isDead && m.team === bot.team && getHorizontalDistance(m.mesh.position, getWorldPosition(turret)) <= r) n++;
+  return n;
+}
+
+// 스킬 하나를 지금 대상에게 쓸지 정한다 - { slot, point, target, kind } 또는 null. 순수 판단(명령은 내리지 않음).
+function botPlanSkill(bot, slot, target, opts = {}) {
+  if (!target || !bot.skillLevels || !(bot.skillLevels[slot] > 0)) return null;
+  if ((bot.cooldowns && bot.cooldowns[slot]) > 0) return null;
+  if (typeof skillAimSpec !== 'function') return null;
+  const spec = skillAimSpec(bot.championId, slot);
+  if (!spec) return null;
+  const cd = bot._champData ? bot._champData() : null;
+  const d = (cd && cd[slot]) || {};
+  const tp = _botPos(target);
+  const dist = _botDist(bot, target);
+  const tr = getCollisionRadius(target) || 0;
+  const aaRange = botAttackRangeWorld(bot);
+  const instant = typeof skillAimIsInstant === 'function' && skillAimIsInstant(bot, slot);
+  const lead = opts.lead || 0;
+  const vel = opts.targetVel || null;
+  const predict = (rangeW) => {
+    if (!vel || !lead) return tp.clone();
+    const speedW = _botW(d.speed || d.missileSpeed || BOT_DEFAULT_SKILL_SPEED_LOL);
+    const t = Math.min(1, dist / Math.max(1e-6, speedW)) * lead;
+    const p = tp.clone().addScaledVector(vel, t);
+    const from = bot.root.position;
+    const off = new THREE.Vector3(p.x - from.x, 0, p.z - from.z);
+    if (rangeW && off.length() > rangeW) off.setLength(rangeW);
+    return new THREE.Vector3(from.x + off.x, 0, from.z + off.z);
+  };
+  if (instant) {
+    // 즉시 시전(자기 강화·자기 주변 범위·재시전): 상대가 가까울 때만. 범위가 데이터에 없으면 평타 사거리 + 150.
+    const r = _botW(d.radius || d.range || d.aoeRadius || 0) || (aaRange + _botW(150));
+    if (dist > r + tr) return null;
+    return { slot, point: tp.clone(), target, kind: 'instant' };
+  }
+  const aim = typeof computeSkillAim === 'function' ? computeSkillAim(bot, slot, tp) : null;
+  const rangeW = aim && aim.rangeWorld ? aim.rangeWorld : _botW(d.range || 0);
+  switch (spec.type) {
+    case 'unit':
+      if (dist > rangeW + tr) return null;
+      return { slot, point: tp.clone(), target, kind: 'unit' };
+    case 'dash': case 'blink':
+      // 돌진: 평타 사거리 밖의 상대에게 붙을 때(사거리 + 평타 사거리 안).
+      if (opts.noGapClose || dist <= aaRange + tr || dist > rangeW + aaRange) return null;
+      return { slot, point: tp.clone(), target, kind: 'dash' };
+    case 'charge': {
+      const maxR = _botW(d.maxRange || d.range || 0);
+      if (dist > maxR + tr) return null;
+      return { slot, point: predict(maxR), target, kind: 'charge', chargeSec: Math.min(1.5, (d.rangeChargeDuration || 1.5) * Math.min(1, dist / Math.max(1e-6, maxR)) + 0.15) };
+    }
+    case 'ally': case 'wall':
+      return null; // 아군 대상(리 신 W)·바람 장막은 봇이 쓰지 않는다
+    default: {
+      // line / lineToPoint / circleAt / cone / trapezoid / rectAtPoint / selfAim
+      const reach = rangeW + tr + (spec.type === 'circleAt' ? _botW(d.radius || 0) : 0);
+      if (!(rangeW > 0) || dist > reach) return null;
+      return { slot, point: predict(rangeW), target, kind: spec.type };
+    }
+  }
+}
+
+class BotBrain {
+  constructor(bot, opts = {}) {
+    this.bot = bot;
+    this.difficulty = BOT_DIFFICULTY[opts.difficulty] ? opts.difficulty : 'normal';
+    this.cfg = BOT_DIFFICULTY[this.difficulty];
+    this.mode = 'LANE';
+    this.acc = Math.random() * this.cfg.thinkSec;
+    this.seenAt = new Map(); // 상대를 처음 본 시각(반응 시간)
+    this.lastTargetPos = null; this.targetVel = new THREE.Vector3();
+    this.charge = null;
+    this.nextCastAt = 0;
+    this.lateral = (Math.random() - 0.5) * 2; // 라인에서 서는 옆 위치(-1~1)
+    this.lastOrder = '';
+    this.retreatSince = 0;
+    this.slotBackoff = {}; // 시전했는데 재사용 대기가 안 걸린 스킬(대상별 쿨다운·중첩 부족 등) - 잠시 다시 시도하지 않는다
+    this.lastAttempt = null;
+  }
+  setDifficulty(name) { if (BOT_DIFFICULTY[name]) { this.difficulty = name; this.cfg = BOT_DIFFICULTY[name]; } }
+  tick(dt) {
+    const b = this.bot;
+    if (typeof gameEnded !== 'undefined' && gameEnded) return;
+    this._spendSkillPoints();
+    if (!isChampionAlive(b)) { this.mode = 'DEAD'; this._shop(); return; }
+    if (this.mode === 'DEAD') { this.mode = 'LANE'; this._shop(); }
+    if (typeof isPositionInBaseZone === 'function' && isPositionInBaseZone(b.root.position, b.team)) this._shop(); // 기지에 있으면 산다(1초에 한 번)
+    this._tickCharge();
+    this.acc += dt;
+    if (this.acc < this.cfg.thinkSec) return;
+    const step = this.acc; this.acc = 0;
+    this.think(step);
+  }
+  _now() { return performance.now(); }
+  _order(tag, fn) { this.lastOrder = tag; return fn(); }
+  think(step) {
+    const b = this.bot, cfg = this.cfg, now = this._now();
+    const enemies = botEnemyChampions(b);
+    for (const e of enemies) if (!this.seenAt.has(e)) this.seenAt.set(e, now);
+    for (const k of [...this.seenAt.keys()]) if (!enemies.includes(k)) this.seenAt.delete(k);
+    const target = enemies[0] || null;
+    if (target) {
+      const p = _botPos(target);
+      if (this.lastTargetPos && step > 0) this.targetVel.set((p.x - this.lastTargetPos.x) / step, 0, (p.z - this.lastTargetPos.z) / step);
+      this.lastTargetPos = p.clone();
+    } else this.lastTargetPos = null;
+    const hpPct = b.hp / Math.max(1, b.maxHp);
+    const axis = botLaneAxis(b.team);
+    const turretOnMe = typeof turrets !== 'undefined' ? turrets.find((t) => t && !t.destroyed && t.team !== b.team && t.attackTarget === b) : null;
+
+    // 후퇴 판단
+    if (this.mode !== 'RETREAT' && (hpPct < cfg.retreatPct || (turretOnMe && (!target || hpPct < 0.6)))) { this.mode = 'RETREAT'; this.retreatSince = now; }
+    if (this.mode === 'RETREAT') {
+      const safeEnough = hpPct >= BOT_SAFE_RECOVER_PCT || (!turretOnMe && hpPct >= cfg.retreatPct + 0.15 && (!target || _botDist(b, target) > _botW(1400)));
+      if (safeEnough && !turretOnMe) this.mode = 'LANE';
+      else return this._retreat(target, hpPct, axis, turretOnMe);
+    }
+    // 교전 판단
+    if (target && this._shouldEngage(target, hpPct, axis)) { this.mode = 'FIGHT'; return this._fight(target); }
+    this.mode = 'LANE';
+    return this._lane(axis, target);
+  }
+  _engageRangeW() {
+    const b = this.bot;
+    let r = botAttackRangeWorld(b);
+    for (const s of ['Q', 'W', 'E', 'R']) {
+      const aim = typeof computeSkillAim === 'function' && typeof skillAimSpec === 'function' && skillAimSpec(b.championId, s) ? computeSkillAim(b, s, null) : null;
+      if (aim && aim.rangeWorld && aim.rangeWorld < _botW(1300)) r = Math.max(r, aim.rangeWorld);
+    }
+    return r + _botW(this.cfg.engageExtraLol);
+  }
+  _shouldEngage(target, hpPct, axis) {
+    const b = this.bot;
+    if (this._now() - (this.seenAt.get(target) || 0) < this.cfg.reactSec * 1000) return false; // 반응 시간
+    if (_botDist(b, target) > this._engageRangeW()) return false;
+    // 상대 포탑 아래로는 들어가지 않는다(상대가 빈사이고 내가 건강하거나, 아군 미니언이 포탑을 맞고 있으면 예외).
+    const tTurret = botEnemyTurretCovering(b, _botPos(target), 50);
+    if (tTurret) {
+      const targetLow = target.hp / Math.max(1, target.maxHp) < this.cfg.diveHpPct && hpPct > 0.6;
+      if (!targetLow && botAlliedMinionsUnderTurret(b, tTurret) < 2) return false;
+    }
+    // 내가 훨씬 불리하면(체력 비율이 크게 낮으면) 싸우지 않는다.
+    const tPct = target.hp / Math.max(1, target.maxHp);
+    if (hpPct < 0.5 && tPct > hpPct + 0.35) return false;
+    return true;
+  }
+  _fight(target) {
+    const b = this.bot, cfg = this.cfg, now = this._now();
+    const la = this.lastAttempt;
+    if (la && now - la.at > 300) {
+      if (!((b.cooldowns && b.cooldowns[la.slot]) > 0) && !(b._varus && b._varus.qCharge)) this.slotBackoff[la.slot] = now + 2000;
+      this.lastAttempt = null;
+    }
+    if (now >= this.nextCastAt && !this.charge && Math.random() < cfg.skillChance) {
+      const order = [...BOT_SKILL_ORDER];
+      const tPct = target.hp / Math.max(1, target.maxHp);
+      if (tPct < 0.55 || b.hp / Math.max(1, b.maxHp) < 0.45) order.unshift('R'); // 궁극기는 마무리·위기 때
+      for (const slot of order) {
+        if ((this.slotBackoff[slot] || 0) > now) continue;
+        const plan = botPlanSkill(b, slot, target, { lead: cfg.lead, targetVel: this.targetVel });
+        if (!plan) continue;
+        this.nextCastAt = now + cfg.reactSec * 500;
+        return this._cast(plan);
+      }
+    }
+    if (b.currentTarget !== target || !b.attackOrderActive) {
+      return this._order('attack', () => { b.attackOrderActive = true; return b.selectTarget(target); });
+    }
+    return null;
+  }
+  _cast(plan) {
+    const b = this.bot;
+    this.lastAttempt = { slot: plan.slot, at: this._now() };
+    if (plan.kind === 'unit') b.currentTarget = plan.target;
+    if (plan.kind === 'charge') {
+      const ok = this._order('cast' + plan.slot, () => b.castAbility(plan.slot, plan.point));
+      this.charge = { slot: plan.slot, target: plan.target, releaseAt: this._now() + plan.chargeSec * 1000 };
+      return ok;
+    }
+    return this._order('cast' + plan.slot, () => b.castAbility(plan.slot, plan.point));
+  }
+  // 충전형(바루스 Q): 충전을 시작했으면 정한 시간 뒤 대상 쪽으로 놓는다.
+  _tickCharge() {
+    const c = this.charge, b = this.bot;
+    if (!c) return;
+    const charging = b._varus && b._varus.qCharge;
+    if (!charging && this._now() > c.releaseAt + 300) { this.charge = null; return; }
+    if (charging && this._now() >= c.releaseAt) {
+      const t = c.target && isChampionAlive(c.target) ? _botPos(c.target).clone() : b.root.position.clone().add(new THREE.Vector3(0, 0, 1));
+      this.charge = null;
+      this._order('release' + c.slot, () => b.castAbility(c.slot, t));
+    }
+  }
+  _retreat(target, hpPct, axis, turretOnMe) {
+    const b = this.bot;
+    // 아주 위험하면 점멸로 도망친다.
+    if (target && hpPct < 0.15 && _botDist(b, target) < _botW(500) && b.summoners) {
+      const slot = Object.keys(b.summoners).find((k) => b.summoners[k] && b.summoners[k].id === 'flash' && !(b.summoners[k].readyAt > this._now()));
+      if (slot && typeof castSummonerSpell === 'function') {
+        const home = typeof getTeamSpawnPosition === 'function' ? getTeamSpawnPosition(b.team) : b.root.position.clone();
+        castSummonerSpell(b, slot, home, null);
+      }
+    }
+    let dest;
+    if (axis) {
+      // 아군 포탑(가장 앞 것) 뒤쪽으로. 없으면 분수.
+      const own = (typeof turrets !== 'undefined' ? turrets : []).filter((t) => t && !t.destroyed && t.team === b.team && t.isStructure);
+      const progs = own.map((t) => botLaneProgress(axis, getWorldPosition(t)));
+      const front = progs.length ? Math.max(...progs) : 0;
+      dest = botLanePoint(axis, Math.max(0, front - _botW(500)), this.lateral * _botW(120));
+    } else {
+      const away = target ? new THREE.Vector3().subVectors(b.root.position, _botPos(target)).setY(0) : new THREE.Vector3(0, 0, 1);
+      if (away.lengthSq() < 1e-6) away.set(0, 0, 1);
+      dest = b.root.position.clone().addScaledVector(away.normalize(), _botW(800));
+    }
+    if (getHorizontalDistance(b.root.position, dest) > _botW(60)) return this._move('retreat', dest);
+    return null;
+  }
+  // 곧장 가는 길이 구조물(포탑·억제기·넥서스)을 지나면 그 옆으로 먼저 간다 - 이동은 직선이라 구조물에 막혀 멈췄다(길찾기 없음).
+  _detour(from, dest) {
+    const structs = [...(typeof turrets !== 'undefined' ? turrets : []), ...(typeof inhibitorBuildings !== 'undefined' ? inhibitorBuildings : []), ...(typeof nexusBuildings !== 'undefined' ? nexusBuildings : [])]
+      .filter((t) => t && t.isStructure);
+    const me = getCollisionRadius(this.bot) || 0, margin = _botW(60);
+    const dx = dest.x - from.x, dz = dest.z - from.z, len2 = dx * dx + dz * dz;
+    if (len2 < 1e-8) return dest;
+    let best = null;
+    for (const t of structs) {
+      const c = getWorldPosition(t), r = (getCollisionRadius(t) || 0) + me + margin;
+      const u = ((c.x - from.x) * dx + (c.z - from.z) * dz) / len2;
+      if (u <= 0 || u >= 1) continue;
+      const px = from.x + dx * u, pz = from.z + dz * u;
+      const d = Math.hypot(px - c.x, pz - c.z);
+      if (d >= r || (best && u >= best.u)) continue;
+      // 길이 구조물 중심의 어느 쪽을 지나는지에 따라 그쪽 옆으로(중심을 지나면 길의 왼쪽).
+      let nx = px - c.x, nz = pz - c.z;
+      if (Math.hypot(nx, nz) < 1e-6) { const l = Math.sqrt(len2); nx = -dz / l; nz = dx / l; }
+      const nl = Math.hypot(nx, nz);
+      best = { u, p: new THREE.Vector3(c.x + nx / nl * (r + margin), 0, c.z + nz / nl * (r + margin)) };
+    }
+    return best ? best.p : dest;
+  }
+  _move(tag, dest) {
+    const b = this.bot;
+    dest = this._detour(b.root.position, dest);
+    if (b.targetPos && getHorizontalDistance(b.targetPos, dest) < _botW(40) && b.state === STATE.MOVE) return null; // 같은 곳으로 이미 가는 중
+    b.attackOrderActive = false; b.currentTarget = null;
+    return this._order(tag, () => b.moveTo(dest));
+  }
+  _lane(axis, target) {
+    const b = this.bot, cfg = this.cfg;
+    if (!axis) {
+      // 맵이 없는 연습 공간: 상대 챔피언에게 다가간다.
+      if (target) return this._move('seek', _botPos(target).clone());
+      return null;
+    }
+    const allies = (typeof minions !== 'undefined' ? minions : []).filter((m) => m && !m.isDead && m.team === b.team);
+    const foes = (typeof minions !== 'undefined' ? minions : []).filter((m) => m && !m.isDead && m.team !== b.team && botCanSee(b, m));
+    const aa = botAttackRangeWorld(b);
+    // 막타: 평타 한 방이면 죽는 미니언(가까운 것부터).
+    if (cfg.lastHit) {
+      const lh = foes.filter((m) => _botDist(b, m) <= aa + _botW(350) && m.hp <= botEstimateAutoDamage(b, m) * 1.05
+        && !botEnemyTurretCovering(b, m.mesh.position, -50))
+        .sort((x, y) => _botDist(b, x) - _botDist(b, y))[0];
+      if (lh) { if (b.currentTarget !== lh) return this._order('lasthit', () => { b.attackOrderActive = true; return b.selectTarget(lh); }); return null; }
+    }
+    // 아군 미니언이 포탑을 치고 있으면 포탑도 친다.
+    const turretUnderAttack = (typeof turrets !== 'undefined' ? turrets : []).find((t) => t && !t.destroyed && t.team !== b.team && t.isStructure
+      && !(typeof isStructureProtected === 'function' && isStructureProtected(t)) && botAlliedMinionsUnderTurret(b, t) >= 2);
+    if (turretUnderAttack && !target) {
+      if (b.currentTarget !== turretUnderAttack) return this._order('siege', () => { b.attackOrderActive = true; return b.selectTarget(turretUnderAttack); });
+      return null;
+    }
+    // 미니언끼리 싸우는 중이면 상대 미니언을 친다(체력이 낮은 것 - 쉬움은 안 함).
+    if (foes.length && allies.length && this.difficulty !== 'easy') {
+      const near = foes.filter((m) => _botDist(b, m) <= aa + _botW(150) && !botEnemyTurretCovering(b, m.mesh.position, 0));
+      if (near.length) {
+        const pick = near.sort((x, y) => x.hp - y.hp)[0];
+        if (b.currentTarget !== pick) return this._order('push', () => { b.attackOrderActive = true; return b.selectTarget(pick); });
+        return null;
+      }
+    }
+    // 서 있을 곳: 아군 미니언 맨 앞 바로 뒤. 아군 미니언이 없으면 아군 맨 앞 포탑 근처.
+    // (새 웨이브가 아직 아군 맨 앞 포탑에 오지 않았으면 포탑 옆에서 기다린다 - 기지까지 되돌아가지 않게.)
+    const own = (typeof turrets !== 'undefined' ? turrets : []).filter((t) => t && !t.destroyed && t.team === b.team && t.isStructure);
+    const turretFront = own.length ? Math.max(...own.map((t) => botLaneProgress(axis, getWorldPosition(t)))) - _botW(150) : axis.len * 0.3;
+    const front = allies.length ? Math.max(Math.max(...allies.map((m) => botLaneProgress(axis, m.mesh.position))) - _botW(220), turretFront - _botW(450)) : turretFront;
+    let dest = botLanePoint(axis, front, this.lateral * _botW(150));
+    // 상대 포탑 사거리 안이고 아군 미니언이 그 포탑을 맞고 있지 않으면 사거리 밖으로 물러선다.
+    const cover = botEnemyTurretCovering(b, dest, 80);
+    if (cover && botAlliedMinionsUnderTurret(b, cover) < 2) {
+      const tp = botLaneProgress(axis, getWorldPosition(cover));
+      dest = botLanePoint(axis, tp - _botW(TURRET_ATTACK_RANGE_LOL + 200), this.lateral * _botW(150));
+    }
+    if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap && howlingAbyssMap.clampPosition) dest = howlingAbyssMap.clampPosition(dest);
+    if (getHorizontalDistance(b.root.position, dest) > _botW(90)) return this._move('lane', dest);
+    if (b.state === STATE.MOVE && !b.currentTarget) return null;
+    return null;
+  }
+  _spendSkillPoints() {
+    const b = this.bot;
+    let guard = 4;
+    while ((b.skillPoints || 0) > 0 && guard-- > 0) {
+      const before = b.skillPoints;
+      for (const s of BOT_LEVEL_ORDER) { if (typeof b.levelUpSkill === 'function' && b.levelUpSkill(s)) break; }
+      if (b.skillPoints === before) break;
+    }
+  }
+  // 죽어 있거나 기지에 있을 때 역할별 추천 아이템을 산다(신발 → 핵심 순서, 모자라면 재료부터).
+  _shop() {
+    const b = this.bot;
+    if (typeof buildOrBuyItem !== 'function' || typeof SHOP_RECOMMENDED === 'undefined' || typeof ITEM_DATA === 'undefined') return;
+    if ((this._shopAt || 0) > this._now()) return;
+    this._shopAt = this._now() + 1000;
+    const role = typeof _shopRole === 'function' ? _shopRole(b) : 'fighter';
+    const rec = SHOP_RECOMMENDED[role] || SHOP_RECOMMENDED.fighter;
+    const owned = new Set([...(b.items || []).filter(Boolean).map((s) => s.id), b.boots && b.boots.id].filter(Boolean));
+    const wants = [];
+    if (!b.boots || !b.boots.id || b.boots.id === 'boots') wants.push(rec.boots[0]);
+    for (const id of rec.core) if (!owned.has(id)) wants.push(id);
+    for (const id of wants.slice(0, 2)) {
+      if (!ITEM_DATA[id]) continue;
+      if (this._tryBuy(id, 3)) return;
+    }
+  }
+  _tryBuy(id, depth) {
+    const b = this.bot, it = ITEM_DATA[id];
+    if (!it || depth < 0) return false;
+    const goldBefore = b.gold || 0;
+    if ((it.cost || 0) <= goldBefore) {
+      buildOrBuyItem(b, id);
+      if ((b.gold || 0) < goldBefore) return true;
+    }
+    for (const part of (it.recipe || [])) if (this._tryBuy(part, depth - 1)) return true;
+    return false;
+  }
+}
+
+/* ===== src/world/enemy_bot.js ===== */
+/* enemy_bot.js — 95차: 적 챔피언 봇(만들기·매 프레임 갱신·지우기)
+ *
+ * 봇은 플레이어와 같은 CharacterController + 같은 챔피언 코드다(bootstrapChampion과 같은 순서로 GLB를 세운다).
+ * 다른 점: team = RED, isBot = true, 머리 위 바는 적(빨강), 화면 HUD·대상 표시·알림은 건드리지 않는다(updateBars 등이
+ * isBot/isBotActing을 본다). 매 프레임 봇 입장(withCombatActor)에서 두뇌(BotBrain) → 컨트롤러 update 순서로 돈다.
+ * 게임 초기화·챔피언 교체 때도 남아 있고(초기화는 처음 상태로 되살림), "적 챔피언 AI 전부 제거"로 지운다.
+ */
+// enemyBots 배열은 00_global_constants.js에 있다(메인 루프가 이 파일보다 먼저 돌기 시작한다).
+const _botGlbCache = new Map();
+function _botFetchGlb(id) {
+  if (!_botGlbCache.has(id)) {
+    _botGlbCache.set(id, fetch(CHAMPION_MODEL_DIR + id + '.glb').then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.arrayBuffer(); })
+      .catch((e) => { _botGlbCache.delete(id); throw e; }));
+  }
+  return _botGlbCache.get(id);
+}
+function _botChampionName(id) {
+  const row = CHAMPION_MODEL_LIBRARY.find(([k]) => k === id);
+  return row ? row[1] : id;
+}
+// 적 챔피언 봇을 만든다. opts: { difficulty: 'easy'|'normal'|'hard', team, position, level }
+async function spawnEnemyBot(championId, opts = {}) {
+  if (!CHAMPION_MODEL_LIBRARY.some(([k]) => k === championId)) throw new Error('모르는 챔피언: ' + championId);
+  const buf = await _botFetchGlb(championId);
+  const gltf = await new Promise((res, rej) => new GLTFLoader().parse(buf.slice(0), '', res, rej));
+  return _buildEnemyBot(gltf, championId, opts);
+}
+function _buildEnemyBot(gltf, championId, opts) {
+  const model = gltf.scene;
+  if (championId === 'nilah') ensureNilahWeaponRig(model);
+  alignModelOrigin(model);
+  const originCorrection = MODEL_ORIGIN_CORRECTION[championId];
+  if (originCorrection) { model.position.x += originCorrection.x; model.position.z += originCorrection.z; }
+  model.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  const scaleWrapper = new THREE.Group();
+  scaleWrapper.add(model);
+  scaleWrapper.scale.setScalar(resolveModelScaleMultiplier(championId));
+  const root = new THREE.Group();
+  root.add(scaleWrapper);
+  scene.add(root);
+  const resolver = new AnimationRoleResolver(gltf.animations || []);
+  const abilityResolver = new ChampionAbilityResolver(resolver, championId);
+  const actionData = buildActionData(resolver, abilityResolver);
+  const box = new THREE.Box3().setFromObject(model);
+  const sphere = new THREE.Sphere(); box.getBoundingSphere(sphere);
+  root.add(createBlobShadow(sphere.radius * 0.9));
+  const hpDiv = makeChampBarDiv('enemy', _botChampionName(championId));
+  const hpLabel3d = new CSS2DObject(hpDiv);
+  hpLabel3d.position.set(0, (isFinite(box.max.y) ? box.max.y : BASE_UNIT * 1.8) + 2.55, 0);
+  root.add(hpLabel3d);
+
+  const bot = new CharacterController(root, model, resolver, actionData);
+  bot.isBot = true; // 생성 직후 - 아래 초기화가 플레이어 화면을 건드리지 않게
+  bot.team = opts.team || ENEMY_TEAM;
+  bot.botDifficulty = opts.difficulty || 'normal';
+  if (championId === 'nilah') attachNilahWeaponRig(bot, model);
+  bot.healthBarLabelDiv = hpDiv;
+  bot.skillAnimStore = new SkillAnimationSequenceStore(championId);
+  bot.abilityResolver = abilityResolver;
+  bot.modelHeight = isFinite(box.max.y) ? Math.max(1, box.max.y) : 1.8; // 클릭 선택 높이
+  withCombatActor(bot, () => {
+    bot.applyChampionData(championId);
+    if (typeof precomputeAttackImpacts === 'function') precomputeAttackImpacts(bot);
+    if (championId === 'renekton' && bot.findAnimation('Idle1')) bot.playFirstAvailable(['Idle1'], { loop: THREE.LoopRepeat, fade: 0 });
+    else if (championId === 'yasuo' && bot.findAnimation('Idle1_Raw')) bot.playFirstAvailable(['Idle1_Raw'], { loop: THREE.LoopRepeat, fade: 0 });
+    else bot.playFirstAvailable(actionData.idle.clips, { fade: 0 });
+  });
+  const groundDrop = groundModelOnIdlePose(bot);
+  if (groundDrop) hpLabel3d.position.y -= groundDrop;
+  bot._hpLabel3d = hpLabel3d; bot._hpLabelBaseY = hpLabel3d.position.y;
+  bot._scaleWrapper = scaleWrapper; bot._sizeScale = 1; bot._sizeMods = {};
+  _botResetForGame(bot, opts);
+  bot.brain = new BotBrain(bot, { difficulty: bot.botDifficulty });
+  enemyBots.push(bot);
+  if (typeof entityId === 'function') entityId(bot);
+  updateBars(bot);
+  return bot;
+}
+// 게임 시작 상태(칼바람: 3레벨·1400골드, 상대 분수) - 처음 만들 때와 게임 초기화 때.
+function _botResetForGame(bot, opts = {}) {
+  const level = opts.level || ((typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned) ? 3 : bot.champLevel || 1);
+  bot.champLevel = Math.max(1, Math.min(18, level)); bot.currentExp = 0; bot.skillPoints = 0;
+  bot.items = []; bot.gold = 0; bot._startingGoldGiven = false; bot.score = { kills: 0, deaths: 0, assists: 0, cs: 0 }; bot._bounty = 0;
+  if (typeof grantStartingGold === 'function' && typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned) grantStartingGold(bot);
+  if (typeof recomputeItemStats === 'function') recomputeItemStats(bot);
+  bot.recomputeStats(); bot.hp = bot.maxHp; bot.mp = bot.maxMp;
+  const p = opts.position ? opts.position.clone() : (typeof getTeamSpawnPosition === 'function' && typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap
+    ? getTeamSpawnPosition(bot.team) : new THREE.Vector3(0, 0, -10));
+  bot.root.position.copy(p);
+  bot.targetPos = null; bot.currentTarget = null; bot.attackOrderActive = false;
+  bot.setState(STATE.IDLE);
+  if (bot.brain) bot.brain.mode = 'LANE';
+}
+function updateEnemyBots(dt) {
+  for (const b of enemyBots) {
+    if (!b || b._removed) continue;
+    withCombatActor(b, () => {
+      try { if (b.brain) b.brain.tick(dt); } catch (e) { console.error('[BOT AI]', b.championId, e); }
+      b.update(dt);
+      if (typeof b._tickSizeScale === 'function') b._tickSizeScale(dt);
+    });
+  }
+}
+function removeEnemyBot(bot) {
+  const i = enemyBots.indexOf(bot);
+  if (i < 0) return false;
+  enemyBots.splice(i, 1);
+  bot._removed = true;
+  withCombatActor(bot, () => {
+    try { bot._teardownChampionRuntime(); } catch (e) { console.error('[BOT] 정리', e); }
+    bot._clearPending(); bot._clearActionTimers();
+    if (bot.mixer) bot.mixer.stopAllAction();
+  });
+  if (typeof clearStatusesFromSource === 'function' && typeof listEntities === 'function') clearStatusesFromSource(bot, listEntities());
+  if (typeof controller !== 'undefined' && controller && controller.currentTarget === bot) { controller.currentTarget = null; controller.attackOrderActive = false; if (typeof targetRing !== 'undefined') targetRing.clear(); }
+  bot.hp = 0;
+  if (bot.root) {
+    bot.root.traverse((o) => { if (o.isCSS2DObject && o.element && o.element.parentNode) o.element.parentNode.removeChild(o.element); });
+    if (bot.root.parent) bot.root.parent.remove(bot.root);
+  }
+  return true;
+}
+function clearEnemyBots() { for (const b of [...enemyBots]) removeEnemyBot(b); }
+
+// 연습 도구 패널: 챔피언·난이도를 골라 추가 / 전부 제거.
+(function setupEnemyBotUI() {
+  const sel = document.getElementById('enemyBotChampSelect');
+  const diff = document.getElementById('enemyBotDifficulty');
+  const add = document.getElementById('spawnEnemyBotBtn');
+  const clr = document.getElementById('clearEnemyBotsBtn');
+  if (sel) for (const [id, name] of CHAMPION_MODEL_LIBRARY) { const o = document.createElement('option'); o.value = id; o.textContent = name; sel.appendChild(o); }
+  if (add) add.addEventListener('click', () => {
+    const id = sel && sel.value ? sel.value : 'garen';
+    add.disabled = true;
+    spawnEnemyBot(id, { difficulty: diff ? diff.value : 'normal' })
+      .then(() => { if (typeof showSkillToast === 'function') showSkillToast(`적 챔피언 AI 추가: ${_botChampionName(id)}`); })
+      .catch((e) => { if (typeof showSkillToast === 'function') showSkillToast(`적 챔피언을 불러오지 못했어요 (${e.message || e})`); })
+      .finally(() => { add.disabled = false; });
+  });
+  if (clr) clr.addEventListener('click', () => clearEnemyBots());
+  if (diff) diff.addEventListener('change', () => { for (const b of enemyBots) if (b.brain) b.brain.setDifficulty(diff.value); });
+})();
 
 /* ===== src/core/lobby_ui.js ===== */
 /* ============================================================
@@ -41031,6 +41843,14 @@ function resetGame() {
     if (!d) continue;
     if (typeof clearUnitCombatState === 'function') clearUnitCombatState(d);
     for (const k of Object.keys(d)) if (/^_item\w*Stacks?$/.test(k)) delete d[k];
+  }
+  // 95차: 적 챔피언 봇은 남기고 처음 상태(3레벨·시작 골드·상대 분수·아이템 없음)로 되살린다.
+  if (typeof enemyBots !== 'undefined') for (const b of enemyBots) {
+    withCombatActor(b, () => { b._clearPending(); b._clearActionTimers(); b._cancelChampionTimers(); });
+    if (typeof clearUnitCombatState === 'function') clearUnitCombatState(b);
+    b._champContrib = null; b._dashState = null; b.pendingCast = null; b.pendingMove = null;
+    _botResetForGame(b);
+    updateBars(b);
   }
   // 4) 챔피언을 처음 상태로 다시 불러온다(이전 챔피언 상태를 넘기지 않음)
   if (typeof gameSession !== 'undefined' && gameSession) gameSession.reset(); // 93차: 세션 틱·시간을 처음으로(+ gameReset 이벤트)

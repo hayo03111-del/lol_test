@@ -1,6 +1,7 @@
 {
   "source_html": "SETT_Renekton_System_vex_little_20skills_fixed_nilah_weapon_vfx_phase9_final%20%283%29_visible_debug_fixed_darius_Q_motion_fixed_Q_action_lock_fixed_dummy_hpbar_swap_fixed.html",
   "parts": [
+    "src/core/00_game_clock.js",
     "src/core/00_global_constants.js",
     "src/core/01_status_effect_system.js",
     "src/core/shield_system.js",
@@ -89,6 +90,8 @@
     "src/core/global_system_instances.js",
     "src/core/game_screen_ui.js",
     "src/loader/champion_glb_loader.js",
+    "src/core/bot_brain.js",
+    "src/world/enemy_bot.js",
     "src/core/lobby_ui.js",
     "src/core/options_ui.js",
     "src/core/game_reset.js"

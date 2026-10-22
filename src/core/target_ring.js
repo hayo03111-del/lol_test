@@ -13,12 +13,13 @@ class TargetRing {
     this._t = 0;
   }
   attachTo(enemy) {
+    if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
     this.target = enemy || null;
     // 연습 더미에는 선택 표시용 타깃 링을 표시하지 않는다.
     // 더미의 HP바/피격 효과와 실제 타겟 상태는 그대로 유지한다.
     this.mesh.visible = !!enemy && !enemy.isTrainingDummy;
   }
-  clear() { this.target = null; this.mesh.visible = false; }
+  clear() { if (typeof isBotActing === 'function' && isBotActing()) return; this.target = null; this.mesh.visible = false; } // 95차: 봇이 지우지 않게
   update(dt) {
     if (!this.target) return;
     if (this.target.hp <= 0) { this.clear(); return; }

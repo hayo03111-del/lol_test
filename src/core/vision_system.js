@@ -171,6 +171,7 @@ class VisionSystem {
     if (controller && controller.root && controller.hp > 0 && controller.state !== STATE.DEAD) blue.push({ position: controller.root.position, lolRadius: champR(controller.championId) });
     if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (a && a.hp > 0) blue.push({ position: getWorldPosition(a), lolRadius: VISION_CONFIG.championSightRange });
     if (typeof dummy !== 'undefined' && dummy && dummy.hp > 0 && !dummy.destroyed) red.push({ position: getWorldPosition(dummy), lolRadius: VISION_CONFIG.championSightRange });
+    if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b.root && b.hp > 0 && b.state !== STATE.DEAD) (b.team === VISION_TEAM_BLUE ? blue : red).push({ position: b.root.position, lolRadius: champR(b.championId) }); // 95차: 적 챔피언 봇의 시야
     if (typeof placedDummies !== 'undefined') for (const d of placedDummies) if (d && d.hp > 0 && !d.destroyed) red.push({ position: getWorldPosition(d), lolRadius: VISION_CONFIG.championSightRange });
     if (typeof minions !== 'undefined') for (const m of minions) {
       if (!m || m.isDead || !m.mesh) continue;

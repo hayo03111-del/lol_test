@@ -170,19 +170,19 @@ function findEnemyChampionsNear(turret) {
   // 하드코딩했지만, 이제 플레이어 자신의 `.team`(controller.team)과
   // generic하게 비교한다 - 같은 팀(BLUE) 포탑에는 이 우선순위가 여전히
   // 적용되지 않는다(동작은 그대로, 가정만 데이터 기반으로 바뀜).
-  if (typeof controller === 'undefined' || !controller || controller.hp <= 0) return [];
-  if (!isEnemyUnit(turret, controller)) return [];
-  if (controller.state === STATE.DEAD || controller.isUntargetable) return []; // 요청 13 단서: 무적/대상 지정 불가 상태는 별도 처리
-  // 버그 수정(모데카이저 R "죽음의 세계" 명세 9절 "메인 월드 포탑은 죽음의
-  // 세계 내부의 챔피언을 대상으로 지정할 수 없다"): 포탑은 항상 메인
-  // 월드(realmId='main')에 속해 있으므로, 플레이어가 죽음의 세계로
-  // 들어가 있으면(realmId가 'main'이 아니면) canRealmInteract()가 자동으로
-  // false를 반환해 포탑이 그 플레이어를 아예 후보에서 제외한다 - 새
-  // 판정 시스템을 만들지 않고 기존 realmId 태그 하나만 재사용한다.
-  if (!canRealmInteract(turret, controller)) return [];
+  // 95차: 플레이어만이 아니라 상대 팀 챔피언 모두(적 챔피언 봇 포함) - 가까운 순.
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
-  const dist = getHorizontalDistance(getWorldPosition(turret), getWorldPosition(controller));
-  return dist <= range + getCollisionRadius(controller) ? [controller] : []; // 44차: 원작 - 포탑 중심에서 대상 가장자리까지
+  const tp = getWorldPosition(turret);
+  const out = [];
+  for (const c of (typeof listChampionUnits === 'function' ? listChampionUnits() : [])) {
+    if (!c || c.hp <= 0 || !isEnemyUnit(turret, c)) continue;
+    if (c.state === STATE.DEAD || c.isUntargetable) continue; // 요청 13 단서: 무적/대상 지정 불가 상태는 별도 처리
+    // 포탑은 메인 월드(realmId='main') - 죽음의 세계 안의 챔피언은 후보에서 뺀다(모데카이저 R 명세 9절).
+    if (!canRealmInteract(turret, c)) continue;
+    const dist = getHorizontalDistance(tp, getWorldPosition(c));
+    if (dist <= range + getCollisionRadius(c)) out.push({ c, dist }); // 44차: 원작 - 포탑 중심에서 대상 가장자리까지
+  }
+  return out.sort((x, y) => x.dist - y.dist).map((x) => x.c);
 }
 // 59차: 챔피언 판정 - 플레이어 컨트롤러(championId)와 허수아비(isChampion) 모두.
 function isTurretChampionUnit(u) { return !!(u && (u.isChampion || typeof u.championId === 'string')); }
@@ -838,11 +838,12 @@ function updateNexusWell(well, dt) {
   // 자기 우물(레드)에서 리스폰하자마자 공격당했다. 공격 판정은 우물 자체의
   // 좁은 충돌 반경(well.radius)만 쓴다 - 기지 전체를 위험 지대로 만들면
   // 안 되므로 회복 구역(BASE_ZONE_RADIUS)과는 의도적으로 분리했다.
-  if (typeof controller !== 'undefined' && controller && controller.hp > 0 && controller.state !== STATE.DEAD
-      && well.team !== (controller.team || PLAYER_TEAM) && canRealmInteract(well, controller)) {
-    const dist = getHorizontalDistance(getWorldPosition(well), controller.root.position);
+  // 95차: 플레이어만이 아니라 상대 팀 챔피언 모두(적 챔피언 봇 포함).
+  for (const c of (typeof listChampionUnits === 'function' ? listChampionUnits() : [])) {
+    if (!c || c.hp <= 0 || c.state === STATE.DEAD || well.team === (c.team || PLAYER_TEAM) || !canRealmInteract(well, c)) continue;
+    const dist = getHorizontalDistance(getWorldPosition(well), c.root.position);
     if (dist <= well.radius) {
-      applyDamage(controller, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: well, isStatusTick: true });
+      applyDamage(c, { rawDamage: data.wellDamagePerSec * dt, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, source: well, isStatusTick: true });
     }
   }
   // 적 미니언도 같은 원칙으로 상대 진영 우물 범위에 들어오면 공격당한다.
@@ -858,13 +859,13 @@ function updateNexusWell(well, dt) {
   // 요청("기지 안에 들어갈 수 있게 해서 그 범위 안에서 힐/마나회복") -
   // 우물의 좁은 충돌 반경이 아니라 기지 전체 구역(BASE_ZONE_RADIUS)
   // 안에 있으면 회복된다.
-  if (typeof controller !== 'undefined' && controller && controller.hp > 0 && controller.state !== STATE.DEAD
-      && well.team === (controller.team || PLAYER_TEAM) && canRealmInteract(well, controller)) {
+  for (const c of (typeof listChampionUnits === 'function' ? listChampionUnits() : [])) {
+    if (!c || c.hp <= 0 || c.state === STATE.DEAD || well.team !== (c.team || PLAYER_TEAM) || !canRealmInteract(well, c)) continue;
     // 83차: 칼바람 나락 우물은 회복시키지 않는다(원작 - 회복은 체력 구슬과 부활뿐).
-    if (!(typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned) && isPositionInBaseZone(controller.root.position, well.team) && (controller.hp < controller.maxHp || controller.mp < controller.maxMp)) {
-      controller.hp = Math.min(controller.maxHp, controller.hp + WELL_HEAL_HP_PER_SEC * dt);
-      controller.mp = Math.min(controller.maxMp, controller.mp + WELL_HEAL_MP_PER_SEC * dt);
-      updateBars(controller);
+    if (!(typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned) && isPositionInBaseZone(c.root.position, well.team) && (c.hp < c.maxHp || c.mp < c.maxMp)) {
+      c.hp = Math.min(c.maxHp, c.hp + WELL_HEAL_HP_PER_SEC * dt);
+      c.mp = Math.min(c.maxMp, c.mp + WELL_HEAL_MP_PER_SEC * dt);
+      updateBars(c);
     }
   }
 }
@@ -886,6 +887,7 @@ function updateTurrets(dt) {
 // 갱신한다. 골드가 바뀌는 지점(포탑/미니언 처치 등)에서만 호출되는
 // 이벤트 기반 함수라 매 프레임 갱신 부담이 없다.
 function updateGoldDisplay() {
+  if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   if (typeof updateDebugPanel === 'function') updateDebugPanel();
   const el = document.getElementById('goldAmount');
   if (el && controller) el.textContent = Math.floor(controller.gold || 0).toLocaleString();

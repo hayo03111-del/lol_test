@@ -348,6 +348,7 @@ function tickHudItemCooldowns(ctrl) {
 // (updateGoldDisplay()와 같은 원칙, 매 프레임 아님). 칸 배치는 원작과 같다: 1·2·3 / 5·6·7 + 장신구(4).
 // 사용 아이템은 클릭(또는 숫자키)으로 사용하고, 나머지는 클릭하면 상점이 열리며 그 칸이 선택된다(판매는 상점에서).
 function updateItemUI(ctrl) {
+  if (ctrl && ctrl.isBot) return; if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   if (typeof renderShopPanel === 'function') renderShopPanel(); // 골드/보유 아이템이 바뀌면 상점 창도 함께 갱신
   const box = document.getElementById('hudItems');
   if (!box || typeof ITEM_DATA === 'undefined') return;
@@ -840,6 +841,7 @@ window.addEventListener('blur', () => {
 
 function togglePause() {
   paused = !paused;
+  if (typeof gameClockSetPaused === 'function') gameClockSetPaused(paused); // 95차: 상태 효과·재사용 대기·스킬 타이머도 멈춘다
   document.getElementById('pauseOverlay').classList.toggle('show', paused);
   clock.getDelta();
 }

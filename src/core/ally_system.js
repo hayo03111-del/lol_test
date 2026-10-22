@@ -17,16 +17,23 @@ const placedAllies = [];
 globalThis.placedAllies = placedAllies; // 닐라 패시브(_nilahAllyCandidates)가 이 이름으로 찾는다
 
 // source(보통 플레이어)를 제외한 살아 있는 아군 챔피언.
+// 95차: 아군 후보는 판정하는 쪽(source, 없으면 지금 행동 중인 챔피언)과 같은 팀의 아군 더미·챔피언(적 챔피언 봇의 아군은 다른 적 봇).
+function _allyCandidates(source) {
+  const me = source || (typeof combatPerspective === 'function' ? combatPerspective() : null);
+  const team = (me && me.team) || PLAYER_TEAM;
+  const list = [...placedAllies, ...(typeof listChampionUnits === 'function' ? listChampionUnits() : [])];
+  return list.filter((a) => a && a !== me && (a.team || PLAYER_TEAM) === team && a.hp > 0 && a.state !== 'DEAD');
+}
 function getAllyChampions(source = null) {
   const out = [];
-  for (const a of placedAllies) if (a && a.hp > 0 && a !== source && (!source || typeof canRealmInteract !== 'function' || canRealmInteract(source, a))) out.push(a); // 죽음의 세계 안에서는 바깥 아군과 상호작용 불가
+  for (const a of _allyCandidates(source)) if (!source || typeof canRealmInteract !== 'function' || canRealmInteract(source, a)) out.push(a); // 죽음의 세계 안에서는 바깥 아군과 상호작용 불가
   return out;
 }
 
 function findAlliesInRadius(center, lolRadius, { exclude = [] } = {}) {
   const radius = lolRangeToWorld(lolRadius);
   const out = [];
-  for (const a of placedAllies) {
+  for (const a of _allyCandidates(null)) {
     if (!a || a.hp <= 0 || exclude.includes(a)) continue;
     const d = getHorizontalDistance(getWorldPosition(a), getWorldPosition(center) || center);
     if (d <= radius + getCollisionRadius(a)) out.push({ unit: a, distance: d });
@@ -37,9 +44,9 @@ function findAlliesInRadius(center, lolRadius, { exclude = [] } = {}) {
 
 // 아군의 보호막은 여러 출처를 따로 들고 있다가(지속시간/감쇠가 서로 다름)
 // 합계를 a.shield에 반영한다.
-function _allyRecomputeShield(a) {
-  a.shield = (a.shieldEntries || []).reduce((s, e) => s + e.amount, 0);
-}
+// 95차: 보호막 구현을 하나로 - 아군 보호막도 공용 보호막(shield_system.js: addShield·absorbShieldDamage·tickShields)을 쓴다.
+// 예전엔 아군 더미 전용 목록·흡수·감소 코드가 따로 있어 두 구현이 조금씩 달랐다(적 챔피언 봇의 아군인 봇에도 같은 경로).
+function _allyRecomputeShield(a) { recomputeShield(a); }
 
 // 아군에게 회복을 준다. 대상의 받는 회복 배율(정령의형상/그리버스)을 적용하고
 // 실제 회복량을 돌려준다. noItemHook은 월석재생기 연쇄처럼 "회복이 다시
@@ -60,10 +67,7 @@ function healAlly(source, target, amount, { noItemHook = false } = {}) {
 function shieldAlly(source, target, amount, durationSec, { decay = false, id = null, noItemHook = false } = {}) {
   if (!target || target.hp <= 0 || !(amount > 0)) return 0;
   const eff = amount * getShieldReceivedMultiplier(target);
-  target.shieldEntries = target.shieldEntries || [];
-  if (id) target.shieldEntries = target.shieldEntries.filter((e) => e.id !== id);
-  target.shieldEntries.push({ id, amount: eff, expiresAt: performance.now() + durationSec * 1000, decayPerSec: decay && durationSec > 0 ? eff / durationSec : 0 });
-  _allyRecomputeShield(target);
+  if (!addShield(target, id, eff, durationSec, { decay })) return 0;
   if (!noItemHook && source && typeof itemOnAllyHealOrShield === 'function') itemOnAllyHealOrShield(source, target, 'shield', eff, { durationSec, decay });
   return eff;
 }
@@ -79,29 +83,15 @@ function allyAbsorbIncoming(a, dmg, result) {
     remaining = Math.max(0, remaining - a._dreamBlue.amount);
     a._dreamBlue = null;
   }
-  // 83차: 먼저 만료되는 보호막부터(원작). 피해 종류 전용 보호막은 그 종류만, 같은 종류면 먼저 깎인다.
-  const dType = (result && result.damageType) || null;
-  const sorted = (a.shieldEntries || []).slice().sort((x, y) => (x.expiresAt || Infinity) - (y.expiresAt || Infinity));
-  const order = sorted.filter((e) => e.onlyType && e.onlyType === dType).concat(sorted.filter((e) => !e.onlyType));
-  for (const e of order) {
-    if (remaining <= 0) break;
-    const take = Math.min(e.amount, remaining);
-    e.amount -= take; remaining -= take;
-  }
-  if (a.shieldEntries) a.shieldEntries = a.shieldEntries.filter((e) => e.amount > 1e-6);
-  _allyRecomputeShield(a);
-  return remaining;
+  // 83차: 먼저 만료되는 보호막부터(원작). 피해 종류 전용 보호막은 그 종류만, 같은 종류면 먼저 깎인다(공용 absorbShieldDamage).
+  return absorbShieldDamage(a, remaining, (result && result.damageType) || null);
 }
 
 function tickAllyUnits(dt) {
   const now = performance.now();
   for (const a of placedAllies) {
     if (!a) continue;
-    if (a.shieldEntries && a.shieldEntries.length) {
-      for (const e of a.shieldEntries) if (e.decayPerSec > 0) e.amount = Math.max(0, e.amount - e.decayPerSec * dt);
-      a.shieldEntries = a.shieldEntries.filter((e) => e.expiresAt > now && e.amount > 1e-6);
-      _allyRecomputeShield(a);
-    }
+    tickShields(a, dt);
     if (a._dreamBlue && a._dreamBlue.expiresAt <= now) a._dreamBlue = null;
     if (a._dreamPurple && a._dreamPurple.expiresAt <= now) a._dreamPurple = null;
     if (typeof a.onTick === 'function') a.onTick(dt);

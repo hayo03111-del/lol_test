@@ -42,6 +42,14 @@ function resetGame() {
     if (typeof clearUnitCombatState === 'function') clearUnitCombatState(d);
     for (const k of Object.keys(d)) if (/^_item\w*Stacks?$/.test(k)) delete d[k];
   }
+  // 95차: 적 챔피언 봇은 남기고 처음 상태(3레벨·시작 골드·상대 분수·아이템 없음)로 되살린다.
+  if (typeof enemyBots !== 'undefined') for (const b of enemyBots) {
+    withCombatActor(b, () => { b._clearPending(); b._clearActionTimers(); b._cancelChampionTimers(); });
+    if (typeof clearUnitCombatState === 'function') clearUnitCombatState(b);
+    b._champContrib = null; b._dashState = null; b.pendingCast = null; b.pendingMove = null;
+    _botResetForGame(b);
+    updateBars(b);
+  }
   // 4) 챔피언을 처음 상태로 다시 불러온다(이전 챔피언 상태를 넘기지 않음)
   if (typeof gameSession !== 'undefined' && gameSession) gameSession.reset(); // 93차: 세션 틱·시간을 처음으로(+ gameReset 이벤트)
   window.__resetNoCarry = true;

@@ -30,7 +30,8 @@ function _aramMat(color, intensity = 1, extra = {}) {
 }
 function _aramChampions() {
   const list = [];
-  if (typeof controller !== 'undefined' && controller && controller.root) list.push(controller);
+  if (typeof listChampionUnits === 'function') list.push(...listChampionUnits().filter((c) => c && c.root && c.state !== STATE.DEAD)); // 95차: 적 챔피언 봇도
+  else if (typeof controller !== 'undefined' && controller && controller.root) list.push(controller);
   if (typeof placedAllies !== 'undefined') list.push(...placedAllies);
   return list.filter((u) => u && u.hp > 0);
 }

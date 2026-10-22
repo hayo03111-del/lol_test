@@ -16,7 +16,27 @@ const _hudEls = {
   resourceLabel: document.getElementById('resourceLabel'),
 };
 const _hudLast = { hpPct: '', hpText: '', shieldLeft: '', shieldWidth: '', shieldDisplay: '', mpFlow: null, mpWidth: '', mpText: '', label: '', worldHpPct: '', worldHpText: '', worldResourceWidth: '', worldResourceDisplay: '', worldResourceMode: '' };
+// 머리 위 챔피언 바에 그릴 값(체력·보호막·레벨·자원). 95차: 적 챔피언 봇도 같은 바를 쓴다.
+function _champOverheadBarState(ch) {
+  let resourcePct = 0, resourceMode = 'hidden';
+  if (ch.championId === 'renekton') {
+    resourcePct = Math.max(0, Math.min(100, ch._renekton?.rage || 0)); resourceMode = 'rage';
+  } else if (ch.championId === 'sett') {
+    const cd = ch._champData ? ch._champData() : null;
+    const maxFlow = cd ? ch.maxHp * (cd.W.gritMaxHpPercent / 100) : 0;
+    const flow = (ch._sett && ch._sett.grit) || 0;
+    resourcePct = maxFlow ? Math.max(0, Math.min(100, flow / maxFlow * 100)) : 0;
+    resourceMode = maxFlow > 0 ? 'flow' : 'hidden';
+  } else if (ch.championId === 'yasuo') {
+    resourcePct = Math.max(0, Math.min(100, ch._yasuo ? ch._yasuo.flow : 0)); resourceMode = 'flow';
+  } else if (Number(ch.maxMp) > 0) {
+    resourcePct = Math.max(0, Math.min(100, (ch.mp / ch.maxMp) * 100)); resourceMode = 'mana';
+  }
+  return { hp: ch.hp, maxHp: ch.maxHp, shield: Math.max(0, ch.shield || 0), level: ch.champLevel ?? ch.level ?? 1, resPct: Math.round(resourcePct * 10) / 10, resMode: resourceMode };
+}
 function updateBars(ch) {
+  // 95차: 적 챔피언 봇은 머리 위 바만 갱신한다(아래 화면 HUD는 플레이어 것).
+  if (ch && ch.isBot) { if (ch.healthBarLabelDiv) updateChampBar(ch.healthBarLabelDiv, _champOverheadBarState(ch)); return; }
   const hpPct = `${(ch.hp / ch.maxHp) * 100}%`;
   // 69차: 원작 HUD처럼 체력·마나 바 오른쪽 끝에 초당 재생량(+1.6). 가득 차 있으면 숨긴다. hpRegen/mpRegen은 5초당 값이다.
   const hpRegenEl = document.getElementById('hpRegenText'), mpRegenEl = document.getElementById('mpRegenText');
@@ -41,21 +61,7 @@ function updateBars(ch) {
     // 67차: 머리 위 바는 원작식 공용 바(champion_healthbar.js)가 그린다 - 체력 색은 바뀌지 않고(내 챔피언 초록), 보호막 흰 구간·
     // 100/1000 눈금·피해 잔상·레벨 칸·자원 바. 자원: 마나 챔피언은 MP, 마나가 없는 챔피언은 특수 자원(레넥톤 분노 / 세트 투지 /
     // 야스오 기류), 둘 다 없으면 숨김.
-    let resourcePct = 0, resourceMode = 'hidden';
-    if (ch.championId === 'renekton') {
-      resourcePct = Math.max(0, Math.min(100, ch._renekton?.rage || 0)); resourceMode = 'rage';
-    } else if (ch.championId === 'sett') {
-      const cd = ch._champData ? ch._champData() : null;
-      const maxFlow = cd ? ch.maxHp * (cd.W.gritMaxHpPercent / 100) : 0;
-      const flow = (ch._sett && ch._sett.grit) || 0;
-      resourcePct = maxFlow ? Math.max(0, Math.min(100, flow / maxFlow * 100)) : 0;
-      resourceMode = maxFlow > 0 ? 'flow' : 'hidden';
-    } else if (ch.championId === 'yasuo') {
-      resourcePct = Math.max(0, Math.min(100, ch._yasuo ? ch._yasuo.flow : 0)); resourceMode = 'flow';
-    } else if (Number(ch.maxMp) > 0) {
-      resourcePct = Math.max(0, Math.min(100, (ch.mp / ch.maxMp) * 100)); resourceMode = 'mana';
-    }
-    updateChampBar(ch.healthBarLabelDiv, { hp: ch.hp, maxHp: ch.maxHp, shield: Math.max(0, ch.shield || 0), level: ch.champLevel ?? ch.level ?? 1, resPct: Math.round(resourcePct * 10) / 10, resMode: resourceMode });
+    updateChampBar(ch.healthBarLabelDiv, _champOverheadBarState(ch));
   }
   // 요청: 보호막이 계산은 정상인데 화면에 아무 표시가 없어 "작동 안 하는
   // 것처럼" 보였다 - HP 바 뒤에 이어 붙는 빗금 무늬 세그먼트로 실제 보호막
@@ -109,6 +115,7 @@ function updateBars(ch) {
   }
 }
 function updateSkillUI(cooldowns) {
+  if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   for (const key of ['Q','W','E','R']) {
     const slot = document.getElementById('slot' + key);
     let cdEl = slot.querySelector('.cd');
@@ -179,6 +186,7 @@ function updateSkillUI(cooldowns) {
 // 기존 updateBars() dirty-check 패턴을 그대로 따른다.
 const _expUiLast = { levelText: '', pct: '', spText: '' };
 function updateExpUI(champion) {
+  if (champion && champion.isBot) return; if (typeof isBotActing === 'function' && isBotActing()) return; // 95차: 적 챔피언 봇 차례에는 플레이어 화면을 건드리지 않는다
   if (!champion) return;
   const levelEl = document.getElementById('levelText');
   const fillEl = document.getElementById('xpFill');
@@ -236,6 +244,7 @@ function _updateSkillLevelUpButtons(champion) {
 // 깔끔하게" - 텍스트 하나가 잠깐 떴다 사라지는 정도로 제한한다.
 let _levelUpFxTimer = null;
 function showLevelUpEffect(champion) {
+  if (champion && champion.isBot) return; // 95차
   const el = document.getElementById('levelUpFx');
   if (!el) return;
   el.textContent = `LEVEL UP! Lv.${champion.champLevel}`;
