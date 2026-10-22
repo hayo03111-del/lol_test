@@ -125,12 +125,12 @@ function _netHostOnMessage(st, d) {
   if (d.k === 'cmd') {
     const bot = st.remote;
     if (!bot || bot._removed || !st.guestReady) return;
+    const cmd = d.cmd;
+    if (validateCommand(cmd)) return;
     // 초당 명령 수 제한(우클릭 연타 정도는 넉넉히) - 넘치면 버린다.
     const now = __gcRealNow(); st.cmdTimes = st.cmdTimes.filter((x) => now - x < 1000);
     if (st.cmdTimes.length >= 60) return;
     st.cmdTimes.push(now);
-    const cmd = d.cmd;
-    if (validateCommand(cmd)) return;
     withCombatActor(bot, () => { try { gameSession._apply(bot, cmd); } catch (e) { console.error('[NET] 원격 명령 처리 오류', cmd, e); } });
   }
 }
@@ -453,7 +453,7 @@ function _netGuestApplyPrivate(st, me) {
     const s = me.sm[k]; if (!s) continue;
     if (!c.summoners) c.summoners = {};
     if (!c.summoners[k] || c.summoners[k].id !== s.spellId) c.summoners[k] = { id: s.spellId, readyAt: 0 };
-    c.summoners[k].readyAt = now + (s.readyInMs || 0);
+    c.summoners[k].readyAt = s.readyInMs > 0 ? now + s.readyInMs : 0; // 0이면 '준비됨' 그대로(메시지는 프레임 사이에 와서 그 시각이 다음 프레임 시계보다 늦을 수 있다)
   }
   if (me.res) {
     if (me.res.rage != null && c._renekton) c._renekton.rage = me.res.rage;

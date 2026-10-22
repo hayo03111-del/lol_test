@@ -177,6 +177,11 @@ function tickMinimap(dt) {
   if (typeof placedDummies !== 'undefined') champs.push(...placedDummies);
   if (typeof placedAllies !== 'undefined') champs.push(...placedAllies);
   for (const d of champs) if (d && d.mesh && d.mesh.visible !== false) dot(d.mesh.position, 4.5, teamColor(d.team || (d.isAlly ? myTeam : 'RED')), '#000');
+  // 97차: 다른 챔피언(챔피언 AI·온라인 상대) - 보이는 것만(시야 시스템이 숨긴 적은 그리지 않는다)
+  if (typeof enemyBots !== 'undefined') for (const b of enemyBots) {
+    if (!b || !b.root || b._removed || b.root.visible === false || b.state === STATE.DEAD) continue;
+    dot(b.root.position, 5.5, teamColor(b.team), '#000');
+  }
   // 카메라가 보는 영역
   const quad = _cameraGroundQuad();
   if (quad) {
