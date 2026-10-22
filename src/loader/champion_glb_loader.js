@@ -1722,9 +1722,13 @@ function animate() {
   let dt = clock.getDelta();
   if (!isFinite(dt) || dt < 0) dt = 1 / 60; // 비정상적인 값이면 안전한 기본 프레임 시간으로 대체
   dt = Math.min(dt, SIM_STEP_SEC * SIM_MAX_STEPS);
-  if (!paused) {
-    const steps = Math.max(1, Math.ceil(dt / SIM_STEP_SEC - 1e-6));
-    for (let i = 0; i < steps; i++) simulateStep(dt / steps);
+  if (!paused || netGuestMode) {
+    if (netGuestMode) netGuestTick(dt); // 97차: 온라인 대전 참가자 - 시뮬레이션은 방장이 한다(스냅샷 보간·동작 재생만)
+    else {
+      const steps = Math.max(1, Math.ceil(dt / SIM_STEP_SEC - 1e-6));
+      for (let i = 0; i < steps; i++) simulateStep(dt / steps);
+      if (typeof netHostFrame === 'function') netHostFrame(dt); // 97차: 온라인 대전 방장 - 참가자에게 스냅샷 보내기
+    }
     // 아래는 화면(카메라·연출·표시)이라 프레임마다 한 번, 프레임 전체 dt로.
     if (controller) updateCameraTransform(cameraFocusPoint(controller.root.position, dt), dt);
     else updateCameraTransform(new THREE.Vector3(0,0,0), dt);

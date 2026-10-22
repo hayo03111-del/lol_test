@@ -156,20 +156,28 @@ class VisionSystem {
 
   // 플레이어 팀 유닛(빨강 팀 시야로 볼 때 가려질 수 있는 쪽).
   _blueUnits(controller) {
+    if (controller && controller.team === VISION_TEAM_RED) return getAllEnemyUnits(true); // 97차: 온라인 게스트(빨강 팀 조작) - 파랑 팀 유닛은 "내 적"
+    return this._ownTeamUnits(controller, VISION_TEAM_BLUE);
+  }
+  _redUnits(controller) {
+    if (controller && controller.team === VISION_TEAM_RED) return this._ownTeamUnits(controller, VISION_TEAM_RED);
+    return getAllEnemyUnits(true);
+  }
+  // 조작 중인 챔피언과 같은 팀 유닛(상대 팀 시야로 볼 때 가려질 수 있는 쪽).
+  _ownTeamUnits(controller, team) {
     const out = [];
     if (controller && controller.root) out.push(controller);
-    if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (a && a.hp > 0) out.push(a);
-    if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b.team === VISION_TEAM_BLUE && b.hp > 0) out.push(b); // 96차: 아군(파랑) 봇
-    if (typeof minions !== 'undefined') for (const m of minions) if (m && !m.isDead && m.team === VISION_TEAM_BLUE) out.push(m);
+    if (team === VISION_TEAM_BLUE && typeof placedAllies !== 'undefined') for (const a of placedAllies) if (a && a.hp > 0) out.push(a);
+    if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b.team === team && b.hp > 0) out.push(b); // 96차: 아군 봇
+    if (typeof minions !== 'undefined') for (const m of minions) if (m && !m.isDead && m.team === team) out.push(m);
     return out;
   }
-  _redUnits() { return getAllEnemyUnits(true); }
 
   _collectSources(controller) {
     const now = performance.now();
     const blue = [], red = [];
     const champR = (id) => { const o = VISION_CONFIG.championSightOverride[id]; return o != null ? o : VISION_CONFIG.championSightRange; };
-    if (controller && controller.root && controller.hp > 0 && controller.state !== STATE.DEAD) blue.push({ position: controller.root.position, lolRadius: champR(controller.championId) });
+    if (controller && controller.root && controller.hp > 0 && controller.state !== STATE.DEAD) (controller.team === VISION_TEAM_RED ? red : blue).push({ position: controller.root.position, lolRadius: champR(controller.championId) });
     if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (a && a.hp > 0) blue.push({ position: getWorldPosition(a), lolRadius: VISION_CONFIG.championSightRange });
     if (typeof dummy !== 'undefined' && dummy && dummy.hp > 0 && !dummy.destroyed) red.push({ position: getWorldPosition(dummy), lolRadius: VISION_CONFIG.championSightRange });
     if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b.root && b.hp > 0 && b.state !== STATE.DEAD) (b.team === VISION_TEAM_BLUE ? blue : red).push({ position: b.root.position, lolRadius: champR(b.championId) }); // 95차: 적 챔피언 봇의 시야
@@ -259,10 +267,10 @@ class VisionSystem {
       return;
     }
 
-    const redUnits = this._redUnits(), blueUnits = this._blueUnits(controller);
+    const redUnits = this._redUnits(controller), blueUnits = this._blueUnits(controller);
     this._visibleTo[VISION_TEAM_BLUE] = this._computeVisible(VISION_TEAM_BLUE, redUnits, blueSources);
     this._visibleTo[VISION_TEAM_RED] = this._computeVisible(VISION_TEAM_RED, blueUnits, this._teamSources[VISION_TEAM_RED]);
-    this._visibleCache = this._visibleTo[VISION_TEAM_BLUE];
+    this._visibleCache = this._visibleTo[controller && controller.team === VISION_TEAM_RED ? VISION_TEAM_RED : VISION_TEAM_BLUE]; // 97차: 조작 중인 챔피언의 팀 시야
 
     // 화면 표시: 보는 팀의 상대 유닛 중 그 팀에게 안 보이는 것만 숨긴다(바뀐 유닛만 건드림).
     const viewer = this.viewTeam;

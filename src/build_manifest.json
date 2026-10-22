@@ -92,6 +92,7 @@
     "src/loader/champion_glb_loader.js",
     "src/core/bot_brain.js",
     "src/world/enemy_bot.js",
+    "src/net/net_session.js",
     "src/core/lobby_ui.js",
     "src/core/options_ui.js",
     "src/core/game_reset.js"

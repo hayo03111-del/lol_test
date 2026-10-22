@@ -17,6 +17,18 @@ function entityId(unit) {
   if (id == null) { id = _entityNextId++; _entityIds.set(unit, id); }
   return id;
 }
+// 97차(온라인 대전): 게스트 화면은 방장이 정한 ID를 그대로 쓴다 - 구조물·미니언·챔피언에 방장 쪽 ID를 붙인다.
+// reserveEntityIds(n): 이 브라우저가 새로 발급하는 ID를 n부터 시작하게 한다(방장 ID와 겹치지 않게).
+function assignEntityId(unit, id) {
+  if (!unit || !Number.isInteger(id)) return null;
+  if (!_entityIds) { _entityIds = new WeakMap(); _entityNextId = 1; }
+  _entityIds.set(unit, id);
+  return id;
+}
+function reserveEntityIds(n) {
+  if (!_entityIds) { _entityIds = new WeakMap(); _entityNextId = 1; }
+  if (_entityNextId < n) _entityNextId = n;
+}
 function entityKind(unit) {
   if (!unit) return 'unknown';
   if (typeof CharacterController !== 'undefined' && unit instanceof CharacterController) return 'champion';

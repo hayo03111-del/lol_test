@@ -18,7 +18,7 @@ function _botChampionName(id) {
   const row = CHAMPION_MODEL_LIBRARY.find(([k]) => k === id);
   return row ? row[1] : id;
 }
-// 적 챔피언 봇을 만든다. opts: { difficulty: 'easy'|'normal'|'hard', team, position, level }
+// 적 챔피언 봇을 만든다. opts: { difficulty: 'easy'|'normal'|'hard', team, position, level, remote, name }
 async function spawnEnemyBot(championId, opts = {}) {
   if (!CHAMPION_MODEL_LIBRARY.some(([k]) => k === championId)) throw new Error('모르는 챔피언: ' + championId);
   const buf = await _botFetchGlb(championId);
@@ -45,7 +45,8 @@ function _buildEnemyBot(gltf, championId, opts) {
   const sphere = new THREE.Sphere(); box.getBoundingSphere(sphere);
   root.add(createBlobShadow(sphere.radius * 0.9));
   const team = opts.team || ENEMY_TEAM;
-  const hpDiv = makeChampBarDiv(team === PLAYER_TEAM ? 'ally' : 'enemy', _botChampionName(championId)); // 96차: 아군 봇은 파랑 바
+  const myTeam = (typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM; // 97차: 온라인 게스트는 빨강 팀 - 바 색은 내 팀 기준
+  const hpDiv = makeChampBarDiv(team === myTeam ? 'ally' : 'enemy', opts.name || _botChampionName(championId)); // 96차: 아군 봇은 파랑 바
   const hpLabel3d = new CSS2DObject(hpDiv);
   hpLabel3d.position.set(0, (isFinite(box.max.y) ? box.max.y : BASE_UNIT * 1.8) + 2.55, 0);
   root.add(hpLabel3d);
@@ -71,7 +72,9 @@ function _buildEnemyBot(gltf, championId, opts) {
   bot._hpLabel3d = hpLabel3d; bot._hpLabelBaseY = hpLabel3d.position.y;
   bot._scaleWrapper = scaleWrapper; bot._sizeScale = 1; bot._sizeMods = {};
   _botResetForGame(bot, opts);
-  bot.brain = new BotBrain(bot, { difficulty: bot.botDifficulty });
+  // 97차: 온라인 대전의 원격 챔피언(상대 사람이 조작)은 두뇌 없이 받은 명령으로만 움직인다(src/net/net_session.js).
+  if (opts.remote) { bot.isRemote = true; bot.brain = null; bot.netName = opts.name || ''; }
+  else bot.brain = new BotBrain(bot, { difficulty: bot.botDifficulty });
   enemyBots.push(bot);
   if (typeof entityId === 'function') entityId(bot);
   updateBars(bot);
