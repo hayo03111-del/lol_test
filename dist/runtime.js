@@ -12,7 +12,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
  *      보통 화면(20fps 이상)에서 일시정지하지 않으면 실제 시간과 같다.
  *    - 그래서 상태 효과 만료·재사용 대기·스킬 타이머가 일시정지 중에 흐르지 않고(95차), 아주 느린 화면(20fps 미만)에서도
  *      이동(dt, 0.05초 상한)과 같은 빠르기로 흐른다(96차 - 예전엔 타이머만 실제 시간으로 앞서 갔다).
- *    - 번들 안의 setTimeout: 예약한 게임 시각이 될 때 실행한다(일시정지·느린 화면이면 그만큼 늦게). setInterval: 일시정지 중의 실행은 건너뛴다.
+ *    - setTimeout(페이지 전체, 96차): 예약한 게임 시각이 될 때 실행한다(일시정지·느린 화면이면 그만큼 늦게). setInterval: 일시정지 중의 실행은 건너뛴다.
  *    - 메인 루프가 매 프레임 gameClockFrame()을 불러 버린 시간을 센다.
  *
  * 2) 전투 행위자: "지금 누구의 입장에서 판정하는가". 판정 함수(getAllEnemyUnits 등)와 피해 출처 기본값이 이것을 본다.
@@ -46,38 +46,46 @@ const performance = { now: gameClockNow };
 try { globalThis.performance.now = gameClockNow; } catch (e) { /* 덮어쓸 수 없으면 번들 안에서만 게임 시계 */ }
 
 // 아래 네 함수는 const로 둔다 - 함수 선언이면 일반 스크립트에서 전역(globalThis.setTimeout)을 덮어써 자기 자신을 부르게 된다.
+// 96차: 페이지 전체의 setTimeout/setInterval도 이것으로 바꾼다(아래) - 그래서 원래 브라우저 타이머는 먼저 잡아 둔다.
+const __hostSetTimeout = globalThis.setTimeout.bind(globalThis), __hostClearTimeout = globalThis.clearTimeout.bind(globalThis);
+const __hostSetInterval = globalThis.setInterval.bind(globalThis), __hostClearInterval = globalThis.clearInterval.bind(globalThis);
 const __gcTimers = new Map();
 let __gcTimerSeq = 0;
 const setTimeout = function setTimeout(fn, ms = 0, ...args) {
-  if (typeof fn !== 'function') return globalThis.setTimeout(fn, ms, ...args);
+  if (typeof fn !== 'function') return __hostSetTimeout(fn, ms, ...args);
   const id = ++__gcTimerSeq, actor = __combatActor;
   const wait = Math.max(0, Number(ms) || 0);
-  const due = performance.now() + wait;
+  const due = gameClockNow() + wait;
   const fire = () => {
     // 일시정지 중이거나(멈춘 시간만큼 뒤로 밀렸다) 아직 게임 시각이 안 됐으면 다시 기다린다.
-    if (gameClockIsPaused()) { __gcTimers.set(id, globalThis.setTimeout(fire, 50)); return; }
-    const left = due - performance.now();
-    if (left > 1) { __gcTimers.set(id, globalThis.setTimeout(fire, left)); return; }
+    if (gameClockIsPaused()) { __gcTimers.set(id, __hostSetTimeout(fire, 50)); return; }
+    const left = due - gameClockNow();
+    if (left > 1) { __gcTimers.set(id, __hostSetTimeout(fire, left)); return; }
     __gcTimers.delete(id);
     withCombatActor(actor, () => fn(...args));
   };
-  __gcTimers.set(id, globalThis.setTimeout(fire, wait));
+  __gcTimers.set(id, __hostSetTimeout(fire, wait));
   return id;
-}
+};
 const setInterval = function setInterval(fn, ms = 0, ...args) {
-  if (typeof fn !== 'function') return globalThis.setInterval(fn, ms, ...args);
+  if (typeof fn !== 'function') return __hostSetInterval(fn, ms, ...args);
   const id = ++__gcTimerSeq, actor = __combatActor;
-  __gcTimers.set(id, globalThis.setInterval(() => { if (!gameClockIsPaused()) withCombatActor(actor, () => fn(...args)); }, ms));
+  __gcTimers.set(id, __hostSetInterval(() => { if (!gameClockIsPaused()) withCombatActor(actor, () => fn(...args)); }, ms));
   return id;
-}
+};
 const clearTimeout = function clearTimeout(id) {
   const h = __gcTimers.get(id);
-  if (h !== undefined) { globalThis.clearTimeout(h); __gcTimers.delete(id); }
-}
+  if (h !== undefined) { __hostClearTimeout(h); __gcTimers.delete(id); } else __hostClearTimeout(id);
+};
 const clearInterval = function clearInterval(id) {
   const h = __gcTimers.get(id);
-  if (h !== undefined) { globalThis.clearInterval(h); __gcTimers.delete(id); }
-}
+  if (h !== undefined) { __hostClearInterval(h); __gcTimers.delete(id); } else __hostClearInterval(id);
+};
+// 96차: 페이지 전체 타이머도 게임 시계로 - 번들 밖 코드(브라우저 점검 스크립트 등)의 대기도 같은 시계로 잰다.
+try {
+  globalThis.setTimeout = setTimeout; globalThis.clearTimeout = clearTimeout;
+  globalThis.setInterval = setInterval; globalThis.clearInterval = clearInterval;
+} catch (e) { /* 바꿀 수 없으면 번들 안에서만 */ }
 
 /* ===== src/core/00_global_constants.js ===== */
 /* ============================================================

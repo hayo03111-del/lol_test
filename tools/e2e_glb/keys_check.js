@@ -43,7 +43,7 @@ const startServer = require('./server.js');
   r.oToggleOff = !(await shown());
 
   // 부활 대기 후 레벨 업
-  await page.waitForFunction(() => window.controller.state !== 'DEAD' && window.controller.state !== 'RESPAWN', null, { timeout: 20000 });
+  await page.waitForFunction(() => window.controller.state !== 'DEAD' && window.controller.state !== 'RESPAWN', null, { timeout: 60000 }); // 96차: 부활은 게임 시간 기준(느린 화면에서는 실제보다 늦다)
   await page.evaluate(() => { const c = window.controller; c.skillPoints = 2; c.cooldowns = { Q: 0, W: 0, E: 0, R: 0 }; c.mp = c.maxMp; window.__lv = { ...c.skillLevels }; window.updateExpUIForE2E && 0; });
   await page.keyboard.press('Control+KeyQ'); await wait(200);
   r.ctrlQ = await page.evaluate(() => ({ before: window.__lv.Q, after: window.controller.skillLevels.Q, qCooldown: window.controller.cooldowns.Q, points: window.controller.skillPoints }));
