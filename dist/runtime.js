@@ -51,7 +51,10 @@ try { globalThis.performance.now = gameClockNow; } catch (e) { /* 덮어쓸 수 
 const __hostSetTimeout = globalThis.setTimeout.bind(globalThis), __hostClearTimeout = globalThis.clearTimeout.bind(globalThis);
 const __hostSetInterval = globalThis.setInterval.bind(globalThis), __hostClearInterval = globalThis.clearInterval.bind(globalThis);
 const __gcTimers = new Map();
-let __gcTimerSeq = 0;
+// 게임 타이머 번호는 10억부터 - 브라우저 타이머 번호(1부터)와 겹치지 않게. 겹치면 이미 끝난 게임 타이머를 지울 때 같은 번호의 다른
+// 브라우저 타이머가 지워졌다(96차 점검에서 발견 - 점검 스크립트의 대기 타이머가 사라져 멈춤).
+const __GC_TIMER_BASE = 1e9;
+let __gcTimerSeq = __GC_TIMER_BASE;
 const setTimeout = function setTimeout(fn, ms = 0, ...args) {
   if (typeof fn !== 'function') return __hostSetTimeout(fn, ms, ...args);
   const id = ++__gcTimerSeq, actor = __combatActor;
@@ -76,11 +79,11 @@ const setInterval = function setInterval(fn, ms = 0, ...args) {
 };
 const clearTimeout = function clearTimeout(id) {
   const h = __gcTimers.get(id);
-  if (h !== undefined) { __hostClearTimeout(h); __gcTimers.delete(id); } else __hostClearTimeout(id);
+  if (h !== undefined) { __hostClearTimeout(h); __gcTimers.delete(id); } else if (!(id >= __GC_TIMER_BASE)) __hostClearTimeout(id);
 };
 const clearInterval = function clearInterval(id) {
   const h = __gcTimers.get(id);
-  if (h !== undefined) { __hostClearInterval(h); __gcTimers.delete(id); } else __hostClearInterval(id);
+  if (h !== undefined) { __hostClearInterval(h); __gcTimers.delete(id); } else if (!(id >= __GC_TIMER_BASE)) __hostClearInterval(id);
 };
 // 96차: 페이지 전체 타이머도 게임 시계로 - 번들 밖 코드(브라우저 점검 스크립트 등)의 대기도 같은 시계로 잰다.
 try {

@@ -55,7 +55,7 @@ vm.runInContext([rd('src/core/00_game_clock.js'), rd('src/core/00_global_constan
    var SKILL_AIM_TEST = {}; function skillAimSpec(id, slot) { return (SKILL_AIM_TEST[id] || {})[slot] || null; }
    function skillAimIsInstant(c, slot) { const s = skillAimSpec(c.championId, slot); return !s || s.type === 'instant'; }
    function computeSkillAim(c, slot) { const s = skillAimSpec(c.championId, slot); return s ? { rangeWorld: lolRangeToWorld(s.rangeLol) } : null; }
-   this.api = { performance, setTimeout, withCombatActor, gameClockSetPaused, gameClockFrame, getTargetableEnemyUnits, setVision: (v) => { visionSystem = v; }, combatPerspective, isBotActing, getAllEnemyUnits, getAllyChampions, resolveDamageSource, applyStatus,
+   this.api = { performance, setTimeout, clearTimeout, withCombatActor, gameClockSetPaused, gameClockFrame, getTargetableEnemyUnits, setVision: (v) => { visionSystem = v; }, combatPerspective, isBotActing, getAllEnemyUnits, getAllyChampions, resolveDamageSource, applyStatus,
      rewardChampionKill, recordChampionContribution, CHAMPION_KILL_XP_BY_LEVEL, botPlanSkill, lolRangeToWorld, enemyBots, placedAllies, SKILL_AIM_TEST,
      gained: () => gained, setWorld: (w) => { controller = w.controller || null; dummy = w.dummy || null; minions = w.minions || []; } };`].join('\n'), ctx);
 const A = ctx.api;
@@ -85,6 +85,16 @@ const L = A.lolRangeToWorld;
   advance(200); A.gameClockFrame(50);
   assert(near(A.performance.now() - t0, 80), '느린 프레임: 200ms 프레임은 50ms만 흐른다(시뮬레이션 dt 상한과 같다)');
   assert(ctx.performance.now() === A.performance.now(), '페이지 전체 performance.now()도 게임 시계(three.js·점검 스크립트와 같은 시계)');
+}
+// --- 96차: 끝난 게임 타이머 번호를 지워도 다른(브라우저) 타이머는 지워지지 않는다 ---
+{
+  let a = 0, b = 0;
+  const id1 = A.setTimeout(() => { a++; }, 10);
+  advance(20);
+  const id2 = A.setTimeout(() => { b++; }, 50);
+  A.clearTimeout(id1); // 이미 끝난 타이머
+  advance(100);
+  assert(a === 1 && b === 1 && id1 >= 1e9, '타이머 번호: 끝난 게임 타이머를 지워도 다른 타이머는 그대로 실행된다(번호가 브라우저 타이머와 겹치지 않음)');
 }
 // --- 행위자 문맥: 타이머는 예약한 쪽 입장에서 실행된다 ---
 const player = { team: 'BLUE', championId: 'garen', isChampion: true, hp: 1000, maxHp: 1000, state: 'IDLE', root: { position: new Vector3(0, 0, 0) }, collisionRadius: L(65), statusEffects: [], champLevel: 6 };
