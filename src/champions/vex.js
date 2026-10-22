@@ -252,6 +252,7 @@ CharacterController.prototype._vexUpdateQWave = function(t, half) {
     const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
     m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x9b6bff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     m.renderOrder = 4; scene.add(m); this._vex.qWaveMesh = m;
+    if (typeof netMirror === 'function') netMirror(m); // 100차: 온라인 대전 - 참가자 화면에도
     // 정리는 공용 VFX 목록이 맡는다 - 파동이 끝났거나(qWaveMesh가 바뀜) 챔피언을 바꿔 이 컨트롤러가 더 이상 갱신되지
     // 않으면(controller !== this) 다음 프레임에 지운다. 예전엔 교체 도중이면 띠가 장면에 남았다.
     const owner = this;

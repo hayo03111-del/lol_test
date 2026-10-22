@@ -177,6 +177,7 @@ CharacterController.prototype._yoneEnsureMarkIndicator = function(target) {
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(0.5, 0.5, 1);
   scene.add(sprite);
+  if (typeof netMirror === 'function') netMirror(sprite); // 100차: 온라인 대전 - 참가자 화면에도
   spirit.markIndicators.set(key, sprite);
 };
 // 매 프레임(_yoneUpdateESpirit에서 호출) 표식 대상들의 머리 위로 스프라이트
@@ -626,6 +627,7 @@ CharacterController.prototype._yoneSpawnBodyHusk = function(position, quaternion
   outer.position.copy(position);
   outer.quaternion.copy(quaternion);
   scene.add(outer);
+  if (typeof netMirror === 'function') netMirror(outer, { via: [this, '_yoneSpawnBodyHusk', position, quaternion] }); // 100차: 스킨 모델이라 참가자 쪽에서 같은 함수로 만든다
   const mixer = new THREE.AnimationMixer(clone);
   // 실제 영상 확인(ability_0777_E1.webm): 남겨진 육체는 별도 Idle 루프가
   // 아니라 "시전 순간에 하던 동작 그대로 멈춘" 모습에 훨씬 가깝다(예:
@@ -722,6 +724,7 @@ CharacterController.prototype._yoneUpdateSpiritBeam = function(fromPos, toPos) {
     beam = new THREE.Mesh(geo, mat);
     beam.rotation.x = -Math.PI / 2;
     scene.add(beam);
+    if (typeof netMirror === 'function') netMirror(beam); // 100차
     this._yone.spiritBeam = beam;
   }
   const mid = fromPos.clone().add(toPos).multiplyScalar(0.5);

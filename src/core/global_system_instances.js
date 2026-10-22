@@ -820,7 +820,14 @@ function onSkillKeyUp(code) {
   const slot = skillAim.slot;
   const spec = skillAimSpec(controller.championId, slot);
   const p = lastGroundPoint || controller.root.position.clone();
-  if (spec && spec.type === 'charge') { skillAim.cancel(); if (controller._varus && controller._varus.qCharge) submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(p) }); return; }
+  if (spec && spec.type === 'charge') {
+    skillAim.cancel();
+    // 100차: 온라인 참가자 - 충전 상태는 방장 쪽에 있어 늦게 온다. 이번 키 누름으로 충전을 시작했으면(_netChargeSlot) 바로 발사 명령을 보낸다.
+    const guestCharging = typeof netGuestMode !== 'undefined' && netGuestMode && controller._netChargeSlot === slot;
+    if ((controller._varus && controller._varus.qCharge) || guestCharging) submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(p) });
+    controller._netChargeSlot = null;
+    return;
+  }
   if (skillAim.mode !== 'indicator') return; // 일반 시전은 클릭으로 시전
   skillAim.cancel();
   skillAim.cast(controller, slot, p, lastPointerClient);

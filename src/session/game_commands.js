@@ -27,8 +27,9 @@
  *   placeWard   { point }                         장신구
  *   buyItem     { itemId }
  *   sellItem    { slot }                          0~5 또는 'boots'
+ *   shopUndo    { }                               100차: 상점 되돌리기(온라인 참가자 - 방장 쪽 원격 챔피언의 기록으로)
  */
-const COMMAND_TYPES = ['move', 'stop', 'attack', 'clearTarget', 'attackMove', 'cast', 'levelUpSkill', 'recall', 'summoner', 'useItem', 'placeWard', 'buyItem', 'sellItem'];
+const COMMAND_TYPES = ['move', 'stop', 'attack', 'clearTarget', 'attackMove', 'cast', 'levelUpSkill', 'recall', 'summoner', 'useItem', 'placeWard', 'buyItem', 'sellItem', 'shopUndo'];
 const _CMD_SKILL_SLOTS = ['Q', 'W', 'E', 'R'];
 const _CMD_SUMMONER_SLOTS = ['D', 'F'];
 function _cmdIsPoint(p) { return !!p && typeof p === 'object' && Number.isFinite(p.x) && Number.isFinite(p.z) && (p.y == null || Number.isFinite(p.y)); }
@@ -124,10 +125,24 @@ class LocalSession {
         return { ok: true, outcome };
       }
       case 'placeWard': return typeof placeWard === 'function' ? { ok: true, outcome: placeWard(c, _cmdVec(cmd.point)) } : { ok: false, reason: '와드 없음' };
-      case 'buyItem': return typeof buildOrBuyItem === 'function' ? { ok: true, outcome: buildOrBuyItem(c, cmd.itemId) } : { ok: false, reason: '상점 없음' };
-      case 'sellItem':
-        if (cmd.slot === 'boots') return typeof sellBoots === 'function' ? { ok: true, outcome: sellBoots(c) } : { ok: false, reason: '상점 없음' };
-        return typeof sellItem === 'function' ? { ok: true, outcome: sellItem(c, cmd.slot) } : { ok: false, reason: '상점 없음' };
+      case 'buyItem': case 'sellItem': {
+        // 100차: 원격 챔피언(온라인 참가자)의 거래는 방장이 되돌리기 기록을 남긴다(참가자 상점의 "되돌리기").
+        const remote = c.isRemote && typeof shopRemoteRecord === 'function';
+        if (remote) {
+          const it = cmd.type === 'buyItem' ? ITEM_DATA[cmd.itemId] : (cmd.slot === 'boots' ? c.boots : c.items && c.items[cmd.slot]);
+          const nm = it ? ((ITEM_DATA[it.id || cmd.itemId] || it).nameKo || it.id || cmd.itemId) : '';
+          shopRemoteRecord(c, `${nm} ${cmd.type === 'buyItem' ? '구매' : '판매'}`);
+        }
+        let res;
+        if (cmd.type === 'buyItem') res = typeof buildOrBuyItem === 'function' ? { ok: true, outcome: buildOrBuyItem(c, cmd.itemId) } : { ok: false, reason: '상점 없음' };
+        else if (cmd.slot === 'boots') res = typeof sellBoots === 'function' ? { ok: true, outcome: sellBoots(c) } : { ok: false, reason: '상점 없음' };
+        else res = typeof sellItem === 'function' ? { ok: true, outcome: sellItem(c, cmd.slot) } : { ok: false, reason: '상점 없음' };
+        if (remote) { if (res.outcome) shopRemoteMarkAfter(c); else shopRemoteDrop(c); }
+        return res;
+      }
+      case 'shopUndo':
+        if (c.isRemote && typeof shopRemoteUndo === 'function') return { ok: true, outcome: shopRemoteUndo(c) };
+        return { ok: true, outcome: typeof shopUndo === 'function' && c === (typeof controller !== 'undefined' ? controller : null) ? shopUndo() : false };
     }
     return { ok: false, reason: '처리하지 않는 명령' };
   }

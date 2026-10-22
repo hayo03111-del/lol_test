@@ -84,6 +84,7 @@ CharacterController.prototype._luxCastGate = function(slot) {
 CharacterController.prototype._luxMakeOrb = function(color, size) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(BASE_UNIT * size, 14, 10), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
   if (typeof scene !== 'undefined') scene.add(m);
+  if (typeof netMirror === 'function') netMirror(m); // 100차: 온라인 대전 - 참가자 화면에도
   return m;
 };
 CharacterController.prototype._luxDisposeMesh = function(m) {
@@ -212,6 +213,7 @@ CharacterController.prototype._luxMakeZoneMesh = function(center, radiusWorld) {
   g.add(disc, ring);
   g.position.set(center.x, 0.06, center.z);
   if (typeof scene !== 'undefined') scene.add(g);
+  if (typeof netMirror === 'function') netMirror(g); // 100차
   return g;
 };
 CharacterController.prototype._luxTickZone = function(dt) {

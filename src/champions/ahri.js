@@ -136,6 +136,7 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
   orbMesh.scale.setScalar(0.5);
   orbMesh.position.copy(origin);
   scene.add(orbMesh);
+  if (typeof netMirror === 'function') netMirror(orbMesh); // 100차: 온라인 대전 - 참가자 화면에도
 
   this._ahri.qTravel = {
     phase: 'out', dir: dir.clone(), pos: origin.clone(), outDist, traveled: 0,
@@ -293,6 +294,7 @@ CharacterController.prototype._ahriSpawnFoxfire = function(index, orbitRadius, l
   const sprite = new THREE.Sprite(mat);
   sprite.scale.setScalar(0.34);
   scene.add(sprite);
+  if (typeof netMirror === 'function') netMirror(sprite); // 100차
   return {
     sprite, angleOffset: (index / 3) * Math.PI * 2, orbitRadius, level: lvl,
     spawnedAt: startTime, priorityShotAt: startTime + (w.initialDelay || 0.25) * 1000,
@@ -450,6 +452,7 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   sprite.scale.setScalar(0.4);
   sprite.position.copy(origin);
   scene.add(sprite);
+  if (typeof netMirror === 'function') netMirror(sprite); // 100차
 
   this._ahri.eTravel = {
     origin: origin.clone(), dir: dir.clone(), traveled: 0, maxDist: worldRange,

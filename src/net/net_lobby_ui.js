@@ -102,6 +102,21 @@ function _nlEl(id) { return document.getElementById(id); }
     __hostSetTimeout(() => { openNetLobby(); _netStatus('초대받은 방입니다 - 이름을 넣고 "참가"를 누르세요'); }, 0);
   }
   __hostSetInterval(() => netLobbyRefresh(), 1000); // 상태 줄·버튼(연결·참가·대전 시작) 갱신
+  // 100차: 채팅 - 방에 있을 때 Enter로 입력 칸을 열고, Enter로 보내고, Esc로 닫는다(픽창·대전 모두).
+  const chat = document.createElement('input');
+  chat.id = 'netChatInput'; chat.maxLength = 200; chat.placeholder = '메시지 (Enter 보내기 · Esc 닫기)';
+  chat.style.cssText = 'position:fixed;left:14px;bottom:120px;width:340px;display:none;z-index:500;background:rgba(10,14,18,.92);color:#e8e2d0;border:1px solid #785a28;padding:6px 8px;font:13px sans-serif';
+  document.body.appendChild(chat);
+  chat.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { if (chat.value.trim()) netSendChat(chat.value); chat.value = ''; chat.style.display = 'none'; chat.blur(); }
+    else if (e.key === 'Escape') { chat.value = ''; chat.style.display = 'none'; chat.blur(); }
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !netState || !netState.client) return;
+    const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+    e.preventDefault(); chat.style.display = ''; chat.focus();
+  });
 })();
 
 function netInviteLink() {
@@ -165,7 +180,9 @@ function netLobbyRefresh() {
   if (gb) {
     const live = typeof netMatchActive === 'function' && netMatchActive();
     gb.classList.toggle('live', !!st);
-    gb.textContent = live ? `온라인 대전 중${st && st.code ? ' · ' + st.code : ''}` : st && st.code ? `온라인 방 ${st.code}` : '온라인 대전';
+    const rtt = st ? (st.role === 'host' ? st.guestRtt : st.rtt) : null;
+    const how = st && st.client ? ({ p2p: '직접 연결', mqtt: '우회 중계', relay: '중계 서버' }[st.client.kind] || '') : '';
+    gb.textContent = live ? `온라인 대전 · ${rtt != null ? Math.round(rtt) + 'ms' : '…'}${how ? ' · ' + how : ''}` : st && st.code ? `온라인 방 ${st.code}` : '온라인 대전'; // 100차: 대전 중 핑·연결 방식
   }
   if (picking) netLobbyRefreshPick();
 }

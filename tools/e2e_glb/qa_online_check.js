@@ -111,6 +111,14 @@ const MODE = process.env.NET_MODE === 'p2p' ? 'p2p' : 'relay';
   r.shop = { gold0, hostGold: await host.evaluate(() => window.__e2e.enemyBots[0].gold), hostItem: await host.evaluate(() => (window.__e2e.enemyBots[0].items || []).some((i) => i && i.id === 'longSword')),
     guestGold: await guest.evaluate(() => window.controller.gold), guestItem: await guest.evaluate(() => (window.controller.items || []).some((i) => i && i.id === 'longSword')) };
   check('shop: buy command applied by host and reflected on guest', r.shop.hostGold < gold0 && r.shop.hostItem && r.shop.guestItem && Math.abs(r.shop.guestGold - r.shop.hostGold) < 30);
+  // 100차: 참가자 상점 되돌리기(방장이 기록을 갖고 되돌린다) - 다시 사 둔다
+  r.shop.undoInfo = await guest.evaluate(() => window.controller._netUndo);
+  await guest.evaluate(() => window.gameSession.submit({ type: 'shopUndo' }));
+  await realWait(guest, 3 * LAG + 400);
+  r.shop.afterUndo = { hostGold: await host.evaluate(() => window.__e2e.enemyBots[0].gold), hostItem: await host.evaluate(() => (window.__e2e.enemyBots[0].items || []).some((i) => i && i.id === 'longSword')), guestItem: await guest.evaluate(() => (window.controller.items || []).some((i) => i && i.id === 'longSword')) };
+  check('shop: guest undo is done by the host', r.shop.undoInfo && r.shop.undoInfo.n >= 1 && !r.shop.afterUndo.hostItem && !r.shop.afterUndo.guestItem && Math.abs(r.shop.afterUndo.hostGold - gold0) < 30);
+  await guest.evaluate(() => window.gameSession.submit({ type: 'buyItem', itemId: 'longSword' }));
+  await realWait(guest, 3 * LAG + 300);
 
   // 3) 이동 예측: 명령을 보낸 뒤 참가자 화면의 내 챔피언이 움직이기 시작한 시각과 방장 쪽이 움직이기 시작한 시각(벽시계 Date.now)을 잰다.
   //    예측이 없으면 내 챔피언은 왕복 지연(2×LAG) + 보간 지연이 지나서야 움직인다. 예측이 있으면 다음 화면 한두 장 안에 움직인다.
@@ -134,10 +142,15 @@ const MODE = process.env.NET_MODE === 'p2p' ? 'p2p' : 'relay';
   // 4) 미니언: 방장 게임 시간을 웨이브 시각으로 - 참가자 화면에도 같은 ID로 생긴다(델타 스냅샷)
   await host.evaluate(() => window.__e2e.setGameTimeSec(64));
   await realWait(guest, 5000);
-  const mins = await Promise.all([host.evaluate(() => window.__e2e.minions.filter((m) => !m.isDead).map((m) => window.__e2eEntityId(m)).sort((a, b) => a - b)), guest.evaluate(() => window.__e2e.minions.filter((m) => !m.isDead).map((m) => window.__e2eEntityId(m)).sort((a, b) => a - b))]);
-  const common = mins[0].filter((id) => mins[1].includes(id)).length;
-  r.minionCounts = { host: mins[0].length, guest: mins[1].length, common };
-  check('minions: guest shows host minions with the same ids', mins[0].length >= 6 && common >= mins[0].length - 3);
+  // 100차: 안개 - 참가자(빨강) 팀이 못 보는 파랑 미니언은 참가자 쪽에 아예 오지 않는다
+  const mins = await Promise.all([
+    host.evaluate(() => { const E = window.__e2e, id = window.__e2eEntityId, live = E.minions.filter((m) => !m.isDead); const seen = live.filter((m) => m.team === 'RED' || E.visionSystem.isVisibleTo('RED', m)); return { seen: seen.map(id), hidden: live.filter((m) => !seen.includes(m)).map(id), all: live.length }; }),
+    guest.evaluate(() => window.__e2e.minions.filter((m) => !m.isDead && m.mesh.position.y > -100).map((m) => window.__e2eEntityId(m))),
+  ]);
+  const common = mins[0].seen.filter((id) => mins[1].includes(id)).length, leaked = mins[0].hidden.filter((id) => mins[1].includes(id)).length;
+  r.minionCounts = { host: mins[0].all, visibleToGuest: mins[0].seen.length, hiddenFromGuest: mins[0].hidden.length, guest: mins[1].length, common, leaked };
+  check('minions: guest shows the host minions it can see, with the same ids', mins[0].all >= 6 && common >= mins[0].seen.length - 3);
+  check('fog: minions hidden from the guest team are not sent', leaked === 0);
 
   // 5) 추격 예측 + 전투: 방장 챔피언을 사거리 밖에 두고 참가자가 공격 - 바로 다가가고, 평타·W로 피해, 투사체·연출 복제
   await host.evaluate(() => { const E = window.__e2e, c = window.controller, b = E.enemyBots[0], L = E.lolRangeToWorld; c.root.position.set(b.root.position.x, 0, b.root.position.z - L(1100)); c.targetPos = null; c.itemBonusMaxHp = 20000; c.recomputeStats(); c.hp = c.maxHp; E.applyStatus(c, { id: 'e2eHold', type: 'STUN', duration: 10 }); b.mp = b.maxMp; b.cooldowns = { Q: 0, W: 0, E: 0, R: 0 }; });
@@ -175,11 +188,46 @@ const MODE = process.env.NET_MODE === 'p2p' ? 'p2p' : 'relay';
   }
   check('animation: guest plays the host-side attack clip', r.clip.some((x) => { const [a, b] = x.split('/'); return a && a === b && /Attack/i.test(a); }));
 
+  // 100차: 챔피언 내부 상태(애쉬 Q 중첩·아이템 재사용 대기)·상대 상태 효과·채팅·연출 물체 미러·회복 유물
+  await host.evaluate(() => { const b = window.__e2e.enemyBots[0]; if (!b._ashe) b._ashe = {}; b._ashe.focusStacks = 4; b._itemActiveCooldownUntil = Object.assign(b._itemActiveCooldownUntil || {}, { e2eItem: performance.now() + 5000 }); window.__e2e.applyStatus(window.controller, { id: 'e2eStun2', type: 'STUN', duration: 6 }); });
+  await guest.evaluate(() => window.netSendChat('안녕 e2e'));
+  const mirrorId = await host.evaluate(() => { const E = window.__e2e, T = E.THREE, b = E.enemyBots[0]; const m = new T.Mesh(new T.SphereGeometry(0.3, 8, 6), new T.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.8 })); m.position.copy(b.root.position).add(new T.Vector3(0, 1, 0)); m.name = 'e2eMirror'; E.scene.add(m); window.netMirror(m); window.__e2eMirror = m; return 1; });
+  await host.evaluate(() => window.__e2e.setGameTimeSec(200)); // 회복 유물이 나오는 시각
+  await realWait(guest, 3 * LAG + 1200);
+  r.sync = await guest.evaluate(() => { const c = window.controller, p = window.__e2e.enemyBots[0]; const mirrors = window.netState.mirrors ? [...window.netState.mirrors.values()] : []; return {
+    stacks: c._ashe && c._ashe.focusStacks, itemCdLeft: c._itemActiveCooldownUntil && c._itemActiveCooldownUntil.e2eItem ? Math.round(c._itemActiveCooldownUntil.e2eItem - performance.now()) : null,
+    hostStunned: (p.statusEffects || []).some((e) => e.type === 'STUN'), mirrors: mirrors.length, mirrorPos: mirrors[0] ? mirrors[0].obj.position.y : null, relics: window.__aram.relics.filter((x) => x.active && x.orb.visible).length }; });
+  r.sync.hostRelics = await host.evaluate(() => window.__aram.relics.filter((x) => x.active).length);
+  r.sync.chat = await host.evaluate(() => (window.netState.chatLog || []).some((m) => m.text === '안녕 e2e'));
+  check('state: champion internal state and item cooldowns reach the guest (time converted)', r.sync.stacks === 4 && r.sync.itemCdLeft > 2500 && r.sync.itemCdLeft < 6000);
+  check('state: enemy champion status effects are shown on the guest', r.sync.hostStunned);
+  check('chat: guest message reaches the host', r.sync.chat);
+  check('relics: health relics appear on the guest', r.sync.hostRelics >= 1 && r.sync.relics === r.sync.hostRelics);
+  await host.evaluate(() => { window.__e2eMirror.position.y += 2; });
+  await realWait(guest, 3 * LAG + 300);
+  r.sync.mirrorMoved = await guest.evaluate(() => { const m = [...window.netState.mirrors.values()][0]; return m ? +m.obj.position.y.toFixed(2) : null; });
+  r.sync.mirrorHostY = await host.evaluate(() => +window.__e2eMirror.position.y.toFixed(2));
+  await host.evaluate(() => { window.__e2e.scene.remove(window.__e2eMirror); });
+  await realWait(guest, 3 * LAG + 300);
+  r.sync.mirrorGone = await guest.evaluate(() => window.netState.mirrors.size === 0);
+  check('mirror: champion-made objects appear, move and disappear on the guest', r.sync.mirrors === 1 && Math.abs(r.sync.mirrorMoved - r.sync.mirrorHostY) < 0.01 && r.sync.mirrorGone);
+
   // 7) 와드: 방장 쪽에 생긴 빨강 팀 와드가 참가자 화면에 같은 ID로
   r.ward = await host.evaluate(() => { const E = window.__e2e, b = E.enemyBots[0]; const w = E.wardSystem.place(null, 'stealth', b.root.position.clone().add(new E.THREE.Vector3(1, 0, 1)), { team: 'RED', durationSec: 60 }); return window.__e2eEntityId(w); });
   await realWait(guest, 3 * LAG + 400);
   r.wardGuest = await guest.evaluate((id) => window.__e2e.wardSystem.wards.filter((w) => !w.destroyed).map((w) => window.__e2eEntityId(w)).includes(id), r.ward);
   check('wards: host ward appears on the guest with the same id', r.wardGuest);
+
+  // 100차: 서리 관문 - 참가자 챔피언도 탄다(예전엔 직접 조작하는 챔피언만)
+  r.gate = await host.evaluate(() => { const g = window.__aram.gates.find((x) => x.team === 'RED'), ex = window.__aram.exit(g); return { pos: { x: g.pos.x, y: 0, z: g.pos.z }, exit: ex ? { x: ex.x, z: ex.z } : null }; });
+  if (r.gate.exit) {
+    await host.evaluate(() => { const b = window.__e2e.enemyBots[0]; b.statusEffects = []; b.hp = b.maxHp; });
+    await guest.evaluate((p) => window.gameSession.submit({ type: 'move', point: p }), r.gate.pos);
+    await host.waitForFunction((ex) => { const p = window.__e2e.enemyBots[0].root.position; return Math.hypot(p.x - ex.x, p.z - ex.z) < 2; }, r.gate.exit, { timeout: 25000 }).catch(() => {});
+    const bp = await pos(host, 'window.__e2e.enemyBots[0]');
+    r.gate.dist = Math.round(Math.hypot(bp.x - r.gate.exit.x, bp.z - r.gate.exit.z) / L1);
+  }
+  check('gate: the guest champion can ride the frost gate', r.gate.exit && r.gate.dist < 200);
 
   // 8) 처치: 방장이 참가자 챔피언을 처치 - 참가자 화면에서 죽음, 점수 동기화
   await host.evaluate(() => { const E = window.__e2e, b = E.enemyBots[0], c = window.controller; c.statusEffects = []; E.applyDamage(b, { rawDamage: 1e6, damageType: 'TRUE', isCritical: false, critMultiplier: 1, source: c }); });

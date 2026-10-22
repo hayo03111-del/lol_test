@@ -660,6 +660,7 @@ function updateTurretShieldStageVisual(turret) {
 // 59차: 포탑이 플레이어를 노리는 동안 포탑 꼭대기에서 플레이어까지 붉은 조준선을 그린다(원작의 포탑 어그로 표시).
 // 가열 단계가 오를수록 진해진다. 아군 포탑이 적 미니언을 노릴 때는 그리지 않는다(원작도 내 챔피언을 노릴 때만 보인다).
 function updateTurretAggroBeam(turret, target) {
+  turret._netAggroTarget = target || null; // 100차: 온라인 대전 - 참가자 화면에도 조준선(net_session.js)
   const show = !!(target && typeof controller !== 'undefined' && target === controller && !turret.destroyed);
   if (!show) { if (turret._aggroBeam) turret._aggroBeam.visible = false; return; }
   if (!turret._aggroBeam) {

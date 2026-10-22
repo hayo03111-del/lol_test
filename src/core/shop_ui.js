@@ -145,10 +145,28 @@ function _shopSnapshot(label) {
 function _shopMarkAfter() { const t = _shopUndoStack[_shopUndoStack.length - 1], c = controller; if (t && c) { t.goldAfter = c.gold || 0; t.hpAfter = c.hp; t.mpAfter = c.mp; } }
 function shopClearUndo() { _shopUndoStack = []; if (_shopOpen) renderShopPanel(true); }
 function shopTickUndoZone(ctrl) { if (_shopUndoStack.length && ctrl && ctrl === controller && !_shopInBase(ctrl)) shopClearUndo(); }
+// 100차: 온라인 대전 - 방장 쪽 원격 챔피언(참가자)의 되돌리기 기록. 참가자 상점은 "되돌리기"를 명령(shopUndo)으로 보내고 방장이 되돌린다.
+const _shopRemoteUndo = new WeakMap();
+function _shopTake(c, label) {
+  return { ctrl: c, label, gold: c.gold || 0, hp: c.hp, mp: c.mp, items: (c.items || []).map((s) => ({ ...s })), boots: c.boots ? { ...c.boots } : null, bootsExtra: c._itemBootsExtraMoveSpeedLol || 0 };
+}
+function shopRemoteRecord(c, label) { let a = _shopRemoteUndo.get(c); if (!a) _shopRemoteUndo.set(c, a = []); a.push(_shopTake(c, label)); if (a.length > 20) a.shift(); }
+function shopRemoteMarkAfter(c) { const a = _shopRemoteUndo.get(c), t = a && a[a.length - 1]; if (t) { t.goldAfter = c.gold || 0; t.hpAfter = c.hp; t.mpAfter = c.mp; } }
+function shopRemoteDrop(c) { const a = _shopRemoteUndo.get(c); if (a) a.pop(); }
+function shopRemoteClear(c) { _shopRemoteUndo.delete(c); }
+function shopRemoteUndoInfo(c) { const a = _shopRemoteUndo.get(c); return { n: a ? a.length : 0, label: a && a.length ? a[a.length - 1].label : '' }; }
+function shopRemoteUndo(c) { const a = _shopRemoteUndo.get(c), snap = a && a.pop(); if (!snap) return false; _shopApplyUndo(c, snap); return true; }
 function shopUndo() {
+  if (typeof netGuestMode !== 'undefined' && netGuestMode) { submitPlayerCommand({ type: 'shopUndo' }); _shopSelectedSlot = null; return true; } // 100차: 참가자는 방장이 되돌린다
   const snap = _shopUndoStack.pop();
   if (!snap || snap.ctrl !== controller) { _shopUndoStack = []; renderShopPanel(true); return false; }
-  const c = controller;
+  _shopApplyUndo(controller, snap);
+  _shopSelectedSlot = null;
+  renderShopPanel(true);
+  if (typeof showSkillToast === 'function') showSkillToast(`되돌리기: ${snap.label}`);
+  return true;
+}
+function _shopApplyUndo(c, snap) {
   // 90차(QA): 거래 뒤에 번 골드는 지킨다 - 그 거래로 바뀐 골드(after - before)만 되돌린다(예전엔 거래 직전 값으로 덮어써 그 사이 번 골드가 사라졌다).
   // 체력·마나도 그 거래로 늘어난 만큼만 빼서, 사고 되돌리기로 공짜 회복이 되지 않게 한다.
   const goldDelta = (snap.goldAfter ?? c.gold) - snap.gold, hpDelta = (snap.hpAfter ?? c.hp) - snap.hp, mpDelta = (snap.mpAfter ?? c.mp) - snap.mp;
@@ -156,20 +174,18 @@ function shopUndo() {
   if (typeof recomputeItemStats === 'function') recomputeItemStats(c);
   if (c.hp > 0) c.hp = Math.max(1, Math.min(c.maxHp, c.hp - Math.max(0, hpDelta)));
   if (typeof c.mp === 'number') c.mp = Math.max(0, Math.min(c.maxMp ?? c.mp, c.mp - Math.max(0, mpDelta)));
+  if (c !== controller) return;
   if (typeof updateBars === 'function') updateBars(c);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(c);
-  _shopSelectedSlot = null;
-  renderShopPanel(true);
-  if (typeof showSkillToast === 'function') showSkillToast(`되돌리기: ${snap.label}`);
-  return true;
 }
 function _shopBuy(itemId) {
   const reason = shopBlockReason(controller, itemId);
   if (reason) { if (typeof showSkillToast === 'function') showSkillToast(reason); return false; }
-  _shopSnapshot(`${(ITEM_DATA[itemId] || {}).nameKo || itemId} 구매`);
+  const guest = typeof netGuestMode !== 'undefined' && netGuestMode; // 100차: 참가자는 되돌리기 기록을 방장이 갖는다
+  if (!guest) _shopSnapshot(`${(ITEM_DATA[itemId] || {}).nameKo || itemId} 구매`);
   const ok = typeof buildOrBuyItem === 'function' && !!submitPlayerCommand({ type: 'buyItem', itemId }).outcome; // 93차: 명령으로
-  if (!ok) _shopUndoStack.pop(); else _shopMarkAfter();
+  if (!guest) { if (!ok) _shopUndoStack.pop(); else _shopMarkAfter(); }
   if (ok) {
     const tile = document.querySelector(`#shopGrid .shop-tile[data-id="${itemId}"]`);
     if (tile) { tile.classList.remove('bought'); void tile.offsetWidth; tile.classList.add('bought'); }
@@ -180,10 +196,10 @@ function _shopSell() {
   if (!controller || _shopSelectedSlot == null) return;
   const sel = _shopSelectedSlot === 'boots' ? controller.boots : controller.items[_shopSelectedSlot];
   if (!sel) { _shopSelectedSlot = null; renderShopPanel(true); return; }
-  _shopSnapshot(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
+  const guest = typeof netGuestMode !== 'undefined' && netGuestMode;
+  if (!guest) _shopSnapshot(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
   const ok = !!submitPlayerCommand({ type: 'sellItem', slot: _shopSelectedSlot }).outcome; // 93차: 명령으로(신발 칸은 'boots')
-  if (!ok) _shopUndoStack.pop();
-  else _shopMarkAfter();
+  if (!guest) { if (!ok) _shopUndoStack.pop(); else _shopMarkAfter(); }
   if (ok && typeof showSkillToast === 'function') showSkillToast(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
   _shopSelectedSlot = null;
   renderShopPanel(true);
@@ -381,9 +397,14 @@ function _shopRenderInventory() {
   if (sellBtn) { sellBtn.disabled = !sel; sellBtn.textContent = sel ? `판매 +${price.toLocaleString()}` : '판매'; }
   const undoBtn = _shopEl('shopUndoBtn');
   if (undoBtn) {
+    if (typeof netGuestMode !== 'undefined' && netGuestMode && ctrl) { // 100차: 참가자 - 방장이 알려 준 되돌리기 기록
+      const u = ctrl._netUndo || { n: 0, label: '' };
+      undoBtn.disabled = !u.n; undoBtn.title = u.n ? `되돌리기: ${u.label}` : '되돌릴 거래가 없습니다';
+    } else {
     if (_shopUndoStack.length && _shopUndoStack[_shopUndoStack.length - 1].ctrl !== ctrl) _shopUndoStack = [];
     undoBtn.disabled = !_shopUndoStack.length;
     undoBtn.title = _shopUndoStack.length ? `되돌리기: ${_shopUndoStack[_shopUndoStack.length - 1].label}` : '되돌릴 거래가 없습니다';
+    }
   }
   if (info) info.textContent = sel ? sel.nameKo : '보유 아이템을 고르면 판매할 수 있습니다';
 }
@@ -393,7 +414,7 @@ function renderShopPanel(force) {
   if (!_shopOpen || typeof ITEM_DATA === 'undefined') return;
   const ctrl = controller;
   const sig = ctrl
-    ? [Math.floor(ctrl.gold || 0), _shopInBase(ctrl), (ctrl.items || []).map((s) => `${s.id}:${s.count}:${s.charges}`).join(','), ctrl.boots && ctrl.boots.id, ctrl.trinket && ctrl.trinket.charges, _shopSelectedItemId, _shopSelectedSlot].join('|')
+    ? [Math.floor(ctrl.gold || 0), _shopInBase(ctrl), (ctrl.items || []).map((s) => `${s.id}:${s.count}:${s.charges}`).join(','), ctrl.boots && ctrl.boots.id, ctrl.trinket && ctrl.trinket.charges, _shopSelectedItemId, _shopSelectedSlot, ctrl._netUndo ? ctrl._netUndo.n : ''].join('|')
     : 'none';
   if (!force && sig === _shopStateSig) return;
   _shopStateSig = sig;

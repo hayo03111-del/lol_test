@@ -149,7 +149,7 @@ function updateAramFeatures(dt) {
     if (!exit) continue;
     const reach = lolRangeToWorld(ARAM_GATE_RADIUS_LOL);
     for (const u of champs) {
-      if (u !== controller || u._dashState || u.state === 'DEAD') continue; // 지금은 직접 조작하는 챔피언만 탄다
+      if ((u !== controller && !u.isRemote) || u._dashState || u.state === 'DEAD') continue; // 사람이 조작하는 챔피언만 탄다(100차: 온라인 상대 = 원격 챔피언 포함)
       // 원작처럼 관문을 "찍어서"(우클릭 이동 목표가 관문 안) 들어갈 때만 탄다 - 그냥 옆을 지나가면 타지 않는다.
       if (u.targetPos && getHorizontalDistance(u.targetPos, gate.pos) <= reach) u._aramGateIntent = gate;
       else if (u.targetPos) u._aramGateIntent = null;
@@ -163,7 +163,7 @@ function updateAramFeatures(dt) {
       const dir = exit.clone().sub(from); dir.y = 0;
       u._dashState = { from, to: exit.clone(), duration: ARAM_GATE_TRAVEL_SEC, elapsed: 0, faceDir: dir.lengthSq() > 1e-6 ? dir.normalize() : null };
       u.targetPos = null;
-      if (typeof showSkillToast === 'function') showSkillToast('서리 관문');
+      if (u === controller && typeof showSkillToast === 'function') showSkillToast('서리 관문');
     }
   }
 }

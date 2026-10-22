@@ -20292,6 +20292,7 @@ CharacterController.prototype._yoneEnsureMarkIndicator = function(target) {
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(0.5, 0.5, 1);
   scene.add(sprite);
+  if (typeof netMirror === 'function') netMirror(sprite); // 100차: 온라인 대전 - 참가자 화면에도
   spirit.markIndicators.set(key, sprite);
 };
 // 매 프레임(_yoneUpdateESpirit에서 호출) 표식 대상들의 머리 위로 스프라이트
@@ -20741,6 +20742,7 @@ CharacterController.prototype._yoneSpawnBodyHusk = function(position, quaternion
   outer.position.copy(position);
   outer.quaternion.copy(quaternion);
   scene.add(outer);
+  if (typeof netMirror === 'function') netMirror(outer, { via: [this, '_yoneSpawnBodyHusk', position, quaternion] }); // 100차: 스킨 모델이라 참가자 쪽에서 같은 함수로 만든다
   const mixer = new THREE.AnimationMixer(clone);
   // 실제 영상 확인(ability_0777_E1.webm): 남겨진 육체는 별도 Idle 루프가
   // 아니라 "시전 순간에 하던 동작 그대로 멈춘" 모습에 훨씬 가깝다(예:
@@ -20837,6 +20839,7 @@ CharacterController.prototype._yoneUpdateSpiritBeam = function(fromPos, toPos) {
     beam = new THREE.Mesh(geo, mat);
     beam.rotation.x = -Math.PI / 2;
     scene.add(beam);
+    if (typeof netMirror === 'function') netMirror(beam); // 100차
     this._yone.spiritBeam = beam;
   }
   const mid = fromPos.clone().add(toPos).multiplyScalar(0.5);
@@ -24234,6 +24237,7 @@ CharacterController.prototype._vexUpdateQWave = function(t, half) {
     const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
     m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x9b6bff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     m.renderOrder = 4; scene.add(m); this._vex.qWaveMesh = m;
+    if (typeof netMirror === 'function') netMirror(m); // 100차: 온라인 대전 - 참가자 화면에도
     // 정리는 공용 VFX 목록이 맡는다 - 파동이 끝났거나(qWaveMesh가 바뀜) 챔피언을 바꿔 이 컨트롤러가 더 이상 갱신되지
     // 않으면(controller !== this) 다음 프레임에 지운다. 예전엔 교체 도중이면 띠가 장면에 남았다.
     const owner = this;
@@ -24953,6 +24957,7 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
   orbMesh.scale.setScalar(0.5);
   orbMesh.position.copy(origin);
   scene.add(orbMesh);
+  if (typeof netMirror === 'function') netMirror(orbMesh); // 100차: 온라인 대전 - 참가자 화면에도
 
   this._ahri.qTravel = {
     phase: 'out', dir: dir.clone(), pos: origin.clone(), outDist, traveled: 0,
@@ -25110,6 +25115,7 @@ CharacterController.prototype._ahriSpawnFoxfire = function(index, orbitRadius, l
   const sprite = new THREE.Sprite(mat);
   sprite.scale.setScalar(0.34);
   scene.add(sprite);
+  if (typeof netMirror === 'function') netMirror(sprite); // 100차
   return {
     sprite, angleOffset: (index / 3) * Math.PI * 2, orbitRadius, level: lvl,
     spawnedAt: startTime, priorityShotAt: startTime + (w.initialDelay || 0.25) * 1000,
@@ -25267,6 +25273,7 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   sprite.scale.setScalar(0.4);
   sprite.position.copy(origin);
   scene.add(sprite);
+  if (typeof netMirror === 'function') netMirror(sprite); // 100차
 
   this._ahri.eTravel = {
     origin: origin.clone(), dir: dir.clone(), traveled: 0, maxDist: worldRange,
@@ -26911,6 +26918,7 @@ CharacterController.prototype._nautilusUpdateChain = function() {
     const line = new THREE.Mesh(lineGeo, mat);
     const anchor = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0x9fb6c2 }));
     group.add(line, anchor); scene.add(group);
+    if (typeof netMirror === 'function') netMirror(group); // 100차: 온라인 대전 - 참가자 화면에도
     ch = n.qChain = { group, line, anchor };
     const owner = this;
     const entry = { life: 30, maxLife: 30, tag: 'nautilusChain',
@@ -27509,6 +27517,7 @@ CharacterController.prototype._luxCastGate = function(slot) {
 CharacterController.prototype._luxMakeOrb = function(color, size) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(BASE_UNIT * size, 14, 10), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
   if (typeof scene !== 'undefined') scene.add(m);
+  if (typeof netMirror === 'function') netMirror(m); // 100차: 온라인 대전 - 참가자 화면에도
   return m;
 };
 CharacterController.prototype._luxDisposeMesh = function(m) {
@@ -27637,6 +27646,7 @@ CharacterController.prototype._luxMakeZoneMesh = function(center, radiusWorld) {
   g.add(disc, ring);
   g.position.set(center.x, 0.06, center.z);
   if (typeof scene !== 'undefined') scene.add(g);
+  if (typeof netMirror === 'function') netMirror(g); // 100차
   return g;
 };
 CharacterController.prototype._luxTickZone = function(dt) {
@@ -29051,6 +29061,7 @@ function updateTurretShieldStageVisual(turret) {
 // 59차: 포탑이 플레이어를 노리는 동안 포탑 꼭대기에서 플레이어까지 붉은 조준선을 그린다(원작의 포탑 어그로 표시).
 // 가열 단계가 오를수록 진해진다. 아군 포탑이 적 미니언을 노릴 때는 그리지 않는다(원작도 내 챔피언을 노릴 때만 보인다).
 function updateTurretAggroBeam(turret, target) {
+  turret._netAggroTarget = target || null; // 100차: 온라인 대전 - 참가자 화면에도 조준선(net_session.js)
   const show = !!(target && typeof controller !== 'undefined' && target === controller && !turret.destroyed);
   if (!show) { if (turret._aggroBeam) turret._aggroBeam.visible = false; return; }
   if (!turret._aggroBeam) {
@@ -30137,7 +30148,7 @@ function updateAramFeatures(dt) {
     if (!exit) continue;
     const reach = lolRangeToWorld(ARAM_GATE_RADIUS_LOL);
     for (const u of champs) {
-      if (u !== controller || u._dashState || u.state === 'DEAD') continue; // 지금은 직접 조작하는 챔피언만 탄다
+      if ((u !== controller && !u.isRemote) || u._dashState || u.state === 'DEAD') continue; // 사람이 조작하는 챔피언만 탄다(100차: 온라인 상대 = 원격 챔피언 포함)
       // 원작처럼 관문을 "찍어서"(우클릭 이동 목표가 관문 안) 들어갈 때만 탄다 - 그냥 옆을 지나가면 타지 않는다.
       if (u.targetPos && getHorizontalDistance(u.targetPos, gate.pos) <= reach) u._aramGateIntent = gate;
       else if (u.targetPos) u._aramGateIntent = null;
@@ -30151,7 +30162,7 @@ function updateAramFeatures(dt) {
       const dir = exit.clone().sub(from); dir.y = 0;
       u._dashState = { from, to: exit.clone(), duration: ARAM_GATE_TRAVEL_SEC, elapsed: 0, faceDir: dir.lengthSq() > 1e-6 ? dir.normalize() : null };
       u.targetPos = null;
-      if (typeof showSkillToast === 'function') showSkillToast('서리 관문');
+      if (u === controller && typeof showSkillToast === 'function') showSkillToast('서리 관문');
     }
   }
 }
@@ -35970,8 +35981,9 @@ function buildGameSnapshot() {
  *   placeWard   { point }                         장신구
  *   buyItem     { itemId }
  *   sellItem    { slot }                          0~5 또는 'boots'
+ *   shopUndo    { }                               100차: 상점 되돌리기(온라인 참가자 - 방장 쪽 원격 챔피언의 기록으로)
  */
-const COMMAND_TYPES = ['move', 'stop', 'attack', 'clearTarget', 'attackMove', 'cast', 'levelUpSkill', 'recall', 'summoner', 'useItem', 'placeWard', 'buyItem', 'sellItem'];
+const COMMAND_TYPES = ['move', 'stop', 'attack', 'clearTarget', 'attackMove', 'cast', 'levelUpSkill', 'recall', 'summoner', 'useItem', 'placeWard', 'buyItem', 'sellItem', 'shopUndo'];
 const _CMD_SKILL_SLOTS = ['Q', 'W', 'E', 'R'];
 const _CMD_SUMMONER_SLOTS = ['D', 'F'];
 function _cmdIsPoint(p) { return !!p && typeof p === 'object' && Number.isFinite(p.x) && Number.isFinite(p.z) && (p.y == null || Number.isFinite(p.y)); }
@@ -36067,10 +36079,24 @@ class LocalSession {
         return { ok: true, outcome };
       }
       case 'placeWard': return typeof placeWard === 'function' ? { ok: true, outcome: placeWard(c, _cmdVec(cmd.point)) } : { ok: false, reason: '와드 없음' };
-      case 'buyItem': return typeof buildOrBuyItem === 'function' ? { ok: true, outcome: buildOrBuyItem(c, cmd.itemId) } : { ok: false, reason: '상점 없음' };
-      case 'sellItem':
-        if (cmd.slot === 'boots') return typeof sellBoots === 'function' ? { ok: true, outcome: sellBoots(c) } : { ok: false, reason: '상점 없음' };
-        return typeof sellItem === 'function' ? { ok: true, outcome: sellItem(c, cmd.slot) } : { ok: false, reason: '상점 없음' };
+      case 'buyItem': case 'sellItem': {
+        // 100차: 원격 챔피언(온라인 참가자)의 거래는 방장이 되돌리기 기록을 남긴다(참가자 상점의 "되돌리기").
+        const remote = c.isRemote && typeof shopRemoteRecord === 'function';
+        if (remote) {
+          const it = cmd.type === 'buyItem' ? ITEM_DATA[cmd.itemId] : (cmd.slot === 'boots' ? c.boots : c.items && c.items[cmd.slot]);
+          const nm = it ? ((ITEM_DATA[it.id || cmd.itemId] || it).nameKo || it.id || cmd.itemId) : '';
+          shopRemoteRecord(c, `${nm} ${cmd.type === 'buyItem' ? '구매' : '판매'}`);
+        }
+        let res;
+        if (cmd.type === 'buyItem') res = typeof buildOrBuyItem === 'function' ? { ok: true, outcome: buildOrBuyItem(c, cmd.itemId) } : { ok: false, reason: '상점 없음' };
+        else if (cmd.slot === 'boots') res = typeof sellBoots === 'function' ? { ok: true, outcome: sellBoots(c) } : { ok: false, reason: '상점 없음' };
+        else res = typeof sellItem === 'function' ? { ok: true, outcome: sellItem(c, cmd.slot) } : { ok: false, reason: '상점 없음' };
+        if (remote) { if (res.outcome) shopRemoteMarkAfter(c); else shopRemoteDrop(c); }
+        return res;
+      }
+      case 'shopUndo':
+        if (c.isRemote && typeof shopRemoteUndo === 'function') return { ok: true, outcome: shopRemoteUndo(c) };
+        return { ok: true, outcome: typeof shopUndo === 'function' && c === (typeof controller !== 'undefined' ? controller : null) ? shopUndo() : false };
     }
     return { ok: false, reason: '처리하지 않는 명령' };
   }
@@ -36230,10 +36256,28 @@ function _shopSnapshot(label) {
 function _shopMarkAfter() { const t = _shopUndoStack[_shopUndoStack.length - 1], c = controller; if (t && c) { t.goldAfter = c.gold || 0; t.hpAfter = c.hp; t.mpAfter = c.mp; } }
 function shopClearUndo() { _shopUndoStack = []; if (_shopOpen) renderShopPanel(true); }
 function shopTickUndoZone(ctrl) { if (_shopUndoStack.length && ctrl && ctrl === controller && !_shopInBase(ctrl)) shopClearUndo(); }
+// 100차: 온라인 대전 - 방장 쪽 원격 챔피언(참가자)의 되돌리기 기록. 참가자 상점은 "되돌리기"를 명령(shopUndo)으로 보내고 방장이 되돌린다.
+const _shopRemoteUndo = new WeakMap();
+function _shopTake(c, label) {
+  return { ctrl: c, label, gold: c.gold || 0, hp: c.hp, mp: c.mp, items: (c.items || []).map((s) => ({ ...s })), boots: c.boots ? { ...c.boots } : null, bootsExtra: c._itemBootsExtraMoveSpeedLol || 0 };
+}
+function shopRemoteRecord(c, label) { let a = _shopRemoteUndo.get(c); if (!a) _shopRemoteUndo.set(c, a = []); a.push(_shopTake(c, label)); if (a.length > 20) a.shift(); }
+function shopRemoteMarkAfter(c) { const a = _shopRemoteUndo.get(c), t = a && a[a.length - 1]; if (t) { t.goldAfter = c.gold || 0; t.hpAfter = c.hp; t.mpAfter = c.mp; } }
+function shopRemoteDrop(c) { const a = _shopRemoteUndo.get(c); if (a) a.pop(); }
+function shopRemoteClear(c) { _shopRemoteUndo.delete(c); }
+function shopRemoteUndoInfo(c) { const a = _shopRemoteUndo.get(c); return { n: a ? a.length : 0, label: a && a.length ? a[a.length - 1].label : '' }; }
+function shopRemoteUndo(c) { const a = _shopRemoteUndo.get(c), snap = a && a.pop(); if (!snap) return false; _shopApplyUndo(c, snap); return true; }
 function shopUndo() {
+  if (typeof netGuestMode !== 'undefined' && netGuestMode) { submitPlayerCommand({ type: 'shopUndo' }); _shopSelectedSlot = null; return true; } // 100차: 참가자는 방장이 되돌린다
   const snap = _shopUndoStack.pop();
   if (!snap || snap.ctrl !== controller) { _shopUndoStack = []; renderShopPanel(true); return false; }
-  const c = controller;
+  _shopApplyUndo(controller, snap);
+  _shopSelectedSlot = null;
+  renderShopPanel(true);
+  if (typeof showSkillToast === 'function') showSkillToast(`되돌리기: ${snap.label}`);
+  return true;
+}
+function _shopApplyUndo(c, snap) {
   // 90차(QA): 거래 뒤에 번 골드는 지킨다 - 그 거래로 바뀐 골드(after - before)만 되돌린다(예전엔 거래 직전 값으로 덮어써 그 사이 번 골드가 사라졌다).
   // 체력·마나도 그 거래로 늘어난 만큼만 빼서, 사고 되돌리기로 공짜 회복이 되지 않게 한다.
   const goldDelta = (snap.goldAfter ?? c.gold) - snap.gold, hpDelta = (snap.hpAfter ?? c.hp) - snap.hp, mpDelta = (snap.mpAfter ?? c.mp) - snap.mp;
@@ -36241,20 +36285,18 @@ function shopUndo() {
   if (typeof recomputeItemStats === 'function') recomputeItemStats(c);
   if (c.hp > 0) c.hp = Math.max(1, Math.min(c.maxHp, c.hp - Math.max(0, hpDelta)));
   if (typeof c.mp === 'number') c.mp = Math.max(0, Math.min(c.maxMp ?? c.mp, c.mp - Math.max(0, mpDelta)));
+  if (c !== controller) return;
   if (typeof updateBars === 'function') updateBars(c);
   if (typeof updateGoldDisplay === 'function') updateGoldDisplay();
   if (typeof updateItemUI === 'function') updateItemUI(c);
-  _shopSelectedSlot = null;
-  renderShopPanel(true);
-  if (typeof showSkillToast === 'function') showSkillToast(`되돌리기: ${snap.label}`);
-  return true;
 }
 function _shopBuy(itemId) {
   const reason = shopBlockReason(controller, itemId);
   if (reason) { if (typeof showSkillToast === 'function') showSkillToast(reason); return false; }
-  _shopSnapshot(`${(ITEM_DATA[itemId] || {}).nameKo || itemId} 구매`);
+  const guest = typeof netGuestMode !== 'undefined' && netGuestMode; // 100차: 참가자는 되돌리기 기록을 방장이 갖는다
+  if (!guest) _shopSnapshot(`${(ITEM_DATA[itemId] || {}).nameKo || itemId} 구매`);
   const ok = typeof buildOrBuyItem === 'function' && !!submitPlayerCommand({ type: 'buyItem', itemId }).outcome; // 93차: 명령으로
-  if (!ok) _shopUndoStack.pop(); else _shopMarkAfter();
+  if (!guest) { if (!ok) _shopUndoStack.pop(); else _shopMarkAfter(); }
   if (ok) {
     const tile = document.querySelector(`#shopGrid .shop-tile[data-id="${itemId}"]`);
     if (tile) { tile.classList.remove('bought'); void tile.offsetWidth; tile.classList.add('bought'); }
@@ -36265,10 +36307,10 @@ function _shopSell() {
   if (!controller || _shopSelectedSlot == null) return;
   const sel = _shopSelectedSlot === 'boots' ? controller.boots : controller.items[_shopSelectedSlot];
   if (!sel) { _shopSelectedSlot = null; renderShopPanel(true); return; }
-  _shopSnapshot(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
+  const guest = typeof netGuestMode !== 'undefined' && netGuestMode;
+  if (!guest) _shopSnapshot(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
   const ok = !!submitPlayerCommand({ type: 'sellItem', slot: _shopSelectedSlot }).outcome; // 93차: 명령으로(신발 칸은 'boots')
-  if (!ok) _shopUndoStack.pop();
-  else _shopMarkAfter();
+  if (!guest) { if (!ok) _shopUndoStack.pop(); else _shopMarkAfter(); }
   if (ok && typeof showSkillToast === 'function') showSkillToast(`${(ITEM_DATA[sel.id] || {}).nameKo || sel.id} 판매`);
   _shopSelectedSlot = null;
   renderShopPanel(true);
@@ -36466,9 +36508,14 @@ function _shopRenderInventory() {
   if (sellBtn) { sellBtn.disabled = !sel; sellBtn.textContent = sel ? `판매 +${price.toLocaleString()}` : '판매'; }
   const undoBtn = _shopEl('shopUndoBtn');
   if (undoBtn) {
+    if (typeof netGuestMode !== 'undefined' && netGuestMode && ctrl) { // 100차: 참가자 - 방장이 알려 준 되돌리기 기록
+      const u = ctrl._netUndo || { n: 0, label: '' };
+      undoBtn.disabled = !u.n; undoBtn.title = u.n ? `되돌리기: ${u.label}` : '되돌릴 거래가 없습니다';
+    } else {
     if (_shopUndoStack.length && _shopUndoStack[_shopUndoStack.length - 1].ctrl !== ctrl) _shopUndoStack = [];
     undoBtn.disabled = !_shopUndoStack.length;
     undoBtn.title = _shopUndoStack.length ? `되돌리기: ${_shopUndoStack[_shopUndoStack.length - 1].label}` : '되돌릴 거래가 없습니다';
+    }
   }
   if (info) info.textContent = sel ? sel.nameKo : '보유 아이템을 고르면 판매할 수 있습니다';
 }
@@ -36478,7 +36525,7 @@ function renderShopPanel(force) {
   if (!_shopOpen || typeof ITEM_DATA === 'undefined') return;
   const ctrl = controller;
   const sig = ctrl
-    ? [Math.floor(ctrl.gold || 0), _shopInBase(ctrl), (ctrl.items || []).map((s) => `${s.id}:${s.count}:${s.charges}`).join(','), ctrl.boots && ctrl.boots.id, ctrl.trinket && ctrl.trinket.charges, _shopSelectedItemId, _shopSelectedSlot].join('|')
+    ? [Math.floor(ctrl.gold || 0), _shopInBase(ctrl), (ctrl.items || []).map((s) => `${s.id}:${s.count}:${s.charges}`).join(','), ctrl.boots && ctrl.boots.id, ctrl.trinket && ctrl.trinket.charges, _shopSelectedItemId, _shopSelectedSlot, ctrl._netUndo ? ctrl._netUndo.n : ''].join('|')
     : 'none';
   if (!force && sig === _shopStateSig) return;
   _shopStateSig = sig;
@@ -38927,7 +38974,14 @@ function onSkillKeyUp(code) {
   const slot = skillAim.slot;
   const spec = skillAimSpec(controller.championId, slot);
   const p = lastGroundPoint || controller.root.position.clone();
-  if (spec && spec.type === 'charge') { skillAim.cancel(); if (controller._varus && controller._varus.qCharge) submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(p) }); return; }
+  if (spec && spec.type === 'charge') {
+    skillAim.cancel();
+    // 100차: 온라인 참가자 - 충전 상태는 방장 쪽에 있어 늦게 온다. 이번 키 누름으로 충전을 시작했으면(_netChargeSlot) 바로 발사 명령을 보낸다.
+    const guestCharging = typeof netGuestMode !== 'undefined' && netGuestMode && controller._netChargeSlot === slot;
+    if ((controller._varus && controller._varus.qCharge) || guestCharging) submitPlayerCommand({ type: 'cast', slot, point: toCommandPoint(p) });
+    controller._netChargeSlot = null;
+    return;
+  }
   if (skillAim.mode !== 'indicator') return; // 일반 시전은 클릭으로 시전
   skillAim.cancel();
   skillAim.cast(controller, slot, p, lastPointerClient);
@@ -41551,7 +41605,7 @@ var netState = null;      // { role:'host'|'guest', client, ... }
 
 // ---------------- 중계 서버 연결 ----------------
 class NetClient {
-  constructor(url) { this.url = url; this.ws = null; this.handlers = new Map(); this.rtt = null; this._pingTimer = null; }
+  constructor(url) { this.url = url; this.kind = 'relay'; this.ws = null; this.handlers = new Map(); this.rtt = null; this._pingTimer = null; }
   on(type, fn) { this.handlers.set(type, fn); return this; }
   _emit(type, m) { const fn = this.handlers.get(type); if (fn) { try { fn(m); } catch (e) { console.error('[NET]', type, e); } } }
   connect() {
@@ -41843,6 +41897,7 @@ function _netSer(v, depth = 0) {
   if (v.isVector3) return { __v: [_netRound(v.x), _netRound(v.y), _netRound(v.z)] };
   if (v.isColor) return v.getHex();
   if (v.isObject3D) { const u = _netUnitByObject(v); return u ? { __o: entityId(u) } : undefined; }
+  if (v._meshEntry && v.mesh && netState && netState.role === 'host') return { __p: _netProjId(netState, v) }; // 100차: 투사체 기록(연출이 따라간다) → 참가자 쪽 같은 투사체
   if (Array.isArray(v)) return v.map((x) => { const s = _netSer(x, depth + 1); return s === undefined ? null : s; });
   if (_netIsUnit(v)) return { __e: entityId(v) };
   if (Object.getPrototypeOf(v) !== Object.prototype) return undefined; // 그 밖의 클래스 인스턴스(재질·텍스처 등)는 보내지 않는다
@@ -41856,6 +41911,7 @@ function _netDeser(v) {
   if (v.__v) return new THREE.Vector3(v.__v[0], v.__v[1], v.__v[2]);
   if (v.__e != null) return findEntityById(v.__e);
   if (v.__o != null) { const u = findEntityById(v.__o); return u ? (u.root || u.mesh || null) : null; }
+  if (v.__p != null) return _netGuestProjProxy(netState, v.__p);
   const o = {};
   for (const [k, x] of Object.entries(v)) o[k] = _netDeser(x);
   return o;
@@ -41941,7 +41997,7 @@ function _netHostOnMessage(st, d) {
     case 'hello': {
       const token = String(d.token || '');
       // 재접속: 같은 토큰이면 진행 중인 대전으로 돌려보낸다.
-      if (st.remote && !st.ended && st.token && token === st.token) { _netHostResume(st); return; }
+      if (st.remote && !st.ended && ((st.token && token === st.token) || st.guestGoneAt)) { st.token = token; _netHostResume(st); return; }
       if (st.remote && !st.ended) { st.client.sendMsg({ k: 'bye', msg: '이미 대전 중인 방입니다' }); st.client.send({ t: 'kick' }); return; }
       if (d.v != null && d.v !== NET_PROTOCOL_VERSION) { st.client.sendMsg({ k: 'bye', msg: '게임 버전이 다릅니다 - 둘 다 새로고침하세요' }); st.client.send({ t: 'kick' }); return; }
       st.hello = { champ: String(d.champ || ''), name: String(d.name || st.peerName || '상대').slice(0, 24), spells: Array.isArray(d.spells) ? d.spells.slice(0, 2).map(String) : null, rune: d.rune && typeof d.rune === 'object' ? d.rune : null };
@@ -41956,7 +42012,8 @@ function _netHostOnMessage(st, d) {
       const token = String(d.token || '');
       if (d.v != null && d.v !== NET_PROTOCOL_VERSION) { st.client.sendMsg({ k: 'bye', msg: '게임 버전이 다릅니다 - 둘 다 새로고침하세요' }); st.client.send({ t: 'kick' }); return; }
       if (st.remote && !st.ended) {
-        if (st.token && token === st.token) { _netHostResume(st); return; }
+        // 100차: 같은 토큰(같은 브라우저) 또는 상대가 끊겨 기다리는 중이면 이어서 한다(다른 탭·다른 기기로 다시 들어와도 된다)
+        if ((st.token && token === st.token) || st.guestGoneAt) { st.token = token; _netHostResume(st); return; }
         st.client.sendMsg({ k: 'bye', msg: '이미 대전 중인 방입니다' }); st.client.send({ t: 'kick' }); return;
       }
       st.guestName = String(d.name || st.peerName || '상대').slice(0, 24); st.token = token;
@@ -41977,6 +42034,7 @@ function _netHostOnMessage(st, d) {
       return;
     }
     case 'gping': st.client.sendMsg({ k: 'gpong', at: d.at }); return;
+    case 'chat': _netChatShow(st.guestName || st.peerName || '상대', String(d.text || '').slice(0, 200), 'RED'); return;
     case 'gstat': if (Number.isFinite(d.rtt)) st.guestRtt = Math.round(d.rtt); return;
     case 'rematch': st.rematch.guest = true; _netToast(`${st.guestName}이(가) 재대결을 원합니다`); _netEndScreenUpdate(); _netHostMaybeRematch(st); return;
     case 'cmd': {
@@ -42033,7 +42091,8 @@ function _netWelcome(st, resume) {
   };
 }
 function _netHostResume(st) {
-  st.guestReady = false; st.resumed = true; st.sent = new Map(); st.seq = 0; // 다음 스냅샷은 전체
+  st.guestReady = false; st.resumed = true; st.sent = new Map(); st.seq = 0; st.csSent = null; st.rlSent = null; // 다음 스냅샷은 전체
+  _netMirrorResend(st);
   st.client.sendMsg(_netWelcome(st, true));
   _netToast(`${st.guestName}이(가) 다시 접속했습니다`);
 }
@@ -42117,7 +42176,67 @@ function _netSnapChampion(st, c, nowMs) {
     mv: c.model ? (c.model.visible !== false ? 1 : 0) : 1, sz: _netRound(c._sizeScale || 1, 100),
     sc: c.score ? [c.score.kills || 0, c.score.deaths || 0, c.score.assists || 0, c.score.cs || 0] : [0, 0, 0, 0],
     rs: c.state === STATE.DEAD && c._respawnAt ? Math.max(0, Math.round((c._respawnAt - nowMs) / 100) * 100) : null,
+    ef: _netSnapStatus(c, nowMs), // 100차: 모든 챔피언의 상태 효과(상대 챔피언 위 표식·행동 불가 표시)
   };
+}
+function _netSnapStatus(u, nowMs) {
+  return (u.statusEffects || []).filter((x) => x && (!x.expiresAt || x.expiresAt > nowMs)).slice(0, 16).map((x) => [String(x.id || x.type), x.type,
+    x.expiresAt && Number.isFinite(x.expiresAt) ? Math.round((x.expiresAt - nowMs) / 100) * 100 : -1, typeof x.value === 'number' ? _netRound(x.value, 1000) : null,
+    x.source ? entityId(x.source) : null, typeof x.stacks === 'number' ? x.stacks : null]);
+}
+function _netStatusFrom(list, now) {
+  return (list || []).map(([id, type, ms, v, src, stacks]) => {
+    const e = { id, type, expiresAt: ms >= 0 ? now + ms : Infinity, value: v };
+    if (src != null) e.source = findEntityById(src);
+    if (stacks != null) e.stacks = stacks;
+    return e;
+  });
+}
+// 100차: 안개 - 참가자(빨강) 팀 시야 밖의 파랑 팀 유닛은 위치를 보내지 않는다(받은 데이터를 들여다봐도 보이지 않게).
+function _netHiddenFromGuest(u) {
+  if (!u || u.team !== 'BLUE' || typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled) return false;
+  if (u.isStructure || u.isTurret || u.isInhibitor || u.isNexus) return false;
+  if (u.isWard) return typeof wardSystem !== 'undefined' && wardSystem && !wardSystem.isVisibleTo('RED', u);
+  return typeof visionSystem.isVisibleTo === 'function' && !visionSystem.isVisibleTo('RED', u);
+}
+// 100차: 챔피언 내부 상태(재시전 창·충전·중첩·표식·아이템 재사용 대기 등) - 참가자 화면의 조준·스킬 칸·표식이 방장과 같게.
+const NET_CHAMP_STATE_KEY = /^_(ahri|ashe|chogath|darius|ezreal|garen\w*|leesin|lux|masteryi|morde|nautilus|nilah|rammus\w*|renekton|sett|varus|vex|yasuo\w*|yone|summonerMark|itemActiveCooldownUntil|rune)$/;
+function _netChampState(st, c) {
+  const out = {}; let any = false;
+  if (!st.csSent) st.csSent = new Map();
+  for (const k of Object.keys(c)) {
+    if (!NET_CHAMP_STATE_KEY.test(k)) continue;
+    const v = _netSer(c[k]);
+    const j = JSON.stringify(v === undefined ? null : v);
+    if (st.csSent.get(k) === j) continue;
+    st.csSent.set(k, j); out[k] = v === undefined ? null : v; any = true;
+  }
+  return any ? out : null;
+}
+// 참가자: 받은 내부 상태를 내 챔피언에 넣는다. 시각 값(…At·…Until·…Expires)은 방장 시계 → 내 시계로 옮긴다.
+const _NET_TIME_KEY = /(At|Until|Expires|ExpiresAt)$/;
+function _netTimeShift(v, key, off, inTime) {
+  const isTime = inTime || (typeof key === 'string' && _NET_TIME_KEY.test(key));
+  if (typeof v === 'number') return isTime && Number.isFinite(v) && v > 1000 ? v + off : v;
+  if (Array.isArray(v)) return v.map((x) => _netTimeShift(x, null, off, isTime));
+  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) { for (const k of Object.keys(v)) v[k] = _netTimeShift(v[k], k, off, isTime); }
+  return v;
+}
+function _netApplyChampState(c, cs, hostNow) {
+  const off = performance.now() - hostNow;
+  for (const [k, raw] of Object.entries(cs)) {
+    const val = _netTimeShift(_netDeser(raw), k, off, false);
+    const cur = c[k];
+    if (val && cur && typeof val === 'object' && typeof cur === 'object' && !Array.isArray(val) && Object.getPrototypeOf(cur) === Object.prototype) {
+      // 방장에 없는 값(지나간 재시전 창 등)은 지운다 - 참가자 쪽에서만 쓰는 것(Map·화면 객체)은 그대로 둔다
+      for (const kk of Object.keys(cur)) {
+        if (kk in val) continue;
+        const x = cur[kk];
+        if (x == null || typeof x !== 'object' || Array.isArray(x) || Object.getPrototypeOf(x) === Object.prototype) cur[kk] = null;
+      }
+      Object.assign(cur, val);
+    } else c[k] = val;
+  }
 }
 // 지금 이동 명령을 받으면 바로 움직일 수 있는가(참가자 예측을 켤지 정한다 - controller_movement.js moveTo의 분기와 같은 순서).
 function _netCanMoveNow(b) {
@@ -42138,10 +42257,11 @@ function _netSnapPrivate(st, c, nowMs) {
   const chasing = c.currentTarget && (c.isChasing || c.attackOrderActive || c.state === STATE.ATTACK);
   const me = { g: p.gold, it: p.items, bo: p.boots, tr: p.trinket, sl: p.skillLevels, sp: p.skillPoints, ex: p.exp, sm: p.summoners, cd,
     res: { rage: c._renekton ? _netRound(c._renekton.rage || 0, 10) : null, flow: c._yasuo ? _netRound(c._yasuo.flow || 0, 10) : null, grit: c._sett ? _netRound(c._sett.grit || 0, 10) : null },
-    ef: (c.statusEffects || []).filter((x) => !x.expiresAt || x.expiresAt > nowMs).slice(0, 16).map((x) => ({ id: String(x.id || x.type), type: x.type, ms: x.expiresAt ? Math.round(x.expiresAt - nowMs) : null, v: typeof x.value === 'number' ? x.value : null })),
     ms: _netRound(getFinalMoveSpeed(c.stats), 1000), fr: _netCanMoveNow(c) ? 1 : 0, ack: st.ack,
     tp: c.state === STATE.MOVE && c.targetPos ? [_netRound(c.targetPos.x), _netRound(c.targetPos.z)] : null,
     tg: chasing ? entityId(c.currentTarget) : null };
+  if ((st.seq % 3) === 0) { const cs = _netChampState(st, c); if (cs) { me.cs = cs; me.now = _netRound(nowMs, 1); } }
+  if (typeof shopRemoteUndoInfo === 'function') { const u = shopRemoteUndoInfo(c); me.uc = u.n; me.ul = u.label; }
   if ((st.seq % 10) === 0) { // 능력치는 자주 바뀌지 않는다 - 10번에 1번
     const s = {}; for (const [k, v] of Object.entries(c.stats || {})) if (typeof v === 'number' && Number.isFinite(v)) s[k] = _netRound(v, 1000);
     me.st = s; me.hr = c.hpRegen || 0; me.mr = c.mpRegen || 0;
@@ -42178,20 +42298,36 @@ function netBuildHostSnapshot(st) {
     all.push({ i: entityId(m), k: 'm', tm: _netTeamCode(m.team), ty: m.type, x: _netRound(p.x), y: _netRound(p.y), z: _netRound(p.z), r: m.body && m.body !== m.mesh ? _netRound(_netYawOf(m.body), 100) : 0,
       hp: _netRound(m.hp, 10), mh: _netRound(m.maxHp, 10), cl: m.currentClipName || null, ai: m.attackClipIndex || 0, ts: m.currentAction ? _netRound(m.currentAction.timeScale, 100) : 1 });
   }
-  for (const [k, s] of _netStructures()) all.push({ i: entityId(s), k, hp: _netRound(s.hp, 10), mh: _netRound(s.maxHp, 10), d: s.destroyed ? 1 : 0 });
+  for (const [k, s] of _netStructures()) {
+    const e = { i: entityId(s), k, hp: _netRound(s.hp, 10), mh: _netRound(s.maxHp, 10), d: s.destroyed ? 1 : 0 };
+    if (k === 't') { const t = s._netAggroTarget; e.tg = t && !t._removed && (t.isChampion || typeof t.championId === 'string') ? entityId(t) : null; e.ht = s.heatStacks || 0; } // 100차: 포탑 조준선·가열
+    all.push(e);
+  }
   if (typeof wardSystem !== 'undefined' && wardSystem && wardSystem.wards) for (const w of wardSystem.wards) if (!w.destroyed) all.push(_netSnapWard(w, nowMs));
+  // 안개: 참가자 팀이 못 보는 파랑 팀 유닛은 위치 대신 hid만
+  const unitOf = new Map(listEntities().map((u) => [entityId(u), u]));
+  for (let i = 0; i < all.length; i++) {
+    const e = all[i], u = unitOf.get(e.i);
+    if (u && _netHiddenFromGuest(u)) all[i] = { i: e.i, k: e.k, tm: e.tm, ty: e.ty, c: e.c, hid: 1, sc: e.sc, lv: e.lv, s: e.s };
+    else if (e.k === 'c' || e.k === 'm' || e.k === 'w') e.hid = 0;
+  }
   const ents = [], ids = new Set();
   for (const e of all) { ids.add(e.i); const d = _netDelta(st, e, full); if (d) ents.push(d); }
   const gone = [];
   for (const id of [...st.sent.keys()]) if (!ids.has(id)) { gone.push(id); st.sent.delete(id); }
   const pr = [];
   for (const proj of projectiles.projectiles) {
-    if (!proj.mesh || !proj.mesh.parent || proj.done) continue;
-    let id = st.projIds.get(proj); if (!id) { id = ++st.projSeq; st.projIds.set(proj, id); }
+    if (!proj.mesh || proj.done) continue;
+    const id = _netProjId(st, proj);
     const p = proj.mesh.position, q = proj.mesh.quaternion;
-    pr.push([id, _netRound(p.x), _netRound(p.y), _netRound(p.z), _netRound(q.x), _netRound(q.y), _netRound(q.z), _netRound(q.w), proj.color || 0xdff0ff, _netRound(proj.mesh.scale.x, 100)]);
+    // 100차: 숨김 투사체(자체 연출이 따라가는 리 신 Q·럭스 Q 등)도 위치는 보낸다 - 참가자 쪽 연출이 따라갈 수 있게(그리지는 않음)
+    pr.push([id, _netRound(p.x), _netRound(p.y), _netRound(p.z), _netRound(q.x), _netRound(q.y), _netRound(q.z), _netRound(q.w), proj.color || 0xdff0ff, _netRound(proj.mesh.scale.x, 100), proj.mesh.parent ? 0 : 1]);
   }
+  // 100차: 칼바람 회복 유물(나타남·빛줄기)
+  const rl = typeof aramRelics !== 'undefined' ? aramRelics.map((r) => [r.active ? 1 : 0, _netRound(r.beam && r.beam.material ? r.beam.material.opacity : 0, 100)]) : [];
   const snap = { k: 'snap', t: _netRound(nowMs, 1), gt: _netRound(getTurretGameTimeSec()), ents, pr, ge: gameEnded ? 1 : 0 };
+  const rlj = JSON.stringify(rl); if (full || rlj !== st.rlSent) { snap.rl = rl; st.rlSent = rlj; }
+  const mi = _netMirrorSnapshot(st, full); if (mi) snap.mi = mi;
   if (full) snap.full = 1;
   if (gone.length) snap.gone = gone;
   if (st.fx.length) { snap.fx = st.fx; st.fxSent += st.fx.length; st.fx = []; }
@@ -42200,10 +42336,12 @@ function netBuildHostSnapshot(st) {
   st.seq++;
   return snap;
 }
+function _netProjId(st, proj) { let id = st.projIds.get(proj); if (!id) { id = ++st.projSeq; st.projIds.set(proj, id); } return id; }
 // 메인 루프가 시뮬레이션 뒤 프레임마다 부른다(실제 경과 시간 기준 초당 30번 보낸다).
 function netHostFrame(dt) {
   const st = netState;
   if (!st || st.role !== 'host' || !st.remote || !st.guestReady) return;
+  if (typeof shopRemoteClear === 'function' && typeof _shopInBase === 'function' && !_shopInBase(st.remote)) shopRemoteClear(st.remote); // 기지를 벗어나면 되돌리기 기록을 비운다(원작)
   st.acc += dt;
   if (st.acc < 1 / NET_SNAPSHOT_HZ) return;
   st.acc = Math.min(st.acc - 1 / NET_SNAPSHOT_HZ, 1 / NET_SNAPSHOT_HZ);
@@ -42247,14 +42385,21 @@ class RemoteSession {
     if (bad) { this.lastResult = { ok: false, reason: bad }; return this.lastResult; }
     if (this.st && this.st.locked) { this.lastResult = { ok: false, reason: '시작 전' }; return this.lastResult; }
     const s = ++this.commandSeq;
+    // 100차: 충전 스킬(바루스 Q)을 시작하는 시전이면 기억해 둔다 - 키를 떼면 방장 쪽 충전 상태가 오기 전이라도 발사 명령을 보낸다.
+    if (cmd.type === 'cast' && typeof controller !== 'undefined' && controller && typeof skillAimSpec === 'function') {
+      const spec = skillAimSpec(controller.championId, cmd.slot);
+      if (spec && spec.type === 'charge') controller._netChargeSlot = (controller._varus && controller._varus.qCharge) || controller._netChargeSlot === cmd.slot ? null : cmd.slot;
+    }
     this.client.sendMsg({ k: 'cmd', cmd, s });
     if (this.st) _netPredictOnCommand(this.st, cmd, s);
     this.lastResult = { ok: true, outcome: true };
     return this.lastResult;
   }
 }
-function _netGuestToken() {
-  try { let t = sessionStorage.getItem('netToken'); if (!t) { t = Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem('netToken', t); } return t; } catch (e) { return 'tok' + Math.random().toString(36).slice(2); }
+// 100차: 방마다 토큰을 이 브라우저(localStorage)에 기억한다 - 새 탭·새로고침으로 다시 들어와도 진행 중인 대전으로 돌아간다.
+function _netGuestToken(code) {
+  const key = 'netToken:' + (code || '');
+  try { let t = localStorage.getItem(key); if (!t) { t = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem(key, t); } return t; } catch (e) { return 'tok' + Math.random().toString(36).slice(2); }
 }
 function _netGuestHello(st) {
   const spells = controller && controller.summoners ? ['D', 'F'].map((k) => controller.summoners[k] && controller.summoners[k].id) : null;
@@ -42262,7 +42407,7 @@ function _netGuestHello(st) {
 }
 function netGuestJoin(url, code, name) {
   netLeave(true);
-  const st = { role: 'guest', client: null, url, name: name || '참가자', code: String(code || '').toUpperCase(), token: _netGuestToken(), ready: false, units: new Map(), proj: new Map(), lastSnapAt: 0, hostT: 0,
+  const st = { role: 'guest', client: null, url, name: name || '참가자', code: String(code || '').toUpperCase(), token: _netGuestToken(String(code || '').toUpperCase()), ready: false, units: new Map(), proj: new Map(), lastSnapAt: 0, hostT: 0,
     status: '', state: new Map(), pred: null, rtt: null, jitter: 10, lastArrive: 0, delay: 70, own: null, ownId: null, reconnects: 0, locked: false, fxPlayed: 0 };
   netState = st;
   return _netGuestConnect(st, true);
@@ -42288,6 +42433,7 @@ function _netGuestConnect(st, first) {
     else if (d.k === 'pickStart') { st.hostName = d.hostName || st.hostName; _netCloseEndScreen(); _netPickEnter(st, d.sec); }
     else if (d.k === 'pick') { if (st.pick && st.pick.phase === 'pick') { st.pick.opp = _netPickSanitize(d); _netPickRefresh(); } }
     else if (d.k === 'go') { _netPickGo(st); }
+    else if (d.k === 'chat') { _netChatShow(st.hostName || '방장', String(d.text || '').slice(0, 200), 'BLUE'); }
   });
   return client.connect().then(() => {
     client.send({ t: 'join', code: st.code, name: st.name });
@@ -42413,6 +42559,8 @@ function _netGuestOnSnapshot(st, s) {
   if (s.full) for (const id of st.state.keys()) if (!touched.has(id)) gone.add(id);
   for (const id of gone) _netGuestRemove(st, id);
   _netGuestProjectiles(st, s.pr || []);
+  if (s.rl) _netGuestRelics(s.rl);
+  if (s.mi) _netMirrorApply(st, s.mi);
   if (s.me) _netGuestApplyPrivate(st, s.me);
   if (s.fx) st.fxPlayed += _netFxPlay(s.fx);
   if (s.ev) for (const ev of s.ev) _netGuestEvent(st, ev);
@@ -42454,8 +42602,11 @@ function _netGuestChampion(st, e, t) {
   if (!c) return;
   let rec = st.units.get(e.i);
   if (!rec) { rec = { kind: 'c', obj: c, samples: [] }; st.units.set(e.i, rec); }
+  if (c.score && e.sc) [c.score.kills, c.score.deaths, c.score.assists, c.score.cs] = e.sc;
+  if (_netGuestHide(rec, e)) return; // 100차: 안개 속 - 방장이 위치를 보내지 않았다
   _netPushSample(rec, t, e);
   if (c === controller) st.own = { x: e.x, y: e.y, z: e.z, r: e.r, s: e.s, t, at: __gcRealNow() };
+  if (e.ef) c.statusEffects = _netStatusFrom(e.ef, performance.now());
   c.hp = e.hp; c.maxHp = e.mh; c.shield = e.sh; c.mp = e.mp; c.maxMp = e.mm; c.champLevel = e.lv;
   if (c.state !== e.s) c.state = e.s;
   c._respawnAt = e.rs != null ? performance.now() + e.rs : null;
@@ -42473,7 +42624,23 @@ function _netGuestChampion(st, e, t) {
   }
   updateBars(c);
 }
+// 100차: 안개 속 유닛(hid) - 보이지 않는 먼 곳으로 치우고, 다시 보이면 새 표본부터(옛 자리에서 미끄러져 오지 않게)
+const NET_VOID = { x: 99999, y: -1000, z: 99999 };
+function _netGuestHide(rec, e) {
+  if (e.hid) {
+    if (!rec.hidden) {
+      rec.hidden = true; rec.samples.length = 0;
+      const o = rec.obj, root = o.root || o.mesh;
+      if (root) root.position.set(NET_VOID.x, NET_VOID.y, NET_VOID.z);
+      rec.samples.push({ t: 0, x: NET_VOID.x, y: NET_VOID.y, z: NET_VOID.z, r: 0 });
+    }
+    return true;
+  }
+  if (rec.hidden) { rec.hidden = false; rec.samples.length = 0; }
+  return false;
+}
 function _netGuestMinion(st, e, t) {
+  if (e.hid && !st.units.get(e.i)) return; // 처음 보는데 안개 속 - 보일 때 만든다
   let rec = st.units.get(e.i);
   if (!rec) {
     const m = createMinion(e.ty, new THREE.Vector3(e.x, e.y, e.z), getTurretGameTimeSec(), _netTeamName(e.tm));
@@ -42483,6 +42650,7 @@ function _netGuestMinion(st, e, t) {
     st.units.set(e.i, rec);
   }
   const m = rec.obj;
+  if (_netGuestHide(rec, e)) return;
   _netPushSample(rec, t, e);
   m.hp = e.hp; m.maxHp = e.mh;
   if (m.usingRealModel && e.cl) {
@@ -42512,6 +42680,7 @@ function _netGuestMinionDie(m) {
 function _netGuestWard(st, e) {
   if (typeof wardSystem === 'undefined' || !wardSystem) return;
   let rec = st.units.get(e.i);
+  if (e.hid) { if (rec) { wardSystem.destroy(rec.obj, 'expired'); st.units.delete(e.i); } return; } // 100차: 못 보는 와드는 지운다(보이면 다시 만든다)
   if (!rec) {
     const w = wardSystem.place(null, e.ty, new THREE.Vector3(e.x, 0, e.z), { team: _netTeamName(e.tm), durationSec: e.ex >= 0 ? e.ex / 1000 + 2 : undefined, maxHp: e.mh, visionRadius: e.vr || undefined });
     if (!w) return;
@@ -42532,6 +42701,7 @@ function _netGuestStructure(st, e) {
     return;
   }
   if (!e.d && s.destroyed && e.k === 'h' && typeof respawnInhibitor === 'function') respawnInhibitor(s);
+  if (e.k === 't') { s._netGuestTarget = e.tg != null ? e.tg : null; if (e.ht != null && e.ht !== s.heatStacks) { s.heatStacks = e.ht; if (e.ht > 0 && typeof turretNowMs === 'function') s.lastChampionHitAt = turretNowMs(); } }
   if (e.d || Math.abs((s.hp || 0) - e.hp) <= 0.05) return;
   s.hp = e.hp; if (Number.isFinite(e.mh)) s.maxHp = e.mh;
   if (e.k === 't' && typeof updateTurretVisual === 'function') updateTurretVisual(s);
@@ -42540,22 +42710,30 @@ function _netGuestStructure(st, e) {
 }
 function _netGuestProjectiles(st, list) {
   const seen = new Set();
-  for (const [id, x, y, z, qx, qy, qz, qw, color, scale] of list) {
+  for (const [id, x, y, z, qx, qy, qz, qw, color, scale, hidden] of list) {
     seen.add(id);
     let p = st.proj.get(id);
-    if (!p) {
-      const entry = projectiles._acquireArrowMesh(color);
-      scene.add(entry.group);
-      entry.group.position.set(x, y, z);
-      p = { entry, samples: [] };
-      st.proj.set(id, p);
-    }
+    if (!p) p = _netGuestProjProxy(st, id, color);
+    if (!hidden && !p.entry.group.parent) scene.add(p.entry.group);
+    if (!p.positioned) { p.entry.group.position.set(x, y, z); p.positioned = true; }
     p.entry.group.quaternion.set(qx, qy, qz, qw);
     p.entry.group.scale.setScalar(scale || 1);
     p.samples.push({ t: st.hostT, x, y, z });
     if (p.samples.length > 4) p.samples.shift();
   }
-  for (const [id, p] of st.proj) if (!seen.has(id)) { projectiles._releaseArrowMesh(p.entry); st.proj.delete(id); }
+  for (const [id, p] of st.proj) if (!seen.has(id)) { p.done = true; projectiles._releaseArrowMesh(p.entry); st.proj.delete(id); }
+}
+// 방장 투사체 하나에 대응하는 참가자 쪽 대리 객체({ mesh, done }) - 연출(vfxFollowProjectile)이 따라간다. 숨김 투사체는 그리지 않는다.
+function _netGuestProjProxy(st, id, color = 0xdff0ff) {
+  if (!st || !st.proj) return { mesh: new THREE.Object3D(), done: true };
+  let p = st.proj.get(id);
+  if (!p) {
+    const entry = projectiles._acquireArrowMesh(color);
+    if (entry.group.parent) entry.group.parent.remove(entry.group);
+    p = { entry, samples: [], mesh: entry.group, done: false, positioned: false };
+    st.proj.set(id, p);
+  }
+  return p;
 }
 function _netGuestApplyPrivate(st, me) {
   const c = controller; if (!c) return;
@@ -42586,7 +42764,8 @@ function _netGuestApplyPrivate(st, me) {
     if (me.res.flow != null && c._yasuo) c._yasuo.flow = me.res.flow;
     if (me.res.grit != null && c._sett) c._sett.grit = me.res.grit;
   }
-  c.statusEffects = (me.ef || []).map((x) => ({ id: x.id, type: x.type, expiresAt: x.ms != null ? now + x.ms : null, value: x.v }));
+  if (me.cs) _netApplyChampState(c, me.cs, me.now || st.hostT);
+  c._netUndo = { n: me.uc || 0, label: me.ul || '' };
   if (me.st) { for (const [k, v] of Object.entries(me.st)) if (c.stats && k in c.stats) c.stats[k] = v; c.hpRegen = me.hr; c.mpRegen = me.mr; }
   const P = st.pred;
   if (P) {
@@ -42763,8 +42942,13 @@ function netGuestTick(dt) {
   }
   for (const t of turrets) {
     if (t.destroyed && typeof updateTurretCombat === 'function') updateTurretCombat(t, dt); // 부서진 포탑은 무너지는 연출만(전투 없음)
-    else if (typeof placeStructLabel === 'function') placeStructLabel(t);
+    else {
+      if (typeof placeStructLabel === 'function') placeStructLabel(t);
+      if (typeof updateTurretAggroBeam === 'function') updateTurretAggroBeam(t, t._netGuestTarget != null ? findEntityById(t._netGuestTarget) : null); // 100차: 나를 노리는 포탑 조준선
+    }
   }
+  _netGuestAramTick(dt);
+  _netMirrorTick(st, dt);
   if (typeof wardSystem !== 'undefined' && wardSystem && typeof wardSystem.update === 'function') wardSystem.update(dt); // 와드 연출·보이기(지우기는 방장 스냅샷)
 }
 
@@ -42952,6 +43136,151 @@ function _netLoadChampion(champ, spells, page) {
   });
 }
 if (typeof window !== 'undefined') { window.netPickLock = netPickLock; window.netPickActive = netPickActive; }
+
+// ================= 100차: 칼바람 회복 유물·서리 관문(참가자 화면) =================
+function _netGuestRelics(list) {
+  if (typeof aramRelics === 'undefined') return;
+  if (!aramFeaturesBuilt && typeof buildAramFeatures === 'function') buildAramFeatures();
+  list.forEach(([active, beam], i) => {
+    const r = aramRelics[i]; if (!r) return;
+    r.active = !!active; r.orb.visible = r.active;
+    if (r.beam && r.beam.material) r.beam.material.opacity = beam || 0;
+  });
+}
+function _netGuestAramTick(dt) {
+  if (typeof aramRelics === 'undefined') return;
+  if (!aramFeaturesBuilt && typeof buildAramFeatures === 'function' && !buildAramFeatures()) return;
+  const now = performance.now();
+  for (const r of aramRelics) if (r.active) { r.orb.position.y = lolRangeToWorld(110) + Math.sin(now / 400) * lolRangeToWorld(12); r.orb.rotation.y += dt * 1.6; }
+  for (const gate of aramGates) {
+    const exit = typeof aramGateExit === 'function' ? aramGateExit(gate) : null;
+    gate.group.visible = true;
+    gate.swirl.rotation.z += dt * (exit ? 1.8 : 0.2);
+    gate.swirl.material.opacity = exit ? .5 : .12;
+  }
+}
+
+// ================= 100차: 챔피언이 직접 만든 연출 물체 미러링 =================
+// 아리 Q 구슬·W 여우불·E 매혹, 요네 표식·육체·영혼 리본, 럭스 구체·E 장판, 노틸러스 닻줄, 벡스 Q 파동처럼 챔피언 코드가
+// 직접 장면에 넣는 물체는 연출 함수 호출 복제(_netFx*)에 잡히지 않는다. 만든 곳에서 netMirror(obj)를 부르면
+//  - 방장: 처음 한 번 물체 모양(three.js toJSON - 같은 텍스처 이미지는 한 번만)을 보내고, 그 뒤엔 위치·회전·크기·보임·투명도만
+//    (자식까지, 바뀐 것만) 보낸다. 장면에서 빠지면 지우라고 알린다. 참가자 팀 시야 밖이면 숨김으로 보낸다.
+//  - opts.via = [유닛, 메서드 이름, ...인자]: 모양 대신 "참가자 쪽 같은 유닛에서 같은 메서드를 불러 만들라"고 보낸다(요네 육체처럼 스킨 모델 복제).
+//  - 참가자: 받은 모양을 ObjectLoader로 만들어 장면에 넣고, 받은 상태를 그대로 입힌다.
+function netMirror(obj, opts = {}) {
+  const st = netState;
+  if (!obj || !st || st.role !== 'host' || !st.remote || !st.guestReady) return obj;
+  if (!st.mirrors) { st.mirrors = new Map(); st.mirrorSeq = 0; st.mirrorImgs = new Set(); }
+  if (!st.mirrors.has(obj)) st.mirrors.set(obj, { id: ++st.mirrorSeq, created: false, opts, last: '' });
+  return obj;
+}
+function _netPointVisibleForTeam(team, p) {
+  if (!p || typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled) return true;
+  const src = visionSystem._teamSources && visionSystem._teamSources[team];
+  if (!src) return true;
+  for (const s of src) if (Math.hypot(s.position.x - p.x, s.position.z - p.z) <= lolRangeToWorld(s.lolRadius)) return true;
+  return false;
+}
+function _netMirrorNodes(obj) { const out = []; obj.traverse((o) => { if (out.length < 16) out.push(o); }); return out; }
+function _netMirrorJson(st, obj, opts) {
+  if (opts && opts.via) { const [unit, method, ...args] = opts.via; return { via: [entityId(unit), method, ...args.map((a) => _netSer(a))] }; }
+  let skinned = false; obj.traverse((o) => { if (o.isSkinnedMesh) skinned = true; });
+  if (skinned) return null; // 스킨 모델은 모양을 옮기지 않는다(via로 보낸다)
+  const copy = obj.clone(true);
+  copy.traverse((o) => { if ((o.isMesh || o.isLine || o.isPoints) && o.geometry && o.geometry.parameters) o.geometry = THREE.BufferGeometry.prototype.copy.call(new THREE.BufferGeometry(), o.geometry); }); // 회전·이동시킨 기본 도형도 그대로
+  let j;
+  try { j = copy.toJSON(); } catch (e) { return null; }
+  for (const img of j.images || []) { if (st.mirrorImgs.has(img.uuid)) img.url = null; else st.mirrorImgs.add(img.uuid); }
+  if (JSON.stringify(j).length > 400000) return null;
+  return j;
+}
+function _netMirrorState(obj) {
+  const wp = obj.getWorldPosition(new THREE.Vector3());
+  const seen = _netPointVisibleForTeam('RED', wp);
+  return _netMirrorNodes(obj).map((o, i) => {
+    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    return [_netRound(o.position.x), _netRound(o.position.y), _netRound(o.position.z), _netRound(o.quaternion.x), _netRound(o.quaternion.y), _netRound(o.quaternion.z), _netRound(o.quaternion.w),
+      _netRound(o.scale.x), _netRound(o.scale.y), _netRound(o.scale.z), (o.visible && (i > 0 || seen)) ? 1 : 0, m && typeof m.opacity === 'number' ? _netRound(m.opacity, 100) : -1];
+  });
+}
+function _netMirrorSnapshot(st, full) {
+  if (!st.mirrors || !st.mirrors.size) return null;
+  const a = [], u = [], g = [];
+  for (const [obj, rec] of st.mirrors) {
+    if (!obj.parent) { if (rec.created) g.push(rec.id); st.mirrors.delete(obj); continue; }
+    if (!rec.created) { rec.created = true; const j = _netMirrorJson(st, obj, rec.opts); if (!j) { rec.skip = true; continue; } a.push({ id: rec.id, j }); rec.last = ''; }
+    if (rec.skip) continue;
+    const state = _netMirrorState(obj), sj = JSON.stringify(state);
+    if (full || sj !== rec.last) { rec.last = sj; u.push([rec.id, state]); }
+  }
+  return a.length || u.length || g.length ? { a, u, g } : null;
+}
+function _netMirrorResend(st) { if (st.mirrors) for (const rec of st.mirrors.values()) { rec.created = false; rec.skip = false; } if (st.mirrorImgs) st.mirrorImgs.clear(); }
+function _netMirrorApply(st, mi) {
+  if (!st.mirrors) { st.mirrors = new Map(); st.mirrorImgs = new Map(); }
+  for (const { id, j } of mi.a || []) {
+    if (st.mirrors.has(id)) continue;
+    let obj = null;
+    try {
+      if (j.via) {
+        const [uid, method, ...args] = j.via, unit = findEntityById(uid);
+        if (unit && typeof unit[method] === 'function') { const ret = unit[method](...args.map(_netDeser)); obj = ret && ret.isObject3D ? ret : ret && (ret.outer || ret.group || ret.mesh) || null; if (obj && ret.mixer) obj.userData.netMixer = ret.mixer; }
+      } else {
+        for (const img of j.images || []) { if (img.url) st.mirrorImgs.set(img.uuid, img.url); else img.url = st.mirrorImgs.get(img.uuid) || ''; }
+        obj = new THREE.ObjectLoader().parse(j);
+      }
+    } catch (e) { console.warn('[NET] 연출 물체 만들기 실패', e); }
+    if (!obj) continue;
+    if (!obj.parent) scene.add(obj);
+    st.mirrors.set(id, { obj, nodes: _netMirrorNodes(obj) });
+  }
+  for (const [id, state] of mi.u || []) {
+    const rec = st.mirrors.get(id); if (!rec) continue;
+    state.forEach((v, i) => {
+      const o = rec.nodes[i]; if (!o) return;
+      o.position.set(v[0], v[1], v[2]); o.quaternion.set(v[3], v[4], v[5], v[6]); o.scale.set(v[7], v[8], v[9]); o.visible = !!v[10];
+      if (v[11] >= 0) { const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []; for (const m of mats) m.opacity = v[11]; }
+    });
+  }
+  for (const id of mi.g || []) {
+    const rec = st.mirrors.get(id); if (!rec) continue;
+    st.mirrors.delete(id);
+    if (rec.obj.parent) rec.obj.parent.remove(rec.obj);
+    rec.obj.traverse((o) => { if (o.geometry && o.geometry.dispose) o.geometry.dispose(); });
+  }
+}
+function _netMirrorTick(st, dt) {
+  if (!st.mirrors) return;
+  for (const rec of st.mirrors.values()) { const mx = rec.obj && rec.obj.userData && rec.obj.userData.netMixer; if (mx && !mx._netFrozen) { mx.update(0); mx._netFrozen = true; } }
+}
+if (typeof window !== 'undefined') window.netMirror = netMirror;
+
+// ================= 100차: 채팅 =================
+function netSendChat(text) {
+  const st = netState; text = String(text || '').trim().slice(0, 200);
+  if (!st || !st.client || !text) return false;
+  st.client.sendMsg({ k: 'chat', text });
+  _netChatShow(st.name || '나', text, st.role === 'host' ? 'BLUE' : 'RED', true);
+  return true;
+}
+function _netChatShow(name, text, team, mine) {
+  if (typeof document === 'undefined' || !text) return;
+  let log = document.getElementById('netChatLog');
+  if (!log) {
+    log = document.createElement('div'); log.id = 'netChatLog';
+    log.style.cssText = 'position:fixed;left:14px;bottom:150px;width:340px;max-height:180px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;z-index:60;pointer-events:none;font:13px sans-serif';
+    document.body.appendChild(log);
+  }
+  const line = document.createElement('div');
+  line.style.cssText = 'background:rgba(0,0,0,.45);padding:2px 6px;border-radius:3px;color:#e8e2d0;text-shadow:0 1px 2px #000;transition:opacity .6s';
+  const nm = document.createElement('b'); nm.style.color = team === 'RED' ? '#ff8a7a' : '#8ac4ff'; nm.textContent = `${name}${mine ? '' : ''}: `;
+  line.appendChild(nm); line.appendChild(document.createTextNode(text));
+  log.appendChild(line);
+  while (log.children.length > 8) log.removeChild(log.firstChild);
+  __hostSetTimeout(() => { line.style.opacity = '0'; __hostSetTimeout(() => line.remove(), 700); }, 12000);
+  if (netState) { netState.chatLog = netState.chatLog || []; netState.chatLog.push({ name, text }); }
+}
+if (typeof window !== 'undefined') window.netSendChat = netSendChat;
 
 /* ===== src/core/lobby_ui.js ===== */
 /* ============================================================
@@ -43262,6 +43591,21 @@ function _nlEl(id) { return document.getElementById(id); }
     __hostSetTimeout(() => { openNetLobby(); _netStatus('초대받은 방입니다 - 이름을 넣고 "참가"를 누르세요'); }, 0);
   }
   __hostSetInterval(() => netLobbyRefresh(), 1000); // 상태 줄·버튼(연결·참가·대전 시작) 갱신
+  // 100차: 채팅 - 방에 있을 때 Enter로 입력 칸을 열고, Enter로 보내고, Esc로 닫는다(픽창·대전 모두).
+  const chat = document.createElement('input');
+  chat.id = 'netChatInput'; chat.maxLength = 200; chat.placeholder = '메시지 (Enter 보내기 · Esc 닫기)';
+  chat.style.cssText = 'position:fixed;left:14px;bottom:120px;width:340px;display:none;z-index:500;background:rgba(10,14,18,.92);color:#e8e2d0;border:1px solid #785a28;padding:6px 8px;font:13px sans-serif';
+  document.body.appendChild(chat);
+  chat.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { if (chat.value.trim()) netSendChat(chat.value); chat.value = ''; chat.style.display = 'none'; chat.blur(); }
+    else if (e.key === 'Escape') { chat.value = ''; chat.style.display = 'none'; chat.blur(); }
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !netState || !netState.client) return;
+    const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+    e.preventDefault(); chat.style.display = ''; chat.focus();
+  });
 })();
 
 function netInviteLink() {
@@ -43325,7 +43669,9 @@ function netLobbyRefresh() {
   if (gb) {
     const live = typeof netMatchActive === 'function' && netMatchActive();
     gb.classList.toggle('live', !!st);
-    gb.textContent = live ? `온라인 대전 중${st && st.code ? ' · ' + st.code : ''}` : st && st.code ? `온라인 방 ${st.code}` : '온라인 대전';
+    const rtt = st ? (st.role === 'host' ? st.guestRtt : st.rtt) : null;
+    const how = st && st.client ? ({ p2p: '직접 연결', mqtt: '우회 중계', relay: '중계 서버' }[st.client.kind] || '') : '';
+    gb.textContent = live ? `온라인 대전 · ${rtt != null ? Math.round(rtt) + 'ms' : '…'}${how ? ' · ' + how : ''}` : st && st.code ? `온라인 방 ${st.code}` : '온라인 대전'; // 100차: 대전 중 핑·연결 방식
   }
   if (picking) netLobbyRefreshPick();
 }

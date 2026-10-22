@@ -478,6 +478,7 @@ CharacterController.prototype._nautilusUpdateChain = function() {
     const line = new THREE.Mesh(lineGeo, mat);
     const anchor = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0x9fb6c2 }));
     group.add(line, anchor); scene.add(group);
+    if (typeof netMirror === 'function') netMirror(group); // 100차: 온라인 대전 - 참가자 화면에도
     ch = n.qChain = { group, line, anchor };
     const owner = this;
     const entry = { life: 30, maxLife: 30, tag: 'nautilusChain',
