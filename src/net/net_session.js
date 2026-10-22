@@ -197,7 +197,7 @@ class PeerNetClient {
     peer.on('open', () => {
       const conn = peer.connect(NET_P2P_PREFIX + code, { reliable: true, serialization: 'raw' });
       this.conn = conn;
-      conn.on('open', () => { opened = true; this._sendConn({ t: 'join', code, name }); });
+      conn.on('open', () => { opened = true; if (this.deferJoin) this._emit('conn-open', {}); else this._sendConn({ t: 'join', code, name }); }); // 102차: deferJoin이면 길 재기(probe) 뒤에 sendJoin()
       conn.on('data', (d) => this._onData(conn, d));
       conn.on('close', () => this._connGone(conn));
       conn.on('error', () => { /* close가 뒤따른다 */ });
@@ -211,10 +211,15 @@ class PeerNetClient {
       console.warn('[NET p2p] 참가자 오류', t, err);
     });
   }
+  // 102차: 길 재기 - 참가 전에 왕복 시간을 잰다(방장은 붙잡지 않고 바로 답만 한다)
+  probe() { this._sendConn({ t: 'probe', at: __gcRealNow() }); }
+  sendJoin() { this._sendConn({ t: 'join', code: this.code, name: this.name }); }
   _handle(conn, m) {
     if (!m || typeof m !== 'object' || this.closed) return;
     if (conn === this.conn || this.role === 'host') this._lastRecv = __gcRealNow();
     if (m.t === 'ka') return;
+    if (m.t === 'probe') { try { conn.send(JSON.stringify({ t: 'probe-ok', at: m.at })); } catch (e) { /* 무시 */ } return; }
+    if (m.t === 'probe-ok') { this._emit('probe-ok', { rtt: __gcRealNow() - m.at }); return; }
     if (m.t === 'bye') { try { conn.close(); } catch (e) { /* 무시 */ } this._connGone(conn); return; }
     if (this.role === 'host') {
       if (m.t === 'join') { conn._joined = true; this.conn = conn; this._sendConn({ t: 'joined', code: this.code, host: { name: this.name } }); this._emit('peer-join', { name: String(m.name || '참가자').slice(0, 24) }); return; }
@@ -1543,7 +1548,7 @@ function netLeave(silent) {
 }
 if (typeof window !== 'undefined') {
   window.netHostCreateRoom = netHostCreateRoom; window.netGuestJoin = netGuestJoin; window.netLeave = netLeave; window.netRequestRematch = netRequestRematch;
-  window.netMatchActive = netMatchActive; window.netHeadlessFrame = netHeadlessFrame; window.netLagCompMs = () => netLagCompMs(); window.togglePause = (f) => togglePause(f);
+  window.netMatchActive = netMatchActive; window.netHeadlessFrame = netHeadlessFrame; window.netLagCompMs = () => netLagCompMs(); window.togglePause = (f) => togglePause(f); window.__netRealNow = __gcRealNow;
   Object.defineProperty(window, 'netState', { get: () => netState, configurable: true });
   Object.defineProperty(window, 'netGuestMode', { get: () => netGuestMode, configurable: true });
 }

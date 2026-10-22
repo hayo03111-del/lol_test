@@ -53,12 +53,18 @@ const MODE = ['p2p', 'mqtt'].includes(process.env.NET_MODE) ? process.env.NET_MO
   await guest.waitForFunction(() => window.netState && window.netState.ready, null, { timeout: 90000 });
   await host.waitForFunction(() => window.netState && window.netState.guestReady && !window.netState.locked, null, { timeout: 30000 });
   await host.evaluate(() => window.__e2e.setGameTimeSec(64)); // 미니언이 나와 스냅샷이 커진 상태로
+  if (process.env.DIAG) { // 구간별 한 방향 지연(같은 기계라 벽시계가 같다): 참가자→방장(gping), 방장→참가자(스냅샷)
+    const hto = await host.evaluate(() => performance.timeOrigin), gto = await guest.evaluate(() => performance.timeOrigin);
+    await host.evaluate((gto) => { const st = window.netState, h = st.client.handlers.get('msg'); window.__ow = []; const rn = window.__netRealNow; st.client.handlers.set('msg', (d) => { if (d && d.k === 'gping') window.__ow.push(Math.round(performance.timeOrigin + rn() - (gto + d.at))); h(d); }); }, gto);
+    await guest.evaluate((hto) => { const st = window.netState, h = st.client.handlers.get('msg'); window.__ow = []; const rn = window.__netRealNow; st.client.handlers.set('msg', (d) => { if (d && d.k === 'snap') window.__ow.push(Math.round(performance.timeOrigin + rn() - (hto + d.t))); h(d); }); }, hto);
+  }
   // 30초 동안 2초마다: 참가자 왕복 지연·스냅샷 지연(대기열)·초당 스냅샷·크기
   r.series = [];
   for (let i = 0; i < 15; i++) {
     await realWait(guest, 2000);
     r.series.push(await guest.evaluate(() => { const st = window.netState; return { rtt: Math.round(st.rtt || 0), q: Math.round(st.queueDelay || 0), hz: st.gapAvg ? Math.round(1000 / st.gapAvg) : null, delay: Math.round(st.delay || 0), rb: st.recvBps }; }));
   }
+  if (process.env.DIAG) { r.owGuestToHost = await host.evaluate(() => window.__ow.slice(-15)); r.owHostToGuest = await guest.evaluate(() => window.__ow.slice(-30)); }
   r.host = await host.evaluate(() => { const st = window.netState; return { kind: st.client.kind, avgBytes: Math.round((st.snapBytes || 0) / Math.max(1, st.snapCount || 0)), count: st.snapCount, hz: st.sendHz || null, skipped: st.snapSkipped || 0, congestions: st.congestions || 0, guestQueue: st.guestQueue, budget: st.budget || null, bpsOut: st.bpsOut }; });
   const first = r.series.slice(1, 4).map((x) => x.rtt), last = r.series.slice(-3).map((x) => x.rtt);
   const avg = (a) => a.reduce((s, x) => s + x, 0) / a.length;

@@ -23,7 +23,7 @@ ctx.withCombatActor = (a, fn) => { ctx.actorLog.push(a); return fn(); };
 vm.createContext(ctx);
 let src = '';
 for (const f of ['src/session/entity_registry.js', 'src/session/game_commands.js', 'src/net/net_session.js', 'src/net/net_transport.js']) src += fs.readFileSync(path.join(ROOT, f), 'utf8') + '\n';
-src += ';globalThis.__t = { _netHistAt, _netRewound, MqttWs, _mqttPacket, _mqttStr, _mqttLen, _netTimeShift, _netApplyChampState, _netStatusFrom, _netDelta, _netSer, _netDeser, _netEffectiveIntent, _netReconcile, _netNewPred: (p) => ({ pos: p, intent: null, intentSeq: 0, hist: [], corr: new THREE.Vector3(), srv: null, follow: false, corrections: 0, snaps: 0 }), _netSampleAt, RemoteSession, _netHostOnMessage, assignEntityId, reserveEntityIds, entityId, findEntityById, getGameSession: () => gameSession, setGameSession: (s) => { gameSession = s; } };';
+src += ';globalThis.__t = { _netRateControl, _netQueueSample, _netCodeHash, AutoNetClient, NET_MQTT_TOPIC, _netHistAt, _netRewound, MqttWs, _mqttPacket, _mqttStr, _mqttLen, _netTimeShift, _netApplyChampState, _netStatusFrom, _netDelta, _netSer, _netDeser, _netEffectiveIntent, _netReconcile, _netNewPred: (p) => ({ pos: p, intent: null, intentSeq: 0, hist: [], corr: new THREE.Vector3(), srv: null, follow: false, corrections: 0, snaps: 0 }), _netSampleAt, RemoteSession, _netHostOnMessage, assignEntityId, reserveEntityIds, entityId, findEntityById, getGameSession: () => gameSession, setGameSession: (s) => { gameSession = s; } };';
 vm.runInContext(src, ctx);
 const T = ctx.__t;
 
@@ -133,3 +133,58 @@ assert(sts[0].expiresAt === 2500 && sts[1].expiresAt === Infinity && sts[1].stac
 // 11) 101차: 지연 보정 - 기록에서 과거 자리를 보간하고, 실행하는 동안만 되돌렸다가 제자리로(스킬이 옮겼으면 그 자리 유지)
 const h = [{ t: 1000, x: 0, y: 0, z: 0 }, { t: 1100, x: 10, y: 0, z: 0 }];
 assert(T._netHistAt(h, 1050).x === 5 && T._netHistAt(h, 500).x === 0 && T._netHistAt(h, 2000).x === 10, '지연 보정: 기록 사이 자리 보간');
+
+// 12) 102차: 혼잡 제어 - 대기열이 서고 받는 속도가 보낸 속도보다 느리면 예산을 받은 속도 쪽으로 낮추고, 흔들림만으로는 낮추지 않는다
+{
+  const st = { bpsOut: 20000 };
+  T._netRateControl(st, { now: 0, q: 150, rb: 19800 }); T._netRateControl(st, { now: 1000, q: 150, rb: 19900 });
+  assert(st.budget == null, '혼잡 제어: 대기열 값이 높아도 받은 만큼 다 받고 있으면(프레임 흔들림) 줄이지 않는다');
+  const s2 = { bpsOut: 20000 };
+  T._netRateControl(s2, { now: 0, q: 150, rb: 8000 }); T._netRateControl(s2, { now: 1000, q: 200, rb: 8000 });
+  assert(s2.budget === 10000 && s2.congestions === 1, '혼잡 제어: 줄이 서고 받는 속도가 느리면 예산을 낮춘다(한 번에 반 아래로는 안 내림)');
+  T._netRateControl(s2, { now: 1100, q: 200, rb: 8000 });
+  assert(s2.congestions === 1, '혼잡 제어: 줄이 빠질 시간(q ms, 최소 0.5초) 안에는 다시 낮추지 않는다');
+  T._netRateControl(s2, { now: 1600, q: 500, rb: 8000 });
+  assert(s2.budget === 6800, '혼잡 제어: 대기열이 아주 크면(400ms+) 다시 낮춘다(받은 속도의 85%)');
+  s2.bpsOut = 7000; for (let i = 0; i < 4; i++) T._netRateControl(s2, { now: 4000 + i * 1000, q: 10, rb: 7000 });
+  assert(s2.budget > 7000 && s2.budget < 12000, '혼잡 제어: 조용해지면 조금씩(1초에 8%) 되돌린다');
+  const s3 = { bpsOut: 5000 };
+  T._netRateControl(s3, { now: 0, backlog: 64 * 1024 });
+  assert(s3.budget === 3500, '혼잡 제어: 보내는 쪽 대기열(backlog)이 크면 지금 속도의 70%로');
+  const q = {};
+  T._netQueueSample(q, 100, 1000); T._netQueueSample(q, 300, 1500); T._netQueueSample(q, 120, 2100); T._netQueueSample(q, 400, 3000);
+  assert(q.queueDelay === 20, '대기열 지연: 1초 칸의 최솟값만 본다(프레임 흔들림 300ms는 빠진다) - 기준보다 20ms 늦음');
+}
+// 13) 102차: 우회 중계 주제는 방 코드의 해시, 방장은 "길 재기"에 붙잡지 않고 답만 한다
+{
+  const h1 = T._netCodeHash('ABCD'), h2 = T._netCodeHash('ABCE');
+  assert(h1 !== h2 && !/ABCD/.test(h1) && T._netCodeHash('ABCD') === h1, '주제: 방 코드가 그대로 보이지 않는 해시(같은 코드면 같은 값)');
+  const a = new T.AutoNetClient(); a.role = 'host'; a.code = 'ABCD'; a.name = '방장';
+  const pubs = []; const link = { publish: (topic, text) => pubs.push([topic, JSON.parse(text)]) };
+  a._hostMqtt(link, JSON.stringify({ f: 'g1', t: 'probe', at: 123 }));
+  assert(pubs.length === 1 && pubs[0][1].t === 'probe-ok' && pubs[0][1].at === 123 && pubs[0][1].to === 'g1' && pubs[0][0] === T.NET_MQTT_TOPIC + h1 + '/g' && !a.guest, '길 재기: 방장은 바로 답하고 참가자로 잡지 않는다');
+  a._hostMqtt(link, JSON.stringify({ f: 'g1', t: 'join', name: '친구' }));
+  assert(a.guest && a.guest.cid === 'g1' && pubs[1][1].t === 'joined' && pubs[1][1].code === undefined, '참가: join으로만 참가자가 되고, 답에 방 코드를 싣지 않는다');
+  const link2 = { publish: (topic, text) => pubs.push(['2', JSON.parse(text)]) };
+  a._hostMqtt(link2, JSON.stringify({ f: 'g1', t: 'msg', d: {} }));
+  assert(a.guest.link === link2, '재연결: 참가자 메시지가 다른(다시 붙은) 중계소로 오면 답도 그쪽으로');
+}
+// 14) 102차: 참가자는 모든 길(직접 연결 + 중계소 전부)을 재서 가장 빠른 길로 참가한다(직접 연결은 30ms 덤), 나머지는 닫는다
+(async () => {
+  const mk = (kind, label, rtt, log) => ({ kind, label, rtt, close: () => log.push('close ' + label), commit: () => log.push('commit ' + label) });
+  const run = async (p2pRtt, mq) => {
+    const a = new T.AutoNetClient(), log = [];
+    a._probeP2p = async () => (p2pRtt == null ? null : mk('p2p', 'p2p', p2pRtt, log));
+    let i = 0; a._probeMqtt = async () => { const r = mq[i % mq.length]; i++; return r == null ? null : mk('mqtt', 'mq' + i, r, log); };
+    await a._join('ABCD', '친구');
+    return log;
+  };
+  const l1 = await run(260, [400, 120, null, 300, null]);
+  assert(l1.includes('commit mq2') && l1.filter((x) => x.startsWith('close')).length === 3, '길 고르기: 가장 빠른 중계소(120ms)로 참가하고 나머지 길은 닫는다');
+  const l2 = await run(140, [400, 120, null, 300, null]);
+  assert(l2.includes('commit p2p'), '길 고르기: 직접 연결이 30ms 안쪽으로 비슷하면 직접 연결');
+  const a3 = new T.AutoNetClient(); const ev = [];
+  a3.on('error', (m) => ev.push(m.msg)); a3._probeP2p = async () => null; a3._probeMqtt = async () => null;
+  await a3._join('ZZZZ', '친구');
+  assert(ev.length === 1 && /방을 찾지 못했습니다/.test(ev[0]), '길 고르기: 어느 길로도 답이 없으면 방이 없다고 알린다');
+})();

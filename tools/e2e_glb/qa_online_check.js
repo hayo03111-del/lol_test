@@ -184,6 +184,8 @@ const MODE = ['p2p', 'mqtt'].includes(process.env.NET_MODE) ? process.env.NET_MO
     wCast: await host.evaluate(() => window.__e2e.enemyBots[0].cooldowns.W > 0), guestCd: await guest.evaluate(() => window.controller.cooldowns.W > 0),
     fxSent: await host.evaluate(() => window.netState.fxSent), fxPlayed: await guest.evaluate(() => window.netState.fxPlayed), fxBefore: fx0 };
   check('fight: guest attack/W damage host champion (host decides)', r.fight.hostHp < r.fight.hp0 - 50 && r.fight.wCast);
+  // 102차: 싸움이 계속되는 중이라 같은 순간에 읽으면 화면 지연만큼 차이가 난다 - 방장이 읽은 값에 참가자 화면이 3초 안에 따라오는지 본다
+  for (let i = 0; i < 12 && Math.abs(r.fight.guestSeesHp - r.fight.hostHp) >= 400; i++) { await realWait(guest, 250); r.fight.guestSeesHp = Math.round(await guest.evaluate(() => window.__e2e.enemyBots[0].hp)); }
   check('fight: guest sees host hp, its own cooldown and projectiles', Math.abs(r.fight.guestSeesHp - r.fight.hostHp) < 400 && r.fight.guestCd && r.fight.projSeen > 0);
   check('effects: host vfx calls are replayed on the guest', r.fight.fxSent > 0 && r.fight.fxPlayed > r.fight.fxBefore);
   if (process.env.SHOT) { await guest.screenshot({ path: process.env.SHOT + '_guest.png' }); await host.screenshot({ path: process.env.SHOT + '_host.png' }); }
