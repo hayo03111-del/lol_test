@@ -935,6 +935,8 @@ CharacterController.prototype._yoneCastR = function(mouseWorldPoint, free = fals
   const timer = this._champTimeout(() => {
     if (this.currentActionKey !== key) return;
     this.currentPhase = 'ACTIVE';
+    // 94차(원작 R-점멸): 판정은 시전이 끝나는 순간 요네가 있는 자리에서 나간다(방향은 조준한 그대로). 예전엔 시전 시작 위치를 썼다.
+    origin.copy(this.root.position);
     // 1단계: 직선 범위(사거리/폭) 내 모든 적 넉다운+기절(위키: 1초).
     const halfWidth = lolRangeToWorld(r.width || 225) * 0.5;
     const lolRange = r.range || 1000;

@@ -319,7 +319,7 @@ function runeOnTakeDamage(ctrl, incoming, damageType, source, meta) {
   }
   if (runeHas(ctrl, 'NullifyingOrb') && damageType === DAMAGE_TYPE.MAGICAL && runeCdReady(ctrl, 'NullifyingOrb') && (ctrl.hp - dmg) / Math.max(1, ctrl.maxHp) < 0.3) {
     runeSetCd(ctrl, 'NullifyingOrb', 60);
-    if (typeof addShield === 'function') addShield(ctrl, 'runeNullifyingOrb', runeLevelLerp(ctrl, 35, 110) + 0.14 * (ctrl.stats.abilityPower || 0) + 0.09 * runeBonusAD(ctrl), 4);
+    if (typeof addShield === 'function') addShield(ctrl, 'runeNullifyingOrb', (runeLevelLerp(ctrl, 35, 110) + 0.14 * (ctrl.stats.abilityPower || 0) + 0.09 * runeBonusAD(ctrl)) * (typeof getShieldReceivedMultiplier === 'function' ? getShieldReceivedMultiplier(ctrl) : 1), 4); // 94차: 칼바람 보호막 보정·받는 보호막 증가를 챔피언·아이템 보호막과 같이
   }
   return dmg;
 }

@@ -295,7 +295,8 @@ function updateDebugPanel() {
 <span class="k">CritChance</span> : ${(s.critChance * 100).toFixed(0)}%
 ${distanceDebugText(controller)}
 ${masterYiDebugText(controller)}
-${projectileDebugText()}`;
+${projectileDebugText()}
+${combatLogDebugText(controller)}`;
 }
 
 // Q 사거리 보강 문서 섹션 17/18: Q Cast Range(600)와 재등장 거리(75 계열)를
@@ -334,6 +335,43 @@ function masterYiQRangeDebugText(ctrl, cd) {
 // 더 아낄 필요는 없다(요청 "디버그가 꺼져 있을 때 추가 연산이 과도하지
 // 않도록" - 애초에 updateDebugPanel() 자체가 debugPanelVisible=false면
 // 맨 위에서 즉시 return하므로 이 함수 호출까지 가지도 않는다).
+// 94차: 전투 관찰 - 대기 중인 선입력·행동 제한 상태·보호막과 최근 전투 기록(게임 이벤트 버퍼에서 읽기만 한다).
+function _debugUnitName(id) {
+  if (id == null) return '-';
+  const u = (typeof findEntityById === 'function') ? findEntityById(id) : null;
+  if (!u) return '#' + id;
+  if (u === controller) return u.championId || 'player';
+  return (u.championId || u.minionType || (u.isStructure ? 'struct' : u.isWard ? 'ward' : 'unit')) + '#' + id;
+}
+function _debugEventLine(e) {
+  const t = (e.simTimeSec || 0).toFixed(1);
+  switch (e.type) {
+    case 'damage': return `${t} ${_debugUnitName(e.sourceId)}→${_debugUnitName(e.targetId)} ${e.amount} ${e.damageType}${e.basicAttack ? ' AA' : ''}${e.dot ? ' DOT' : ''} hp=${e.targetHp}`;
+    case 'status': return `${t} ${e.statusType} ${e.durationSec}s → ${_debugUnitName(e.targetId)} (${e.statusId})`;
+    case 'cast': return `${t} ${_debugUnitName(e.entityId)} cast ${e.slot}`;
+    case 'projectileMiss': return `${t} miss → ${_debugUnitName(e.targetId)}${e.lost ? ' (lost)' : ''}`;
+    case 'death': return `${t} death ${_debugUnitName(e.entityId)} by ${_debugUnitName(e.killerId)}`;
+    case 'commandResult': return e.ok ? null : `${t} cmd ${e.commandType} rejected: ${e.reason}`;
+    default: return null;
+  }
+}
+function combatLogDebugText(ctrl) {
+  const pc = ctrl.pendingCast ? `${ctrl.pendingCast.slot}${ctrl.pendingCast.at ? ' ' + Math.round(performance.now() - ctrl.pendingCast.at) + 'ms' : ''}` : '-';
+  const cc = (ctrl.statusEffects || []).filter((e) => e.expiresAt > performance.now()).map((e) => e.type).join(',') || '-';
+  const events = (typeof recentGameEvents === 'function') ? recentGameEvents(0) : [];
+  const lines = [];
+  for (let i = events.length - 1; i >= 0 && lines.length < 8; i--) {
+    const l = _debugEventLine(events[i]);
+    if (l) lines.push(l);
+  }
+  const esc = (x) => String(x).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  return `--- combat ---
+<span class="k">PendingCast</span>: ${esc(pc)}
+<span class="k">Summoner Buf</span>: ${ctrl._bufferedSummoner ? esc(ctrl._bufferedSummoner.slot) : '-'}
+<span class="k">Statuses</span>  : ${esc(cc)}
+<span class="k">Shield</span>    : ${(ctrl.shield || 0).toFixed(0)}
+${lines.reverse().map(esc).join('\n')}`;
+}
 function projectileDebugText() {
   const p = (typeof projectiles !== 'undefined') ? projectiles : null;
   if (!p) return '';

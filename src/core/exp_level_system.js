@@ -76,6 +76,7 @@ function getMinionExpValue(minion) {
   return (d && d.xp) || 0;
 }
 function awardMinionExperience(minion) {
+  if (typeof gameEnded !== 'undefined' && gameEnded) return; // 94차: 게임 종료 뒤 경험치 없음
   if (typeof controller === 'undefined' || !controller) return;
   if (controller.state === STATE.DEAD || controller.hp <= 0) return;
   if (minion.team === PLAYER_TEAM) return;
@@ -169,6 +170,8 @@ const MINION_FORMATION_SPACING = 0.8; // 가로 간격(월드, 약 LoL 92) - 근
 // 60차: 미니언 소환 간격·공격 타격 시점을 실제 시간(setTimeout)이 아니라 게임 루프 시간(minionSimTime, dt 누적)으로 잰다.
 // 예전엔 일시정지 중에도 미니언이 나오고 예약된 타격이 들어갔으며, 공격 도중 죽은 미니언의 타격도 그대로 들어갔다.
 let minionSimTime = 0;
+// 94차: 미니언 AI 시각(추격 포기 4초·도움 요청 3초·챔피언 공격 기록)도 게임 루프 시간으로 잰다 - 일시정지가 4초를 넘으면 풀릴 때 대상을 포기하던 문제.
+function minionAiNowMs() { return minionSimTime * 1000; }
 let pendingMinionSpawns = [];
 function spawnMinionWave(team, gameTimeSec) {
   const waveIndex = team === 'RED' ? ++redMinionWaveCounter : ++minionWaveCounter;
@@ -498,7 +501,7 @@ function getMinionAttackTarget(minion) {
   // 83차: 도발되면 시전자만 공격한다(원작).
   const taunter = typeof getTauntSource === 'function' ? getTauntSource(minion) : null;
   if (taunter) return taunter;
-  const now = performance.now();
+  const now = minionAiNowMs();
   const pos = minion.mesh.position;
   // 86차 추격 포기(원작 미니언 AI): 대상을 4초 동안 한 번도 때리지 못하면(쫓기만 하면) 그 대상을 잠시 무시한다.
   // 예전엔 출처 없는 "700 끌려가면 포기"였다. 포탑을 치는 중이면 다른 대상(도움 요청 포함)을 보지 않는다.
@@ -543,7 +546,7 @@ function getMinionAttackTarget(minion) {
 function notifyMinionsChampionAttacked(attacker, victim) {
   // 65차: 허수아비(연습 표적)를 때리는 건 미니언 어그로를 끌지 않는다 - 다리 가운데 허수아비를 치다 보면 레드 미니언이 몰려왔다.
   if (!attacker || attacker.isTrainingDummy || !victim || victim.isTrainingDummy || !attacker.team || attacker.team === victim.team) return;
-  const until = performance.now() + MINION_CALL_FOR_HELP_MS;
+  const until = minionAiNowMs() + MINION_CALL_FOR_HELP_MS;
   for (const m of minions) {
     if (m.isDead || m.team !== victim.team) continue;
     // 86차(원작): 아군 챔피언이 공격받을 때의 도움 요청은 1000 범위(평소 인식 500의 두 배). 포탑을 치고 있는 미니언은 도움 요청을 무시한다.
@@ -576,7 +579,7 @@ function resolvePlayerStructureCollisions(ctrl) {
   // 막으려 하면 아래 `s.collisionRadius || s.radius` 폴백이 0을 falsy로
   // 취급해 radius(우물 구역 크기)로 넘어가버리는 버그가 있어 아예 목록에서
   // 뺐다.
-  const structures = [...turrets, ...inhibitorBuildings, ...nexusBuildings].filter((s) => s.isStructure);
+  const structures = minionStructureList();
   for (const s of structures) {
     const sp = getWorldPosition(s);
     let dx = pos.x - sp.x, dz = pos.z - sp.z;
@@ -618,7 +621,7 @@ function resolvePlayerMinionCollisions(ctrl) {
 }
 function resolveMinionStructureCollisions(minion) {
   const pos = minion.mesh.position;
-  const structures = [...turrets, ...inhibitorBuildings, ...nexusBuildings].filter((s) => s.isStructure);
+  const structures = minionStructureList();
   for (const s of structures) {
     const sp = getWorldPosition(s);
     let dx = pos.x - sp.x, dz = pos.z - sp.z;
@@ -687,8 +690,7 @@ function faceMinionToward(minion, dx, dz) {
 function computeStructureAvoidance(minion, dirX, dirZ) {
   const p = minion.mesh.position;
   let ax = 0, az = 0;
-  for (const s of [...turrets, ...inhibitorBuildings, ...nexusBuildings]) {
-    if (!s.isStructure) continue;
+  for (const s of minionStructureList()) {
     if (minion.attackTarget === s) continue; // 때리러 가는 구조물은 피하지 않는다
     const sp = getWorldPosition(s);
     const vx = sp.x - p.x, vz = sp.z - p.z, d = Math.hypot(vx, vz);
@@ -801,7 +803,7 @@ function updateMinionAttack(minion, dt) {
   if (minion.attackCooldown > 0) return;
   const cycleTime = 1 / minion.attackSpeed;
   minion.attackCooldown = cycleTime;
-  minion._lastAttackAt = performance.now(); // 86차: 추격 포기(4초) 판정용
+  minion._lastAttackAt = minionAiNowMs(); // 86차: 추격 포기(4초) 판정용
   const label = `${minion.team} ${minion.type} minion`;
   let hitDelaySec = 0;
   if (minion.usingRealModel && minion.attackClipSequence.length) {
@@ -1010,7 +1012,7 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
   // 원인일 때만(fromPlayer===true) 갱신한다.
   if (!fromPlayer) minion._lastHitBy = result.source || null; // 59차: 마지막 타격이 미니언·포탑이면 플레이어 막타(골드·CS)가 아니다
   if (fromPlayer) {
-    minion.lastAttackedByPlayerAt = performance.now();
+    minion.lastAttackedByPlayerAt = minionAiNowMs();
     if (typeof controller !== 'undefined' && controller) {
       minion._lastHitBy = controller;
       minion._lastChampionAttacker = controller; minion._lastChampionAttackedAt = minion.lastAttackedByPlayerAt; // 59차 미니언 어그로 5순위
@@ -1027,6 +1029,7 @@ function applyDamageToMinion(minion, result, fromPlayer = false) {
   }
   // 93차: 게임 이벤트(공격자: 플레이어 피해면 플레이어, 아니면 넘어온 공격자 - 구조물·환경은 null)
   if (typeof _evDamage === 'function') _evDamage(fromPlayer ? controller : (result.source && !result.source.isStructure ? result.source : null), minion, finalDmg, result);
+  if (fromPlayer && typeof leesinOmnivampOnDamage === 'function' && typeof controller !== 'undefined') leesinOmnivampOnDamage(controller, minion, finalDmg, result); // 94차: 리 신 W2 모든 피해 흡혈
   if (minion.hp <= 0) { killMinion(minion); return finalDmg; }
   // 요청("미니언 모션 최소 요구: Idle/Move/Attack/Hit/Death, 우선순위
   // Death>Attack>Hit>Move>Idle") - 피격 애니메이션을 재생한다. 짧은 창
@@ -1080,8 +1083,20 @@ function updateMinionWaveSpawner(gameTimeSec) {
     spawnMinionWave('RED', gameTimeSec);
   }
 }
+// 94차(성능): 미니언마다 프레임당 세 번씩 새로 만들던 구조물 목록을 프레임마다 한 번만 만든다.
+// 구조물은 파괴돼도 배열에 남으므로(파괴 여부는 쓰는 쪽이 본다) 프레임 번호·개수·첫 원소(초기화 때 새로 세움)로만 갱신한다.
+let _minionFrameNo = 0, _minionStructCache = null;
+function minionStructureList() {
+  const n = turrets.length + inhibitorBuildings.length + nexusBuildings.length;
+  const c = _minionStructCache;
+  if (!c || c.frame !== _minionFrameNo || c.n !== n || c.first !== turrets[0] || c.nexus !== nexusBuildings[0]) {
+    _minionStructCache = { frame: _minionFrameNo, n, first: turrets[0], nexus: nexusBuildings[0], list: [...turrets, ...inhibitorBuildings, ...nexusBuildings].filter((s) => s.isStructure) };
+  }
+  return _minionStructCache.list;
+}
 function updateMinions(dt) {
   minionSimTime += dt;
+  _minionFrameNo++;
   if (pendingMinionSpawns.length) {
     const due = pendingMinionSpawns.filter((p) => minionSimTime >= p.at);
     if (due.length) {

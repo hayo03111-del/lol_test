@@ -66,7 +66,7 @@ function buildAramFeatures() {
       const beam = new THREE.Mesh(new THREE.CylinderGeometry(lolRangeToWorld(ARAM_RELIC_BEAM_RADIUS_LOL), lolRangeToWorld(ARAM_RELIC_BEAM_RADIUS_LOL), .05, 48, 1, true),
         _aramMat(0x9dffb0, .8, { transparent: true, opacity: .0, side: THREE.DoubleSide, depthWrite: false }));
       beam.position.y = .05; g.add(beam);
-      aramRelics.push({ team, kind: sp.kind, pos, group: g, orb, beam, nextSpawnAt: sp.firstSec, active: false, beamAt: null, picker: null, pickedTeam: null });
+      aramRelics.push({ team, kind: sp.kind, pos, group: g, orb, beam, nextSpawnAt: sp.firstSec, firstSec: sp.firstSec, active: false, beamAt: null, picker: null, pickedTeam: null });
     }
     // 서리 관문: 넥서스 옆(아래쪽 +x), 넥서스 가장자리 바로 바깥
     const nexus = haLolToWorld(s.nexus), sign = team === 'RED' ? -1 : 1; // 다리 쪽 방향
@@ -99,6 +99,13 @@ function aramGateExit(gate) {
   return howlingAbyssMap.clampPosition(p);
 }
 
+// 94차: 게임 초기화 때 회복 유물을 처음 상태로(예전엔 이전 판의 활성·다음 등장 시각이 남아 초기화 직후 4개가 모두 떠 있었다).
+function resetAramRelics() {
+  for (const r of aramRelics) {
+    r.active = false; r.beamAt = null; r._beamDone = false; r.picker = null; r.pickedTeam = null;
+    r.nextSpawnAt = r.firstSec; r.orb.visible = false; r.beam.material.opacity = 0;
+  }
+}
 function updateAramFeatures(dt) {
   if (!aramFeaturesBuilt && !buildAramFeatures()) return;
   const gameSec = typeof getTurretGameTimeSec === 'function' ? getTurretGameTimeSec() : 0;

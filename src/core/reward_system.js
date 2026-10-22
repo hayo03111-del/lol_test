@@ -47,6 +47,7 @@ function grantStartingGold(ctrl) {
 
 // 미니언이 죽었을 때(killMinion에서 한 번) - 막타 골드 또는 근처 골드.
 function rewardMinionDeath(minion) {
+  if (typeof gameEnded !== 'undefined' && gameEnded) return; // 94차: 게임 종료 뒤 멈춘 미니언을 잡아 골드를 버는 것 방지
   if (typeof controller === 'undefined' || !controller || !minion || minion.team === controller.team) return;
   const at = minion.mesh ? minion.mesh.position.clone().add(new THREE.Vector3(0, (minion.modelHeight || 0.8) + 0.3, 0)) : null;
   if (minion._lastHitBy === controller) {

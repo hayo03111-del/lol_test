@@ -4,6 +4,7 @@ CharacterController.prototype._vexClearRRecast = function() {
     this._vex.recastTarget = null;
     this._vex.recastReadyUntil = 0;
     this._vex.dashActive = false;
+    this._vex.dashFollow = null; this._vex.dashArrive = null; // 94차
     this._vex.dashStart = null;
     this._vex.dashEnd = null;
     this._vex.dashT = 0;
@@ -46,10 +47,13 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
       this.currentPhase = 'ACTIVE';
       this.setState(STATE.R_CAST);
       this.playFirstAvailable(['Spell4_Dash', 'Spell4_Attack', 'Spell4'], { loop: THREE.LoopOnce, fade: 0.08 });
-      const hitTimer = this._champTimeout(() => {
-        // 버그 수정(실제 게임 기제 점검): 예전엔 "아직 돌진 중인가(dashActive)"를 확인했는데, 매 프레임 갱신이 같은
-        // 0.28초 시점에 먼저 dashActive를 끄면 이 타이머가 그냥 끝나 재시전 피해가 안 들어가고 행동 키도 남았다.
+      // 94차(원작): 재시전 돌진은 표식이 붙은 대상을 따라간다(대상이 움직여도 그 대상에게 도착해서 피해). 예전엔 시전 순간 위치로
+      // 곧장 가서, 정해진 시간이 되면 대상이 어디 있든 피해를 줬다. 도착은 _vexUpdateR가 판정하고 이 함수(onArrive)를 부른다.
+      // 아래 타이머는 도착하지 못하는 경우(대상이 계속 멀어짐)를 위한 안전장치(예상 시간의 2배 + 0.5초).
+      this._vex.dashFollow = target;
+      const arrive = () => {
         if (this.currentActionKey !== 'vexRRecast') return;
+        this._vex.dashArrive = null; this._vex.dashFollow = null;
         this._vex.dashActive = false;
         if (this._vex.dashEnd) this.root.position.copy(this._vex.dashEnd);
         const t = this._vex.recastTarget;
@@ -68,7 +72,9 @@ CharacterController.prototype._vexCastR = function(mouseWorldPoint, free = false
         } else this._vexClearRRecast();
         this.currentActionKey = null; this.currentPhase = null;
         this._resumeAfterAction();
-      }, this._vex.dashDuration * 1000);
+      };
+      this._vex.dashArrive = arrive;
+      const hitTimer = this._champTimeout(arrive, (this._vex.dashDuration * 2 + 0.5) * 1000);
       this._actionTimers.push(hitTimer);
       return;
     }
@@ -148,10 +154,25 @@ CharacterController.prototype._vexUpdateR = function(dt) {
       if (this._vex && this._vex.recastReadyUntil && performance.now() >= this._vex.recastReadyUntil) this._vexClearRRecast();
       return;
     }
+    // 94차: 대상을 따라가는 돌진(속도 2200) - 매 프레임 대상의 지금 위치(충돌 반경만큼 앞)로 다가가고, 닿으면 도착 처리.
+    const ft = this._vex.dashFollow;
+    if (ft && ft.hp > 0 && !ft.isDead && !ft.destroyed) {
+      const rd = this._champData().R;
+      const tp = getWorldPosition(ft), pos = this.root.position;
+      const to = new THREE.Vector3(tp.x - pos.x, 0, tp.z - pos.z);
+      const stop = getCollisionRadius(ft) + (this.collisionRadius || 0);
+      const dist = to.length(), step = lolRangeToWorld(rd.dashSpeed || 2200) * dt;
+      if (dist - stop <= step) {
+        if (dist > stop) pos.addScaledVector(to.normalize(), dist - stop);
+        this._vex.dashEnd = pos.clone(); this._vex.dashActive = false;
+        if (this._vex.dashArrive) this._vex.dashArrive();
+      } else { to.normalize(); pos.addScaledVector(to, step); this.faceDirectionInstant(to); }
+      return;
+    }
     this._vex.dashT += dt / Math.max(0.01, this._vex.dashDuration);
     const t = Math.min(1, this._vex.dashT);
     this.root.position.lerpVectors(this._vex.dashStart, this._vex.dashEnd, t);
-    if (t >= 1) this._vex.dashActive = false;
+    if (t >= 1) { this._vex.dashActive = false; if (this._vex.dashArrive) this._vex.dashArrive(); }
   
 };
 

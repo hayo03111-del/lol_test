@@ -22,17 +22,26 @@ function resetGame() {
     for (const p of projectiles.projectiles) { p.done = true; if (p._meshEntry && projectiles._releaseArrowMesh) projectiles._releaseArrowMesh(p._meshEntry); else if (p.mesh) _resetDisposeObject3D(p.mesh); }
     projectiles.projectiles.length = 0;
   }
-  for (const s of [...turrets, ...inhibitorBuildings, ...nexusBuildings]) _resetDisposeObject3D(s.mesh);
+  // 94차: 분수 테두리 링·포탑 조준선은 장면에 따로 붙어 있어 함께 지운다(예전엔 초기화마다 링 2개씩 쌓였다).
+  for (const s of [...turrets, ...inhibitorBuildings, ...nexusBuildings]) { _resetDisposeObject3D(s.mesh); _resetDisposeObject3D(s._ring); _resetDisposeObject3D(s._aggroBeam); }
   turrets.length = 0; inhibitorBuildings.length = 0; nexusBuildings.length = 0;
   if (typeof howlingAbyssStructuresSpawned !== 'undefined') howlingAbyssStructuresSpawned = false;
   gameEnded = false;
   document.querySelectorAll('body > div').forEach((d) => { if (/^(BLUE|RED) WINS$/.test(d.textContent || '')) d.remove(); });
   if (typeof spawnHowlingAbyssStructures === 'function') spawnHowlingAbyssStructures();
   if (typeof resetTurretGameClock === 'function') resetTurretGameClock();
+  if (typeof resetAramRelics === 'function') resetAramRelics(); // 94차
+  if (typeof _passiveGoldAcc !== 'undefined') _passiveGoldAcc = 0; // 94차: 기본 골드 누적 시간도 처음으로
   // 3) 와드·파티클
   if (typeof wardSystem !== 'undefined' && wardSystem && wardSystem.clear) wardSystem.clear();
   if (typeof lolVfx !== 'undefined' && lolVfx) { for (const s of lolVfx.systems) s.dispose(); lolVfx.systems = []; }
-  if (typeof placedAllies !== 'undefined') for (const a of placedAllies) { a.hp = a.maxHp; a.statusEffects = []; }
+  if (typeof placedAllies !== 'undefined') for (const a of placedAllies) { a.hp = a.maxHp; if (typeof clearUnitCombatState === 'function') clearUnitCombatState(a); else a.statusEffects = []; }
+  // 94차: 허수아비(적·직접 놓은 것)의 상태 효과·공중에 뜸·끌려가기·보호막과 아이템 중첩(칠흑의 양날 도끼·부패 등)도 처음으로.
+  for (const d of [typeof dummy !== 'undefined' ? dummy : null, ...(typeof placedDummies !== 'undefined' ? placedDummies : [])]) {
+    if (!d) continue;
+    if (typeof clearUnitCombatState === 'function') clearUnitCombatState(d);
+    for (const k of Object.keys(d)) if (/^_item\w*Stacks?$/.test(k)) delete d[k];
+  }
   // 4) 챔피언을 처음 상태로 다시 불러온다(이전 챔피언 상태를 넘기지 않음)
   if (typeof gameSession !== 'undefined' && gameSession) gameSession.reset(); // 93차: 세션 틱·시간을 처음으로(+ gameReset 이벤트)
   window.__resetNoCarry = true;

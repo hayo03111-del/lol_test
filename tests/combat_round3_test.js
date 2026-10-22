@@ -108,6 +108,7 @@ this.resistDamageMultiplier = resistDamageMultiplier;
 this.prdConstant = prdConstant;
 this.isGhosted = isGhosted;
 this.setController = (c) => { controller = c; };
+this.leesinOmnivampOnDamage = leesinOmnivampOnDamage;
 `, context);
 const { CharacterController, CHAMPION_DATA, STATE, applyStatus, applyDamage, getStatus, getSlowPercent,
   getAttackSpeedBuffPercent, getTenacity, computeChampionStats, lolRangeToWorld, setController, worldDistanceToLol, calculateDamage, isStunned, isRooted, tickStatusEffects, getMoveSpeedBuffPercent, getFinalAttackSpeed, getWindupDuration, getDamageReductionPercent, applyMoveSpeedSoftCap, resistDamageMultiplier, prdConstant, isGhosted } = context;
@@ -281,8 +282,25 @@ stubs.scene = { add() {}, remove() {} };
   const t = makeEnemy(0, 1); t._lastDamageTakenAmount = 100;
   l._leesin.passiveHitsLeft = 0;
   l._leesinOnBasicAttackHit(t);
-  assert(near(l.hp, 510), '리 신 W2: 패시브 없이도 평타 흡혈 적용(예전엔 패시브 횟수가 있어야만)');
+  assert(near(l.hp, 500), '리 신 W2: 평타 적중 훅에서는 회복하지 않는다(94차 - 공용 피해 경로에서 한 번만)');
+  context.leesinOmnivampOnDamage(l, t, 100, { isBasicAttack: true });
+  assert(near(l.hp, 510), '리 신 W2: 평타 피해 10% 회복(공용 피해 경로)');
+  context.leesinOmnivampOnDamage(l, t, 100, { isAbility: true });
+  assert(near(l.hp, 520), '리 신 W2: 스킬 피해로도 회복(94차 - 모든 피해 흡혈, 예전엔 평타만)');
   l._leesin.passiveHitsLeft = 2; const mp0 = l.mp; // 패시브 버프(3초) 없음
   l._leesinOnBasicAttackHit(t);
   assert(l.mp === mp0 && l._leesin.passiveHitsLeft === 0, '리 신 패시브: 3초 버프가 끝나면 남은 기력 회복 횟수도 소멸');
+}
+// --- 94차: 사망 중 시전 금지, 마스터 이 처치 관여 쿨감은 R을 배운 뒤에만, 스킬 시전 중 다른 스킬 선입력 ---
+{
+  const g = makeChamp('garen'); g.state = STATE.DEAD; g.hp = 0;
+  g.castAbility('Q', new Vector3(0, 0, 1));
+  assert(g.cooldowns.Q === 0 && g.currentActionKey == null && g.pendingCast == null, '94차: 사망 중에는 어떤 경로로도 스킬을 시전하지 않는다');
+  const y = makeChamp('masteryi', [], { skillLevels: { Q: 1, W: 1, E: 1, R: 0 } }); y.cooldowns.W = 10;
+  y._onBasicAttackHit(makeEnemy(0, 1, { hp: 10, maxHp: 1000 }), null, true, null, false);
+  assert(y.cooldowns.W === 10, '94차 마스터 이: R(최후의 전사)을 배우기 전에는 처치 관여 쿨감이 없다');
+  const d = makeChamp('garen'); d.state = 'Q_CAST'; d.currentActionKey = 'garenQ'; d.currentPhase = 'STARTUP'; d.phaseCancelable = false; d.actionData = {};
+  d.canStartNewAction = () => false;
+  d.castAbility('E', new Vector3(0, 0, 1));
+  assert(d.pendingCast && d.pendingCast.slot === 'E', '94차 선입력: 다른 스킬 시전 시간 중 누른 스킬은 버리지 않고 보관한다');
 }

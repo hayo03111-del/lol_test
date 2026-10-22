@@ -140,11 +140,7 @@ CharacterController.prototype._leesinOnBasicAttackHit = function(target) {
     // 강철의 의지(W 재시전): 평타로 실제 입힌 피해(방어력 적용 후)의 일부만큼 흡혈.
     // 버그 수정: 예전엔 이 처리가 패시브(질풍격) 횟수가 남아 있을 때만 실행되는 위치에 있어,
     // 패시브가 없으면 W2 흡혈이 전혀 적용되지 않았다.
-    if (hasStatus(this, 'LEESIN_W_VAMP')) {
-      const st = getStatus(this, 'leesinW_vamp');
-      const dealt = target && target._lastDamageTakenAmount != null ? target._lastDamageTakenAmount : this.stats.attackDamage;
-      if (st) { this.hp = Math.min(this.maxHp, this.hp + dealt * st.value * getHealReceivedMultiplier(this)); updateBars(this); }
-    }
+    // 94차: W2 흡혈은 이제 모든 피해에서(공용 피해 경로 _leesinOmnivamp) - 여기서 따로 회복하면 평타가 두 번 회복된다.
     // 질풍격은 "스킬 사용 후 3초 안"의 2회 평타만 강화한다 - 버프가 끝났으면 남은 횟수도 소멸
     // (버그 수정: 예전엔 횟수가 만료되지 않아 한참 뒤 평타에도 기력이 회복됐다).
     if (this._leesin.passiveHitsLeft > 0 && !getStatus(this, 'leesinPassive_as')) this._leesin.passiveHitsLeft = 0;
@@ -307,7 +303,9 @@ CharacterController.prototype._leesinCastW = function(free, mouseWorldPoint = nu
     // 지정해야 하고, 대상을 직접 찍지 않으면 커서 반경 100 안의 와드를 찾는다. 예전엔 빈 땅을 찍어도 자기 시전으로
     // 처리됐다. 이제 아군·와드·자신(커서가 리 신 위)이 아니면 비용 없이 쓰지 않는다(모션 테스트 free는 자기 시전).
     const ally = this._leesinPickWAlly(mouseWorldPoint);
-    const ward = ally ? null : this._leesinPickWWard(mouseWorldPoint);
+    // 94차(원작): 아군 미니언에게도 방호로 돌진한다(칼바람의 주된 이동 수단) - 와드와 같이 돌진·자기 보호막만. 예전엔 고를 수 없었다.
+    const allyMinion = (ally || this._leesinPickWWard(mouseWorldPoint)) ? null : this._leesinPickWMinion(mouseWorldPoint);
+    const ward = ally ? null : (this._leesinPickWWard(mouseWorldPoint) || (allyMinion ? { position: getWorldPosition(allyMinion).clone(), _minion: allyMinion } : null));
     const selfPick = !ally && !ward && (free || (mouseWorldPoint && getHorizontalDistance(this.root.position, mouseWorldPoint) <= this.collisionRadius + lolRangeToWorld(150)));
     if (!ally && !ward && !selfPick) { showSkillToast('W - 아군·와드·자신을 지정해야 합니다'); return; }
     if (!free && this.mp < w.energy1) { debugSkillMiss('Lee Sin W', '기력 부족'); return; }
@@ -365,6 +363,21 @@ CharacterController.prototype._leesinPickWAlly = function(mouseWorldPoint) {
 
 // 29차: 방호 대상 와드 - 커서 반경 100 안(PC 위키 "대상을 직접 찍지 않으면 반경 100 안의 와드를 찾는다")의
 // 설치된 와드 중 리 신 W 사거리(range1) 안에서 커서에 가장 가까운 것.
+// 94차: 커서 반경 150 안의 살아 있는 아군 미니언(방호 사거리 안) 중 커서에 가장 가까운 것.
+CharacterController.prototype._leesinPickWMinion = function(mouseWorldPoint) {
+  if (!mouseWorldPoint || typeof minions === 'undefined' || !minions) return null;
+  const w = this._champData().W;
+  let best = null, bestD = Infinity;
+  for (const m of minions) {
+    if (!m || m.team !== this.team || m.isDead || m.destroyed || !(m.hp > 0)) continue;
+    const p = getWorldPosition(m); if (!p) continue;
+    const dMouse = getHorizontalDistance(p, mouseWorldPoint);
+    if (dMouse > lolRangeToWorld(150) + getCollisionRadius(m)) continue;
+    if (getHorizontalDistance(p, this.root.position) > lolRangeToWorld(w.range1) + getCollisionRadius(m)) continue;
+    if (dMouse < bestD) { best = m; bestD = dMouse; }
+  }
+  return best;
+};
 CharacterController.prototype._leesinPickWWard = function(mouseWorldPoint) {
   // 32차: 자기 와드뿐 아니라 아군 와드 전부(원작 - 아군 와드로 방호 가능).
   const pool = [...(this._placedWards || [])];
@@ -513,3 +526,15 @@ CharacterController.prototype._leesinDashSpeedWorld = function() {
   const msLol = msW > 0 ? worldDistanceToLol(msW) : (CHAMPION_DATA.leesin.stats.moveSpeed || 345);
   return lolRangeToWorld(1350 + msLol);
 };
+
+// 94차(원작): 강철의 의지(W2)는 모든 피해 흡혈 10~26%(4초) - 평타뿐 아니라 Q·E·R 피해로도 회복한다. 예전엔 평타에서만 회복했다.
+// 공용 피해 경로(applyDamage·applyDamageToMinion)가 실제로 입힌 피해(dealt)로 부른다. 챔피언이 아닌 대상에게 준 광역·지속 피해는
+// 다른 모든 피해 흡혈과 같이 33%만.
+function leesinOmnivampOnDamage(source, target, dealt, result) {
+  if (!source || source.championId !== 'leesin' || !(dealt > 0) || typeof getStatus !== 'function') return;
+  const st = getStatus(source, 'leesinW_vamp');
+  if (!st || !(st.expiresAt > performance.now())) return;
+  const eff = target && !target.isChampion && result && (result.isAoE || result.isStatusTick) ? 0.33 : 1;
+  source.hp = Math.min(source.maxHp, source.hp + dealt * st.value * eff * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(source) : 1));
+  if (typeof updateBars === 'function') updateBars(source);
+}

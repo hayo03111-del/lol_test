@@ -82,6 +82,8 @@ class LocalSession {
   }
   // 기존 함수로 연결. 각 분기의 동작은 93차 이전 입력 처리 코드와 같다(입력 쪽에서 옮겨 온 게임 규칙만 여기 있다).
   _apply(c, cmd) {
+    // 94차: 새 이동·공격·정지·귀환 명령은 기억해 둔 스킬 선입력을 취소한다(원작 - 마지막 명령이 이긴다).
+    if (['move', 'stop', 'attack', 'attackMove', 'recall'].includes(cmd.type)) c.pendingCast = null;
     switch (cmd.type) {
       case 'move': {
         const p = _cmdVec(cmd.point);

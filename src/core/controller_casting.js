@@ -78,6 +78,14 @@ const CHAMPION_SLOT_CASTS = {
 // 버려져 스킬마다 애니메이션이 끝날 때까지(최대 1.7초) 서 있거나 아예 멈췄다. 돌진·점멸 같은 이동 스킬은 원래 목적지를
 // 잇지 않는다. 시전 직후 저장한 목적지는 runAction의 판정 시점(시전 시간 끝) 또는 행동 종료 시 _resumeAfterAction이 쓴다.
 CharacterController.prototype.castAbility = function(slot, mouseWorldPoint) {
+    // 94차: 죽어 있거나 부활 중에는 어떤 스킬도 쓰지 못한다(원작). 예전엔 챔피언별 예외 분기들이 일반 검사(canStartNewAction)를
+    // 건너뛰어 가렌 Q·W, 세트 Q, 모데카이저 W, 마스터 이 W·E·R, 다리우스 W 등이 죽은 채로 나갔다(다리우스 W는 시체를 IDLE로 되돌려 걷게 했다).
+    if (this.state === STATE.DEAD || this.state === STATE.RESPAWN || !(this.hp > 0)) return;
+    // 94차: 스킬별 잠금(_castLock = { until, slots }) - 잠긴 칸의 입력은 버리지 않고 기억했다가 잠금이 풀리면 쓴다(레넥톤 Q 뒤 E·R 0.25초 등).
+    if (this._castLock && performance.now() < this._castLock.until && this._castLock.slots.includes(slot)) {
+      this.pendingCast = { slot, mouseWorldPoint, at: performance.now() };
+      return;
+    }
     this._wardOrder = null; // 스킬 명령은 "걸어가서 와드 놓기"를 취소한다
     // 32차: 평타 대상으로 고른 와드는 스킬 대상이 아니다(원작 - 대상 지정 스킬은 와드를 지정하지 못한다). 시전하는 동안만
     // 대상을 비우고, 스킬이 새 대상을 정하지 않았으면 와드 공격 명령을 되돌린다.
@@ -317,6 +325,8 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
     // 방해하지 않는다 - _castQ 내부의 취소 로직도 이미 "현재 진행 중인 게
     // 기본 공격일 때만" 끊도록 되어 있어서(코드 확인 완료), E 채널은 그대로
     // 유지된 채 Q만 얹힌다.
+    // 94차: 레넥톤 Q 직후 0.25초 동안도 W(무자비한 포식자)는 바로 쓴다(원작 Q→W 연계 - 잠기는 것은 평타·E·R뿐).
+    if (this.championId === 'renekton' && slot === 'W' && this.currentActionKey === 'renektonQ') { this._dispatchCast('W', mouseWorldPoint, false); return; }
     if (this.championId === 'renekton' && slot === 'R' && this.currentActionKey === 'renektonW') {
       // 평-W-R: W 피해/기절 판정은 이미 끝난 뒤 남은 후딜레이만 R 모션으로 캔슬한다.
       // 버그 수정("마나 부족하면 모션이 기본으로 돌아간다"): W를 취소하기
@@ -361,6 +371,12 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
     // 다른 행동의 상태를 손상시키지 않는다(가렌/모데카이저/다리우스 W와
     // 동일한 안전성 근거). 실제 사용 가능 여부(4중첩 확보/침묵)는
     // _asheCastQ 내부에서 그대로 확인한다.
+    // 94차(원작): 바루스 W(오한의 화살통 사용)는 시전 시간이 없어 Q를 충전하는 중에도 바로 쓴다(W → Q 충전 발사 연계).
+    if (this.championId === 'varus' && slot === 'W') { this._dispatchCast('W', mouseWorldPoint, false); return; }
+    // 94차: 아리 W(여우불)도 시전 동작이 없어 Q·E 시전 중에도 바로 쓴다(원작).
+    if (this.championId === 'ahri' && slot === 'W') { this._dispatchCast('W', mouseWorldPoint, false); return; }
+    // 94차(원작): 닐라 R(환희)은 E(미끄러지기) 돌진 중에도 쓸 수 있다.
+    if (this.championId === 'nilah' && slot === 'R' && this.currentActionKey === 'nilahE' && this._nilah && this._nilah.eDash) { this._dispatchCast('R', mouseWorldPoint, false); return; }
     if (this.championId === 'ashe' && slot === 'Q') {
       this._dispatchCast(slot, mouseWorldPoint, false);
       return;
@@ -479,9 +495,16 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
     // 취소하고 새 스킬로 넘어가게 한다(단, R은 제외 - 1초 캐스트 타임 동안
     // 시전자 스스로도 끊을 수 없는 확정 캐스트라는 게 원작 설계이므로
     // ezrealR의 STARTUP은 그대로 잠가둔다).
-    if (this.championId === 'ezreal' && this.currentActionKey && this.currentActionKey.startsWith('ezreal') && this.currentActionKey !== 'ezrealR') {
-      this._clearActionTimers();
-      this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
+    // 94차: 위 이즈리얼 예외는 아래 공통 규칙으로 옮겼다 - 예전엔 시전 시간(0.25초) 중에 누른 스킬이 앞 스킬을 아예 취소해,
+    // 앞 스킬은 마나·쿨다운만 쓰고 나가지 않았다(W→Q를 빨리 누르면 W가 사라짐).
+    // 94차 공통 규칙(원작 선입력): 챔피언 전용 행동이
+    //  - 발사 뒤 후딜(RECOVERY, phaseCancelable=true)이면 남은 모션을 끊고 바로 새 스킬을 쓴다.
+    //  - 시전 시간 중(STARTUP/ACTIVE)이면 입력을 기억했다가 시전이 끝나는 즉시 쓴다(_flushBufferedCast, 마지막 입력 우선, 1.5초 뒤 버림).
+    // 후딜을 일부러 잠그는 행동(레넥톤 W 직후 0.528초 - phaseCancelable=false)은 끊지 않고 기억만 한다.
+    if (!this.canStartNewAction() && !isBasicAttackAction && this.currentActionKey && !this.actionData[this.currentActionKey]
+        && this.currentPhase === 'RECOVERY' && this.phaseCancelable === true) {
+      this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false; // 남은 후딜 타이머는 키 확인으로 스스로 무시된다
+      if (this.state !== STATE.DEAD) this.setState(STATE.IDLE);
       this._dispatchCast(slot, mouseWorldPoint, false);
       return;
     }
@@ -493,8 +516,15 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
       // 나간다. 다른 스킬이 진행 중이라 막힌 경우는 기존과 동일하게
       // 거부한다(스킬끼리 서로 끼어들어 취소되는 것은 이번 요청 범위 밖).
       if (isBasicAttackAction) {
-        this.pendingCast = { slot, mouseWorldPoint };
+        this.pendingCast = { slot, mouseWorldPoint, at: performance.now() };
         console.log(`[SKILL QUEUED] ${slot} - 현재 평타(${this.currentActionKey}) 종료 후 자동 시전 예약`);
+        return;
+      }
+      // 94차: 다른 스킬의 시전 중이면 거부하지 않고 기억한다(원작 선입력). 채널링·충전(바루스 Q) 중에는 예전처럼 거부.
+      if (this.currentActionKey && this.state !== STATE.CHANNEL && this.currentActionKey !== 'varusQCharge'
+          && (this.currentPhase === 'STARTUP' || this.currentPhase === 'ACTIVE' || this.currentPhase === 'RECOVERY')) {
+        this.pendingCast = { slot, mouseWorldPoint, at: performance.now() };
+        console.log(`[SKILL QUEUED] ${slot} - ${this.currentActionKey} 시전이 끝나면 자동 시전`);
         return;
       }
       const m = `${slot} - 다른 행동(${this.currentActionKey || this.state}) 중이라 캐스트 불가`; console.log(`[SKILL BLOCKED] ${m}`); showSkillToast(m); return;
@@ -554,6 +584,7 @@ CharacterController.prototype._dispatchCast = function(slot, mouseWorldPoint, fr
     // 궁극기(R)를 썼는지"를 item_system.js에서 판정할 수 있다.
     if (!free) { this._itemLastCastSlot = slot; this._itemLastCastSlotAt = performance.now(); }
     if (!free && slot === 'R' && typeof itemOnUltimateCast === 'function') itemOnUltimateCast(this); // 40차: 악마사냥꾼의 화살(폭격 개시)
+    if (!free && typeof emitGameEvent === 'function') emitGameEvent('cast', { entityId: _evId(this), slot }); // 94차: 전투 기록(실제 시전이 이 한 지점을 거친다)
     const direct = CHAMPION_DIRECT_CASTS[this.championId] && CHAMPION_DIRECT_CASTS[this.championId][slot];
     if (direct) return direct(this, mouseWorldPoint, free);
     if (free && this.playSkillAnimationSequence(slot, { mouseWorldPoint, free })) return;
@@ -652,6 +683,24 @@ CharacterController.prototype._castCustomSequence = function(slot, steps, mouseW
 // 애니메이션으로 복귀한다 -- 대기 중이던 이동 명령 > 살아있는 타겟 재교전
 // > Idle 순으로 기존 상태 시스템(_commitMove/_tryEngageTarget/_returnToLocomotion)
 // 을 그대로 재사용한다.
+// 94차: 스킬 선입력(원작) - 다른 스킬 시전 중에 누른 스킬을 기억했다가, 앞 스킬이 발사 뒤 후딜(끊을 수 있는 RECOVERY)에
+// 들어가거나 행동이 끝나는 즉시 쓴다. 매 프레임 update()에서 부른다. 이 시간보다 오래 기다린 입력은 버린다.
+const BUFFERED_CAST_MAX_AGE_MS = 1500;
+CharacterController.prototype._flushBufferedCast = function() {
+    if (!this.pendingCast || this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
+    if (this._castLock && performance.now() < this._castLock.until && this._castLock.slots.includes(this.pendingCast.slot)) return; // 잠금이 풀릴 때까지
+    const key = this.currentActionKey;
+    const data = key ? this.actionData[key] : null;
+    // 공용 행동 표(actionData)에 있는 스킬은 그 표의 cancelToSpell(후딜을 스킬로 끊을 수 있는가)을 따른다.
+    if (key && data && this.currentPhase === 'RECOVERY' && data.cancelToSpell) { this._resumeAfterAction(); return; }
+    if (key && !data && this.currentPhase === 'RECOVERY' && this.phaseCancelable === true) {
+      this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false; // 남은 후딜 타이머는 키 확인으로 스스로 무시된다
+      if (this.state !== STATE.CHANNEL && this.state !== STATE.RECALL) this.setState(STATE.IDLE);
+      this._resumeAfterAction();
+    } else if (!key && this.state !== STATE.RECALL && this.state !== STATE.CHANNEL && !this._dashState && !(typeof isCrowdControlled === 'function' && isCrowdControlled(this))) {
+      this._resumeAfterAction(); // 행동이 조용히 끝나 재개가 불리지 않은 경우
+    }
+};
 CharacterController.prototype._resumeAfterAction = function() {
     if (this.state === STATE.DEAD || this.state === STATE.RESPAWN || this.state === STATE.RECALL) return;
     // 요청("평타 도중 스킬을 누르면 그 평타가 끝나고 바로 스킬이 나가게"):
@@ -663,7 +712,8 @@ CharacterController.prototype._resumeAfterAction = function() {
     // 넘어간다.
     if (this.pendingCast) {
       const c = this.pendingCast; this.pendingCast = null;
-      if (this.canStartNewAction()) {
+      if (c.at != null && performance.now() - c.at > BUFFERED_CAST_MAX_AGE_MS) { /* 94차: 너무 오래된 선입력은 버린다 */ }
+      else if (this.canStartNewAction()) {
         console.log(`[SKILL QUEUED] ${c.slot} - 평타 종료, 예약된 스킬 시전`);
         // 버그 수정(핵심 - "마나 부족 시 스킬 쓰면 평타가 멈춘다"): 예약
         // 당시엔 시전 가능해 보였어도, 실제로 castAbility가 실행되는
@@ -1001,7 +1051,10 @@ CharacterController.prototype._castQ = function(mouseWorldPoint, free = false) {
           // 마우스가 가리킨 지점(범위를 넘으면 사거리로 clamp)을 중심으로
           // 반경 판정을 한다.
           // PC 위키: 지점 원형이 아니라 전방 직사각형(사거리 625, 폭 90~150) 판정.
-          this._mordeQOnCast(this.root.position.clone(), dir.clone());
+          // 94차(원작 25.12 "커서 쪽으로"): 시전 중 점멸 등으로 자리가 바뀌었으면 새 자리에서 처음 조준한 지점 쪽으로 내리친다.
+          let qDir = dir.clone();
+          if (mouseWorldPoint) { const nd = new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0); if (nd.lengthSq() > 1e-4) qDir = nd.normalize(); }
+          this._mordeQOnCast(this.root.position.clone(), qDir);
           return;
         }
         // 버그 수정(논타겟 스킬 Hit Detection): dir는 이미 마우스 방향으로
@@ -1377,6 +1430,9 @@ CharacterController.prototype._castW = function(mouseWorldPoint, free = false) {
     }
     this.runAction('w', STATE.W_CAST, {
       onFire: () => {
+        // 94차(원작 W-점멸): 주먹은 발사 순간 세트가 있는 자리에서 나간다(방향은 조준한 그대로). 예전엔 시전 시작 위치를 고정해
+        // 0.75초 준비 중에 점멸해도 판정이 원래 자리에서 나갔다.
+        settWOrigin.copy(this.root.position);
         if (settWData) {
           const wLen = lolRangeToWorld(settWData.range), wHw0 = lolRangeToWorld(settWData.centerHalfWidth), wHwS = lolRangeToWorld(settWData.startHalfWidth ?? settWData.centerHalfWidth), wHw1 = lolRangeToWorld(settWData.endHalfWidth);
           vfx.groundShapeFlash(settWOrigin, settWForward, { kind: 'trapezoid', length: wLen, hw0: wHwS, hw1: wHw1, opacity: 0.4 }, 0xff8a3a, 0.4);
@@ -1483,10 +1539,14 @@ CharacterController.prototype._castE = function(mouseWorldPoint, free = false) {
     if (this.championId === 'sett') {
       const data = this.actionData.e1;
       if (!data) { console.warn('[SETT E] actionData.e1 missing'); return; }
-      let facing = this.currentTarget
+      // 94차(원작): 세트 E는 조준한 방향(커서)을 축으로 양쪽을 나눈다 - 조준 표시도 커서 방향이다. 예전엔 커서를 무시하고
+      // 지금 대상(없으면 몸이 보는 방향)을 썼다. 커서 좌표가 없을 때만 예전 규칙.
+      let facing = mouseWorldPoint
+        ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0)
+        : this.currentTarget
         ? new THREE.Vector3().subVectors(this.currentTarget.mesh.position, this.root.position).setY(0)
         : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
-      if (facing.lengthSq() < 1e-6) facing.set(0, 0, 1);
+      if (facing.lengthSq() < 1e-6) facing = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion);
       facing.normalize();
       this.runAction('e1', STATE.E_CAST, {
         faceDir: facing,

@@ -519,6 +519,9 @@ function _useItemImpl(ctrl, slotIndex, opts = {}) {
   if (!slot) return false;
   const item = ITEM_DATA[slot.id];
   if (!item) return false;
+  // 94차(원작): 기절·속박 같은 행동 불가 상태에서는 아이템 사용도 막힌다 - 예외는 군중 제어를 푸는 수은류(cleanseActive).
+  // 예전엔 아무 검사도 없어 기절 중에도 존야·초시계 등을 쓸 수 있었다(소환사 주문은 이미 막고 있었다).
+  if (!item.cleanseActive && typeof isCrowdControlled === 'function' && isCrowdControlled(ctrl)) { itemWarn('행동 불가 상태에서는 아이템을 쓸 수 없습니다.'); return false; }
   // 활성 사용 아이템(티아맷의 "초승달" 등) - 중첩/충전 소모가 없는 대신
   // 아이템 자체 쿨다운이 있다. 소비 아이템과 분기를 분리한다.
   if (typeof itemExtraUse === 'function') { const r = itemExtraUse(ctrl, slotIndex, item, opts); if (r !== undefined) return r; } // 71차
@@ -580,6 +583,13 @@ function _useActiveAbilityItem(ctrl, item) {
   if (now < readyAt) { itemWarn(`${item.nameKo} 재사용 대기 ${Math.ceil((readyAt - now) / 1000)}초`); return false; }
   ctrl._itemActiveCooldownUntil[item.id] = now + item.activeAbility.cooldownSec * 1000;
   if (typeof ctrl.resetAttackTimer === 'function') ctrl.resetAttackTimer(); // 83차: 티아맷·히드라 사용은 평타 초기화(원작)
+  // 94차(원작): 남은 평타 후딜(이미 맞힌 뒤의 동작)도 끊고 곧바로 다음 평타로 이어간다(평타-티아맷-평타 캔슬). 예전엔 타이머만
+  // 지워서 후딜 모션이 끝날 때까지 기다렸다. 선딜(아직 안 맞힘) 중이면 평타를 끊지 않는다.
+  if (ctrl.currentPhase === 'RECOVERY' && ctrl.currentActionKey && /^(attack|crit|renektonAA)/.test(ctrl.currentActionKey) && typeof ctrl._clearActionTimers === 'function') {
+    ctrl._clearActionTimers(); ctrl.currentActionKey = null; ctrl.currentPhase = null; ctrl.phaseCancelable = false;
+    if (ctrl.state === STATE.ATTACK) ctrl.setState(STATE.IDLE);
+    if (typeof ctrl._resumeAfterAction === 'function') ctrl._resumeAfterAction();
+  }
   const raw = item.activeAbility.percentAD * (ctrl.stats.attackDamage || 0);
   if (raw > 0 && typeof findEnemiesInRadius === 'function') {
     const hits = findEnemiesInRadius(ctrl.root.position, item.activeAbility.radius);
@@ -777,7 +787,10 @@ function _useStasisActive(ctrl, item) {
   ctrl.isUntargetable = true;
   ctrl._itemStasisUntil = Math.max(ctrl._itemStasisUntil || 0, now + p.durationSec * 1000);
   if (typeof applyStatus === 'function') {
-    applyStatus(ctrl, { id: 'itemStasisStun', type: 'STUN', duration: p.durationSec });
+    // 94차: 정지(STASIS)는 기절과 다른 상태다 - 강인함으로 줄지 않고, 정화·수은으로 풀리지 않으며, 적이 건 군중 제어로 치지 않는다
+    // (가렌 패시브 초기화·군중 제어 아이템 훅 없음). 행동 불가는 isStunned가 똑같이 막는다. 예전엔 STUN이라 강인함 30%면 1.75초에 풀려
+    // 비대상인 채로 움직이고 공격할 수 있었다.
+    applyStatus(ctrl, { id: 'itemStasisStun', type: 'STASIS', duration: p.durationSec });
   }
   if (p.transformsAfterUse) {
     const slot = (ctrl.items || []).find((s) => s.id === item.id);
@@ -1543,7 +1556,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
       const shieldBonusPercent = isMelee ? p.meleeShieldBonusAdPercent : p.rangedShieldBonusAdPercent;
       // 정령의형상(무한한 활력)/월석재생기(별빛 은총) - 생명선 보호막도
       // "받는 보호막"에 해당한다(보호막 전용 증폭률 사용).
-      const shieldAmt = (shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent) * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
+      const shieldAmt = (shieldBase + _itemBonusAD(ctrl) * shieldBonusPercent) * _itemShieldMul(ctrl);
       addShield(ctrl, 'itemMaw', shieldAmt, p.shieldDurationSec, { onlyType: DAMAGE_TYPE.MAGICAL }); // 83차: 마법 피해만 막는 보호막(원작)
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       ctrl._itemMawOmnivampUntil = now + p.omnivampDurationSec * 1000;
@@ -1562,7 +1575,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
     if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
       ctrl._itemSterakIcdUntil = now + p.icdSec * 1000;
       const bonusHp = (ctrl.itemBonusMaxHp || 0) + (ctrl.bonusMaxHp || 0);
-      const shieldAmt = bonusHp * p.bonusHpShieldPercent * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
+      const shieldAmt = bonusHp * p.bonusHpShieldPercent * _itemShieldMul(ctrl);
       addShield(ctrl, 'itemSterak', shieldAmt, p.shieldDecaySec, { decay: true }); // 4.5초에 걸쳐 감소하는 인스턴스
       ctrl._itemSterakShieldState = { maxAmount: shieldAmt, startedAt: now, decaySec: p.shieldDecaySec };
       console.log('[ITEM] 스테락의도전 - 생명선 발동');
@@ -1581,7 +1594,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
       const isMelee = _itemIsMelee(ctrl);
       const shieldAmt = (isMelee
         ? _itemScaleByLevel(ctrl, p.meleeShieldMin, p.meleeShieldMax, p.levelMin, p.levelMax)
-        : _itemScaleByLevel(ctrl, p.rangedShieldMin, p.rangedShieldMax, p.levelMin, p.levelMax)) * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
+        : _itemScaleByLevel(ctrl, p.rangedShieldMin, p.rangedShieldMax, p.levelMin, p.levelMax)) * _itemShieldMul(ctrl);
       addShield(ctrl, 'itemShieldbow', shieldAmt, p.shieldDurationSec);
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       console.log('[ITEM] 불멸의 철갑궁 - 생명선 발동');
@@ -1597,7 +1610,7 @@ function itemOnTakeDamage(ctrl, incomingDamage, damageType, source, meta = null)
     const hpAfter = (ctrl.hp || 0) - Math.max(0, remaining - (ctrl.shield || 0));
     if (hpAfter < (ctrl.maxHp || 0) * p.hpThresholdPercent) {
       ctrl._itemSeraphIcdUntil = now + p.icdSec * 1000;
-      const shieldAmt = (ctrl.maxMp || 0) * p.shieldManaPercent * (1 + (ctrl.itemShieldReceivedBonusPercent || 0));
+      const shieldAmt = (ctrl.maxMp || 0) * p.shieldManaPercent * _itemShieldMul(ctrl);
       addShield(ctrl, 'itemSeraph', shieldAmt, p.shieldDurationSec);
       ctrl._itemShieldExpiresAt = Math.max(ctrl._itemShieldExpiresAt || 0, now + p.shieldDurationSec * 1000);
       console.log('[ITEM] 대천사의포옹 - 생명선 발동');
@@ -3187,4 +3200,9 @@ function _itemMuramanaShockOnHit(ctrl, target, isBasicAttack) {
     const minHp = target.isTrainingDummy ? Math.max(1, Math.round((target.maxHp || 0) * 0.02)) : 0;
     target.hp = Math.max(minHp, (target.hp || 0) - finalDmg);
   }
+}
+
+// 94차: 아이템 보호막 배율 - 공용 보호막 배율(받는 보호막 증가 아이템 + 칼바람 보호막 보정)을 쓴다. 예전엔 칼바람 보정이 빠졌다.
+function _itemShieldMul(ctrl) {
+  return typeof getShieldReceivedMultiplier === 'function' ? getShieldReceivedMultiplier(ctrl) : (1 + ((ctrl && ctrl.itemShieldReceivedBonusPercent) || 0));
 }

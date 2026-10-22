@@ -344,6 +344,7 @@ CharacterController.prototype._ezrealTickRTravel = function(dt) {
   if (!travel) return;
   const remaining = Math.max(0, travel.maxDist - travel.traveled);
   const step = Math.min(remaining, Math.max(0, travel.speed * dt));
+  const segFrom = travel.pos.clone(); // 94차: 연속 판정(이번 프레임 구간)
   travel.pos.addScaledVector(travel.dir, step);
   travel.traveled += step;
 
@@ -361,7 +362,7 @@ CharacterController.prototype._ezrealTickRTravel = function(dt) {
   const baseDmg = skillVal(r.damageByLevel, lvl) + (r.bonusAdRatio || 0) * this._getBonusAD() + (r.apRatio || 0) * (this.stats.abilityPower || 0);
   for (const u of getAllEnemyUnits()) {
     if (!u || u.hp <= 0 || travel.hitSet.has(u)) continue;
-    if (isInCircle(u, travel.pos, travel.halfWidth)) {
+    if (isInSweptCircle(u, segFrom, travel.pos, travel.halfWidth)) {
       travel.hitSet.add(u);
       // PC 판 정조준 일격은 맞힌 수에 따른 감소가 없다(미니언/일반 몬스터만 50%) - 예전 "대상마다 10% 감소"는 제거.
       travel.hitCount++;

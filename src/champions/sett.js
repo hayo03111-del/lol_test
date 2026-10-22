@@ -28,7 +28,7 @@ CharacterController.prototype._settOnBasicAttackHit = function(target, attackHan
 // Extracted from CharacterController: _settPassiveTimeoutTick
 CharacterController.prototype._settPassiveTimeoutTick = function() { 
     if (this.championId !== 'sett') return;
-    const wouldBeRight = (this._settAttackStep % 2) === 1;
+    const wouldBeRight = (this.comboIndex % 2) === 1; // 94차: 실제 손 순서(comboIndex) - 예전 _settAttackStep은 늘지 않아 이 검사가 항상 꺼져 있었다
     if (!wouldBeRight) return;
     const p = this._champData() && this._champData().passive;
     const timeoutMs = (p && p.leftHandTimeoutSec != null ? p.leftHandTimeoutSec : 2) * 1000;
@@ -58,6 +58,8 @@ CharacterController.prototype._settQOnCast = function() {
     const q = cd.Q;
     applyStatus(this, { id: 'settQ_ms', type: 'MS_BUFF', duration: q.moveSpeedDuration, value: q.moveSpeedBonusPercent / 100 });
     this._sett.qUsesRemaining = 2;
+    this._sett.qHandStep = 0; // 94차: Q 두 방은 왼손부터
+    this.comboIndex = 0;
   
 };
 

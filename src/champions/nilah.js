@@ -509,6 +509,7 @@ CharacterController.prototype._nilahEnemiesAlongSegment = function(from,to,halfW
 CharacterController.prototype._nilahResolveEDashEnd = function(dash) { 
     if (!dash || dash.resolved) return;
     dash.resolved=true;
+    if (typeof this.resetAttackTimer === 'function') this.resetAttackTimer(); // 94차(원작): 미끄러지기(E)는 평타 타이머를 초기화한다
     const e=this._nilahData().E; const lvl=Math.max(1,this.skillLevels.E||1); const raw=skillVal(e.damageByLevel,lvl)+e.bonusAdRatio*Math.max(0,this.stats.attackDamage-(computeChampionStats('nilah',this.champLevel)?.attackDamage||0));
     for(const u of this._nilahEnemiesAlongSegment(dash.from,dash.to)) applyDamage(u,{rawDamage:raw,damageType:DAMAGE_TYPE.PHYSICAL,isCritical:false,critMultiplier:1,armorPenPercent:this.armorPenPercent||0});
     // 버그 수정("Q처럼 E도 멈출 수 있는 구조였다" 예방): 대기 웨이브 판정
@@ -612,7 +613,10 @@ CharacterController.prototype._nilahCastR = function(free=false) {
     if(!this._payCost('R',free)) return;
     if(!free)this.cooldowns.R=abilityHasteCooldown(this, skillVal(r.cooldown,lvl));
     if(this._nilah.rSeq) return;
-    this._clearActionTimers(); this.currentActionKey='nilahR'; this.currentPhase='STARTUP'; this.setState(STATE.R_CAST); this.phaseCancelable=false;
+    // 94차(원작): E 돌진 중에도 R을 쓸 수 있다(E→R 진입) - 돌진은 _nilahUpdate가 계속 움직이고, 돌진 끝 정리는 행동 키가 nilahE일 때만
+    // 키를 지우므로 R을 끊지 않는다. 돌진 중이면 행동 타이머를 지우지 않는다(E의 끝 처리 보존).
+    if (!this._nilah.eDash) this._clearActionTimers();
+    this.currentActionKey='nilahR'; this.currentPhase='STARTUP'; this.setState(STATE.R_CAST); this.phaseCancelable=false;
     // PC 위키: 시전 시간 없음(예전엔 근거 없는 선딜 0.16초 동안 이동까지 막았다). 첫 틱은 다음 프레임에 시작한다.
     const startup=0;
     this._nilah.rSeq={elapsed:0,tickAccum:0,ticksDone:0,finalDone:false,precast:true,precastUntil:now+startup*1000,championDamage:0,nonChampionDamage:0,channelEnded:false};

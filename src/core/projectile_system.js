@@ -61,6 +61,7 @@ class ProjectileSystem {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const proj = this.projectiles[i];
       if (proj.fromTurret) continue;
+      if (proj.team) continue; // 94차: 팀이 붙은 투사체(미니언 등 플레이어가 쏘지 않은 것)도 남긴다 - 예전엔 챔피언을 바꾸면 날아가던 미니언 공격이 사라졌다
       proj.done = true;
       this._releaseArrowMesh(proj._meshEntry);
       this.projectiles.splice(i, 1);
@@ -91,9 +92,13 @@ class ProjectileSystem {
     this.projectiles.push(proj);
     return proj;
   }
+  // 94차: 전투 기록 - 빗나간 투사체(대상 사망·비대상·사거리 끝)를 남긴다.
+  _evMiss(proj) {
+    if (typeof emitGameEvent === 'function') emitGameEvent('projectileMiss', { team: proj.team || null, targetId: proj.target ? _evId(proj.target) : null, lost: !!proj._lost, line: !!proj.line });
+  }
   _remove(i, missed) {
     const proj = this.projectiles[i];
-    if (missed) this.totalMisses++;
+    if (missed) { this.totalMisses++; this._evMiss(proj); }
     proj.done = true;
     this._releaseArrowMesh(proj._meshEntry);
     this.projectiles.splice(i, 1);
@@ -153,7 +158,9 @@ class ProjectileSystem {
     }
   }
   _currentAimPoint(proj) {
-    if (proj.target && proj.target.hp > 0 && !proj.target.isDead && !proj.target.destroyed && !proj.target.isUntargetable) {
+    // 94차: 한 번 대상을 놓치면(비대상·사망) 그 투사체는 끝까지 빗나간다 - 예전엔 비대상이 풀리면 다시 쫓아가 맞혔다(마스터 이 Q·존야).
+    if (!proj._lost && proj.target && !(proj.target.hp > 0 && !proj.target.isDead && !proj.target.destroyed && !proj.target.isUntargetable)) proj._lost = true;
+    if (!proj._lost && proj.target) {
       const p = getWorldPosition(proj.target);
       const aim = p ? p.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)) : proj.targetPoint;
       if (aim) proj._lastAim = aim;
@@ -174,8 +181,13 @@ class ProjectileSystem {
       // 버그 수정(요청 27): 포탑 공격/광선은 막지 않는다 - fromTurret 발사체는
       // 장막 충돌 검사 자체를 건너뛴다(다른 모든 투사체는 기존 동작 그대로 유지).
       // 바람 장막 판정 기준점은 시전 위치(wall.origin)로 고정 - 예전엔 야스오 현재 위치라 장막이 야스오를 따라다녔다.
-      if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret && !(proj.team && proj.team === controller.team)) { // 59차: 아군 미니언 투사체는 통과
-        const wall=controller._yasuo.windwall, wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, yasuoWindwallOffsetWorld(wall)), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x); if(Math.abs(along)<=0.45 && side<=wall.width*0.5){ this._remove(i, true); continue; }
+      // 94차: 적 팀 투사체만 막는다(팀이 없는 투사체 = 플레이어가 쏜 것 - 예전엔 자기 표식 눈덩이도 막혔다). 장막 두께(±0.45)를
+      // 한 프레임에 건너뛰는 빠른 투사체도 막도록 지난 프레임과 이번 프레임 사이에 장막 면을 지났는지도 본다(연속 판정).
+      if (typeof controller !== 'undefined' && controller?.championId === 'yasuo' && controller._yasuo?.windwall && proj.mesh && !proj.fromTurret && proj.team && proj.team !== controller.team) {
+        const wall=controller._yasuo.windwall, wp=(wall.origin||controller.root.position).clone().addScaledVector(wall.dir, yasuoWindwallOffsetWorld(wall)), rel=proj.mesh.position.clone().sub(wp); rel.y=0; const along=rel.dot(wall.dir), side=Math.abs(rel.x*(-wall.dir.z)+rel.z*wall.dir.x);
+        const crossed = proj._wwAlong != null && Math.sign(proj._wwAlong) !== Math.sign(along) && Math.max(side, proj._wwSide ?? side) <= wall.width*0.5;
+        proj._wwAlong = along; proj._wwSide = side;
+        if((Math.abs(along)<=0.45 && side<=wall.width*0.5) || crossed){ this._remove(i, true); continue; }
       }
       if (proj.line) { this._updateLine(proj, i, dt); continue; }
       const aim = this._currentAimPoint(proj);
@@ -190,9 +202,9 @@ class ProjectileSystem {
         // 취급이라 이 검사가 사실상 항상 통과해서 기존 동작과 동일하다.
         const realmOk = canRealmInteract({ realmId: proj.realmId }, proj.target);
         // 90차(QA): 도착했을 때 대상이 비대상(마스터 이 Q 등)이거나 이미 죽었으면 피해·적중 효과(둔화·흡혈·아이템·룬) 없이 사라진다.
-        const t = proj.target, hittable = t && t.hp > 0 && !t.isDead && !t.destroyed && !t.isUntargetable;
+        const t = proj.target, hittable = !proj._lost && t && t.hp > 0 && !t.isDead && !t.destroyed && !t.isUntargetable;
         if (hittable && proj.onHit && realmOk) { proj.onHit(t); this.totalHits++; }
-        else this.totalMisses++;
+        else { this.totalMisses++; this._evMiss(proj); }
         this.vfx.spawn('hit', proj.mesh.position.clone(), new THREE.Vector3(), { color: proj.color });
         proj.done = true;
         this._releaseArrowMesh(proj._meshEntry);

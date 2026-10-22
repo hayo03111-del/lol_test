@@ -157,12 +157,7 @@ CharacterController.prototype._varusCastQ = function(mouseWorldPoint, free = fal
   // 버그 수정: 예전엔 충전 1.25초가 되면 자동 발사했다(원작에 없는 동작).
   const holdTimer = this._champTimeout(() => {
     if (this.currentActionKey !== 'varusQCharge' || !this._varus.qCharge) return;
-    const charge = this._varus.qCharge; this._varus.qCharge = null;
-    clearStatus(this, 'varusQ_chargeSlow');
-    this.mp = Math.min(this.maxMp, this.mp + (charge.manaPaid || 0) * (q.holdTimeoutManaRefundPercent || 50) / 100);
-    updateBars(this);
-    this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
-    if (this.state !== STATE.MOVE) this._resumeAfterAction();
+    this._varusCancelQCharge();
   }, (q.maxHoldSec || 4) * 1000);
   this._actionTimers.push(holdTimer);
 };
@@ -391,6 +386,8 @@ CharacterController.prototype._varusRHit = function(firstUnit, dir) {
     applyDamage(u, { isUltimate: true, rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, source: this });
     applyStatus(u, { id: 'varusR_root', type: 'ROOT', duration: r.rootDuration || 2, value: 0, source: this });
     this._varusDetonateBlight(u, { viaQ: false, chargeFraction: 0 });
+    // 94차(원작): 부패의 사슬에 묶인 챔피언은 속박되는 동안 오한 3중첩을 차례로 얻는다(R → Q/E로 터뜨리는 연계). 예전엔 중첩을 주지 않았다.
+    if (u.isChampion) { const rootSec = r.rootDuration || 2; for (let k = 1; k <= 3; k++) this._champTimeout(() => { if (u.hp > 0) this._varusApplyBlight(u); }, rootSec * 1000 * k / 3); }
     vfx.spawn('hit', getWorldPosition(u)?.clone() || u.mesh.position.clone(), undefined, { color: 0xb08cff });
     debugSkillHit('Varus R', u);
   };
@@ -419,15 +416,23 @@ CharacterController.prototype._varusRHit = function(firstUnit, dir) {
   void spreadTimer;
 };
 
-// 챔피언 전용 매 프레임 훅 - character_controller.js update() 맨 끝에서
-// 챔피언과 무관하게 항상 호출된다(_ezrealUpdate/_ahriUpdate와 동일한
-// 위치/관례). 충전 중 하드 CC에 걸리면(원작은 완전 캔슬이지만, 이 엔진은
-// "충전만 남고 아무것도 안 나가는" 고아 상태를 피하기 위해) 그 시점의
-// 충전량으로 즉시 발사해 안전하게 정리한다.
+// 충전 취소(발사 없음) - 마나 50% 반환. 최대 유지 시간 초과와 94차부터 행동 불가(기절 등)로 끊겼을 때 쓴다.
+CharacterController.prototype._varusCancelQCharge = function() {
+  const q = this._champData().Q;
+  const charge = this._varus.qCharge; if (!charge) return;
+  this._varus.qCharge = null;
+  clearStatus(this, 'varusQ_chargeSlow');
+  this.mp = Math.min(this.maxMp, this.mp + (charge.manaPaid || 0) * (q.holdTimeoutManaRefundPercent || 50) / 100);
+  updateBars(this);
+  if (this.currentActionKey === 'varusQCharge') { this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false; }
+  if (this.state !== STATE.MOVE && !isCrowdControlled(this)) this._resumeAfterAction();
+};
+// 챔피언 전용 매 프레임 훅 - character_controller.js update() 맨 끝에서 챔피언과 무관하게 항상 호출된다(_ezrealUpdate/_ahriUpdate와 같은 관례).
 CharacterController.prototype._varusUpdate = function(dt) {
   if (this.championId !== 'varus' || !this._varus) return;
   this._varusLvTick(dt);
-  if (this._varus.qCharge && isCrowdControlled(this)) { this._varusReleaseQ(); return; }
+  // 94차(원작): 충전 중 행동 불가가 걸리면 화살이 나가지 않고 충전이 취소된다(마나 50% 반환). 예전엔 그 자리에서 발사됐다.
+  if (this._varus.qCharge && isCrowdControlled(this)) { this._varusCancelQCharge(); return; }
   // 28차: 충전 중 조준 방향은 커서를 따라가고, 서 있으면 바루스도 그쪽을 바라본다(움직이는 중에는 이동 방향).
   const charge = this._varus.qCharge;
   const p = (typeof lastGroundPoint !== 'undefined') ? lastGroundPoint : null;

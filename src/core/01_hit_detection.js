@@ -93,7 +93,7 @@ function getTargetableEnemyUnits() {
 function findEnemiesInRadius(center, lolRadius, { forward = null, maxAngleDeg = null } = {}) {
   const radius = lolRangeToWorld(lolRadius); // 버그 수정: 지금까지 LoL 원본 반경(예: 900)을 그대로 world 반경으로 썼다
   const hits = [];
-  for (const u of getTargetableEnemyUnits()) {
+  for (const u of getAllEnemyUnits()) { // 94차: 범위·스킬샷 판정은 시야와 무관(원작 - 덤불·안개 속 적도 맞는다). 시야 필터는 클릭 대상 고르기 전용
     const inShape = (forward && maxAngleDeg != null) ? isInCone(u, center, forward, radius, maxAngleDeg) : isInCircle(u, center, radius);
     if (!inShape) continue;
     hits.push({ unit: u, distance: getHorizontalDistance(getWorldPosition(u), center) });
@@ -109,7 +109,7 @@ function findEnemiesInRadius(center, lolRadius, { forward = null, maxAngleDeg = 
 function findFirstInLine(origin, dir, lolRange, halfWidth, filter = null) { // filter(u): 걸러낼 대상(예: 챔피언만) - 28차
   const range = lolRangeToWorld(lolRange); // 버그 수정: LoL 원본 사거리를 그대로 world 거리로 썼다
   let best = null;
-  for (const u of getTargetableEnemyUnits()) {
+  for (const u of getAllEnemyUnits()) { // 94차: 범위·스킬샷 판정은 시야와 무관(원작 - 덤불·안개 속 적도 맞는다). 시야 필터는 클릭 대상 고르기 전용
     if (filter && !filter(u)) continue;
     const p = getWorldPosition(u);
     const r = getCollisionRadius(u);
@@ -128,7 +128,7 @@ function findEnemiesInLine(origin, dir, lolRange, lolWidth) {
   const range = lolRangeToWorld(lolRange);
   const halfWidth = lolRangeToWorld(lolWidth) * 0.5;
   const out = [];
-  for (const u of getTargetableEnemyUnits()) {
+  for (const u of getAllEnemyUnits()) { // 94차: 범위·스킬샷 판정은 시야와 무관(원작 - 덤불·안개 속 적도 맞는다). 시야 필터는 클릭 대상 고르기 전용
     const p = getWorldPosition(u);
     if (!p) continue;
     const r = getCollisionRadius(u);
@@ -171,7 +171,7 @@ function isSilenced(target) { return hasStatus(target, 'SILENCE'); }
 function isStunned(target) {
   // 공포(FEAR, 벡스 패시브)도 매혹처럼 행동을 막고 강제로 이동시킨다(시전자에게서 멀어짐).
   // 83차: 도발(TAUNT)은 여기서 뺐다 - 원작에서 도발된 유닛은 시전자를 "기본 공격"한다(스킬·아이템·자유 이동만 막힘).
-  return hasStatus(target, 'STUN') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM') || hasStatus(target, 'FEAR');
+  return hasStatus(target, 'STUN') || hasStatus(target, 'STASIS') || hasStatus(target, 'KNOCKUP') || hasStatus(target, 'SUPPRESSION') || hasStatus(target, 'CHARM') || hasStatus(target, 'FEAR');
 }
 function isRooted(target) { return hasStatus(target, 'ROOT'); }
 function isTaunted(target) { return hasStatus(target, 'TAUNT'); }
@@ -227,7 +227,10 @@ function tickStatusEffects(target, dt) {
   for (const e of target.statusEffects) {
     if ((e.type === 'CHARM' || e.type === 'FEAR' || e.type === 'TAUNT') && e.expiresAt > now && e.source && (e.source.hp <= 0 || e.source.isDead)) e.expiresAt = now;
   }
-  for (const e of target.statusEffects) {
+  // 94차: 기절·정지·속박·공중에 뜸·제압 중이거나 끌려가는 중에는 매혹·도발·공포로 걷지 않는다(원작 - 더 강한 행동 제한이 이긴다).
+  // 예전엔 속박+기절+도발이 함께 걸린 허수아비가 1초에 3.45 걸어갔고, 공중에 뜬 채 매혹으로 걸었다.
+  const forcedWalkBlocked = !!target._pullState || ['STUN', 'STASIS', 'ROOT', 'KNOCKUP', 'SUPPRESSION'].some((t) => hasStatus(target, t));
+  for (const e of (forcedWalkBlocked ? [] : target.statusEffects)) {
     // 83차: 도발은 여기서 걷기만 하지 않는다 - 미니언·허수아비는 시전자를 공격 대상으로 고정하고 평소처럼 다가가 평타한다(사거리 밖이면 다가감).
     if (e.type === 'TAUNT' && e.expiresAt > now && e.source && target.mesh?.position) {
       const sp = getWorldPosition(e.source), tp0 = target.mesh.position;
@@ -250,7 +253,7 @@ function tickStatusEffects(target, dt) {
     }
   }
   // 벡스 패시브(파멸) 공포: 시전자에게서 멀어지는 쪽으로 걷는다. 공포 중 둔화(value=둔화 비율, 시전자에게서 멀수록 큼)를 이동 속도에 반영.
-  for (const e of target.statusEffects) {
+  for (const e of (forcedWalkBlocked ? [] : target.statusEffects)) {
     if (e.type !== 'FEAR' || e.expiresAt <= now || !e.source || !target.mesh?.position) continue;
     const srcPos = getWorldPosition(e.source);
     if (!srcPos) continue;

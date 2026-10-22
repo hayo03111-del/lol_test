@@ -10,7 +10,7 @@
 CharacterController.prototype.moveTo = function(point) {
     this._wardOrder = null; // 이동 명령은 "걸어가서 와드 놓기"를 취소한다(와드 명령 자신은 moveTo 뒤에 다시 건다)
     this._approachCast = null; // 이동 명령은 "다가가서 시전"을 취소한다(접근 시전 자신은 moveTo 뒤에 다시 건다)
-    if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
+    if (this.state === STATE.DEAD || this.state === STATE.RESPAWN || !(this.hp > 0)) return; // 94차: 체력 0도 사망으로 본다
     if (!this._keepAttackMove) this._attackMoveDest = null; // 83차: 일반 이동 명령은 공격 이동을 끝낸다
     this._autoAcquired = false;
     // 83차: 행동 불가 중 내린 이동 명령은 버리지 않고 기억했다가 풀리면 실행한다(원작).
@@ -339,8 +339,10 @@ CharacterController.prototype.faceDirectionInstant = function(dir) {
 CharacterController.prototype.selectTarget = function(enemy) {
     this._wardOrder = null;
     this._approachCast = null; // 공격 명령은 "다가가서 시전"을 취소한다
-    if (this.state === STATE.DEAD || this.state === STATE.RESPAWN) return;
+    if (this.state === STATE.DEAD || this.state === STATE.RESPAWN || !(this.hp > 0)) return; // 94차: 체력 0도 사망으로 본다
     if (!enemy || enemy.hp <= 0) return;
+    // 94차: 비대상(마스터 이 Q·존야·요네 E 등) 유닛은 공격 대상으로 정하지 못한다 - 예전엔 대상으로 잡혀 평타 선딜이 끝없이 반복됐다.
+    if (enemy.isUntargetable) return;
     // 죽음의 세계: 다른 세계의 유닛은 공격 대상으로 지정할 수 없다(위치만 보이는 혼령).
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, enemy)) return;
     // 요청(귀환 캔슬): 귀환 중 적 타겟 지정(공격 명령) -> 귀환 모션 중단 후
@@ -399,7 +401,7 @@ CharacterController.prototype._isInAttackRangeWithBonus = function(target) {
     return inRange;
 };
 CharacterController.prototype._tryEngageTarget = function() {
-    if (!this.currentTarget || this.currentTarget.hp <= 0 || (typeof canRealmInteract === 'function' && !canRealmInteract(this, this.currentTarget))) { this.currentTarget = null; this.isChasing = false; return; }
+    if (!this.currentTarget || this.currentTarget.hp <= 0 || this.currentTarget.isUntargetable || (typeof canRealmInteract === 'function' && !canRealmInteract(this, this.currentTarget))) { this.currentTarget = null; this.isChasing = false; return; } // 94차: 비대상도 놓는다
     // 38차: 람머스 대회전 중에는 평타 대신 대상에게 굴러간다(닿으면 rammus.js가 충돌 처리).
     if (this.championId === 'rammus' && this._rammus && this._rammus.roll) {
       this.targetPos = this.currentTarget.mesh.position.clone();

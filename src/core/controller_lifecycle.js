@@ -18,6 +18,11 @@ CharacterController.prototype.startRecall = function() {
     if (typeof howlingAbyssStructuresSpawned !== 'undefined' && howlingAbyssStructuresSpawned) { if (typeof showSkillToast === 'function') showSkillToast('칼바람 나락에서는 귀환할 수 없습니다'); return; }
     // PC 위키: 귀환은 이동 스킬로 취급되어 속박 중엔 쓸 수 없고, 기절류(행동 불가) 중에도 쓸 수 없다.
     if ((typeof isRooted === 'function' && isRooted(this)) || (typeof isCrowdControlled === 'function' && isCrowdControlled(this))) { if (typeof showSkillToast === 'function') showSkillToast('귀환 - 군중 제어 중 사용 불가'); return; }
+    // 94차: 스킬 시전·돌진·충전 중에는 귀환을 시작하지 않는다 - 예전엔 진행 중이던 스킬 타이머를 그냥 지워 돌진·충전 상태가 남거나
+    // 스킬이 반쯤만 나갔다. 평타는 지금처럼 취소하고 귀환한다.
+    const busy = this._dashState || (typeof summonerDashHoldsFlash === 'function' && summonerDashHoldsFlash(this)) || (this._varus && this._varus.qCharge)
+      || (this.currentActionKey && this.state !== STATE.ATTACK && !/^(attack|crit|renektonAA)/i.test(this.currentActionKey));
+    if (busy) { if (typeof showSkillToast === 'function') showSkillToast('귀환 - 스킬 사용 중에는 시작할 수 없습니다'); return; }
     this._clearActionTimers();
     this.currentActionKey = null; this.currentPhase = null;
     this.targetPos = null; this.currentTarget = null;
@@ -191,6 +196,9 @@ CharacterController.prototype._die = function() {
     if (typeof this.recomputeStats === 'function') this.recomputeStats();
     this.currentActionKey = null; this.currentPhase = null;
     this.targetPos = null; this.currentTarget = null; this.pendingMove = null; this.pendingCast = null;
+    // 94차: 공격 이동·행동 불가 중 이동 예약·평타 대기 상태도 지운다 - 예전엔 남아 있어 부활하자마자 분수 밖으로 걸어 나갔다.
+    this._attackMoveDest = null; this._attackMoveOpts = null; this._ccBufferedMove = null; this._awaitingAttackTimer = false;
+    this.attackOrderActive = false; this.attackOrderAnchor = null; this._autoAcquired = false; this._approachCast = null; this._bufferedSummoner = null; this._castLock = null;
     targetRing.clear();
     this.setState(STATE.DEAD);
     if (typeof ensureScore === 'function' && typeof controller !== 'undefined' && controller === this) ensureScore(this).deaths += 1; // 34차 스코어보드

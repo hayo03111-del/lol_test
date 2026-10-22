@@ -361,6 +361,7 @@ class CharacterController {
     // 생긴 타이머라 버려진 컨트롤러가 교체 후에도 허수아비를 계속 때렸다. 재개할 명령(대상·이동·시전 예약)부터 비운다.
     this.currentTarget = null; this.attackOrderActive = false; this.attackOrderAnchor = null;
     this.pendingMove = null; this.pendingCast = null; this.targetPos = null; this._approachCast = null;
+    if (typeof clearStatusesFromSource === 'function' && typeof listEntities === 'function') clearStatusesFromSource(this, listEntities()); // 94차
     // 챔피언 교체/재선택 중 이전 레넥톤의 지속 R 오라가 남지 않도록 정리한다.
     if (this._renekton?.rAuraVfx && typeof vfx !== 'undefined') {
       vfx.stopRenektonRAura(this._renekton.rAuraVfx);
@@ -703,7 +704,7 @@ class CharacterController {
     if (!Array.isArray(names) || !names.length) return;
     const mode = entry.attackOverrideMode || 'duration';
     // 83차: 원작 평타 초기화 스킬 - 가렌 Q·다리우스 W·노틸러스 W(레넥톤 W·마스터 이 W·티아맷은 각자 경로에서).
-    const RESET_SLOTS = { garen: 'Q', darius: 'W', nautilus: 'W' };
+    const RESET_SLOTS = { garen: 'Q', darius: 'W', nautilus: 'W', sett: 'Q' }; // 94차: 세트 Q(일격필승)도 평타 초기화(원작)
     if (RESET_SLOTS[this.championId] === roleLetter) this.resetAttackTimer();
     this.registerAttackOverride({
       id: roleLetter,
@@ -1319,6 +1320,7 @@ class CharacterController {
   update(dt) {
     safeMixerUpdate(this.mixer, dt, `champion:${this.championId}`);
     this.sequencePlayer.update(dt); // mixer.update() 다음에 호출 -- action.time이 최신값이어야 clipEnd 판정이 정확함
+    if (this.pendingCast && typeof this._flushBufferedCast === 'function') this._flushBufferedCast(); // 94차: 스킬 선입력
 
     // Q 종료 안전장치:
     // 전용 Q 상태 머신/시퀀스가 정상 종료했는데 currentActionKey만

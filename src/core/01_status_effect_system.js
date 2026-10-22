@@ -44,6 +44,9 @@ function ensureStatusHost(u) {
 // effect: { id, type, duration(sec), value, damageType, totalDamage, tickInterval, source }
 // type: SLOW / STUN / SILENCE / ROOT / ARMOR_SHRED / MR_SHRED / DOT / AD_BUFF / MS_BUFF / DAMAGE_REDUCTION / VULNERABLE
 function applyStatus(target, effect) {
+  // 94차: 지속시간이 없거나 0 이하·NaN인 효과는 걸지 않는다(무한은 허용). 예전엔 NaN 공중에 뜸이 대상 높이를 영영 NaN으로 만들었고,
+  // 0초 효과도 군중 제어 훅(가렌 패시브 초기화·아이템 발동)을 실행했다.
+  if (!effect || !(effect.duration > 0)) { if (effect) console.warn('[STATUS] 잘못된 지속시간 - 무시', effect.id, effect.type, effect.duration); return null; }
   ensureStatusHost(target);
   // 요청 7/8/34: 세트 R 시퀀스 진행 중(캐스트~착지 완료)에는 세트 자신이
   // Unstoppable(저지불가) 상태다 - 새 CC 면역 시스템을 따로 만들지 않고,
@@ -77,13 +80,15 @@ function applyStatus(target, effect) {
   const tenacity = getTenacity(target);
   // PC 위키(Tenacity): 에어본·수면·근시·경직(정지)·제압을 뺀 모든 군중 제어 지속시간을 줄인다 - 둔화 포함.
   // 예전엔 둔화가 빠져 있었다.
-  if (tenacity > 0 && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR', 'SLOW', 'TAUNT'].includes(effect.type)) {
+  // 94차: 자기 자신에게 건 효과(바루스 Q 충전 중 둔화 등)는 강인함·둔화 저항을 받지 않는다(적이 건 군중 제어가 아니다).
+  const selfApplied = !!effect.source && effect.source === target;
+  if (tenacity > 0 && !selfApplied && ['STUN', 'ROOT', 'SILENCE', 'CHARM', 'FEAR', 'SLOW', 'TAUNT'].includes(effect.type)) {
     // 83차: PC 위키(Tenacity) - 강인함으로 0.3초 미만까지 줄지는 않는다(원래 0.3초보다 짧으면 그대로).
     effDuration = Math.max(Math.min(effDuration, 0.3), effDuration * (1 - tenacity));
   }
   // 둔화 저항: 아이템·룬 출처끼리 곱연산(83차, 예전엔 아이템 합만).
   const slowResist = target ? 1 - (1 - Math.max(0, Math.min(1, target.itemSlowResistPercent || 0))) * (1 - Math.max(0, Math.min(1, target.runeSlowResist || 0))) : 0;
-  if (slowResist > 0 && effect.type === 'SLOW') {
+  if (slowResist > 0 && effect.type === 'SLOW' && !selfApplied) {
     effValue = effValue * (1 - slowResist);
   }
   const rec = { ...effect, duration: effDuration, value: effValue, expiresAt: now + Math.max(0, effDuration) * 1000, _tickAccum: 0 };
@@ -103,6 +108,8 @@ function applyStatus(target, effect) {
     rec._tickAccum = target.statusEffects[idx]._tickAccum || 0;
   }
   if (idx >= 0) target.statusEffects[idx] = rec; else target.statusEffects.push(rec);
+  // 94차: 전투 기록(디버그 패널 전투 로그·gameSession.events()) - 행동 제한 계열만(지속 피해·버프까지 남기면 기록이 금방 밀린다).
+  if ((CC_TYPES.has(effect.type) || effect.type === 'STASIS') && typeof emitGameEvent === 'function') emitGameEvent('status', { targetId: _evId(target), sourceId: _evId(effect.source || null), statusType: effect.type, statusId: effect.id, durationSec: Math.round(effDuration * 1000) / 1000 });
   if (CC_TYPES.has(effect.type)) {
     console.log(`[CC]\nTarget: ${unitLabel(target)}\nType: ${effect.type}\nDuration: ${effDuration}`); // 강인함 적용 후 실제 지속시간(디버깅 혼동 방지)
     refreshUnitCcTags(target);
@@ -324,4 +331,24 @@ function getAttackSpeedReductionMultiplier(target) {
   return keep;
 }
 
-
+// 94차: 유닛의 전투 상태(상태 효과·공중에 뜸·끌려가기·보호막)를 모두 지운다 - 게임 초기화에서 허수아비·아군에게 쓴다.
+// 예전엔 초기화 뒤에도 허수아비에 걸린 출혈·점화가 계속 틱했고, 공중에 뜬 높이·끌려가는 중인 상태가 남았다.
+function clearUnitCombatState(u) {
+  if (!u) return;
+  if (u._yasuoAirborne && u.mesh && u.mesh.position) u.mesh.position.y = u._yasuoAirborne.baseY;
+  u._yasuoAirborne = null; u._pullState = null;
+  if (Array.isArray(u.statusEffects)) u.statusEffects.length = 0;
+  if (typeof clearShields === 'function') clearShields(u);
+  if (typeof refreshUnitCcTags === 'function') refreshUnitCcTags(u);
+}
+// 94차: 챔피언을 바꿀 때 그 컨트롤러가 다른 유닛에게 건 상태 효과를 지운다 - 예전엔 람머스 도발·아리 매혹이 남아 허수아비가
+// 새 챔피언 쪽으로 계속 걸어왔다(같은 컨트롤러 객체를 재사용하므로 source가 그대로였다).
+function clearStatusesFromSource(source, units) {
+  if (!source || !units) return;
+  for (const u of units) {
+    if (!u || u === source || !Array.isArray(u.statusEffects)) continue;
+    const before = u.statusEffects.length;
+    for (let i = u.statusEffects.length - 1; i >= 0; i--) if (u.statusEffects[i].source === source) u.statusEffects.splice(i, 1);
+    if (u.statusEffects.length !== before && typeof refreshUnitCcTags === 'function') refreshUnitCcTags(u);
+  }
+}

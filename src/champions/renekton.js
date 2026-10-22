@@ -118,27 +118,33 @@ CharacterController.prototype._renektonCastQ = function(mouseWorldPoint, free=fa
     if (!free) { this.cooldowns.Q=abilityHasteCooldown(this, q.cooldown); }
     const empowered = !free && this._renekton.rage >= 50;
     if (empowered) this._renekton.rage -= 50;
-    this._clearActionTimers();
-    this.setState(STATE.Q_CAST); this.currentActionKey='renektonQ'; this.currentPhase='STARTUP'; this.phaseCancelable=false;
-    this._renektonFacePoint(mouseWorldPoint);
+    // 94차(원작): Q는 시전 시간이 없고, 쓴 뒤 0.25초 동안 평타·E·R만 잠긴다(이동·W는 자유). 예전엔 행동 상태를 차지해
+    // 이동 중에 쓰면 0.25초 멈췄고 Q→W 입력도 거부됐다. 이동 중이면 행동 상태를 차지하지 않고, 잠금은 _castLock·평타 타이머로 건다.
+    const qLockMs = 250;
+    this._castLock = { until: performance.now() + qLockMs, slots: ['E', 'R'] };
+    if (this._attackReadyAt != null) this._attackReadyAt = Math.max(this._attackReadyAt, performance.now() + qLockMs);
+    const movingQ = this.state === STATE.MOVE && !!this.targetPos;
+    if (!movingQ) { this._clearActionTimers(); this.setState(STATE.Q_CAST); this.currentActionKey='renektonQ'; this.currentPhase='STARTUP'; this.phaseCancelable=false; }
+    if (!movingQ) this._renektonFacePoint(mouseWorldPoint);
     const clip=this.findAnimation('Spell1');
     const dur=clip?.duration||0.45;
     this._renektonPlay('Spell1',{loop:THREE.LoopOnce,fade:0.05,clampWhenFinished:true});
     // 시전 시간이 없는 회전 베기(원작): 이동 중에 쓰면 회전 모션을 끝까지 보여 주며 그대로 움직인다(이동 루프가 덮어쓰지 않게 전환 클립으로 등록).
     if (clip) { this._beginTransientMoveClip('Spell1'); this._champTimeout(() => this._endTransientMoveClip('Spell1'), dur * 1000); }
-    const timer=this._champTimeout(()=>{
-      if (this.championId!=='renekton') return;
+    // 94차: 판정은 즉시(시전 시간 없음). 예전엔 0초 타이머로 미뤄, 바로 이어진 이동 명령이 행동 타이머를 지우면 Q 피해가 사라질 수 있었다.
+    {
       const radius=q.range + (this._renekton.rActive ? (q.rRangeBonus || 0) : 0);
       const hits=findEnemiesInRadius(this.root.position,radius);
       const tracker={generated:0,champHeal:0};
       for(const h of hits) this._renektonApplyQHit(h.unit,empowered,tracker);
       updateBars(this);
-      this.currentPhase='RECOVERY'; this.phaseCancelable=true;
-      // PC 위키: 시전 후 0.25초 동안 평타·E·R 사용 불가(그 뒤 해제).
-      const end=this._champTimeout(()=>{ if(this.currentActionKey==='renektonQ'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},250);
-      this._actionTimers.push(end);
-    },0); // 버그 수정(타이밍 측정으로 발견): 예전엔 클립 길이×0.62(약 0.5초) 뒤 판정 - PC 위키는 시전 시간 없음(즉시)
-    this._actionTimers.push(timer);
+      if (!movingQ) {
+        this.currentPhase='RECOVERY'; this.phaseCancelable=true;
+        // PC 위키: 시전 후 0.25초 동안 평타·E·R 사용 불가(그 뒤 해제) - 잠금 자체는 위 _castLock·평타 타이머.
+        const end=this._champTimeout(()=>{ if(this.currentActionKey==='renektonQ'){this.currentActionKey=null;this.currentPhase=null;this._resumeAfterAction();}},qLockMs);
+        this._actionTimers.push(end);
+      }
+    }
     updateBars(this);
   
 };
@@ -166,7 +172,8 @@ CharacterController.prototype._renektonCastW = function(mouseWorldPoint, free=fa
 CharacterController.prototype._renektonBeginAttackSwing = function() { 
     const target=this.currentTarget;
     if (!target || target.hp<=0) { this.currentTarget=null; return; }
-    if (isSilenced(this) || isCrowdControlled(this)) return;
+    // 94차: 침묵은 평타를 막지 않는다(공용 평타와 같은 원작 규칙). 행동 불가면 풀린 뒤 대기 루프가 다시 친다(예전엔 영영 멈췄다).
+    if (isCrowdControlled(this)) { this._awaitingAttackTimer = true; return; }
     const w=this._renektonData().W;
     if (this._renekton.wArmed && !target.isWard) { // 와드에는 강화 평타(W)를 쓰지 않고 일반 평타로 친다
       const empowered=this._renekton.wEmpowered;
@@ -192,7 +199,12 @@ CharacterController.prototype._renektonBeginAttackSwing = function() {
     const clip=this.findAnimation(clipName); const interval=getAttackInterval(this.stats); const windup=getWindupDuration(this.stats); const recovery=getRecoveryDuration(this.stats);
     this._markAttackSwing(windup,interval); // 83차: 평타 타이머
     this.runAction(`renektonAA${this.comboIndex}`,STATE.ATTACK,{faceDir:dir,startupOverride:windup,recoveryOverride:recovery,timeScaleOverride:clip&&interval>0?attackClipTimeScale(this,clip,windup,interval):1,dataOverride:{clips:[clipName],startup:windup,recovery,cancelToMove:true,cancelToSpell:true,cancelable:true,dmg:0},onFire:()=>{
-      if(!targetLockValid(target)) return;
+      // 94차: 공용 평타(_beginAttackSwing onFire)와 같은 선딜 끝 검사 - 대상이 죽었거나 비대상이면 대상을 놓고, 행동 불가면 취소(타이머 반환).
+      if(!targetLockValid(target) || target.isUntargetable || target.isDead || target.destroyed){ if(this.currentTarget===target) this.currentTarget=null; this._cancelAttackWindup(); return; }
+      if(isCrowdControlled(this)){ this._cancelAttackWindup(); return; }
+      this._attackWindupEndsAt = 0; // 선딜 완료 - 이후 이동해도 타이머는 그대로(후딜 중 추격 판정이 쓴다)
+      if (typeof canRealmInteract === 'function' && !canRealmInteract(this, target)) return; // 죽음의 세계: 다른 세계 대상은 못 때린다
+      if (typeof brushSystem !== 'undefined' && brushSystem) brushSystem.onActionFromBrush(this); // 부쉬 안에서 평타를 치면 잠깐 드러남
       if(target.isWard){ wardSystem.hitWard(target,this); return; } // 32차: 와드는 평타 1회에 체력 1
       // 91차: 명중 처리는 공용 근접 평타 경로(치명타·관통·아이템 적중 효과·분노 획득은 _onBasicAttackHit에서).
       const willCrit=this._rollBasicAttackCrit();
@@ -258,12 +270,18 @@ CharacterController.prototype._renektonCastE = function(mouseWorldPoint, free=fa
     const msW=typeof getFinalMoveSpeed==='function'?getFinalMoveSpeed(this.stats):0;
     const msLol=msW>0?worldDistanceToLol(msW):(CHAMPION_DATA.renekton.stats.moveSpeed||345);
     const dashSec=e.range/((e.dashSpeedBase||760)+(e.dashSpeedMsRatio??1)*msLol);
-    this._dashState={from:origin,to:dest,duration:dashSec,elapsed:0,faceDir:dir};
-    const hits=this._renektonFindLineHits(origin,dest,this._renekton.rActive?(CHAMPION_DATA.renekton.E.rHalfWidthBonus||0):0);
+    // 94차(원작): 돌진이 실제로 지나간 구간에 닿은 적만 맞는다 - 예전엔 시전 순간의 적 위치로 대상을 정해, 그 사이 빠져나간 적도
+    // 맞고 새로 들어온 적은 빠졌다(E2 가능 여부도 그에 따라 틀어졌다). 매 프레임 구간 판정으로 모으고 돌진 끝에 피해를 준다.
+    const eWidthBonus=this._renekton.rActive?(CHAMPION_DATA.renekton.E.rHalfWidthBonus||0):0;
+    const passed=new Set(); let lastPos=origin.clone();
+    const collect=(a,b)=>{ for(const h of this._renektonFindLineHits(a,b,eWidthBonus)) passed.add(h.unit); lastPos=b.clone(); };
+    this._dashState={from:origin,to:dest,duration:dashSec,elapsed:0,faceDir:dir,onTick:collect};
     const empowered=isSecond&&!free&&this._renekton.rage>=50;
     if(empowered)this._renekton.rage-=50;
     const timer=this._champTimeout(()=>{
       const lvl=this.skillLevels.E||1, extra=this._renektonExtraAD();
+      if (getHorizontalDistance(lastPos, dest) > 1e-3) collect(lastPos, this.root.position.clone()); // 마지막 프레임 구간
+      const hits=[...passed].filter((u)=>u && u.hp>0).map((u)=>({unit:u}));
       for(const h of hits){
         const target=h.unit;
         const raw=empowered?(skillVal(e.empoweredDamageByLevel,lvl)+e.empoweredBonusAdRatio*extra):(skillVal(e.damageByLevel,lvl)+e.bonusAdRatio*extra);

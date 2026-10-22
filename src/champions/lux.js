@@ -236,7 +236,7 @@ CharacterController.prototype._luxTickZone = function(dt) {
   const slow = skillVal(e.slowPercentByLevel, z.lvl) / 100;
   for (const { unit } of findEnemiesInRadius(z.end, e.radius)) {
     if (!unit || unit.isStructure || !canRealmInteract(this, unit)) continue;
-    applyStatus(unit, { id: 'luxE_slow', type: 'SLOW', duration: 0.25, value: slow, source: this });
+    applyStatus(unit, { id: 'luxE_slow', type: 'SLOW', duration: e.slowLingerSec || 1, value: slow, source: this }); // 94차(원작): 영역을 벗어나도 1초 더 둔화(예전 0.25초)
   }
   if (z.area) z.area.children[1].material.opacity = 0.55 + 0.2 * Math.sin(performance.now() / 160);
   if (performance.now() >= z.expiresAt) this._luxDetonateE();

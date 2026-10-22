@@ -129,12 +129,13 @@ CharacterController.prototype._yasuoTickQ3Tornado = function(dt) {
     if (!travel) return;
     const remaining = Math.max(0, travel.maxDist - travel.traveled);
     const step = Math.min(remaining, Math.max(0, travel.speed * dt));
+    const segFrom = travel.pos.clone(); // 94차: 연속 판정(이번 프레임 구간)
     travel.pos.addScaledVector(travel.dir, step);
     travel.traveled += step;
 
     for (const u of getAllEnemyUnits()) {
       if (!u || u.hp <= 0 || travel.hitSet.has(u)) continue;
-      if (isInCircle(u, travel.pos, travel.halfWidth)) {
+      if (isInSweptCircle(u, segFrom, travel.pos, travel.halfWidth)) {
         travel.hitSet.add(u);
         this._yasuoQCritRoll = travel.critRoll;
         this._yasuoApplyQHit(u, { tornado: true, circle: false });
@@ -299,6 +300,13 @@ CharacterController.prototype._yasuoApplyEDashDamage = function() {
 };
 
 // Extracted from CharacterController: _yasuoFinishEDash
+// 94차: 야스오 E 돌진 중 점멸(원작 "비블레이드" E-Q-점멸) - 돌진을 점멸 지점에서 끝내고, 예약된 회오리 Q(EQ)도 그 자리에서 나간다.
+// 예전엔 다음 프레임에 돌진 경로로 되돌려져 점멸이 버려지고 EQ도 원래 도착 지점에서 나갔다. summoner_spells.js가 점멸 뒤 부른다.
+CharacterController.prototype._yasuoOnFlash = function(from, to) {
+  if (!this._yasuo || !this._yasuo.eDashStart || this.currentActionKey !== 'yasuoE') return;
+  this._yasuo.eDashEnd = to.clone();
+  this._yasuoFinishEDash();
+};
 CharacterController.prototype._yasuoFinishEDash = function() {
     if (!this._yasuo || !this._yasuo.eDashStart || this.currentActionKey !== 'yasuoE') return;
 

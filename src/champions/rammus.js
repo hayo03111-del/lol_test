@@ -77,7 +77,7 @@ CharacterController.prototype._rammusTickRoll = function(dt) {
   this._rammusTickBallSpin(dt);
   // 적과 충돌(구조물·와드 제외) → 멈추고 폭발.
   const pos = this.root.position;
-  for (const u of getTargetableEnemyUnits()) {
+  for (const u of getAllEnemyUnits()) { // 94차: 범위 판정은 시야와 무관(원작)
     if (!u || u.hp <= 0 || u.isStructure || u.isWard || u.isDead) continue;
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
     const up = getWorldPosition(u); if (!up) continue;
@@ -437,7 +437,7 @@ CharacterController.prototype._rammusLand = function(j) {
   const slow = skillVal(rd.slowPercentByLevel, j.lvl) / 100;
   const qLvl = Math.max(1, this.skillLevels.Q || 1);
   const qRaw = skillVal(q.damageByLevel, qLvl) + q.apRatio * (this.stats.abilityPower || 0);
-  const units = getTargetableEnemyUnits().filter((u) => u && u.hp > 0 && !u.isWard && isInCircle(u, center, lolRangeToWorld(rd.radius)));
+  const units = getAllEnemyUnits().filter( /* 94차: 시야와 무관 */ (u) => u && u.hp > 0 && !u.isWard && isInCircle(u, center, lolRangeToWorld(rd.radius)));
   // 91차: 멀리 뛸수록 중앙 피해가 늘던 효과(최대 +50%)는 원작에서 삭제됐다 - 거리와 무관하게 같은 피해.
   for (const u of units) {
     if (typeof canRealmInteract === 'function' && !canRealmInteract(this, u)) continue;
@@ -464,7 +464,7 @@ CharacterController.prototype._rammusTickAftershocks = function(dt) {
   a.accum += dt;
   while (a.remaining > 0 && a.accum >= a.interval) {
     a.accum -= a.interval; a.remaining -= 1;
-    for (const u of getTargetableEnemyUnits()) {
+    for (const u of getAllEnemyUnits()) { // 94차: 범위 판정은 시야와 무관(원작)
       if (!u || u.hp <= 0 || u.isStructure || u.isWard || !isInCircle(u, a.center, lolRangeToWorld(rd.radius))) continue;
       applyStatus(u, { id: 'rammusR_slow', type: 'SLOW', duration: rd.slowDurationSec, value: skillVal(rd.slowPercentByLevel, a.lvl) / 100, source: this });
     }

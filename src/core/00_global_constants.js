@@ -372,6 +372,17 @@ function isInCircle(target, center, radius) {
   const c = getWorldPosition(center) || center;
   return getHorizontalDistance(p, c) <= radius + getCollisionRadius(target);
 }
+// 94차: 움직이는 원형 판정(연속 판정) - 이번 프레임에 원이 from → to로 쓸고 지나간 영역(캡슐) 안인가. isInCircle과 같은 기준
+// (반지름 + 대상 충돌 반경). 빠르게 날아가는 판정(이즈리얼 R·애쉬 R·야스오 회오리)이 낮은 프레임에서 대상을 건너뛰지 않게 한다.
+function isInSweptCircle(target, from, to, radius) {
+  const p = getWorldPosition(target);
+  if (!p) return false;
+  const dx = to.x - from.x, dz = to.z - from.z, lenSq = dx * dx + dz * dz;
+  let t = lenSq > 1e-12 ? ((p.x - from.x) * dx + (p.z - from.z) * dz) / lenSq : 0;
+  t = Math.max(0, Math.min(1, t));
+  const cx = from.x + dx * t, cz = from.z + dz * t;
+  return Math.hypot(p.x - cx, p.z - cz) <= radius + getCollisionRadius(target);
+}
 // Cone(부채꼴) 판정 - 거리 AND 각도를 동시에 확인(요청 12).
 function isInCone(target, origin, direction, range, angleDeg) {
   const p = getWorldPosition(target);
@@ -757,6 +768,7 @@ function applyDamage(target, result) {
   if (typeof target.takeDamage === 'function') target.takeDamage(finalDmg, result.source || null, result.damageType || DAMAGE_TYPE.PHYSICAL, { isBasicAttack: !!result.isBasicAttack, isStatusTick: !!result.isStatusTick, isItemEffect: !!result.isItemEffect, isAbility: result.isAbility, isCritical: !!result.isCritical });
   else damageEnemy(target, finalDmg, result);
   if (typeof _evDamage === 'function') _evDamage(dmgSource, target, finalDmg, result); // 93차: 게임 이벤트(보호막 흡수 전 피해, 적용 뒤 체력)
+  if (typeof leesinOmnivampOnDamage === 'function') leesinOmnivampOnDamage(dmgSource, target, vampBase, result); // 94차: 리 신 W2 모든 피해 흡혈
   const lethal = hpBefore > 0 && (target.hp <= 0 || (target.isTrainingDummy && !wasFloored && isFlooredTrainingDummy(target) && finalDmg >= hpBefore));
   if (lethal) {
     markExecute(target, finalDmg);

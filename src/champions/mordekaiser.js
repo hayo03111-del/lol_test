@@ -149,7 +149,7 @@ CharacterController.prototype._mordeEAreaHits = function(origin, dir, dist) {
     const lenWorld = lolRangeToWorld(e.areaLength || 800);
     const half = lolRangeToWorld(e.areaWidth || 200) * 0.5;
     const out = [];
-    for (const u of getTargetableEnemyUnits()) {
+    for (const u of getAllEnemyUnits()) { // 94차: 범위 판정은 시야와 무관(원작)
       const p = getWorldPosition(u); if (!p) continue;
       const r = getCollisionRadius(u);
       const v = new THREE.Vector3(p.x - origin.x, 0, p.z - origin.z);

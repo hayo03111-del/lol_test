@@ -70,8 +70,10 @@ CharacterController.prototype._chogathCastQ = function(mouseWorldPoint, free) {
     // 까지 행동이 묶였다. 시전 시간이 끝나면 이동으로 끊을 수 있는 후딜로 바꾼다(기다리던 이동은 곧바로 이어진다).
     const castEnd = this._champTimeout(() => {
       if (this.currentActionKey !== 'chogathQ') return;
-      this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
-      if (this.pendingMove) { const p = this.pendingMove; this.pendingMove = null; this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false; this._commitMove(p); }
+      // 94차: 시전 시간이 끝나면 행동 자체를 끝낸다(원작 - 파열은 따로 터지는 지연 효과). 예전엔 후딜로만 바꿔 폭발(약 0.63초 뒤)까지
+      // 평타·다른 스킬이 막혔다. 폭발 타이머는 행동 타이머가 아니라 그대로 터진다.
+      this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false;
+      this._resumeAfterAction();
     }, q.castTime * 1000);
     this._actionTimers.push(castEnd);
   

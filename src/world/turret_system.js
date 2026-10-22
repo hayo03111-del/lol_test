@@ -114,11 +114,18 @@ const TURRET_DATA = {
 // 기준"). 이 데모에는 아직 "매치 시작" 개념이 없어 이 모듈이 로드된
 // 시점을 0초로 삼는다 - 나중에 실제 라운드/매치 시스템이 생기면 이
 // 함수 하나만 그 타이머를 참조하도록 바꾸면 된다.
-let TURRET_GAME_START_MS = performance.now();
-function getTurretGameTimeSec() { return (performance.now() - TURRET_GAME_START_MS) / 1000; }
+// 94차: 게임 시계를 실제 시간(performance.now) 대신 시뮬레이션 시간(프레임 dt 누적, 일시정지 중 멈춤)으로 센다. 예전엔
+// 느린 컴퓨터(프레임 dt가 0.05초로 잘림)에서 미니언·포탑은 느리게 움직이는데 웨이브는 실제 시간 25초마다 나와 라인에
+// 미니언이 50마리까지 쌓였고, 일시정지 중에도 웨이브·포탑 성장·억제기 재생·유물 시간이 흘렀다.
+let TURRET_GAME_SIM_SEC = 0;
+function getTurretGameTimeSec() { return TURRET_GAME_SIM_SEC; }
+function advanceTurretGameClock(dt) { if (dt > 0 && Number.isFinite(dt)) TURRET_GAME_SIM_SEC += dt; }
+function setTurretGameTimeSec(t) { if (Number.isFinite(t)) TURRET_GAME_SIM_SEC = t; } // 연습 도구·브라우저 점검용
 // 59차: 게임 시계는 구조물이 생기는 순간(로비에서 시작을 누른 뒤 첫 챔피언 로드)부터 0초로 센다 - 로비에 머문 시간이
 // 요새화(5분)·미니언 첫 웨이브·성장 시간을 깎아먹지 않게.
-function resetTurretGameClock() { TURRET_GAME_START_MS = performance.now(); }
+function resetTurretGameClock() { TURRET_GAME_SIM_SEC = 0; }
+// 94차: 가열(5초 초기화)·바깥 포탑 파괴 후 60초 피해 감소도 같은 게임 시계로(밀리초).
+function turretNowMs() { return TURRET_GAME_SIM_SEC * 1000; }
 
 // B. 게임 시간 기반 능력치 증가 - A(포탑 능력치)와 분리된 별도 함수지만,
 // 최종 사용값은 이 함수 하나로 중앙화한다(요청 47 getTurretStats).
@@ -220,6 +227,9 @@ function isValidTurretTarget(turret, target) {
   if (!target || target.hp <= 0 || target.isDead || target.destroyed || target.state === STATE.DEAD) return false;
   if (target.isTrainingDummy) return false; // 60차: 허수아비(연습 표적)는 포탑도 노리지 않는다
   if (target.isUntargetable) return false; // 무적/대상 지정 불가(요청 13 단서, 22 단서)
+  // 94차: 같은 팀은 대상이 아니고, 다른 세계(모데카이저 죽음의 세계)로 간 대상은 이미 노리던 대상이라도 놓는다 - 예전엔 대상 유지 경로에 이 검사가 없어 계속 쐈다.
+  if (target.team && target.team === turret.team) return false;
+  if (typeof canRealmInteract === 'function' && !canRealmInteract(turret, target)) return false;
   const range = lolRangeToWorld(TURRET_ATTACK_RANGE_LOL);
   return getHorizontalDistance(getWorldPosition(turret), getWorldPosition(target)) <= range + getCollisionRadius(target);
 }
@@ -308,7 +318,7 @@ function getBastionBonus(turret) {
 // 호출 경로가 생겨도 실수로 여기서 걸러지길 기대하지 않고 호출부
 // 책임을 명확히 한다).
 function getTurretHeatMultiplierAndRegister(turret, target = null) {
-  const now = performance.now();
+  const now = turretNowMs();
   if (!turret.heatStacks || (now - (turret.lastChampionHitAt || 0)) / 1000 > TURRET_HEAT_RESET_SEC) turret.heatStacks = 0; // 84차: 대상 변경으로는 초기화 안 됨
   if (target) turret._heatTarget = target;
   const multiplier = 1 + Math.min(turret.heatStacks, TURRET_HEAT_MAX_STACKS) * TURRET_HEAT_STEP;
@@ -360,7 +370,6 @@ function applyDamageToTurret(turret, result, sourceInfo = {}) {
   // 요청("포탑 공격 이벤트를 기준으로 디버깅") - GLB_DEBUG일 때만 스냅샷을
   // 뜬다(평상시 비용 0, snapshotTurretGLBState는 GLB_DEBUG=false면 즉시 null).
   const beforeSnap = snapshotTurretGLBState(turret, 'before-damage');
-  const hpBefore = Number(turret.hp);
   let finalDmg = calculateDamage({ ...result, target: turret });
   if (!Number.isFinite(finalDmg) || finalDmg < 0) {
     console.warn('[TURRET] invalid damage ignored', { type: turret.type, finalDmg, result });
@@ -375,14 +384,14 @@ function applyDamageToTurret(turret, result, sourceInfo = {}) {
   // 84차: 칼바람 억제기 포탑 - 같은 팀 외곽 포탑이 무너진 뒤 60초 동안 받는 피해 35% 감소.
   if (data.outerFallenDamageReduction) {
     const outer = turrets.find((t) => t.team === turret.team && t.type === TURRET_TYPE.OUTER1);
-    if (outer && outer.destroyed && outer._destroyedAt && performance.now() - outer._destroyedAt < data.outerFallenDurationSec * 1000) finalDmg *= 1 - data.outerFallenDamageReduction;
+    if (outer && outer.destroyed && outer._destroyedAt && turretNowMs() - outer._destroyedAt < data.outerFallenDurationSec * 1000) finalDmg *= 1 - data.outerFallenDamageReduction;
   }
   // 구조물 HP는 외부 애니메이션/렌더링 상태와 분리한다.
   // 실제 피해가 적용된 뒤의 HP를 명확히 기록해 '한 번 맞자마자 사라짐'
   // 현상을 게임 로직/모델 가시성 중 어느 쪽에서도 조용히 삼키지 않게 한다.
   turret.hp = Math.max(0, turret.hp - finalDmg);
   if (typeof _evDamage === 'function') _evDamage(sourceInfo.source || resolveDamageSource(result.source, turret), turret, finalDmg, result); // 93차: 게임 이벤트
-  console.log(`[TURRET DAMAGE] ${turret.team}/${turret.type}: ${hpBefore.toFixed(2)} -> ${turret.hp.toFixed(2)} (raw=${Number(result.rawDamage||0).toFixed(2)}, final=${finalDmg.toFixed(2)})`);
+  // 94차(성능): 포탑 피격마다 남기던 체력 로그는 지웠다(미니언이 몰리면 프레임마다 수십 줄) - 피해 기록은 gameSession.events()의 damage 이벤트로 본다.
   updateTurretVisual(turret);
   if (turret.hp <= 0) destroyTurret(turret);
   if (GLB_DEBUG && beforeSnap) {
@@ -399,7 +408,7 @@ function destroyTurret(turret) {
   if (turret.destroyed) return;
   turret.destroyed = true;
   if (typeof emitGameEvent === 'function') emitGameEvent('structureDestroyed', { entityId: _evId(turret), kind: 'turret', team: turret.team }); // 93차
-  turret._destroyedAt = performance.now(); // 84차: 억제기 포탑 피해 감소(60초) 기준 시각
+  turret._destroyedAt = turretNowMs(); // 84차: 억제기 포탑 피해 감소(60초) 기준 시각
   const data = TURRET_DATA[turret.type];
   // 62차: 보상은 reward_system.js(칼바람 값 - 팀 전체 + 파괴자 몫)로 옮겼다. 예전엔 어디서 부서지든 고정값 전액을 줬다.
   if (typeof controller !== 'undefined' && controller && isEnemyUnit(turret, controller)) {
@@ -526,7 +535,7 @@ function createTurret(type, position, team = 'RED') {
     ringMesh.position.set(position.x, 0.035, position.z);
     scene.add(ringMesh);
     return {
-      mesh: zoneMesh, body: zoneMesh, type, team,
+      mesh: zoneMesh, body: zoneMesh, _ring: ringMesh, type, team, // _ring: 94차 초기화 때 함께 지운다
       hp: Infinity, maxHp: Infinity, radius: zoneRadius, collisionRadius: 0, // 충돌 없음(요청)
       isTurret: true, isStructure: false, isChampion: false, isMonster: true, isTrainingDummy: false, destroyed: false,
       isUntargetable: true, mixer: null,
@@ -663,7 +672,7 @@ function updateTurretAggroBeam(turret, target) {
   const b = getWorldPosition(target).clone().add(new THREE.Vector3(0, 0.9, 0));
   const pos = turret._aggroBeam.geometry.attributes.position;
   pos.setXYZ(0, a.x, a.y, a.z); pos.setXYZ(1, b.x, b.y, b.z); pos.needsUpdate = true;
-  const recent = (performance.now() - (turret.lastChampionHitAt || 0)) / 1000 <= TURRET_HEAT_RESET_SEC;
+  const recent = (turretNowMs() - (turret.lastChampionHitAt || 0)) / 1000 <= TURRET_HEAT_RESET_SEC;
   const stacks = recent ? (turret.heatStacks || 0) : 0;
   turret._aggroBeam.material.opacity = 0.45 + 0.17 * stacks;
   turret._aggroBeam.material.color.setHex([0xff3a2a, 0xff5a1a, 0xff7a10, 0xffa000][Math.min(3, stacks)]);
@@ -687,7 +696,7 @@ function updateTurretTraitBadges(turret, dt) {
   if (data.hasShield && isShieldActive(turret)) badges.push(['#7fb3e6', '방패']);
   if (turret.bastionEndsAt && now < turret.bastionEndsAt) badges.push(['#a98be0', `방벽 ${Math.ceil(turret.bastionEndsAt - now)}초`]);
   if (isDoubleArmorActive(turret)) badges.push(['#9aa4ad', '백도어 보호']);
-  const recent = (performance.now() - (turret.lastChampionHitAt || 0)) / 1000 <= TURRET_HEAT_RESET_SEC;
+  const recent = (turretNowMs() - (turret.lastChampionHitAt || 0)) / 1000 <= TURRET_HEAT_RESET_SEC;
   if (recent && turret.heatStacks > 0) badges.push(['#ff7a3a', `가열 ${turret.heatStacks}단계 +${Math.round(turret.heatStacks * TURRET_HEAT_STEP * 100)}%`]);
   const html = badges.map(([c, t]) => `<span style="display:inline-block;margin:1px 2px 0;padding:0 4px;border-radius:3px;font-size:9px;line-height:13px;color:#111;background:${c}">${t}</span>`).join('');
   if (html !== turret._traitHtml) { turret.traitsDiv.innerHTML = html; turret._traitHtml = html; }
@@ -763,7 +772,8 @@ function updateTurretCombat(turret, dt) {
   updateTurretBastion(turret);
   updateTurretShieldStageVisual(turret);
   turret.attackCooldown = Math.max(0, turret.attackCooldown - dt);
-  const target = getTurretAttackTarget(turret);
+  // 94차: 게임이 끝나면(넥서스 파괴) 포탑은 더 쏘지 않는다 - 예전엔 미니언 AI만 멈추고 포탑은 계속 플레이어를 공격했다.
+  const target = (typeof gameEnded !== 'undefined' && gameEnded) ? null : getTurretAttackTarget(turret);
   turret.attackTarget = target;
   updateTurretAggroBeam(turret, target);
   updateTurretTraitBadges(turret, dt);
@@ -819,6 +829,7 @@ function isPositionInBaseZone(position, team) {
 }
 function updateNexusWell(well, dt) {
   const data = TURRET_DATA[TURRET_TYPE.NEXUS_WELL];
+  if (typeof gameEnded !== 'undefined' && gameEnded) return; // 94차: 게임 종료 뒤에는 우물도 공격하지 않는다
   // 요청("자기진영의 넥서스오벨리스크는 공격하지 않아. 상대팀이 우물에
   // 들어왔을 때 상대팀을 공격하는게 넥서스오벨리스크야") - 이 우물이
   // 자기 진영(well.team)과 같은 유닛은 절대 공격하지 않고, 다른 진영
@@ -859,7 +870,16 @@ function updateNexusWell(well, dt) {
 }
 
 let turrets = [];
-function updateTurrets(dt) { for (const t of turrets) updateTurretCombat(t, dt); }
+function updateTurrets(dt) {
+  for (const t of turrets) updateTurretCombat(t, dt);
+  // 94차: 구조물에 걸린 상태 효과(공성 파괴자 "파괴 공작" 지속 피해, 방어력 감소 만료 등)를 매 프레임 진행한다 - 예전엔 구조물에는
+  // 상태 효과 갱신이 없어 구조물 지속 피해가 한 번도 들어가지 않았다. 효과가 있는 구조물만 돈다.
+  if (typeof tickStatusEffects === 'function') {
+    for (const list of [turrets, typeof inhibitorBuildings !== 'undefined' ? inhibitorBuildings : [], typeof nexusBuildings !== 'undefined' ? nexusBuildings : []]) {
+      for (const s of list) if (s && !s.destroyed && s.statusEffects && s.statusEffects.length) tickStatusEffects(s, dt);
+    }
+  }
+}
 // destroyTurret()에서 참조하는 즉시 갱신 헬퍼 - 이미 매 프레임 도는
 // updateDebugPanel()을 그대로 재사용한다(새 UI 갱신 시스템을 만들지 않음).
 // 요청("ui적용해줘") - 새 HUD의 골드 표시(#goldAmount)도 여기서 같이

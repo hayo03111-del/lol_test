@@ -498,8 +498,10 @@ CharacterController.prototype._ahriTickETravel = function(dt) {
   const pos = travel.origin.clone().addScaledVector(travel.dir, travel.traveled);
   if (travel.sprite) travel.sprite.position.copy(pos);
 
-  const traveledLolRange = worldDistanceToLol(travel.traveled);
-  const hitUnit = findFirstInLine(travel.origin, travel.dir, traveledLolRange, travel.halfWidth);
+  // 94차: 이번 프레임에 지나간 구간만 판정한다(연속 판정). 예전엔 매 프레임 시작점부터 지금까지 전부를 다시 봐서, 구슬이 이미 지나간
+  // 길로 뒤늦게 걸어 들어온 적도 매혹됐다.
+  const segStart = travel.origin.clone().addScaledVector(travel.dir, travel.traveled - Math.max(0, step));
+  const hitUnit = findFirstInLine(segStart, travel.dir, worldDistanceToLol(Math.max(0, step)), travel.halfWidth);
   if (hitUnit) {
     const raw = skillVal(e.damageByLevel, travel.lvl) + (e.apRatio || 0) * (this.stats.abilityPower || 0);
     const charmDuration = skillVal(e.charmDurationByLevel, travel.lvl);
@@ -593,9 +595,13 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   // 찾고 있었다 - 그 결과 시작 지점에 있던 적은 아직 돌진이 도착하기도
   // 전에 맞고, 반대로 도착 지점 근처의 진짜 대상에게는 피해가 들어가지
   // 않는 경우가 생겼다. 탐색/피해 기준점을 착지 위치(endPos)로 바꾼다.
+  // 94차(원작): 정기 탄환은 돌진이 "끝난 뒤" 아리가 있는 자리에서 주변 적(챔피언 우선) 최대 3명을 골라 쏜다. 예전엔 시전 순간에 도착 예정
+  // 지점 기준으로 대상을 고르고 탄환을 쏴서, 아리가 도착하기도 전에 탄환이 날아갔고 그 사이 움직인 적을 기준으로 하지 않았다.
+  const fireBolts = () => {
+  const here = this.root.position.clone();
   const acquireRange = lolRangeToWorld(r.acquisitionRange || 600);
   const inRange = getAllEnemyUnits()
-    .map((u) => ({ u, d: getHorizontalDistance(getWorldPosition(u), endPos) }))
+    .map((u) => ({ u, d: getHorizontalDistance(getWorldPosition(u), here) }))
     .filter((c) => c.d <= acquireRange);
   const champCandidates = inRange.filter((c) => c.u.isChampion || (!c.u.isMinion && !c.u.isMonster && !c.u.isStructure));
   const otherCandidates = inRange.filter((c) => !champCandidates.includes(c));
@@ -618,12 +624,13 @@ CharacterController.prototype._ahriCastR = function(mouseWorldPoint, free = fals
   };
   for (const { u } of candidates) {
     if (typeof projectiles !== 'undefined' && projectiles && projectiles.spawn) {
-      projectiles.spawn({ from: endPos.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)), target: u, speed: lolRangeToWorld(r.boltSpeed || 1400), damage: 0, color: 0x9fd7ff, realmId: this.realmId, onHit: boltHit });
+      projectiles.spawn({ from: here.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0)), target: u, speed: lolRangeToWorld(r.boltSpeed || 1400), damage: 0, color: 0x9fd7ff, realmId: this.realmId, onHit: boltHit });
     } else boltHit(u);
   }
   if (!candidates.length) debugSkillMiss('Ahri R', 'no target in range');
 
-  this._ahri.rDash = { start: startPos, end: endPos, elapsed: 0, duration: dashDuration };
+  };
+  this._ahri.rDash = { start: startPos, end: endPos, elapsed: 0, duration: dashDuration, fireBolts };
 };
 // 매 프레임 R 돌진 이동 - 요네/이즈리얼 R의 매 프레임 진행 패턴과 동일한
 // 위치에서 호출된다(_ahriUpdate). 돌진이 끝나면 남은 재사용 횟수가
@@ -637,6 +644,7 @@ CharacterController.prototype._ahriTickRDash = function(dt) {
   this.root.position.lerpVectors(dash.start, dash.end, t);
   if (t < 1) return;
   this._ahri.rDash = null;
+  if (dash.fireBolts && this.hp > 0) dash.fireBolts(); // 94차: 도착한 뒤 탄환
   if (this.currentActionKey !== 'ahriR') return;
   const hasCharge = this._ahri.rCharges > 0 && performance.now() < this._ahri.rReadyUntil;
   if (hasCharge) {

@@ -24,6 +24,7 @@ function recomputeShield(u) {
 // 83차: onlyType('MAGICAL'/'PHYSICAL') - 그 피해 종류만 막는 보호막(멜모셔스의 아귀 생명선 = 마법 피해 전용).
 function addShield(u, id, amount, durationSec, { decay = false, decayDelaySec = 0, replace = true, onlyType = null } = {}) {
   const list = _shieldHost(u); if (!list || !(amount > 0)) return 0;
+  if (durationSec != null && !(durationSec > 0)) return 0; // 94차: NaN·0 지속시간 보호막은 만들지 않는다(예전엔 NaN이면 영구 보호막)
   const now = performance.now();
   if (replace && id != null) for (let i = list.length - 1; i >= 0; i--) if (list[i].id === id) list.splice(i, 1);
   const expiresAt = durationSec == null ? Infinity : now + durationSec * 1000;

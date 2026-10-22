@@ -1561,7 +1561,7 @@ function tickOneDummy(unit, dt) {
   if (dist <= unit.attackRange && unit.attackCooldown <= 0) {
     unit.attackCooldown = 1 / ((unit.attackSpeed || 1 / 1.4) * (typeof getAttackSpeedReductionMultiplier === "function" ? getAttackSpeedReductionMultiplier(unit) : 1)); // 83차: 공속 감소 반영
     if (typeof brushSystem !== 'undefined') brushSystem.onActionFromBrush(unit); // 부쉬 안에서 공격하면 잠깐 드러남
-    applyDamage(controller, { rawDamage: unit.attackDamage ?? 6, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1 });
+    applyDamage(controller, { rawDamage: unit.attackDamage ?? 6, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, source: unit }); // 94차: 공격자를 넘긴다(탈진·가렌 패시브·피격 아이템 훅이 공격자를 알 수 있게)
   }
 }
 function updateDummyAI(dt) {
@@ -1616,6 +1616,7 @@ function tickPullEffects(dt) {
   // Q2 등). controller._dashState = {from, to, duration, elapsed}만 설정.
   if (typeof controller !== 'undefined' && controller && controller._dashState) {
     const p = controller._dashState;
+    const dashPrevPos = p.onTick ? controller.root.position.clone() : null; // 94차: 지나간 구간 판정용(onTick)
     p.elapsed += dt;
     let t = Math.min(1, p.elapsed / p.duration);
     if (p.follow) {
@@ -1654,6 +1655,8 @@ function tickPullEffects(dt) {
       // faceDirectionInstant(쿼터니언)로 180° 돌아 있으면 오일러가 (π, 0, π)로 남아 있어, y만 바꾸면 정반대를 봤다.
       controller.faceDirectionInstant(p.faceDir);
     }
+    // 94차: 돌진 중 매 프레임 지나간 구간(이전 위치 → 지금 위치)을 알려 준다 - 레넥톤 E처럼 "지나가며 맞히는" 돌진이 쓴다.
+    if (p.onTick) { try { p.onTick(dashPrevPos, controller.root.position.clone()); } catch (e) { console.error('[DASH onTick]', e); } }
     if (t >= 1) { controller._dashState = null; if (p.onArrive) p.onArrive(); }
   }
 }
@@ -1689,6 +1692,7 @@ function animate() {
   if (!paused) {
     // 93차: 세션 시뮬레이션 틱·시간(스냅샷·이벤트에 찍히는 번호). 아직 게임 규칙은 이 시계를 읽지 않는다(README 93차 "시간 처리").
     if (typeof gameSession !== 'undefined' && gameSession) gameSession.advance(dt);
+    if (typeof advanceTurretGameClock === 'function') advanceTurretGameClock(dt); // 94차: 게임 시계 = 시뮬레이션 시간
     if (controller) { controller.update(dt); updateCameraTransform(cameraFocusPoint(controller.root.position, dt), dt); }
     else updateCameraTransform(new THREE.Vector3(0,0,0), dt);
     updateMarkers(dt);

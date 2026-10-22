@@ -186,34 +186,27 @@ CharacterController.prototype._asheResolveWImpact = function(p) {
   // 화살 N발(7~11)이 부채꼴(27.75~46.25°)로 퍼진다. 화살마다 처음 맞은 적 하나에만 피해(한 대상은 한 번만).
   const coneDeg = skillVal(w.coneAngleDegByLevel, p.lvl) || 46;
   const arrows = skillVal(w.arrowsByLevel, p.lvl) || 9;
-  const candidates = findEnemiesInRadius(origin, w.range || 1200, { forward: p.dir, maxAngleDeg: coneDeg / 2 });
   // 28차: 화살 표시가 없어 범위가 보이지 않았다 - 판정 부채꼴(사거리·레벨별 각도)을 바닥에 잠깐 그린다(색·수명은 연출값).
   if (typeof vfx.groundShapeFlash === 'function') vfx.groundShapeFlash(origin, p.dir, { kind: 'cone', range: lolRangeToWorld(w.range || 1200), angleDeg: coneDeg }, 0xbfe8ff, 0.45);
-  const hits = [];
+  // 94차(원작): 화살 하나하나가 실제로 날아가는 투사체(애쉬 앞 75에서 출발, 속도 2000)이고, 처음 닿은 적 하나에만 맞는다(한 적은
+  // 화살 하나만). 예전엔 시전 순간의 적 위치로 맞을 대상을 미리 정해 거리만큼 늦게 피해만 줘서, 쏜 뒤에 움직여도 피할 수 없었다.
+  const raw = skillVal(w.damageByLevel, p.lvl) + (w.bonusAdRatio || 0) * this._getBonusAD();
+  const speedLol = w.missileSpeed || 2000, startLol = w.spawnOffset != null ? w.spawnOffset : 75;
   const taken = new Set();
+  let anyHit = false, flying = arrows;
   for (let i = 0; i < arrows; i++) {
     const ang = THREE.MathUtils.degToRad(-coneDeg / 2 + (arrows > 1 ? (coneDeg * i) / (arrows - 1) : coneDeg / 2));
-    const adir = p.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), ang);
-    let best = null;
-    for (const h of candidates) {
-      if (taken.has(h.unit)) continue;
-      const up = getWorldPosition(h.unit); if (!up) continue;
-      const v = new THREE.Vector3(up.x - origin.x, 0, up.z - origin.z);
-      const along = v.dot(adir); if (along < 0) continue;
-      const lateral = Math.sqrt(Math.max(0, v.lengthSq() - along * along));
-      if (lateral > lolRangeToWorld(20) + getCollisionRadius(h.unit)) continue; // 화살 폭(미공개 - 20 근사)
-      if (!best || along < best.along) best = { unit: h.unit, along };
-    }
-    if (best) { taken.add(best.unit); hits.push(best); }
-  }
-  if (!hits.length) { debugSkillMiss('Ashe W (일제 사격)', '부채꼴 범위 내 대상 없음'); return; }
-  const raw = skillVal(w.damageByLevel, p.lvl) + (w.bonusAdRatio || 0) * this._getBonusAD();
-  // 81차: 화살은 애쉬 앞 75 지점에서 출발해 속도 2000으로 날아간다(PC 위키) - 거리만큼 늦게 맞는다. 예전엔 즉시 피해.
-  const speedLol = w.missileSpeed || 2000, startLol = w.spawnOffset != null ? w.spawnOffset : 75;
-  for (const h of hits) {
-    const delayMs = Math.max(0, (worldDistanceToLol(h.along) - startLol) / speedLol) * 1000;
-    if (delayMs > 1 && typeof this._champTimeout === 'function') this._champTimeout(() => this._asheApplyWHit(h.unit, raw, p.lvl), delayMs);
-    else this._asheApplyWHit(h.unit, raw, p.lvl);
+    const adir = p.dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), ang).setY(0).normalize();
+    const from = origin.clone().addScaledVector(adir, lolRangeToWorld(startLol)); from.y = origin.y + BASE_UNIT * 0.6;
+    projectiles.spawn({
+      from, speed: lolRangeToWorld(speedLol), damage: 0, color: 0xbfe8ff, realmId: this.realmId,
+      line: {
+        dir: adir, maxDist: lolRangeToWorld(Math.max(0, (w.range || 1200) - startLol)), halfWidth: lolRangeToWorld(20), // 화살 폭(미공개 - 20 근사)
+        filter: (u) => !taken.has(u) && !u.isStructure && !u.isWard,
+        onMiss: () => { if (--flying === 0 && !anyHit) debugSkillMiss('Ashe W (일제 사격)', '맞은 대상 없음'); },
+      },
+      onHit: (u) => { if (taken.has(u)) return; taken.add(u); anyHit = true; flying--; this._asheApplyWHit(u, raw, p.lvl); },
+    });
   }
 };
 
@@ -342,6 +335,7 @@ CharacterController.prototype._asheTickRTravel = function(dt) {
   if (travel.speedSteps.length) travel.speed = travel.speedSteps[Math.min(travel.speedSteps.length - 1, Math.floor(travel.flightSec))];
   const remaining = Math.max(0, travel.maxDist - travel.traveled);
   const step = Math.min(remaining, Math.max(0, travel.speed * dt));
+  const segFrom = travel.pos.clone(); // 94차: 연속 판정(이번 프레임 구간)
   travel.pos.addScaledVector(travel.dir, step);
   travel.traveled += step;
 
@@ -353,7 +347,7 @@ CharacterController.prototype._asheTickRTravel = function(dt) {
 
   for (const u of getAllEnemyUnits()) {
     if (!u || u.hp <= 0 || !u.isChampion) continue; // 미니언/포탑/억제기/넥서스는 무시하고 통과(공식 설명 그대로)
-    if (isInCircle(u, travel.pos, travel.halfWidth)) {
+    if (isInSweptCircle(u, segFrom, travel.pos, travel.halfWidth)) {
       this._asheResolveRHit(u, travel);
       this._ashe.rTravel = null;
       return;

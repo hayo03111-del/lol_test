@@ -783,7 +783,7 @@ CharacterController.prototype._beginAttackSwing = function() {
     if (!target || target.hp <= 0) { this.currentTarget = null; return; }
     // 버그 수정(원작 규칙): 침묵은 스킬만 막고 기본 공격은 막지 않는다(예전 기획안 8절의
     // "침묵 중 평타 불가"는 원작과 달라 제거).
-    if (isCrowdControlled(this)) return; // 기절/속박 중에도 마찬가지
+    if (isCrowdControlled(this)) { this._awaitingAttackTimer = true; return; } // 기절/속박 중에도 마찬가지 - 94차: 풀리면 다시 공격(대기 루프가 재시도)
     const dirToTarget = new THREE.Vector3().subVectors(target.mesh.position, this.root.position);
     dirToTarget.y = 0; dirToTarget.normalize();
 
@@ -823,9 +823,11 @@ CharacterController.prototype._beginAttackSwing = function() {
     const overrideAttackHand = (() => {
       const labels = ATTACK_HAND_LABELS[this.championId];
       if (!labels) return null;
-      const idx = this.championId === 'sett'
-        ? (this._settAttackStep % 2)
-        : (this.comboIndex % getAttackSequenceNames(this.championId).length);
+      // 94차(원작): 세트 Q 강화 평타 2회는 항상 왼손 → 오른손(오른손은 패시브의 2초 대기 없이). 예전엔 _settAttackStep이
+      // 한 번도 증가하지 않아 Q 두 방이 모두 왼손이었다(오른손 추가 피해가 Q에 안 붙음). 그 밖의 세트 스윙은 콤보 순서.
+      let idx;
+      if (this.championId === 'sett' && override && override.id === 'Q') { idx = (this._sett.qHandStep || 0) % 2; this._sett.qHandStep = (this._sett.qHandStep || 0) + 1; }
+      else idx = this.comboIndex % (this.championId === 'sett' ? 2 : getAttackSequenceNames(this.championId).length);
       return labels[idx] || null;
     })();
     // 요청 견고성 보강: 왼손/오른손처럼 엄격한 좌우 교대가 있는 챔피언은
@@ -971,7 +973,10 @@ CharacterController.prototype._beginAttackSwing = function() {
       animationSequenceClips: attackData.animationSequenceClips || null,
       onFire: () => {
         // 83차: 선딜 도중 기절·공중에 뜸 등 행동 불가가 걸렸거나 대상이 대상 지정 불가가 되면 공격이 취소되고 타이머는 돌려받는다(원작).
-        if (isCrowdControlled(this) || target.isUntargetable) { this._cancelAttackWindup(); return; }
+        // 94차: 대상이 비대상이 되거나 선딜 중에 죽으면 대상 명령도 놓는다(타이머는 돌려받아 바로 다음 대상을 칠 수 있다 - 막타).
+        // 예전엔 비대상 대상을 계속 붙잡고 선딜을 끝없이 되풀이했고, 죽은 대상에게도 평타 타이머를 다 썼다.
+        if (target.isUntargetable || !(target.hp > 0) || target.isDead || target.destroyed) { if (this.currentTarget === target) this.currentTarget = null; this._cancelAttackWindup(); return; }
+        if (isCrowdControlled(this)) { this._cancelAttackWindup(); return; }
         this._attackWindupEndsAt = 0; // 선딜 완료 - 이후 이동해도 타이머는 그대로
         if (hitClip) this.crossFadeToClip(hitClip, { loop: THREE.LoopOnce, clampWhenFinished: true, fade: 0.05, timeScale: attackHitClipTimeScale(this, windup) });
         // 죽음의 세계: 서로 다른 세계의 대상은 때릴 수 없다(스윙 도중 한쪽이 들어가도 명중 취소).

@@ -94,7 +94,14 @@ function castSummonerSpell(ctrl, slot, mousePoint, pointerClient, opts = {}) {
   // 83차: PC 위키 - 정화도 제압 중에는 쓸 수 없다(제압은 정화로 풀리지 않음).
   if (id === 'cleanse' && typeof hasStatus === 'function' && hasStatus(ctrl, 'SUPPRESSION')) return _summonerFail(`${d.nameKo} - 제압 상태`);
   if ((id === 'flash' || markRecast) && typeof isRooted === 'function' && isRooted(ctrl)) return _summonerFail(`${d.nameKo} - 속박 상태`);
-  if ((id === 'flash' || markRecast) && ctrl._dashState) return _summonerFail(`${d.nameKo} - 돌진 중`);
+  // 94차(원작): 돌진 중 점멸은 버려지지 않는다 - 돌진이 끝나는 즉시 나간다(점멸 예약). 예외: 점멸로 돌진을 끝내는 테크
+  // (야스오 E - 비블레이드, 요네 Q3 - Q플)는 챔피언 훅(_<id>OnFlash)이 처리하므로 막지 않는다.
+  // 예전엔 공용 돌진(_dashState)은 "돌진 중" 토스트로 입력을 버렸고, 챔피언이 직접 움직이는 돌진(야스오 E·요네 E·닐라 E·아리 R·
+  // 벡스 R2·람머스 R·세트 R·마스터 이 Q)은 점멸이 나간 뒤 다음 프레임에 돌진 경로로 되돌려져 쿨다운만 날아갔다.
+  if ((id === 'flash' || markRecast) && summonerDashHoldsFlash(ctrl)) {
+    ctrl._bufferedSummoner = { slot, mousePoint: mousePoint ? mousePoint.clone() : null, at: performance.now() };
+    return false;
+  }
   let ok = false;
   switch (id) {
     case 'flash': ok = _summonerFlash(ctrl, d, mousePoint); break;
@@ -269,7 +276,31 @@ function _summonerMarkDash(ctrl, d, slot) {
   return true;
 }
 // 매 프레임: 날아가는 눈덩이 이동·착탄, 표식 만료.
+// 94차: 지금 점멸(과 표식 돌진)을 돌진이 끝날 때까지 미뤄야 하는가.
+function summonerDashHoldsFlash(ctrl) {
+  if (!ctrl) return false;
+  if (ctrl._dashState) return true;
+  if (ctrl._yone && ctrl._yone.eSpirit && ctrl._yone.eSpirit.travelElapsed < ctrl._yone.eSpirit.travelDuration) return true;
+  if (ctrl._nilah && ctrl._nilah.eDash) return true;
+  if (ctrl._ahri && ctrl._ahri.rDash) return true;
+  if (ctrl._vex && ctrl._vex.dashActive) return true;
+  if (ctrl._rammus && ctrl._rammus.jump) return true;
+  if (ctrl._sett && ctrl._sett.rSeq) return true;
+  if (ctrl._masteryi && ctrl._masteryi.alpha) return true;
+  return false;
+}
+// 예약된 점멸을 돌진이 끝나면 쓴다(1.2초 안에 끝나지 않으면 버린다). 메인 루프의 summonerSpellTick에서 부른다.
+const SUMMONER_BUFFER_MAX_MS = 1200;
+function _summonerFlushBuffered(ctrl) {
+  const b = ctrl && ctrl._bufferedSummoner;
+  if (!b) return;
+  if (performance.now() - b.at > SUMMONER_BUFFER_MAX_MS || ctrl.hp <= 0 || ctrl.state === STATE.DEAD) { ctrl._bufferedSummoner = null; return; }
+  if (summonerDashHoldsFlash(ctrl)) return;
+  ctrl._bufferedSummoner = null;
+  castSummonerSpell(ctrl, b.slot, b.mousePoint, null);
+}
 function summonerSpellTick(dt) {
+  if (typeof controller !== 'undefined' && controller && controller._bufferedSummoner) _summonerFlushBuffered(controller);
   for (let i = _summonerSnowballs.length - 1; i >= 0; i--) {
     const b = _summonerSnowballs[i];
     if (!b.proj.done) { b.mesh.position.set(b.proj.mesh.position.x, b.mesh.position.y, b.proj.mesh.position.z); continue; }

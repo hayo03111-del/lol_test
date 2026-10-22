@@ -89,6 +89,8 @@ CharacterController.prototype._masteryiOnKill = function(target, context) {
       console.log(`${label} Unit takedown (${unitLabel(target)}) - no champion cooldown reduction.`);
       return;
     }
+    // 94차(원작): 처치 관여 시 기본 스킬 재사용 대기시간 70% 감소는 R(최후의 전사)의 기본 지속 효과 - R을 1레벨 이상 배워야 한다.
+    if (!((this.skillLevels && this.skillLevels.R) > 0)) { console.log(`${label} Champion takedown - R 미습득이라 쿨감 없음`); return; }
     console.log(`${label} Champion takedown (${unitLabel(target)}) - Q/W/E cooldown: Q ${this.cooldowns.Q.toFixed(1)} / W ${this.cooldowns.W.toFixed(1)} / E ${this.cooldowns.E.toFixed(1)} -> ×0.3`);
     this.cooldowns.Q = Math.max(0, this.cooldowns.Q * 0.3);
     this.cooldowns.W = Math.max(0, this.cooldowns.W * 0.3);
