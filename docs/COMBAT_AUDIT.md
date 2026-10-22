@@ -135,3 +135,19 @@
 - `tests/structures94_test.js`: 게임 시계, 포탑 대상 팀·세계, 가열 초기화, 회복 유물 초기화.
 - `tools/e2e_glb/qa_combat94.js`: 실제 브라우저에서 선입력, 돌진 중 점멸, 애쉬 W, 바루스 Q 기절 취소, 게임 시계, 전투 기록. 실패 시 종료 코드 1.
 - 미니언·포탑 대상 선정, 보상, 승리 판정은 여전히 브라우저 점검(`minion_ai_check`, `structure_check`, `structure_minion_check`)에만 있다.
+
+## 11. 회귀 결과 (94차 최종 빌드, 헤드리스 Chromium)
+
+- Node: `node tests/run_all.js` - 46개 파일 모두 통과(assert 3101개).
+- 브라우저 점검 30개(이전 빌드 결과와 숫자·ID를 가리고 비교):
+  - 종료 코드·페이지 오류 없음: `qa_combat94`, `structure_check`, `structure_minion_check`, `minion_ai_check`, `aram_features_check`,
+    `game_screen_check`, `qa_reset_check`, `keys_check`, `movement_check`, `combo_check`, `shop_check`, `qa_item_shop`, `qa_champ_switch`,
+    `qa_focus_check`, `indicator_check`, `aim_check`, `approach_check`, `qa_projectile_edge`, `qa_damage_class`, `qa_flash_tech`, `ward_check`,
+    `vision_check`, `qa_session_check`, `qa_dmg_fixes91`, `spawn_check`, `switch_check`(단독 실행 - 3개 병렬로는 600초 제한에 걸림).
+  - `spells_check`는 이전 빌드(93차 전)와 같은 곳에서 같은 오류로 실패한다(기존 문제, 이번 변경과 무관).
+  - 달라진 점(의도된 변화):
+    - `combo_check`: 이즈리얼 W→Q, 야스오 Q3 연계가 이제 맞는다(두 번째 입력이 버려지던 문제).
+    - `approach_check`·`ward_check`: 예전 실패 항목이 통과.
+    - `movement_check`: 노틸러스 Q 뒤 이동 복귀가 "never" → 약 0.9초.
+    - `minion_ai_check`: 추격 포기 전 끌려간 거리 341 → 1316(이제 게임 시간 4초 = 이동 속도 325 × 4).
+  - 병렬 실행 때 `movement_check`에서 가렌 Q가 잠깐 멈춘 것으로 찍혔지만, 단독 실행과 직접 재현에서는 멈추지 않았다(16ms 표본이 같은 프레임을 두 번 본 것).
