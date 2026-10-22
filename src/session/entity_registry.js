@@ -34,6 +34,7 @@ function listEntities() {
   const out = [], seen = new Set();
   const add = (u) => { if (u && !seen.has(u)) { seen.add(u); out.push(u); } };
   if (typeof controller !== 'undefined') add(controller);
+  if (typeof enemyBots !== 'undefined' && enemyBots) enemyBots.forEach(add); // 97차: 챔피언 봇·원격 챔피언(예전엔 빠져 있어 우클릭 공격 명령이 대상을 못 찾았다)
   if (typeof dummy !== 'undefined') add(dummy);
   if (typeof placedDummies !== 'undefined' && placedDummies) placedDummies.forEach(add);
   if (typeof placedAllies !== 'undefined' && placedAllies) placedAllies.forEach(add);
