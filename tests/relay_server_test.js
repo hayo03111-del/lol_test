@@ -74,6 +74,18 @@ function assert(cond, msg) { if (!cond) { console.error('FAIL:', msg); process.e
     const got = [await next(h2, (m) => m.t === 'msg' && m.d.n === 0), await next(h2, (m) => m.t === 'msg' && m.d.n === 1), await next(h2, (m) => m.t === 'msg' && m.d.n === 2)];
     assert(got[0]._at - sentAt >= 140 && got[0]._at <= got[1]._at && got[1]._at <= got[2]._at, '인공 지연: 메시지가 지연만큼 늦게, 순서대로 간다');
     h2.close(); g2b.close(); lag.close();
+    // 102차: 좁은 길(bwBytesPerSec) - 넘치는 만큼 줄을 서서 늦게, 순서대로 간다.
+    const bw = createRelayServer({ bwBytesPerSec: 10000 });
+    await new Promise((r) => bw.listen(0, '127.0.0.1', r));
+    const burl = `ws://127.0.0.1:${bw.address().port}/ws`;
+    const h3 = await openAt(burl), g3 = await openAt(burl);
+    h3.send(JSON.stringify({ t: 'create' })); const c3 = await next(h3, (m) => m.t === 'created');
+    g3.send(JSON.stringify({ t: 'join', code: c3.code })); await next(g3, (m) => m.t === 'joined');
+    const pad = 'x'.repeat(980), bwAt = Date.now();
+    for (let i = 0; i < 5; i++) h3.send(JSON.stringify({ t: 'msg', d: { n: i, pad } })); // 약 5KB → 초당 10KB면 약 0.5초
+    const g5 = []; for (let i = 0; i < 5; i++) g5.push(await next(g3, (m) => m.t === 'msg' && m.d.n === i));
+    assert(g5[4]._at - bwAt >= 400 && g5.every((m, i) => !i || g5[i - 1]._at <= m._at), '좁은 길: 넘치는 메시지는 줄을 서서(약 0.5초) 순서대로 간다');
+    h3.close(); g3.close(); bw.close();
   } catch (e) {
     console.error('FAIL:', e.message); process.exitCode = 1;
   } finally {

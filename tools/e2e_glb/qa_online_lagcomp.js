@@ -99,7 +99,7 @@ const LAG = Number(process.env.LAG || 150);
       const fired = await host.evaluate(() => {
         const E = window.__e2e, L = E.lolRangeToWorld, c = window.controller, b = E.enemyBots[0], st = window.netState;
         const h = st.lagHist && st.lagHist.get(c); if (!h || h.length < 3) return null;
-        const now = performance.now(), at = (t) => { for (let k = h.length - 1; k > 0; k--) if (h[k - 1].t <= t) { const a = h[k - 1], d = h[k], f = d.t > a.t ? (t - a.t) / (d.t - a.t) : 1; return { x: a.x + (d.x - a.x) * f, z: a.z + (d.z - a.z) * f }; } return h[0]; };
+        const now = h[h.length - 1].t, at = (t) => { for (let k = h.length - 1; k > 0; k--) if (h[k - 1].t <= t) { const a = h[k - 1], d = h[k], f = d.t > a.t ? (t - a.t) / (d.t - a.t) : 1; return { x: a.x + (d.x - a.x) * f, z: a.z + (d.z - a.z) * f }; } return h[0]; };
         const p = at(now - 600), q = at(now - 800); const vz = (p.z - q.z) / 0.2;
         const dist = Math.hypot(p.x - b.root.position.x, p.z - b.root.position.z), lead = 0.25 + dist / L(2000), tz = p.z + vz * lead;
         if (Math.abs(vz) < L(250) || Math.abs(tz) > L(400) || Math.abs(c.root.position.z) > L(330)) return null;

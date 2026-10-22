@@ -99,7 +99,8 @@ class WsConn {
 
 // ---------------- 방 ----------------
 // lagMs: 시험용 인공 지연 - 중계하는 메시지마다 이만큼 늦게 넘긴다(한쪽 방향). 순서는 그대로다. 환경 변수 RELAY_LAG_MS로도 켤 수 있다.
-function createRelayServer({ root = ROOT, log = () => {}, lagMs = 0 } = {}) {
+// bwBytesPerSec(102차): 시험용 좁은 길 - 받는 쪽마다 초당 이 바이트만큼만 흘려보낸다(넘치면 줄을 서서 늦어진다 = 약한 와이파이·붐비는 중계소). RELAY_BW로도 켠다.
+function createRelayServer({ root = ROOT, log = () => {}, lagMs = 0, bwBytesPerSec = 0 } = {}) {
   const rooms = new Map(); // code → { host, guest, createdAt }
   const conns = new Set();
   const newCode = () => {
@@ -151,6 +152,11 @@ function createRelayServer({ root = ROOT, log = () => {}, lagMs = 0 } = {}) {
       case 'msg': {
         const room = conn.room; if (!room) return send(conn, { t: 'error', msg: '방에 없음' });
         const to = room.host === conn ? room.guest : room.host;
+        if (bwBytesPerSec > 0 && to) { // 줄 서기: 앞 메시지가 다 흘러간 뒤에야 다음 것이 나간다
+          const text = JSON.stringify({ t: 'msg', d: m.d }), now = Date.now();
+          to._busyUntil = Math.max(now, to._busyUntil || 0) + (text.length / bwBytesPerSec) * 1000;
+          setTimeout(() => { if (!to.closed) to.send(text); }, to._busyUntil - now + lagMs); return;
+        }
         if (lagMs > 0) { const text = JSON.stringify({ t: 'msg', d: m.d }); setTimeout(() => { if (to && !to.closed) to.send(text); }, lagMs); return; }
         return send(to, { t: 'msg', d: m.d });
       }
@@ -201,7 +207,7 @@ function createRelayServer({ root = ROOT, log = () => {}, lagMs = 0 } = {}) {
 if (require.main === module) {
   const i = process.argv.indexOf('--port');
   const port = Number(i > 0 ? process.argv[i + 1] : process.env.PORT) || 8787;
-  const server = createRelayServer({ log: (s) => console.log(`[relay] ${s}`), lagMs: Number(process.env.RELAY_LAG_MS) || 0 });
+  const server = createRelayServer({ log: (s) => console.log(`[relay] ${s}`), lagMs: Number(process.env.RELAY_LAG_MS) || 0, bwBytesPerSec: Number(process.env.RELAY_BW) || 0 });
   server.listen(port, () => console.log(`[relay] http://localhost:${port}/  (웹소켓: ws://localhost:${port}/ws)`));
 }
 module.exports = { createRelayServer };

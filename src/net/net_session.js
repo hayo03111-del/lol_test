@@ -23,7 +23,7 @@
  *    승리/패배 화면·재대결, 끊긴 참가자 재접속(60초 안, 같은 토큰), 방장 탭이 백그라운드여도 시뮬레이션 계속(워커 타이머).
  *
  * 메시지(중계 서버의 {t:'msg', d} 안쪽 d)
- *   게스트 → 방장  {k:'hello', v, champ, name, spells, rune, token}  {k:'ready'}  {k:'cmd', cmd, s}  {k:'gping', at}  {k:'gstat', rtt}  {k:'rematch'}
+ *   게스트 → 방장  {k:'hello', v, champ, name, spells, rune, token}  {k:'ready'}  {k:'cmd', cmd, s}  {k:'gping', at}  {k:'gstat', rtt, delay, q(대기열 지연), rb(받은 바이트/초)}  {k:'rematch'}
  *   방장 → 게스트  {k:'welcome', resume, hostChamp, hostName, hostId, youId, structs, gt}  {k:'countdown', sec}
  *                  {k:'snap', t, gt, full, ents, gone, pr, me, fx, ev, ge}  {k:'gpong', at}  {k:'end', winner, stats}  {k:'rematch'}  {k:'bye', msg}
  * 아직 없는 것(README 98차 "한계"): 챔피언 코드가 직접 만드는 일부 연출(아리·요네·럭스 등의 자체 메시)은 방장 화면에만 나온다.
@@ -57,6 +57,7 @@ class NetClient {
       ws.onerror = () => { if (!opened) reject(new Error('서버에 연결하지 못했습니다')); };
       ws.onclose = () => { if (this._pingTimer) __hostClearInterval(this._pingTimer); this._pingTimer = null; if (opened) this._emit('close', {}); };
       ws.onmessage = (e) => {
+        this.bytesIn = (this.bytesIn || 0) + (e.data && e.data.length || 0); // 102차: 받은 양(참가자가 받는 속도를 방장에게 알린다)
         let m; try { m = JSON.parse(e.data); } catch (err) { return; }
         if (m.t === 'pong') { this.rtt = Math.round(__gcRealNow() - m.at); this._emit('pong', m); return; }
         if (m.t === 'msg') this._emit('msg', m.d || {});
@@ -66,6 +67,7 @@ class NetClient {
   }
   send(obj) { if (this.ws && this.ws.readyState === 1) { const text = JSON.stringify(obj); this.ws.send(text); this.bytesOut = (this.bytesOut || 0) + text.length; } }
   sendMsg(d) { this.send({ t: 'msg', d }); }
+  backlog() { return (this.ws && this.ws.bufferedAmount) || 0; } // 102차: 아직 못 보낸 바이트(보내는 쪽 대기열)
   close() { if (this._pingTimer) __hostClearInterval(this._pingTimer); this._pingTimer = null; this.handlers.clear(); if (this.ws) try { this.ws.close(); } catch (e) { /* 이미 닫힘 */ } }
 }
 
@@ -148,6 +150,8 @@ class PeerNetClient {
     }
   }
   sendMsg(d) { this.send({ t: 'msg', d }); }
+  // 102차: 데이터 채널에 쌓인 바이트 + PeerJS가 채널이 꽉 차 따로 쥐고 있는 메시지(개수 - 하나에 1KB로 친다)
+  backlog() { const c = this.conn; if (!c) return 0; let n = 0; try { n += (c.dataChannel && c.dataChannel.bufferedAmount) || 0; n += (c.bufferSize || 0) * 1024; } catch (e) { /* 무시 */ } return n; }
   _sendConn(o) {
     const c = this.conn; if (!c || !c.open) return;
     const text = JSON.stringify(o); this.bytesOut += text.length;
@@ -156,7 +160,7 @@ class PeerNetClient {
   // 받은 메시지(시험용 인공 지연 window.__netTestLagMs - 받은 순서 그대로 늦춘다)
   _onData(conn, raw) {
     let m = raw;
-    if (typeof raw === 'string') { try { m = JSON.parse(raw); } catch (e) { return; } }
+    if (typeof raw === 'string') { this.bytesIn = (this.bytesIn || 0) + raw.length; try { m = JSON.parse(raw); } catch (e) { return; } }
     const lag = (typeof window !== 'undefined' && window.__netTestLagMs) || 0;
     const go = () => this._handle(conn, m);
     if (lag > 0) __hostSetTimeout(go, lag); else go();
@@ -473,7 +477,10 @@ function _netHostOnMessage(st, d) {
     }
     case 'gping': st.client.sendMsg({ k: 'gpong', at: d.at }); return;
     case 'chat': _netChatShow(st.guestName || st.peerName || '상대', String(d.text || '').slice(0, 200), 'RED'); return;
-    case 'gstat': if (Number.isFinite(d.rtt)) st.guestRtt = Math.round(d.rtt); if (Number.isFinite(d.delay)) st.guestDelay = Math.round(d.delay); return;
+    case 'gstat':
+      if (Number.isFinite(d.rtt)) st.guestRtt = Math.round(d.rtt); if (Number.isFinite(d.delay)) st.guestDelay = Math.round(d.delay);
+      if (Number.isFinite(d.q)) { st.guestQueue = Math.round(d.q); st.guestRecvBps = Number.isFinite(d.rb) ? d.rb : null; _netRateControl(st, { now: __gcRealNow(), q: d.q, rb: st.guestRecvBps }); }
+      return;
     case 'rematch': st.rematch.guest = true; _netToast(`${st.guestName}이(가) 재대결을 원합니다`); _netEndScreenUpdate(); _netHostMaybeRematch(st); return;
     case 'cmd': {
       const bot = st.remote;
@@ -767,7 +774,9 @@ function netBuildHostSnapshot(st) {
   }
   // 100차: 칼바람 회복 유물(나타남·빛줄기)
   const rl = typeof aramRelics !== 'undefined' ? aramRelics.map((r) => [r.active ? 1 : 0, _netRound(r.beam && r.beam.material ? r.beam.material.opacity : 0, 100)]) : [];
-  const snap = { k: 'snap', t: _netRound(nowMs, 1), gt: _netRound(getTurretGameTimeSec()), ents, pr, ge: gameEnded ? 1 : 0 };
+  // 102차: t는 실제 시각(게임 시계는 느린 기기에서 프레임 시간 상한 때문에 실제보다 느리게 갈 수 있다 - 그러면 보간이 표본을 앞질러 끊기고
+  // 대기열 지연도 계속 늘어나는 것처럼 보였다). 게임 시계 기준 값(상태 만료 등)은 me.now로 따로 보낸다.
+  const snap = { k: 'snap', t: _netRound(__gcRealNow(), 1), gt: _netRound(getTurretGameTimeSec()), ents, pr, ge: gameEnded ? 1 : 0 };
   const rlj = JSON.stringify(rl); if (full || rlj !== st.rlSent) { snap.rl = rl; st.rlSent = rlj; }
   const mi = _netMirrorSnapshot(st, full); if (mi) snap.mi = mi;
   if (full) snap.full = 1;
@@ -778,6 +787,36 @@ function netBuildHostSnapshot(st) {
   st.seq++;
   return snap;
 }
+// 102차: 혼잡 제어 - 받는 쪽보다 빨리 보내면 줄이 밀려 핑이 끝없이 늘어난다(공개 중계소·약한 와이파이).
+// 혼잡 판단(셋 중 하나): 보내는 쪽 대기열(backlog)이 크다 / 참가자가 잰 대기열 지연(q)이 아주 크다(400ms+) /
+//   q가 두 번 연속 높고(90ms+) 참가자가 받은 속도(rb)가 내가 보낸 속도보다 확실히 느리다(줄이 쌓이는 중 - 프레임 흔들림만으로는 생기지 않는다).
+// 혼잡하면 초당 보낼 바이트(st.budget)를 "받은 속도의 85%"(한 번에 반 아래로는 안 내림, 모르면 70%)로 낮추고, 다시 낮추기 전엔 줄이 빠질 시간(q ms, 최소 0.5초)을 준다.
+// 조용해지면(2초 뒤부터) 1초에 8%씩 올리고, 실제 쓰는 양보다 넉넉해지면 제한을 푼다.
+const NET_MIN_BPS = 1500, NET_BACKLOG_MAX = 24 * 1024, NET_QUEUE_HIGH_MS = 90, NET_QUEUE_SEVERE_MS = 400;
+function _netRateControl(st, o) {
+  const now = o.now;
+  if (typeof window !== 'undefined' && window.__netRateControl === false) { st.budget = null; return null; } // 시험용: 끄고 비교
+  let starving = false;
+  if (o.q != null) {
+    const push = (k, v) => { const a = st[k] || (st[k] = []); a.push(v); if (a.length > 3) a.shift(); return a.reduce((x, y) => x + y, 0) / a.length; };
+    const rbAvg = push('rbHist', o.rb > 0 ? o.rb : 0), outAvg = push('outHist', st.bpsOut || 0);
+    starving = st.rbHist.length >= 2 && rbAvg < outAvg * 0.85 - 300;
+    st.qHigh = o.q > NET_QUEUE_HIGH_MS ? (st.qHigh || 0) + 1 : 0;
+  }
+  const congested = (o.backlog != null && o.backlog > NET_BACKLOG_MAX) || (o.q != null && (o.q > NET_QUEUE_SEVERE_MS || (st.qHigh >= 2 && starving)));
+  if (congested) {
+    if (!st.congestAt || now - st.congestAt >= Math.max(500, o.q || 0)) {
+      const cur = st.budget || st.bpsOut || 30000;
+      const fromRecv = o.rb > 0 ? Math.max(o.rb * 0.85, cur * 0.5) : cur * 0.7; // 받은 속도가 곧 좁은 길의 폭 - 단, 한 번에 반 아래로는 안 내린다
+      st.budget = Math.max(NET_MIN_BPS, Math.round(Math.min(cur * 0.7, fromRecv)));
+      st.congestAt = now; st.congestions = (st.congestions || 0) + 1;
+    }
+  } else if (st.budget && o.q != null && (o.q <= NET_QUEUE_HIGH_MS || !starving) && now - (st.congestAt || 0) >= 2000) { // 줄이 없거나, 보낸 만큼 다 받고 있다
+    st.budget = Math.round(st.budget * 1.08 + 200);
+    if (st.budget > 60000 || (st.bpsOut && st.budget > st.bpsOut * 1.5 && st.budget > 20000)) st.budget = null; // 제한이 실제 쓰는 양보다 한참 크다 - 푼다
+  }
+  return st.budget;
+}
 function _netProjId(st, proj) { let id = st.projIds.get(proj); if (!id) { id = ++st.projSeq; st.projIds.set(proj, id); } return id; }
 // 메인 루프가 시뮬레이션 뒤 프레임마다 부른다(실제 경과 시간 기준 초당 30번 보낸다).
 function netHostFrame(dt) {
@@ -786,10 +825,25 @@ function netHostFrame(dt) {
   if (typeof shopRemoteClear === 'function' && typeof _shopInBase === 'function' && !_shopInBase(st.remote)) shopRemoteClear(st.remote); // 기지를 벗어나면 되돌리기 기록을 비운다(원작)
   _netLagCompRecord(st);
   const hz = (st.client && st.client.snapshotHz) || NET_SNAPSHOT_HZ; // 우회 중계는 초당 15번
+  const now = __gcRealNow();
+  // 102차: 보낸 속도(바이트/초) - 1초마다
+  if (!st.bpsAt) { st.bpsAt = now; st.bpsBytes = st.client.bytesOut || 0; }
+  else if (now - st.bpsAt >= 1000) { const b = st.client.bytesOut || 0; st.bpsOut = Math.round(((b - st.bpsBytes) * 1000) / (now - st.bpsAt)); st.bpsAt = now; st.bpsBytes = b; }
+  // 102차: 혼잡하면 바이트 예산(토큰)만큼만 보낸다 - 예산이 없으면 초당 hz번
+  if (st.budget) st.tokens = Math.min((st.tokens || 0) + st.budget * dt, Math.max(2048, st.budget * 0.25));
   st.acc += dt;
   if (st.acc < 1 / hz) return;
+  if (st.budget && st.tokens < 0) return; // 예산이 모자라다 - 조금 뒤에(다음 프레임) 다시 본다
   st.acc = Math.min(st.acc - 1 / hz, 1 / hz);
-  try { const b0 = st.client.bytesOut || 0; st.client.sendMsg(netBuildHostSnapshot(st)); st.snapBytes = (st.snapBytes || 0) + (st.client.bytesOut || 0) - b0; st.snapCount = (st.snapCount || 0) + 1; } catch (e) { console.error('[NET] 스냅샷 오류', e); }
+  // 102차: 지난 스냅샷이 아직 다 나가지도 못했으면 이번 것은 건너뛴다(쌓아 두면 그만큼 늦게 도착한다). 차이 기준은 "마지막으로 보낸 것"이라 건너뛰어도 안전하다.
+  const backlog = st.client && typeof st.client.backlog === 'function' ? st.client.backlog() : 0;
+  if (backlog > NET_BACKLOG_MAX && !(typeof window !== 'undefined' && window.__netRateControl === false)) { st.snapSkipped = (st.snapSkipped || 0) + 1; _netRateControl(st, { now, backlog }); return; }
+  try {
+    const b0 = st.client.bytesOut || 0; st.client.sendMsg(netBuildHostSnapshot(st));
+    const n = (st.client.bytesOut || 0) - b0; st.snapBytes = (st.snapBytes || 0) + n; st.snapCount = (st.snapCount || 0) + 1;
+    if (st.budget) st.tokens -= n;
+    st.sendTimes = (st.sendTimes || []).filter((x) => now - x < 1000); st.sendTimes.push(now); st.sendHz = st.sendTimes.length; // 최근 1초 보낸 횟수
+  } catch (e) { console.error('[NET] 스냅샷 오류', e); }
 }
 // 방장 탭이 백그라운드로 가면 브라우저가 화면 갱신(requestAnimationFrame)을 멈춘다 - 워커 타이머(백그라운드에서도 거의 제때 온다)로
 // 시뮬레이션·스냅샷만 계속 돌린다(그리기는 하지 않는다).
@@ -884,7 +938,8 @@ function _netGuestConnect(st, first) {
     if (!st.pingTimer) st.pingTimer = __hostSetInterval(() => {
       if (netState !== st) { __hostClearInterval(st.pingTimer); return; }
       st.client.sendMsg({ k: 'gping', at: __gcRealNow() });
-      if (st.ready && st.rtt != null) { st.client.sendMsg({ k: 'gstat', rtt: st.rtt, delay: st.delay }); _netStatus(`대전 중 - ${st.hostName} · 왕복 ${Math.round(st.rtt)}ms`); }
+      if (st.ready && st.rtt != null) { const bi = st.client.bytesIn || 0, rb = st.bytesInPrev != null ? bi - st.bytesInPrev : null; st.bytesInPrev = bi; st.recvBps = rb;
+        st.client.sendMsg({ k: 'gstat', rtt: st.rtt, delay: st.delay, q: Math.round(st.queueDelay || 0), rb }); _netStatus(`대전 중 - ${st.hostName} · 왕복 ${Math.round(st.rtt)}ms`); }
     }, 1000);
     return st;
   }).catch((e) => {
@@ -977,6 +1032,18 @@ function _netMerge(st, d, full) {
   st.state.set(d.i, e);
   return e;
 }
+// 102차: 대기열 지연 - (받은 시각 - 방장이 만든 시각)은 "경로 지연 + 두 시계 차 + 대기열 + 프레임 흔들림"이다. 1초 칸마다 가장 빨리 온 값을 남기고,
+// 최근 15초의 최솟값을 기준(대기열 없음)으로 "방금 끝난 1초 칸의 최솟값"이 얼마나 늦었는지를 대기열로 친다(최솟값이라 프레임 흔들림은 빠지고
+// 계속 서 있는 줄만 남는다). 방장에게 알려(gstat.q) 줄이 생기면 바로 덜 보내게 한다.
+function _netQueueSample(st, off, now) {
+  if (!Number.isFinite(off)) return;
+  const qb = st.qb || (st.qb = { slot: -1, mins: [] });
+  const slot = Math.floor(now / 1000);
+  if (slot !== qb.slot) {
+    if (qb.mins.length) { const done = qb.mins[qb.mins.length - 1]; st.queueDelay = Math.max(0, done - Math.min(...qb.mins)); }
+    qb.slot = slot; qb.mins.push(off); if (qb.mins.length > 15) qb.mins.shift();
+  } else if (off < qb.mins[qb.mins.length - 1]) qb.mins[qb.mins.length - 1] = off;
+}
 function _netGuestOnSnapshot(st, s) {
   const recvAt = __gcRealNow();
   // 도착 간격 흔들림 → 보간 지연(스냅샷 간격 + 흔들림 2배, 45~250ms)
@@ -987,6 +1054,7 @@ function _netGuestOnSnapshot(st, s) {
     st.delay = Math.max(45, Math.min(300, st.gapAvg * 1.2 + st.jitter * 2 + 8));
   }
   st.lastArrive = recvAt;
+  _netQueueSample(st, recvAt - s.t, recvAt);
   st.hostT = s.t; st.lastSnapAt = recvAt;
   if (Number.isFinite(s.gt) && typeof setTurretGameTimeSec === 'function') {
     const local = getTurretGameTimeSec();
@@ -1320,7 +1388,7 @@ function _netReconcile(st) {
   const P = st.pred, own = st.own;
   if (!P || !own || P.follow || !P.srv) return;
   if (P.intent && P.intentSeq > (P.srv.ack || 0)) return; // 방장이 아직 내 명령을 모른다 - 비교하면 틀린 차이가 나온다
-  const back = __gcRealNow() - (st.rtt != null ? st.rtt : 100) - (1000 / NET_SNAPSHOT_HZ) / 2;
+  const back = __gcRealNow() - (st.rtt != null ? st.rtt : 100) - (st.gapAvg || 1000 / NET_SNAPSHOT_HZ) / 2; // 102차: 실제 도착 간격(혼잡하면 길어진다)
   let h = null;
   for (let i = P.hist.length - 1; i >= 0; i--) { if (P.hist[i].t <= back) { h = P.hist[i]; break; } }
   if (!h) return;
@@ -1746,7 +1814,7 @@ function _netLagCompUnits() {
 }
 function _netLagCompRecord(st) {
   if (!st.lagHist) st.lagHist = new Map();
-  const now = performance.now();
+  const now = __gcRealNow(); // 102차: 참가자 화면 지연(왕복+보간)은 실제 시간이다
   for (const u of _netLagCompUnits()) {
     const p = u.root ? u.root.position : u.mesh.position;
     let h = st.lagHist.get(u); if (!h) st.lagHist.set(u, h = []);
@@ -1775,7 +1843,7 @@ function _netHistAt(h, t) {
 function _netRewound(st, fn) {
   const ms = netLagCompMs(st);
   if (!ms || !st.lagHist || st._rewinding) return fn();
-  const t = performance.now() - ms;
+  const t = __gcRealNow() - ms;
   const moved = [];
   for (const u of _netLagCompUnits()) {
     if (u === st.remote || u._dashState || u._pullState) continue; // 돌진·끌려가는 중인 유닛은 지금 자리 그대로

@@ -56,6 +56,7 @@ class MqttWs {
     });
   }
   _send(bytes) { if (this.ws && this.ws.readyState === 1) this.ws.send(bytes); }
+  backlog() { return (this.ws && this.ws.bufferedAmount) || 0; }
   _data(chunk) {
     const b = new Uint8Array(this.buf.length + chunk.length); b.set(this.buf); b.set(chunk, this.buf.length); this.buf = b;
     for (;;) {
@@ -90,6 +91,7 @@ class MqttWs {
 class AutoNetClient {
   constructor() { this.url = ''; this.kind = 'auto'; this.handlers = new Map(); this.rtt = null; this.bytesOut = 0; this.closed = false; this.active = null; this.code = null; this.peer = null; this.mqtt = []; this.guest = null; this.myId = _netRandId(); this._timers = []; }
   get snapshotHz() { return this.kind === 'mqtt' ? 15 : undefined; }
+  get bytesIn() { return (this._bytesIn || 0) + ((this.peer && this.peer.bytesIn) || 0); } // 102차: 받은 양(직접 연결 + 중계)
   on(type, fn) { this.handlers.set(type, fn); return this; }
   _emit(type, m) { if (this.closed && type !== 'close') return; const fn = this.handlers.get(type); if (fn) { try { fn(m); } catch (e) { console.error('[NET auto]', type, e); } } }
   _status(msg) { if (typeof _netStatus === 'function' && netState && netState.client === this) _netStatus(msg); }
@@ -102,6 +104,7 @@ class AutoNetClient {
     if (obj.t === 'kick') return this._kick();
   }
   sendMsg(d) { this._sendMsg(d); }
+  backlog() { if (this.kind === 'p2p' && this.peer) return this.peer.backlog(); if (this.kind === 'mqtt' && this.guest && this.guest.link) return this.guest.link.backlog(); return 0; }
   _sendMsg(d) {
     if (this.kind === 'p2p' && this.peer) { this.peer.sendMsg(d); this.bytesOut = this.peer.bytesOut; return; }
     if (this.kind === 'mqtt' && this.guest) { const text = JSON.stringify({ f: this.myId, to: this.role === 'host' ? this.guest.cid : undefined, t: 'msg', d }); this.bytesOut += text.length; this.guest.link.publish(this._topic(this.role === 'host' ? 'g' : 'h'), text); }
@@ -225,6 +228,7 @@ class AutoNetClient {
         link.onmessage = (topic, payload) => {
           let m; try { m = JSON.parse(payload); } catch (e) { return; }
           if (!m || m.to !== this.myId) return;
+          this._bytesIn = (this._bytesIn || 0) + payload.length;
           this._lastRecv = __gcRealNow();
           if (m.t === 'joined' && !settled) { this.kind = 'mqtt'; this.guest = { via: 'mqtt', link }; done('ok'); this._startGuestKeepAlive(); this._emit('joined', m); return; }
           if (m.t === 'error' && !settled) { done(m.msg === '방이 가득 참' ? 'full' : 'no'); return; }
