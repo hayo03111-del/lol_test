@@ -79,7 +79,9 @@ const LAG = Number(process.env.LAG || 150);
   const watch = (p, expr) => p.evaluate((e) => { const o = eval(e), s = o.root.position.clone(); window.__mvStart = null; const loop = () => { if (o.root.position.distanceTo(s) > 0.01) { window.__mvStart = Date.now(); return; } requestAnimationFrame(loop); }; requestAnimationFrame(loop); }, expr);
   await watch(host, 'window.__e2e.enemyBots[0]'); await watch(guest, 'window.controller');
   const sentAt = await guest.evaluate(() => { const c = window.controller, L = window.__e2e.lolRangeToWorld, p = c.root.position; const t = Date.now(); window.gameSession.submit({ type: 'move', point: { x: p.x, y: 0, z: p.z - L(700) } }); return t; });
-  await realWait(guest, 3000);
+  await realWait(guest, 1000);
+  await host.waitForFunction(() => window.__e2e.enemyBots[0].state !== 'MOVE', null, { timeout: 15000 }).catch(() => {}); // 느린 화면(여러 점검을 같이 돌릴 때)에서도 도착할 때까지
+  await realWait(guest, 3 * LAG + 400);
   const g2 = await pos(guest, 'window.controller'), h2 = await pos(host, 'window.__e2e.enemyBots[0]');
   r.predict = { guestReactMs: (await guest.evaluate(() => window.__mvStart)) - sentAt, hostReactMs: (await host.evaluate(() => window.__mvStart)) - sentAt, hostMoved: distLol(h0, h2), guestMoved: distLol(g0, g2), gapAfter: distLol(g2, h2) };
   r.predict.stats = await guest.evaluate(() => ({ corrections: window.netState.pred.corrections, snaps: window.netState.pred.snaps }));
