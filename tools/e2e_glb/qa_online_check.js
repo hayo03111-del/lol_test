@@ -118,6 +118,7 @@ const LAG = Number(process.env.LAG || 150);
   check('effects: host vfx calls are replayed on the guest', r.fight.fxSent > 0 && r.fight.fxPlayed > r.fight.fxBefore);
   if (process.env.SHOT) { await guest.screenshot({ path: process.env.SHOT + '_guest.png' }); await host.screenshot({ path: process.env.SHOT + '_host.png' }); }
 
+  r.snapshotBytes = await host.evaluate(() => ({ avg: Math.round((window.netState.snapBytes || 0) / Math.max(1, window.netState.snapCount || 0)), count: window.netState.snapCount }));
   // 6) 동작 클립: 참가자 화면의 내 챔피언이 방장 쪽 평타 클립을 튼다(몇 번 재서 한 번이라도 같으면 통과)
   await guest.evaluate((id) => window.gameSession.submit({ type: 'attack', targetId: id }), H.hostId);
   r.clip = [];

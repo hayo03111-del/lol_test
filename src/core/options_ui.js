@@ -132,7 +132,7 @@ function _optBuild() {
   ov.querySelector('#optCloseX').addEventListener('click', () => setOptionsOpen(false));
   ov.querySelector('#optOkBtn').addEventListener('click', () => setOptionsOpen(false));
   ov.querySelector('#optResetBtn').addEventListener('click', () => { optionsState = { ...OPTIONS_DEFAULTS }; _optSave(); applyOptions(); _optRenderBody(); });
-  ov.querySelector('#optRestartBtn').addEventListener('click', () => { if (typeof resetGame === 'function' && confirm('게임을 처음부터 다시 시작할까요? (골드·아이템·레벨·미니언·포탑이 처음 상태로 돌아갑니다)')) { setOptionsOpen(false); resetGame(); } }); // 90차
+  ov.querySelector('#optRestartBtn').addEventListener('click', () => { if (typeof netMatchActive === 'function' && netMatchActive()) { if (typeof showSkillToast === 'function') showSkillToast('온라인 대전 중에는 다시 시작할 수 없습니다 - 끝난 뒤 재대결을 고르세요'); return; } if (typeof resetGame === 'function' && confirm('게임을 처음부터 다시 시작할까요? (골드·아이템·레벨·미니언·포탑이 처음 상태로 돌아갑니다)')) { setOptionsOpen(false); resetGame(); } }); // 90차
   ov.querySelector('#optPauseBtn').addEventListener('click', () => { if (typeof togglePause === 'function') togglePause(); _optRenderBody(); });
   ov.querySelector('#optTabs').addEventListener('click', (e) => { const t = e.target.closest('[data-tab]'); if (t) { _optTab = t.dataset.tab; _optRenderBody(); } });
   const body = ov.querySelector('#optBody');

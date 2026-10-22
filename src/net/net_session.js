@@ -63,7 +63,7 @@ class NetClient {
       };
     });
   }
-  send(obj) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(obj)); }
+  send(obj) { if (this.ws && this.ws.readyState === 1) { const text = JSON.stringify(obj); this.ws.send(text); this.bytesOut = (this.bytesOut || 0) + text.length; } }
   sendMsg(d) { this.send({ t: 'msg', d }); }
   close() { if (this._pingTimer) __hostClearInterval(this._pingTimer); this._pingTimer = null; this.handlers.clear(); if (this.ws) try { this.ws.close(); } catch (e) { /* 이미 닫힘 */ } }
 }
@@ -503,7 +503,7 @@ function netHostFrame(dt) {
   st.acc += dt;
   if (st.acc < 1 / NET_SNAPSHOT_HZ) return;
   st.acc = Math.min(st.acc - 1 / NET_SNAPSHOT_HZ, 1 / NET_SNAPSHOT_HZ);
-  try { st.client.sendMsg(netBuildHostSnapshot(st)); } catch (e) { console.error('[NET] 스냅샷 오류', e); }
+  try { const b0 = st.client.bytesOut || 0; st.client.sendMsg(netBuildHostSnapshot(st)); st.snapBytes = (st.snapBytes || 0) + (st.client.bytesOut || 0) - b0; st.snapCount = (st.snapCount || 0) + 1; } catch (e) { console.error('[NET] 스냅샷 오류', e); }
 }
 // 방장 탭이 백그라운드로 가면 브라우저가 화면 갱신(requestAnimationFrame)을 멈춘다 - 워커 타이머(백그라운드에서도 거의 제때 온다)로
 // 시뮬레이션·스냅샷만 계속 돌린다(그리기는 하지 않는다).
