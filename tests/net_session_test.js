@@ -23,7 +23,7 @@ ctx.withCombatActor = (a, fn) => { ctx.actorLog.push(a); return fn(); };
 vm.createContext(ctx);
 let src = '';
 for (const f of ['src/session/entity_registry.js', 'src/session/game_commands.js', 'src/net/net_session.js', 'src/net/net_transport.js']) src += fs.readFileSync(path.join(ROOT, f), 'utf8') + '\n';
-src += ';globalThis.__t = { MqttWs, _mqttPacket, _mqttStr, _mqttLen, _netTimeShift, _netApplyChampState, _netStatusFrom, _netDelta, _netSer, _netDeser, _netEffectiveIntent, _netReconcile, _netNewPred: (p) => ({ pos: p, intent: null, intentSeq: 0, hist: [], corr: new THREE.Vector3(), srv: null, follow: false, corrections: 0, snaps: 0 }), _netSampleAt, RemoteSession, _netHostOnMessage, assignEntityId, reserveEntityIds, entityId, findEntityById, getGameSession: () => gameSession, setGameSession: (s) => { gameSession = s; } };';
+src += ';globalThis.__t = { _netHistAt, _netRewound, MqttWs, _mqttPacket, _mqttStr, _mqttLen, _netTimeShift, _netApplyChampState, _netStatusFrom, _netDelta, _netSer, _netDeser, _netEffectiveIntent, _netReconcile, _netNewPred: (p) => ({ pos: p, intent: null, intentSeq: 0, hist: [], corr: new THREE.Vector3(), srv: null, follow: false, corrections: 0, snaps: 0 }), _netSampleAt, RemoteSession, _netHostOnMessage, assignEntityId, reserveEntityIds, entityId, findEntityById, getGameSession: () => gameSession, setGameSession: (s) => { gameSession = s; } };';
 vm.runInContext(src, ctx);
 const T = ctx.__t;
 
@@ -129,3 +129,7 @@ T._netApplyChampState(champ, { _leesin: { qStacks: 1 }, _itemActiveCooldownUntil
 assert(champ._leesin.qMarkTarget === null && champ._leesin.qStacks === 1 && champ._leesin.local instanceof Map && Math.abs(champ._itemActiveCooldownUntil.zhonya - 51000) < 1, '내부 상태: 지난 재시전 표식은 지우고, 참가자 쪽 Map은 두고, 아이템 대기 시각은 옮긴다');
 const sts = T._netStatusFrom([['stun', 'STUN', 1500, null, null, null], ['buff', 'BUFF', -1, 0.3, null, 2]], 1000);
 assert(sts[0].expiresAt === 2500 && sts[1].expiresAt === Infinity && sts[1].stacks === 2, '상태 효과: 남은 시간 → 내 시계, 끝없는 효과·중첩');
+
+// 11) 101차: 지연 보정 - 기록에서 과거 자리를 보간하고, 실행하는 동안만 되돌렸다가 제자리로(스킬이 옮겼으면 그 자리 유지)
+const h = [{ t: 1000, x: 0, y: 0, z: 0 }, { t: 1100, x: 10, y: 0, z: 0 }];
+assert(T._netHistAt(h, 1050).x === 5 && T._netHistAt(h, 500).x === 0 && T._netHistAt(h, 2000).x === 10, '지연 보정: 기록 사이 자리 보간');

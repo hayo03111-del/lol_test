@@ -43480,7 +43480,7 @@ function _netHostOnMessage(st, d) {
     }
     case 'gping': st.client.sendMsg({ k: 'gpong', at: d.at }); return;
     case 'chat': _netChatShow(st.guestName || st.peerName || '상대', String(d.text || '').slice(0, 200), 'RED'); return;
-    case 'gstat': if (Number.isFinite(d.rtt)) st.guestRtt = Math.round(d.rtt); return;
+    case 'gstat': if (Number.isFinite(d.rtt)) st.guestRtt = Math.round(d.rtt); if (Number.isFinite(d.delay)) st.guestDelay = Math.round(d.delay); return;
     case 'rematch': st.rematch.guest = true; _netToast(`${st.guestName}이(가) 재대결을 원합니다`); _netEndScreenUpdate(); _netHostMaybeRematch(st); return;
     case 'cmd': {
       const bot = st.remote;
@@ -43522,6 +43522,7 @@ async function _netHostStartMatch(st) {
     if (typeof bot.recomputeStats === 'function') { bot.recomputeStats(); bot.hp = bot.maxHp; bot.mp = bot.maxMp; }
     st.remote = bot; st.ack = 0; st.sent = new Map(); st.seq = 0; st.fx = []; st.ev = [];
     _netFxInstall(st);
+    _netLagCompInstall(st);
     _netHostHookEvents(st);
     st.client.sendMsg(_netWelcome(st, false));
   } catch (e) {
@@ -43601,6 +43602,7 @@ function _netHostEndMatch(st) {
   st.guestReady = false; st.locked = false;
   if (paused) togglePause(true);
   _netFxUninstall(st);
+  _netLagCompUninstall(st);
   if (st.offEvents) st.offEvents();
   netApplyControlLock();
 }
@@ -43789,6 +43791,7 @@ function netHostFrame(dt) {
   const st = netState;
   if (!st || st.role !== 'host' || !st.remote || !st.guestReady) return;
   if (typeof shopRemoteClear === 'function' && typeof _shopInBase === 'function' && !_shopInBase(st.remote)) shopRemoteClear(st.remote); // 기지를 벗어나면 되돌리기 기록을 비운다(원작)
+  _netLagCompRecord(st);
   const hz = (st.client && st.client.snapshotHz) || NET_SNAPSHOT_HZ; // 우회 중계는 초당 15번
   st.acc += dt;
   if (st.acc < 1 / hz) return;
@@ -43888,7 +43891,7 @@ function _netGuestConnect(st, first) {
     if (!st.pingTimer) st.pingTimer = __hostSetInterval(() => {
       if (netState !== st) { __hostClearInterval(st.pingTimer); return; }
       st.client.sendMsg({ k: 'gping', at: __gcRealNow() });
-      if (st.ready && st.rtt != null) { st.client.sendMsg({ k: 'gstat', rtt: st.rtt }); _netStatus(`대전 중 - ${st.hostName} · 왕복 ${Math.round(st.rtt)}ms`); }
+      if (st.ready && st.rtt != null) { st.client.sendMsg({ k: 'gstat', rtt: st.rtt, delay: st.delay }); _netStatus(`대전 중 - ${st.hostName} · 왕복 ${Math.round(st.rtt)}ms`); }
     }, 1000);
     return st;
   }).catch((e) => {
@@ -44068,7 +44071,8 @@ function _netGuestChampion(st, e, t) {
     rec.cl = e.cl; rec.cn = e.cn;
     const ownLoco = c === controller && _netIsLocoClip(c, e.cl);
     if (c === controller) rec.serverLoco = ownLoco;
-    const clip = ownLoco ? null : c.findAnimation(e.cl);
+    const predicted = c === controller && !ownLoco && _netOwnClipFromHost(st, c, e.cl); // 101차: 예측해서 이미 튼 시전 동작
+    const clip = ownLoco || predicted ? null : c.findAnimation(e.cl);
     if (clip) c.crossFadeToClip(clip, { loop: e.lp ? THREE.LoopRepeat : THREE.LoopOnce, clampWhenFinished: !e.lp, fade: 0.12, timeScale: e.ts || 1, time: e.lp ? 0 : Math.max(0, e.at || 0) });
   }
   updateBars(c);
@@ -44234,6 +44238,7 @@ function _netNewPred(pos) {
 // 명령을 보내는 순간: 이동 계열이면 예측 목표를 바꾼다(방장이 받기 전까지는 이 목표로 움직인다).
 function _netPredictOnCommand(st, cmd, seq) {
   const P = st.pred; if (!P || !controller) return;
+  if (cmd.type === 'cast') st.lastCast = { slot: cmd.slot, at: __gcRealNow() }; // 101차: 방장이 틀 시전 클립을 배우려고(행동 불가 중이어도)
   if (P.srv && !P.srv.fr) return; // 방장 쪽에서 지금 움직일 수 없다(행동 불가·시전 고정) - 방장 결과를 따른다
   const clampPt = (p) => { const v = new THREE.Vector3(p.x, 0, p.z); return (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap) ? howlingAbyssMap.clampPosition(v) : v; };
   switch (cmd.type) {
@@ -44241,6 +44246,7 @@ function _netPredictOnCommand(st, cmd, seq) {
     case 'attack': P.intent = { kind: 'chase', id: cmd.targetId }; P.intentSeq = seq; break;
     case 'stop': case 'recall': P.intent = { kind: 'stop' }; P.intentSeq = seq; break;
     case 'cast': case 'summoner':
+      if (cmd.type === 'cast') _netPredictCast(st, cmd); // 101차: 시전 동작 바로
       // 시전 방향으로 바로 돌아선다(방장도 같은 방향을 본다). 이동은 방장 결과를 기다린다.
       if (cmd.point) { const d = new THREE.Vector3(cmd.point.x - controller.root.position.x, 0, cmd.point.z - controller.root.position.z); if (d.lengthSq() > 1e-6) controller.root.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.normalize()); }
       break;
@@ -44337,6 +44343,7 @@ function _netOwnAnimate(st, c) {
   const pending = !!(P.intent && P.srv && P.intentSeq > (P.srv.ack || 0));
   const serverLoco = !rec || rec.serverLoco !== false;
   if (P.follow || !(serverLoco || (pending && P.moving))) return;
+  if (P.castLockUntil && __gcRealNow() < P.castLockUntil && !P.moving) return; // 101차: 예측한 시전 동작을 대기 동작으로 덮지 않는다
   const want = P.moving ? 'move' : 'idle';
   const cur = c.currentClipKey;
   const isMove = cur && c._moveClips().includes(cur), isIdle = cur && (c._idleClips().includes(cur) || cur === 'Idle1_Raw');
@@ -44475,7 +44482,7 @@ function netLeave(silent) {
 }
 if (typeof window !== 'undefined') {
   window.netHostCreateRoom = netHostCreateRoom; window.netGuestJoin = netGuestJoin; window.netLeave = netLeave; window.netRequestRematch = netRequestRematch;
-  window.netMatchActive = netMatchActive; window.netHeadlessFrame = netHeadlessFrame; window.togglePause = (f) => togglePause(f);
+  window.netMatchActive = netMatchActive; window.netHeadlessFrame = netHeadlessFrame; window.netLagCompMs = () => netLagCompMs(); window.togglePause = (f) => togglePause(f);
   Object.defineProperty(window, 'netState', { get: () => netState, configurable: true });
   Object.defineProperty(window, 'netGuestMode', { get: () => netGuestMode, configurable: true });
 }
@@ -44730,6 +44737,104 @@ function _netChatShow(name, text, team, mine) {
   if (netState) { netState.chatLog = netState.chatLog || []; netState.chatLog.push({ name, text }); }
 }
 if (typeof window !== 'undefined') window.netSendChat = netSendChat;
+
+// ================= 101차: 지연 보정(참가자가 본 그대로 맞는다) =================
+// 참가자는 상대 챔피언·미니언을 "한쪽 지연 + 보간 지연"만큼 과거 모습으로 보고, 그 화면을 보고 겨눈 명령은 다시 한쪽 지연 뒤에 방장에 닿는다.
+// 그래서 참가자의 스킬샷은 (왕복 지연 + 보간 지연)만큼 늦은 세상을 겨눈 셈이다 - 보정이 없으면 움직이는 상대를 화면대로 맞혀도 빗나간다.
+// 방장은 참가자 챔피언이 "행동하는 동안"(명령 처리·참가자 투사체 비행·참가자 스킬의 지연 판정·참가자 챔피언 갱신 - withCombatActor(원격 챔피언))
+// 다른 유닛(방장 챔피언·미니언)을 그만큼 과거 자리로 잠깐 되돌렸다가(위치 기록 0.6초) 끝나면 제자리로 돌린다.
+// 그 사이에 스킬이 그 유닛을 옮겼으면(넉백·끌어당김) 옮긴 자리를 그대로 둔다. 되돌리는 양은 최대 0.35초(너무 늦은 상대를 맞히지 않게).
+const NET_LAGCOMP_MAX_MS = 350;
+function _netLagCompUnits() {
+  const out = [];
+  if (typeof controller !== 'undefined' && controller && controller.root) out.push(controller);
+  for (const m of (typeof minions !== 'undefined' ? minions : [])) if (m && !m.isDead && m.mesh) out.push(m);
+  return out;
+}
+function _netLagCompRecord(st) {
+  if (!st.lagHist) st.lagHist = new Map();
+  const now = performance.now();
+  for (const u of _netLagCompUnits()) {
+    const p = u.root ? u.root.position : u.mesh.position;
+    let h = st.lagHist.get(u); if (!h) st.lagHist.set(u, h = []);
+    h.push({ t: now, x: p.x, y: p.y, z: p.z });
+    while (h.length > 2 && now - h[0].t > 700) h.shift();
+  }
+  if (st.lagHist.size > 200) for (const u of st.lagHist.keys()) if (!u.root && (u.isDead || !u.mesh)) st.lagHist.delete(u);
+}
+function netLagCompMs(st) {
+  st = st || netState;
+  if (!st || st.role !== 'host' || (typeof window !== 'undefined' && window.__netLagComp === false)) return 0;
+  const ms = (st.guestRtt || 0) + (st.guestDelay || 0);
+  return Math.max(0, Math.min(NET_LAGCOMP_MAX_MS, ms));
+}
+function _netHistAt(h, t) {
+  if (!h || !h.length) return null;
+  if (t <= h[0].t) return h[0];
+  for (let i = h.length - 1; i > 0; i--) {
+    const a = h[i - 1], b = h[i];
+    if (t >= a.t && t <= b.t) { const k = b.t > a.t ? (t - a.t) / (b.t - a.t) : 1; return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k }; }
+  }
+  return h[h.length - 1];
+}
+// fn을 "참가자가 본 세상"에서 실행한다.
+function _netRewound(st, fn) {
+  const ms = netLagCompMs(st);
+  if (!ms || !st.lagHist || st._rewinding) return fn();
+  const t = performance.now() - ms;
+  const moved = [];
+  for (const u of _netLagCompUnits()) {
+    if (u === st.remote || u._dashState || u._pullState) continue; // 돌진·끌려가는 중인 유닛은 지금 자리 그대로
+    const past = _netHistAt(st.lagHist.get(u), t); if (!past) continue;
+    const p = u.root ? u.root.position : u.mesh.position;
+    moved.push([p, p.x, p.y, p.z, past.x, past.y, past.z]);
+    p.set(past.x, past.y, past.z);
+  }
+  st._rewinding = true;
+  try { return fn(); } finally {
+    st._rewinding = false;
+    for (const [p, x, y, z, px, py, pz] of moved) if (p.x === px && p.y === py && p.z === pz) p.set(x, y, z); // 스킬이 옮겼으면 그 자리를 둔다
+    st.lagCompUses = (st.lagCompUses || 0) + 1;
+  }
+}
+function _netLagCompInstall(st) {
+  if (st.lagRestore) return;
+  const orig = withCombatActor;
+  withCombatActor = function (actor, fn) {
+    if (actor && actor === st.remote && netState === st && st.guestReady && __combatActor !== actor) return orig(actor, () => _netRewound(st, fn));
+    return orig(actor, fn);
+  };
+  st.lagRestore = () => { withCombatActor = orig; };
+}
+function _netLagCompUninstall(st) { if (st && st.lagRestore) { st.lagRestore(); st.lagRestore = null; } }
+
+// ================= 101차: 참가자 시전 동작 예측 =================
+// 참가자가 스킬을 쓰면 방장 결과(왕복 지연 뒤)를 기다리지 않고 바로 시전 동작을 튼다. 어떤 클립인지는 챔피언·칸마다 "지난번에 방장이 튼 클립"을
+// 배워 둔다(챔피언마다 스킬 동작이 다르고 연속 동작도 있어서 - 처음 한 번은 방장 것을 기다린다). 방장 쪽 같은 클립이 1초 안에 오면 다시 틀지 않는다.
+// 쿨다운 중·마나 부족·행동 불가·시전 고정이면 틀지 않는다.
+const _netCastClipMemo = new Map(); // `${championId}:${slot}` → 클립 이름
+function _netPredictCast(st, cmd) {
+  const c = controller, P = st.pred; if (!c || !P) return;
+  const slot = cmd.slot;
+  st.lastCast = { slot, at: __gcRealNow() };
+  if (!P.srv || !P.srv.fr) return;
+  if (c.state === STATE.DEAD || ((c.cooldowns && c.cooldowns[slot]) || 0) > 0.05 || !((c.skillLevels && c.skillLevels[slot]) > 0)) return;
+  const clipName = _netCastClipMemo.get(`${c.championId}:${slot}`); if (!clipName) return;
+  const clip = c.findAnimation(clipName); if (!clip) return;
+  c.crossFadeToClip(clip, { loop: THREE.LoopOnce, clampWhenFinished: true, fade: 0.08 });
+  st.predictedClip = { name: clipName, at: __gcRealNow() };
+  P.castLockUntil = __gcRealNow() + Math.min(600, clip.duration * 1000); // 시전 동작 중에는 걷기 동작으로 덮지 않는다
+}
+// 방장 쪽 내 챔피언 클립이 바뀌면: 방금 쓴 스킬의 클립을 배우고, 예측해서 이미 튼 클립이면 다시 틀지 않는다.
+function _netOwnClipFromHost(st, c, clipName) {
+  const now = __gcRealNow();
+  if (st.lastCast && now - st.lastCast.at < 1500 && !_netIsLocoClip(c, clipName) && !/attack|death|recall|respawn/i.test(clipName)) {
+    _netCastClipMemo.set(`${c.championId}:${st.lastCast.slot}`, clipName);
+    st.lastCast = null;
+  }
+  if (st.predictedClip && st.predictedClip.name === clipName && now - st.predictedClip.at < 1000) { st.predictedClip = null; return true; } // 이미 틀었다
+  return false;
+}
 
 /* ===== src/net/net_transport.js ===== */
 /* net_transport.js — 100차: 학교·회사 와이파이에서도 붙는 연결(자동 선택)
