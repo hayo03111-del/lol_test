@@ -9,7 +9,7 @@ const startServer = require('./server.js');
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = []; page.on('pageerror', (e) => errors.push(e.message));
   const r = {};
-  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
+  await page.goto(`http://127.0.0.1:${port}/index.html?nolobby`, { waitUntil: 'load' }); // 52차부터 처음에 로비가 떠서 시작 화면 버튼을 가린다
   await page.waitForFunction(() => window.__e2e, null, { timeout: 30000 });
   r.entryButtons = await page.evaluate(() => [...document.querySelectorAll('#championLibrary button')].map((b) => b.dataset.champ));
   if (process.argv[2]) await page.screenshot({ path: process.argv[2] });
