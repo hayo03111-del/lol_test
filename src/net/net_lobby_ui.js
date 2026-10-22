@@ -32,14 +32,16 @@ function _nlEl(id) { return document.getElementById(id); }
     <div class="nl-card" id="nlConnect">
       <h3>온라인 1:1 대전</h3>
       <div class="nl-help">
-        <b>1.</b> 한 사람이 중계 서버를 켭니다: <code>node server/relay.js</code> (Node 18+, 설치할 것 없음, 포트 8787)<br>
-        <b>2.</b> 둘 다 <code>http://&lt;그 컴퓨터 주소&gt;:8787/</code>로 접속하면 서버 주소가 자동으로 들어갑니다.<br>
-        <b>3.</b> 한 사람이 "방 만들기" → 코드(또는 초대 링크)를 보내고, 상대가 코드를 넣고 "참가" → 챔피언 선택 → 대전.
+        <b>1.</b> 한 사람이 <b>방 만들기</b> → 나온 코드(또는 초대 링크)를 상대에게 보냅니다.<br>
+        <b>2.</b> 상대가 이 페이지에서 코드를 넣고 <b>참가</b> → 챔피언을 고르고 확정하면 시작합니다.<br>
+        설치할 것도, 켜 둘 서버도 없습니다 - 두 브라우저가 직접 연결됩니다(WebRTC).
       </div>
-      <label>서버 주소<input id="netServerUrl" placeholder="ws://주소:8787/ws  (https 페이지면 wss://…/ws)"></label>
       <label>내 이름<input id="netName" maxlength="24" placeholder="이름"></label>
       <div class="nl-row"><button type="button" id="netCreateBtn" class="primary">방 만들기</button></div>
       <div class="nl-row"><input id="netJoinCode" maxlength="4" placeholder="방 코드 4자리" style="text-transform:uppercase;letter-spacing:.2em"><button type="button" id="netJoinBtn">참가</button></div>
+      <details class="nl-adv"><summary>고급: 직접 켠 중계 서버 쓰기</summary>
+        <label>중계 서버 주소(비우면 브라우저끼리 직접 연결)<input id="netServerUrl" placeholder="ws://주소:8787/ws  (node server/relay.js)"></label>
+      </details>
     </div>
     <div class="nl-card" id="nlRoom" style="display:none">
       <h3 id="nlRoomTitle">대기실</h3>
@@ -65,11 +67,11 @@ function _nlEl(id) { return document.getElementById(id); }
   });
   _nlEl('lbTabOnline').addEventListener('click', () => netLobbyMode('online'));
   const urlEl = _nlEl('netServerUrl'), nameEl = _nlEl('netName'), codeEl = _nlEl('netJoinCode');
-  urlEl.value = _nlGet(_NL_STORE.url) || (typeof netDefaultServerUrl === 'function' ? netDefaultServerUrl() : '');
+  urlEl.value = _nlGet(_NL_STORE.url);
   nameEl.value = _nlGet(_NL_STORE.name);
   const read = () => {
     const url = urlEl.value.trim(); _nlSet(_NL_STORE.url, url); _nlSet(_NL_STORE.name, nameEl.value.trim());
-    if (!/^wss?:\/\//.test(url)) { _netStatus('서버 주소를 ws://… 또는 wss://… 로 입력하세요 (node server/relay.js)'); return null; }
+    if (url && !/^wss?:\/\//.test(url)) { _netStatus('중계 서버 주소는 ws://… 또는 wss://… 입니다 (비우면 브라우저끼리 직접 연결)'); return null; }
     return { url, name: nameEl.value.trim() };
   };
   _nlEl('netCreateBtn').addEventListener('click', () => { const r = read(); if (r) netHostCreateRoom(r.url, r.name || '방장').catch(() => {}).finally(netLobbyRefresh); netLobbyRefresh(); });
@@ -105,7 +107,8 @@ function _nlEl(id) { return document.getElementById(id); }
 function netInviteLink() {
   const st = netState; if (!st || !st.code) return '';
   const base = location.origin + location.pathname;
-  return `${base}?room=${st.code}&server=${encodeURIComponent(st.client ? st.client.url : _nlGet(_NL_STORE.url))}`;
+  const url = st.client && st.client.url !== 'p2p' ? st.client.url : '';
+  return `${base}?room=${st.code}${url ? '&server=' + encodeURIComponent(url) : ''}`;
 }
 function openNetLobby() {
   if (typeof openLobby === 'function' && !(typeof isLobbyOpen === 'function' && isLobbyOpen())) openLobby();

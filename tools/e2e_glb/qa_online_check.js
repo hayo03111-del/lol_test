@@ -3,17 +3,31 @@
 // 99차: 로비 온라인 탭(방 만들기·참가)·픽창(실시간 선택·확정·재대결 때 다시 고르기).
 // 98차: 로비 주문 전달, 카운트다운(그동안 명령 막힘), 대전 중 연습 도구·일시정지 잠금, 내 챔피언 즉시 반응(예측)과 수렴, 추격 예측,
 //       연출 복제, 와드 동기화, 처치·죽음, 끊긴 뒤 자동 재접속, 백그라운드 방장 시뮬레이션, 승패 화면·재대결.
-// 사용법: THREE_DIR=<three package> E2E_HIDE_MAP=1 [LAG=150] [SHOT=<경로 접두어>] node tools/e2e_glb/qa_online_check.js  (실패 항목이 있으면 종료 코드 1)
+// 99차: NET_MODE=p2p - 브라우저끼리 직접 연결(WebRTC, PeerJS). 연결 중개 서버는 PeerJS 공식 서버 패키지를 이 컴퓨터에 띄운다(PEER_SERVER_DIR = `npm install peer@1` 한 폴더).
+//       인공 지연은 페이지 쪽(window.__netTestLagMs - 받은 메시지를 늦춘다)으로 넣는다.
+// 사용법: THREE_DIR=<three package> E2E_HIDE_MAP=1 [LAG=150] [NET_MODE=relay|p2p PEER_SERVER_DIR=<폴더>] [SHOT=<경로 접두어>] node tools/e2e_glb/qa_online_check.js  (실패 항목이 있으면 종료 코드 1)
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const path = require('path');
 const startServer = require('./server.js');
 const { createRelayServer } = require(path.resolve(__dirname, '../../server/relay.js'));
 const LAG = Number(process.env.LAG || 150);
+const MODE = process.env.NET_MODE === 'p2p' ? 'p2p' : 'relay';
 (async () => {
   const srv = await startServer(); const port = srv.address().port;
-  const relay = createRelayServer({ lagMs: LAG }); await new Promise((r) => relay.listen(0, '127.0.0.1', r));
-  const wsUrl = `ws://127.0.0.1:${relay.address().port}/ws`;
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
+  let relay = null, wsUrl = '', peerOpts = null, peerSrv = null;
+  if (MODE === 'relay') {
+    relay = createRelayServer({ lagMs: LAG }); await new Promise((r) => relay.listen(0, '127.0.0.1', r));
+    wsUrl = `ws://127.0.0.1:${relay.address().port}/ws`;
+  } else {
+    const mods = path.join(process.env.PEER_SERVER_DIR || '', 'node_modules');
+    const { ExpressPeerServer } = require(path.join(mods, 'peer')), express = require(path.join(mods, 'express'));
+    const app = express();
+    peerSrv = await new Promise((r) => { const sv = app.listen(0, '127.0.0.1', () => r(sv)); });
+    app.use('/lolsim', ExpressPeerServer(peerSrv, { path: '/' }));
+    const peerPort = peerSrv.address().port;
+    peerOpts = { host: '127.0.0.1', port: peerPort, path: '/lolsim', secure: false, config: { iceServers: [] } };
+  }
+  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--disable-features=WebRtcHideLocalIpsWithMdns'] });
   const errors = [];
   const open = async (champ, tag) => {
     const ctx = await browser.newContext({ viewport: { width: 800, height: 500 } });
@@ -21,13 +35,14 @@ const LAG = Number(process.env.LAG || 150);
     page.on('pageerror', (e) => errors.push(tag + ': ' + e.message.slice(0, 200)));
     await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__e2e, null, { timeout: 60000 });
+    if (MODE === 'p2p') await page.evaluate(([o, lag]) => { window.__netPeerOptions = o; window.__netTestLagMs = lag; }, [peerOpts, LAG]);
     await page.evaluate((id) => { const s = document.getElementById('libraryChampSelect'); s.value = id; s.dispatchEvent(new Event('change')); }, champ);
     await page.waitForFunction((id) => window.controller && window.controller.championId === id, champ, { timeout: 60000 });
     await page.waitForTimeout(800);
     return page;
   };
   const host = await open('garen', 'host'), guest = await open('ashe', 'guest');
-  const r = { lag: LAG }, fails = [];
+  const r = { lag: LAG, mode: MODE }, fails = [];
   const check = (name, ok) => { r[name] = !!ok; if (!ok) fails.push(name); };
   const realWait = (p, ms) => p.evaluate((ms) => window.__e2e.realWait(ms), ms);
   const L1 = await host.evaluate(() => window.__e2e.lolRangeToWorld(1));
@@ -105,8 +120,12 @@ const LAG = Number(process.env.LAG || 150);
   const sentAt = await guest.evaluate(() => { const c = window.controller, L = window.__e2e.lolRangeToWorld, p = c.root.position; const t = Date.now(); window.gameSession.submit({ type: 'move', point: { x: p.x, y: 0, z: p.z - L(700) } }); return t; });
   await realWait(guest, 1000);
   await host.waitForFunction(() => window.__e2e.enemyBots[0].state !== 'MOVE', null, { timeout: 15000 }).catch(() => {}); // 느린 화면(여러 점검을 같이 돌릴 때)에서도 도착할 때까지
-  await realWait(guest, 3 * LAG + 400);
-  const g2 = await pos(guest, 'window.controller'), h2 = await pos(host, 'window.__e2e.enemyBots[0]');
+  let g2, h2;
+  for (let i = 0; i < 12; i++) { // 느린 화면에서는 스냅샷·보정이 늦게 돈다 - 최대 6초 동안 수렴을 기다린다
+    await realWait(guest, i ? 500 : 3 * LAG + 400);
+    g2 = await pos(guest, 'window.controller'); h2 = await pos(host, 'window.__e2e.enemyBots[0]');
+    if (distLol(g2, h2) < 25) break;
+  }
   r.predict = { guestReactMs: (await guest.evaluate(() => window.__mvStart)) - sentAt, hostReactMs: (await host.evaluate(() => window.__mvStart)) - sentAt, hostMoved: distLol(h0, h2), guestMoved: distLol(g0, g2), gapAfter: distLol(g2, h2) };
   r.predict.stats = await guest.evaluate(() => ({ corrections: window.netState.pred.corrections, snaps: window.netState.pred.snaps }));
   check('prediction: own champion reacts before a round trip could (guest moves before the host even starts)', r.predict.guestReactMs >= 0 && r.predict.guestReactMs < 2 * LAG && r.predict.guestReactMs < r.predict.hostReactMs);
@@ -170,7 +189,7 @@ const LAG = Number(process.env.LAG || 150);
 
   // 9) 끊긴 뒤 자동 재접속: 참가자 소켓을 강제로 끊는다 - 방장은 원격 챔피언을 유지하고, 참가자가 다시 붙어 스냅샷을 이어 받는다
   const botBefore = await host.evaluate(() => window.__e2eEntityId(window.__e2e.enemyBots[0]));
-  await guest.evaluate(() => window.netState.client.ws.close());
+  await guest.evaluate(() => { const c = window.netState.client; if (c.ws) c.ws.close(); else c.conn.close(); });
   await host.waitForFunction(() => window.netState && window.netState.guestGoneAt, null, { timeout: 10000 }).catch(() => {});
   r.reconnect = { hostKept: await host.evaluate(() => window.__e2e.enemyBots.length === 1) };
   await host.waitForFunction(() => window.netState && window.netState.guestReady, null, { timeout: 20000 }).catch(() => {});
@@ -212,7 +231,7 @@ const LAG = Number(process.env.LAG || 150);
 
   // 12) 나가기: 참가자 탭을 닫으면 방장은 재접속을 기다린다(원격 챔피언 유지) → 방장이 방을 닫으면 정리된다
   await guest.close();
-  await host.waitForFunction(() => window.netState && window.netState.guestGoneAt, null, { timeout: 10000 }).catch(() => {});
+  await host.waitForFunction(() => window.netState && window.netState.guestGoneAt, null, { timeout: 20000 }).catch(() => {}); // P2P: 닫기 알림 또는 keepalive 시간 초과(8초)
   r.leave = await host.evaluate(() => ({ bots: window.__e2e.enemyBots.length, waiting: !!window.netState.guestGoneAt, code: window.netState && window.netState.code }));
   check('leave: guest disconnect keeps the remote champion while waiting for reconnect', r.leave.bots === 1 && r.leave.waiting && r.leave.code === code);
   await host.evaluate(() => window.netLeave());
@@ -222,6 +241,6 @@ const LAG = Number(process.env.LAG || 150);
   r.errors = errors; r.fails = fails;
   if (errors.length) fails.push('page errors');
   console.log(JSON.stringify(r, null, 1));
-  await browser.close(); srv.close(); relay.close();
+  await browser.close(); srv.close(); if (relay) relay.close(); if (peerSrv && peerSrv.close) try { peerSrv.close(); } catch (e) { /* 무시 */ }
   process.exit(fails.length ? 1 : 0);
 })();

@@ -885,6 +885,8 @@
   #netLobbyPanel .nl-code{ font:bold 44px/1 monospace; letter-spacing:.25em; color:#f0d899; text-align:center; padding:8px 0; }
   #netLobbyPanel .nl-help{ font-size:12px; color:var(--text-1); line-height:1.7; }
   #netLobbyPanel .nl-help b{ color:var(--accent); }
+  #netLobbyPanel .nl-adv summary{ cursor:pointer; font-size:11px; color:var(--text-1); }
+  #netLobbyPanel .nl-adv label{ margin-top:6px; }
   #netLobbyPanel .nl-status{ font-size:12px; color:#9cf; min-height:16px; }
   #netLobbyPanel .nl-players{ display:flex; gap:10px; }
   #netLobbyPanel .nl-player{ flex:1; padding:10px; border:1px solid var(--line); font-size:13px; }
@@ -43020,6 +43022,175 @@ class NetClient {
   close() { if (this._pingTimer) __hostClearInterval(this._pingTimer); this._pingTimer = null; this.handlers.clear(); if (this.ws) try { this.ws.close(); } catch (e) { /* 이미 닫힘 */ } }
 }
 
+// ---------------- 99차: 브라우저끼리 직접 연결(P2P, WebRTC) ----------------
+// 서버를 켤 필요 없이 웹페이지에서 바로 대전한다. PeerJS(vendor/peerjs, MIT)의 공개 연결 중개 서버(0.peerjs.com)로 처음 연결만 맺고,
+// 그 뒤 게임 메시지는 두 브라우저가 WebRTC 데이터 채널로 직접 주고받는다(공유기 사정으로 직접 연결이 안 되면 PeerJS의 TURN 중계).
+// 위 NetClient(중계 서버 relay.js)와 같은 모양(on/connect/send/sendMsg/close, 'created'·'joined'·'peer-join'·'peer-leave'·'room-closed'·'msg'·'error'·'close')을
+// 흉내 내서, 나머지 대전 코드는 어느 쪽인지 모른다. 방 코드 ABCD = PeerJS 아이디 'lolsim-pvp-ABCD'(방장).
+const NET_P2P_PREFIX = 'lolsim-pvp-';
+const NET_PEERJS_SRC = 'vendor/peerjs/peerjs.min.js';
+const NET_ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+let _netPeerJsPromise = null;
+function _netLoadPeerJs() {
+  if (typeof window !== 'undefined' && window.Peer) return Promise.resolve(window.Peer);
+  if (!_netPeerJsPromise) {
+    _netPeerJsPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = NET_PEERJS_SRC;
+      s.onload = () => (window.Peer ? resolve(window.Peer) : reject(new Error('P2P 라이브러리를 불러오지 못했습니다')));
+      s.onerror = () => { _netPeerJsPromise = null; reject(new Error('P2P 라이브러리를 불러오지 못했습니다')); };
+      document.head.appendChild(s);
+    });
+  }
+  return _netPeerJsPromise;
+}
+function _netRandomCode() { let c = ''; for (let i = 0; i < 4; i++) c += NET_ROOM_ALPHABET[Math.floor(Math.random() * NET_ROOM_ALPHABET.length)]; return c; }
+class PeerNetClient {
+  constructor() { this.url = 'p2p'; this.kind = 'p2p'; this.handlers = new Map(); this.peer = null; this.conn = null; this.rtt = null; this.bytesOut = 0; this.closed = false; this._roomClosed = false; this._joined = false; this._pongTimer = null; }
+  on(type, fn) { this.handlers.set(type, fn); return this; }
+  _emit(type, m) {
+    const fn = this.handlers.get(type);
+    if (!fn) return;
+    const run = () => { if (!this.closed || type === 'close') { try { fn(m); } catch (e) { console.error('[NET p2p]', type, e); } } };
+    run();
+  }
+  _peerOptions() { return Object.assign({ debug: 0 }, (typeof window !== 'undefined' && window.__netPeerOptions) || {}); }
+  _newPeer(id) {
+    const Peer = window.Peer;
+    const peer = id ? new Peer(id, this._peerOptions()) : new Peer(this._peerOptions());
+    // 중개 서버와의 연결만 끊긴 경우(데이터 채널은 그대로) - 다시 붙는다(방장은 같은 아이디로 새 참가를 받을 수 있게).
+    peer.on('disconnected', () => { if (!this.closed && !peer.destroyed) { try { peer.reconnect(); } catch (e) { /* 다음 기회 */ } } });
+    return peer;
+  }
+  // 라이브러리를 불러온다. 참가자는 여기서 자기 피어를 열어 둔다(방장은 방 코드를 정한 뒤 'create'에서 연다).
+  connect(role) {
+    return _netLoadPeerJs().then(() => {
+      // 2초마다: 살아 있다는 신호(ka)를 보내고, 상대에게서 8초 넘게 아무것도 안 오면 끊긴 것으로 본다
+      // (탭을 닫거나 네트워크가 끊겨도 WebRTC는 한참 뒤에야 닫힘을 알린다).
+      this._pongTimer = __hostSetInterval(() => {
+        this._emit('pong', {});
+        const c = this.conn;
+        if (!c || !c.open) return;
+        this._sendConn({ t: 'ka' });
+        if (this._lastRecv && __gcRealNow() - this._lastRecv > 8000) { this._lastRecv = 0; try { c.close(); } catch (e) { /* 무시 */ } this._connGone(c); }
+      }, 2000);
+      if (typeof window !== 'undefined') {
+        this._onPageHide = () => { const c = this.conn; if (c && c.open) { try { c.send(JSON.stringify({ t: this.role === 'host' ? 'room-closed' : 'bye' })); } catch (e) { /* 무시 */ } } };
+        window.addEventListener('pagehide', this._onPageHide);
+      }
+      return this;
+    });
+  }
+  // 데이터 채널이 닫혔다(닫힘 알림·keepalive 시간 초과·상대의 bye) - 한 번만 처리한다.
+  _connGone(conn) {
+    if (conn._gone) return; conn._gone = true;
+    if (this.conn !== conn) return;
+    this.conn = null;
+    if (this.role === 'host') { if (conn._joined) this._emit('peer-leave', {}); }
+    else if (this._roomClosed) this._emit('room-closed', {}); else this._emit('close', {});
+  }
+  send(obj) {
+    if (this.closed || !obj) return;
+    switch (obj.t) {
+      case 'create': this._create(obj.name || '방장', 0); break;
+      case 'join': this._join(String(obj.code || '').toUpperCase().trim(), obj.name || '참가자'); break;
+      case 'msg': this._sendConn({ t: 'msg', d: obj.d }); break;
+      case 'kick': if (this.conn) { const c = this.conn; this.conn = null; try { c.send({ t: 'error', msg: '방장이 참가를 거절했습니다' }); } catch (e) { /* 이미 닫힘 */ } __hostSetTimeout(() => { try { c.close(); } catch (e) { /* 이미 닫힘 */ } }, 300); } break;
+      case 'leave': if (this.conn) { try { this.conn.close(); } catch (e) { /* 이미 닫힘 */ } this.conn = null; } break;
+      case 'ping': break; // 왕복 지연은 게임 핑(gping)으로 잰다
+    }
+  }
+  sendMsg(d) { this.send({ t: 'msg', d }); }
+  _sendConn(o) {
+    const c = this.conn; if (!c || !c.open) return;
+    const text = JSON.stringify(o); this.bytesOut += text.length;
+    try { c.send(text); } catch (e) { console.warn('[NET p2p] 보내기 실패', e); }
+  }
+  // 받은 메시지(시험용 인공 지연 window.__netTestLagMs - 받은 순서 그대로 늦춘다)
+  _onData(conn, raw) {
+    let m = raw;
+    if (typeof raw === 'string') { try { m = JSON.parse(raw); } catch (e) { return; } }
+    const lag = (typeof window !== 'undefined' && window.__netTestLagMs) || 0;
+    const go = () => this._handle(conn, m);
+    if (lag > 0) __hostSetTimeout(go, lag); else go();
+  }
+  // ---- 방장 ----
+  _create(name, tries) {
+    this.role = 'host'; this.name = name;
+    const code = _netRandomCode();
+    const peer = this._newPeer(NET_P2P_PREFIX + code);
+    this.peer = peer;
+    peer.on('open', () => { this.code = code; this._emit('created', { code }); });
+    peer.on('error', (err) => {
+      if (err && err.type === 'unavailable-id' && tries < 6 && !this.code) { try { peer.destroy(); } catch (e) { /* 무시 */ } this._create(name, tries + 1); return; }
+      if (err && (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error' || err.type === 'socket-closed')) { if (!this.code) this._emit('error', { msg: '연결 중개 서버에 닿지 못했습니다 - 인터넷 연결을 확인하세요' }); return; }
+      if (err && err.type === 'browser-incompatible') { this._emit('error', { msg: '이 브라우저는 P2P(WebRTC)를 지원하지 않습니다' }); return; }
+      console.warn('[NET p2p] 방장 오류', err && err.type, err);
+    });
+    peer.on('connection', (conn) => {
+      conn.on('open', () => {
+        if (this.conn && this.conn !== conn && this.conn.open) { try { conn.send(JSON.stringify({ t: 'error', msg: '방이 가득 참' })); } catch (e) { /* 무시 */ } __hostSetTimeout(() => conn.close(), 300); return; }
+        this.conn = conn;
+      });
+      conn.on('data', (d) => this._onData(conn, d));
+      conn.on('close', () => this._connGone(conn));
+      conn.on('error', () => { /* close가 뒤따른다 */ });
+    });
+  }
+  // ---- 참가자 ----
+  _join(code, name) {
+    this.role = 'guest'; this.name = name; this.code = code;
+    const peer = this._newPeer(null);
+    this.peer = peer;
+    let opened = false;
+    peer.on('open', () => {
+      const conn = peer.connect(NET_P2P_PREFIX + code, { reliable: true, serialization: 'raw' });
+      this.conn = conn;
+      conn.on('open', () => { opened = true; this._sendConn({ t: 'join', code, name }); });
+      conn.on('data', (d) => this._onData(conn, d));
+      conn.on('close', () => this._connGone(conn));
+      conn.on('error', () => { /* close가 뒤따른다 */ });
+      __hostSetTimeout(() => { if (!opened && !this.closed && this.conn === conn) { this._emit('error', { msg: '방장과 직접 연결하지 못했습니다(방화벽·공유기). 잠시 뒤 다시 시도하세요' }); this._emit('close', {}); } }, 20000);
+    });
+    peer.on('error', (err) => {
+      const t = err && err.type;
+      if (t === 'peer-unavailable') { this._emit('error', { msg: '방이 없음 - 코드를 확인하세요' }); this._emit('close', {}); return; }
+      if (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') { if (!opened) { this._emit('error', { msg: '연결 중개 서버에 닿지 못했습니다 - 인터넷 연결을 확인하세요' }); this._emit('close', {}); } return; }
+      if (t === 'browser-incompatible') { this._emit('error', { msg: '이 브라우저는 P2P(WebRTC)를 지원하지 않습니다' }); return; }
+      console.warn('[NET p2p] 참가자 오류', t, err);
+    });
+  }
+  _handle(conn, m) {
+    if (!m || typeof m !== 'object' || this.closed) return;
+    if (conn === this.conn || this.role === 'host') this._lastRecv = __gcRealNow();
+    if (m.t === 'ka') return;
+    if (m.t === 'bye') { try { conn.close(); } catch (e) { /* 무시 */ } this._connGone(conn); return; }
+    if (this.role === 'host') {
+      if (m.t === 'join') { conn._joined = true; this.conn = conn; this._sendConn({ t: 'joined', code: this.code, host: { name: this.name } }); this._emit('peer-join', { name: String(m.name || '참가자').slice(0, 24) }); return; }
+      if (m.t === 'msg' && conn === this.conn) this._emit('msg', m.d || {});
+      return;
+    }
+    if (m.t === 'joined') { this._joined = true; this._emit('joined', m); return; }
+    if (m.t === 'room-closed') { this._roomClosed = true; try { conn.close(); } catch (e) { /* 무시 */ } this._connGone(conn); return; }
+    if (m.t === 'error') { this._emit('error', m); return; }
+    if (m.t === 'msg') this._emit('msg', m.d || {});
+  }
+  close() {
+    if (this.closed) return;
+    if (this.role === 'host' && this.conn && this.conn.open) { try { this.conn.send(JSON.stringify({ t: 'room-closed' })); } catch (e) { /* 무시 */ } }
+    if (this.role === 'guest' && this.conn && this.conn.open) { try { this.conn.send(JSON.stringify({ t: 'bye' })); } catch (e) { /* 무시 */ } }
+    this.closed = true;
+    if (this._pongTimer) __hostClearInterval(this._pongTimer);
+    if (this._onPageHide && typeof window !== 'undefined') window.removeEventListener('pagehide', this._onPageHide);
+    this.handlers.clear();
+    const peer = this.peer, conn = this.conn;
+    this.conn = null;
+    __hostSetTimeout(() => { try { if (conn) conn.close(); } catch (e) { /* 무시 */ } try { if (peer) peer.destroy(); } catch (e) { /* 무시 */ } }, 250);
+  }
+}
+// 서버 주소가 비어 있으면(기본) 브라우저끼리 직접 연결, ws://·wss://면 중계 서버(relay.js).
+function _netMakeClient(url) { return (!url || url === 'p2p') ? new PeerNetClient() : new NetClient(url); }
+
 // 기본 서버 주소: 이 페이지를 relay.js가 내보냈으면 같은 주소의 /ws. GitHub Pages 같은 정적 호스팅이면 직접 입력해야 한다.
 function netDefaultServerUrl() {
   if (typeof location === 'undefined' || !/^https?:$/.test(location.protocol)) return '';
@@ -43188,7 +43359,7 @@ function _netFxPlay(list) {
 // ================= 방장(호스트) =================
 function netHostCreateRoom(url, name) {
   netLeave(true);
-  const client = new NetClient(url);
+  const client = _netMakeClient(url);
   netState = { role: 'host', client, name: name || '방장', remote: null, guestName: '', code: null, acc: 0, seq: 0, clipTrack: new WeakMap(), projIds: new WeakMap(), projSeq: 0,
     cmdTimes: [], starting: false, status: '', ack: 0, sent: new Map(), fx: [], ev: [], hello: null, token: null, rematch: { host: false, guest: false }, ended: false, fxSent: 0 };
   const st = netState;
@@ -43540,7 +43711,7 @@ function netGuestJoin(url, code, name) {
   return _netGuestConnect(st, true);
 }
 function _netGuestConnect(st, first) {
-  const client = new NetClient(st.url);
+  const client = _netMakeClient(st.url);
   st.client = client;
   if (typeof gameSession !== 'undefined' && gameSession && gameSession.kind === 'remote') gameSession.client = client;
   _netStatus(first ? '서버에 연결하는 중…' : '다시 연결하는 중…');
@@ -44464,14 +44635,16 @@ function _nlEl(id) { return document.getElementById(id); }
     <div class="nl-card" id="nlConnect">
       <h3>온라인 1:1 대전</h3>
       <div class="nl-help">
-        <b>1.</b> 한 사람이 중계 서버를 켭니다: <code>node server/relay.js</code> (Node 18+, 설치할 것 없음, 포트 8787)<br>
-        <b>2.</b> 둘 다 <code>http://&lt;그 컴퓨터 주소&gt;:8787/</code>로 접속하면 서버 주소가 자동으로 들어갑니다.<br>
-        <b>3.</b> 한 사람이 "방 만들기" → 코드(또는 초대 링크)를 보내고, 상대가 코드를 넣고 "참가" → 챔피언 선택 → 대전.
+        <b>1.</b> 한 사람이 <b>방 만들기</b> → 나온 코드(또는 초대 링크)를 상대에게 보냅니다.<br>
+        <b>2.</b> 상대가 이 페이지에서 코드를 넣고 <b>참가</b> → 챔피언을 고르고 확정하면 시작합니다.<br>
+        설치할 것도, 켜 둘 서버도 없습니다 - 두 브라우저가 직접 연결됩니다(WebRTC).
       </div>
-      <label>서버 주소<input id="netServerUrl" placeholder="ws://주소:8787/ws  (https 페이지면 wss://…/ws)"></label>
       <label>내 이름<input id="netName" maxlength="24" placeholder="이름"></label>
       <div class="nl-row"><button type="button" id="netCreateBtn" class="primary">방 만들기</button></div>
       <div class="nl-row"><input id="netJoinCode" maxlength="4" placeholder="방 코드 4자리" style="text-transform:uppercase;letter-spacing:.2em"><button type="button" id="netJoinBtn">참가</button></div>
+      <details class="nl-adv"><summary>고급: 직접 켠 중계 서버 쓰기</summary>
+        <label>중계 서버 주소(비우면 브라우저끼리 직접 연결)<input id="netServerUrl" placeholder="ws://주소:8787/ws  (node server/relay.js)"></label>
+      </details>
     </div>
     <div class="nl-card" id="nlRoom" style="display:none">
       <h3 id="nlRoomTitle">대기실</h3>
@@ -44497,11 +44670,11 @@ function _nlEl(id) { return document.getElementById(id); }
   });
   _nlEl('lbTabOnline').addEventListener('click', () => netLobbyMode('online'));
   const urlEl = _nlEl('netServerUrl'), nameEl = _nlEl('netName'), codeEl = _nlEl('netJoinCode');
-  urlEl.value = _nlGet(_NL_STORE.url) || (typeof netDefaultServerUrl === 'function' ? netDefaultServerUrl() : '');
+  urlEl.value = _nlGet(_NL_STORE.url);
   nameEl.value = _nlGet(_NL_STORE.name);
   const read = () => {
     const url = urlEl.value.trim(); _nlSet(_NL_STORE.url, url); _nlSet(_NL_STORE.name, nameEl.value.trim());
-    if (!/^wss?:\/\//.test(url)) { _netStatus('서버 주소를 ws://… 또는 wss://… 로 입력하세요 (node server/relay.js)'); return null; }
+    if (url && !/^wss?:\/\//.test(url)) { _netStatus('중계 서버 주소는 ws://… 또는 wss://… 입니다 (비우면 브라우저끼리 직접 연결)'); return null; }
     return { url, name: nameEl.value.trim() };
   };
   _nlEl('netCreateBtn').addEventListener('click', () => { const r = read(); if (r) netHostCreateRoom(r.url, r.name || '방장').catch(() => {}).finally(netLobbyRefresh); netLobbyRefresh(); });
@@ -44537,7 +44710,8 @@ function _nlEl(id) { return document.getElementById(id); }
 function netInviteLink() {
   const st = netState; if (!st || !st.code) return '';
   const base = location.origin + location.pathname;
-  return `${base}?room=${st.code}&server=${encodeURIComponent(st.client ? st.client.url : _nlGet(_NL_STORE.url))}`;
+  const url = st.client && st.client.url !== 'p2p' ? st.client.url : '';
+  return `${base}?room=${st.code}${url ? '&server=' + encodeURIComponent(url) : ''}`;
 }
 function openNetLobby() {
   if (typeof openLobby === 'function' && !(typeof isLobbyOpen === 'function' && isLobbyOpen())) openLobby();
