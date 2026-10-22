@@ -78,7 +78,12 @@ function getAllEnemyUnits(ignoreRealm = false) { // ignoreRealm: 죽음의 세�
 // 시야 시스템 추가 범위에는 포함되지 않는다(명시적 한계 - README 참고).
 function getTargetableEnemyUnits() {
   const all = getAllEnemyUnits();
-  if (typeof isBotActing === 'function' && isBotActing()) return all; // 95차: 적 봇은 시야 제한 없이 본다(간단한 AI - README 95차)
+  // 96차: 봇이 대상을 고를 때는 봇 팀 시야(isVisibleTo)를 본다 - 예전엔 시야 제한 없이 안개·부쉬 속 플레이어를 대상 스킬로 골랐다.
+  if (typeof isBotActing === 'function' && isBotActing()) {
+    const me = combatPerspective();
+    if (typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled || typeof visionSystem.isVisibleTo !== 'function') return all;
+    return all.filter((u) => visionSystem.isVisibleTo(me.team, u));
+  }
   if (typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled) return all;
   return all.filter((u) => visionSystem.isVisible(u));
 }

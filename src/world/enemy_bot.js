@@ -44,14 +44,15 @@ function _buildEnemyBot(gltf, championId, opts) {
   const box = new THREE.Box3().setFromObject(model);
   const sphere = new THREE.Sphere(); box.getBoundingSphere(sphere);
   root.add(createBlobShadow(sphere.radius * 0.9));
-  const hpDiv = makeChampBarDiv('enemy', _botChampionName(championId));
+  const team = opts.team || ENEMY_TEAM;
+  const hpDiv = makeChampBarDiv(team === PLAYER_TEAM ? 'ally' : 'enemy', _botChampionName(championId)); // 96차: 아군 봇은 파랑 바
   const hpLabel3d = new CSS2DObject(hpDiv);
   hpLabel3d.position.set(0, (isFinite(box.max.y) ? box.max.y : BASE_UNIT * 1.8) + 2.55, 0);
   root.add(hpLabel3d);
 
   const bot = new CharacterController(root, model, resolver, actionData);
   bot.isBot = true; // 생성 직후 - 아래 초기화가 플레이어 화면을 건드리지 않게
-  bot.team = opts.team || ENEMY_TEAM;
+  bot.team = team;
   bot.botDifficulty = opts.difficulty || 'normal';
   if (championId === 'nilah') attachNilahWeaponRig(bot, model);
   bot.healthBarLabelDiv = hpDiv;
@@ -126,14 +127,16 @@ function clearEnemyBots() { for (const b of [...enemyBots]) removeEnemyBot(b); }
 (function setupEnemyBotUI() {
   const sel = document.getElementById('enemyBotChampSelect');
   const diff = document.getElementById('enemyBotDifficulty');
+  const teamSel = document.getElementById('enemyBotTeam');
   const add = document.getElementById('spawnEnemyBotBtn');
   const clr = document.getElementById('clearEnemyBotsBtn');
   if (sel) for (const [id, name] of CHAMPION_MODEL_LIBRARY) { const o = document.createElement('option'); o.value = id; o.textContent = name; sel.appendChild(o); }
   if (add) add.addEventListener('click', () => {
     const id = sel && sel.value ? sel.value : 'garen';
     add.disabled = true;
-    spawnEnemyBot(id, { difficulty: diff ? diff.value : 'normal' })
-      .then(() => { if (typeof showSkillToast === 'function') showSkillToast(`적 챔피언 AI 추가: ${_botChampionName(id)}`); })
+    const team = teamSel && teamSel.value === 'BLUE' ? 'BLUE' : 'RED';
+    spawnEnemyBot(id, { difficulty: diff ? diff.value : 'normal', team })
+      .then(() => { if (typeof showSkillToast === 'function') showSkillToast(`${team === 'BLUE' ? '아군' : '적'} 챔피언 AI 추가: ${_botChampionName(id)}`); })
       .catch((e) => { if (typeof showSkillToast === 'function') showSkillToast(`적 챔피언을 불러오지 못했어요 (${e.message || e})`); })
       .finally(() => { add.disabled = false; });
   });

@@ -1,12 +1,12 @@
-/* 00_game_clock.js — 95차: 게임 시계(일시정지)와 전투 행위자 문맥
+/* 00_game_clock.js — 95차: 게임 시계와 전투 행위자 문맥
  *
- * 1) 게임 시계: 이 번들 안의 모든 코드는 performance.now()·setTimeout·setInterval을 이 파일의 것으로 쓴다(같은 모듈 범위에서 가린다).
- *    - performance.now(): 실제 시간에서 "일시정지로 멈춰 있던 시간"을 뺀 값. 일시정지하지 않으면 실제 시간과 같다(브라우저 점검 스크립트의
- *      시각과도 같음). 그래서 상태 효과 만료·재사용 대기·스킬 타이머가 일시정지 중에 흐르지 않는다(예전엔 일시정지 중에 끝났다).
- *    - setTimeout: 예약한 게임 시각이 될 때 실행한다. 일시정지 중에 시간이 되면 풀릴 때까지 미룬다.
- *    - setInterval: 일시정지 중의 실행은 건너뛴다.
- *    프레임 dt가 0.05초로 잘리는 아주 느린 화면(20fps 미만)에서는 이 시계가 이동(dt)보다 빨리 간다 - 게임 규칙 시계(웨이브·포탑,
- *    turret_system.js의 시뮬레이션 시계)는 dt 누적이고, 이 시계는 일시정지만 빼는 실제 시간이다(README 95차).
+ * 1) 게임 시계 = 실제 시간 − (일시정지한 시간 + 프레임이 0.05초 상한을 넘어 시뮬레이션이 버린 시간).
+ *    - 페이지 전체의 performance.now()를 이 시계로 바꾼다(96차) - 번들 코드·three.js 시계·브라우저 점검 스크립트가 모두 같은 시계를 본다.
+ *      보통 화면(20fps 이상)에서 일시정지하지 않으면 실제 시간과 같다.
+ *    - 그래서 상태 효과 만료·재사용 대기·스킬 타이머가 일시정지 중에 흐르지 않고(95차), 아주 느린 화면(20fps 미만)에서도
+ *      이동(dt, 0.05초 상한)과 같은 빠르기로 흐른다(96차 - 예전엔 타이머만 실제 시간으로 앞서 갔다).
+ *    - 번들 안의 setTimeout: 예약한 게임 시각이 될 때 실행한다(일시정지·느린 화면이면 그만큼 늦게). setInterval: 일시정지 중의 실행은 건너뛴다.
+ *    - 메인 루프가 매 프레임 gameClockFrame()을 불러 버린 시간을 센다.
  *
  * 2) 전투 행위자: "지금 누구의 입장에서 판정하는가". 판정 함수(getAllEnemyUnits 등)와 피해 출처 기본값이 이것을 본다.
  *    플레이어 차례면 null(= 전역 controller), 적 챔피언 봇이 움직이거나 스킬을 쓰는 동안에는 그 봇이다.
@@ -20,16 +20,23 @@ function withCombatActor(actor, fn) {
   try { return fn(); } finally { __combatActor = prev; }
 }
 
-let __gcPausedTotalMs = 0, __gcPauseStartedAt = null;
+const __gcRealNow = (() => { const p = globalThis.performance; const f = p.now; return () => f.call(p); })(); // 실제 시간(덮어쓰기 전 원본)
+let __gcLostMs = 0, __gcPauseStartedAt = null, __gcLastRaw = null;
+function gameClockNow() { return (__gcPauseStartedAt != null ? __gcPauseStartedAt : __gcRealNow()) - __gcLostMs; }
 function gameClockSetPaused(p) {
-  const t = globalThis.performance.now();
+  const t = __gcRealNow();
   if (p && __gcPauseStartedAt == null) __gcPauseStartedAt = t;
-  else if (!p && __gcPauseStartedAt != null) { __gcPausedTotalMs += t - __gcPauseStartedAt; __gcPauseStartedAt = null; }
+  else if (!p && __gcPauseStartedAt != null) { __gcLostMs += t - __gcPauseStartedAt; __gcPauseStartedAt = null; }
 }
 function gameClockIsPaused() { return __gcPauseStartedAt != null; }
-const performance = {
-  now() { return (__gcPauseStartedAt != null ? __gcPauseStartedAt : globalThis.performance.now()) - __gcPausedTotalMs; },
-};
+// 메인 루프가 매 프레임(시계 dt를 읽기 전에) 부른다 - 지난 프레임에서 maxStepMs를 넘은 만큼은 시뮬레이션이 진행하지 않았으므로 게임 시계에서도 뺀다.
+function gameClockFrame(maxStepMs = 50) {
+  const raw = __gcRealNow();
+  if (__gcLastRaw != null && __gcPauseStartedAt == null) { const d = raw - __gcLastRaw; if (d > maxStepMs) __gcLostMs += d - maxStepMs; }
+  __gcLastRaw = raw;
+}
+const performance = { now: gameClockNow };
+try { globalThis.performance.now = gameClockNow; } catch (e) { /* 덮어쓸 수 없으면 번들 안에서만 게임 시계 */ }
 
 // 아래 네 함수는 const로 둔다 - 함수 선언이면 일반 스크립트에서 전역(globalThis.setTimeout)을 덮어써 자기 자신을 부르게 된다.
 const __gcTimers = new Map();

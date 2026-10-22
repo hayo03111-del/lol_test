@@ -1175,10 +1175,10 @@ animation:yasuoWall 4s ease-out forwards;z-index:20
   <button id="addGoldBtn" style="margin-top:4px;width:100%;">골드 +10,000</button>
   <button id="spawnWaveBtn" style="margin-top:4px;width:100%;">미니언 웨이브 바로 소환</button>
   <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a2a35;">
-    <div style="font-size:10px;color:#999;margin-bottom:4px;">적 챔피언 AI</div>
-    <div style="display:flex;gap:4px;"><select id="enemyBotChampSelect" style="flex:1;font-size:11px;"></select><select id="enemyBotDifficulty" style="font-size:11px;"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">어려움</option></select></div>
-    <button id="spawnEnemyBotBtn" style="margin-top:4px;width:100%;">적 챔피언 AI 추가</button>
-    <button id="clearEnemyBotsBtn" style="margin-top:4px;width:100%;">적 챔피언 AI 전부 제거</button>
+    <div style="font-size:10px;color:#999;margin-bottom:4px;">챔피언 AI</div>
+    <div style="display:flex;gap:4px;"><select id="enemyBotTeam" style="font-size:11px;"><option value="RED" selected>적</option><option value="BLUE">아군</option></select><select id="enemyBotChampSelect" style="flex:1;font-size:11px;"></select><select id="enemyBotDifficulty" style="font-size:11px;"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">어려움</option></select></div>
+    <button id="spawnEnemyBotBtn" style="margin-top:4px;width:100%;">챔피언 AI 추가</button>
+    <button id="clearEnemyBotsBtn" style="margin-top:4px;width:100%;">챔피언 AI 전부 제거</button>
   </div>
   <button id="openLobbyBtn" style="margin-top:4px;width:100%;">로비 (챔피언·룬·주문 선택)</button>
   <button id="clearBrushesBtn" style="margin-top:4px;">부쉬 전부 제거</button>
@@ -1400,15 +1400,15 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 
 
 /* ===== src/core/00_game_clock.js ===== */
-/* 00_game_clock.js — 95차: 게임 시계(일시정지)와 전투 행위자 문맥
+/* 00_game_clock.js — 95차: 게임 시계와 전투 행위자 문맥
  *
- * 1) 게임 시계: 이 번들 안의 모든 코드는 performance.now()·setTimeout·setInterval을 이 파일의 것으로 쓴다(같은 모듈 범위에서 가린다).
- *    - performance.now(): 실제 시간에서 "일시정지로 멈춰 있던 시간"을 뺀 값. 일시정지하지 않으면 실제 시간과 같다(브라우저 점검 스크립트의
- *      시각과도 같음). 그래서 상태 효과 만료·재사용 대기·스킬 타이머가 일시정지 중에 흐르지 않는다(예전엔 일시정지 중에 끝났다).
- *    - setTimeout: 예약한 게임 시각이 될 때 실행한다. 일시정지 중에 시간이 되면 풀릴 때까지 미룬다.
- *    - setInterval: 일시정지 중의 실행은 건너뛴다.
- *    프레임 dt가 0.05초로 잘리는 아주 느린 화면(20fps 미만)에서는 이 시계가 이동(dt)보다 빨리 간다 - 게임 규칙 시계(웨이브·포탑,
- *    turret_system.js의 시뮬레이션 시계)는 dt 누적이고, 이 시계는 일시정지만 빼는 실제 시간이다(README 95차).
+ * 1) 게임 시계 = 실제 시간 − (일시정지한 시간 + 프레임이 0.05초 상한을 넘어 시뮬레이션이 버린 시간).
+ *    - 페이지 전체의 performance.now()를 이 시계로 바꾼다(96차) - 번들 코드·three.js 시계·브라우저 점검 스크립트가 모두 같은 시계를 본다.
+ *      보통 화면(20fps 이상)에서 일시정지하지 않으면 실제 시간과 같다.
+ *    - 그래서 상태 효과 만료·재사용 대기·스킬 타이머가 일시정지 중에 흐르지 않고(95차), 아주 느린 화면(20fps 미만)에서도
+ *      이동(dt, 0.05초 상한)과 같은 빠르기로 흐른다(96차 - 예전엔 타이머만 실제 시간으로 앞서 갔다).
+ *    - 번들 안의 setTimeout: 예약한 게임 시각이 될 때 실행한다(일시정지·느린 화면이면 그만큼 늦게). setInterval: 일시정지 중의 실행은 건너뛴다.
+ *    - 메인 루프가 매 프레임 gameClockFrame()을 불러 버린 시간을 센다.
  *
  * 2) 전투 행위자: "지금 누구의 입장에서 판정하는가". 판정 함수(getAllEnemyUnits 등)와 피해 출처 기본값이 이것을 본다.
  *    플레이어 차례면 null(= 전역 controller), 적 챔피언 봇이 움직이거나 스킬을 쓰는 동안에는 그 봇이다.
@@ -1422,16 +1422,23 @@ function withCombatActor(actor, fn) {
   try { return fn(); } finally { __combatActor = prev; }
 }
 
-let __gcPausedTotalMs = 0, __gcPauseStartedAt = null;
+const __gcRealNow = (() => { const p = globalThis.performance; const f = p.now; return () => f.call(p); })(); // 실제 시간(덮어쓰기 전 원본)
+let __gcLostMs = 0, __gcPauseStartedAt = null, __gcLastRaw = null;
+function gameClockNow() { return (__gcPauseStartedAt != null ? __gcPauseStartedAt : __gcRealNow()) - __gcLostMs; }
 function gameClockSetPaused(p) {
-  const t = globalThis.performance.now();
+  const t = __gcRealNow();
   if (p && __gcPauseStartedAt == null) __gcPauseStartedAt = t;
-  else if (!p && __gcPauseStartedAt != null) { __gcPausedTotalMs += t - __gcPauseStartedAt; __gcPauseStartedAt = null; }
+  else if (!p && __gcPauseStartedAt != null) { __gcLostMs += t - __gcPauseStartedAt; __gcPauseStartedAt = null; }
 }
 function gameClockIsPaused() { return __gcPauseStartedAt != null; }
-const performance = {
-  now() { return (__gcPauseStartedAt != null ? __gcPauseStartedAt : globalThis.performance.now()) - __gcPausedTotalMs; },
-};
+// 메인 루프가 매 프레임(시계 dt를 읽기 전에) 부른다 - 지난 프레임에서 maxStepMs를 넘은 만큼은 시뮬레이션이 진행하지 않았으므로 게임 시계에서도 뺀다.
+function gameClockFrame(maxStepMs = 50) {
+  const raw = __gcRealNow();
+  if (__gcLastRaw != null && __gcPauseStartedAt == null) { const d = raw - __gcLastRaw; if (d > maxStepMs) __gcLostMs += d - maxStepMs; }
+  __gcLastRaw = raw;
+}
+const performance = { now: gameClockNow };
+try { globalThis.performance.now = gameClockNow; } catch (e) { /* 덮어쓸 수 없으면 번들 안에서만 게임 시계 */ }
 
 // 아래 네 함수는 const로 둔다 - 함수 선언이면 일반 스크립트에서 전역(globalThis.setTimeout)을 덮어써 자기 자신을 부르게 된다.
 const __gcTimers = new Map();
@@ -2848,7 +2855,12 @@ function getAllEnemyUnits(ignoreRealm = false) { // ignoreRealm: 죽음의 세�
 // 시야 시스템 추가 범위에는 포함되지 않는다(명시적 한계 - README 참고).
 function getTargetableEnemyUnits() {
   const all = getAllEnemyUnits();
-  if (typeof isBotActing === 'function' && isBotActing()) return all; // 95차: 적 봇은 시야 제한 없이 본다(간단한 AI - README 95차)
+  // 96차: 봇이 대상을 고를 때는 봇 팀 시야(isVisibleTo)를 본다 - 예전엔 시야 제한 없이 안개·부쉬 속 플레이어를 대상 스킬로 골랐다.
+  if (typeof isBotActing === 'function' && isBotActing()) {
+    const me = combatPerspective();
+    if (typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled || typeof visionSystem.isVisibleTo !== 'function') return all;
+    return all.filter((u) => visionSystem.isVisibleTo(me.team, u));
+  }
   if (typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled) return all;
   return all.filter((u) => visionSystem.isVisible(u));
 }
@@ -11620,6 +11632,7 @@ class VisionSystem {
     const out = [];
     if (controller && controller.root) out.push(controller);
     if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (a && a.hp > 0) out.push(a);
+    if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b.team === VISION_TEAM_BLUE && b.hp > 0) out.push(b); // 96차: 아군(파랑) 봇
     if (typeof minions !== 'undefined') for (const m of minions) if (m && !m.isDead && m.team === VISION_TEAM_BLUE) out.push(m);
     return out;
   }
@@ -15307,6 +15320,26 @@ CharacterController.prototype._champInterval = function(fn, ms) {
   }, ms);
   this._championTimers.add(id);
   return id;
+};
+// 96차: 시전 시간 중 점멸 - 시전할 때 조준점과 위치를 기억해 두고, 발사 순간 챔피언이 옮겨졌으면(점멸 등) 새 위치에서 원래 조준점을 향해
+// 쏜다(PC 위키 Flash 상호작용 - 대부분의 방향 스킬은 "새 위치 → 원래 대상 지점"). 옮겨지지 않았으면 시전 때 방향 그대로.
+// 쓰는 법: const aim = this._captureAim(mouseWorldPoint); ... 발사할 때 aim.apply(dir)(dir를 그 자리에서 고친다).
+CharacterController.prototype._captureAim = function(point) {
+  const from = this.root.position.clone(), target = point ? new THREE.Vector3(point.x, 0, point.z) : null;
+  const self = this;
+  return {
+    point: target,
+    moved() { return getHorizontalDistance(self.root.position, from) > lolRangeToWorld(25); },
+    apply(dir) {
+      if (!target || !dir || !this.moved()) return dir;
+      const d = new THREE.Vector3(target.x - self.root.position.x, 0, target.z - self.root.position.z);
+      if (d.lengthSq() < 1e-6) return dir;
+      d.normalize();
+      dir.set(d.x, dir.y || 0, d.z);
+      if (typeof self.faceDirectionInstant === 'function') self.faceDirectionInstant(dir);
+      return dir;
+    },
+  };
 };
 // 95차: 이 챔피언의 입장에서 실행(적 봇이면 봇, 플레이어면 플레이어) - 다른 챔피언 차례에 예약된 자기 타이머도 자기 것으로 판정한다.
 CharacterController.prototype._asActor = function(fn) {
@@ -20948,7 +20981,7 @@ CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false
     this._yasuoQStackTick();
     const q = this._champData().Q;
     const dir = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0) : new THREE.Vector3(0,0,1).applyQuaternion(this.root.quaternion);
-    if (dir.lengthSq() < 1e-6) dir.set(0,0,1); dir.normalize(); this.faceDirectionInstant(dir);
+    if (dir.lengthSq() < 1e-6) dir.set(0,0,1); dir.normalize(); this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
     const stackBefore = this._yasuo.qStacks;
     const inEDash = this.currentActionKey === 'yasuoE' && this.currentPhase === 'ACTIVE';
     // E 돌진 중 Q(EQ): E의 돌진/피해 타이머를 취소하지 않고 Q만 겹쳐 재생한다.
@@ -20970,7 +21003,7 @@ CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false
     const castTime = this._yasuoQCastTime();
     this._yasuo.qMoveEntryPending = true;
     this.currentActionKey='yasuoQ'; this.currentPhase='STARTUP'; this.setState(STATE.Q_CAST);
-    this.runAction('yasuoQ', STATE.Q_CAST, { faceDir: dir, startupOverride: castTime, recoveryOverride: 0.08, dataOverride:{ clips:[anim], startup:castTime, recovery:0.08, cancelToMove:false, cancelToSpell:false, cancelable:false, dmg:0 }, onFire:()=>{
+    this.runAction('yasuoQ', STATE.Q_CAST, { faceDir: dir, startupOverride: castTime, recoveryOverride: 0.08, dataOverride:{ clips:[anim], startup:castTime, recovery:0.08, cancelToMove:false, cancelToSpell:false, cancelable:false, dmg:0 }, onFire:()=>{ __aim.apply(dir);
       this._yasuoQHitConsumed = false;
       if (tornado) {
         // Q3(회오리바람)는 시전 순간 전체 사거리를 한 번에 검사하지 않는다.
@@ -25518,14 +25551,14 @@ CharacterController.prototype._vexCastQ = function(mouseWorldPoint, free = false
   const dir = this._vexAimDir(mouseWorldPoint);
   if (!this._payCost('Q', free)) return;
   const doom = this._vexConsumeDoom();
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'vexQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.Q_CAST);
   this.playFirstAvailable(['Spell1_Base'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
   const lvl = Math.max(1, this.skillLevels.Q || 1);
   const castMs = (q.castTimeSec != null ? q.castTimeSec : 0.15) * 1000;
-  const fire = this._champTimeout(() => {
+  const fire = this._champTimeout(() => { __aim.apply(dir);
     if (this.currentActionKey !== 'vexQ') return;
     this._vex.qTravel = { origin: this.root.position.clone(), dir: dir.clone(), traveled: 0, hitSet: new Set(), lvl, doom };
     this.currentActionKey = null; this.currentPhase = null;
@@ -25639,13 +25672,13 @@ CharacterController.prototype._vexCastE = function(mouseWorldPoint, free = false
   const dist = Math.min(rawDist, maxWorld);
   if (!this._payCost('E', free)) return;
   const doom = this._vexConsumeDoom();
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'vexE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.E_CAST);
   this.playFirstAvailable(['Spell3_0'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
   const lvl = Math.max(1, this.skillLevels.E || 1);
-  const fire = this._champTimeout(() => {
+  const fire = this._champTimeout(() => { __aim.apply(dir);
     if (this.currentActionKey !== 'vexE') return;
     const from = this.root.position.clone();
     const to = from.clone().addScaledVector(dir, dist);
@@ -25800,14 +25833,14 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('Q', free)) return;
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'ezrealQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.Q_CAST);
 
   // 발사(시전 시간 끝) 뒤 남은 모션은 이동으로 끊을 수 있는 후딜(RECOVERY)이다 - 기다리던 이동이 곧바로 이어진다.
   // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사하고, 그 전에 다른 행동으로 끊기면 원작처럼 취소된다.
-  const __fire = () => {
+  const __fire = () => { __aim.apply(dir);
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(q.width || 60) * 0.5;
   // 정정(사용자가 올려준 실제 CommunityDragon Q 텍스처 적용): 기존 단색
@@ -25874,13 +25907,13 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('W', free)) return;
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'ezrealW'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.W_CAST);
 
   // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사하고, 그 전에 다른 행동으로 끊기면 원작처럼 취소된다.
-  const __fire = () => {
+  const __fire = () => { __aim.apply(dir);
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(w.width || 60) * 0.5;
   // 정정(레퍼런스 영상 ability_0081_W1.webm 프레임 대조): 실제 정수의 흐름
@@ -26051,7 +26084,7 @@ CharacterController.prototype._ezrealCastR = function(mouseWorldPoint, free = fa
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('R', free)) return;
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'ezrealR'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
   this.setState(STATE.R_CAST);
@@ -26066,7 +26099,7 @@ CharacterController.prototype._ezrealCastR = function(mouseWorldPoint, free = fa
   // 지오메트리로 재현한다 - _ezrealRBow, nilah_vfx_assets_and_runtime.js.
   vfx.spawn('ezrealRBow', this.root.position.clone(), dir, { duration: castTime });
 
-  const fireTimer = this._champTimeout(() => {
+  const fireTimer = this._champTimeout(() => { __aim.apply(dir);
     if (this.currentActionKey !== 'ezrealR') return;
     this.currentPhase = 'ACTIVE';
     const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
@@ -26259,7 +26292,7 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
   // 전부 이 방식이 아니다 - 방향만 클릭으로 정하고, 거리는 항상 최대
   // 사거리(900)를 그대로 쓴다(벽 등으로 막히는 경우는 이 프로젝트에
   // 지형 충돌이 없어 고려하지 않는다).
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'ahriQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.Q_CAST);
@@ -26270,7 +26303,7 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
   // orbMesh의 참조를 잃어버려 scene에 영구히 남는다.
   // 발사(시전 시간 끝) 뒤 남은 모션은 이동으로 끊을 수 있는 후딜(RECOVERY)이다 - 기다리던 이동이 곧바로 이어진다.
   // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사, 그 전에 끊기면 취소.
-  const __fire = () => {
+  const __fire = () => { __aim.apply(dir);
   if (this._ahri.qTravel) this._ahriEndQTravel();
 
   const worldRange = lolRangeToWorld(q.range);
@@ -26565,7 +26598,7 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   if (!this._payCost('E', free)) return;
   // alwaysSnapFacing(ahri.bin AhriE) - 다른 방향별 캐스트(가렌 E 등)와 달리
   // 언제나 조준 방향으로 즉시 정면을 돌린다.
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'ahriE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.E_CAST);
@@ -26579,7 +26612,7 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   if (Math.abs(dir.x) > Math.abs(dir.z)) clipName = dir.x > 0 ? 'Spell3_east' : 'Spell3_west';
 
   // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사, 그 전에 끊기면 취소.
-  const __fire = () => {
+  const __fire = () => { __aim.apply(dir);
   const worldRange = lolRangeToWorld(e.range);
   const halfWidth = lolRangeToWorld(e.width || 60) * 0.5;
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));
@@ -27183,14 +27216,14 @@ CharacterController.prototype._varusCastR = function(mouseWorldPoint, free = fal
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('R', free)) return;
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'varusR'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
   this.setState(STATE.R_CAST);
   this.playFirstAvailable(['Spell4'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
 
   const castTime = 0.242; // bin mCastTime(≈0.2419) - SKILL_TIMING_DATABASE.varus.R와 동일한 수치
-  const fireTimer = this._champTimeout(() => {
+  const fireTimer = this._champTimeout(() => { __aim.apply(dir);
     if (this.currentActionKey !== 'varusR') return;
     this.currentPhase = 'ACTIVE';
     const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
@@ -29823,7 +29856,7 @@ const TURRET_DATA = {
     armorMrGrowthStartSec: 60, armorMrGrowthEndSec: 1260, armorMrGrowthStepSec: 60, armorMrGrowthPerStep: 1,
     goldReward: 375, xpReward: 0,
     hasFortification: false, hasShield: false, hasBastion: false,
-    outerFallenDamageReduction: 0.35, outerFallenDurationSec: 60, // 84차: 외곽 포탑이 무너진 뒤 60초 동안 받는 피해 35% 감소(칼바람)
+    outerFallenDamageReduction: 0.30, outerFallenDurationSec: 60, // 84차: 외곽 포탑이 무너진 뒤 60초 동안 받는 피해 감소(칼바람). 96차: 35% → 30%(PC 위키 Turret·ARAM 패치 기록 13.5 - 35%는 옛 판)
     destroyGoldOverride: 150,
   },
   [TURRET_TYPE.NEXUS_TWIN]: {
@@ -30749,7 +30782,7 @@ function updateNexusBuildingAnim(dt) {
 // 로딩 파이프라인)을 그대로 재사용한다 - 새 로딩 시스템을 만들지 않는다.
 const INHIBITOR_MAX_HP = 4000; // 실제 LoL 억제기 체력 표준값
 const INHIBITOR_ARMOR = 20; // 요청("방어력과 마법 저항력이 제대로 작동하게") - 실제 LoL 억제기 방어력 표준값(마법저항력은 0이 맞음)
-const INHIBITOR_RESPAWN_SEC = 300; // 실제 LoL 5분 재생성
+const INHIBITOR_RESPAWN_SEC = 250; // 96차: 칼바람 억제기 재생성 300 → 250초(PC 위키 ARAM 패치 기록 V25.21)
 let inhibitorBuildings = [];
 // radiusWorld: 원작 충돌 반경(칼바람 배치가 넘긴다). 주면 GLB가 없을 때의 임시 도형도 그 크기로 만든다.
 function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {
@@ -42188,6 +42221,7 @@ function animate() {
   // 가 깨지고, GLB가 아닌 바닥/소품(순수 지오메트리, 애니메이션 없음)은
   // 전혀 영향을 안 받는다 - 정확히 스크린샷에서 보인 패턴과 일치한다.
   // 새로고침 전까지 절대 스스로 복구되지 않는 것도 NaN의 특성과 맞는다.
+  if (typeof gameClockFrame === 'function') gameClockFrame(50); // 96차: 0.05초 상한을 넘은 시간은 게임 시계에서도 뺀다(아래 dt 상한과 같은 값)
   let dt = clock.getDelta();
   if (!isFinite(dt) || dt < 0) dt = 1 / 60; // 비정상적인 값이면 안전한 기본 프레임 시간으로 대체
   dt = Math.min(dt, 0.05);
@@ -42710,14 +42744,15 @@ function _buildEnemyBot(gltf, championId, opts) {
   const box = new THREE.Box3().setFromObject(model);
   const sphere = new THREE.Sphere(); box.getBoundingSphere(sphere);
   root.add(createBlobShadow(sphere.radius * 0.9));
-  const hpDiv = makeChampBarDiv('enemy', _botChampionName(championId));
+  const team = opts.team || ENEMY_TEAM;
+  const hpDiv = makeChampBarDiv(team === PLAYER_TEAM ? 'ally' : 'enemy', _botChampionName(championId)); // 96차: 아군 봇은 파랑 바
   const hpLabel3d = new CSS2DObject(hpDiv);
   hpLabel3d.position.set(0, (isFinite(box.max.y) ? box.max.y : BASE_UNIT * 1.8) + 2.55, 0);
   root.add(hpLabel3d);
 
   const bot = new CharacterController(root, model, resolver, actionData);
   bot.isBot = true; // 생성 직후 - 아래 초기화가 플레이어 화면을 건드리지 않게
-  bot.team = opts.team || ENEMY_TEAM;
+  bot.team = team;
   bot.botDifficulty = opts.difficulty || 'normal';
   if (championId === 'nilah') attachNilahWeaponRig(bot, model);
   bot.healthBarLabelDiv = hpDiv;
@@ -42792,14 +42827,16 @@ function clearEnemyBots() { for (const b of [...enemyBots]) removeEnemyBot(b); }
 (function setupEnemyBotUI() {
   const sel = document.getElementById('enemyBotChampSelect');
   const diff = document.getElementById('enemyBotDifficulty');
+  const teamSel = document.getElementById('enemyBotTeam');
   const add = document.getElementById('spawnEnemyBotBtn');
   const clr = document.getElementById('clearEnemyBotsBtn');
   if (sel) for (const [id, name] of CHAMPION_MODEL_LIBRARY) { const o = document.createElement('option'); o.value = id; o.textContent = name; sel.appendChild(o); }
   if (add) add.addEventListener('click', () => {
     const id = sel && sel.value ? sel.value : 'garen';
     add.disabled = true;
-    spawnEnemyBot(id, { difficulty: diff ? diff.value : 'normal' })
-      .then(() => { if (typeof showSkillToast === 'function') showSkillToast(`적 챔피언 AI 추가: ${_botChampionName(id)}`); })
+    const team = teamSel && teamSel.value === 'BLUE' ? 'BLUE' : 'RED';
+    spawnEnemyBot(id, { difficulty: diff ? diff.value : 'normal', team })
+      .then(() => { if (typeof showSkillToast === 'function') showSkillToast(`${team === 'BLUE' ? '아군' : '적'} 챔피언 AI 추가: ${_botChampionName(id)}`); })
       .catch((e) => { if (typeof showSkillToast === 'function') showSkillToast(`적 챔피언을 불러오지 못했어요 (${e.message || e})`); })
       .finally(() => { add.disabled = false; });
   });

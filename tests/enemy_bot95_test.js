@@ -37,7 +37,7 @@ const ctx = {
   clearTimeout: (id) => { timers = timers.filter((t) => t.id !== id); },
   setInterval: () => 0, clearInterval: () => {},
   THREE: { Vector3, MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } },
-  controller: null, dummy: null, placedDummies: [], minions: [], turrets: [], inhibitorBuildings: [], nexusBuildings: [], BASE_UNIT: 1, gameEnded: false,
+  controller: null, dummy: null, placedDummies: [], visionSystem: null, minions: [], turrets: [], inhibitorBuildings: [], nexusBuildings: [], BASE_UNIT: 1, gameEnded: false,
   document: { getElementById: () => null },
 };
 const advance = (ms) => {
@@ -55,7 +55,7 @@ vm.runInContext([rd('src/core/00_game_clock.js'), rd('src/core/00_global_constan
    var SKILL_AIM_TEST = {}; function skillAimSpec(id, slot) { return (SKILL_AIM_TEST[id] || {})[slot] || null; }
    function skillAimIsInstant(c, slot) { const s = skillAimSpec(c.championId, slot); return !s || s.type === 'instant'; }
    function computeSkillAim(c, slot) { const s = skillAimSpec(c.championId, slot); return s ? { rangeWorld: lolRangeToWorld(s.rangeLol) } : null; }
-   this.api = { performance, setTimeout, withCombatActor, gameClockSetPaused, combatPerspective, isBotActing, getAllEnemyUnits, getAllyChampions, resolveDamageSource, applyStatus,
+   this.api = { performance, setTimeout, withCombatActor, gameClockSetPaused, gameClockFrame, getTargetableEnemyUnits, setVision: (v) => { visionSystem = v; }, combatPerspective, isBotActing, getAllEnemyUnits, getAllyChampions, resolveDamageSource, applyStatus,
      rewardChampionKill, recordChampionContribution, CHAMPION_KILL_XP_BY_LEVEL, botPlanSkill, lolRangeToWorld, enemyBots, placedAllies, SKILL_AIM_TEST,
      gained: () => gained, setWorld: (w) => { controller = w.controller || null; dummy = w.dummy || null; minions = w.minions || []; } };`].join('\n'), ctx);
 const A = ctx.api;
@@ -75,6 +75,16 @@ const L = A.lolRangeToWorld;
   assert(fired === 0, '게임 시계: 풀린 뒤에도 남은 게임 시간(600ms)이 지나야 실행된다');
   advance(200);
   assert(fired === 1 && near(A.performance.now() - t0, 1100), '게임 시계: 남은 시간이 지나면 한 번 실행(실제 6.1초, 게임 1.1초)');
+}
+// --- 96차: 느린 프레임 - 0.05초 상한을 넘은 시간은 게임 시계에서도 빠진다(이동과 같은 빠르기), 페이지 전체 시계도 같다 ---
+{
+  A.gameClockFrame(50);
+  const t0 = A.performance.now();
+  advance(30); A.gameClockFrame(50);
+  assert(near(A.performance.now() - t0, 30), '느린 프레임: 상한(50ms) 안의 프레임은 그대로 흐른다');
+  advance(200); A.gameClockFrame(50);
+  assert(near(A.performance.now() - t0, 80), '느린 프레임: 200ms 프레임은 50ms만 흐른다(시뮬레이션 dt 상한과 같다)');
+  assert(ctx.performance.now() === A.performance.now(), '페이지 전체 performance.now()도 게임 시계(three.js·점검 스크립트와 같은 시계)');
 }
 // --- 행위자 문맥: 타이머는 예약한 쪽 입장에서 실행된다 ---
 const player = { team: 'BLUE', championId: 'garen', isChampion: true, hp: 1000, maxHp: 1000, state: 'IDLE', root: { position: new Vector3(0, 0, 0) }, collisionRadius: L(65), statusEffects: [], champLevel: 6 };
@@ -102,6 +112,14 @@ A.enemyBots.push(bot); A.placedAllies.push(blueAlly);
   bot.state = 'DEAD';
   assert(!A.getAllEnemyUnits().includes(bot), '적 목록: 죽은 봇은 빠진다');
   bot.state = 'IDLE';
+}
+// --- 96차: 봇이 대상을 고를 때는 봇 팀 시야를 본다(범위 판정은 그대로 시야 무관) ---
+{
+  A.setVision({ enabled: true, isVisibleTo: (team, u) => !(team === 'RED' && u === player), isVisible: () => true });
+  const t = A.withCombatActor(bot, () => A.getTargetableEnemyUnits());
+  const all = A.withCombatActor(bot, () => A.getAllEnemyUnits());
+  assert(!t.includes(player) && t.includes(blueAlly) && all.includes(player), '봇 대상 고르기: 봇 팀에게 안 보이는 플레이어는 고르지 않는다(범위 판정 목록에는 남는다)');
+  A.setVision(null);
 }
 // --- 출처 기본값: 봇 차례의 피해·상태 효과는 봇의 것 ---
 {

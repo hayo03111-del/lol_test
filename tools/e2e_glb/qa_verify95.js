@@ -61,6 +61,27 @@ const startServer = require('./server.js');
   await page.waitForTimeout(400);
   Object.assign(r.minion, await page.evaluate(() => ({ after: window.__vm.attackTarget === window.controller, paused: document.getElementById('pauseOverlay').classList.contains('show') })));
   check('minion keeps its target through a 5 s pause (leash timer on game clock)', r.minion.before && r.minion.after);
+  // 96차: 시전 시간 중 점멸 - 이즈리얼 Q를 앞쪽(+Z)으로 쏘고 시전 중 옆(+X)으로 점멸하면 새 위치에서 원래 조준점을 향해 날아간다.
+  await page.evaluate(() => { const s = document.getElementById('libraryChampSelect'); s.value = 'ezreal'; s.dispatchEvent(new Event('change')); });
+  await page.waitForFunction(() => window.controller && window.controller.championId === 'ezreal', null, { timeout: 60000 });
+  await page.waitForTimeout(800);
+  r.flashAim = await page.evaluate(() => new Promise((res) => {
+    const E = window.__e2e, c = window.controller, T = E.THREE, L = E.lolRangeToWorld;
+    c.root.position.set(0, 0, 0); c.statusEffects = []; c.cooldowns.Q = 0; c.mp = c.maxMp; c.skillLevels.Q = Math.max(1, c.skillLevels.Q || 1);
+    c.summoners = { D: { id: 'flash', readyAt: 0 }, F: { id: 'heal', readyAt: 0 } };
+    const aim = new T.Vector3(0, 0, L(1000));
+    const before = E.projectiles.projectiles.length;
+    c.castAbility('Q', aim);
+    setTimeout(() => E.castSummonerSpell(c, 'D', new T.Vector3(L(400), 0, 0), null), 80);
+    setTimeout(() => {
+      const p = E.projectiles.projectiles.slice(before).find((x) => x.line);
+      if (!p) return res({ fired: false });
+      const pos = c.root.position, d = p.line.dir;
+      const want = new T.Vector3(aim.x - p.line.origin.x, 0, aim.z - p.line.origin.z).normalize();
+      res({ fired: true, flashedX: Math.round(E.worldDistanceToLol(pos.x)), dot: +(d.x * want.x + d.z * want.z).toFixed(3), dirX: +d.x.toFixed(3) });
+    }, 420);
+  }));
+  check('flash during Ezreal Q cast: fires from the new spot toward the original aim point', r.flashAim.fired && r.flashAim.flashedX > 200 && r.flashAim.dot > 0.999 && r.flashAim.dirX < -0.1);
   r.errors = errors; r.fails = fails;
   if (errors.length) fails.push('page errors');
   console.log(JSON.stringify(r, null, 1));

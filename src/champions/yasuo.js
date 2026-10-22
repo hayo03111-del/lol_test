@@ -178,7 +178,7 @@ CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false
     this._yasuoQStackTick();
     const q = this._champData().Q;
     const dir = mouseWorldPoint ? new THREE.Vector3().subVectors(mouseWorldPoint, this.root.position).setY(0) : new THREE.Vector3(0,0,1).applyQuaternion(this.root.quaternion);
-    if (dir.lengthSq() < 1e-6) dir.set(0,0,1); dir.normalize(); this.faceDirectionInstant(dir);
+    if (dir.lengthSq() < 1e-6) dir.set(0,0,1); dir.normalize(); this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
     const stackBefore = this._yasuo.qStacks;
     const inEDash = this.currentActionKey === 'yasuoE' && this.currentPhase === 'ACTIVE';
     // E 돌진 중 Q(EQ): E의 돌진/피해 타이머를 취소하지 않고 Q만 겹쳐 재생한다.
@@ -200,7 +200,7 @@ CharacterController.prototype._yasuoCastQ = function(mouseWorldPoint, free=false
     const castTime = this._yasuoQCastTime();
     this._yasuo.qMoveEntryPending = true;
     this.currentActionKey='yasuoQ'; this.currentPhase='STARTUP'; this.setState(STATE.Q_CAST);
-    this.runAction('yasuoQ', STATE.Q_CAST, { faceDir: dir, startupOverride: castTime, recoveryOverride: 0.08, dataOverride:{ clips:[anim], startup:castTime, recovery:0.08, cancelToMove:false, cancelToSpell:false, cancelable:false, dmg:0 }, onFire:()=>{
+    this.runAction('yasuoQ', STATE.Q_CAST, { faceDir: dir, startupOverride: castTime, recoveryOverride: 0.08, dataOverride:{ clips:[anim], startup:castTime, recovery:0.08, cancelToMove:false, cancelToSpell:false, cancelable:false, dmg:0 }, onFire:()=>{ __aim.apply(dir);
       this._yasuoQHitConsumed = false;
       if (tornado) {
         // Q3(회오리바람)는 시전 순간 전체 사거리를 한 번에 검사하지 않는다.

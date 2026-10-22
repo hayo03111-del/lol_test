@@ -100,7 +100,7 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
   // 전부 이 방식이 아니다 - 방향만 클릭으로 정하고, 거리는 항상 최대
   // 사거리(900)를 그대로 쓴다(벽 등으로 막히는 경우는 이 프로젝트에
   // 지형 충돌이 없어 고려하지 않는다).
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'ahriQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.Q_CAST);
@@ -111,7 +111,7 @@ CharacterController.prototype._ahriCastQ = function(mouseWorldPoint, free = fals
   // orbMesh의 참조를 잃어버려 scene에 영구히 남는다.
   // 발사(시전 시간 끝) 뒤 남은 모션은 이동으로 끊을 수 있는 후딜(RECOVERY)이다 - 기다리던 이동이 곧바로 이어진다.
   // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사, 그 전에 끊기면 취소.
-  const __fire = () => {
+  const __fire = () => { __aim.apply(dir);
   if (this._ahri.qTravel) this._ahriEndQTravel();
 
   const worldRange = lolRangeToWorld(q.range);
@@ -406,7 +406,7 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   if (!this._payCost('E', free)) return;
   // alwaysSnapFacing(ahri.bin AhriE) - 다른 방향별 캐스트(가렌 E 등)와 달리
   // 언제나 조준 방향으로 즉시 정면을 돌린다.
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'ahriE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.E_CAST);
@@ -420,7 +420,7 @@ CharacterController.prototype._ahriCastE = function(mouseWorldPoint, free = fals
   if (Math.abs(dir.x) > Math.abs(dir.z)) clipName = dir.x > 0 ? 'Spell3_east' : 'Spell3_west';
 
   // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사, 그 전에 끊기면 취소.
-  const __fire = () => {
+  const __fire = () => { __aim.apply(dir);
   const worldRange = lolRangeToWorld(e.range);
   const halfWidth = lolRangeToWorld(e.width || 60) * 0.5;
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.65, 0));

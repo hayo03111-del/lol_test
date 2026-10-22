@@ -194,14 +194,14 @@ CharacterController.prototype._vexCastQ = function(mouseWorldPoint, free = false
   const dir = this._vexAimDir(mouseWorldPoint);
   if (!this._payCost('Q', free)) return;
   const doom = this._vexConsumeDoom();
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'vexQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.Q_CAST);
   this.playFirstAvailable(['Spell1_Base'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
   const lvl = Math.max(1, this.skillLevels.Q || 1);
   const castMs = (q.castTimeSec != null ? q.castTimeSec : 0.15) * 1000;
-  const fire = this._champTimeout(() => {
+  const fire = this._champTimeout(() => { __aim.apply(dir);
     if (this.currentActionKey !== 'vexQ') return;
     this._vex.qTravel = { origin: this.root.position.clone(), dir: dir.clone(), traveled: 0, hitSet: new Set(), lvl, doom };
     this.currentActionKey = null; this.currentPhase = null;
@@ -315,13 +315,13 @@ CharacterController.prototype._vexCastE = function(mouseWorldPoint, free = false
   const dist = Math.min(rawDist, maxWorld);
   if (!this._payCost('E', free)) return;
   const doom = this._vexConsumeDoom();
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'vexE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.E_CAST);
   this.playFirstAvailable(['Spell3_0'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
   const lvl = Math.max(1, this.skillLevels.E || 1);
-  const fire = this._champTimeout(() => {
+  const fire = this._champTimeout(() => { __aim.apply(dir);
     if (this.currentActionKey !== 'vexE') return;
     const from = this.root.position.clone();
     const to = from.clone().addScaledVector(dir, dist);

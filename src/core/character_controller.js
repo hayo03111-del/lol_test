@@ -1523,6 +1523,26 @@ CharacterController.prototype._champInterval = function(fn, ms) {
   this._championTimers.add(id);
   return id;
 };
+// 96차: 시전 시간 중 점멸 - 시전할 때 조준점과 위치를 기억해 두고, 발사 순간 챔피언이 옮겨졌으면(점멸 등) 새 위치에서 원래 조준점을 향해
+// 쏜다(PC 위키 Flash 상호작용 - 대부분의 방향 스킬은 "새 위치 → 원래 대상 지점"). 옮겨지지 않았으면 시전 때 방향 그대로.
+// 쓰는 법: const aim = this._captureAim(mouseWorldPoint); ... 발사할 때 aim.apply(dir)(dir를 그 자리에서 고친다).
+CharacterController.prototype._captureAim = function(point) {
+  const from = this.root.position.clone(), target = point ? new THREE.Vector3(point.x, 0, point.z) : null;
+  const self = this;
+  return {
+    point: target,
+    moved() { return getHorizontalDistance(self.root.position, from) > lolRangeToWorld(25); },
+    apply(dir) {
+      if (!target || !dir || !this.moved()) return dir;
+      const d = new THREE.Vector3(target.x - self.root.position.x, 0, target.z - self.root.position.z);
+      if (d.lengthSq() < 1e-6) return dir;
+      d.normalize();
+      dir.set(d.x, dir.y || 0, d.z);
+      if (typeof self.faceDirectionInstant === 'function') self.faceDirectionInstant(dir);
+      return dir;
+    },
+  };
+};
 // 95차: 이 챔피언의 입장에서 실행(적 봇이면 봇, 플레이어면 플레이어) - 다른 챔피언 차례에 예약된 자기 타이머도 자기 것으로 판정한다.
 CharacterController.prototype._asActor = function(fn) {
   return typeof withCombatActor === 'function' ? withCombatActor(this.isBot ? this : null, fn) : fn();

@@ -40,14 +40,14 @@ CharacterController.prototype._ezrealCastQ = function(mouseWorldPoint, free = fa
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('Q', free)) return;
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'ezrealQ'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.Q_CAST);
 
   // 발사(시전 시간 끝) 뒤 남은 모션은 이동으로 끊을 수 있는 후딜(RECOVERY)이다 - 기다리던 이동이 곧바로 이어진다.
   // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사하고, 그 전에 다른 행동으로 끊기면 원작처럼 취소된다.
-  const __fire = () => {
+  const __fire = () => { __aim.apply(dir);
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(q.width || 60) * 0.5;
   // 정정(사용자가 올려준 실제 CommunityDragon Q 텍스처 적용): 기존 단색
@@ -114,13 +114,13 @@ CharacterController.prototype._ezrealCastW = function(mouseWorldPoint, free = fa
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('W', free)) return;
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'ezrealW'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
   this.setState(STATE.W_CAST);
 
   // 버그 수정(타이밍 측정으로 발견): 예전엔 시전 즉시 발사됐다. PC 위키 시전 시간 0.25초 뒤 발사하고, 그 전에 다른 행동으로 끊기면 원작처럼 취소된다.
-  const __fire = () => {
+  const __fire = () => { __aim.apply(dir);
   const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
   const halfWidth = lolRangeToWorld(w.width || 60) * 0.5;
   // 정정(레퍼런스 영상 ability_0081_W1.webm 프레임 대조): 실제 정수의 흐름
@@ -291,7 +291,7 @@ CharacterController.prototype._ezrealCastR = function(mouseWorldPoint, free = fa
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('R', free)) return;
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'ezrealR'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
   this.setState(STATE.R_CAST);
@@ -306,7 +306,7 @@ CharacterController.prototype._ezrealCastR = function(mouseWorldPoint, free = fa
   // 지오메트리로 재현한다 - _ezrealRBow, nilah_vfx_assets_and_runtime.js.
   vfx.spawn('ezrealRBow', this.root.position.clone(), dir, { duration: castTime });
 
-  const fireTimer = this._champTimeout(() => {
+  const fireTimer = this._champTimeout(() => { __aim.apply(dir);
     if (this.currentActionKey !== 'ezrealR') return;
     this.currentPhase = 'ACTIVE';
     const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));

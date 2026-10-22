@@ -159,6 +159,7 @@ class VisionSystem {
     const out = [];
     if (controller && controller.root) out.push(controller);
     if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (a && a.hp > 0) out.push(a);
+    if (typeof enemyBots !== 'undefined') for (const b of enemyBots) if (b && b.team === VISION_TEAM_BLUE && b.hp > 0) out.push(b); // 96차: 아군(파랑) 봇
     if (typeof minions !== 'undefined') for (const m of minions) if (m && !m.isDead && m.team === VISION_TEAM_BLUE) out.push(m);
     return out;
   }

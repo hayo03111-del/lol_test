@@ -90,7 +90,7 @@ const TURRET_DATA = {
     armorMrGrowthStartSec: 60, armorMrGrowthEndSec: 1260, armorMrGrowthStepSec: 60, armorMrGrowthPerStep: 1,
     goldReward: 375, xpReward: 0,
     hasFortification: false, hasShield: false, hasBastion: false,
-    outerFallenDamageReduction: 0.35, outerFallenDurationSec: 60, // 84차: 외곽 포탑이 무너진 뒤 60초 동안 받는 피해 35% 감소(칼바람)
+    outerFallenDamageReduction: 0.30, outerFallenDurationSec: 60, // 84차: 외곽 포탑이 무너진 뒤 60초 동안 받는 피해 감소(칼바람). 96차: 35% → 30%(PC 위키 Turret·ARAM 패치 기록 13.5 - 35%는 옛 판)
     destroyGoldOverride: 150,
   },
   [TURRET_TYPE.NEXUS_TWIN]: {
@@ -1016,7 +1016,7 @@ function updateNexusBuildingAnim(dt) {
 // 로딩 파이프라인)을 그대로 재사용한다 - 새 로딩 시스템을 만들지 않는다.
 const INHIBITOR_MAX_HP = 4000; // 실제 LoL 억제기 체력 표준값
 const INHIBITOR_ARMOR = 20; // 요청("방어력과 마법 저항력이 제대로 작동하게") - 실제 LoL 억제기 방어력 표준값(마법저항력은 0이 맞음)
-const INHIBITOR_RESPAWN_SEC = 300; // 실제 LoL 5분 재생성
+const INHIBITOR_RESPAWN_SEC = 250; // 96차: 칼바람 억제기 재생성 300 → 250초(PC 위키 ARAM 패치 기록 V25.21)
 let inhibitorBuildings = [];
 // radiusWorld: 원작 충돌 반경(칼바람 배치가 넘긴다). 주면 GLB가 없을 때의 임시 도형도 그 크기로 만든다.
 function createInhibitorBuilding(position, team = 'RED', radiusWorld = null) {

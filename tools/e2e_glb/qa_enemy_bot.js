@@ -44,7 +44,10 @@ const startServer = require('./server.js');
     await new Promise((res) => setTimeout(res, 2500));
     const dead = bot.state === 'DEAD', respawnAt = bot._respawnAt, waitMs = Math.max(0, respawnAt - performance.now());
     const ev = window.gameSession.events(0).filter((e) => e.type === 'championKill').slice(-1)[0] || null;
-    await new Promise((res) => setTimeout(res, waitMs + 1500));
+    // 부활은 게임 시간 기준(느린 화면에서는 실제 시간보다 늦다) - 살아날 때까지(실제 최대 60초) 기다린다.
+    const w0 = Date.now();
+    while ((bot.state === 'DEAD' || bot.hp < bot.maxHp) && Date.now() - w0 < 60000) await new Promise((res) => setTimeout(res, 300));
+    await new Promise((res) => setTimeout(res, 300));
     const spawnDist = E.worldDistanceToLol(Math.hypot(bot.root.position.x - E.getTeamSpawnPosition('RED').x, bot.root.position.z - E.getTeamSpawnPosition('RED').z));
     bot.brain = brain;
     return { dead, gold: Math.round((c.gold || 0) - g0), kills: c.score.kills - k0, event: !!ev, respawned: bot.hp === bot.maxHp && bot.state !== 'DEAD', spawnDist: Math.round(spawnDist), waitSec: +(waitMs / 1000).toFixed(1) };
@@ -102,7 +105,22 @@ const startServer = require('./server.js');
   });
   check('lane: leaves the fountain, buys boots and last-hits minions', r.lane.maxDist > 5000 && r.lane.cs >= 1 && r.lane.boughtBoots);
 
-  // 6) 제거
+  // 6) 아군(파랑) 봇: 플레이어의 적이 아니고 아군 목록에 있으며, 적 봇과 싸운다
+  r.ally = await page.evaluate(async () => {
+    const E = window.__e2e, c = window.controller, T = E.THREE, L = E.lolRangeToWorld, id = window.__e2eEntityId;
+    E.clearEnemyBots();
+    const p = new T.Vector3(L(2000), 0, 0);
+    const ally = await E.spawnEnemyBot('garen', { team: 'BLUE', position: p.clone(), difficulty: 'hard' });
+    const foe = await E.spawnEnemyBot('darius', { team: 'RED', position: p.clone().add(new T.Vector3(0, 0, L(400))), difficulty: 'hard' });
+    const seq0 = (window.gameSession.events(0).slice(-1)[0] || { seq: 0 }).seq;
+    await new Promise((res) => setTimeout(res, 5000));
+    const ev = window.gameSession.events(seq0).filter((e) => e.type === 'damage');
+    return { notEnemy: !E.getAllEnemyUnits().includes(ally), allyHits: ev.filter((e) => e.sourceId === id(ally) && e.targetId === id(foe)).length,
+      foeHits: ev.filter((e) => e.sourceId === id(foe) && e.targetId === id(ally)).length, bar: ally.healthBarLabelDiv.className };
+  });
+  check('ally bot: not an enemy of the player, blue bar, fights the red bot', r.ally.notEnemy && r.ally.allyHits > 0 && r.ally.foeHits > 0 && /ally/.test(r.ally.bar));
+
+  // 7) 제거
   r.remove = await page.evaluate(() => {
     const E = window.__e2e, bot = E.enemyBots[0];
     E.clearEnemyBots();

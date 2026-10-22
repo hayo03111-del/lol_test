@@ -1695,6 +1695,7 @@ function animate() {
   // 가 깨지고, GLB가 아닌 바닥/소품(순수 지오메트리, 애니메이션 없음)은
   // 전혀 영향을 안 받는다 - 정확히 스크린샷에서 보인 패턴과 일치한다.
   // 새로고침 전까지 절대 스스로 복구되지 않는 것도 NaN의 특성과 맞는다.
+  if (typeof gameClockFrame === 'function') gameClockFrame(50); // 96차: 0.05초 상한을 넘은 시간은 게임 시계에서도 뺀다(아래 dt 상한과 같은 값)
   let dt = clock.getDelta();
   if (!isFinite(dt) || dt < 0) dt = 1 / 60; // 비정상적인 값이면 안전한 기본 프레임 시간으로 대체
   dt = Math.min(dt, 0.05);

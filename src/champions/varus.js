@@ -342,14 +342,14 @@ CharacterController.prototype._varusCastR = function(mouseWorldPoint, free = fal
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
   dir.normalize();
   if (!this._payCost('R', free)) return;
-  this.faceDirectionInstant(dir);
+  this.faceDirectionInstant(dir); const __aim = this._captureAim(mouseWorldPoint); // 96차: 시전 시간 중 점멸하면 새 위치 → 원래 조준점
   this._clearActionTimers();
   this.currentActionKey = 'varusR'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
   this.setState(STATE.R_CAST);
   this.playFirstAvailable(['Spell4'], { loop: THREE.LoopOnce, fade: 0.05, clampWhenFinished: true });
 
   const castTime = 0.242; // bin mCastTime(≈0.2419) - SKILL_TIMING_DATABASE.varus.R와 동일한 수치
-  const fireTimer = this._champTimeout(() => {
+  const fireTimer = this._champTimeout(() => { __aim.apply(dir);
     if (this.currentActionKey !== 'varusR') return;
     this.currentPhase = 'ACTIVE';
     const origin = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
