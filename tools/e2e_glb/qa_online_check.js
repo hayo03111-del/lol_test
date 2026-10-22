@@ -11,14 +11,23 @@ const path = require('path');
 const startServer = require('./server.js');
 const { createRelayServer } = require(path.resolve(__dirname, '../../server/relay.js'));
 const LAG = Number(process.env.LAG || 150);
-const MODE = process.env.NET_MODE === 'p2p' ? 'p2p' : 'relay';
+const MODE = ['p2p', 'mqtt'].includes(process.env.NET_MODE) ? process.env.NET_MODE : 'relay';
 (async () => {
   const srv = await startServer(); const port = srv.address().port;
   let relay = null, wsUrl = '', peerOpts = null, peerSrv = null;
   if (MODE === 'relay') {
     relay = createRelayServer({ lagMs: LAG }); await new Promise((r) => relay.listen(0, '127.0.0.1', r));
     wsUrl = `ws://127.0.0.1:${relay.address().port}/ws`;
-  } else {
+  }
+  let mqttUrl = null, brokerSrv = null;
+  if (MODE === 'mqtt') { // 100차: 우회 중계 - 이 컴퓨터에 MQTT 중계소(aedes, 웹소켓)를 띄운다. 방장은 직접 연결을 끄고, 참가자는 직접 연결을 먼저 시도했다가 실패하면 중계로 간다
+    const mods = path.join(process.env.PEER_SERVER_DIR || '', 'node_modules');
+    const aedes = require(path.join(mods, 'aedes'))(), { createServer } = require(path.join(mods, 'aedes-server-factory'));
+    brokerSrv = createServer(aedes, { ws: true });
+    await new Promise((r) => brokerSrv.listen(0, '127.0.0.1', r));
+    mqttUrl = `ws://127.0.0.1:${brokerSrv.address().port}/mqtt`;
+  }
+  if (MODE !== 'relay') {
     const mods = path.join(process.env.PEER_SERVER_DIR || '', 'node_modules');
     const { ExpressPeerServer } = require(path.join(mods, 'peer')), express = require(path.join(mods, 'express'));
     const app = express();
@@ -35,7 +44,7 @@ const MODE = process.env.NET_MODE === 'p2p' ? 'p2p' : 'relay';
     page.on('pageerror', (e) => errors.push(tag + ': ' + e.message.slice(0, 200)));
     await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__e2e, null, { timeout: 60000 });
-    if (MODE === 'p2p') await page.evaluate(([o, lag]) => { window.__netPeerOptions = o; window.__netTestLagMs = lag; }, [peerOpts, LAG]);
+    if (MODE !== 'relay') await page.evaluate(([o, lag, mq, mode, tag]) => { window.__netPeerOptions = o; window.__netTestLagMs = lag; window.__netMqttBrokers = mq ? [mq] : []; if (mode === 'mqtt' && tag === 'host') window.__netPeerDisabled = true; }, [peerOpts, LAG, mqttUrl, MODE, tag]);
     await page.evaluate((id) => { const s = document.getElementById('libraryChampSelect'); s.value = id; s.dispatchEvent(new Event('change')); }, champ);
     await page.waitForFunction((id) => window.controller && window.controller.championId === id, champ, { timeout: 60000 });
     await page.waitForTimeout(800);
@@ -72,6 +81,9 @@ const MODE = process.env.NET_MODE === 'p2p' ? 'p2p' : 'relay';
     btn: await guest.evaluate(() => document.getElementById('lobbyStartBtn').textContent), timer: await guest.evaluate(() => Number(document.getElementById('npTimer').textContent)),
   };
   check('lobby: room created from the online tab shows the code and waiting room', r.lobbyUi.roomShown && /^[A-Z2-9]{4}$/.test(code));
+  r.transport = { host: await host.evaluate(() => window.netState.client.kind), guest: await guest.evaluate(() => window.netState && window.netState.client && window.netState.client.kind) };
+  if (MODE === 'mqtt') check('transport: direct link unavailable → guest falls back to the relay broker automatically', r.transport.guest === 'mqtt' && r.transport.host === 'mqtt');
+  if (MODE === 'p2p') check('transport: direct WebRTC link used', r.transport.guest === 'p2p' && r.transport.host === 'p2p');
   check('pick: both see each other\'s live champion choice, lock-in button and timer', r.pick.hostSeesGuest === 'ashe' && r.pick.guestSeesHost === 'garen' && r.pick.btn === '확정' && r.pick.timer > 60);
   await guest.evaluate(() => document.getElementById('lobbyStartBtn').click());
   await realWait(guest, 3 * LAG + 400);
@@ -237,7 +249,7 @@ const MODE = process.env.NET_MODE === 'p2p' ? 'p2p' : 'relay';
 
   // 9) 끊긴 뒤 자동 재접속: 참가자 소켓을 강제로 끊는다 - 방장은 원격 챔피언을 유지하고, 참가자가 다시 붙어 스냅샷을 이어 받는다
   const botBefore = await host.evaluate(() => window.__e2eEntityId(window.__e2e.enemyBots[0]));
-  await guest.evaluate(() => { const c = window.netState.client; if (c.ws) c.ws.close(); else c.conn.close(); });
+  await guest.evaluate(() => { const c = window.netState.client; if (c.ws) c.ws.close(); else if (c.conn) c.conn.close(); else if (c.kind === 'mqtt') c.guest.link.ws.close(); else if (c.peer && c.peer.conn) c.peer.conn.close(); });
   await host.waitForFunction(() => window.netState && window.netState.guestGoneAt, null, { timeout: 10000 }).catch(() => {});
   r.reconnect = { hostKept: await host.evaluate(() => window.__e2e.enemyBots.length === 1) };
   await host.waitForFunction(() => window.netState && window.netState.guestReady, null, { timeout: 20000 }).catch(() => {});
@@ -246,6 +258,7 @@ const MODE = process.env.NET_MODE === 'p2p' ? 'p2p' : 'relay';
   r.reconnect.flowing = (await guest.evaluate(() => window.netState && window.netState.hostT)) > t0;
   r.reconnect.sameBot = (await host.evaluate(() => window.__e2eEntityId(window.__e2e.enemyBots[0]))) === botBefore;
   r.reconnect.guestMode = await guest.evaluate(() => window.netGuestMode && !!window.netState);
+  r.reconnect.debug = { guest: await guest.evaluate(() => window.netState && { status: window.netState.status, reconnects: window.netState.reconnects, kind: window.netState.client && window.netState.client.kind, ready: window.netState.ready }), host: await host.evaluate(() => window.netState && { status: window.netState.status, gone: window.netState.guestGoneAt, ready: window.netState.guestReady, kind: window.netState.client.kind }) };
   check('reconnect: dropped guest reconnects automatically and the match continues', r.reconnect.hostKept && r.reconnect.flowing && r.reconnect.sameBot && r.reconnect.guestMode);
 
   // 10) 백그라운드 방장: 화면 갱신이 멈춰도 워커 타이머로 시뮬레이션·스냅샷이 계속된다(여기서는 강제로 켜서 확인)
@@ -289,6 +302,6 @@ const MODE = process.env.NET_MODE === 'p2p' ? 'p2p' : 'relay';
   r.errors = errors; r.fails = fails;
   if (errors.length) fails.push('page errors');
   console.log(JSON.stringify(r, null, 1));
-  await browser.close(); srv.close(); if (relay) relay.close(); if (peerSrv && peerSrv.close) try { peerSrv.close(); } catch (e) { /* 무시 */ }
+  await browser.close(); srv.close(); if (relay) relay.close(); if (brokerSrv) try { brokerSrv.close(); } catch (e) { /* 무시 */ } if (peerSrv && peerSrv.close) try { peerSrv.close(); } catch (e) { /* 무시 */ }
   process.exit(fails.length ? 1 : 0);
 })();

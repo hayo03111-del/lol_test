@@ -34,11 +34,14 @@ function _nlEl(id) { return document.getElementById(id); }
       <div class="nl-help">
         <b>1.</b> 한 사람이 <b>방 만들기</b> → 나온 코드(또는 초대 링크)를 상대에게 보냅니다.<br>
         <b>2.</b> 상대가 이 페이지에서 코드를 넣고 <b>참가</b> → 챔피언을 고르고 확정하면 시작합니다.<br>
-        설치할 것도, 켜 둘 서버도 없습니다 - 두 브라우저가 직접 연결됩니다(WebRTC).
+        설치할 것도, 켜 둘 서버도 없습니다. 먼저 두 브라우저를 직접 잇고(WebRTC), 학교·회사 와이파이처럼 직접 연결이 막히면 자동으로 <b>우회 중계</b>로 갑니다.
       </div>
+      <div class="nl-row" id="nlRecentRow" style="display:none"><button type="button" id="nlRecent" style="flex:1"></button></div>
       <label>내 이름<input id="netName" maxlength="24" placeholder="이름"></label>
       <div class="nl-row"><button type="button" id="netCreateBtn" class="primary">방 만들기</button></div>
-      <div class="nl-row"><input id="netJoinCode" maxlength="4" placeholder="방 코드 4자리" style="text-transform:uppercase;letter-spacing:.2em"><button type="button" id="netJoinBtn">참가</button></div>
+      <div class="nl-row"><input id="netJoinCode" maxlength="300" placeholder="방 코드 4자리 (초대 링크를 붙여 넣어도 됨)" style="text-transform:uppercase;letter-spacing:.2em" autocomplete="off"><button type="button" id="netJoinBtn">참가</button></div>
+      <div class="nl-row"><button type="button" id="nlTestBtn">연결 테스트 (학교·회사 와이파이 확인)</button></div>
+      <div id="nlTestOut" class="nl-help" style="display:none"></div>
       <details class="nl-adv"><summary>고급: 직접 켠 중계 서버 쓰기</summary>
         <label>중계 서버 주소(비우면 브라우저끼리 직접 연결)<input id="netServerUrl" placeholder="ws://주소:8787/ws  (node server/relay.js)"></label>
       </details>
@@ -75,14 +78,40 @@ function _nlEl(id) { return document.getElementById(id); }
     return { url, name: nameEl.value.trim() };
   };
   _nlEl('netCreateBtn').addEventListener('click', () => { const r = read(); if (r) netHostCreateRoom(r.url, r.name || '방장').catch(() => {}).finally(netLobbyRefresh); netLobbyRefresh(); });
-  _nlEl('netJoinBtn').addEventListener('click', () => {
+  // 100차: 코드 칸에 초대 링크를 통째로 붙여 넣어도 코드(·서버)를 뽑아 쓴다. 소문자·공백도 괜찮다.
+  const parseCode = (raw) => {
+    const t = String(raw || '').trim();
+    const m = t.match(/[?&]room=([A-Za-z0-9]{4})/);
+    if (m) { const sv = t.match(/[?&]server=([^&\s]+)/); if (sv) urlEl.value = decodeURIComponent(sv[1]); return m[1].toUpperCase(); }
+    return t.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4);
+  };
+  const joinNow = (codeArg) => {
     const r = read(); if (!r) return;
-    const code = codeEl.value.trim().toUpperCase();
-    if (!/^[A-Z0-9]{4}$/.test(code)) { _netStatus('방 코드 4자리를 입력하세요'); return; }
+    const code = codeArg || parseCode(codeEl.value);
+    codeEl.value = code;
+    if (!/^[A-Z0-9]{4}$/.test(code)) { _netStatus('방 코드 4자리를 입력하세요'); codeEl.focus(); return; }
+    _nlSet('netRecent', JSON.stringify({ code, at: Date.now() }));
     netGuestJoin(r.url, code, r.name || '참가자').catch(() => {}).finally(netLobbyRefresh);
     netLobbyRefresh();
+  };
+  _nlEl('netJoinBtn').addEventListener('click', () => joinNow());
+  codeEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinNow(); });
+  codeEl.addEventListener('paste', () => __hostSetTimeout(() => { const c = parseCode(codeEl.value); codeEl.value = c; if (/^[A-Z0-9]{4}$/.test(c)) joinNow(c); }, 0)); // 붙여 넣으면 바로 참가
+  // 최근에 들어간 방(2시간 안) - 끊겼거나 새로고침했을 때 한 번에 다시 참가
+  const recent = (() => { try { const v = JSON.parse(_nlGet('netRecent') || 'null'); return v && Date.now() - v.at < 2 * 3600 * 1000 ? v : null; } catch (e) { return null; } })();
+  if (recent) { _nlEl('nlRecentRow').style.display = ''; _nlEl('nlRecent').textContent = `최근 방 ${recent.code}에 다시 참가`; _nlEl('nlRecent').addEventListener('click', () => joinNow(recent.code)); }
+  // 연결 테스트: 직접 연결 중개 서버·우회 중계소마다 닿는지 보여 준다
+  _nlEl('nlTestBtn').addEventListener('click', async () => {
+    const out = _nlEl('nlTestOut'), btn = _nlEl('nlTestBtn');
+    out.style.display = ''; out.textContent = '확인하는 중…'; btn.disabled = true;
+    const render = (rows) => {
+      const anyRelay = rows.some((x) => x.ok && /우회/.test(x.name)), p2p = rows.find((x) => /직접/.test(x.name));
+      out.innerHTML = rows.map((x) => `${x.ok ? '✅' : '❌'} ${x.name} ${x.ok ? `(${x.ms}ms)` : ''}${x.note ? `<br><span style="opacity:.7">${x.note}</span>` : ''}`).join('<br>')
+        + (rows.length >= 2 ? `<br><b>${(p2p && p2p.ok) || anyRelay ? '이 네트워크에서 온라인 대전을 할 수 있습니다' + (!(p2p && p2p.ok) ? ' (우회 중계로)' : '') : '이 네트워크에서는 연결할 수 없습니다 - 휴대폰 핫스팟 등 다른 네트워크를 써 보세요'}</b>` : '');
+    };
+    try { render(await netConnectionTest(render)); } catch (e) { out.textContent = '확인 실패: ' + (e.message || e); }
+    btn.disabled = false;
   });
-  codeEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') _nlEl('netJoinBtn').click(); });
   const copy = (text, what) => {
     const ok = () => { if (typeof showSkillToast === 'function') showSkillToast(`${what}를 복사했습니다`); };
     try { navigator.clipboard.writeText(text).then(ok, () => window.prompt(`${what}:`, text)); } catch (e) { window.prompt(`${what}:`, text); }
@@ -99,7 +128,12 @@ function _nlEl(id) { return document.getElementById(id); }
   if (q.get('room')) {
     codeEl.value = q.get('room').toUpperCase().slice(0, 4);
     if (q.get('server')) urlEl.value = q.get('server');
-    __hostSetTimeout(() => { openNetLobby(); _netStatus('초대받은 방입니다 - 이름을 넣고 "참가"를 누르세요'); }, 0);
+    // 100차: 초대 링크 - 이름이 저장돼 있으면 바로 참가, 없으면 이름 칸에 커서를 두고 안내
+    __hostSetTimeout(() => {
+      openNetLobby();
+      if (nameEl.value.trim()) { _netStatus('초대받은 방에 참가하는 중…'); joinNow(codeEl.value); }
+      else { _netStatus('초대받은 방입니다 - 이름을 넣고 "참가"(또는 Enter)를 누르세요'); nameEl.focus(); nameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinNow(codeEl.value); }); }
+    }, 300);
   }
   __hostSetInterval(() => netLobbyRefresh(), 1000); // 상태 줄·버튼(연결·참가·대전 시작) 갱신
   // 100차: 채팅 - 방에 있을 때 Enter로 입력 칸을 열고, Enter로 보내고, Esc로 닫는다(픽창·대전 모두).

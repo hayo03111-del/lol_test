@@ -162,9 +162,9 @@ class PeerNetClient {
     if (lag > 0) __hostSetTimeout(go, lag); else go();
   }
   // ---- 방장 ----
-  _create(name, tries) {
+  _create(name, tries, fixedCode) {
     this.role = 'host'; this.name = name;
-    const code = _netRandomCode();
+    const code = fixedCode && !tries ? fixedCode : _netRandomCode();
     const peer = this._newPeer(NET_P2P_PREFIX + code);
     this.peer = peer;
     peer.on('open', () => { this.code = code; this._emit('created', { code }); });
@@ -235,8 +235,8 @@ class PeerNetClient {
     __hostSetTimeout(() => { try { if (conn) conn.close(); } catch (e) { /* 무시 */ } try { if (peer) peer.destroy(); } catch (e) { /* 무시 */ } }, 250);
   }
 }
-// 서버 주소가 비어 있으면(기본) 브라우저끼리 직접 연결, ws://·wss://면 중계 서버(relay.js).
-function _netMakeClient(url) { return (!url || url === 'p2p') ? new PeerNetClient() : new NetClient(url); }
+// 서버 주소가 비어 있으면(기본) 자동 연결(직접 연결 → 막히면 우회 중계 - net_transport.js), 'p2p'면 직접 연결만, ws://·wss://면 중계 서버(relay.js).
+function _netMakeClient(url) { return !url ? new AutoNetClient() : url === 'p2p' ? new PeerNetClient() : new NetClient(url); }
 
 // 기본 서버 주소: 이 페이지를 relay.js가 내보냈으면 같은 주소의 /ws. GitHub Pages 같은 정적 호스팅이면 직접 입력해야 한다.
 function netDefaultServerUrl() {
@@ -413,7 +413,9 @@ function netHostCreateRoom(url, name) {
     cmdTimes: [], starting: false, status: '', ack: 0, sent: new Map(), fx: [], ev: [], hello: null, token: null, rematch: { host: false, guest: false }, ended: false, fxSent: 0 };
   const st = netState;
   _netStatus('서버에 연결하는 중…');
-  client.on('created', (m) => { st.code = m.code; _netStatus(`방 코드 ${m.code} - 상대를 기다리는 중`); _netToast(`방을 만들었습니다: ${m.code}`); });
+  const waysText = (w) => w ? [w.p2p ? '직접 연결' : null, w.relays ? `우회 중계 ${w.relays}곳` : null].filter(Boolean).join(' + ') : '';
+  client.on('created', (m) => { st.code = m.code; st.ways = m.ways; _netStatus(`방 코드 ${m.code} - 상대를 기다리는 중${m.ways ? ' (' + waysText(m.ways) + ' 대기)' : ''}`); _netToast(`방을 만들었습니다: ${m.code}`); });
+  client.on('ways', (w) => { st.ways = w; if (st.code && !st.remote && !st.pick) _netStatus(`방 코드 ${st.code} - 상대를 기다리는 중 (${waysText(w)} 대기)`); });
   client.on('peer-join', (m) => { st.peerName = m.name || '상대'; if (!st.remote) _netStatus(`${st.peerName} 참가 - 연결 확인 중`); });
   client.on('peer-leave', () => { if (st.pick && !st.remote) { _netPickCancel(st); _netStatus(`상대가 나갔습니다 - 방 코드 ${st.code}로 다시 기다리는 중`); _netToast('상대가 대기실을 나갔습니다'); return; } _netHostGuestGone(st); });
   client.on('error', (m) => { _netStatus('오류: ' + m.msg); });
@@ -778,9 +780,10 @@ function netHostFrame(dt) {
   const st = netState;
   if (!st || st.role !== 'host' || !st.remote || !st.guestReady) return;
   if (typeof shopRemoteClear === 'function' && typeof _shopInBase === 'function' && !_shopInBase(st.remote)) shopRemoteClear(st.remote); // 기지를 벗어나면 되돌리기 기록을 비운다(원작)
+  const hz = (st.client && st.client.snapshotHz) || NET_SNAPSHOT_HZ; // 우회 중계는 초당 15번
   st.acc += dt;
-  if (st.acc < 1 / NET_SNAPSHOT_HZ) return;
-  st.acc = Math.min(st.acc - 1 / NET_SNAPSHOT_HZ, 1 / NET_SNAPSHOT_HZ);
+  if (st.acc < 1 / hz) return;
+  st.acc = Math.min(st.acc - 1 / hz, 1 / hz);
   try { const b0 = st.client.bytesOut || 0; st.client.sendMsg(netBuildHostSnapshot(st)); st.snapBytes = (st.snapBytes || 0) + (st.client.bytesOut || 0) - b0; st.snapCount = (st.snapCount || 0) + 1; } catch (e) { console.error('[NET] 스냅샷 오류', e); }
 }
 // 방장 탭이 백그라운드로 가면 브라우저가 화면 갱신(requestAnimationFrame)을 멈춘다 - 워커 타이머(백그라운드에서도 거의 제때 온다)로
@@ -973,9 +976,10 @@ function _netGuestOnSnapshot(st, s) {
   const recvAt = __gcRealNow();
   // 도착 간격 흔들림 → 보간 지연(스냅샷 간격 + 흔들림 2배, 45~250ms)
   if (st.lastArrive) {
-    const gap = recvAt - st.lastArrive, expect = 1000 / NET_SNAPSHOT_HZ;
-    st.jitter = st.jitter * 0.9 + Math.abs(gap - expect) * 0.1;
-    st.delay = Math.max(45, Math.min(250, expect * 1.2 + st.jitter * 2 + 8));
+    const gap = recvAt - st.lastArrive;
+    st.gapAvg = st.gapAvg ? st.gapAvg * 0.95 + Math.min(500, gap) * 0.05 : 1000 / NET_SNAPSHOT_HZ; // 스냅샷 간격(우회 중계면 더 길다)
+    st.jitter = st.jitter * 0.9 + Math.abs(gap - st.gapAvg) * 0.1;
+    st.delay = Math.max(45, Math.min(300, st.gapAvg * 1.2 + st.jitter * 2 + 8));
   }
   st.lastArrive = recvAt;
   st.hostT = s.t; st.lastSnapAt = recvAt;

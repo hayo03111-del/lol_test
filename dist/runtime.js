@@ -41726,9 +41726,9 @@ class PeerNetClient {
     if (lag > 0) __hostSetTimeout(go, lag); else go();
   }
   // ---- 방장 ----
-  _create(name, tries) {
+  _create(name, tries, fixedCode) {
     this.role = 'host'; this.name = name;
-    const code = _netRandomCode();
+    const code = fixedCode && !tries ? fixedCode : _netRandomCode();
     const peer = this._newPeer(NET_P2P_PREFIX + code);
     this.peer = peer;
     peer.on('open', () => { this.code = code; this._emit('created', { code }); });
@@ -41799,8 +41799,8 @@ class PeerNetClient {
     __hostSetTimeout(() => { try { if (conn) conn.close(); } catch (e) { /* 무시 */ } try { if (peer) peer.destroy(); } catch (e) { /* 무시 */ } }, 250);
   }
 }
-// 서버 주소가 비어 있으면(기본) 브라우저끼리 직접 연결, ws://·wss://면 중계 서버(relay.js).
-function _netMakeClient(url) { return (!url || url === 'p2p') ? new PeerNetClient() : new NetClient(url); }
+// 서버 주소가 비어 있으면(기본) 자동 연결(직접 연결 → 막히면 우회 중계 - net_transport.js), 'p2p'면 직접 연결만, ws://·wss://면 중계 서버(relay.js).
+function _netMakeClient(url) { return !url ? new AutoNetClient() : url === 'p2p' ? new PeerNetClient() : new NetClient(url); }
 
 // 기본 서버 주소: 이 페이지를 relay.js가 내보냈으면 같은 주소의 /ws. GitHub Pages 같은 정적 호스팅이면 직접 입력해야 한다.
 function netDefaultServerUrl() {
@@ -41977,7 +41977,9 @@ function netHostCreateRoom(url, name) {
     cmdTimes: [], starting: false, status: '', ack: 0, sent: new Map(), fx: [], ev: [], hello: null, token: null, rematch: { host: false, guest: false }, ended: false, fxSent: 0 };
   const st = netState;
   _netStatus('서버에 연결하는 중…');
-  client.on('created', (m) => { st.code = m.code; _netStatus(`방 코드 ${m.code} - 상대를 기다리는 중`); _netToast(`방을 만들었습니다: ${m.code}`); });
+  const waysText = (w) => w ? [w.p2p ? '직접 연결' : null, w.relays ? `우회 중계 ${w.relays}곳` : null].filter(Boolean).join(' + ') : '';
+  client.on('created', (m) => { st.code = m.code; st.ways = m.ways; _netStatus(`방 코드 ${m.code} - 상대를 기다리는 중${m.ways ? ' (' + waysText(m.ways) + ' 대기)' : ''}`); _netToast(`방을 만들었습니다: ${m.code}`); });
+  client.on('ways', (w) => { st.ways = w; if (st.code && !st.remote && !st.pick) _netStatus(`방 코드 ${st.code} - 상대를 기다리는 중 (${waysText(w)} 대기)`); });
   client.on('peer-join', (m) => { st.peerName = m.name || '상대'; if (!st.remote) _netStatus(`${st.peerName} 참가 - 연결 확인 중`); });
   client.on('peer-leave', () => { if (st.pick && !st.remote) { _netPickCancel(st); _netStatus(`상대가 나갔습니다 - 방 코드 ${st.code}로 다시 기다리는 중`); _netToast('상대가 대기실을 나갔습니다'); return; } _netHostGuestGone(st); });
   client.on('error', (m) => { _netStatus('오류: ' + m.msg); });
@@ -42342,9 +42344,10 @@ function netHostFrame(dt) {
   const st = netState;
   if (!st || st.role !== 'host' || !st.remote || !st.guestReady) return;
   if (typeof shopRemoteClear === 'function' && typeof _shopInBase === 'function' && !_shopInBase(st.remote)) shopRemoteClear(st.remote); // 기지를 벗어나면 되돌리기 기록을 비운다(원작)
+  const hz = (st.client && st.client.snapshotHz) || NET_SNAPSHOT_HZ; // 우회 중계는 초당 15번
   st.acc += dt;
-  if (st.acc < 1 / NET_SNAPSHOT_HZ) return;
-  st.acc = Math.min(st.acc - 1 / NET_SNAPSHOT_HZ, 1 / NET_SNAPSHOT_HZ);
+  if (st.acc < 1 / hz) return;
+  st.acc = Math.min(st.acc - 1 / hz, 1 / hz);
   try { const b0 = st.client.bytesOut || 0; st.client.sendMsg(netBuildHostSnapshot(st)); st.snapBytes = (st.snapBytes || 0) + (st.client.bytesOut || 0) - b0; st.snapCount = (st.snapCount || 0) + 1; } catch (e) { console.error('[NET] 스냅샷 오류', e); }
 }
 // 방장 탭이 백그라운드로 가면 브라우저가 화면 갱신(requestAnimationFrame)을 멈춘다 - 워커 타이머(백그라운드에서도 거의 제때 온다)로
@@ -42537,9 +42540,10 @@ function _netGuestOnSnapshot(st, s) {
   const recvAt = __gcRealNow();
   // 도착 간격 흔들림 → 보간 지연(스냅샷 간격 + 흔들림 2배, 45~250ms)
   if (st.lastArrive) {
-    const gap = recvAt - st.lastArrive, expect = 1000 / NET_SNAPSHOT_HZ;
-    st.jitter = st.jitter * 0.9 + Math.abs(gap - expect) * 0.1;
-    st.delay = Math.max(45, Math.min(250, expect * 1.2 + st.jitter * 2 + 8));
+    const gap = recvAt - st.lastArrive;
+    st.gapAvg = st.gapAvg ? st.gapAvg * 0.95 + Math.min(500, gap) * 0.05 : 1000 / NET_SNAPSHOT_HZ; // 스냅샷 간격(우회 중계면 더 길다)
+    st.jitter = st.jitter * 0.9 + Math.abs(gap - st.gapAvg) * 0.1;
+    st.delay = Math.max(45, Math.min(300, st.gapAvg * 1.2 + st.jitter * 2 + 8));
   }
   st.lastArrive = recvAt;
   st.hostT = s.t; st.lastSnapAt = recvAt;
@@ -43282,6 +43286,305 @@ function _netChatShow(name, text, team, mine) {
 }
 if (typeof window !== 'undefined') window.netSendChat = netSendChat;
 
+/* ===== src/net/net_transport.js ===== */
+/* net_transport.js — 100차: 학교·회사 와이파이에서도 붙는 연결(자동 선택)
+ *
+ * 기본 연결(서버 주소 칸이 비어 있을 때)은 AutoNetClient다. 대전 코드(net_session.js)는 중계 서버용 NetClient와 같은 모양
+ * (on/connect/send/sendMsg/close, 'created'·'joined'·'peer-join'·'peer-leave'·'room-closed'·'msg'·'error'·'close')으로 쓴다.
+ *  - 방장: 방 코드를 정하고 두 가지 길로 동시에 기다린다.
+ *      ① 브라우저끼리 직접 연결(PeerNetClient - WebRTC, PeerJS)
+ *      ② 우회 중계: 공개 MQTT 중계소(웹소켓·wss) 여러 곳에 같은 방 코드로 귀를 기울인다.
+ *  - 참가자: ① 직접 연결을 먼저 시도하고, 안 되면(학교 와이파이는 기기끼리 직접 통신·UDP를 막는 경우가 많다) ② 중계소를
+ *    차례로(웹 기본 포트 443을 쓰는 곳 먼저) 시도한다. 붙은 길로 대전한다 - 화면 왼쪽 위에 "직접 연결/우회 중계"가 보인다.
+ *  - 우회 중계는 게임 메시지가 공개 중계소를 거치므로 직접 연결보다 느리다 - 방장은 스냅샷을 초당 15번으로 줄여 보낸다.
+ * 연결 진단(netConnectionTest): 직접 연결 중개 서버와 각 중계소에 닿는지 재서 로비에 보여 준다.
+ *
+ * MQTT는 3.1.1 최소 구현(CONNECT·SUBSCRIBE·PUBLISH QoS 0·PING) - 라이브러리 없이 웹소켓(하위 프로토콜 'mqtt') 위에서 돈다.
+ * 주제: lolsim/pvp1/<방 코드>/h(방장이 받음) · /g(참가자가 받음). 메시지는 JSON 글자: { f: 보낸 쪽 아이디, to: 받는 참가자 아이디, t, d }.
+ */
+const NET_MQTT_BROKERS = [
+  'wss://mqtt.eclipseprojects.io:443/mqtt', // 웹 기본 포트(443) - 학교·회사 방화벽에서도 열려 있는 경우가 많다
+  'wss://broker.emqx.io:8084/mqtt',
+  'wss://broker.hivemq.com:8884/mqtt',
+  'wss://test.mosquitto.org:8081/mqtt',
+];
+const NET_MQTT_TOPIC = 'lolsim/pvp1/';
+function _netMqttBrokers() { return (typeof window !== 'undefined' && Array.isArray(window.__netMqttBrokers)) ? window.__netMqttBrokers : NET_MQTT_BROKERS; }
+function _netP2pDisabled() { return typeof window !== 'undefined' && !!window.__netPeerDisabled; }
+function _netRandId() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
+
+// ---------------- MQTT 3.1.1 최소 클라이언트 ----------------
+const _netTE = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null, _netTD = typeof TextDecoder !== 'undefined' ? new TextDecoder() : null;
+function _mqttStr(s) { const b = _netTE.encode(s); return [b.length >> 8, b.length & 255, ...b]; }
+function _mqttLen(n) { const out = []; do { let d = n % 128; n = Math.floor(n / 128); if (n > 0) d |= 128; out.push(d); } while (n > 0); return out; }
+function _mqttPacket(head, body) { const b = body instanceof Uint8Array ? body : Uint8Array.from(body); const l = _mqttLen(b.length); const out = new Uint8Array(1 + l.length + b.length); out[0] = head; out.set(l, 1); out.set(b, 1 + l.length); return out; }
+class MqttWs {
+  constructor(url, clientId) { this.url = url; this.clientId = clientId; this.ws = null; this.buf = new Uint8Array(0); this.onmessage = null; this.onclose = null; this.pid = 1; this._ping = null; this.closed = false; }
+  connect(timeoutMs = 6000) {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const fail = (msg) => { if (done) return; done = true; this.close(); reject(new Error(msg)); };
+      const timer = __hostSetTimeout(() => fail('시간 초과'), timeoutMs);
+      let ws;
+      try { ws = new WebSocket(this.url, ['mqtt']); } catch (e) { __hostClearTimeout(timer); fail(e.message); return; }
+      this.ws = ws; ws.binaryType = 'arraybuffer';
+      ws.onopen = () => {
+        const vh = [..._mqttStr('MQTT'), 4, 0x02, 0, 30]; // 3.1.1, clean session, keepalive 30초
+        ws.send(_mqttPacket(0x10, [...vh, ..._mqttStr(this.clientId)]));
+      };
+      ws.onerror = () => { __hostClearTimeout(timer); fail('연결 실패'); };
+      ws.onclose = () => { __hostClearTimeout(timer); if (!done) fail('연결이 닫힘'); else if (!this.closed) { this.closed = true; if (this._ping) __hostClearInterval(this._ping); if (this.onclose) this.onclose(); } };
+      this._onConnack = (rc) => {
+        __hostClearTimeout(timer);
+        if (rc !== 0) { fail('거절됨(' + rc + ')'); return; }
+        done = true;
+        this._ping = __hostSetInterval(() => this._send(Uint8Array.from([0xC0, 0])), 20000);
+        resolve(this);
+      };
+      ws.onmessage = (e) => this._data(new Uint8Array(e.data));
+    });
+  }
+  _send(bytes) { if (this.ws && this.ws.readyState === 1) this.ws.send(bytes); }
+  _data(chunk) {
+    const b = new Uint8Array(this.buf.length + chunk.length); b.set(this.buf); b.set(chunk, this.buf.length); this.buf = b;
+    for (;;) {
+      if (this.buf.length < 2) return;
+      let mul = 1, len = 0, i = 1, byte;
+      do { if (i >= this.buf.length) return; byte = this.buf[i++]; len += (byte & 127) * mul; mul *= 128; } while (byte & 128);
+      if (this.buf.length < i + len) return;
+      const type = this.buf[0] >> 4, body = this.buf.subarray(i, i + len);
+      this.buf = this.buf.slice(i + len);
+      if (type === 2 && this._onConnack) this._onConnack(body[1]);
+      else if (type === 3) {
+        const tl = (body[0] << 8) | body[1];
+        const topic = _netTD.decode(body.subarray(2, 2 + tl));
+        const payload = _netTD.decode(body.subarray(2 + tl));
+        const fire = () => { if (this.onmessage) { try { this.onmessage(topic, payload); } catch (e) { console.error('[NET mqtt]', e); } } };
+        const lag = (typeof window !== 'undefined' && window.__netTestLagMs) || 0; // 시험용 인공 지연(받은 순서 그대로)
+        if (lag > 0) __hostSetTimeout(fire, lag); else fire();
+      }
+    }
+  }
+  subscribe(topic) { const id = this.pid++ & 0xffff; this._send(_mqttPacket(0x82, [id >> 8, id & 255, ..._mqttStr(topic), 0])); }
+  publish(topic, text) { const t = _mqttStr(topic), p = _netTE.encode(text); const body = new Uint8Array(t.length + p.length); body.set(t); body.set(p, t.length); this._send(_mqttPacket(0x30, body)); }
+  close() {
+    if (this._ping) __hostClearInterval(this._ping);
+    this.closed = true;
+    try { this._send(Uint8Array.from([0xE0, 0])); } catch (e) { /* 무시 */ }
+    try { if (this.ws) this.ws.close(); } catch (e) { /* 무시 */ }
+  }
+}
+
+// ---------------- 자동 연결(직접 → 우회 중계) ----------------
+class AutoNetClient {
+  constructor() { this.url = ''; this.kind = 'auto'; this.handlers = new Map(); this.rtt = null; this.bytesOut = 0; this.closed = false; this.active = null; this.code = null; this.peer = null; this.mqtt = []; this.guest = null; this.myId = _netRandId(); this._timers = []; }
+  get snapshotHz() { return this.kind === 'mqtt' ? 15 : undefined; }
+  on(type, fn) { this.handlers.set(type, fn); return this; }
+  _emit(type, m) { if (this.closed && type !== 'close') return; const fn = this.handlers.get(type); if (fn) { try { fn(m); } catch (e) { console.error('[NET auto]', type, e); } } }
+  _status(msg) { if (typeof _netStatus === 'function' && netState && netState.client === this) _netStatus(msg); }
+  connect() { return Promise.resolve(this); } // 실제 연결은 create/join에서
+  send(obj) {
+    if (this.closed || !obj) return;
+    if (obj.t === 'create') return this._create(obj.name || '방장');
+    if (obj.t === 'join') return this._join(String(obj.code || '').toUpperCase().trim(), obj.name || '참가자');
+    if (obj.t === 'msg') return this._sendMsg(obj.d);
+    if (obj.t === 'kick') return this._kick();
+  }
+  sendMsg(d) { this._sendMsg(d); }
+  _sendMsg(d) {
+    if (this.kind === 'p2p' && this.peer) { this.peer.sendMsg(d); this.bytesOut = this.peer.bytesOut; return; }
+    if (this.kind === 'mqtt' && this.guest) { const text = JSON.stringify({ f: this.myId, to: this.role === 'host' ? this.guest.cid : undefined, t: 'msg', d }); this.bytesOut += text.length; this.guest.link.publish(this._topic(this.role === 'host' ? 'g' : 'h'), text); }
+  }
+  _topic(side) { return NET_MQTT_TOPIC + this.code + '/' + side; }
+  // ===== 방장 =====
+  _create(name) {
+    this.role = 'host'; this.name = name;
+    this.code = typeof _netRandomCode === 'function' ? _netRandomCode() : Math.random().toString(36).slice(2, 6).toUpperCase();
+    let announced = false;
+    const announce = () => { if (!announced && !this.closed) { announced = true; this._emit('created', { code: this.code, ways: this._ways() }); } };
+    // ① 직접 연결
+    if (!_netP2pDisabled()) {
+      const p = new PeerNetClient();
+      this.peerHost = p;
+      p.on('created', (m) => {
+        if (m.code !== this.code) { // 방 코드가 이미 쓰이고 있었다 - 아직 알리기 전이면 새 코드로 중계도 다시 구독, 알린 뒤면 직접 연결은 포기
+          if (announced) { p.handlers.clear(); p.close(); this.peerHost = null; return; }
+          this.code = m.code; for (const l of this.mqtt) l.subscribe(this._topic('h'));
+        }
+        this.p2pReady = true; announce(); this._emit('ways', this._ways());
+      });
+      p.on('error', (m) => { this.p2pError = m.msg; });
+      p.on('peer-join', (m) => { if (this.guest) { p.send({ t: 'kick' }); return; } this.kind = 'p2p'; this.peer = p; this.guest = { via: 'p2p' }; this._emit('peer-join', m); });
+      p.on('peer-leave', () => { if (this.kind === 'p2p') { this.guest = null; this.peer = null; this.kind = 'auto'; this._emit('peer-leave', {}); } });
+      p.on('msg', (d) => { if (this.kind === 'p2p') this._emit('msg', d); });
+      p.connect().then(() => { if (!this.closed) p._create(name, 0, this.code); }).catch((e) => { this.p2pError = e.message; });
+    }
+    // ② 우회 중계 - 연결되는 중계소마다 같은 방 코드로 기다린다
+    for (const url of _netMqttBrokers()) {
+      const link = new MqttWs(url, 'lolsim-h-' + this.myId);
+      link.connect().then(() => {
+        if (this.closed) { link.close(); return; }
+        this.mqtt.push(link);
+        link.subscribe(this._topic('h'));
+        link.onmessage = (topic, payload) => this._hostMqtt(link, payload);
+        link.onclose = () => { this.mqtt = this.mqtt.filter((x) => x !== link); if (this.kind === 'mqtt' && this.guest && this.guest.link === link) { this.guest = null; this.kind = 'auto'; this._emit('peer-leave', {}); } };
+        this._emit('ways', this._ways());
+        // 직접 연결 준비가 늦으면(중개 서버가 막힌 네트워크) 중계만으로도 방을 연다
+        __hostSetTimeout(announce, this.p2pReady || _netP2pDisabled() ? 0 : 4000);
+      }).catch(() => { /* 이 중계소는 안 된다 */ });
+    }
+    // 아무 길도 안 열리면 알린다
+    this._timers.push(__hostSetTimeout(() => { if (!announced && !this.closed) this._emit('error', { msg: '방을 열지 못했습니다 - 인터넷 연결을 확인하세요 (로비의 "연결 테스트")' }); }, 15000));
+    this._timers.push(__hostSetInterval(() => this._hostKeepAlive(), 2000));
+  }
+  _ways() { return { p2p: !!this.p2pReady, relays: this.mqtt.length }; }
+  _hostMqtt(link, payload) {
+    let m; try { m = JSON.parse(payload); } catch (e) { return; }
+    if (!m || m.f === this.myId) return;
+    if (m.t === 'join') {
+      // 참가자가 다시 붙으면(새 연결 아이디) 예전 연결이 조용해진 지 2.5초가 넘었을 때 바꿔 준다
+      if (this.guest && this.guest.via === 'mqtt' && this.guest.cid !== m.f && __gcRealNow() - this.guest.last > 2500) { this.guest = null; this.kind = 'auto'; this._emit('peer-leave', {}); }
+      if (this.guest && !(this.guest.via === 'mqtt' && this.guest.cid === m.f)) { link.publish(this._topic('g'), JSON.stringify({ f: this.myId, to: m.f, t: 'error', msg: '방이 가득 참' })); return; }
+      const again = this.guest && this.guest.cid === m.f;
+      this.guest = { via: 'mqtt', cid: m.f, link, last: __gcRealNow() }; this.kind = 'mqtt';
+      link.publish(this._topic('g'), JSON.stringify({ f: this.myId, to: m.f, t: 'joined', code: this.code, host: { name: this.name } }));
+      if (!again) this._emit('peer-join', { name: String(m.name || '참가자').slice(0, 24) });
+      return;
+    }
+    if (!this.guest || this.guest.via !== 'mqtt' || this.guest.cid !== m.f) return;
+    this.guest.last = __gcRealNow();
+    if (m.t === 'msg') this._emit('msg', m.d || {});
+    else if (m.t === 'bye') { this.guest = null; this.kind = 'auto'; this._emit('peer-leave', {}); }
+  }
+  _hostKeepAlive() {
+    if (this.kind !== 'mqtt' || !this.guest) return;
+    this.guest.link.publish(this._topic('g'), JSON.stringify({ f: this.myId, to: this.guest.cid, t: 'ka' }));
+    if (__gcRealNow() - this.guest.last > 9000) { this.guest = null; this.kind = 'auto'; this._emit('peer-leave', {}); }
+  }
+  _kick() {
+    if (this.kind === 'p2p' && this.peer) this.peer.send({ t: 'kick' });
+    else if (this.kind === 'mqtt' && this.guest) this.guest.link.publish(this._topic('g'), JSON.stringify({ f: this.myId, to: this.guest.cid, t: 'error', msg: '방장이 참가를 거절했습니다' }));
+    this.guest = null; this.peer = null; this.kind = 'auto';
+  }
+  // ===== 참가자 =====
+  async _join(code, name) {
+    this.role = 'guest'; this.name = name; this.code = code;
+    // 다시 붙을 때도 같은 아이디(방 토큰에서) - 방장이 "같은 사람"으로 보고 바로 받아 준다(예전 연결이 아직 살아 있는 것으로 보여도)
+    if (typeof netState !== 'undefined' && netState && netState.token) this.myId = 'g' + String(netState.token).slice(0, 12);
+    // ① 직접 연결
+    if (!_netP2pDisabled()) {
+      this._status('방장에게 직접 연결하는 중… (1단계)');
+      const ok = await this._tryP2p(code, name);
+      if (ok || this.closed) return;
+    }
+    // ② 우회 중계 - 중계소를 차례로
+    const list = _netMqttBrokers();
+    for (let i = 0; i < list.length && !this.closed; i++) {
+      this._status(`직접 연결이 막혀 우회 중계로 연결하는 중… (${i + 1}/${list.length})`);
+      const r = await this._tryMqtt(list[i], code, name);
+      if (r === 'ok' || this.closed) return;
+      if (r === 'full') { this._emit('error', { msg: '방이 가득 참' }); this._emit('close', {}); return; }
+    }
+    if (this.closed) return;
+    this._emit('error', { msg: '방을 찾지 못했습니다 - 코드를 확인하거나 로비의 "연결 테스트"를 눌러 보세요' });
+    this._emit('close', {});
+  }
+  _tryP2p(code, name) {
+    return new Promise((resolve) => {
+      const p = new PeerNetClient();
+      let settled = false;
+      const done = (ok) => { if (settled) return; settled = true; if (!ok) { p.handlers.clear(); p.close(); } resolve(ok); };
+      p.on('joined', (m) => { if (settled) return; this.kind = 'p2p'; this.peer = p; this.guest = { via: 'p2p' }; done(true); this._emit('joined', m); });
+      p.on('error', (m) => { if (!settled) { if (m && m.msg === '방이 가득 참') { done(true); this._emit('error', m); this._emit('close', {}); } else done(false); } else this._emit('error', m); });
+      p.on('close', () => { if (!settled) done(false); else if (this.kind === 'p2p') this._emit('close', {}); });
+      p.on('room-closed', () => { if (settled && this.kind === 'p2p') this._emit('room-closed', {}); });
+      p.on('msg', (d) => { if (this.kind === 'p2p') this._emit('msg', d); });
+      p.connect().then(() => p.send({ t: 'join', code, name })).catch(() => done(false));
+      this._timers.push(__hostSetTimeout(() => done(false), 9000)); // 학교 와이파이처럼 직접 연결이 안 되면 9초 뒤 우회 중계로
+    });
+  }
+  _tryMqtt(url, code, name) {
+    return new Promise((resolve) => {
+      const link = new MqttWs(url, 'lolsim-g-' + this.myId);
+      let settled = false;
+      const done = (r) => { if (settled) return; settled = true; if (r !== 'ok') link.close(); resolve(r); };
+      link.connect(5000).then(() => {
+        if (this.closed) { done('closed'); return; }
+        link.subscribe(this._topic('g'));
+        link.onmessage = (topic, payload) => {
+          let m; try { m = JSON.parse(payload); } catch (e) { return; }
+          if (!m || m.to !== this.myId) return;
+          this._lastRecv = __gcRealNow();
+          if (m.t === 'joined' && !settled) { this.kind = 'mqtt'; this.guest = { via: 'mqtt', link }; done('ok'); this._startGuestKeepAlive(); this._emit('joined', m); return; }
+          if (m.t === 'error' && !settled) { done(m.msg === '방이 가득 참' ? 'full' : 'no'); return; }
+          if (!settled || this.kind !== 'mqtt') return;
+          if (m.t === 'msg') this._emit('msg', m.d || {});
+          else if (m.t === 'error') this._emit('error', m);
+          else if (m.t === 'room-closed') { this._roomClosed = true; this._emit('room-closed', {}); }
+        };
+        link.onclose = () => { if (settled && this.kind === 'mqtt' && !this.closed) this._emit('close', {}); };
+        // 구독이 자리 잡을 시간을 조금 주고 참가 요청(답이 없으면 한 번 더)
+        const ask = () => { if (!settled) link.publish(this._topic('h'), JSON.stringify({ f: this.myId, t: 'join', code, name })); };
+        __hostSetTimeout(ask, 300); __hostSetTimeout(ask, 1800);
+        __hostSetTimeout(() => done('no'), 4000);
+      }).catch(() => done('down'));
+    });
+  }
+  _startGuestKeepAlive() {
+    this._lastRecv = __gcRealNow();
+    this._timers.push(__hostSetInterval(() => {
+      if (this.kind !== 'mqtt' || !this.guest || this.closed) return;
+      this.guest.link.publish(this._topic('h'), JSON.stringify({ f: this.myId, t: 'ka' }));
+      if (__gcRealNow() - this._lastRecv > 9000) { const l = this.guest.link; this.guest = null; this.kind = 'auto'; l.close(); this._emit('close', {}); }
+    }, 2000));
+  }
+  close() {
+    if (this.closed) return;
+    // 상대에게 알리고 닫는다
+    if (this.kind === 'mqtt' && this.guest) {
+      const msg = this.role === 'host' ? { f: this.myId, to: this.guest.cid, t: 'room-closed' } : { f: this.myId, t: 'bye' };
+      try { this.guest.link.publish(this._topic(this.role === 'host' ? 'g' : 'h'), JSON.stringify(msg)); } catch (e) { /* 무시 */ }
+    }
+    this.closed = true;
+    for (const t of this._timers) { __hostClearTimeout(t); __hostClearInterval(t); }
+    const links = [...this.mqtt, ...(this.guest && this.guest.link ? [this.guest.link] : [])];
+    __hostSetTimeout(() => { for (const l of links) l.close(); }, 200);
+    if (this.peer) this.peer.close();
+    if (this.peerHost && this.peerHost !== this.peer) this.peerHost.close();
+    this.handlers.clear();
+  }
+}
+
+// ---------------- 연결 테스트(로비) ----------------
+// 직접 연결 중개 서버(PeerJS)에 닿는지, 우회 중계소마다 닿는지·응답 시간을 잰다. 결과: [{ name, ok, ms, note }]
+async function netConnectionTest(onStep) {
+  const out = [];
+  const step = (r) => { out.push(r); if (onStep) onStep(out.slice()); };
+  // ① 직접 연결 중개
+  if (!_netP2pDisabled()) {
+    const t0 = __gcRealNow();
+    const ok = await new Promise((resolve) => {
+      _netLoadPeerJs().then(() => {
+        let peer; try { peer = new window.Peer(Object.assign({ debug: 0 }, window.__netPeerOptions || {})); } catch (e) { resolve(false); return; }
+        const fin = (v) => { try { peer.destroy(); } catch (e) { /* 무시 */ } resolve(v); };
+        peer.on('open', () => fin(true)); peer.on('error', () => fin(false));
+        __hostSetTimeout(() => fin(false), 6000);
+      }).catch(() => resolve(false));
+    });
+    step({ name: '직접 연결(WebRTC) 중개 서버', ok, ms: Math.round(__gcRealNow() - t0), note: ok ? '같은 와이파이라도 기기끼리 직접 통신을 막으면 실패할 수 있어요 - 그땐 자동으로 우회 중계로 갑니다' : '막혀 있음 - 우회 중계로 연결됩니다' });
+  }
+  // ② 우회 중계소
+  for (const url of _netMqttBrokers()) {
+    const t0 = __gcRealNow();
+    const link = new MqttWs(url, 'lolsim-t-' + _netRandId());
+    const ok = await link.connect(5000).then(() => true, () => false);
+    link.close();
+    step({ name: '우회 중계 ' + url.replace(/^wss?:\/\//, '').replace(/\/.*$/, ''), ok, ms: Math.round(__gcRealNow() - t0) });
+  }
+  return out;
+}
+if (typeof window !== 'undefined') { window.netConnectionTest = netConnectionTest; }
+
 /* ===== src/core/lobby_ui.js ===== */
 /* ============================================================
    로비 화면 - 52차
@@ -43523,11 +43826,14 @@ function _nlEl(id) { return document.getElementById(id); }
       <div class="nl-help">
         <b>1.</b> 한 사람이 <b>방 만들기</b> → 나온 코드(또는 초대 링크)를 상대에게 보냅니다.<br>
         <b>2.</b> 상대가 이 페이지에서 코드를 넣고 <b>참가</b> → 챔피언을 고르고 확정하면 시작합니다.<br>
-        설치할 것도, 켜 둘 서버도 없습니다 - 두 브라우저가 직접 연결됩니다(WebRTC).
+        설치할 것도, 켜 둘 서버도 없습니다. 먼저 두 브라우저를 직접 잇고(WebRTC), 학교·회사 와이파이처럼 직접 연결이 막히면 자동으로 <b>우회 중계</b>로 갑니다.
       </div>
+      <div class="nl-row" id="nlRecentRow" style="display:none"><button type="button" id="nlRecent" style="flex:1"></button></div>
       <label>내 이름<input id="netName" maxlength="24" placeholder="이름"></label>
       <div class="nl-row"><button type="button" id="netCreateBtn" class="primary">방 만들기</button></div>
-      <div class="nl-row"><input id="netJoinCode" maxlength="4" placeholder="방 코드 4자리" style="text-transform:uppercase;letter-spacing:.2em"><button type="button" id="netJoinBtn">참가</button></div>
+      <div class="nl-row"><input id="netJoinCode" maxlength="300" placeholder="방 코드 4자리 (초대 링크를 붙여 넣어도 됨)" style="text-transform:uppercase;letter-spacing:.2em" autocomplete="off"><button type="button" id="netJoinBtn">참가</button></div>
+      <div class="nl-row"><button type="button" id="nlTestBtn">연결 테스트 (학교·회사 와이파이 확인)</button></div>
+      <div id="nlTestOut" class="nl-help" style="display:none"></div>
       <details class="nl-adv"><summary>고급: 직접 켠 중계 서버 쓰기</summary>
         <label>중계 서버 주소(비우면 브라우저끼리 직접 연결)<input id="netServerUrl" placeholder="ws://주소:8787/ws  (node server/relay.js)"></label>
       </details>
@@ -43564,14 +43870,40 @@ function _nlEl(id) { return document.getElementById(id); }
     return { url, name: nameEl.value.trim() };
   };
   _nlEl('netCreateBtn').addEventListener('click', () => { const r = read(); if (r) netHostCreateRoom(r.url, r.name || '방장').catch(() => {}).finally(netLobbyRefresh); netLobbyRefresh(); });
-  _nlEl('netJoinBtn').addEventListener('click', () => {
+  // 100차: 코드 칸에 초대 링크를 통째로 붙여 넣어도 코드(·서버)를 뽑아 쓴다. 소문자·공백도 괜찮다.
+  const parseCode = (raw) => {
+    const t = String(raw || '').trim();
+    const m = t.match(/[?&]room=([A-Za-z0-9]{4})/);
+    if (m) { const sv = t.match(/[?&]server=([^&\s]+)/); if (sv) urlEl.value = decodeURIComponent(sv[1]); return m[1].toUpperCase(); }
+    return t.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4);
+  };
+  const joinNow = (codeArg) => {
     const r = read(); if (!r) return;
-    const code = codeEl.value.trim().toUpperCase();
-    if (!/^[A-Z0-9]{4}$/.test(code)) { _netStatus('방 코드 4자리를 입력하세요'); return; }
+    const code = codeArg || parseCode(codeEl.value);
+    codeEl.value = code;
+    if (!/^[A-Z0-9]{4}$/.test(code)) { _netStatus('방 코드 4자리를 입력하세요'); codeEl.focus(); return; }
+    _nlSet('netRecent', JSON.stringify({ code, at: Date.now() }));
     netGuestJoin(r.url, code, r.name || '참가자').catch(() => {}).finally(netLobbyRefresh);
     netLobbyRefresh();
+  };
+  _nlEl('netJoinBtn').addEventListener('click', () => joinNow());
+  codeEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinNow(); });
+  codeEl.addEventListener('paste', () => __hostSetTimeout(() => { const c = parseCode(codeEl.value); codeEl.value = c; if (/^[A-Z0-9]{4}$/.test(c)) joinNow(c); }, 0)); // 붙여 넣으면 바로 참가
+  // 최근에 들어간 방(2시간 안) - 끊겼거나 새로고침했을 때 한 번에 다시 참가
+  const recent = (() => { try { const v = JSON.parse(_nlGet('netRecent') || 'null'); return v && Date.now() - v.at < 2 * 3600 * 1000 ? v : null; } catch (e) { return null; } })();
+  if (recent) { _nlEl('nlRecentRow').style.display = ''; _nlEl('nlRecent').textContent = `최근 방 ${recent.code}에 다시 참가`; _nlEl('nlRecent').addEventListener('click', () => joinNow(recent.code)); }
+  // 연결 테스트: 직접 연결 중개 서버·우회 중계소마다 닿는지 보여 준다
+  _nlEl('nlTestBtn').addEventListener('click', async () => {
+    const out = _nlEl('nlTestOut'), btn = _nlEl('nlTestBtn');
+    out.style.display = ''; out.textContent = '확인하는 중…'; btn.disabled = true;
+    const render = (rows) => {
+      const anyRelay = rows.some((x) => x.ok && /우회/.test(x.name)), p2p = rows.find((x) => /직접/.test(x.name));
+      out.innerHTML = rows.map((x) => `${x.ok ? '✅' : '❌'} ${x.name} ${x.ok ? `(${x.ms}ms)` : ''}${x.note ? `<br><span style="opacity:.7">${x.note}</span>` : ''}`).join('<br>')
+        + (rows.length >= 2 ? `<br><b>${(p2p && p2p.ok) || anyRelay ? '이 네트워크에서 온라인 대전을 할 수 있습니다' + (!(p2p && p2p.ok) ? ' (우회 중계로)' : '') : '이 네트워크에서는 연결할 수 없습니다 - 휴대폰 핫스팟 등 다른 네트워크를 써 보세요'}</b>` : '');
+    };
+    try { render(await netConnectionTest(render)); } catch (e) { out.textContent = '확인 실패: ' + (e.message || e); }
+    btn.disabled = false;
   });
-  codeEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') _nlEl('netJoinBtn').click(); });
   const copy = (text, what) => {
     const ok = () => { if (typeof showSkillToast === 'function') showSkillToast(`${what}를 복사했습니다`); };
     try { navigator.clipboard.writeText(text).then(ok, () => window.prompt(`${what}:`, text)); } catch (e) { window.prompt(`${what}:`, text); }
@@ -43588,7 +43920,12 @@ function _nlEl(id) { return document.getElementById(id); }
   if (q.get('room')) {
     codeEl.value = q.get('room').toUpperCase().slice(0, 4);
     if (q.get('server')) urlEl.value = q.get('server');
-    __hostSetTimeout(() => { openNetLobby(); _netStatus('초대받은 방입니다 - 이름을 넣고 "참가"를 누르세요'); }, 0);
+    // 100차: 초대 링크 - 이름이 저장돼 있으면 바로 참가, 없으면 이름 칸에 커서를 두고 안내
+    __hostSetTimeout(() => {
+      openNetLobby();
+      if (nameEl.value.trim()) { _netStatus('초대받은 방에 참가하는 중…'); joinNow(codeEl.value); }
+      else { _netStatus('초대받은 방입니다 - 이름을 넣고 "참가"(또는 Enter)를 누르세요'); nameEl.focus(); nameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinNow(codeEl.value); }); }
+    }, 300);
   }
   __hostSetInterval(() => netLobbyRefresh(), 1000); // 상태 줄·버튼(연결·참가·대전 시작) 갱신
   // 100차: 채팅 - 방에 있을 때 Enter로 입력 칸을 열고, Enter로 보내고, Esc로 닫는다(픽창·대전 모두).
