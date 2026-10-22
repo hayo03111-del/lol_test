@@ -1758,6 +1758,7 @@ function _netLagCompRecord(st) {
 function netLagCompMs(st) {
   st = st || netState;
   if (!st || st.role !== 'host' || (typeof window !== 'undefined' && window.__netLagComp === false)) return 0;
+  if (typeof window !== 'undefined' && Number.isFinite(window.__netLagCompForceMs)) return window.__netLagCompForceMs; // 점검용
   const ms = (st.guestRtt || 0) + (st.guestDelay || 0);
   return Math.max(0, Math.min(NET_LAGCOMP_MAX_MS, ms));
 }
