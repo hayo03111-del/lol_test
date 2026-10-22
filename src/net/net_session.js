@@ -29,7 +29,8 @@
  * 아직 없는 것(README 98차 "한계"): 챔피언 코드가 직접 만드는 일부 연출(아리·요네·럭스 등의 자체 메시)은 방장 화면에만 나온다.
  *    방장은 지연이 0이라 유리하다(방장 권위 방식의 한계 - 스킬 판정 되감기 없음).
  */
-const NET_PROTOCOL_VERSION = 2;
+const NET_PROTOCOL_VERSION = 3;
+const NET_PICK_SEC = 90;               // 99차: 챔피언 선택 제한 시간(초) - 끝나면 지금 고른 것으로 확정
 const NET_SNAPSHOT_HZ = 30;
 const NET_KEYFRAME_EVERY = 30;          // 스냅샷 30번(1초)마다 전체
 const NET_GUEST_ID_BASE = 1000000;      // 게스트가 직접 발급하는 ID는 여기부터(방장 ID와 겹치지 않게)
@@ -76,7 +77,7 @@ function netDefaultServerUrl() {
 }
 function _netToast(msg) { if (typeof showSkillToast === 'function') showSkillToast(msg); console.log('[NET] ' + msg); }
 function _netBanner(msg) { if (typeof showRewardBanner === 'function') showRewardBanner(msg); else _netToast(msg); }
-function _netStatus(msg) { if (typeof document !== 'undefined') { const el = document.getElementById('netStatus'); if (el) el.textContent = msg; } if (netState) netState.status = msg; }
+function _netStatus(msg) { if (typeof document !== 'undefined') { const el = document.getElementById('netStatus'); if (el) el.textContent = msg; } if (netState) netState.status = msg; if (typeof netLobbyRefresh === 'function') netLobbyRefresh(); }
 const _netRound = (v, m = 1000) => (Number.isFinite(v) ? Math.round(v * m) / m : 0);
 const _netTeamCode = (t) => (t === 'RED' ? 'R' : 'B');
 const _netTeamName = (c) => (c === 'R' ? 'RED' : 'BLUE');
@@ -242,8 +243,8 @@ function netHostCreateRoom(url, name) {
   const st = netState;
   _netStatus('서버에 연결하는 중…');
   client.on('created', (m) => { st.code = m.code; _netStatus(`방 코드 ${m.code} - 상대를 기다리는 중`); _netToast(`방을 만들었습니다: ${m.code}`); });
-  client.on('peer-join', (m) => { st.peerName = m.name || '상대'; if (!st.remote) _netStatus(`${st.peerName} 참가 - 챔피언 정보를 기다리는 중`); });
-  client.on('peer-leave', () => _netHostGuestGone(st));
+  client.on('peer-join', (m) => { st.peerName = m.name || '상대'; if (!st.remote) _netStatus(`${st.peerName} 참가 - 연결 확인 중`); });
+  client.on('peer-leave', () => { if (st.pick && !st.remote) { _netPickCancel(st); _netStatus(`상대가 나갔습니다 - 방 코드 ${st.code}로 다시 기다리는 중`); _netToast('상대가 대기실을 나갔습니다'); return; } _netHostGuestGone(st); });
   client.on('error', (m) => { _netStatus('오류: ' + m.msg); });
   client.on('close', () => { if (netState === st) { _netHostEndMatch(st); netState = null; netApplyControlLock(); _netStatus('서버 연결이 끊겼습니다'); } });
   client.on('pong', () => _netHostStatusLine(st));
@@ -266,7 +267,28 @@ function _netHostOnMessage(st, d) {
       if (d.v != null && d.v !== NET_PROTOCOL_VERSION) { st.client.sendMsg({ k: 'bye', msg: '게임 버전이 다릅니다 - 둘 다 새로고침하세요' }); st.client.send({ t: 'kick' }); return; }
       st.hello = { champ: String(d.champ || ''), name: String(d.name || st.peerName || '상대').slice(0, 24), spells: Array.isArray(d.spells) ? d.spells.slice(0, 2).map(String) : null, rune: d.rune && typeof d.rune === 'object' ? d.rune : null };
       st.token = token;
+      // 99차: 픽창에서 "확정 → 불러오기"를 거친다 - 방장 챔피언을 다 불러온 뒤에 시작한다.
+      if (st.pick && st.pick.phase === 'loading' && !st.pick.hostLoaded) { st.pick.startWhenLoaded = true; return; }
+      st.pick = null;
       _netHostStartMatch(st);
+      return;
+    }
+    case 'hi': { // 99차: 참가자가 방에 들어왔다 - 진행 중인 대전이면 재접속, 아니면 챔피언 선택
+      const token = String(d.token || '');
+      if (d.v != null && d.v !== NET_PROTOCOL_VERSION) { st.client.sendMsg({ k: 'bye', msg: '게임 버전이 다릅니다 - 둘 다 새로고침하세요' }); st.client.send({ t: 'kick' }); return; }
+      if (st.remote && !st.ended) {
+        if (st.token && token === st.token) { _netHostResume(st); return; }
+        st.client.sendMsg({ k: 'bye', msg: '이미 대전 중인 방입니다' }); st.client.send({ t: 'kick' }); return;
+      }
+      st.guestName = String(d.name || st.peerName || '상대').slice(0, 24); st.token = token;
+      _netPickBegin(st);
+      return;
+    }
+    case 'pick': {
+      if (!st.pick || st.pick.phase !== 'pick') return;
+      st.pick.opp = _netPickSanitize(d);
+      _netPickRefresh();
+      _netHostMaybeGo(st);
       return;
     }
     case 'ready': {
@@ -326,7 +348,7 @@ async function _netHostStartMatch(st) {
 }
 function _netWelcome(st, resume) {
   return {
-    k: 'welcome', resume, hostChamp: controller ? controller.championId : 'garen', hostName: st.name,
+    k: 'welcome', resume, hostChamp: controller ? controller.championId : 'garen', hostName: st.name, youChamp: st.remote ? st.remote.championId : null,
     hostId: entityId(controller), youId: entityId(st.remote), gt: _netRound(getTurretGameTimeSec()),
     structs: _netStructures().map(([k, s]) => ({ id: entityId(s), k, tm: _netTeamCode(s.team), ty: s.type || null, x: _netRound(getWorldPosition(s).x), z: _netRound(getWorldPosition(s).z) })),
   };
@@ -385,7 +407,10 @@ function _netHostHookEvents(st) {
 function _netHostMaybeRematch(st) {
   if (st.role !== 'host' || !st.rematch.host || !st.rematch.guest || !st.hello) return;
   st.rematch = { host: false, guest: false };
-  _netHostStartMatch(st);
+  // 99차: 재대결은 챔피언 선택부터 다시(같은 챔피언이면 그대로 확정만 누르면 된다).
+  _netHostEndMatch(st);
+  _netCloseEndScreen();
+  _netPickBegin(st);
 }
 function _netHostEndMatch(st) {
   st = st || netState; if (!st || st.role !== 'host') return;
@@ -568,7 +593,7 @@ function _netGuestConnect(st, first) {
   st.client = client;
   if (typeof gameSession !== 'undefined' && gameSession && gameSession.kind === 'remote') gameSession.client = client;
   _netStatus(first ? '서버에 연결하는 중…' : '다시 연결하는 중…');
-  client.on('joined', (m) => { st.hostName = (m.host && m.host.name) || '방장'; st.reconnects = 0; _netStatus(`${st.hostName}의 방에 참가 - 게임 준비 중`); client.sendMsg(_netGuestHello(st)); });
+  client.on('joined', (m) => { st.hostName = (m.host && m.host.name) || '방장'; st.reconnects = 0; _netStatus(`${st.hostName}의 방에 참가 - 대기실`); client.sendMsg(st.ready ? _netGuestHello(st) : { k: 'hi', v: NET_PROTOCOL_VERSION, name: st.name, token: st.token }); });
   client.on('error', (m) => { _netStatus('오류: ' + m.msg); if (!st.ready && first) { client.close(); if (netState === st) netState = null; } });
   client.on('room-closed', () => _netGuestLost(st, '방장이 나가 대전이 끝났습니다'));
   client.on('close', () => _netGuestDisconnected(st, client));
@@ -581,6 +606,9 @@ function _netGuestConnect(st, first) {
     else if (d.k === 'end') { st.ended = true; _netShowEndScreen(d.winner, null, d.stats); }
     else if (d.k === 'rematch') { _netToast(`${st.hostName}이(가) 재대결을 원합니다`); st.rematchHost = true; _netEndScreenUpdate(); }
     else if (d.k === 'bye') { _netGuestLost(st, d.msg || '방장이 대전을 거절했습니다'); }
+    else if (d.k === 'pickStart') { st.hostName = d.hostName || st.hostName; _netCloseEndScreen(); _netPickEnter(st, d.sec); }
+    else if (d.k === 'pick') { if (st.pick && st.pick.phase === 'pick') { st.pick.opp = _netPickSanitize(d); _netPickRefresh(); } }
+    else if (d.k === 'go') { _netPickGo(st); }
   });
   return client.connect().then(() => {
     client.send({ t: 'join', code: st.code, name: st.name });
@@ -607,6 +635,7 @@ function _netGuestDisconnected(st, client) {
 }
 function _netGuestLost(st, msg) {
   if (netState !== st) return;
+  if (st.pick) { st.pick = null; if (typeof netLobbyRefresh === 'function') netLobbyRefresh(); }
   _netToast(msg); _netStatus(msg + ' - 잠시 뒤 연습 모드로 돌아갑니다');
   if (st.client) st.client.close();
   if (st.pingTimer) __hostClearInterval(st.pingTimer);
@@ -627,6 +656,9 @@ async function _netGuestStart(st, w) {
   for (const p of st.proj.values()) projectiles._releaseArrowMesh(p.entry);
   st.proj.clear(); st.units.clear(); st.state.clear(); st.pred = null; st.own = null;
   try {
+    st.pick = null;
+    if (typeof closeLobby === 'function') closeLobby();
+    if (w.youChamp && controller && controller.championId !== w.youChamp) await _netLoadChampion(w.youChamp, null, null); // 새로고침 뒤 재접속 - 방장 쪽 내 챔피언과 맞춘다
     await _netResetGameAndWait();
     if (netState !== st) return;
     _netClearPracticeUnits();
@@ -1136,26 +1168,108 @@ if (typeof window !== 'undefined') {
   Object.defineProperty(window, 'netGuestMode', { get: () => netGuestMode, configurable: true });
 }
 
-// 연습 도구 패널: 서버 주소·이름·방 만들기·참가·나가기
-(function setupNetPanel() {
-  if (typeof document === 'undefined') return;
-  const urlEl = document.getElementById('netServerUrl'), nameEl = document.getElementById('netName'), codeEl = document.getElementById('netJoinCode');
-  const createBtn = document.getElementById('netCreateBtn'), joinBtn = document.getElementById('netJoinBtn'), leaveBtn = document.getElementById('netLeaveBtn');
-  if (!urlEl || !createBtn) return;
-  const ls = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { /* 저장소 막힘 */ } return null; };
-  urlEl.value = ls('netServerUrl') || netDefaultServerUrl();
-  if (nameEl) nameEl.value = ls('netName') || '';
-  const read = () => {
-    const url = urlEl.value.trim(); ls('netServerUrl', url); if (nameEl) ls('netName', nameEl.value.trim());
-    if (!/^wss?:\/\//.test(url)) { _netStatus('서버 주소를 ws:// 또는 wss://로 입력하세요 (node server/relay.js)'); return null; }
-    return { url, name: nameEl ? nameEl.value.trim() : '' };
-  };
-  createBtn.addEventListener('click', () => { const r = read(); if (r) netHostCreateRoom(r.url, r.name || '방장').catch(() => {}); });
-  if (joinBtn) joinBtn.addEventListener('click', () => {
-    const r = read(); if (!r) return;
-    const code = codeEl ? codeEl.value.trim().toUpperCase() : '';
-    if (!/^[A-Z0-9]{4}$/.test(code)) { _netStatus('방 코드 4자리를 입력하세요'); return; }
-    netGuestJoin(r.url, code, r.name || '참가자').catch(() => {});
+// ================= 99차: 챔피언 선택(픽창) =================
+// 둘이 방에 모이면 방장이 선택을 시작한다(제한 시간 NET_PICK_SEC). 각자 로비 화면(lobby_ui.js)에서 챔피언·룬·소환사 주문을 고르고
+// "확정"을 누른다 - 고르는 동안의 선택은 상대 화면에 바로 보인다. 둘 다 확정하면 방장이 'go'를 보내고, 양쪽이 고른 챔피언을
+// 불러온 뒤(참가자는 그다음 hello) 97·98차 흐름대로 대전을 시작한다. 시간이 다 되면 지금 고른 것으로 확정된다.
+function _netPickSanitize(d) {
+  const champ = typeof CHAMPION_MODEL_LIBRARY !== 'undefined' && CHAMPION_MODEL_LIBRARY.some(([k]) => k === d.champ) ? d.champ : null;
+  const spells = Array.isArray(d.spells) ? d.spells.slice(0, 2).map(String) : null;
+  return { champ, spells, locked: !!d.locked };
+}
+function _netMyPick() {
+  const ls = typeof lobbyState !== 'undefined' ? lobbyState : null;
+  return { champ: ls && ls.champ, spells: ls ? ls.spells.slice() : null, page: ls && ls.page ? JSON.parse(JSON.stringify(ls.page)) : null };
+}
+// 방장: 선택 시작(참가자 입장 직후·재대결)
+function _netPickBegin(st) {
+  st.client.sendMsg({ k: 'pickStart', sec: NET_PICK_SEC, hostName: st.name });
+  _netPickEnter(st, NET_PICK_SEC);
+}
+function _netPickEnter(st, sec) {
+  st.pick = { phase: 'pick', endsAt: __gcRealNow() + (sec || NET_PICK_SEC) * 1000, locked: false, opp: { champ: null, spells: null, locked: false }, lastSent: '' };
+  if (typeof openLobby === 'function' && !(typeof isLobbyOpen === 'function' && isLobbyOpen())) openLobby();
+  if (typeof netLobbyShowPick === 'function') netLobbyShowPick();
+  _netStatus('챔피언 선택 중');
+  _netPickTicker(st);
+}
+function _netPickCancel(st) { st.pick = null; if (typeof netLobbyRefresh === 'function') netLobbyRefresh(); }
+// 0.25초마다: 내 선택이 바뀌었으면 상대에게 보내고, 시간이 다 되면 확정한다.
+function _netPickTicker(st) {
+  if (st.pickTimer) __hostClearInterval(st.pickTimer);
+  st.pickTimer = __hostSetInterval(() => {
+    const P = st.pick;
+    if (netState !== st || !P || P.phase !== 'pick') { __hostClearInterval(st.pickTimer); st.pickTimer = null; return; }
+    const mine = _netMyPick();
+    const key = JSON.stringify([mine.champ, mine.spells, P.locked]);
+    if (key !== P.lastSent) { P.lastSent = key; st.client.sendMsg({ k: 'pick', champ: mine.champ, spells: mine.spells, locked: P.locked }); _netPickRefresh(); }
+    if (!P.locked && __gcRealNow() >= P.endsAt) netPickLock();
+    _netPickRefresh();
+  }, 250);
+}
+function _netPickRefresh() { if (typeof netLobbyRefreshPick === 'function') netLobbyRefreshPick(); }
+function netPickActive() { return !!(netState && netState.pick && netState.pick.phase === 'pick'); }
+// 확정(로비의 "확정" 버튼·시간 끝). 룬 페이지가 틀리면 기본 룬으로 바꿔 확정한다.
+function netPickLock() {
+  const st = netState; if (!st || !st.pick || st.pick.phase !== 'pick' || st.pick.locked) return false;
+  if (typeof lobbyState !== 'undefined' && !runeValidatePage(lobbyState.page)) lobbyState.page = runeDefaultPage(lobbyState.champ);
+  st.pick.locked = true;
+  st.pick.mine = _netMyPick();
+  const m = st.pick.mine;
+  st.pick.lastSent = JSON.stringify([m.champ, m.spells, true]);
+  st.client.sendMsg({ k: 'pick', champ: m.champ, spells: m.spells, locked: true });
+  _netPickRefresh();
+  if (st.role === 'host') _netHostMaybeGo(st);
+  return true;
+}
+function _netHostMaybeGo(st) {
+  const P = st.pick;
+  if (!P || P.phase !== 'pick' || !P.locked || !P.opp.locked) return;
+  st.client.sendMsg({ k: 'go' });
+  _netPickGo(st);
+}
+// 둘 다 확정: 고른 챔피언을 불러오고(룬·주문 적용·저장), 참가자는 hello, 방장은 hello를 기다렸다가 시작.
+async function _netPickGo(st) {
+  const P = st.pick; if (!P || P.phase === 'loading') return;
+  if (!P.locked) { st.pick.locked = true; P.mine = _netMyPick(); }
+  P.phase = 'loading';
+  _netStatus('챔피언을 불러오는 중…');
+  _netPickRefresh();
+  const m = P.mine || _netMyPick();
+  await _netLoadChampion(m.champ, m.spells, m.page);
+  if (netState !== st || st.pick !== P) return;
+  if (st.role === 'host') {
+    P.hostLoaded = true;
+    if (P.startWhenLoaded) { st.pick = null; _netHostStartMatch(st); }
+  } else {
+    st.client.sendMsg(_netGuestHello(st));
+  }
+}
+// 챔피언 불러오기(로비 "게임 시작"과 같은 저장·적용). 이미 그 챔피언이면 룬·주문만 바꾼다.
+function _netLoadChampion(champ, spells, page) {
+  return new Promise((resolve) => {
+    if (!champ) { resolve(controller); return; }
+    try {
+      if (page && typeof runeValidatePage === 'function' && runeValidatePage(page)) runeSavePage(champ, page);
+      if (typeof _lobbySave === 'function') { _lobbySave(LOBBY_CHAMP_KEY, champ); if (spells) _lobbySave(LOBBY_SPELLS_KEY, spells); }
+    } catch (e) { /* 저장 불가 */ }
+    const apply = () => {
+      if (controller) {
+        if (page && typeof runeSetPage === 'function') runeSetPage(controller, page);
+        if (spells && typeof lobbyApplyPending === 'function') lobbyApplyPending(controller, spells); else if (typeof closeLobby === 'function') closeLobby();
+      }
+      resolve(controller);
+    };
+    if (controller && controller.championId === champ && controller.root) { apply(); return; }
+    if (typeof lobbyState !== 'undefined') lobbyState.pendingSpells = spells ? spells.slice() : null;
+    loadChampionFromLibrary(champ);
+    const t0 = __gcRealNow();
+    const poll = () => {
+      if (controller && controller.championId === champ && controller.root) { apply(); return; }
+      if (__gcRealNow() - t0 > 60000) { resolve(controller); return; }
+      __hostSetTimeout(poll, 100);
+    };
+    poll();
   });
-  if (leaveBtn) leaveBtn.addEventListener('click', () => netLeave(false));
-})();
+}
+if (typeof window !== 'undefined') { window.netPickLock = netPickLock; window.netPickActive = netPickActive; }

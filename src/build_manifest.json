@@ -94,6 +94,7 @@
     "src/world/enemy_bot.js",
     "src/net/net_session.js",
     "src/core/lobby_ui.js",
+    "src/net/net_lobby_ui.js",
     "src/core/options_ui.js",
     "src/core/game_reset.js"
   ]

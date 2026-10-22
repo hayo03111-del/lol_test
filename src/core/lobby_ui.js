@@ -172,6 +172,8 @@ function _renderLobbySpells() {
   box.appendChild(list);
 }
 function lobbyStart() {
+  if (typeof netPickActive === 'function' && netPickActive()) { netPickLock(); return; } // 99차: 온라인 픽창에서는 "확정"
+  if (typeof netLobbyMode === 'function' && netLobbyCurrentMode() === 'online') return; // 온라인 탭(방 만들기·참가 화면)에서는 시작하지 않는다
   const champ = lobbyState.champ, page = lobbyState.page;
   if (!runeValidatePage(page)) { if (typeof showSkillToast === 'function') showSkillToast('룬 페이지가 올바르지 않습니다'); return; }
   runeSavePage(champ, page);

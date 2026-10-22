@@ -1,5 +1,6 @@
 // QA(97·98차): 온라인 1:1 대전 - 실제 중계 서버(server/relay.js, 인공 지연 한쪽 LAG ms)를 띄우고 브라우저 두 개(방장·참가자)를 연결해 확인한다.
 // 97차: 참가 → 원격 챔피언·빨강 팀·ID 일치, 상점, 미니언 동기화, 평타·스킬 피해, 투사체, 동작, 나가기.
+// 99차: 로비 온라인 탭(방 만들기·참가)·픽창(실시간 선택·확정·재대결 때 다시 고르기).
 // 98차: 로비 주문 전달, 카운트다운(그동안 명령 막힘), 대전 중 연습 도구·일시정지 잠금, 내 챔피언 즉시 반응(예측)과 수렴, 추격 예측,
 //       연출 복제, 와드 동기화, 처치·죽음, 끊긴 뒤 자동 재접속, 백그라운드 방장 시뮬레이션, 승패 화면·재대결.
 // 사용법: THREE_DIR=<three package> E2E_HIDE_MAP=1 [LAG=150] [SHOT=<경로 접두어>] node tools/e2e_glb/qa_online_check.js  (실패 항목이 있으면 종료 코드 1)
@@ -36,13 +37,36 @@ const LAG = Number(process.env.LAG || 150);
   // 0) 참가자 로비 선택: F 주문을 바꿔 둔다(방장 쪽 원격 챔피언에 그대로 가야 한다).
   r.spellPick = await guest.evaluate(() => { const E = window.__e2e, c = window.controller, cur = ['D', 'F'].map((k) => c.summoners && c.summoners[k] && c.summoners[k].id); const pick = Object.keys(E.SUMMONER_SPELL_DATA).find((id) => !cur.includes(id) && id !== 'mark'); E.setSummonerSpell(c, 'F', pick); return pick; });
 
-  // 1) 방 만들기 → 참가 → 카운트다운
-  await host.evaluate((u) => window.netHostCreateRoom(u, '방장'), wsUrl);
-  await host.waitForFunction(() => window.netState && window.netState.code, null, { timeout: 10000 });
-  const code = await host.evaluate(() => window.netState.code);
-  await guest.evaluate(([u, c]) => window.netGuestJoin(u, c, '참가자'), [wsUrl, code]);
+  // 1) 로비 화면(온라인 탭)으로 방 만들기 → 참가 → 픽창(서로의 선택이 실시간으로 보임) → 둘 다 확정 → 카운트다운
+  const ui = (p, url, name, code) => p.evaluate(([url, name, code]) => {
+    window.openNetLobby();
+    document.getElementById('netServerUrl').value = url; document.getElementById('netName').value = name;
+    if (code) { document.getElementById('netJoinCode').value = code; document.getElementById('netJoinBtn').click(); }
+    else document.getElementById('netCreateBtn').click();
+  }, [url, name, code]);
+  await ui(host, wsUrl, '방장', null);
+  await host.waitForFunction(() => window.netState && window.netState.code && document.getElementById('nlCode').textContent === window.netState.code, null, { timeout: 10000 });
+  const code = await host.evaluate(() => document.getElementById('nlCode').textContent);
+  r.lobbyUi = { roomShown: await host.evaluate(() => document.getElementById('nlRoom').style.display !== 'none' && document.getElementById('netLobbyPanel').classList.contains('show')), gameBtn: await host.evaluate(() => document.getElementById('netLobbyBtn').textContent) };
+  await ui(guest, wsUrl, '참가자', code);
+  await host.waitForFunction(() => window.netState.pick && document.getElementById('netPickBar').classList.contains('show'), null, { timeout: 15000 });
+  await guest.waitForFunction(() => window.netState && window.netState.pick && document.getElementById('netPickBar').classList.contains('show'), null, { timeout: 15000 });
+  await realWait(guest, 3 * LAG + 600);
+  r.pick = {
+    hostSeesGuest: await host.evaluate(() => window.netState.pick.opp.champ), guestSeesHost: await guest.evaluate(() => window.netState.pick.opp.champ),
+    btn: await guest.evaluate(() => document.getElementById('lobbyStartBtn').textContent), timer: await guest.evaluate(() => Number(document.getElementById('npTimer').textContent)),
+  };
+  check('lobby: room created from the online tab shows the code and waiting room', r.lobbyUi.roomShown && /^[A-Z2-9]{4}$/.test(code));
+  check('pick: both see each other\'s live champion choice, lock-in button and timer', r.pick.hostSeesGuest === 'ashe' && r.pick.guestSeesHost === 'garen' && r.pick.btn === '확정' && r.pick.timer > 60);
+  await guest.evaluate(() => document.getElementById('lobbyStartBtn').click());
+  await realWait(guest, 3 * LAG + 400);
+  r.pick.hostSeesLock = await host.evaluate(() => window.netState.pick && window.netState.pick.opp.locked);
+  await host.evaluate(() => document.getElementById('lobbyStartBtn').click());
+  check('pick: lock-in reaches the other side', r.pick.hostSeesLock);
   await guest.waitForFunction(() => window.netState && window.netState.ready, null, { timeout: 90000 });
-  await host.waitForFunction(() => window.netState && window.netState.guestReady, null, { timeout: 10000 });
+  await host.waitForFunction(() => window.netState && window.netState.guestReady, null, { timeout: 30000 });
+  r.pick.lobbyClosed = await guest.evaluate(() => !document.getElementById('lobbyOverlay').classList.contains('show')) && await host.evaluate(() => !document.getElementById('lobbyOverlay').classList.contains('show'));
+  check('pick: lobby closes and the match starts after both lock in', r.pick.lobbyClosed);
   await realWait(guest, 3 * LAG + 200);
   r.countdown = {
     hostLocked: await host.evaluate(() => !!window.netState.locked), guestLocked: await guest.evaluate(() => !!window.netState.locked),
@@ -171,11 +195,20 @@ const LAG = Number(process.env.LAG || 150);
   await guest.evaluate(() => document.getElementById('netRematchBtn').click());
   await realWait(guest, 3 * LAG);
   await host.evaluate(() => document.getElementById('netRematchBtn').click());
+  // 재대결은 챔피언 선택부터 - 이번엔 참가자가 다른 챔피언(이즈리얼)을 고른다
+  await guest.waitForFunction(() => window.netState && window.netState.pick && window.netState.pick.phase === 'pick', null, { timeout: 20000 }).catch(() => {});
+  await host.waitForFunction(() => window.netState && window.netState.pick && window.netState.pick.phase === 'pick', null, { timeout: 20000 }).catch(() => {});
+  await guest.evaluate(() => { const b = document.querySelector('#lobbyChampGrid [data-champ="ezreal"]'); if (b) b.click(); });
+  await realWait(guest, 3 * LAG + 400);
+  r.rematchPickSeen = await host.evaluate(() => window.netState.pick && window.netState.pick.opp.champ);
+  await guest.evaluate(() => document.getElementById('lobbyStartBtn').click());
+  await host.evaluate(() => document.getElementById('lobbyStartBtn').click());
   await host.waitForFunction(() => window.netState && !window.netState.ended && window.netState.guestReady && !window.netState.locked && window.netState.remote, null, { timeout: 90000 }).catch(() => {});
   await realWait(guest, 1000);
   r.rematch = { hostNexus: await host.evaluate(() => window.__e2e.nexusBuildings.every((n) => !n.destroyed)), guestNexus: await guest.evaluate(() => window.__e2e.nexusBuildings.every((n) => !n.destroyed)),
-    ended: await host.evaluate(() => window.__e2e.gameEnded), endScreen: await guest.evaluate(() => !!document.getElementById('netEndScreen')), bots: await host.evaluate(() => window.__e2e.enemyBots.length), guestReady: await guest.evaluate(() => !!(window.netState && window.netState.ready)) };
-  check('rematch: both accept → fresh match with structures restored', r.rematch.hostNexus && r.rematch.guestNexus && !r.rematch.ended && !r.rematch.endScreen && r.rematch.bots === 1 && r.rematch.guestReady);
+    ended: await host.evaluate(() => window.__e2e.gameEnded), endScreen: await guest.evaluate(() => !!document.getElementById('netEndScreen')), bots: await host.evaluate(() => window.__e2e.enemyBots.length), guestReady: await guest.evaluate(() => !!(window.netState && window.netState.ready)),
+    hostSideChamp: await host.evaluate(() => window.__e2e.enemyBots[0] && window.__e2e.enemyBots[0].championId), guestChamp: await guest.evaluate(() => window.controller.championId) };
+  check('rematch: both accept → pick again (new champion) → fresh match with structures restored', r.rematchPickSeen === 'ezreal' && r.rematch.hostSideChamp === 'ezreal' && r.rematch.guestChamp === 'ezreal' && r.rematch.hostNexus && r.rematch.guestNexus && !r.rematch.ended && !r.rematch.endScreen && r.rematch.bots === 1 && r.rematch.guestReady);
 
   // 12) 나가기: 참가자 탭을 닫으면 방장은 재접속을 기다린다(원격 챔피언 유지) → 방장이 방을 닫으면 정리된다
   await guest.close();
