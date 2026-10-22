@@ -42540,6 +42540,7 @@ class BotBrain {
       if (tPct < 0.55 || b.hp / Math.max(1, b.maxHp) < 0.45) order.unshift('R'); // 궁극기는 마무리·위기 때
       for (const slot of order) {
         if ((this.slotBackoff[slot] || 0) > now) continue;
+        if (this.lastAttempt && this.lastAttempt.slot === slot) continue; // 결과를 보기 전(300ms)에는 같은 스킬을 다시 누르지 않는다(96차 - 예전엔 계속 덮어써 헛시도 방지가 안 걸렸다)
         const plan = botPlanSkill(b, slot, target, { lead: cfg.lead, targetVel: this.targetVel });
         if (!plan) continue;
         this.nextCastAt = now + cfg.reactSec * 500;

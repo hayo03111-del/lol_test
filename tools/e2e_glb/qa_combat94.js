@@ -84,7 +84,7 @@ const startServer = require('./server.js');
     const E = window.__e2e, g0 = E.getTurretGameTimeSec(), w0 = performance.now();
     setTimeout(() => res({ game: +(E.getTurretGameTimeSec() - g0).toFixed(2), wall: +((performance.now() - w0) / 1000).toFixed(2) }), 2000);
   }));
-  check('clock: game time advances, never faster than wall', r.clock.game > 0.2 && r.clock.game <= r.clock.wall + 0.1);
+  check('clock: game time advances with the page clock (within one frame)', r.clock.game > 0.2 && Math.abs(r.clock.game - r.clock.wall) <= 0.3); // 96차: 시뮬레이션은 프레임마다 최대 0.15초씩 - 재는 순간이 한 프레임 어긋날 수 있다
 
   // 6) 전투 기록: 시전·상태 효과 이벤트와 디버그 패널 전투 줄.
   await page.waitForTimeout(300);
