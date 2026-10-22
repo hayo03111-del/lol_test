@@ -74,7 +74,7 @@ const startServer = require('./server.js');
     const E = window.__e2e, bot = E.enemyBots[0];
     E.applyStatus(bot, { id: 'e2ePauseStun', type: 'STUN', duration: 1 });
     E.gameClockSetPaused(true);
-    await new Promise((res) => setTimeout(res, 1600));
+    await E.realWait(1600); // 일시정지 중에는 페이지 setTimeout도 멈추므로(96차) 실제 시간으로 기다린다
     E.gameClockSetPaused(false);
     const still = (bot.statusEffects || []).some((s) => s.id === 'e2ePauseStun' && s.expiresAt > E.gameNow()); // 게임 시계(일시정지 시간 제외)로 비교
     await new Promise((res) => setTimeout(res, 1300));
