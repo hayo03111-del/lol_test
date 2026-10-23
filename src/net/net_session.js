@@ -43,7 +43,7 @@ var netState = null;      // { role:'host'|'guest', client, ... }
 class NetClient {
   constructor(url) { this.url = url; this.kind = 'relay'; this.ws = null; this.handlers = new Map(); this.rtt = null; this._pingTimer = null; }
   on(type, fn) { this.handlers.set(type, fn); return this; }
-  _emit(type, m) { const fn = this.handlers.get(type); if (fn) { try { fn(m); } catch (e) { console.error('[NET]', type, e); } } }
+  _emit(type, m, extra) { const fn = this.handlers.get(type); if (fn) { try { fn(m, extra); } catch (e) { console.error('[NET]', type, e); } } }
   connect() {
     return new Promise((resolve, reject) => {
       let ws;
@@ -60,7 +60,7 @@ class NetClient {
         this.bytesIn = (this.bytesIn || 0) + (e.data && e.data.length || 0); // 102차: 받은 양(참가자가 받는 속도를 방장에게 알린다)
         let m; try { m = JSON.parse(e.data); } catch (err) { return; }
         if (m.t === 'pong') { this.rtt = Math.round(__gcRealNow() - m.at); this._emit('pong', m); return; }
-        if (m.t === 'msg') this._emit('msg', m.d || {});
+        if (m.t === 'msg') this._emit('msg', m.d || {}, m.from); // 104차: 전용 서버의 시뮬레이션은 보낸 플레이어(from)를 함께 받는다
         else this._emit(m.t, m);
       };
     });
@@ -380,8 +380,12 @@ function _netFxInstall(st) {
       inside = true;
       let ret;
       try { ret = orig.apply(this, args); } finally { inside = false; }
-      if (netState === st && st.guestReady) {
-        try { if (st.fx.length < 200) st.fx.push([name, fn, args.map((x) => _netSer(x)), st.remote && __combatActor === st.remote ? 1 : 0]); } catch (e) { /* 기록 실패는 무시(연출만 빠짐) */ } // 103차: 넷째 값 = 참가자 챔피언이 낸 연출
+      if (netState === st) {
+        let ser = null;
+        for (const v of _netViews(st)) {
+          if (!v.guestReady || v.fx.length >= 200) continue;
+          try { if (!ser) ser = args.map((x) => _netSer(x)); v.fx.push([name, fn, ser, v.remote && __combatActor === v.remote ? 1 : 0]); } catch (e) { /* 기록 실패는 무시(연출만 빠짐) */ } // 103차: 넷째 값 = 받는 사람 챔피언이 낸 연출
+        }
       }
       return ret;
     };
@@ -537,7 +541,8 @@ async function _netHostStartMatch(st) {
 function _netWelcome(st, resume) {
   return {
     k: 'welcome', resume, hostChamp: controller ? controller.championId : 'garen', hostName: st.name, youChamp: st.remote ? st.remote.championId : null,
-    hostId: entityId(controller), youId: entityId(st.remote), gt: _netRound(getTurretGameTimeSec()),
+    hostId: entityId(controller), youId: entityId(st.remote), gt: _netRound(getTurretGameTimeSec()), youTeam: 'RED',
+    players: [{ id: entityId(controller), champ: controller ? controller.championId : 'garen', team: 'BLUE', name: st.name, me: 0 }, { id: entityId(st.remote), champ: st.remote ? st.remote.championId : null, team: 'RED', name: st.guestName, me: 1 }], // 104차: 전용 서버와 같은 모양
     structs: _netStructures().map(([k, s]) => ({ id: entityId(s), k, tm: _netTeamCode(s.team), ty: s.type || null, x: _netRound(getWorldPosition(s).x), z: _netRound(getWorldPosition(s).z) })),
   };
 }
@@ -577,13 +582,15 @@ function _netHostHookEvents(st) {
   if (st.offEvents || typeof onGameEvent !== 'function') return;
   const off1 = onGameEvent('championKill', (e) => {
     if (netState !== st) return;
-    st.ev.push({ type: 'championKill', victimId: e.victimId, killerId: e.killerId, gold: e.gold });
+    for (const vw of _netViews(st)) vw.ev.push({ type: 'championKill', victimId: e.victimId, killerId: e.killerId, gold: e.gold });
+    if (st.dedicated) return; // 서버에는 보는 사람이 없다
     const v = findEntityById(e.victimId), k = findEntityById(e.killerId);
     if (v === controller || k === controller) return; // 방장 자신의 처치·죽음 알림은 보상 시스템이 이미 띄운다
     _netBanner(`${k ? _netChampName(k.championId) : '?'} → ${v ? _netChampName(v.championId) : '?'} 처치`);
   });
   const off2 = onGameEvent('gameOver', (e) => {
     if (netState !== st || st.ended) return;
+    if (st.dedicated) { _netSimGameOver(st, e.winnerTeam); return; }
     st.ended = true;
     const stats = _netEndStats();
     // 마지막 스냅샷(넥서스 파괴)이 먼저 가도록 한 번 더 보내고 끝을 알린다.
@@ -649,12 +656,14 @@ function _netStatusFrom(list, now) {
   });
 }
 // 100차: 안개 - 참가자(빨강) 팀 시야 밖의 파랑 팀 유닛은 위치를 보내지 않는다(받은 데이터를 들여다봐도 보이지 않게).
-function _netHiddenFromGuest(u) {
-  if (!u || u.team !== 'BLUE' || typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled) return false;
+// 104차: team 팀에게 안 보이는 상대 팀 유닛인가(같은 팀·구조물은 늘 보인다)
+function _netHiddenFrom(u, team) {
+  if (!u || !u.team || u.team === team || typeof visionSystem === 'undefined' || !visionSystem || !visionSystem.enabled) return false;
   if (u.isStructure || u.isTurret || u.isInhibitor || u.isNexus) return false;
-  if (u.isWard) return typeof wardSystem !== 'undefined' && wardSystem && !wardSystem.isVisibleTo('RED', u);
-  return typeof visionSystem.isVisibleTo === 'function' && !visionSystem.isVisibleTo('RED', u);
+  if (u.isWard) return typeof wardSystem !== 'undefined' && wardSystem && !wardSystem.isVisibleTo(team, u);
+  return typeof visionSystem.isVisibleTo === 'function' && !visionSystem.isVisibleTo(team, u);
 }
+function _netHiddenFromGuest(u) { return _netHiddenFrom(u, 'RED'); }
 // 100차: 챔피언 내부 상태(재시전 창·충전·중첩·표식·아이템 재사용 대기 등) - 참가자 화면의 조준·스킬 칸·표식이 방장과 같게.
 const NET_CHAMP_STATE_KEY = /^_(ahri|ashe|chogath|darius|ezreal|garen\w*|leesin|lux|masteryi|morde|nautilus|nilah|rammus\w*|renekton|sett|varus|vex|yasuo\w*|yone|summonerMark|itemActiveCooldownUntil|rune)$/;
 function _netChampState(st, c) {
@@ -744,9 +753,11 @@ function _netDelta(st, e, full) {
   }
   return out;
 }
-function netBuildHostSnapshot(st) {
+// 104차: 받는 사람(view)마다 스냅샷 - 1:1 방장 모드는 view = 방장 상태(st) 하나(빨강 팀 참가자), 전용 서버(sim)는 플레이어마다 view.
+// view: { team, remote(그 사람 챔피언), sent(차이 기준), seq, fx, ev, rlSent, mir(미러 보낸 상태), ack, guestReady, ... }
+// 공통(base): 유닛 목록·투사체·유물은 프레임마다 한 번만 만든다(_netSnapBase).
+function _netSnapBase(st) {
   const nowMs = performance.now();
-  const full = st.seq % NET_KEYFRAME_EVERY === 0;
   const all = [];
   const champs = [controller, ...enemyBots].filter((c) => c && c.root && !c._removed);
   for (const c of champs) all.push(_netSnapChampion(st, c, nowMs));
@@ -762,17 +773,7 @@ function netBuildHostSnapshot(st) {
     all.push(e);
   }
   if (typeof wardSystem !== 'undefined' && wardSystem && wardSystem.wards) for (const w of wardSystem.wards) if (!w.destroyed) all.push(_netSnapWard(w, nowMs));
-  // 안개: 참가자 팀이 못 보는 파랑 팀 유닛은 위치 대신 hid만
   const unitOf = new Map(listEntities().map((u) => [entityId(u), u]));
-  for (let i = 0; i < all.length; i++) {
-    const e = all[i], u = unitOf.get(e.i);
-    if (u && _netHiddenFromGuest(u)) all[i] = { i: e.i, k: e.k, tm: e.tm, ty: e.ty, c: e.c, hid: 1, sc: e.sc, lv: e.lv, s: e.s };
-    else if (e.k === 'c' || e.k === 'm' || e.k === 'w') e.hid = 0;
-  }
-  const ents = [], ids = new Set();
-  for (const e of all) { ids.add(e.i); const d = _netDelta(st, e, full); if (d) ents.push(d); }
-  const gone = [];
-  for (const id of [...st.sent.keys()]) if (!ids.has(id)) { gone.push(id); st.sent.delete(id); }
   const pr = [];
   for (const proj of projectiles.projectiles) {
     if (!proj.mesh || proj.done) continue;
@@ -786,19 +787,51 @@ function netBuildHostSnapshot(st) {
   }
   // 100차: 칼바람 회복 유물(나타남·빛줄기)
   const rl = typeof aramRelics !== 'undefined' ? aramRelics.map((r) => [r.active ? 1 : 0, _netRound(r.beam && r.beam.material ? r.beam.material.opacity : 0, 100)]) : [];
+  return { nowMs, all, unitOf, pr, rl, rlj: JSON.stringify(rl), t: _netRound(__gcRealNow(), 1), gt: _netRound(getTurretGameTimeSec()) };
+}
+function netBuildHostSnapshot(st, v = st, base = null) {
+  base = base || _netSnapBase(st);
+  const nowMs = base.nowMs;
+  const full = v.seq % NET_KEYFRAME_EVERY === 0;
+  const team = v.team || 'RED';
+  // 안개: 이 사람 팀이 못 보는 상대 팀 유닛은 위치 대신 hid만
+  const all = base.all.map((e) => {
+    const u = base.unitOf.get(e.i);
+    if (u && _netHiddenFrom(u, team)) return { i: e.i, k: e.k, tm: e.tm, ty: e.ty, c: e.c, hid: 1, sc: e.sc, lv: e.lv, s: e.s, it: e.it, sp: e.sp, rn: e.rn };
+    return (e.k === 'c' || e.k === 'm' || e.k === 'w') ? Object.assign({}, e, { hid: 0 }) : e;
+  });
+  const ents = [], ids = new Set();
+  for (const e of all) { ids.add(e.i); const d = _netDelta(v, e, full); if (d) ents.push(d); }
+  const gone = [];
+  for (const id of [...v.sent.keys()]) if (!ids.has(id)) { gone.push(id); v.sent.delete(id); }
   // 102차: t는 실제 시각(게임 시계는 느린 기기에서 프레임 시간 상한 때문에 실제보다 느리게 갈 수 있다 - 그러면 보간이 표본을 앞질러 끊기고
   // 대기열 지연도 계속 늘어나는 것처럼 보였다). 게임 시계 기준 값(상태 만료 등)은 me.now로 따로 보낸다.
-  const snap = { k: 'snap', t: _netRound(__gcRealNow(), 1), gt: _netRound(getTurretGameTimeSec()), ents, pr, ge: gameEnded ? 1 : 0 };
-  const rlj = JSON.stringify(rl); if (full || rlj !== st.rlSent) { snap.rl = rl; st.rlSent = rlj; }
-  const mi = _netMirrorSnapshot(st, full); if (mi) snap.mi = mi;
+  const snap = { k: 'snap', t: base.t, gt: base.gt, ents, pr: base.pr, ge: gameEnded ? 1 : 0 };
+  if (full || base.rlj !== v.rlSent) { snap.rl = base.rl; v.rlSent = base.rlj; }
+  const mi = _netMirrorSnapshot(st, full, v); if (mi) snap.mi = mi;
   if (full) snap.full = 1;
   if (gone.length) snap.gone = gone;
-  if (st.fx.length) { snap.fx = st.fx; st.fxSent += st.fx.length; st.fx = []; }
-  if (st.ev.length) { snap.ev = st.ev; st.ev = []; }
-  if (st.remote) snap.me = _netSnapPrivate(st, st.remote, nowMs);
-  st.seq++;
+  if (v.fx.length) { snap.fx = v.fx; v.fxSent = (v.fxSent || 0) + v.fx.length; if (v !== st) st.fxSent = (st.fxSent || 0) + v.fx.length; v.fx = []; }
+  if (v.ev.length) { snap.ev = v.ev; v.ev = []; }
+  if (v.remote) snap.me = _netSnapPrivate(v, v.remote, nowMs);
+  v.seq++;
   return snap;
 }
+// 104차: 지금 스냅샷을 받는 사람들(1:1 방장 = 방장 상태 하나, 전용 서버 = 대전 중인 플레이어들)
+function _netViews(st) {
+  if (!st) return [];
+  if (st.dedicated) { const out = []; for (const p of st.players.values()) if (p.remote) out.push(p); return out; }
+  return st.remote ? [st] : [];
+}
+// 104차: 한 사람에게 보내기(전용 서버는 서버가 그 사람에게만 넘긴다)
+function _netSendTo(st, v, d) {
+  if (!st.dedicated || v === st) { st.client.sendMsg(d); return; }
+  if (!v.pid) return;
+  const b0 = st.client.bytesOut || 0;
+  st.client.send({ t: 'msg', to: v.pid, d });
+  v.bytesOut = (v.bytesOut || 0) + (st.client.bytesOut || 0) - b0;
+}
+function _netBroadcast(st, d) { if (!st.dedicated) { st.client.sendMsg(d); return; } st.client.send({ t: 'msg', d }); }
 // 102차: 혼잡 제어 - 받는 쪽보다 빨리 보내면 줄이 밀려 핑이 끝없이 늘어난다(공개 중계소·약한 와이파이).
 // 혼잡 판단(셋 중 하나): 보내는 쪽 대기열(backlog)이 크다 / 참가자가 잰 대기열 지연(q)이 아주 크다(400ms+) /
 //   q가 두 번 연속 높고(90ms+) 참가자가 받은 속도(rb)가 내가 보낸 속도보다 확실히 느리다(줄이 쌓이는 중 - 프레임 흔들림만으로는 생기지 않는다).
@@ -833,29 +866,37 @@ function _netProjId(st, proj) { let id = st.projIds.get(proj); if (!id) { id = +
 // 메인 루프가 시뮬레이션 뒤 프레임마다 부른다(실제 경과 시간 기준 초당 30번 보낸다).
 function netHostFrame(dt) {
   const st = netState;
-  if (!st || st.role !== 'host' || !st.remote || !st.guestReady) return;
-  if (typeof shopRemoteClear === 'function' && typeof _shopInBase === 'function' && !_shopInBase(st.remote)) shopRemoteClear(st.remote); // 기지를 벗어나면 되돌리기 기록을 비운다(원작)
+  if (!st || st.role !== 'host') return;
+  const views = _netViews(st).filter((v) => v.guestReady);
+  if (!views.length) return;
   _netLagCompRecord(st);
   const hz = (st.client && st.client.snapshotHz) || NET_SNAPSHOT_HZ; // 우회 중계는 초당 15번
   const now = __gcRealNow();
-  // 102차: 보낸 속도(바이트/초) - 1초마다
-  if (!st.bpsAt) { st.bpsAt = now; st.bpsBytes = st.client.bytesOut || 0; }
-  else if (now - st.bpsAt >= 1000) { const b = st.client.bytesOut || 0; st.bpsOut = Math.round(((b - st.bpsBytes) * 1000) / (now - st.bpsAt)); st.bpsAt = now; st.bpsBytes = b; }
-  // 102차: 혼잡하면 바이트 예산(토큰)만큼만 보낸다 - 예산이 없으면 초당 hz번
-  if (st.budget) st.tokens = Math.min((st.tokens || 0) + st.budget * dt, Math.max(2048, st.budget * 0.25));
-  st.acc += dt;
-  if (st.acc < 1 / hz) return;
-  if (st.budget && st.tokens < 0) return; // 예산이 모자라다 - 조금 뒤에(다음 프레임) 다시 본다
-  st.acc = Math.min(st.acc - 1 / hz, 1 / hz);
-  // 102차: 지난 스냅샷이 아직 다 나가지도 못했으면 이번 것은 건너뛴다(쌓아 두면 그만큼 늦게 도착한다). 차이 기준은 "마지막으로 보낸 것"이라 건너뛰어도 안전하다.
-  const backlog = st.client && typeof st.client.backlog === 'function' ? st.client.backlog() : 0;
-  if (backlog > NET_BACKLOG_MAX && !(typeof window !== 'undefined' && window.__netRateControl === false)) { st.snapSkipped = (st.snapSkipped || 0) + 1; _netRateControl(st, { now, backlog }); return; }
-  try {
-    const b0 = st.client.bytesOut || 0; st.client.sendMsg(netBuildHostSnapshot(st));
-    const n = (st.client.bytesOut || 0) - b0; st.snapBytes = (st.snapBytes || 0) + n; st.snapCount = (st.snapCount || 0) + 1;
-    if (st.budget) st.tokens -= n;
-    st.sendTimes = (st.sendTimes || []).filter((x) => now - x < 1000); st.sendTimes.push(now); st.sendHz = st.sendTimes.length; // 최근 1초 보낸 횟수
-  } catch (e) { console.error('[NET] 스냅샷 오류', e); }
+  let base = null;
+  for (const v of views) {
+    if (typeof shopRemoteClear === 'function' && typeof _shopInBase === 'function' && !_shopInBase(v.remote)) shopRemoteClear(v.remote); // 기지를 벗어나면 되돌리기 기록을 비운다(원작)
+    const bytes = () => (v === st ? (st.client.bytesOut || 0) : (v.bytesOut || 0));
+    // 102차: 보낸 속도(바이트/초) - 1초마다
+    if (!v.bpsAt) { v.bpsAt = now; v.bpsBytes = bytes(); }
+    else if (now - v.bpsAt >= 1000) { const b = bytes(); v.bpsOut = Math.round(((b - v.bpsBytes) * 1000) / (now - v.bpsAt)); v.bpsAt = now; v.bpsBytes = b; }
+    // 102차: 혼잡하면 바이트 예산(토큰)만큼만 보낸다 - 예산이 없으면 초당 hz번
+    if (v.budget) v.tokens = Math.min((v.tokens || 0) + v.budget * dt, Math.max(2048, v.budget * 0.25));
+    v.acc = (v.acc || 0) + dt;
+    if (v.acc < 1 / hz) continue;
+    if (v.budget && v.tokens < 0) continue; // 예산이 모자라다 - 조금 뒤에(다음 프레임) 다시 본다
+    v.acc = Math.min(v.acc - 1 / hz, 1 / hz);
+    // 102차: 지난 스냅샷이 아직 다 나가지도 못했으면 이번 것은 건너뛴다(쌓아 두면 그만큼 늦게 도착한다). 차이 기준은 "마지막으로 보낸 것"이라 건너뛰어도 안전하다.
+    const backlog = v === st && st.client && typeof st.client.backlog === 'function' ? st.client.backlog() : 0;
+    if (backlog > NET_BACKLOG_MAX && !(typeof window !== 'undefined' && window.__netRateControl === false)) { v.snapSkipped = (v.snapSkipped || 0) + 1; _netRateControl(v, { now, backlog }); continue; }
+    try {
+      if (!base) base = _netSnapBase(st);
+      const b0 = bytes(); _netSendTo(st, v, netBuildHostSnapshot(st, v, base));
+      const n = bytes() - b0; v.snapBytes = (v.snapBytes || 0) + n; v.snapCount = (v.snapCount || 0) + 1;
+      if (v.budget) v.tokens -= n;
+      v.sendTimes = (v.sendTimes || []).filter((x) => now - x < 1000); v.sendTimes.push(now); v.sendHz = v.sendTimes.length; // 최근 1초 보낸 횟수
+    } catch (e) { console.error('[NET] 스냅샷 오류', e); }
+  }
+  _netMirrorSweep(st);
 }
 // 방장 탭이 백그라운드로 가면 브라우저가 화면 갱신(requestAnimationFrame)을 멈춘다 - 워커 타이머(백그라운드에서도 거의 제때 온다)로
 // 시뮬레이션·스냅샷만 계속 돌린다(그리기는 하지 않는다).
@@ -870,7 +911,7 @@ function _netWorkerTickerStart() {
 }
 function netHeadlessFrame() {
   const st = netState;
-  if (!st || st.role !== 'host' || !st.remote) return;
+  if (!st || st.role !== 'host' || !_netViews(st).length) return;
   if (typeof gameClockFrame === 'function') gameClockFrame(SIM_STEP_SEC * SIM_MAX_STEPS * 1000);
   let dt = clock.getDelta();
   if (!isFinite(dt) || dt < 0) dt = 1 / 30;
@@ -878,6 +919,9 @@ function netHeadlessFrame() {
   if (paused) return;
   const steps = Math.max(1, Math.ceil(dt / SIM_STEP_SEC - 1e-6));
   for (let i = 0; i < steps; i++) simulateStep(dt / steps);
+  // 104차: 화면을 그리지 않을 때도 시야(안개 - 스냅샷 거르기에 쓴다)·죽는 미니언 정리는 돌린다
+  if (typeof visionSystem !== 'undefined' && visionSystem) visionSystem.update(controller, dt);
+  if (typeof updateDyingMinions === 'function') updateDyingMinions(dt);
   netHostFrame(dt);
   st.headlessFrames = (st.headlessFrames || 0) + 1;
 }
@@ -922,12 +966,39 @@ function netGuestJoin(url, code, name) {
   netState = st;
   return _netGuestConnect(st, true);
 }
+// 104차: 전용 서버에 방을 만든다(size = 팀당 인원 1~5). 만든 사람도 다른 사람과 똑같은 참가자다.
+function netServerCreate(url, name, size) {
+  netLeave(true);
+  const st = { role: 'guest', client: null, url, name: name || '플레이어', code: '', createSize: Math.max(1, Math.min(5, Number(size) || 1)), size: Math.max(1, Math.min(5, Number(size) || 1)), dedicated: true, token: '', ready: false, units: new Map(), proj: new Map(), snapQ: [], goneAt: new Map(), lastSnapAt: 0, hostT: 0,
+    status: '', state: new Map(), pred: null, rtt: null, jitter: 10, lastArrive: 0, delay: 70, own: null, ownId: null, reconnects: 0, locked: false, fxPlayed: 0 };
+  netState = st;
+  return _netGuestConnect(st, true);
+}
+// 104차: 전용 서버의 대기실·픽 상태(누가 어느 팀·무엇을 골랐나·확정했나·남은 시간)
+function _netGuestRoster(st, d) {
+  if (!st.pick) _netPickEnter(st, null, true);
+  st.pid = d.you || st.pid;
+  st.pick.roster = d;
+  st.pick.endsAt = d.sec != null ? __gcRealNow() + d.sec * 1000 : Infinity;
+  const opp = (d.players || []).find((q) => q.pid !== st.pid && q.team !== ((d.players || []).find((x) => x.pid === st.pid) || {}).team);
+  if (opp) st.pick.opp = { champ: opp.champ, spells: opp.spells, locked: opp.locked };
+  _netPickRefresh();
+}
+function netPickTeam(team) { const st = netState; if (st && st.dedicated && st.pick && st.pick.phase === 'pick' && !st.pick.locked) st.client.sendMsg({ k: 'team', team }); }
+function netPickForceStart() { const st = netState; if (st && st.dedicated && st.pick) st.client.sendMsg({ k: 'start' }); }
 function _netGuestConnect(st, first) {
   const client = _netMakeClient(st.url);
   st.client = client;
   if (typeof gameSession !== 'undefined' && gameSession && gameSession.kind === 'remote') gameSession.client = client;
   _netStatus(first ? '서버에 연결하는 중…' : '다시 연결하는 중…');
-  client.on('joined', (m) => { st.hostName = (m.host && m.host.name) || '방장'; st.reconnects = 0; _netStatus(`${st.hostName}의 방에 참가 - 대기실`); client.sendMsg(st.ready ? _netGuestHello(st) : { k: 'hi', v: NET_PROTOCOL_VERSION, name: st.name, token: st.token }); });
+  client.on('creating', (m) => { if (m.code) { st.code = m.code; st.token = _netGuestToken(m.code); } st.size = m.size || st.size; _netStatus(`전용 서버가 대전을 준비하는 중… (방 코드 ${st.code})`); }); // 104차
+  client.on('joined', (m) => {
+    if (m.code && !st.code) { st.code = m.code; st.token = _netGuestToken(m.code); }
+    if (m.pid) st.pid = m.pid;
+    st.hostName = (m.host && m.host.name) || '방장'; st.reconnects = 0;
+    _netStatus(`${st.hostName}의 방에 참가 - 대기실 (방 코드 ${st.code})`);
+    client.sendMsg(st.ready ? _netGuestHello(st) : { k: 'hi', v: NET_PROTOCOL_VERSION, name: st.name, token: st.token });
+  });
   client.on('error', (m) => { _netStatus('오류: ' + m.msg); if (!st.ready && first) { client.close(); if (netState === st) netState = null; } });
   client.on('room-closed', () => _netGuestLost(st, '방장이 나가 대전이 끝났습니다'));
   client.on('close', () => _netGuestDisconnected(st, client));
@@ -938,15 +1009,17 @@ function _netGuestConnect(st, first) {
     else if (d.k === 'gpong') { const r = __gcRealNow() - d.at; st.rtt = st.rtt == null ? r : st.rtt * 0.8 + r * 0.2; }
     else if (d.k === 'countdown') { st.locked = true; _netShowCountdown(d.sec || NET_COUNTDOWN_SEC, () => { st.locked = false; }); }
     else if (d.k === 'end') { st.ended = true; _netShowEndScreen(d.winner, null, d.stats); }
-    else if (d.k === 'rematch') { _netToast(`${st.hostName}이(가) 재대결을 원합니다`); st.rematchHost = true; _netEndScreenUpdate(); }
+    else if (d.k === 'rematch') { if (d.total) { st.rematchCount = [d.n, d.total]; if (d.name && d.name !== st.name) _netToast(`${d.name}이(가) 재대결을 원합니다 (${d.n}/${d.total})`); } else { _netToast(`${st.hostName}이(가) 재대결을 원합니다`); st.rematchHost = true; } _netEndScreenUpdate(); }
     else if (d.k === 'bye') { _netGuestLost(st, d.msg || '방장이 대전을 거절했습니다'); }
-    else if (d.k === 'pickStart') { st.hostName = d.hostName || st.hostName; _netCloseEndScreen(); _netPickEnter(st, d.sec); }
+    else if (d.k === 'pickStart') { st.hostName = d.hostName || st.hostName; st.dedicated = !!d.dedicated; if (d.size) st.size = d.size; _netCloseEndScreen(); _netPickEnter(st, d.sec, !!d.dedicated); }
+    else if (d.k === 'roster') { _netGuestRoster(st, d); }
     else if (d.k === 'pick') { if (st.pick && st.pick.phase === 'pick') { st.pick.opp = _netPickSanitize(d); _netPickRefresh(); } }
     else if (d.k === 'go') { _netPickGo(st); }
-    else if (d.k === 'chat') { _netChatShow(st.hostName || '방장', String(d.text || '').slice(0, 200), 'BLUE'); }
+    else if (d.k === 'chat') { if (d.from && d.from === st.pid) return; _netChatShow(d.name || st.hostName || '방장', String(d.text || '').slice(0, 200), d.team || 'BLUE'); } // 104차: 전용 서버는 보낸 사람 이름·팀이 온다
   });
   return client.connect().then(() => {
-    client.send({ t: 'join', code: st.code, name: st.name });
+    if (st.createSize && !st.code) client.send({ t: 'dcreate', name: st.name, size: st.createSize }); // 104차: 전용 서버에 방 만들기
+    else client.send({ t: 'join', code: st.code, name: st.name });
     if (!st.pingTimer) st.pingTimer = __hostSetInterval(() => {
       if (netState !== st) { __hostClearInterval(st.pingTimer); return; }
       st.client.sendMsg({ k: 'gping', at: __gcRealNow() });
@@ -999,14 +1072,16 @@ async function _netGuestStart(st, w) {
     if (netState !== st) return;
     _netClearPracticeUnits();
     if (typeof reserveEntityIds === 'function') reserveEntityIds(NET_GUEST_ID_BASE);
-    // 내 챔피언 = 방장 쪽 원격 챔피언(빨강 팀)
-    controller.team = 'RED';
+    // 내 챔피언 = 방장(서버) 쪽 내 챔피언. 1:1 방장 모드는 빨강 팀, 전용 서버는 서버가 정한 팀(104차)
+    const myTeam = w.youTeam === 'BLUE' ? 'BLUE' : 'RED';
+    controller.team = myTeam;
     controller.isNetPuppet = true;
-    controller.root.position.copy(getTeamSpawnPosition('RED'));
+    controller.netName = st.name;
+    controller.root.position.copy(getTeamSpawnPosition(myTeam));
     if (typeof snapCameraTo === 'function') snapCameraTo(controller.root.position);
     assignEntityId(controller, w.youId);
     st.ownId = w.youId;
-    if (typeof visionSystem !== 'undefined') visionSystem.setViewTeam('RED');
+    if (typeof visionSystem !== 'undefined') visionSystem.setViewTeam(myTeam);
     if (typeof updateBars === 'function') updateBars(controller);
     // 구조물: 같은 팀·종류 중 가장 가까운 것에 방장 ID를 붙인다(양쪽이 같은 함수로 같은 자리에 세웠다).
     const used = new Set();
@@ -1019,12 +1094,18 @@ async function _netGuestStart(st, w) {
       }
       if (best) { used.add(best); assignEntityId(best, s.id); }
     }
-    // 방장 챔피언(파랑 팀) 인형
-    const host = await spawnEnemyBot(w.hostChamp, { team: 'BLUE', remote: true, name: w.hostName || st.hostName });
-    if (netState !== st) { removeEnemyBot(host); return; }
-    assignEntityId(host, w.hostId);
-    host.isNetPuppet = true;
-    st.hostPuppet = host;
+    // 다른 플레이어들의 챔피언 인형(104차: 전용 서버는 여럿 - 아군도 있다)
+    const others = Array.isArray(w.players) ? w.players.filter((q) => !q.me && q.id !== w.youId) : [{ id: w.hostId, champ: w.hostChamp, team: 'BLUE', name: w.hostName || st.hostName }];
+    st.puppets = new Map(); st.hostPuppet = null;
+    for (const q of others) {
+      const b = await spawnEnemyBot(q.champ, { team: q.team === 'BLUE' ? 'BLUE' : 'RED', remote: true, name: q.name || '' });
+      if (netState !== st) { removeEnemyBot(b); return; }
+      assignEntityId(b, q.id);
+      b.isNetPuppet = true; b.netName = q.name || '';
+      st.puppets.set(q.id, b);
+      if (!st.hostPuppet && b.team !== myTeam) st.hostPuppet = b; // 첫 상대(1:1이면 방장)
+    }
+    if (!st.hostPuppet) st.hostPuppet = st.puppets.values().next().value || null;
     if (typeof setTurretGameTimeSec === 'function' && Number.isFinite(w.gt)) setTurretGameTimeSec(w.gt);
     gameSession = new RemoteSession(st.client, st);
     if (typeof window !== 'undefined') window.gameSession = gameSession;
@@ -1032,7 +1113,7 @@ async function _netGuestStart(st, w) {
     st.ready = true;
     st.client.sendMsg({ k: 'ready' });
     _netStatus(`대전 중 - ${st.hostName}`);
-    _netToast(`${st.hostName}와(과) 대전을 시작합니다 (빨강 팀)`);
+    _netToast(w.dedicated ? `전용 서버 대전을 시작합니다 (${myTeam === 'BLUE' ? '파랑' : '빨강'} 팀)` : `${st.hostName}와(과) 대전을 시작합니다 (빨강 팀)`);
   } catch (e) {
     console.error('[NET] 대전 준비 실패', e); _netStatus('대전 준비 실패: ' + (e.message || e));
   } finally { st.starting = false; netApplyControlLock(); }
@@ -1140,12 +1221,15 @@ function _netGuestApplyLater(st, q) {
   if (q.fx) st.fxPlayed += _netFxPlay(q.fx);
   if (q.ev) for (const ev of q.ev) _netGuestEvent(st, ev);
 }
+function _netPuppetById(st, id) {
+  if (st.puppets) return st.puppets.get(id) || null;
+  return st.hostPuppet && entityId(st.hostPuppet) === id ? st.hostPuppet : null;
+}
 // 받자마자: 유닛을 만들고(처음 보면), 안개 숨김, 위치 표본
 function _netGuestEntityPos(st, e, t) {
   let rec = st.units.get(e.i);
   if (e.k === 'c') {
-    let c = null;
-    if (st.hostPuppet && entityId(st.hostPuppet) === e.i) c = st.hostPuppet;
+    const c = _netPuppetById(st, e.i);
     if (!c) return;
     if (!rec) { rec = { kind: 'c', obj: c, samples: [] }; st.units.set(e.i, rec); }
   } else {
@@ -1187,7 +1271,7 @@ function _netIsLocoClip(c, name) {
 function _netGuestChampion(st, e, t, later) {
   let c = null;
   if (controller && entityId(controller) === e.i) c = controller;
-  else if (st.hostPuppet && entityId(st.hostPuppet) === e.i) c = st.hostPuppet;
+  else c = _netPuppetById(st, e.i);
   if (!c) return;
   let rec = st.units.get(e.i);
   if (!rec) { rec = { kind: 'c', obj: c, samples: [] }; st.units.set(e.i, rec); }
@@ -1591,7 +1675,7 @@ function netGuestTick(dt) {
   _netPredictTick(st, dt);
   const lead = (st.delay + (st.rtt || 0)) / 1000;
   for (const p of st.proj.values()) { const s = _netSampleAt(p.samples, renderT); if (s) { const f = _netProjPresent(p, s, lead, __gcRealNow()); p.entry.group.position.set(f.x, s.y, f.z); } }
-  for (const c of [controller, st.hostPuppet]) if (c && c.mixer) safeMixerUpdate(c.mixer, dt, 'netChampion');
+  for (const c of [controller, ...(st.puppets ? st.puppets.values() : [st.hostPuppet])]) if (c && c.mixer) safeMixerUpdate(c.mixer, dt, 'netChampion');
   for (const m of minions) {
     if (m.mixer) safeMixerUpdate(m.mixer, dt, 'netMinion');
     if (typeof updateMinionHealthBarVisibility === 'function') updateMinionHealthBarVisibility(m);
@@ -1628,8 +1712,7 @@ function _netShowCountdown(sec, done) {
 }
 function _netEndStats() {
   const row = (c) => c ? { champ: c.championId, team: c.team, k: (c.score && c.score.kills) || 0, d: (c.score && c.score.deaths) || 0, a: (c.score && c.score.assists) || 0, cs: (c.score && c.score.cs) || 0, lv: c.champLevel || 1, gold: Math.round(c.gold || 0) } : null;
-  const st = netState;
-  return [row(controller), row(st && st.remote)].filter(Boolean);
+  return [controller, ...(typeof enemyBots !== 'undefined' ? enemyBots : [])].filter((c) => c && !c._removed).map((c) => Object.assign(row(c), { name: c.netName || null })); // 104차: 모든 챔피언
 }
 function _netShowEndScreen(winnerTeam, reason, stats) {
   if (typeof document === 'undefined') return;
@@ -1669,6 +1752,7 @@ function netLeave(silent) {
   if (!st) return;
   netState = null;
   if (st.role === 'host') {
+    if (st.dedicated && typeof _netSimTeardown === 'function') { _netSimTeardown(st); if (st.ticker) __hostClearInterval(st.ticker); }
     _netHostEndMatch(st);
     st.client.close();
     if (!silent) _netStatus('방을 닫았습니다');
@@ -1681,7 +1765,7 @@ function netLeave(silent) {
   netApplyControlLock();
 }
 if (typeof window !== 'undefined') {
-  window.netHostCreateRoom = netHostCreateRoom; window.netGuestJoin = netGuestJoin; window.netLeave = netLeave; window.netRequestRematch = netRequestRematch;
+  window.netHostCreateRoom = netHostCreateRoom; window.netGuestJoin = netGuestJoin; window.netServerCreate = netServerCreate; window.netPickTeam = netPickTeam; window.netPickForceStart = netPickForceStart; window.netLeave = netLeave; window.netRequestRematch = netRequestRematch;
   window.netMatchActive = netMatchActive; window.netHeadlessFrame = netHeadlessFrame; window.netLagCompMs = () => netLagCompMs(); window.togglePause = (f) => togglePause(f); window.__netRealNow = __gcRealNow;
   Object.defineProperty(window, 'netState', { get: () => netState, configurable: true });
   Object.defineProperty(window, 'netGuestMode', { get: () => netGuestMode, configurable: true });
@@ -1705,8 +1789,9 @@ function _netPickBegin(st) {
   st.client.sendMsg({ k: 'pickStart', sec: NET_PICK_SEC, hostName: st.name });
   _netPickEnter(st, NET_PICK_SEC);
 }
-function _netPickEnter(st, sec) {
-  st.pick = { phase: 'pick', endsAt: __gcRealNow() + (sec || NET_PICK_SEC) * 1000, locked: false, opp: { champ: null, spells: null, locked: false }, lastSent: '' };
+function _netPickEnter(st, sec, waitFull) {
+  // 104차: 전용 서버는 방이 다 찰 때까지 시간이 흐르지 않는다(roster가 남은 시간을 알려 준다)
+  st.pick = { phase: 'pick', endsAt: waitFull && sec == null ? Infinity : __gcRealNow() + (sec || NET_PICK_SEC) * 1000, locked: false, opp: { champ: null, spells: null, locked: false }, lastSent: '', roster: null };
   if (typeof openLobby === 'function' && !(typeof isLobbyOpen === 'function' && isLobbyOpen())) openLobby();
   if (typeof netLobbyShowPick === 'function') netLobbyShowPick();
   _netStatus('챔피언 선택 중');
@@ -1825,9 +1910,9 @@ function _netGuestAramTick(dt) {
 //  - 참가자: 받은 모양을 ObjectLoader로 만들어 장면에 넣고, 받은 상태를 그대로 입힌다.
 function netMirror(obj, opts = {}) {
   const st = netState;
-  if (!obj || !st || st.role !== 'host' || !st.remote || !st.guestReady) return obj;
-  if (!st.mirrors) { st.mirrors = new Map(); st.mirrorSeq = 0; st.mirrorImgs = new Set(); }
-  if (!st.mirrors.has(obj)) st.mirrors.set(obj, { id: ++st.mirrorSeq, created: false, opts, last: '' });
+  if (!obj || !st || st.role !== 'host' || !_netViews(st).some((v) => v.guestReady)) return obj;
+  if (!st.mirrors) { st.mirrors = new Map(); st.mirrorSeq = 0; }
+  if (!st.mirrors.has(obj)) st.mirrors.set(obj, { id: ++st.mirrorSeq, opts });
   return obj;
 }
 function _netPointVisibleForTeam(team, p) {
@@ -1838,7 +1923,7 @@ function _netPointVisibleForTeam(team, p) {
   return false;
 }
 function _netMirrorNodes(obj) { const out = []; obj.traverse((o) => { if (out.length < 16) out.push(o); }); return out; }
-function _netMirrorJson(st, obj, opts) {
+function _netMirrorJson(v, obj, opts) {
   if (opts && opts.via) { const [unit, method, ...args] = opts.via; return { via: [entityId(unit), method, ...args.map((a) => _netSer(a))] }; }
   let skinned = false; obj.traverse((o) => { if (o.isSkinnedMesh) skinned = true; });
   if (skinned) return null; // 스킨 모델은 모양을 옮기지 않는다(via로 보낸다)
@@ -1846,32 +1931,42 @@ function _netMirrorJson(st, obj, opts) {
   copy.traverse((o) => { if ((o.isMesh || o.isLine || o.isPoints) && o.geometry && o.geometry.parameters) o.geometry = THREE.BufferGeometry.prototype.copy.call(new THREE.BufferGeometry(), o.geometry); }); // 회전·이동시킨 기본 도형도 그대로
   let j;
   try { j = copy.toJSON(); } catch (e) { return null; }
-  for (const img of j.images || []) { if (st.mirrorImgs.has(img.uuid)) img.url = null; else st.mirrorImgs.add(img.uuid); }
+  if (!v.mirImgs) v.mirImgs = new Set();
+  for (const img of j.images || []) { if (v.mirImgs.has(img.uuid)) img.url = null; else v.mirImgs.add(img.uuid); }
   if (JSON.stringify(j).length > 400000) return null;
   return j;
 }
-function _netMirrorState(obj) {
+function _netMirrorState(obj, team = 'RED') {
   const wp = obj.getWorldPosition(new THREE.Vector3());
-  const seen = _netPointVisibleForTeam('RED', wp);
+  const seen = _netPointVisibleForTeam(team, wp);
   return _netMirrorNodes(obj).map((o, i) => {
     const m = Array.isArray(o.material) ? o.material[0] : o.material;
     return [_netRound(o.position.x), _netRound(o.position.y), _netRound(o.position.z), _netRound(o.quaternion.x), _netRound(o.quaternion.y), _netRound(o.quaternion.z), _netRound(o.quaternion.w),
       _netRound(o.scale.x), _netRound(o.scale.y), _netRound(o.scale.z), (o.visible && (i > 0 || seen)) ? 1 : 0, m && typeof m.opacity === 'number' ? _netRound(m.opacity, 100) : -1];
   });
 }
-function _netMirrorSnapshot(st, full) {
+// 104차: 받는 사람(v)마다 "만들었나·마지막 상태"를 따로 기억한다(v.mir). 없어진 물체는 프레임 끝에 목록에서 뺀다(_netMirrorSweep).
+function _netMirrorSnapshot(st, full, v = st) {
   if (!st.mirrors || !st.mirrors.size) return null;
+  const mir = v.mir || (v.mir = new Map());
   const a = [], u = [], g = [];
   for (const [obj, rec] of st.mirrors) {
-    if (!obj.parent) { if (rec.created) g.push(rec.id); st.mirrors.delete(obj); continue; }
-    if (!rec.created) { rec.created = true; const j = _netMirrorJson(st, obj, rec.opts); if (!j) { rec.skip = true; continue; } a.push({ id: rec.id, j }); rec.last = ''; }
-    if (rec.skip) continue;
-    const state = _netMirrorState(obj), sj = JSON.stringify(state);
-    if (full || sj !== rec.last) { rec.last = sj; u.push([rec.id, state]); }
+    let m = mir.get(rec.id);
+    if (!obj.parent) { if (m && m.created) g.push(rec.id); mir.delete(rec.id); continue; }
+    if (!m) { m = { created: false, skip: false, last: '' }; mir.set(rec.id, m); }
+    if (!m.created) { m.created = true; const j = _netMirrorJson(v, obj, rec.opts); if (!j) { m.skip = true; continue; } a.push({ id: rec.id, j }); m.last = ''; }
+    if (m.skip) continue;
+    const state = _netMirrorState(obj, v.team || 'RED'), sj = JSON.stringify(state);
+    if (full || sj !== m.last) { m.last = sj; u.push([rec.id, state]); }
   }
   return a.length || u.length || g.length ? { a, u, g } : null;
 }
-function _netMirrorResend(st) { if (st.mirrors) for (const rec of st.mirrors.values()) { rec.created = false; rec.skip = false; } if (st.mirrorImgs) st.mirrorImgs.clear(); }
+function _netMirrorSweep(st) { // 없어진 물체는 모든 사람에게 "사라짐"을 보낸 뒤(그 사람의 mir에서 빠진 뒤) 목록에서 뺀다
+  if (!st.mirrors) return;
+  const views = _netViews(st);
+  for (const [obj, rec] of [...st.mirrors]) if (!obj.parent && !views.some((v) => v.mir && v.mir.has(rec.id))) st.mirrors.delete(obj);
+}
+function _netMirrorResend(v) { if (v.mir) v.mir.clear(); if (v.mirImgs) v.mirImgs.clear(); }
 function _netMirrorApply(st, mi) {
   if (!st.mirrors) { st.mirrors = new Map(); st.mirrorImgs = new Map(); }
   for (const { id, j } of mi.a || []) {
@@ -1916,7 +2011,7 @@ function netSendChat(text) {
   const st = netState; text = String(text || '').trim().slice(0, 200);
   if (!st || !st.client || !text) return false;
   st.client.sendMsg({ k: 'chat', text });
-  _netChatShow(st.name || '나', text, st.role === 'host' ? 'BLUE' : 'RED', true);
+  _netChatShow(st.name || '나', text, (controller && st.ready && controller.team) || (st.role === 'host' ? 'BLUE' : 'RED'), true);
   return true;
 }
 function _netChatShow(name, text, team, mine) {
@@ -1945,9 +2040,11 @@ if (typeof window !== 'undefined') window.netSendChat = netSendChat;
 // 다른 유닛(방장 챔피언·미니언)을 그만큼 과거 자리로 잠깐 되돌렸다가(위치 기록 0.6초) 끝나면 제자리로 돌린다.
 // 그 사이에 스킬이 그 유닛을 옮겼으면(넉백·끌어당김) 옮긴 자리를 그대로 둔다. 되돌리는 양은 최대 0.35초(너무 늦은 상대를 맞히지 않게).
 const NET_LAGCOMP_MAX_MS = 350;
+// 104차: 되돌릴 유닛 = 모든 챔피언(행동하는 사람 것은 _netRewound에서 뺀다) + 미니언
 function _netLagCompUnits() {
   const out = [];
   if (typeof controller !== 'undefined' && controller && controller.root) out.push(controller);
+  for (const b of (typeof enemyBots !== 'undefined' ? enemyBots : [])) if (b && b.root && !b._removed) out.push(b);
   for (const m of (typeof minions !== 'undefined' ? minions : [])) if (m && !m.isDead && m.mesh) out.push(m);
   return out;
 }
@@ -1962,11 +2059,13 @@ function _netLagCompRecord(st) {
   }
   if (st.lagHist.size > 200) for (const u of st.lagHist.keys()) if (!u.root && (u.isDead || !u.mesh)) st.lagHist.delete(u);
 }
-function netLagCompMs(st) {
-  st = st || netState;
-  if (!st || st.role !== 'host' || (typeof window !== 'undefined' && window.__netLagComp === false)) return 0;
+// v = 행동하는 사람의 view(1:1 방장 모드는 방장 상태 자체)
+function netLagCompMs(v) {
+  const st = netState;
+  v = v || (st && _netViews(st)[0]) || st;
+  if (!st || st.role !== 'host' || !v || (typeof window !== 'undefined' && window.__netLagComp === false)) return 0;
   if (typeof window !== 'undefined' && Number.isFinite(window.__netLagCompForceMs)) return window.__netLagCompForceMs; // 점검용
-  const ms = (st.guestRtt || 0) + (st.guestDelay || 0);
+  const ms = (v.guestRtt || 0) + (v.guestDelay || 0);
   return Math.max(0, Math.min(NET_LAGCOMP_MAX_MS, ms));
 }
 function _netHistAt(h, t) {
@@ -1979,13 +2078,13 @@ function _netHistAt(h, t) {
   return h[h.length - 1];
 }
 // fn을 "참가자가 본 세상"에서 실행한다.
-function _netRewound(st, fn) {
-  const ms = netLagCompMs(st);
+function _netRewound(st, fn, v = st) {
+  const ms = netLagCompMs(v);
   if (!ms || !st.lagHist || st._rewinding) return fn();
   const t = __gcRealNow() - ms;
   const moved = [];
   for (const u of _netLagCompUnits()) {
-    if (u === st.remote || u._dashState || u._pullState) continue; // 돌진·끌려가는 중인 유닛은 지금 자리 그대로
+    if (u === v.remote || u._dashState || u._pullState) continue; // 행동하는 사람 자신, 돌진·끌려가는 중인 유닛은 지금 자리 그대로
     const past = _netHistAt(st.lagHist.get(u), t); if (!past) continue;
     const p = u.root ? u.root.position : u.mesh.position;
     moved.push([p, p.x, p.y, p.z, past.x, past.y, past.z]);
@@ -2002,7 +2101,10 @@ function _netLagCompInstall(st) {
   if (st.lagRestore) return;
   const orig = withCombatActor;
   withCombatActor = function (actor, fn) {
-    if (actor && actor === st.remote && netState === st && st.guestReady && __combatActor !== actor) return orig(actor, () => _netRewound(st, fn));
+    if (actor && netState === st && __combatActor !== actor) {
+      const v = _netViews(st).find((x) => x.remote === actor);
+      if (v && v.guestReady) return orig(actor, () => _netRewound(st, fn, v));
+    }
     return orig(actor, fn);
   };
   st.lagRestore = () => { withCombatActor = orig; };

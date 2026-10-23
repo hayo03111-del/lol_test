@@ -14,6 +14,8 @@
  *    setTimeout/setInterval은 예약하던 순간의 행위자를 기억했다가 실행할 때 되살린다 - 봇 스킬의 지연 피해도 봇의 것이 된다.
  *    투사체는 projectile_system.js가 발사 순간의 행위자를 기억한다.
  */
+// 104차: 전용 서버가 띄운 시뮬레이션 페이지(index.html?sim=…)는 화면을 그리지 않는다 - 번들 맨 앞에서 정해 둔다(메인 루프가 시작되기 전).
+if (typeof window !== 'undefined' && typeof location !== 'undefined' && /[?&]sim=/.test(location.search || '')) window.__netSimMode = true;
 let __combatActor = null;
 function withCombatActor(actor, fn) {
   const prev = __combatActor;

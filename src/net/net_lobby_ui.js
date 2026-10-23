@@ -9,7 +9,9 @@
  */
 let _netLobbyMode = 'practice';
 function netLobbyCurrentMode() { return _netLobbyMode; }
-const _NL_STORE = { url: 'netServerUrl', name: 'netName' };
+const _NL_STORE = { url: 'netServerUrl', name: 'netName', ded: 'netDedicatedUrl', useDed: 'netUseDedicated', size: 'netDedicatedSize' };
+// 104차: 전용 서버 기본 주소 - 서버를 배포하면 여기에 wss://…/ws 를 적어 두면 모두가 따로 입력하지 않아도 된다(README 104차 "배포").
+const NET_DEDICATED_DEFAULT_URL = '';
 function _nlGet(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
 function _nlSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 저장 불가 */ } }
 function _nlEl(id) { return document.getElementById(id); }
@@ -20,11 +22,13 @@ function _nlEl(id) { return document.getElementById(id); }
   const head = ov.querySelector('.lb-head'), body = ov.querySelector('.lb-body');
   // 탭
   const tabs = document.createElement('div'); tabs.className = 'lb-tabs';
-  tabs.innerHTML = '<button type="button" id="lbTabPractice" class="sel">연습</button><button type="button" id="lbTabOnline">온라인 1:1</button>';
+  tabs.innerHTML = '<button type="button" id="lbTabPractice" class="sel">연습</button><button type="button" id="lbTabOnline">온라인 대전</button>';
   head.appendChild(tabs);
   // 픽창 위쪽 줄
   const bar = document.createElement('div'); bar.id = 'netPickBar';
-  bar.innerHTML = '<div class="np-card blue" id="npMine"></div><div class="np-mid"><div class="np-timer" id="npTimer">90</div><div class="np-info" id="npInfo">챔피언을 고르고 확정하세요</div></div><div class="np-card red" id="npOpp"></div><button type="button" id="npLeave">방 나가기</button>';
+  bar.innerHTML = '<div class="np-card blue" id="npMine"></div><div class="np-mid"><div class="np-timer" id="npTimer">90</div><div class="np-info" id="npInfo">챔피언을 고르고 확정하세요</div>'
+    + '<div class="np-ded" id="npDedBtns" style="display:none"><button type="button" id="npTeamBtn">팀 바꾸기</button><button type="button" id="npStartBtn">지금 시작</button><button type="button" id="npCopyLink">초대 링크</button></div></div>'
+    + '<div class="np-card red" id="npOpp"></div><button type="button" id="npLeave">방 나가기</button>';
   head.after(bar);
   // 방 만들기·참가·대기실
   const panel = document.createElement('section'); panel.id = 'netLobbyPanel';
@@ -38,6 +42,14 @@ function _nlEl(id) { return document.getElementById(id); }
       </div>
       <div class="nl-row" id="nlRecentRow" style="display:none"><button type="button" id="nlRecent" style="flex:1"></button></div>
       <label>내 이름<input id="netName" maxlength="24" placeholder="이름"></label>
+      <div class="nl-ded" id="nlDed">
+        <label class="nl-check"><input type="checkbox" id="netUseDed"> <b>전용 서버</b>로 하기 - 모두 지연이 같고(방장 없음), 1:1 ~ 5:5, 누가 나가도 판이 이어짐</label>
+        <div id="nlDedOpts">
+          <label>전용 서버 주소<input id="netDedUrl" placeholder="wss://내서버.onrender.com/ws  (node server/game_server.js)"></label>
+          <label>인원(방 만들 때)<select id="netDedSize"><option value="1">1 : 1</option><option value="2">2 : 2</option><option value="3">3 : 3</option><option value="4">4 : 4</option><option value="5">5 : 5</option></select></label>
+          <div class="nl-help" id="nlDedInfo"></div>
+        </div>
+      </div>
       <div class="nl-row"><button type="button" id="netCreateBtn" class="primary">방 만들기</button></div>
       <div class="nl-row"><input id="netJoinCode" maxlength="300" placeholder="방 코드 4자리 (초대 링크를 붙여 넣어도 됨)" style="text-transform:uppercase;letter-spacing:.2em" autocomplete="off"><button type="button" id="netJoinBtn">참가</button></div>
       <div class="nl-row"><button type="button" id="nlTestBtn">연결 테스트 (학교·회사 와이파이 확인)</button></div>
@@ -70,19 +82,46 @@ function _nlEl(id) { return document.getElementById(id); }
   });
   _nlEl('lbTabOnline').addEventListener('click', () => netLobbyMode('online'));
   const urlEl = _nlEl('netServerUrl'), nameEl = _nlEl('netName'), codeEl = _nlEl('netJoinCode');
+  const dedEl = _nlEl('netUseDed'), dedUrlEl = _nlEl('netDedUrl'), dedSizeEl = _nlEl('netDedSize');
   urlEl.value = _nlGet(_NL_STORE.url);
   nameEl.value = _nlGet(_NL_STORE.name);
+  dedUrlEl.value = _nlGet(_NL_STORE.ded) || NET_DEDICATED_DEFAULT_URL;
+  dedEl.checked = _nlGet(_NL_STORE.useDed) === '1' || (!_nlGet(_NL_STORE.useDed) && !!dedUrlEl.value);
+  dedSizeEl.value = _nlGet(_NL_STORE.size) || '1';
+  const dedShow = () => { _nlEl('nlDedOpts').style.display = dedEl.checked ? '' : 'none'; _nlEl('netCreateBtn').textContent = dedEl.checked ? `서버에 방 만들기 (${dedSizeEl.value}:${dedSizeEl.value})` : '방 만들기'; };
+  dedEl.addEventListener('change', () => { _nlSet(_NL_STORE.useDed, dedEl.checked ? '1' : '0'); dedShow(); });
+  dedSizeEl.addEventListener('change', () => { _nlSet(_NL_STORE.size, dedSizeEl.value); dedShow(); });
+  dedShow();
+  // 104차: 이 페이지를 전용 서버가 직접 내보내고 있으면(같은 주소) 서버 주소를 저절로 채운다
+  try {
+    if (/^https?:$/.test(location.protocol)) fetch('status', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+      if (j && j.kind === 'dedicated') { if (!dedUrlEl.value) dedUrlEl.value = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`; if (!_nlGet(_NL_STORE.useDed)) dedEl.checked = true; dedShow(); _nlEl('nlDedInfo').textContent = `이 주소의 전용 서버 - 지금 ${j.rooms}/${j.maxRooms}판`; }
+    }).catch(() => {});
+  } catch (e) { /* 정적 호스팅 */ }
   const read = () => {
     const url = urlEl.value.trim(); _nlSet(_NL_STORE.url, url); _nlSet(_NL_STORE.name, nameEl.value.trim());
+    if (dedEl.checked) {
+      const du = dedUrlEl.value.trim(); _nlSet(_NL_STORE.ded, du);
+      if (!/^wss?:\/\//.test(du)) { _netStatus('전용 서버 주소(wss://…/ws)를 넣으세요 - 서버가 없으면 "전용 서버로 하기"를 끄면 브라우저끼리 대전합니다'); dedUrlEl.focus(); return null; }
+      return { url: du, name: nameEl.value.trim(), ded: true, size: Number(dedSizeEl.value) || 1 };
+    }
     if (url && !/^wss?:\/\//.test(url)) { _netStatus('중계 서버 주소는 ws://… 또는 wss://… 입니다 (비우면 브라우저끼리 직접 연결)'); return null; }
     return { url, name: nameEl.value.trim() };
   };
-  _nlEl('netCreateBtn').addEventListener('click', () => { const r = read(); if (r) netHostCreateRoom(r.url, r.name || '방장').catch(() => {}).finally(netLobbyRefresh); netLobbyRefresh(); });
+  _nlEl('netCreateBtn').addEventListener('click', () => {
+    const r = read(); if (!r) return;
+    (r.ded ? netServerCreate(r.url, r.name || '플레이어', r.size) : netHostCreateRoom(r.url, r.name || '방장')).catch(() => {}).finally(netLobbyRefresh);
+    netLobbyRefresh();
+  });
   // 100차: 코드 칸에 초대 링크를 통째로 붙여 넣어도 코드(·서버)를 뽑아 쓴다. 소문자·공백도 괜찮다.
   const parseCode = (raw) => {
     const t = String(raw || '').trim();
     const m = t.match(/[?&]room=([A-Za-z0-9]{4})/);
-    if (m) { const sv = t.match(/[?&]server=([^&\s]+)/); if (sv) urlEl.value = decodeURIComponent(sv[1]); return m[1].toUpperCase(); }
+    if (m) {
+      const sv = t.match(/[?&]server=([^&\s]+)/), dd = /[?&]ded=1/.test(t);
+      if (sv) { if (dd) { dedUrlEl.value = decodeURIComponent(sv[1]); dedEl.checked = true; dedShow(); } else { urlEl.value = decodeURIComponent(sv[1]); dedEl.checked = false; dedShow(); } }
+      return m[1].toUpperCase();
+    }
     return t.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 4);
   };
   const joinNow = (codeArg) => {
@@ -122,12 +161,15 @@ function _nlEl(id) { return document.getElementById(id); }
   _nlEl('nlLeave').addEventListener('click', leave);
   _nlEl('npLeave').addEventListener('click', () => { if (confirm('방을 나갈까요?')) leave(); });
   _nlEl('nlBackToGame').addEventListener('click', () => { if (typeof closeLobby === 'function') closeLobby(); });
+  _nlEl('npTeamBtn').addEventListener('click', () => { const st = netState; const me = st && st.pick && st.pick.roster && st.pick.roster.players.find((x) => x.pid === st.pid); if (me) netPickTeam(me.team === 'BLUE' ? 'RED' : 'BLUE'); });
+  _nlEl('npStartBtn').addEventListener('click', () => netPickForceStart());
+  _nlEl('npCopyLink').addEventListener('click', () => { if (netState && netState.code) copy(netInviteLink(), '초대 링크'); });
   const pb = _nlEl('openNetLobbyBtn'); if (pb) pb.addEventListener('click', openNetLobby);
   // 초대 링크로 들어왔으면: 온라인 탭에 코드·서버를 채워 둔다.
   const q = new URLSearchParams(location.search);
   if (q.get('room')) {
     codeEl.value = q.get('room').toUpperCase().slice(0, 4);
-    if (q.get('server')) urlEl.value = q.get('server');
+    if (q.get('server')) { if (q.get('ded') === '1') { dedUrlEl.value = q.get('server'); dedEl.checked = true; } else { urlEl.value = q.get('server'); dedEl.checked = false; } dedShow(); }
     // 100차: 초대 링크 - 이름이 저장돼 있으면 바로 참가, 없으면 이름 칸에 커서를 두고 안내
     __hostSetTimeout(() => {
       openNetLobby();
@@ -157,7 +199,7 @@ function netInviteLink() {
   const st = netState; if (!st || !st.code) return '';
   const base = location.origin + location.pathname;
   const url = st.client && st.client.url !== 'p2p' ? st.client.url : '';
-  return `${base}?room=${st.code}${url ? '&server=' + encodeURIComponent(url) : ''}`;
+  return `${base}?room=${st.code}${url ? '&server=' + encodeURIComponent(url) : ''}${st.dedicated ? '&ded=1' : ''}`;
 }
 function openNetLobby() {
   if (typeof openLobby === 'function' && !(typeof isLobbyOpen === 'function' && isLobbyOpen())) openLobby();
@@ -179,7 +221,7 @@ function netLobbyRefresh() {
   _nlEl('lbTabPractice').classList.toggle('sel', !online);
   _nlEl('lbTabOnline').classList.toggle('sel', online);
   const h1 = ov.querySelector('.lb-head h1'), sub = ov.querySelector('.lb-head span');
-  if (h1) h1.textContent = online ? (picking ? '챔피언 선택' : '온라인 1:1 대전') : '연습 준비';
+  if (h1) h1.textContent = online ? (picking ? '챔피언 선택' : '온라인 대전') : '연습 준비';
   if (sub) sub.textContent = online ? (picking ? '챔피언 · 룬 · 소환사 주문을 고르고 확정하세요 (상대 선택은 위에 보입니다)' : '방을 만들거나 코드로 참가하세요') : '챔피언 · 룬 · 소환사 주문을 고르고 게임을 시작하세요';
   body.style.display = !online || picking ? '' : 'none';
   panel.classList.toggle('show', online && !picking);
@@ -215,7 +257,7 @@ function netLobbyRefresh() {
     const live = typeof netMatchActive === 'function' && netMatchActive();
     gb.classList.toggle('live', !!st);
     const rtt = st ? (st.role === 'host' ? st.guestRtt : st.rtt) : null;
-    const how = st && st.client ? ({ p2p: '직접 연결', mqtt: '우회 중계', relay: '중계 서버' }[st.client.kind] || '') : '';
+    const how = st && st.client ? (st.dedicated ? '전용 서버' : ({ p2p: '직접 연결', mqtt: '우회 중계', relay: '중계 서버' }[st.client.kind] || '')) : '';
     gb.textContent = live ? `온라인 대전 · ${rtt != null ? Math.round(rtt) + 'ms' : '…'}${how ? ' · ' + how : ''}` : st && st.code ? `온라인 방 ${st.code}` : '온라인 대전'; // 100차: 대전 중 핑·연결 방식
   }
   if (picking) netLobbyRefreshPick();
@@ -233,6 +275,8 @@ function netLobbyRefreshPick() {
   if (!st || !st.pick) return;
   const P = st.pick, isHost = st.role === 'host';
   const mine = P.locked && P.mine ? P.mine : (typeof lobbyState !== 'undefined' ? { champ: lobbyState.champ, spells: lobbyState.spells } : {});
+  _nlEl('npDedBtns').style.display = st.dedicated ? '' : 'none';
+  if (st.dedicated) { _nlRefreshDedicatedPick(st, P, mine); return; }
   const myTeam = isHost ? 'BLUE' : 'RED', oppTeam = isHost ? 'RED' : 'BLUE';
   const mineEl = _nlEl('npMine'), oppEl = _nlEl('npOpp');
   mineEl.className = 'np-card ' + (myTeam === 'BLUE' ? 'blue' : 'red'); oppEl.className = 'np-card ' + (oppTeam === 'BLUE' ? 'blue' : 'red');
@@ -241,6 +285,39 @@ function netLobbyRefreshPick() {
   const left = Math.max(0, Math.ceil((P.endsAt - __gcRealNow()) / 1000));
   const t = _nlEl('npTimer'); t.textContent = P.phase === 'loading' ? '…' : String(left); t.classList.toggle('low', left <= 10);
   _nlEl('npInfo').textContent = P.phase === 'loading' ? '둘 다 확정 - 챔피언을 불러오는 중' : P.locked ? (P.opp.locked ? '시작합니다' : '상대가 확정하기를 기다리는 중') : `방 ${st.code || ''} · 시간이 다 되면 지금 고른 것으로 확정됩니다`;
+  const body = document.querySelector('#lobbyOverlay .lb-body'); if (body) body.classList.toggle('np-locked', !!P.locked);
+  const start = _nlEl('lobbyStartBtn');
+  if (start && _netLobbyMode === 'online') { start.textContent = P.locked ? (P.phase === 'loading' ? '불러오는 중…' : '확정됨') : '확정'; start.disabled = !!P.locked; }
+}
+// 104차: 전용 서버 픽창 - 내 카드 + 양 팀 명단(이름·챔피언·확정), 사람이 다 찰 때까지는 기다림, 방을 만든 사람은 "지금 시작"
+function _nlRefreshDedicatedPick(st, P, mine) {
+  const R = P.roster || { players: [], size: st.size || 1, owner: null };
+  const me = R.players.find((x) => x.pid === st.pid) || { team: 'BLUE' };
+  const mineEl = _nlEl('npMine'), oppEl = _nlEl('npOpp');
+  mineEl.className = 'np-card ' + (me.team === 'BLUE' ? 'blue' : 'red');
+  mineEl.innerHTML = _nlCardHtml(mine.champ, mine.spells, `${st.name || '나'} (나)`, P.locked, me.team);
+  const col = (team) => {
+    const rows = R.players.filter((x) => x.team === team).map((x) => {
+      const nm = x.champ ? ((typeof CHAMPION_MODEL_LIBRARY !== 'undefined' && (CHAMPION_MODEL_LIBRARY.find(([k]) => k === x.champ) || [])[1]) || x.champ) : '고르는 중';
+      return `<div class="np-ro${x.pid === st.pid ? ' me' : ''}${x.on ? '' : ' off'}">${x.champ ? `<img src="assets/champion_icons/${x.champ}/icon.png" alt="">` : '<i></i>'}<span>${(x.name || '').replace(/[<>&]/g, '')}</span><small>${nm}${x.locked ? ' ✔' : ''}</small></div>`;
+    });
+    for (let i = rows.length; i < R.size; i++) rows.push('<div class="np-ro empty"><i></i><span>빈 자리</span></div>');
+    return `<div class="np-col ${team === 'BLUE' ? 'blue' : 'red'}"><b>${team === 'BLUE' ? '파랑 팀' : '빨강 팀'}</b>${rows.join('')}</div>`;
+  };
+  oppEl.className = 'np-card roster';
+  oppEl.innerHTML = col('BLUE') + col('RED');
+  const n = R.players.length, need = R.size * 2;
+  const left = Number.isFinite(P.endsAt) ? Math.max(0, Math.ceil((P.endsAt - __gcRealNow()) / 1000)) : null;
+  const t = _nlEl('npTimer'); t.textContent = P.phase === 'loading' || R.phase === 'loading' ? '…' : left != null ? String(left) : `${n}/${need}`; t.classList.toggle('low', left != null && left <= 10);
+  const allLocked = R.players.length && R.players.every((x) => x.locked);
+  const twoTeams = R.players.some((x) => x.team === 'BLUE') && R.players.some((x) => x.team === 'RED');
+  _nlEl('npInfo').textContent = R.phase === 'loading' || P.phase === 'loading' ? '모두 확정 - 챔피언을 불러오는 중'
+    : n < need ? `방 ${st.code || ''} · ${n}/${need}명 - 코드나 초대 링크를 보내세요${R.owner === st.pid ? ' (모두 확정하면 "지금 시작"으로 바로 할 수 있습니다)' : ''}`
+    : P.locked ? '다른 사람이 확정하기를 기다리는 중' : '시간이 다 되면 지금 고른 것으로 확정됩니다';
+  const teamBtn = _nlEl('npTeamBtn'), other = me.team === 'BLUE' ? 'RED' : 'BLUE';
+  teamBtn.disabled = !!P.locked || R.players.filter((x) => x.team === other).length >= R.size;
+  teamBtn.textContent = other === 'BLUE' ? '파랑 팀으로' : '빨강 팀으로';
+  const sb = _nlEl('npStartBtn'); sb.style.display = R.owner === st.pid && n < need ? '' : 'none'; sb.disabled = !(allLocked && twoTeams);
   const body = document.querySelector('#lobbyOverlay .lb-body'); if (body) body.classList.toggle('np-locked', !!P.locked);
   const start = _nlEl('lobbyStartBtn');
   if (start && _netLobbyMode === 'online') { start.textContent = P.locked ? (P.phase === 'loading' ? '불러오는 중…' : '확정됨') : '확정'; start.disabled = !!P.locked; }

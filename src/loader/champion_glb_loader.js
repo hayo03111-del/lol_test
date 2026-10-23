@@ -1704,6 +1704,7 @@ function simulateStep(dt) {
 }
 
 function animate() {
+  if (typeof window !== 'undefined' && window.__netSimMode) return; // 104차: 전용 서버의 시뮬레이션 페이지 - 화면을 그리지 않는다(netHeadlessFrame이 돈다)
   requestAnimationFrame(animate);
   // 버그 수정(스크린샷으로 확인된 "GLB 투명화" - 애니메이션되는 GLB만
   // 사라지고 바닥/장식 같은 순수 도형은 멀쩡한 패턴): clock.getDelta()가

@@ -210,4 +210,4 @@ if (require.main === module) {
   const server = createRelayServer({ log: (s) => console.log(`[relay] ${s}`), lagMs: Number(process.env.RELAY_LAG_MS) || 0, bwBytesPerSec: Number(process.env.RELAY_BW) || 0 });
   server.listen(port, () => console.log(`[relay] http://localhost:${port}/  (웹소켓: ws://localhost:${port}/ws)`));
 }
-module.exports = { createRelayServer };
+module.exports = { createRelayServer, WsConn, WS_GUID, CONTENT_TYPES, ROOT };
