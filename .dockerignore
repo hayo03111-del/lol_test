@@ -1,0 +1,9 @@
+.git
+**/node_modules
+dist
+docs
+wip
+reference_original.html
+tools/e2e_glb/three
+tools/**/*.glb
+*.log

@@ -60,6 +60,7 @@ function playwrightLauncher({ log }) {
 
 function createGameServer({ root = ROOT, log = () => {}, launchSim = null, maxRooms = Number(process.env.MAX_ROOMS) || 3, lagMs = 0, threeDir = process.env.THREE_DIR || '', simBase = '' } = {}) {
   const rooms = new Map(); // code → room
+  const badJoins = new Map(); // 주소 → 틀린 코드를 넣은 시각들
   const conns = new Set();
   const launcher = launchSim || playwrightLauncher({ log });
   const send = (conn, obj) => { if (conn && !conn.closed) conn.send(JSON.stringify(obj)); };
@@ -131,8 +132,11 @@ function createGameServer({ root = ROOT, log = () => {}, launchSim = null, maxRo
       case 'dcreate': leave(conn); return startRoom(conn, m);
       case 'create': return send(conn, { t: 'error', msg: '전용 서버에서는 dcreate로 방을 만듭니다' });
       case 'join': {
+        // 방 코드 무작위 대입 막기: 한 주소에서 1분에 틀린 코드 10번까지
+        const ip = conn.ip || '', now = Date.now(), tries = (badJoins.get(ip) || []).filter((x) => now - x < 60000);
+        if (tries.length >= 10) { badJoins.set(ip, tries); return send(conn, { t: 'error', msg: '잘못된 코드를 너무 많이 넣었습니다 - 1분 뒤 다시 시도하세요' }); }
         const room = rooms.get(String(m.code || '').toUpperCase().trim());
-        if (!room) return send(conn, { t: 'error', msg: '방이 없음' });
+        if (!room) { tries.push(now); badJoins.set(ip, tries); return send(conn, { t: 'error', msg: '방이 없음' }); }
         leave(conn);
         conn.name = String(m.name || '플레이어').slice(0, 24);
         if (!room.sim) { room.pending.push(conn); return send(conn, { t: 'creating', code: room.code, size: room.size }); }
@@ -172,6 +176,7 @@ function createGameServer({ root = ROOT, log = () => {}, launchSim = null, maxRo
     socket.write(['HTTP/1.1 101 Switching Protocols', 'Upgrade: websocket', 'Connection: Upgrade', `Sec-WebSocket-Accept: ${accept}`, '', ''].join('\r\n'));
     socket.setNoDelay(true);
     const conn = new WsConn(socket);
+    conn.ip = String(req.headers['x-forwarded-for'] || socket.remoteAddress || '').split(',')[0].trim();
     conns.add(conn);
     conn.onmessage = (text) => { try { onMessage(conn, text); } catch (e) { log('메시지 처리 오류 ' + e.message); } };
     conn.onclose = () => { conns.delete(conn); leave(conn); };
@@ -179,6 +184,7 @@ function createGameServer({ root = ROOT, log = () => {}, launchSim = null, maxRo
   const hb = setInterval(() => {
     for (const c of conns) { if (!c.alive) { c.close(1001, 'timeout'); continue; } c.alive = false; c.ping(); }
     const now = Date.now();
+    for (const [ip, a] of badJoins) if (!a.some((x) => now - x < 60000)) badJoins.delete(ip);
     for (const room of [...rooms.values()]) {
       if (!room.sim && now - room.createdAt > SIM_BOOT_MS) { closeRoom(room, '서버가 대전을 준비하지 못했습니다(시간 초과)'); continue; }
       if (room.players.size || room.pending.length) { room.emptySince = 0; continue; }

@@ -1,0 +1,29 @@
+# 104차: Fly.io(https://fly.io) 설정 - `fly launch --copy-config` 뒤 `fly deploy`. 지역은 도쿄(nrt) - 한국에서 가깝다.
+app = "lolsim-game-server"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8787"
+  MAX_ROOMS = "2"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[http_service.checks]]
+  grace_period = "30s"
+  interval = "30s"
+  method = "GET"
+  path = "/healthz"
+  timeout = "5s"
+
+[[vm]]
+  memory = "2gb"
+  cpu_kind = "shared"
+  cpus = 2

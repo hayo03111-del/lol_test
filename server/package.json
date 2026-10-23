@@ -1,0 +1,8 @@
+{
+  "name": "lolsim-game-server",
+  "private": true,
+  "description": "104차 전용 게임 서버 - node server/game_server.js (시뮬레이션은 Playwright가 띄운 머리 없는 Chromium)",
+  "scripts": { "start": "node game_server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "playwright": "1.56.1" }
+}

@@ -44327,7 +44327,13 @@ function _netSimLeave(st, pid) {
     const teamGone = _netSimPlayers(st).filter((q) => q.team === p.team).every((q) => q.goneAt && __gcRealNow() - q.goneAt >= NET_RECONNECT_GRACE_MS - 50);
     if (teamGone) _netSimGameOver(st, p.team === 'BLUE' ? 'RED' : 'BLUE', '상대 팀 기권');
   }, NET_RECONNECT_GRACE_MS);
-  if (!_netSimPlayers(st).some((q) => q.connected)) { _netSimTeardown(st); st.phase = 'lobby'; st.players.clear(); } // 아무도 없다
+  // 모두 끊겨도(같은 와이파이가 잠깐 끊김 등) 바로 치우지 않는다 - 60초 안에 누구든 돌아오면 그대로 이어진다
+  if (!_netSimPlayers(st).some((q) => q.connected)) {
+    __hostSetTimeout(() => {
+      if (netState !== st || st.phase !== 'match' || _netSimPlayers(st).some((q) => q.connected)) return;
+      _netSimTeardown(st); st.phase = 'lobby'; st.players.clear();
+    }, NET_RECONNECT_GRACE_MS + 1000);
+  }
 }
 function _netSimGameOver(st, winner, reason) {
   if (st.ended) return;

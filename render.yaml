@@ -1,0 +1,13 @@
+# 104차: Render(https://render.com) 블루프린트 - 저장소를 연결하고 "Blueprint"로 만들면 전용 서버가 뜬다.
+# 지역은 한국에서 가까운 싱가포르. 한 판에 머리 없는 Chromium 하나가 돌아 메모리가 약 1GB 필요하다(무료 512MB로는 모자랄 수 있다).
+services:
+  - type: web
+    name: lolsim-game-server
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: singapore
+    plan: standard
+    healthCheckPath: /healthz
+    envVars:
+      - key: MAX_ROOMS
+        value: "2"
