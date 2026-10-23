@@ -23,7 +23,7 @@ ctx.withCombatActor = (a, fn) => { ctx.actorLog.push(a); return fn(); };
 vm.createContext(ctx);
 let src = '';
 for (const f of ['src/session/entity_registry.js', 'src/session/game_commands.js', 'src/net/net_session.js', 'src/net/net_transport.js']) src += fs.readFileSync(path.join(ROOT, f), 'utf8') + '\n';
-src += ';globalThis.__t = { _netProjPresent, _netRateControl, _netQueueSample, _netCodeHash, AutoNetClient, NET_MQTT_TOPIC, _netHistAt, _netRewound, MqttWs, _mqttPacket, _mqttStr, _mqttLen, _netTimeShift, _netApplyChampState, _netStatusFrom, _netDelta, _netSer, _netDeser, _netEffectiveIntent, _netReconcile, _netNewPred: (p) => ({ pos: p, intent: null, intentSeq: 0, hist: [], corr: new THREE.Vector3(), srv: null, follow: false, corrections: 0, snaps: 0 }), _netSampleAt, RemoteSession, _netHostOnMessage, assignEntityId, reserveEntityIds, entityId, findEntityById, getGameSession: () => gameSession, setGameSession: (s) => { gameSession = s; } };';
+src += ';globalThis.__t = { _netJitterBuffer, _netRenderTime, _netGuestDrain, _netProjPresent, _netRateControl, _netQueueSample, _netCodeHash, AutoNetClient, NET_MQTT_TOPIC, _netHistAt, _netRewound, MqttWs, _mqttPacket, _mqttStr, _mqttLen, _netTimeShift, _netApplyChampState, _netStatusFrom, _netDelta, _netSer, _netDeser, _netEffectiveIntent, _netReconcile, _netNewPred: (p) => ({ pos: p, intent: null, intentSeq: 0, hist: [], corr: new THREE.Vector3(), srv: null, follow: false, corrections: 0, snaps: 0 }), _netSampleAt, RemoteSession, _netHostOnMessage, assignEntityId, reserveEntityIds, entityId, findEntityById, getGameSession: () => gameSession, setGameSession: (s) => { gameSession = s; } };';
 vm.runInContext(src, ctx);
 const T = ctx.__t;
 
@@ -93,17 +93,29 @@ assert(T._netEffectiveIntent(P).p.x === 9, '예측: 받은 뒤에는 방장 쪽 
 P.srv.tg = 42;
 assert(T._netEffectiveIntent(P).kind === 'chase' && T._netEffectiveIntent(P).id === 42, '예측: 방장 쪽이 대상을 쫓으면 추격');
 
-// 8) 보정: 왕복 지연만큼 과거의 내 예측 위치와 방장 위치를 비교 - 작은 차이는 조금씩, 큰 차이는 바로
+// 8) 보정(103차): 걷는 중에는 옆으로 벗어난 차이·0.3초치를 넘는 앞뒤 차이만, 멈춘 뒤에는 방장 자리에 정확히, 크게 어긋나면 바로
 realNow = 10000;
-const st2 = { pred: T._netNewPred(new V(10, 0, 0)), own: { x: 3.5, y: 0, z: 0 }, rtt: 100 };
-st2.pred.srv = { ack: 5, fr: true }; st2.pred.intentSeq = 5;
+const st2 = { pred: T._netNewPred(new V(10, 0, 0)), own: { x: 3.5, y: 0, z: 0, at: 10000 }, ownPrev: { x: 3.4, y: 0, z: 0 }, rtt: 100 };
+st2.pred.srv = { ack: 5, fr: true, ms: 10 }; st2.pred.intentSeq = 5; st2.pred.moving = true;
 st2.pred.hist = [{ t: 9800, x: 2, z: 0 }, { t: 9880, x: 3, z: 0 }, { t: 9950, x: 4, z: 0 }];
 T._netReconcile(st2);
-assert(Math.abs(st2.pred.corr.x - 0.5) < 1e-9 && st2.pred.hist[0].x === 2.5 && st2.pred.pos.x === 10, '보정: 과거 예측(지연만큼 전)과의 차이를 메울 몫으로 두고 기록도 옮긴다');
-st2.own = { x: 30, y: 0, z: 0 };
+assert(st2.pred.corr.x === 0 && st2.pred.corrections === 0 && st2.pred.pos.x === 10, '보정: 걷는 방향으로 앞서거나 뒤처진 차이(시각 겉차이, 0.3초치 안)는 메우지 않는다');
+st2.own = { x: 3, y: 0, z: 0.5, at: 10000 };
+T._netReconcile(st2);
+assert(Math.abs(st2.pred.corr.z - 0.5) < 1e-9 && Math.abs(st2.pred.corr.x) < 1e-9 && st2.pred.hist[1].z === 0.5 && st2.pred.hist[0].z === 0, '보정: 옆으로 벗어난 차이(미니언에 밀림 등)는 메울 몫으로 두고 그 뒤 기록도 옮긴다');
+st2.own = { x: 3 + 3 + 1, y: 0, z: 0.5, at: 10000 };
+T._netReconcile(st2);
+assert(Math.abs(st2.pred.corr.x - 1) < 0.05, '보정: 0.3초치(이동속도 × 0.3)를 넘는 앞뒤 차이는 넘는 만큼 메운다');
+st2.own = { x: 30, y: 0, z: 0, at: 10000 };
 T._netReconcile(st2);
 assert(st2.pred.pos.x === 30 && st2.pred.snaps === 1, '보정: 크게 어긋나면(점멸·부활 등) 바로 맞춘다');
-st2.pred.intentSeq = 9; st2.pred.intent = { kind: 'move', p: new V(0, 0, 0) }; st2.own = { x: 0, y: 0, z: 0 }; st2.pred.hist = [{ t: 9800, x: 30, z: 0 }];
+st2.pred.moving = false; st2.pred.pos.set(30, 0, 0); st2.ownPrev = { x: 30.5, y: 0, z: 0.2 }; st2.own = { x: 30.5, y: 0, z: 0.2, at: 10000 };
+T._netReconcile(st2);
+assert(Math.abs(st2.pred.corr.x - 0.5) < 1e-9 && Math.abs(st2.pred.corr.z - 0.2) < 1e-9, '보정: 멈춘 뒤 방장도 멈춰 있으면 방장 자리에 정확히 맞춘다');
+st2.pred.corr.set(0, 0, 0); st2.ownPrev = { x: 29, y: 0, z: 0 }; st2.own = { x: 30.5, y: 0, z: 0.2, at: 10000 };
+T._netReconcile(st2);
+assert(st2.pred.corr.x === 0, '보정: 멈췄는데 방장 쪽은 아직 걷는 중이면 기다린다');
+st2.pred.intentSeq = 9; st2.pred.intent = { kind: 'move', p: new V(0, 0, 0) }; st2.own = { x: 0, y: 0, z: 0, at: 10000 }; st2.pred.hist = [{ t: 9800, x: 30, z: 0 }];
 T._netReconcile(st2);
 assert(st2.pred.pos.x === 30, '보정: 방장이 내 최신 명령을 받기 전에는 비교하지 않는다');
 
@@ -197,4 +209,20 @@ assert(T._netHistAt(h, 1050).x === 5 && T._netHistAt(h, 500).x === 0 && T._netHi
   assert(Math.abs(T._netProjPresent(p, { x: 8, z: 0 }, 0.25, 1000).x - 10) < 1e-9, '투사체: 끝 지점(최대 사거리)은 넘지 않는다');
   assert(Math.abs(T._netProjPresent(p, { x: 0, z: 0 }, 0.25, 75).x - 2.5) < 1e-9, '투사체: 나타난 직후 0.15초는 서서히 앞당긴다');
   assert(T._netProjPresent({ bornAt: 0 }, { x: 1, z: 2 }, 0.25, 1000).x === 1, '투사체: 직선 스킬샷이 아니면(유도 투사체) 그대로');
+}
+
+// 16) 103차: 지터 버퍼 - 늦게 오는 스냅샷이 섞여도 지연이 그만큼 늘고, 그릴 시각은 매끄럽게(한 프레임에 조금씩만) 움직인다
+{
+  const st = { delay: 70 };
+  let host = 0;
+  for (let i = 0; i < 40; i++) { host += 33; const late = i % 5 === 0 ? 90 : 0; T._netJitterBuffer(st, host, host + 1000 + late); }
+  assert(st.jbBase === 1000 && st.delay >= 33 + 90 && st.delay <= 33 + 90 + 15, '지터 버퍼: 지연 = 늦음의 90번째 값 + 만든 간격 + 10ms');
+  realNow = 50000; st.renderOff = st.renderOffTarget - 40;
+  const before = st.renderOff; T._netRenderTime(st, 0.1);
+  assert(Math.abs(st.renderOff - before - 1) < 1e-9, '지터 버퍼: 목표와 가까우면 시간을 1%만 늦춰 맞춘다(한 번에 튀지 않음)');
+  const st2 = { snapQ: [{ t: 100, ents: [], gone: [], at: 49990 }, { t: 200, ents: [], gone: [], at: 49995 }, { t: 300, ents: [], gone: [], at: 49999 }], goneAt: new Map() };
+  T._netGuestDrain(st2, 210);
+  assert(st2.snapQ.length === 1 && st2.snapQ[0].t === 300, '같은 시간축: 그릴 시각이 지난 스냅샷만 적용한다(나머지는 기다린다)');
+  T._netGuestDrain(Object.assign(st2, {}), 0); st2.snapQ[0].at = 48000; T._netGuestDrain(st2, 0);
+  assert(st2.snapQ.length === 0, '같은 시간축: 1초 넘게 밀린 것은(화면 멈춤 등) 한꺼번에 적용한다');
 }

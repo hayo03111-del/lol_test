@@ -77,19 +77,23 @@ function _sbPortraitHtml(ctrl) {
   const img = hasIcon ? `<img src="assets/champion_icons/${id}/icon.png" alt="">` : _sbEsc(String(id || '-').slice(0, 2).toUpperCase());
   return `<div class="sb-portrait">${img}<span class="sb-lv">${(ctrl && ctrl.champLevel) || 1}</span></div>`;
 }
-function _sbPlayerRow(ctrl) {
+// 103차: other = 다른 챔피언(온라인 상대·봇) - 이름은 플레이어 이름, 골드는 원작처럼 상대 것은 보이지 않는다.
+function _sbPlayerRow(ctrl, other) {
   const s = ensureScore(ctrl);
   const champ = _sbChampName(ctrl.championId);
   const dead = ctrl.state === 'DEAD' || !(ctrl.hp > 0);
-  return `<div class="sb-row me${dead ? ' dead' : ''}">
+  const sub = other ? _sbEsc(ctrl.netName || (ctrl.isRemote ? '상대' : '봇')) : '나';
+  return `<div class="sb-row ${other ? 'other' : 'me'}${dead ? ' dead' : ''}">
     ${_sbPortraitHtml(ctrl)}${_sbSpellsHtml(ctrl)}${_sbRunesHtml(ctrl)}
-    <div class="sb-name"><b>${_sbEsc(champ)}</b><small>나</small></div>
+    <div class="sb-name"><b>${_sbEsc(champ)}</b><small>${sub}</small></div>
     ${_sbItemsHtml(ctrl)}
     <div class="sb-kda">${s.kills} / ${s.deaths} / ${s.assists}</div>
     <div class="sb-cs">${s.cs}</div>
-    <div class="sb-gold">${Math.floor(ctrl.gold || 0).toLocaleString()}</div>
+    <div class="sb-gold">${other && (ctrl.team || PLAYER_TEAM) !== ((typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM) ? '-' : Math.floor(ctrl.gold || 0).toLocaleString()}</div>
   </div>`;
 }
+// 103차: 이 팀의 다른 챔피언(적 봇·온라인 상대)
+function _sbOtherChamps(team) { return (typeof enemyBots !== 'undefined' ? enemyBots : []).filter((b) => b && !b._removed && (b.team || 'RED') === team); }
 function _sbDummyRow(unit, label) {
   const pct = unit.maxHp ? Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100)) : 0;
   return `<div class="sb-row dummy">
@@ -105,6 +109,7 @@ function _sbEmptyRow() {
 function _sbTeamRows(team, ctrl) {
   const rows = [];
   if (ctrl && (ctrl.team || PLAYER_TEAM) === team) rows.push(_sbPlayerRow(ctrl));
+  for (const b of _sbOtherChamps(team)) if (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbPlayerRow(b, true));
   const playerTeam = (ctrl && ctrl.team) || PLAYER_TEAM;
   if (team === playerTeam) {
     if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbDummyRow(a, '아군 허수아비'));
@@ -116,7 +121,9 @@ function _sbTeamRows(team, ctrl) {
   return rows.join('');
 }
 function _sbTeamKills(team, ctrl) {
-  return ctrl && (ctrl.team || PLAYER_TEAM) === team ? ensureScore(ctrl).kills : 0;
+  let n = ctrl && (ctrl.team || PLAYER_TEAM) === team ? ensureScore(ctrl).kills : 0;
+  for (const b of _sbOtherChamps(team)) n += (b.score && b.score.kills) || 0; // 103차: 상대·봇 처치도 팀 합계에
+  return n;
 }
 // 71차: 팀이 번 골드 합계(원작 위쪽 줄의 "12.3k") - 지금은 플레이어가 번 골드(시작 골드 포함)뿐이다.
 function _sbTeamGold(team, ctrl) {

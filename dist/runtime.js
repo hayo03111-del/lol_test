@@ -36716,19 +36716,23 @@ function _sbPortraitHtml(ctrl) {
   const img = hasIcon ? `<img src="assets/champion_icons/${id}/icon.png" alt="">` : _sbEsc(String(id || '-').slice(0, 2).toUpperCase());
   return `<div class="sb-portrait">${img}<span class="sb-lv">${(ctrl && ctrl.champLevel) || 1}</span></div>`;
 }
-function _sbPlayerRow(ctrl) {
+// 103차: other = 다른 챔피언(온라인 상대·봇) - 이름은 플레이어 이름, 골드는 원작처럼 상대 것은 보이지 않는다.
+function _sbPlayerRow(ctrl, other) {
   const s = ensureScore(ctrl);
   const champ = _sbChampName(ctrl.championId);
   const dead = ctrl.state === 'DEAD' || !(ctrl.hp > 0);
-  return `<div class="sb-row me${dead ? ' dead' : ''}">
+  const sub = other ? _sbEsc(ctrl.netName || (ctrl.isRemote ? '상대' : '봇')) : '나';
+  return `<div class="sb-row ${other ? 'other' : 'me'}${dead ? ' dead' : ''}">
     ${_sbPortraitHtml(ctrl)}${_sbSpellsHtml(ctrl)}${_sbRunesHtml(ctrl)}
-    <div class="sb-name"><b>${_sbEsc(champ)}</b><small>나</small></div>
+    <div class="sb-name"><b>${_sbEsc(champ)}</b><small>${sub}</small></div>
     ${_sbItemsHtml(ctrl)}
     <div class="sb-kda">${s.kills} / ${s.deaths} / ${s.assists}</div>
     <div class="sb-cs">${s.cs}</div>
-    <div class="sb-gold">${Math.floor(ctrl.gold || 0).toLocaleString()}</div>
+    <div class="sb-gold">${other && (ctrl.team || PLAYER_TEAM) !== ((typeof controller !== 'undefined' && controller && controller.team) || PLAYER_TEAM) ? '-' : Math.floor(ctrl.gold || 0).toLocaleString()}</div>
   </div>`;
 }
+// 103차: 이 팀의 다른 챔피언(적 봇·온라인 상대)
+function _sbOtherChamps(team) { return (typeof enemyBots !== 'undefined' ? enemyBots : []).filter((b) => b && !b._removed && (b.team || 'RED') === team); }
 function _sbDummyRow(unit, label) {
   const pct = unit.maxHp ? Math.max(0, Math.min(100, (unit.hp / unit.maxHp) * 100)) : 0;
   return `<div class="sb-row dummy">
@@ -36744,6 +36748,7 @@ function _sbEmptyRow() {
 function _sbTeamRows(team, ctrl) {
   const rows = [];
   if (ctrl && (ctrl.team || PLAYER_TEAM) === team) rows.push(_sbPlayerRow(ctrl));
+  for (const b of _sbOtherChamps(team)) if (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbPlayerRow(b, true));
   const playerTeam = (ctrl && ctrl.team) || PLAYER_TEAM;
   if (team === playerTeam) {
     if (typeof placedAllies !== 'undefined') for (const a of placedAllies) if (rows.length < SCOREBOARD_TEAM_SIZE) rows.push(_sbDummyRow(a, '아군 허수아비'));
@@ -36755,7 +36760,9 @@ function _sbTeamRows(team, ctrl) {
   return rows.join('');
 }
 function _sbTeamKills(team, ctrl) {
-  return ctrl && (ctrl.team || PLAYER_TEAM) === team ? ensureScore(ctrl).kills : 0;
+  let n = ctrl && (ctrl.team || PLAYER_TEAM) === team ? ensureScore(ctrl).kills : 0;
+  for (const b of _sbOtherChamps(team)) n += (b.score && b.score.kills) || 0; // 103차: 상대·봇 처치도 팀 합계에
+  return n;
 }
 // 71차: 팀이 번 골드 합계(원작 위쪽 줄의 "12.3k") - 지금은 플레이어가 번 골드(시작 골드 포함)뿐이다.
 function _sbTeamGold(team, ctrl) {
@@ -41945,7 +41952,7 @@ function _netFxInstall(st) {
       let ret;
       try { ret = orig.apply(this, args); } finally { inside = false; }
       if (netState === st && st.guestReady) {
-        try { if (st.fx.length < 200) st.fx.push([name, fn, args.map((x) => _netSer(x))]); } catch (e) { /* 기록 실패는 무시(연출만 빠짐) */ }
+        try { if (st.fx.length < 200) st.fx.push([name, fn, args.map((x) => _netSer(x)), st.remote && __combatActor === st.remote ? 1 : 0]); } catch (e) { /* 기록 실패는 무시(연출만 빠짐) */ } // 103차: 넷째 값 = 참가자 챔피언이 낸 연출
       }
       return ret;
     };
@@ -42193,6 +42200,10 @@ function _netSnapChampion(st, c, nowMs) {
     sc: c.score ? [c.score.kills || 0, c.score.deaths || 0, c.score.assists || 0, c.score.cs || 0] : [0, 0, 0, 0],
     rs: c.state === STATE.DEAD && c._respawnAt ? Math.max(0, Math.round((c._respawnAt - nowMs) / 100) * 100) : null,
     ef: _netSnapStatus(c, nowMs), // 100차: 모든 챔피언의 상태 효과(상대 챔피언 위 표식·행동 불가 표시)
+    // 103차: 점수판(Tab)용 - 아이템 6칸·장신구·신발, 소환사 주문, 룬(핵심·보조)
+    it: [...[0, 1, 2, 3, 4, 5].map((k) => (c.items && c.items[k] && c.items[k].id) || 0), (c.trinket && c.trinket.id) || 0, (c.boots && c.boots.id) || 0],
+    sp: c.summoners ? [c.summoners.D && c.summoners.D.id, c.summoners.F && c.summoners.F.id] : null,
+    rn: c.runePage ? [c.runePage.keystone, c.runePage.secondary] : null,
   };
 }
 function _netSnapStatus(u, nowMs) {
@@ -42477,7 +42488,7 @@ function _netGuestHello(st) {
 }
 function netGuestJoin(url, code, name) {
   netLeave(true);
-  const st = { role: 'guest', client: null, url, name: name || '참가자', code: String(code || '').toUpperCase(), token: _netGuestToken(String(code || '').toUpperCase()), ready: false, units: new Map(), proj: new Map(), lastSnapAt: 0, hostT: 0,
+  const st = { role: 'guest', client: null, url, name: name || '참가자', code: String(code || '').toUpperCase(), token: _netGuestToken(String(code || '').toUpperCase()), ready: false, units: new Map(), proj: new Map(), snapQ: [], goneAt: new Map(), lastSnapAt: 0, hostT: 0,
     status: '', state: new Map(), pred: null, rtt: null, jitter: 10, lastArrive: 0, delay: 70, own: null, ownId: null, reconnects: 0, locked: false, fxPlayed: 0 };
   netState = st;
   return _netGuestConnect(st, true);
@@ -42550,7 +42561,7 @@ async function _netGuestStart(st, w) {
   _netCloseEndScreen();
   st.ready = false; st.ended = false; st.rematchHost = false; st.rematchSent = false;
   for (const p of st.proj.values()) projectiles._releaseArrowMesh(p.entry);
-  st.proj.clear(); st.units.clear(); st.state.clear(); st.pred = null; st.own = null;
+  st.proj.clear(); st.units.clear(); st.state.clear(); st.snapQ.length = 0; st.goneAt.clear(); st.renderOff = null; st.jb = null; st.pred = null; st.own = null;
   try {
     st.pick = null;
     if (typeof closeLobby === 'function') closeLobby();
@@ -42616,48 +42627,112 @@ function _netQueueSample(st, off, now) {
     qb.slot = slot; qb.mins.push(off); if (qb.mins.length > 15) qb.mins.shift();
   } else if (off < qb.mins[qb.mins.length - 1]) qb.mins[qb.mins.length - 1] = off;
 }
+// 103차: 지터 버퍼 - 예전에는 "마지막 스냅샷 시각 + 그 뒤 흐른 시간 - 지연"으로 그릴 시각을 정해, 스냅샷이 늦게/몰려 오면 그릴 시각이
+// 앞뒤로 튀고(튐) 표본을 앞질러(멈칫) 상대가 덜컥거렸다(측정: 걷는 프레임의 49%가 멈칫). 이제는:
+//  - 최근 4초 동안 (받은 시각 − 만든 시각)의 최솟값 = 가장 빨리 온 길(base). 각 스냅샷이 그보다 늦은 정도(lateness)와 만든 간격(interval)을 모은다.
+//  - 지연 = 늦음의 90번째 값 + 만든 간격의 90번째 값 + 10ms(40~400ms) - 거의 언제나 그릴 시각 뒤에 표본이 하나 더 있다.
+//  - 그릴 시각 = 지금 − (base + 지연). 이 차이(renderOff)는 프레임마다 아주 조금씩만(시간 1~6% 늘이고 줄이기) 목표로 옮긴다 - 시간이 매끄럽게 흐른다.
+function _netJitterBuffer(st, hostT, recvAt) {
+  const w = st.jb || (st.jb = []);
+  w.push({ at: recvAt, lat: recvAt - hostT, t: hostT });
+  while (w.length > 2 && recvAt - w[0].at > 4000) w.shift();
+  let base = Infinity; for (const x of w) if (x.lat < base) base = x.lat;
+  const pct = (arr, q) => { if (!arr.length) return 0; const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(a.length * q))]; };
+  const late = w.map((x) => x.lat - base), iv = [];
+  for (let i = 1; i < w.length; i++) iv.push(w[i].t - w[i - 1].t);
+  const interval = iv.length ? pct(iv, 0.9) : 1000 / NET_SNAPSHOT_HZ;
+  st.delay = Math.max(40, Math.min(400, pct(late, 0.9) + interval + 10));
+  st.jbBase = base;
+  st.renderOffTarget = base + st.delay;
+  if (st.renderOff == null || Math.abs(st.renderOff - st.renderOffTarget) > 350) st.renderOff = st.renderOffTarget;
+}
+// 그릴 시각(방장 시계) - 프레임마다 renderOff를 목표 쪽으로 천천히 옮긴다(멀면 6%, 가까우면 1%만큼 시간을 늘이거나 줄인다)
+function _netRenderTime(st, dt) {
+  if (st.renderOff == null) return st.hostT + (__gcRealNow() - st.lastSnapAt) - st.delay;
+  const diff = st.renderOffTarget - st.renderOff, rate = Math.abs(diff) > 60 ? 0.06 : 0.01;
+  const step = Math.min(Math.abs(diff), rate * dt * 1000);
+  st.renderOff += Math.sign(diff) * step;
+  return __gcRealNow() - st.renderOff;
+}
 function _netGuestOnSnapshot(st, s) {
   const recvAt = __gcRealNow();
-  // 도착 간격 흔들림 → 보간 지연(스냅샷 간격 + 흔들림 2배, 45~250ms)
   if (st.lastArrive) {
     const gap = recvAt - st.lastArrive;
-    st.gapAvg = st.gapAvg ? st.gapAvg * 0.95 + Math.min(500, gap) * 0.05 : 1000 / NET_SNAPSHOT_HZ; // 스냅샷 간격(우회 중계면 더 길다)
+    st.gapAvg = st.gapAvg ? st.gapAvg * 0.95 + Math.min(500, gap) * 0.05 : 1000 / NET_SNAPSHOT_HZ; // 도착 간격(표시·대기열 판단용)
     st.jitter = st.jitter * 0.9 + Math.abs(gap - st.gapAvg) * 0.1;
-    st.delay = Math.max(45, Math.min(300, st.gapAvg * 1.2 + st.jitter * 2 + 8));
   }
   st.lastArrive = recvAt;
+  _netJitterBuffer(st, s.t, recvAt);
   _netQueueSample(st, recvAt - s.t, recvAt);
   st.hostT = s.t; st.lastSnapAt = recvAt;
   if (Number.isFinite(s.gt) && typeof setTurretGameTimeSec === 'function') {
     const local = getTurretGameTimeSec();
     if (Math.abs(local - s.gt) > 1) setTurretGameTimeSec(s.gt); // 크게 어긋날 때만 맞춘다(평소엔 netGuestTick이 같이 흘린다)
   }
-  const touched = new Set();
+  // 103차: 같은 시간축 - 위치(표본)는 받자마자 쌓지만, 상대·미니언·구조물의 체력·동작·연출·사라짐은 "그 스냅샷 시각이 화면에 그려질 때"(그릴 시각이
+  // 지날 때) 적용한다. 예전에는 위치만 보간 지연만큼 늦게 그리고 동작·연출·체력은 바로 바꿔, 동작이 걸음보다 최대 0.25초 앞섰다(멈추기 전에 대기 동작 등).
+  // 내 챔피언(예측 = 지금 시각)과 내 챔피언이 낸 연출, 내 개인 정보는 바로 적용한다.
+  const touched = new Set(), later = [];
+  const ownId = controller ? entityId(controller) : null;
   for (const d of s.ents || []) {
     const e = _netMerge(st, d, !!s.full);
     touched.add(e.i);
-    _netGuestApplyEntity(st, e, s.t);
+    if (e.i === ownId) { _netGuestApplyEntity(st, e, s.t); continue; }
+    if (e.k === 'c' || e.k === 'm') _netGuestEntityPos(st, e, s.t);
+    later.push(e);
   }
   // 이번에 값이 안 온(안 바뀐) 유닛도 이 시각의 자리를 표본으로 남긴다(보간이 예전 표본 사이를 오가지 않게).
-  for (const [id, e] of st.state) if (!touched.has(id)) { const rec = st.units.get(id); if (rec && rec.samples && e.x != null) _netPushSample(rec, s.t, e); }
+  for (const [id, e] of st.state) if (!touched.has(id)) { const rec = st.units.get(id); if (rec && rec.samples && e.x != null && !rec.hidden) _netPushSample(rec, s.t, e); }
   const gone = new Set(s.gone || []);
   if (s.full) for (const id of st.state.keys()) if (!touched.has(id)) gone.add(id);
-  for (const id of gone) _netGuestRemove(st, id);
+  for (const id of gone) st.goneAt.set(id, s.t);
+  for (const id of gone) st.state.delete(id);
   _netGuestProjectiles(st, s.pr || []);
-  if (s.rl) _netGuestRelics(s.rl);
-  if (s.mi) _netMirrorApply(st, s.mi);
   if (s.me) _netGuestApplyPrivate(st, s.me);
-  if (s.fx) st.fxPlayed += _netFxPlay(s.fx);
-  if (s.ev) for (const ev of s.ev) _netGuestEvent(st, ev);
+  let fxNow = null, fxLater = null;
+  for (const f of s.fx || []) (f[3] ? (fxNow || (fxNow = [])) : (fxLater || (fxLater = []))).push(f);
+  if (fxNow) st.fxPlayed += _netFxPlay(fxNow);
+  st.snapQ.push({ t: s.t, ents: later, gone: [...gone], rl: s.rl, mi: s.mi, fx: fxLater, ev: s.ev, at: recvAt });
 }
-function _netGuestApplyEntity(st, e, t) {
-  if (e.k === 'c') _netGuestChampion(st, e, t);
-  else if (e.k === 'm') _netGuestMinion(st, e, t);
+// 103차: 그릴 시각이 지난 스냅샷의 나머지(체력·동작·연출·사라짐)를 적용한다. 화면이 멈춰 있었으면(탭 숨김 등) 1초 넘게 밀린 것은 한꺼번에.
+function _netGuestDrain(st, renderT) {
+  const Q = st.snapQ; if (!Q || !Q.length) return;
+  const now = __gcRealNow();
+  let n = 0;
+  while (n < Q.length && (Q[n].t <= renderT || now - Q[n].at > 1000 || Q.length - n > 90)) n++;
+  if (!n) return;
+  for (const q of Q.splice(0, n)) _netGuestApplyLater(st, q);
+}
+function _netGuestApplyLater(st, q) {
+  for (const e of q.ents) _netGuestApplyEntity(st, e, q.t, true);
+  for (const id of q.gone) { if (st.goneAt.get(id) === q.t) { st.goneAt.delete(id); if (!st.state.has(id)) _netGuestRemove(st, id); } }
+  if (q.rl) _netGuestRelics(q.rl);
+  if (q.mi) _netMirrorApply(st, q.mi);
+  if (q.fx) st.fxPlayed += _netFxPlay(q.fx);
+  if (q.ev) for (const ev of q.ev) _netGuestEvent(st, ev);
+}
+// 받자마자: 유닛을 만들고(처음 보면), 안개 숨김, 위치 표본
+function _netGuestEntityPos(st, e, t) {
+  let rec = st.units.get(e.i);
+  if (e.k === 'c') {
+    let c = null;
+    if (st.hostPuppet && entityId(st.hostPuppet) === e.i) c = st.hostPuppet;
+    if (!c) return;
+    if (!rec) { rec = { kind: 'c', obj: c, samples: [] }; st.units.set(e.i, rec); }
+  } else {
+    if (!rec) { if (e.hid) return; _netGuestMinion(st, e, t); return; } // 처음 보는 미니언은 바로 만든다(첫 표본 포함)
+  }
+  if (_netGuestHide(rec, e)) return;
+  _netPushSample(rec, t, e);
+}
+function _netGuestApplyEntity(st, e, t, later) {
+  if (e.k === 'c') _netGuestChampion(st, e, t, later);
+  else if (e.k === 'm') _netGuestMinion(st, e, t, later);
   else if (e.k === 'w') _netGuestWard(st, e);
   else _netGuestStructure(st, e);
 }
 function _netGuestRemove(st, id) {
-  const e = st.state.get(id); st.state.delete(id);
+  const e = st.state.get(id) || (st.units.get(id) && st.units.get(id).lastE); st.state.delete(id);
   const rec = st.units.get(id); st.units.delete(id);
   if (rec && rec.kind === 'm') _netGuestMinionDie(rec.obj);
   else if (rec && rec.kind === 'w' && typeof wardSystem !== 'undefined' && wardSystem) wardSystem.destroy(rec.obj, e && e.hp > 0 ? 'expired' : 'killed');
@@ -42674,13 +42749,13 @@ function _netPushSample(rec, t, e) {
   const last = rec.samples[rec.samples.length - 1];
   if (last && last.t >= t) return;
   rec.samples.push({ t, x: e.x, y: e.y, z: e.z, r: e.r });
-  if (rec.samples.length > 8) rec.samples.shift();
+  if (rec.samples.length > 32) rec.samples.shift(); // 103차: 지연이 0.4초까지 늘 수 있다
 }
 function _netIsLocoClip(c, name) {
   if (!name) return false;
   return c._moveClips().includes(name) || c._idleClips().includes(name) || name === 'Idle1_Raw' || name === 'Run1_Raw';
 }
-function _netGuestChampion(st, e, t) {
+function _netGuestChampion(st, e, t, later) {
   let c = null;
   if (controller && entityId(controller) === e.i) c = controller;
   else if (st.hostPuppet && entityId(st.hostPuppet) === e.i) c = st.hostPuppet;
@@ -42688,9 +42763,9 @@ function _netGuestChampion(st, e, t) {
   let rec = st.units.get(e.i);
   if (!rec) { rec = { kind: 'c', obj: c, samples: [] }; st.units.set(e.i, rec); }
   if (c.score && e.sc) [c.score.kills, c.score.deaths, c.score.assists, c.score.cs] = e.sc;
-  if (_netGuestHide(rec, e)) return; // 100차: 안개 속 - 방장이 위치를 보내지 않았다
-  _netPushSample(rec, t, e);
-  if (c === controller) st.own = { x: e.x, y: e.y, z: e.z, r: e.r, s: e.s, t, at: __gcRealNow() };
+  if (later) { if (e.hid) return; } // 위치·숨김은 받을 때 했다(_netGuestEntityPos)
+  else { if (_netGuestHide(rec, e)) return; _netPushSample(rec, t, e); } // 100차: 안개 속 - 방장이 위치를 보내지 않았다
+  if (c === controller) { if (st.own && st.own.t !== t) st.ownPrev = st.own; st.own = { x: e.x, y: e.y, z: e.z, r: e.r, s: e.s, t, at: __gcRealNow() }; }
   if (e.ef) c.statusEffects = _netStatusFrom(e.ef, performance.now());
   c.hp = e.hp; c.maxHp = e.mh; c.shield = e.sh; c.mp = e.mp; c.maxMp = e.mm; c.champLevel = e.lv;
   if (c.state !== e.s) c.state = e.s;
@@ -42698,6 +42773,7 @@ function _netGuestChampion(st, e, t) {
   if (!c.score) c.score = { kills: 0, deaths: 0, assists: 0, cs: 0 };
   [c.score.kills, c.score.deaths, c.score.assists, c.score.cs] = e.sc || [0, 0, 0, 0];
   if (c.model) c.model.visible = e.mv !== 0;
+  if (c !== controller) _netGuestScoreInfo(c, e);
   if (c._scaleWrapper && e.sz && Math.abs((c._netSz || 1) - e.sz) > 0.005) { c._scaleWrapper.scale.multiplyScalar(e.sz / (c._netSz || 1)); c._netSz = e.sz; }
   // 동작: 방장 쪽에서 새 클립이 시작됐으면 같은 클립을 튼다. 내 챔피언의 걷기·대기는 예측이 정한다(_netOwnAnimate).
   if (e.cl && (rec.cl !== e.cl || rec.cn !== e.cn)) {
@@ -42709,6 +42785,18 @@ function _netGuestChampion(st, e, t) {
     if (clip) c.crossFadeToClip(clip, { loop: e.lp ? THREE.LoopRepeat : THREE.LoopOnce, clampWhenFinished: !e.lp, fade: 0.12, timeScale: e.ts || 1, time: e.lp ? 0 : Math.max(0, e.at || 0) });
   }
   updateBars(c);
+}
+// 103차: 상대 챔피언의 아이템·소환사 주문·룬(점수판에 원작처럼). 내 것은 개인 정보(me)로 따로 온다.
+function _netGuestScoreInfo(c, e) {
+  if (Array.isArray(e.it)) {
+    const k = e.it.join(','); if (c._netItKey !== k) {
+      c._netItKey = k;
+      c.items = e.it.slice(0, 6).map((id) => (id ? { id } : null));
+      c.trinket = e.it[6] ? { id: e.it[6] } : null; c.boots = e.it[7] ? { id: e.it[7] } : null;
+    }
+  }
+  if (Array.isArray(e.sp) && e.sp[0]) { if (!c.summoners) c.summoners = { D: { id: e.sp[0], readyAt: 0 }, F: { id: e.sp[1], readyAt: 0 } }; else { c.summoners.D.id = e.sp[0]; c.summoners.F.id = e.sp[1]; } }
+  if (Array.isArray(e.rn) && e.rn[0] && (!c.runePage || c.runePage.keystone !== e.rn[0])) c.runePage = Object.assign({}, c.runePage || {}, { keystone: e.rn[0], secondary: e.rn[1] });
 }
 // 100차: 안개 속 유닛(hid) - 보이지 않는 먼 곳으로 치우고, 다시 보이면 새 표본부터(옛 자리에서 미끄러져 오지 않게)
 const NET_VOID = { x: 99999, y: -1000, z: 99999 };
@@ -42725,9 +42813,10 @@ function _netGuestHide(rec, e) {
   if (rec.hidden) { rec.hidden = false; rec.samples.length = 0; }
   return false;
 }
-function _netGuestMinion(st, e, t) {
+function _netGuestMinion(st, e, t, later) {
   if (e.hid && !st.units.get(e.i)) return; // 처음 보는데 안개 속 - 보일 때 만든다
   let rec = st.units.get(e.i);
+  if (later && !rec) return; // 그사이 사라졌다
   if (!rec) {
     const m = createMinion(e.ty, new THREE.Vector3(e.x, e.y, e.z), getTurretGameTimeSec(), _netTeamName(e.tm));
     assignEntityId(m, e.i);
@@ -42736,8 +42825,8 @@ function _netGuestMinion(st, e, t) {
     st.units.set(e.i, rec);
   }
   const m = rec.obj;
-  if (_netGuestHide(rec, e)) return;
-  _netPushSample(rec, t, e);
+  rec.lastE = e;
+  if (later) { if (e.hid) return; } else { if (_netGuestHide(rec, e)) return; _netPushSample(rec, t, e); }
   m.hp = e.hp; m.maxHp = e.mh;
   if (m.usingRealModel && e.cl) {
     const label = `${m.team} ${m.type} minion`;
@@ -42807,7 +42896,7 @@ function _netGuestProjectiles(st, list) {
     p.entry.group.quaternion.set(qx, qy, qz, qw);
     p.entry.group.scale.setScalar(scale || 1);
     p.samples.push({ t: st.hostT, x, y, z });
-    if (p.samples.length > 4) p.samples.shift();
+    if (p.samples.length > 16) p.samples.shift();
   }
   for (const [id, p] of st.proj) if (!seen.has(id)) { p.done = true; projectiles._releaseArrowMesh(p.entry); st.proj.delete(id); }
 }
@@ -42918,9 +43007,13 @@ function _netPredictTick(st, dt) {
     // 방장 위치를 빠르게 따라간다(돌진·넉백·행동 불가·시전 고정·죽음).
     if (own) {
       const k = 1 - Math.exp(-dt * 22);
-      const dx = own.x - P.pos.x, dz = own.z - P.pos.z;
-      if (Math.hypot(dx, dz) > lolRangeToWorld(600)) { P.pos.set(own.x, own.y || 0, own.z); P.snaps++; if (typeof snapCameraTo === 'function') snapCameraTo(P.pos); }
-      else { P.pos.x += dx * k; P.pos.z += dz * k; }
+      const dx = own.x - P.pos.x, dz = own.z - P.pos.z, dist = Math.hypot(dx, dz);
+      if (dist > lolRangeToWorld(600)) { P.pos.set(own.x, own.y || 0, own.z); P.snaps++; if (typeof snapCameraTo === 'function') snapCameraTo(P.pos); }
+      else if (_netOwnHostStill(st)) {
+        // 103차: 방장 쪽에서 멈춰 있다(기절·속박·시전 고정) - 예측으로 앞서간 만큼을 걷는 속도의 1.5배로 되돌아간다(한 프레임에 확 끌려가지 않게)
+        const ms = (P.srv && P.srv.ms) || getFinalMoveSpeed(c.stats), step = Math.min(dist * k, ms * 1.5 * dt);
+        if (dist > 1e-6) { P.pos.x += (dx / dist) * step; P.pos.z += (dz / dist) * step; }
+      } else { P.pos.x += dx * k; P.pos.z += dz * k; } // 돌진·넉백 - 방장 움직임을 바짝 따라간다
       P.pos.y = own.y || 0;
       c.root.quaternion.setFromAxisAngle(_NET_Y_AXIS, own.r || 0);
     }
@@ -42952,9 +43045,11 @@ function _netPredictTick(st, dt) {
     }
     // 방장 위치와의 차이를 조금씩 메운다.
     if (P.corr.lengthSq() > 1e-10) {
-      const k = Math.min(1, dt * 8);
-      P.pos.x += P.corr.x * k; P.pos.z += P.corr.z * k;
-      P.corr.multiplyScalar(1 - k);
+      // 103차: 메우는 속도에 상한(걷는 속도의 60%) - 느린 화면(프레임 간격이 길다)에서 한 프레임에 확 끌려가 보이지 않게
+      const cl = P.corr.length(), ms = (srv && srv.ms) || getFinalMoveSpeed(c.stats);
+      const take = Math.min(cl * (1 - Math.exp(-dt * 8)), ms * 0.6 * dt, cl), f = take / cl;
+      P.pos.x += P.corr.x * f; P.pos.z += P.corr.z * f;
+      P.corr.multiplyScalar(1 - f);
     }
     // 구조물에 파고들지 않게(방장과 같은 충돌 함수)
     c.root.position.copy(P.pos);
@@ -42969,19 +43064,47 @@ function _netPredictTick(st, dt) {
   _netOwnAnimate(st, c);
 }
 // 스냅샷이 오면: 방장이 내 최신 명령을 받은 뒤라면, 왕복 지연만큼 과거의 내 예측 위치와 방장 위치를 비교해 차이를 메울 몫(corr)으로 둔다.
+// 방장 쪽 내 챔피언이 멈춰 있나: 위치가 한동안 안 왔거나(안 바뀐 값은 보내지 않는다) 바로 전 값과 같다
+function _netOwnHostStill(st) {
+  const own = st.own; if (!own) return false;
+  if (__gcRealNow() - own.at > Math.max(80, (st.gapAvg || 33) * 1.6)) return true;
+  return !!(st.ownPrev && Math.hypot(own.x - st.ownPrev.x, own.z - st.ownPrev.z) < lolRangeToWorld(1));
+}
 function _netReconcile(st) {
   const P = st.pred, own = st.own;
   if (!P || !own || P.follow || !P.srv) return;
   if (P.intent && P.intentSeq > (P.srv.ack || 0)) return; // 방장이 아직 내 명령을 모른다 - 비교하면 틀린 차이가 나온다
+  // 103차: 원작처럼 - 걷는 동안 "걷는 방향으로 앞서거나 뒤처진 차이"는 시각을 정확히 맞출 수 없어 생기는 겉차이다(같은 목적지에서 같은 속도로
+  // 멈추므로 저절로 없어진다). 예전에는 이것까지 스냅샷마다 메워(측정: 걷는 동안 보정 298번) 뒤로 끌려가는 프레임이 생겼다.
+  // 이제 걷는 중에는 옆으로 벗어난 차이(미니언에 밀림 등)와 0.3초치를 넘는 앞뒤 차이만 메운다. 멈춘 뒤에는 방장도 멈춰 있으면 방장 자리에 정확히 맞춘다.
+  const hostStill = _netOwnHostStill(st);
+  if (!P.moving) {
+    if (!hostStill) return; // 방장 쪽은 아직 걷는 중 - 멈출 때까지 기다린다
+    const ex = own.x - P.pos.x, ez = own.z - P.pos.z, err = Math.hypot(ex, ez);
+    if (err > lolRangeToWorld(400)) { P.pos.set(own.x, own.y || 0, own.z); P.corr.set(0, 0, 0); P.hist.length = 0; P.snaps++; return; }
+    if (err < lolRangeToWorld(2)) { P.corr.set(0, 0, 0); return; }
+    P.corr.set(ex, 0, ez); P.corrections++;
+    return;
+  }
   const back = __gcRealNow() - (st.rtt != null ? st.rtt : 100) - (st.gapAvg || 1000 / NET_SNAPSHOT_HZ) / 2; // 102차: 실제 도착 간격(혼잡하면 길어진다)
-  let h = null;
-  for (let i = P.hist.length - 1; i >= 0; i--) { if (P.hist[i].t <= back) { h = P.hist[i]; break; } }
+  let h = null, hi = -1;
+  for (let i = P.hist.length - 1; i >= 0; i--) { if (P.hist[i].t <= back) { h = P.hist[i]; hi = i; break; } }
   if (!h) return;
-  const ex = own.x - h.x, ez = own.z - h.z, err = Math.hypot(ex, ez);
+  let ex = own.x - h.x, ez = own.z - h.z;
+  const err = Math.hypot(ex, ez);
   if (err > lolRangeToWorld(400)) { P.pos.set(own.x, own.y || 0, own.z); P.corr.set(0, 0, 0); P.hist.length = 0; P.snaps++; if (typeof snapCameraTo === 'function' && err > lolRangeToWorld(1500)) snapCameraTo(P.pos); return; }
-  if (err < lolRangeToWorld(4)) return;
+  // 걷는 방향(지금 예측 위치 - 그때 위치)
+  let dx = P.pos.x - h.x, dz = P.pos.z - h.z; const dl = Math.hypot(dx, dz);
+  if (dl > 1e-6) {
+    dx /= dl; dz /= dl;
+    const along = ex * dx + ez * dz, crossX = ex - along * dx, crossZ = ez - along * dz;
+    const speed = (P.srv && P.srv.ms) || getFinalMoveSpeed(controller.stats), tol = speed * 0.3;
+    const keep = Math.abs(along) > tol ? along - Math.sign(along) * tol : 0;
+    ex = crossX + keep * dx; ez = crossZ + keep * dz;
+  }
+  if (Math.hypot(ex, ez) < lolRangeToWorld(6)) return;
   P.corr.set(ex, 0, ez); P.corrections++;
-  for (const s of P.hist) { s.x += ex; s.z += ez; } // 같은 차이를 두 번 메우지 않게 기록도 옮긴다
+  for (let i = hi; i < P.hist.length; i++) { P.hist[i].x += ex; P.hist[i].z += ez; } // 같은 차이를 두 번 메우지 않게 기록도 옮긴다
 }
 // 내 챔피언 걷기·대기 동작: 예측한 이동에 맞춘다(방장의 평타·스킬·죽음 동작은 _netGuestChampion이 튼다).
 function _netOwnAnimate(st, c) {
@@ -43019,7 +43142,8 @@ function netGuestTick(dt) {
   if (typeof updateRewardTexts === 'function') updateRewardTexts(dt);
   const st = netState;
   if (!st || st.role !== 'guest' || !st.ready) { if (controller && controller.mixer) safeMixerUpdate(controller.mixer, dt, 'netGuest'); return; }
-  const renderT = st.hostT + (__gcRealNow() - st.lastSnapAt) - st.delay;
+  const renderT = _netRenderTime(st, dt);
+  _netGuestDrain(st, renderT);
   for (const rec of st.units.values()) {
     if (rec.kind === 'w') continue;
     if (rec.kind === 'c' && rec.obj === controller) continue; // 내 챔피언은 예측(_netPredictTick)
