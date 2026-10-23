@@ -23,7 +23,7 @@ ctx.withCombatActor = (a, fn) => { ctx.actorLog.push(a); return fn(); };
 vm.createContext(ctx);
 let src = '';
 for (const f of ['src/session/entity_registry.js', 'src/session/game_commands.js', 'src/net/net_session.js', 'src/net/net_transport.js']) src += fs.readFileSync(path.join(ROOT, f), 'utf8') + '\n';
-src += ';globalThis.__t = { _netRateControl, _netQueueSample, _netCodeHash, AutoNetClient, NET_MQTT_TOPIC, _netHistAt, _netRewound, MqttWs, _mqttPacket, _mqttStr, _mqttLen, _netTimeShift, _netApplyChampState, _netStatusFrom, _netDelta, _netSer, _netDeser, _netEffectiveIntent, _netReconcile, _netNewPred: (p) => ({ pos: p, intent: null, intentSeq: 0, hist: [], corr: new THREE.Vector3(), srv: null, follow: false, corrections: 0, snaps: 0 }), _netSampleAt, RemoteSession, _netHostOnMessage, assignEntityId, reserveEntityIds, entityId, findEntityById, getGameSession: () => gameSession, setGameSession: (s) => { gameSession = s; } };';
+src += ';globalThis.__t = { _netProjPresent, _netRateControl, _netQueueSample, _netCodeHash, AutoNetClient, NET_MQTT_TOPIC, _netHistAt, _netRewound, MqttWs, _mqttPacket, _mqttStr, _mqttLen, _netTimeShift, _netApplyChampState, _netStatusFrom, _netDelta, _netSer, _netDeser, _netEffectiveIntent, _netReconcile, _netNewPred: (p) => ({ pos: p, intent: null, intentSeq: 0, hist: [], corr: new THREE.Vector3(), srv: null, follow: false, corrections: 0, snaps: 0 }), _netSampleAt, RemoteSession, _netHostOnMessage, assignEntityId, reserveEntityIds, entityId, findEntityById, getGameSession: () => gameSession, setGameSession: (s) => { gameSession = s; } };';
 vm.runInContext(src, ctx);
 const T = ctx.__t;
 
@@ -188,3 +188,13 @@ assert(T._netHistAt(h, 1050).x === 5 && T._netHistAt(h, 500).x === 0 && T._netHi
   await a3._join('ZZZZ', '친구');
   assert(ev.length === 1 && /방을 찾지 못했습니다/.test(ev[0]), '길 고르기: 어느 길로도 답이 없으면 방이 없다고 알린다');
 })();
+
+// 15) 102차: 직선 스킬샷은 참가자 화면에서 "지금" 자리로(보간 지연 + 왕복만큼 앞), 끝 지점은 넘지 않고, 처음엔 서서히
+{
+  const p = { line: { vx: 20, vz: 0, speed: 20, ex: 10, ez: 0 }, bornAt: 0 };
+  const a = T._netProjPresent(p, { x: 0, z: 0 }, 0.25, 1000);
+  assert(Math.abs(a.x - 5) < 1e-9 && a.z === 0, '투사체: 속도 × (지연 + 왕복)만큼 앞당겨 그린다');
+  assert(Math.abs(T._netProjPresent(p, { x: 8, z: 0 }, 0.25, 1000).x - 10) < 1e-9, '투사체: 끝 지점(최대 사거리)은 넘지 않는다');
+  assert(Math.abs(T._netProjPresent(p, { x: 0, z: 0 }, 0.25, 75).x - 2.5) < 1e-9, '투사체: 나타난 직후 0.15초는 서서히 앞당긴다');
+  assert(T._netProjPresent({ bornAt: 0 }, { x: 1, z: 2 }, 0.25, 1000).x === 1, '투사체: 직선 스킬샷이 아니면(유도 투사체) 그대로');
+}

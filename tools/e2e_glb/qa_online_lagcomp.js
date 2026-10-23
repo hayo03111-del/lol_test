@@ -121,6 +121,21 @@ const LAG = Number(process.env.LAG || 150);
   check('lag compensation: shots aimed at the guest-view (0.6s old) position hit with compensation', r.on.shots >= 4 && r.on.hits >= r.on.shots - 1);
   check('lag compensation: the same shots mostly miss without it', r.off.shots >= 4 && r.off.hits <= Math.floor(r.off.shots / 2));
 
+  // 102차: 직선 스킬샷은 참가자 화면에서 "지금" 자리로 - 받은 마지막 자리(방장 시각보다 편도만큼 과거)보다 앞에 그려진다(끄면 뒤)
+  const projLead = async (on) => {
+    await guest.evaluate((on) => { window.__netProjPresent = on ? undefined : false; window.__projAhead = []; }, on);
+    await host.evaluate(() => { const E = window.__e2e, b = E.enemyBots[0]; b.cooldowns.Q = 0; b.mp = b.maxMp; b.statusEffects = []; const p = b.root.position; E.withCombatActor(b, () => b.castAbility('Q', new E.THREE.Vector3(p.x + E.lolRangeToWorld(1000), 0, p.z))); });
+    for (let i = 0; i < 16; i++) {
+      await realWait(guest, 60);
+      await guest.evaluate(() => { for (const p of window.netState.proj.values()) { if (!p.line || !p.samples.length) continue; const last = p.samples[p.samples.length - 1], g = p.entry.group.position; window.__projAhead.push(((g.x - last.x) * p.line.vx + (g.z - last.z) * p.line.vz) / p.line.speed); } });
+    }
+    await realWait(guest, 1200);
+    return guest.evaluate(() => { const a = window.__projAhead; return a.length ? Math.max(...a) / window.__e2e.lolRangeToWorld(1) : null; });
+  };
+  r.projAheadOn = await projLead(true); r.projAheadOff = await projLead(false);
+  await guest.evaluate(() => { window.__netProjPresent = undefined; });
+  check('projectiles: skillshots are drawn at their present position on the guest (ahead of the last received spot)', r.projAheadOn != null && r.projAheadOn > 50 && (r.projAheadOff == null || r.projAheadOff <= 5));
+
   // 시전 동작 예측: 이미 Q를 썼으니 클립을 배웠다 - 명령을 보내는 그 자리에서 시전 동작이 시작된다
   await host.evaluate(() => { const b = window.__e2e.enemyBots[0]; b.cooldowns.Q = 0; b.mp = b.maxMp; });
   await realWait(guest, 3 * LAG + 300);

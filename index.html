@@ -43782,7 +43782,10 @@ function netBuildHostSnapshot(st) {
     const id = _netProjId(st, proj);
     const p = proj.mesh.position, q = proj.mesh.quaternion;
     // 100차: 숨김 투사체(자체 연출이 따라가는 리 신 Q·럭스 Q 등)도 위치는 보낸다 - 참가자 쪽 연출이 따라갈 수 있게(그리지는 않음)
-    pr.push([id, _netRound(p.x), _netRound(p.y), _netRound(p.z), _netRound(q.x), _netRound(q.y), _netRound(q.z), _netRound(q.w), proj.color || 0xdff0ff, _netRound(proj.mesh.scale.x, 100), proj.mesh.parent ? 0 : 1]);
+    const row = [id, _netRound(p.x), _netRound(p.y), _netRound(p.z), _netRound(q.x), _netRound(q.y), _netRound(q.z), _netRound(q.w), proj.color || 0xdff0ff, _netRound(proj.mesh.scale.x, 100), proj.mesh.parent ? 0 : 1];
+    // 102차: 직선 스킬샷은 속도(x·z)와 남은 거리도 - 참가자 화면에서 "지금" 자리로 앞당겨 그린다(피하기)
+    const L = proj.line; if (L && L.dir) row.push(_netRound(L.dir.x * proj.speed), _netRound(L.dir.z * proj.speed), _netRound(Math.max(0, L.maxDist - L.traveled)));
+    pr.push(row);
   }
   // 100차: 칼바람 회복 유물(나타남·빛줄기)
   const rl = typeof aramRelics !== 'undefined' ? aramRelics.map((r) => [r.active ? 1 : 0, _netRound(r.beam && r.beam.material ? r.beam.material.opacity : 0, 100)]) : [];
@@ -44236,10 +44239,12 @@ function _netGuestStructure(st, e) {
 }
 function _netGuestProjectiles(st, list) {
   const seen = new Set();
-  for (const [id, x, y, z, qx, qy, qz, qw, color, scale, hidden] of list) {
+  for (const [id, x, y, z, qx, qy, qz, qw, color, scale, hidden, vx, vz, rem] of list) {
     seen.add(id);
     let p = st.proj.get(id);
     if (!p) p = _netGuestProjProxy(st, id, color);
+    if (!p.bornAt) p.bornAt = __gcRealNow();
+    if (Number.isFinite(vx) && Number.isFinite(rem)) { const sp = Math.hypot(vx, vz) || 1; p.line = { vx, vz, speed: sp, ex: x + (vx / sp) * rem, ez: z + (vz / sp) * rem }; }
     if (!hidden && !p.entry.group.parent) scene.add(p.entry.group);
     if (!p.positioned) { p.entry.group.position.set(x, y, z); p.positioned = true; }
     p.entry.group.quaternion.set(qx, qy, qz, qw);
@@ -44248,6 +44253,17 @@ function _netGuestProjectiles(st, list) {
     if (p.samples.length > 4) p.samples.shift();
   }
   for (const [id, p] of st.proj) if (!seen.has(id)) { p.done = true; projectiles._releaseArrowMesh(p.entry); st.proj.delete(id); }
+}
+// 102차: 직선 스킬샷을 "지금" 자리로 - 보간 자리(방장 시각보다 지연·편도만큼 과거)에서 (보간 지연 + 왕복)만큼 앞으로 민다.
+// 그 자리에 있을 때 피하면 내 이동이 방장에게 닿는 순간 실제 투사체도 거기 있다(피하기가 화면과 맞는다). 끝 지점은 넘지 않고,
+// 처음 0.15초 동안 서서히 앞당겨 순간 이동처럼 보이지 않게 한다. window.__netProjPresent = false면 끈다(점검용).
+function _netProjPresent(p, s, leadSec, now) {
+  if (!p.line || !(leadSec > 0) || (typeof window !== 'undefined' && window.__netProjPresent === false)) return s;
+  const L = p.line, ux = L.vx / L.speed, uz = L.vz / L.speed;
+  const ramp = Math.min(1, Math.max(0, (now - (p.bornAt != null ? p.bornAt : now)) / 150));
+  const left = Math.max(0, (L.ex - s.x) * ux + (L.ez - s.z) * uz);
+  const d = Math.min(L.speed * leadSec * ramp, left);
+  return { x: s.x + ux * d, z: s.z + uz * d };
 }
 // 방장 투사체 하나에 대응하는 참가자 쪽 대리 객체({ mesh, done }) - 연출(vfxFollowProjectile)이 따라간다. 숨김 투사체는 그리지 않는다.
 function _netGuestProjProxy(st, id, color = 0xdff0ff) {
@@ -44463,7 +44479,8 @@ function netGuestTick(dt) {
     }
   }
   _netPredictTick(st, dt);
-  for (const p of st.proj.values()) { const s = _netSampleAt(p.samples, renderT); if (s) p.entry.group.position.set(s.x, s.y, s.z); }
+  const lead = (st.delay + (st.rtt || 0)) / 1000;
+  for (const p of st.proj.values()) { const s = _netSampleAt(p.samples, renderT); if (s) { const f = _netProjPresent(p, s, lead, __gcRealNow()); p.entry.group.position.set(f.x, s.y, f.z); } }
   for (const c of [controller, st.hostPuppet]) if (c && c.mixer) safeMixerUpdate(c.mixer, dt, 'netChampion');
   for (const m of minions) {
     if (m.mixer) safeMixerUpdate(m.mixer, dt, 'netMinion');
@@ -44831,7 +44848,7 @@ function _netLagCompRecord(st) {
     const p = u.root ? u.root.position : u.mesh.position;
     let h = st.lagHist.get(u); if (!h) st.lagHist.set(u, h = []);
     h.push({ t: now, x: p.x, y: p.y, z: p.z });
-    while (h.length > 2 && now - h[0].t > 700) h.shift();
+    while (h.length > 2 && now - h[0].t > 1000) h.shift(); // 1초(점검이 0.6~0.8초 전을 본다)
   }
   if (st.lagHist.size > 200) for (const u of st.lagHist.keys()) if (!u.root && (u.isDead || !u.mesh)) st.lagHist.delete(u);
 }
