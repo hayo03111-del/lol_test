@@ -847,6 +847,7 @@ const CHAMPION_DATA = {
       desc: '스킬 효과가 끝나면 2.5초 동안 보호막(47~128.59 + 추가 체력 13%). 스킬이 다른 챔피언에게 영향을 주면 재사용 대기시간 4~8.25초 감소.',
       shieldAt1: 47, shieldAt18: 128.59, bonusHpRatio: 0.13, durationSec: 2.5, cooldownSec: 11,
       cdReduceAt1: 4, cdReduceAt18: 8.25,
+      bladeLeashRange: 2000, // 영혼의 검은 쉔이 너무 멀어지면 쉔 곁으로 옮겨 온다(위키 - 거리는 공개되지 않아 2000은 추정)
     },
     Q: {
       name: '황혼의 습격', cooldown: [8, 7.25, 6.5, 5.75, 5], energy: [140, 130, 120, 110, 100],

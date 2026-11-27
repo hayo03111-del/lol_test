@@ -2673,6 +2673,7 @@ const CHAMPION_DATA = {
       desc: '스킬 효과가 끝나면 2.5초 동안 보호막(47~128.59 + 추가 체력 13%). 스킬이 다른 챔피언에게 영향을 주면 재사용 대기시간 4~8.25초 감소.',
       shieldAt1: 47, shieldAt18: 128.59, bonusHpRatio: 0.13, durationSec: 2.5, cooldownSec: 11,
       cdReduceAt1: 4, cdReduceAt18: 8.25,
+      bladeLeashRange: 2000, // 영혼의 검은 쉔이 너무 멀어지면 쉔 곁으로 옮겨 온다(위키 - 거리는 공개되지 않아 2000은 추정)
     },
     Q: {
       name: '황혼의 습격', cooldown: [8, 7.25, 6.5, 5.75, 5], energy: [140, 130, 120, 110, 100],
@@ -27542,7 +27543,7 @@ CharacterController.prototype._rammusReset = function() {
      판정. 맞히면 기력 회복(한 번).
    - R(단결된 의지): 아군 챔피언(아군 허수아비 포함)에게 시전 즉시 5초 보호막(잃은 체력에 따라 최대 +60%) → 3초 정신 집중 뒤
      그 아군 곁(가장 가까운 적 챔피언 쪽 175)으로 검과 함께 순간 이동. 집중이 끊겨도 보호막은 남는다. 아군이 없으면 못 쓴다.
-   원작과 다른 점(명시): Q 둔화는 "쉔에게서 멀어질 때만"이 아니라 항상, 검이 너무 멀면 쉔 쪽으로 옮겨 오는 규칙(거리 미공개)은 없다.
+   원작과 다른 점(명시): Q 둔화는 "쉔에게서 멀어질 때만"이 아니라 항상. 검이 너무 멀면 쉔 곁으로 옮겨 오는 거리는 공개되지 않아 2000으로 추정.
    ============================================================ */
 
 CharacterController.prototype._shenIsAlive = function() {
@@ -27608,6 +27609,8 @@ CharacterController.prototype._shenTickBlade = function(dt) {
   }
   if (!s.blade) this._shenParkBladeBeside();
   const q = this._champData().Q;
+  // 너무 멀어지면(위키: 거리 미공개 - 2000 추정) 검이 쉔 곁으로 옮겨 온다. 귀환·순간 이동 뒤에도 이 규칙으로 따라온다.
+  if (!s.recall && Math.hypot(s.blade.x - this.root.position.x, s.blade.z - this.root.position.z) > lolRangeToWorld(this._champData().passive.bladeLeashRange)) this._shenParkBladeBeside();
   // 날아오는 중: 쉔(움직여도 따라간다)에게 곧장, 점점 빨라진다 - 지나간 구간에 닿은 적 챔피언을 한 번씩
   if (s.recall) {
     s.recall.speed = Math.min(q.bladeSpeedMax, (s.recall.speed || q.bladeSpeedMin) + q.bladeAccel * dt);
@@ -27652,11 +27655,17 @@ CharacterController.prototype._shenSegmentHits = function(a, b, halfWidthLol) {
 // 스킬 효과가 끝날 때 부른다. affected = 그 스킬이 다른 챔피언에게 영향을 줬나(재사용 대기시간 감소).
 CharacterController.prototype._shenKiBarrier = function(affected = false) {
   const s = this._shen, p = this._champData().passive, now = performance.now();
-  if (affected && s.kiReadyAt > now) s.kiReadyAt -= this._shenLevelLerp(p.cdReduceAt1, p.cdReduceAt18) * 1000;
+  if (affected) this._shenKiReduce();
   if (now < (s.kiReadyAt || 0)) return;
   const amount = (this._shenLevelLerp(p.shieldAt1, p.shieldAt18) + p.bonusHpRatio * this._shenBonusHp()) * (typeof getShieldReceivedMultiplier === 'function' ? getShieldReceivedMultiplier(this) : 1);
   addShield(this, 'shenKiBarrier', amount, p.durationSec);
   s.kiReadyAt = now + p.cooldownSec * 1000;
+};
+
+// 재사용 대기시간 감소(돌고 있을 때만) - Q·E는 적 챔피언을 맞히는 순간, W·R은 효과가 끝날 때(위키)
+CharacterController.prototype._shenKiReduce = function() {
+  const s = this._shen, p = this._champData().passive, now = performance.now();
+  if (s.kiReadyAt > now) s.kiReadyAt = Math.max(now, s.kiReadyAt - this._shenLevelLerp(p.cdReduceAt1, p.cdReduceAt18) * 1000);
 };
 
 /* ---------------- Q - 황혼의 습격 ---------------- */
@@ -27673,6 +27682,7 @@ CharacterController.prototype._shenCastQ = function(mouseWorldPoint, free = fals
 CharacterController.prototype._shenBladeHit = function(u) {
   const q = this._champData().Q, s = this._shen;
   applyStatus(u, { id: 'shenQ_slow', type: 'SLOW', duration: q.slowDurationSec, value: skillVal(q.slowPercentByLevel, s.recall.lvl) / 100, source: this });
+  if (!s.recall.champHit) this._shenKiReduce(); // 적 챔피언을 맞히는 순간
   s.recall.champHit = true;
 };
 // 검이 도착: 다음 평타 3회 강화(검이 적 챔피언을 맞혔으면 더 강하게 + 공속), 기 보호막
@@ -27686,7 +27696,7 @@ CharacterController.prototype._shenBladeArrived = function() {
   if (clips.length) this.registerAttackOverride({ id: 'shenQ', clips: [clips[0]], sequenceClips: clips, priority: 10, oneShot: true, uses: q.attacks, durationSec: q.durationSec });
   if (s.qEmpowered) applyStatus(this, { id: 'shenQ_as', type: 'MASTERYI_R_AS', duration: q.durationSec, value: q.empoweredAttackSpeedPercent / 100 });
   if (typeof this.recomputeStats === 'function') this.recomputeStats(); // 사거리 +75
-  this._shenKiBarrier(rc.champHit);
+  this._shenKiBarrier(false); // 감소는 맞힐 때 이미 했다
 };
 CharacterController.prototype._shenQRangeBonusLol = function() {
   const s = this._shen;
@@ -27795,7 +27805,7 @@ CharacterController.prototype._shenCastE = function(mouseWorldPoint, free = fals
     hit.add(u);
     applyDamage(u, { rawDamage: skillVal(e.damageByLevel, lvl) + e.bonusHpRatio * this._shenBonusHp(), damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, source: this });
     if (u.hp > 0) applyStatus(u, { id: 'shenE_taunt', type: 'TAUNT', duration: e.tauntSec, value: 1, source: this });
-    if (!champHit) { champHit = true; this._shenRestoreEnergy(); } // 기력 회복은 한 번만(위키)
+    if (!champHit) { champHit = true; this._shenRestoreEnergy(); this._shenKiReduce(); } // 기력 회복은 한 번만(위키), 패시브 감소는 맞히는 순간
   };
   const sweep = (a, b) => { for (const u of this._shenSegmentHits(a, b, e.halfWidth)) strike(u); };
   const msLol = worldDistanceToLol(getFinalMoveSpeed(this.stats));
@@ -27803,7 +27813,7 @@ CharacterController.prototype._shenCastE = function(mouseWorldPoint, free = fals
   this._dashState = { from, to, duration: Math.max(0.05, worldDistanceToLol(getHorizontalDistance(from, to)) / speed), elapsed: 0, faceDir: dir.clone(), onTick: sweep,
     onArrive: () => {
       for (const u of getAllEnemyUnits()) if (u && u.hp > 0 && u.isChampion && isInCircle(u, this.root.position, lolRangeToWorld(e.endRadius))) strike(u); // 끝 지점 판정(반경 150)
-      this._shenKiBarrier(champHit);
+      this._shenKiBarrier(false);
       if (this.currentActionKey === 'shenE') { this.currentActionKey = null; this.currentPhase = null; this.setState(STATE.IDLE); this._resumeAfterAction(); }
     } };
   debugSkillHit('Shen E(그림자 돌진)', this, { dist: worldDistanceToLol(travel), speed });
