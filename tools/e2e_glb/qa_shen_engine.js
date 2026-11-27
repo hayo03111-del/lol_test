@@ -21,8 +21,7 @@ const startServer = require('./server.js');
   // 1) 기본 스탯 - 레벨 1·18(원작 성장 공식 기본 + 성장 × (n-1) × (0.7025 + 0.0175 × (n-1)))
   r.stats = await page.evaluate(() => {
     const c = window.controller, L1 = window.__e2e.lolRangeToWorld(1);
-    // 공속은 챔피언 스탯만(기본 + 공속 계수 × 레벨 성장) - 룬·아이템 추가 공속은 빼고 엔진 공식 그대로 계산
-    const champAs = () => c.stats.baseAttackSpeed + (c.stats.attackSpeedRatio || c.stats.baseAttackSpeed) * (c.stats.levelBonusAttackSpeed || 0);
+    const champAs = () => window.getFinalAttackSpeed(c.stats); // 106차: 룬을 지운 그 프레임에도 바로 맞는다(예전엔 한 프레임 동안 룬 공속 3%가 남았다)
     const snap = () => ({ hp: c.maxHp, ar: c.stats.armor, mr: c.stats.magicResist, ad: c.stats.attackDamage, as: champAs(), ratio: c.stats.attackSpeedRatio, windupPct: c.stats.windupPercent, mpMax: c.maxMp, mpRegen5: (c.mpRegen || c.stats.manaRegen || 0), ms: window.getFinalMoveSpeedForE2E(c.stats), range: c.stats.attackRange / L1, timing: window.__attackTiming(c.stats) });
     c.runePage = null; c.recomputeStats(); // 룬(적응형·체력 파편) 없이 챔피언 기본 스탯만
     c.champLevel = 1; c.recomputeStats(); const a = snap();

@@ -54,6 +54,7 @@ const startServer = require('./server.js');
   r.heal = await page.evaluate((hp0) => { const c = window.controller; const ms = c.statusEffects.find((e) => e.id === 'summonerHealMs'); return { healed: Math.round(c.hp - hp0), ms: ms && ms.value }; }, hp0);
 
   // 고르기 창: 주문 변경 → D에 점화, D에 회복(=F와 맞바꿈)
+  await page.click('#practiceToolsBtn'); await wait(150); // 106차: 주문 변경 버튼은 연습 도구 패널을 연 동안에만 보인다(그 뒤에 생긴 규칙 - 예전 점검이 막혀 있었다)
   await page.click('#spellChangeBtn'); await wait(150);
   r.pickerOpen = await page.evaluate(() => document.getElementById('spellPicker').classList.contains('show'));
   r.pickerItems = await page.$$eval('#spellPicker .sp-item', (els) => els.length);

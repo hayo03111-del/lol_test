@@ -564,6 +564,7 @@ class CharacterController {
       else this.hp = (this.hp || 0) + gainHp;
       this.hp = Math.min(this.hp, this.maxHp);
       this.mp = Math.min(prevMaxMp ? (this.mp || 0) + gainMp : (this.mp || this.maxMp), this.maxMp);
+      if (Array.isArray(this.statusEffects) && this.stats) this._syncDynamicStats(); // 106차: 바뀐 룬·아이템·레벨을 공속·사거리·이동 속도 합산에도 바로
     }
     updateBars(this);
   }
@@ -1319,6 +1320,45 @@ class CharacterController {
      ============================================================ */
   _champData() { return this.championId ? CHAMPION_DATA[this.championId] : null; }
 
+  // 106차: 매 프레임 바뀌는 최종 능력치(둔화·이동 속도 버프·사거리·공격 속도 합산)를 stats에 맞춘다. 예전엔 update() 안에만 있어
+  // 룬·아이템·레벨이 바뀐 그 프레임에는 공격 속도 합산이 예전 값으로 남았다(예: 룬 페이지를 지운 직후 공속이 3% 높게 읽힘) -
+  // recomputeStats() 끝에서도 불러 바로 맞춘다.
+  _syncDynamicStats() {
+    // 마스터 이 R(최후의 전사): "둔화 효과에 면역됩니다" - R 활성 중에는
+    // 실제로 걸려있는 SLOW 상태이상과 무관하게 이동속도 계산에 0으로
+    // 반영한다(상태이상 자체를 지우지는 않고, 최종 스탯 적용만 막는다 -
+    // R이 끝나면 자연스럽게 원래 남은 슬로우가 다시 적용된다).
+    this.stats.slowPercent = (this.championId === 'masteryi' && hasStatus(this, 'MASTERYI_R_AS')) ? 0 : getSlowPercent(this);
+    // 요청 16/17: 세트 Q 이동속도 버프는 "적 챔피언을 향해 이동 중"일 때만
+    // 적용한다 - Empower(강화 평타 횟수)와는 완전히 독립된 상태이므로,
+    // 여기서 값만 조건부로 걸러낼 뿐 settQ_ms 상태 자체(및 강화 횟수)는
+    // 건드리지 않는다.
+    let msBuff = getMoveSpeedBuffPercent(this);
+    // 세트 Q 이속은 적 챔피언에게 다가갈 때만 적용된다 - 버그 수정: 예전엔 세트에게 걸린 "모든" 이속 버프
+    // (아이템·다른 효과)를 0으로 만들었다. Q 버프 몫만 뺀다.
+    const settQms = this.championId === 'sett' ? getStatus(this, 'settQ_ms') : null;
+    if (settQms && settQms.expiresAt > performance.now()) {
+      const movingTowardEnemy = this.isChasing && this.currentTarget && this.currentTarget.hp > 0;
+      if (!movingTowardEnemy) msBuff = Math.max(0, msBuff - (settQms.value || 0));
+    }
+    this.stats.percentMoveSpeedBonus = msBuff + (this.itemBonusMoveSpeedPercent || 0) + (typeof runeMoveSpeedBonus === 'function' ? runeMoveSpeedBonus(this) : 0);
+    // 58차 버그 수정: 고정 이동 속도 버프(MS_BUFF_FLAT - 요우무 유령검 +20, 칠흑의 양날도끼 열정 등)는 LoL 단위인데 world 단위
+    // 기본 이동 속도에 그대로 더해, +20이 LoL 약 2300으로 들어가 이동 속도가 1000 넘게 치솟았다. world로 바꿔 더한다.
+    this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? lolRangeToWorld(getFlatMoveSpeedBuff(this)) : 0;
+    // 레넥톤 R(강신): 지속 중 사거리 +25(PC 위키).
+    const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
+    const chogathRange = (this.championId === 'chogath' && typeof chogathFeastBonus === 'function') ? chogathFeastBonus(this).attackRangeLol : 0; // 81차: 포식 중첩 평타 사거리
+    const shenRange = (this.championId === 'shen' && typeof this._shenQRangeBonusLol === 'function') ? this._shenQRangeBonusLol() : 0; // 105차: 황혼의 습격 강화 평타 사거리 +75
+    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange + shenRange);
+    // 83차: 공격 속도 감소(얼어붙은 심장 등)는 "총 공격 속도"에 곱한다(출처끼리 곱연산) - 예전엔 추가 공속에서 뺐다.
+    this.stats.attackSpeedMultiplier = typeof getAttackSpeedReductionMultiplier === 'function' ? getAttackSpeedReductionMultiplier(this) : 1;
+    // 바루스 패시브(살아있는 복수) 중에는 공격 속도 상한 3.33(원작).
+    this.stats.maxAttackSpeed = (this.championId === 'varus' && this._varus && this._varus.lv && this._varus.lv.until > performance.now()) ? 3.33 : 3.003;
+    this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0) + (typeof runeAttackSpeedBonus === 'function' ? runeAttackSpeedBonus(this) : 0)
+      + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
+    if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
+    if (this.championId === 'mordekaiser' && this._morde) this.stats.bonusAttackSpeedPercent += this._morde.rStolenAsBonus || 0; // R로 훔친 공격 속도
+  }
   update(dt) {
     safeMixerUpdate(this.mixer, dt, `champion:${this.championId}`);
     this.sequencePlayer.update(dt); // mixer.update() 다음에 호출 -- action.time이 최신값이어야 clipEnd 판정이 정확함
@@ -1413,40 +1453,7 @@ class CharacterController {
     if (this.championId === 'nilah' && this._nilahWeaponRig) {
       this._nilahWeaponRig.active = !!(this.currentActionKey && /nilah(Q|E|R)/.test(String(this.currentActionKey)));
     }
-    // 마스터 이 R(최후의 전사): "둔화 효과에 면역됩니다" - R 활성 중에는
-    // 실제로 걸려있는 SLOW 상태이상과 무관하게 이동속도 계산에 0으로
-    // 반영한다(상태이상 자체를 지우지는 않고, 최종 스탯 적용만 막는다 -
-    // R이 끝나면 자연스럽게 원래 남은 슬로우가 다시 적용된다).
-    this.stats.slowPercent = (this.championId === 'masteryi' && hasStatus(this, 'MASTERYI_R_AS')) ? 0 : getSlowPercent(this);
-    // 요청 16/17: 세트 Q 이동속도 버프는 "적 챔피언을 향해 이동 중"일 때만
-    // 적용한다 - Empower(강화 평타 횟수)와는 완전히 독립된 상태이므로,
-    // 여기서 값만 조건부로 걸러낼 뿐 settQ_ms 상태 자체(및 강화 횟수)는
-    // 건드리지 않는다.
-    let msBuff = getMoveSpeedBuffPercent(this);
-    // 세트 Q 이속은 적 챔피언에게 다가갈 때만 적용된다 - 버그 수정: 예전엔 세트에게 걸린 "모든" 이속 버프
-    // (아이템·다른 효과)를 0으로 만들었다. Q 버프 몫만 뺀다.
-    const settQms = this.championId === 'sett' ? getStatus(this, 'settQ_ms') : null;
-    if (settQms && settQms.expiresAt > performance.now()) {
-      const movingTowardEnemy = this.isChasing && this.currentTarget && this.currentTarget.hp > 0;
-      if (!movingTowardEnemy) msBuff = Math.max(0, msBuff - (settQms.value || 0));
-    }
-    this.stats.percentMoveSpeedBonus = msBuff + (this.itemBonusMoveSpeedPercent || 0) + (typeof runeMoveSpeedBonus === 'function' ? runeMoveSpeedBonus(this) : 0);
-    // 58차 버그 수정: 고정 이동 속도 버프(MS_BUFF_FLAT - 요우무 유령검 +20, 칠흑의 양날도끼 열정 등)는 LoL 단위인데 world 단위
-    // 기본 이동 속도에 그대로 더해, +20이 LoL 약 2300으로 들어가 이동 속도가 1000 넘게 치솟았다. world로 바꿔 더한다.
-    this.stats.flatMoveSpeedBonus = typeof getFlatMoveSpeedBuff === 'function' ? lolRangeToWorld(getFlatMoveSpeedBuff(this)) : 0;
-    // 레넥톤 R(강신): 지속 중 사거리 +25(PC 위키).
-    const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
-    const chogathRange = (this.championId === 'chogath' && typeof chogathFeastBonus === 'function') ? chogathFeastBonus(this).attackRangeLol : 0; // 81차: 포식 중첩 평타 사거리
-    const shenRange = (this.championId === 'shen' && typeof this._shenQRangeBonusLol === 'function') ? this._shenQRangeBonusLol() : 0; // 105차: 황혼의 습격 강화 평타 사거리 +75
-    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange + shenRange);
-    // 83차: 공격 속도 감소(얼어붙은 심장 등)는 "총 공격 속도"에 곱한다(출처끼리 곱연산) - 예전엔 추가 공속에서 뺐다.
-    this.stats.attackSpeedMultiplier = typeof getAttackSpeedReductionMultiplier === 'function' ? getAttackSpeedReductionMultiplier(this) : 1;
-    // 바루스 패시브(살아있는 복수) 중에는 공격 속도 상한 3.33(원작).
-    this.stats.maxAttackSpeed = (this.championId === 'varus' && this._varus && this._varus.lv && this._varus.lv.until > performance.now()) ? 3.33 : 3.003;
-    this.stats.bonusAttackSpeedPercent = getAttackSpeedBuffPercent(this) + (this.itemBonusAttackSpeedPercent || 0) + (typeof runeAttackSpeedBonus === 'function' ? runeAttackSpeedBonus(this) : 0)
-      + (typeof itemSpellbladeReadyAttackSpeedPercent === 'function' ? itemSpellbladeReadyAttackSpeedPercent(this) : 0);
-    if (this.championId === 'nilah' && this._nilahQActive()) this.stats.bonusAttackSpeedPercent += this._nilahCurrentQASPercent();
-    if (this.championId === 'mordekaiser' && this._morde) this.stats.bonusAttackSpeedPercent += this._morde.rStolenAsBonus || 0; // R로 훔친 공격 속도
+    this._syncDynamicStats(); // 106차: 이동 속도·사거리·공속 합산(상태 효과·룬·아이템) - recomputeStats() 끝에서도 부른다
     this._garenPassiveTick(dt);
     this._dariusPassiveTick();
     this._settPassiveTick(dt);
