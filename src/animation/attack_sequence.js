@@ -58,6 +58,7 @@ const ATTACK_SEQUENCE_OVERRIDES = {
   nautilus: ['attack1', 'attack2', 'attack3'],
   rammus: ['attack1', 'attack2'], // 38차: 실제 GLB 평타 2개(+Crit)
   lux: ['attack1', 'attack2'], // 47차: 실제 GLB 평타 2개(+Crit)
+  shen: ['attack1', 'attack2'], // 105차: 실제 GLB 평타 2개(+Crit)
 };
 // 시퀀스 배열에서의 위치를 챔피언 고유의 "손/방향" 의미로 변환한다.
 // 새 챔피언이 추가되면 이 매핑만 확장하면 된다 - 애니메이션 선택 로직
@@ -141,6 +142,7 @@ const SKILL_RING_RANGE = {
   renekton: { Q: (c, d) => d.range + (c._renekton && c._renekton.rActive ? (d.rRangeBonus || 0) : 0), W: () => null },
   chogath: { E: () => null },
   rammus: { R: (c) => (typeof c._rammusRRangeLol === 'function' ? c._rammusRRangeLol() : null) },
+  shen: { Q: () => null, W: (c, d) => d.radius, R: () => null }, // 105차: Q는 사거리 없음(검을 불러들임), R은 전 맵
   nilah: { R: (c, d) => d.damageRadius },
   varus: { Q: (c, d) => d.maxRange, W: () => null },
   ahri: { W: (c, d) => d.acquisitionRange, R: (c, d) => d.dashDistance },

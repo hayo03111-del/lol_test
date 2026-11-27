@@ -1,5 +1,16 @@
 // 자동 생성(tools/fetch_champion_icons.py) - Data Dragon ko_KR 패시브 이름·설명, 스킬 이름. 아이콘: assets/champion_icons/<id>/{P,Q,W,E,R}.png
 const CHAMPION_ICON_META = {
+ "shen": {
+  "passiveName": "기 보호막",
+  "passiveDesc": "쉔이 스킬 효과를 마치면 보호막을 얻습니다. 스킬이 다른 챔피언에게 영향을 주면 기 보호막의 재사용 대기시간이 줄어듭니다.",
+  "spellNames": {
+   "Q": "황혼의 습격",
+   "W": "영혼의 피난처",
+   "E": "그림자 돌진",
+   "R": "단결된 의지"
+  },
+  "iconVariants": []
+ },
  "ahri": {
   "passiveName": "정기 흡수",
   "passiveDesc": "아리가 미니언 또는 몬스터를 9마리 처치하면 체력을 회복합니다. 아리가 적 챔피언 처치에 관여하면 더 많은 체력을 회복합니다.",

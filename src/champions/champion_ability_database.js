@@ -261,6 +261,16 @@ const championAbilityDatabase = {
     E: { animationNames: ['Spell3'], animationPatterns: [/^spell3/i] },
     R: { animationNames: ['Spell4'], animationPatterns: [/^spell4/i] },
   },
+  // 105차: 쉔.glb(29클립) - 평타 Attack1·2 + Crit, Q 강화 평타 Spell1_Attack1~3, R은 Spell4(3초 = 정신 집중 시간과 같다).
+  shen: {
+    idleAnimationNames: ['Idle1'],
+    moveAnimationNames: ['Run1'],
+    attackAnimationNames: ['Attack1', 'Attack2'],
+    Q: { animationNames: ['Spell1'], animationPatterns: [/^spell1$/i], empoweredAttackClips: ['Spell1_Attack1', 'Spell1_Attack2', 'Spell1_Attack3'] },
+    W: { animationNames: ['Spell2'], animationPatterns: [/^spell2$/i] },
+    E: { animationNames: ['Spell3'], animationPatterns: [/^spell3$/i] },
+    R: { animationNames: ['Spell4'], animationPatterns: [/^spell4$/i] },
+  },
   rammus: {
     idleAnimationNames: ['Idle1'],
     moveAnimationNames: ['Run'],

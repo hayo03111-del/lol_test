@@ -79,6 +79,11 @@ const SKILL_AIM = {
     E: { type: 'circleAt', range: (c, d) => d.range, radius: (c, d) => d.radius, path: true, instantIf: (c) => !!(c._lux && c._lux.zone) }, // 재사용은 바로 터뜨림
     R: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
   },
+  shen: { // 105차 - E 판정 폭(halfWidth)·최대 사거리는 데이터, R은 전 맵 아군(커서에 가장 가까운 아군)
+    Q: { type: 'instant' }, W: { type: 'instant' },
+    E: { type: 'dash', range: (c, d) => d.rangeMax, width: (c, d) => 2 * d.halfWidth },
+    R: { type: 'ally', range: () => 25000, pickLol: 3000 },
+  },
   rammus: { // 38차
     Q: { type: 'instant' }, W: { type: 'instant' },
     E: { type: 'unit', range: (c, d) => d.range },

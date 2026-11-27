@@ -665,7 +665,7 @@ function _netHiddenFrom(u, team) {
 }
 function _netHiddenFromGuest(u) { return _netHiddenFrom(u, 'RED'); }
 // 100차: 챔피언 내부 상태(재시전 창·충전·중첩·표식·아이템 재사용 대기 등) - 참가자 화면의 조준·스킬 칸·표식이 방장과 같게.
-const NET_CHAMP_STATE_KEY = /^_(ahri|ashe|chogath|darius|ezreal|garen\w*|leesin|lux|masteryi|morde|nautilus|nilah|rammus\w*|renekton|sett|varus|vex|yasuo\w*|yone|summonerMark|itemActiveCooldownUntil|rune)$/;
+const NET_CHAMP_STATE_KEY = /^_(ahri|ashe|chogath|darius|ezreal|garen\w*|leesin|lux|masteryi|morde|nautilus|nilah|rammus\w*|renekton|sett|shen|varus|vex|yasuo\w*|yone|summonerMark|itemActiveCooldownUntil|rune)$/;
 function _netChampState(st, c) {
   const out = {}; let any = false;
   if (!st.csSent) st.csSent = new Map();

@@ -40,6 +40,10 @@ const CHAMPION_DIRECT_CASTS = {
     Q: (c, m, f) => c._luxCastQ(m, f), W: (c, m, f) => c._luxCastW(m, f),
     E: (c, m, f) => c._luxCastE(m, f), R: (c, m, f) => c._luxCastR(m, f),
   },
+  shen: { // 105차
+    Q: (c, m, f) => c._shenCastQ(m, f), W: (c, m, f) => c._shenCastW(m, f),
+    E: (c, m, f) => c._shenCastE(m, f), R: (c, m, f) => c._shenCastR(m, f),
+  },
   rammus: {
     Q: (c, m, f) => c._rammusCastQ(m, f), W: (c, m, f) => c._rammusCastW(f),
     E: (c, m, f) => c._rammusCastE(f), R: (c, m, f) => c._rammusCastR(m, f),
@@ -389,6 +393,11 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
     }
     // 38차: 람머스 Q(대회전 - 구르기 시작·재사용 종료)와 W(웅크리기 - 즉시 버프)도 시전 모션 없이 상태만 바꾼다 - 평타 중에도 바로.
     if (this.championId === 'rammus' && (slot === 'Q' || slot === 'W')) {
+      this._dispatchCast(slot, mouseWorldPoint, false);
+      return;
+    }
+    // 105차: 쉔 Q(검 불러들이기)·W(피난처)는 시전 시간이 없다 - 평타 중에도 바로.
+    if (this.championId === 'shen' && (slot === 'Q' || slot === 'W')) {
       this._dispatchCast(slot, mouseWorldPoint, false);
       return;
     }

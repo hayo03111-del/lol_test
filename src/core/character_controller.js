@@ -304,6 +304,7 @@ class CharacterController {
     if (this._rammus && this._rammus.spin && typeof this._rammusEndBallSpin === 'function') this._rammusEndBallSpin(); // 굴리던 공의 회전축 정리(39차)
     this._rammus = { roll: null, wUntil: 0, wStartedAt: 0, wArmor: 0, wMr: 0, jump: null, aftershocks: null, spin: null }; // 38차 람머스(rammus.js)
     if (typeof this._luxReset === 'function') this._luxReset(); else this._lux = null; // 47차 럭스(lux.js) - 남은 구체·영역 메시 정리
+    if (typeof this._shenReset === 'function') this._shenReset(); else this._shen = null; // 105차 쉔(shen.js) - 영혼의 검·피난처 메시 정리
     this._nautilus = {
       passiveReadyAt: new Map(),
       qPending: null, qTravel: null, qPull: null,
@@ -362,6 +363,7 @@ class CharacterController {
     this.currentTarget = null; this.attackOrderActive = false; this.attackOrderAnchor = null;
     this.pendingMove = null; this.pendingCast = null; this.targetPos = null; this._approachCast = null;
     if (typeof clearStatusesFromSource === 'function' && typeof listEntities === 'function') clearStatusesFromSource(this, listEntities()); // 94차
+    if (typeof this._shenReset === 'function' && this._shenFx && this._shenFx.blade) this._shenReset(); // 105차: 쉔 영혼의 검(씬 메시) - 교체·봇 제거 때 남지 않게
     // 챔피언 교체/재선택 중 이전 레넥톤의 지속 R 오라가 남지 않도록 정리한다.
     if (this._renekton?.rAuraVfx && typeof vfx !== 'undefined') {
       vfx.stopRenektonRAura(this._renekton.rAuraVfx);
@@ -1435,7 +1437,8 @@ class CharacterController {
     // 레넥톤 R(강신): 지속 중 사거리 +25(PC 위키).
     const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
     const chogathRange = (this.championId === 'chogath' && typeof chogathFeastBonus === 'function') ? chogathFeastBonus(this).attackRangeLol : 0; // 81차: 포식 중첩 평타 사거리
-    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange);
+    const shenRange = (this.championId === 'shen' && typeof this._shenQRangeBonusLol === 'function') ? this._shenQRangeBonusLol() : 0; // 105차: 황혼의 습격 강화 평타 사거리 +75
+    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange + shenRange);
     // 83차: 공격 속도 감소(얼어붙은 심장 등)는 "총 공격 속도"에 곱한다(출처끼리 곱연산) - 예전엔 추가 공속에서 뺐다.
     this.stats.attackSpeedMultiplier = typeof getAttackSpeedReductionMultiplier === 'function' ? getAttackSpeedReductionMultiplier(this) : 1;
     // 바루스 패시브(살아있는 복수) 중에는 공격 속도 상한 3.33(원작).
@@ -1480,6 +1483,7 @@ class CharacterController {
     if (typeof this._nautilusUpdate === 'function') this._nautilusUpdate(dt);
     if (typeof this._rammusUpdate === 'function') this._rammusUpdate(dt);
     if (typeof this._luxUpdate === 'function') this._luxUpdate(dt);
+    if (typeof this._shenUpdate === 'function') this._shenUpdate(dt);
     if (typeof itemSystemTick === 'function') itemSystemTick(this, dt);
   }
 }

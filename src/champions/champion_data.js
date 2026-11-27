@@ -829,6 +829,52 @@ const CHAMPION_DATA = {
       bonusAttackRangePerStackByLevel: [4.7, 6.2, 7.7], bonusAttackRangeCap: 75, // 81차: 중첩당 평타 사거리 4.7/6.2/7.7, 최대 +75(14.2~) damageType: 'TRUE',
     },
   },
+  shen: {
+    displayName: '쉔',
+    // 105차. 수치 출처: 리그 오브 레전드 위키 Shen 문서(마지막 변경 V26.22) - 기본 스탯·패시브·Q·W·E·R 전부 그 문서 값.
+    // 위키에 없는 값(검 가속 정도 등)만 "추정"으로 표시했다.
+    stats: {
+      hp: 610, hpGrowth: 99, hpRegen: 8.5, hpRegenGrowth: 0.75,
+      ad: 64, adGrowth: 3, attackSpeed: 0.751, attackSpeedRatio: 0.651, attackSpeedGrowthPercent: 3,
+      armor: 34, armorGrowth: 4.2, mr: 32, mrGrowth: 2.05,
+      range: 125, moveSpeed: 340,
+      // 쉔은 마나 대신 기력(에너지) - 리 신과 같이 mana 칸을 고정 기력 풀로 쓴다(5초당 50 = 초당 10).
+      mana: 400, manaGrowth: 0, manaRegen: 50, manaRegenGrowth: 0,
+      windupPercent: 0.17361,
+    },
+    passive: {
+      name: '기 보호막',
+      desc: '스킬 효과가 끝나면 2.5초 동안 보호막(47~128.59 + 추가 체력 13%). 스킬이 다른 챔피언에게 영향을 주면 재사용 대기시간 4~8.25초 감소.',
+      shieldAt1: 47, shieldAt18: 128.59, bonusHpRatio: 0.13, durationSec: 2.5, cooldownSec: 11,
+      cdReduceAt1: 4, cdReduceAt18: 8.25,
+    },
+    Q: {
+      name: '황혼의 습격', cooldown: [8, 7.25, 6.5, 5.75, 5], energy: [140, 130, 120, 110, 100],
+      bladeSpeedMin: 2000, bladeSpeedMax: 5000, bladeAccel: 6000, bladeHalfWidth: 80, // 속도 2000~5000·폭 160(위키), 가속 정도는 추정
+      attacks: 3, durationSec: 8, bonusRange: 75, // 검이 도착하면 다음 평타 3회(8초 안) + 사거리 75
+      flatAt1: 10, flatAt18: 40, // 추가 마법 피해 10~40(레벨 비례) + 대상 최대 체력의 %
+      maxHpPercentByLevel: [2, 2.5, 3, 3.5, 4], maxHpPercentPer100Ap: 1.5,
+      empoweredMaxHpPercentByLevel: [5, 5.5, 6, 6.5, 7], empoweredMaxHpPercentPer100Ap: 2, empoweredAttackSpeedPercent: 50, // 검이 적 챔피언을 맞히면
+      slowPercentByLevel: [25, 30, 35, 40, 45], slowDurationSec: 2, // 적 챔피언(원작은 쉔에게서 멀어질 때만 - 여기서는 항상)
+      damageType: 'MAGICAL',
+    },
+    W: {
+      name: '영혼의 피난처', cooldown: [16, 14.5, 13, 11.5, 10], energy: 40,
+      radius: 350, primeSec: 2, durationSec: 1.75, // 2초 뒤(또는 쉔·아군 챔피언이 들어오면) 1.75초 동안 포탑이 아닌 기본 공격을 막는다
+    },
+    E: {
+      name: '그림자 돌진', cooldown: [18, 16, 14, 12, 10], energy: 150,
+      rangeMax: 600, rangeMin: 300, dashSpeedBase: 800, dashSpeedMsRatio: 1, halfWidth: 60, endRadius: 150, // 충돌 반경 60 · 끝 150
+      tauntSec: 1.5, damageByLevel: [60, 85, 110, 135, 160], bonusHpRatio: 0.11, damageType: 'PHYSICAL',
+      energyRestoreByLevel: { breakpoints: [1, 7, 13], values: [30, 40, 50] }, // Q·E로 피해를 주면 기력 회복(30/40/50 - 레벨 구간은 리 신과 같은 1/7/13으로 해석)
+    },
+    R: {
+      name: '단결된 의지', cooldown: [200, 180, 160], energy: 0,
+      shieldByLevel: [120, 220, 320], shieldApRatio: 1.35, shieldBonusHpRatio: 0.15, // 최소치. 대상이 잃은 체력에 따라 최대 +60%(192/352/512 + AP 216% + 추가 체력 24%)
+      missingHpAmpMax: 0.6, shieldDurationSec: 5, channelSec: 3,
+      placeDistance: 175, enemySearchRange: 2000, // 가장 가까운 적 챔피언(2000 안) 쪽으로 아군에게서 175
+    },
+  },
   leesin: {
     displayName: '리 신',
     stats: {
@@ -1475,6 +1521,7 @@ const ARAM_BALANCE = {
   yone: { dmgDealt: 0.05, dmgTaken: -0.03, attackSpeed: 0.025 },
   leesin: { dmgDealt: 0.05, dmgTaken: -0.05, healing: 0.10, shielding: 0.20, energyRegen: 0.20 }, // 기력 재생은 위키 요약에만(신뢰도 중간)
   lux: { dmgDealt: -0.10, dmgTaken: 0.10, shielding: -0.10 },
+  shen: { dmgDealt: -0.05, dmgTaken: 0.05 }, // 105차: 위키 Shen 문서 특수 수치
   ashe: { dmgDealt: 0.05 },
   ahri: { healing: -0.10 },
   vex: { dmgDealt: -0.05 },

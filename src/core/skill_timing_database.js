@@ -84,6 +84,10 @@ const SKILL_TIMING_DATABASE = {
   lux: {
     R: { eventTime: 1, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
   },
+  // 105차: 쉔 R은 3초 정신 집중 뒤 순간 이동 - shen.js가 직접 처리(GLB Channel 클립으로 채널을 추정하지 않게 등록).
+  shen: {
+    R: { eventTime: 0, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
+  },
   ashe: {
     W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
@@ -134,6 +138,7 @@ const CHAMPION_ALIASES = {
   'nautilus':'nautilus', '노틸러스':'nautilus',
   'rammus':'rammus', '람머스':'rammus',
   'lux':'lux', '럭스':'lux',
+  'shen':'shen', '쉔':'shen',
   'blitzcrank':'blitzcrank', '블리츠크랭크':'blitzcrank',
   'leesin':'leesin', '리신':'leesin',
   'masteryi':'masteryi', '마스터이':'masteryi',

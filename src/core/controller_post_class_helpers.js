@@ -111,7 +111,8 @@ function updateBars(ch) {
     if (_hudLast.mpWidth !== mpWidth) { mpFill.style.width = mpWidth; _hudLast.mpWidth = mpWidth; }
     const mpTextStr = `${Math.ceil(ch.mp)}/${ch.maxMp}`;
     if (_hudLast.mpText !== mpTextStr) { mpText.textContent = mpTextStr; _hudLast.mpText = mpTextStr; }
-    if (resourceLabel && _hudLast.label !== 'MP') { resourceLabel.textContent = 'MP'; _hudLast.label = 'MP'; }
+    const resLbl = ch.championId === 'shen' || ch.championId === 'leesin' ? 'ENERGY' : 'MP'; // 105차: 기력 챔피언
+    if (resourceLabel && _hudLast.label !== resLbl) { resourceLabel.textContent = resLbl; _hudLast.label = resLbl; }
   }
 }
 function updateSkillUI(cooldowns) {
