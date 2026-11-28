@@ -8,6 +8,8 @@ const startServer = require('./server.js');
   const page = await (await browser.newContext({ viewport: { width: 800, height: 500 } })).newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message.slice(0, 300)));
+  // 대기 중 자동 공격(83차 기본 켜짐)이 스킬 피해 측정을 흐리지 않게 끈다(평타 점검은 공격 명령으로)
+  await page.addInitScript(() => { try { localStorage.setItem('lolsim.options.v1', JSON.stringify({ autoAttack: false })); } catch (e) {} });
   await page.goto(`http://127.0.0.1:${port}/index.html?nolobby`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__e2e, null, { timeout: 60000 });
   await page.evaluate(() => { const s = document.getElementById('libraryChampSelect'); s.value = 'gwen'; s.dispatchEvent(new Event('change')); });

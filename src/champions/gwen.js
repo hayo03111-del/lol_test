@@ -24,6 +24,7 @@
    거리(1000)도 추정. 안개 밖에서 이미 날아오던 미니언 투사체도 막는다(원작은 미니언 투사체는 맞는다).
    ============================================================ */
 
+const GWEN_SNIP_CLOSE_SEC = 0.165; // GLB Spell1_0·Spell1_B·Spell1_C에서 가위 날이 닫히는 시각(뼈 각도로 잰 값)
 CharacterController.prototype._gwenIsAlive = function() {
   return this.hp > 0 && this.state !== STATE.DEAD && this.state !== STATE.RESPAWN;
 };
@@ -123,25 +124,36 @@ CharacterController.prototype._gwenCastQ = function(mouseWorldPoint, free = fals
   this.targetPos = null; this.isChasing = false;
   this.currentActionKey = 'gwenQ'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
   this.setState(STATE.Q_CAST);
-  this.playFirstAvailable(['Spell1_0'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
-  // 가위질 시각: 첫 0.13초, 중첩 수만큼 0.45·0.4·0.35·0.23초, 마지막(강한 가위질)은 시전 끝.
-  const times = [q.firstSnipSec, ...q.bonusSnipTimesSec.slice(0, stacks)].sort((a, b) => a - b);
-  for (const t of times) this._champTimeout(() => this._gwenQSnip(cast, false), t * 1000);
+  // 가위질 시각: 첫 0.13초, 중첩 수만큼 0.45·0.4·0.35·0.23초, 마지막(강한 가위질)은 시전 끝(위키).
+  const closes = [q.firstSnipSec, ...q.bonusSnipTimesSec.slice(0, stacks).sort((a, b) => a - b), q.castTimeSec];
+  // 동작: GLB의 가위질 클립은 시작 0.165초에 날이 닫힌다(Spell1_0 첫 가위질, Spell1_B 추가 가위질, Spell1_C 마지막 - 닫힌 채 마무리).
+  // 가위질마다 다음 클립을 이어 붙이고, 닫히는 순간이 판정 시각에 오게 속도를 맞춘다(예전엔 Spell1_0 하나뿐이라 가위가 한 번만 닫혔다).
+  this.playFirstAvailable(['Spell1_0'], { loop: THREE.LoopOnce, fade: 0.04, clampWhenFinished: true, timeScale: GWEN_SNIP_CLOSE_SEC / closes[0] });
+  closes.forEach((t, idx) => {
+    const final = idx === closes.length - 1;
+    const timer = this._champTimeout(() => {
+      this._gwenQSnip(cast, final);
+      if (this.currentActionKey !== 'gwenQ' || this._dashState) return;
+      if (!final) {
+        const gap = Math.max(0.03, closes[idx + 1] - t);
+        this.playFirstAvailable([idx + 1 === closes.length - 1 ? 'Spell1_C.anm' : 'Spell1_B'], { loop: THREE.LoopOnce, fade: 0.02, clampWhenFinished: true, timeScale: GWEN_SNIP_CLOSE_SEC / gap });
+      } else if (this.currentAction) this.currentAction.timeScale = 1; // 닫힌 뒤 마무리는 제 속도로
+    }, t * 1000);
+    if (final) this._actionTimers.push(timer);
+  });
   const fin = this._champTimeout(() => {
-    this._gwenQSnip(cast, true);
     if (this._gwen && this._gwen.q === cast) this._gwen.q = null;
     if (this.currentActionKey !== 'gwenQ') return;
     this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
     if (this._dashState) { this.currentActionKey = 'gwenE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false; return; } // Q 도중 쓴 E 돌진이 아직 진행 중
     if (this.pendingMove || this.pendingCast || this.attackOrderActive) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
-  }, q.castTimeSec * 1000);
+  }, q.castTimeSec * 1000 + 5);
   this._actionTimers.push(fin);
-  const clip = this.findAnimation('Spell1_0');
   const done = this._champTimeout(() => {
     if (this.currentActionKey === 'gwenQ') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
-  }, Math.max(q.castTimeSec + 0.05, Math.min(1.0, clip ? clip.duration : 0.8)) * 1000);
+  }, (q.castTimeSec + 0.45) * 1000);
   this._actionTimers.push(done);
-  debugSkillHit('Gwen Q(싹둑싹둑!)', this, { stacks, snips: times.length + 1 });
+  debugSkillHit('Gwen Q(싹둑싹둑!)', this, { stacks, snips: closes.length });
 };
 CharacterController.prototype._gwenQSnip = function(cast, final) {
   if (this.championId !== 'gwen' || !this._gwenIsAlive() || !this._gwen || this._gwen.q !== cast || this.currentActionKey !== 'gwenQ') return; // 기절 등으로 끊기면 남은 가위질은 없다
@@ -196,7 +208,10 @@ function gwenMistHides(target, observer) {
 function gwenMistBlocksDamage(target, result) {
   if (!target || target.championId !== 'gwen' || !result || result.isStatusTick) return false;
   const src = typeof resolveDamageSource === 'function' ? resolveDamageSource(result.source, target) : result.source;
-  return !!src && gwenMistHides(target, src);
+  // 위키: 안개 밖 "챔피언"이 그웬을 노린 투사체는 사라지지만, 미니언·몬스터가 이미 쏜 투사체는 그대로 맞는다. 미니언이 새로 노리는 것은
+  // 표적 선택(isValidChampionTarget 등)에서 막는다 - 여기서는 챔피언(과 챔피언이 쏜 것)의 피해만 막는다.
+  if (!src || src.isMinion || !(src.isChampion || typeof src.championId === 'string')) return false;
+  return gwenMistHides(target, src);
 }
 CharacterController.prototype._gwenMistResist = function() {
   const s = this._gwen;
@@ -315,10 +330,17 @@ CharacterController.prototype._gwenCastE = function(mouseWorldPoint, free = fals
     this.currentActionKey = 'gwenE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
     this.targetPos = null; this.isChasing = false;
     this.setState(STATE.E_CAST);
-    this.playFirstAvailable(['Spell3_Dash'], { loop: THREE.LoopOnce, fade: 0.04, clampWhenFinished: true });
   }
   const dist = worldDistanceToLol(getHorizontalDistance(from, to));
-  this._dashState = { from, to, duration: Math.max(0.05, dist / e.dashSpeed), elapsed: 0, faceDir: dir.clone(),
+  // 돌진 속도 = 800 + 이동 속도(게임 데이터 DashSpeed 800에 이동 속도를 더하는 방식 - 쉔 E와 같은 해석). 800만 쓰면 350 돌진이 0.44초로
+  // GLB 돌진 동작(0.27초)보다 훨씬 느려 굼뜨게 느껴졌다. 돌진 동작은 돌진 시간에 맞춰 늘이거나 줄인다.
+  const speed = e.dashSpeed + e.dashSpeedMsRatio * worldDistanceToLol(getFinalMoveSpeed(this.stats));
+  const duration = Math.max(0.05, dist / speed);
+  if (!duringQ) {
+    const clip = this.findAnimation('Spell3_Dash');
+    this.playFirstAvailable(['Spell3_Dash'], { loop: THREE.LoopOnce, fade: 0.03, clampWhenFinished: true, timeScale: clip ? clip.duration / duration : 1 });
+  }
+  this._dashState = { from, to, duration, elapsed: 0, faceDir: dir.clone(),
     onArrive: () => {
       if (this.championId !== 'gwen' || !this._gwen) return;
       const now = performance.now();
@@ -326,8 +348,9 @@ CharacterController.prototype._gwenCastE = function(mouseWorldPoint, free = fals
       applyStatus(this, { id: 'gwenE_as', type: 'AS_BUFF', duration: e.buffDurationSec, value: skillVal(e.bonusAttackSpeedPercentByLevel, lvl) / 100, source: this });
       if (this.currentActionKey === 'gwenE') {
         this.currentActionKey = null; this.currentPhase = null; this.setState(STATE.IDLE);
-        const moving = !!(this.pendingMove || this.targetPos);
-        this.playFirstAvailable([moving ? 'Spell3_to_Run.anm' : 'Spell3_Into_IDLE'], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
+        // 이동·공격 명령이 있으면 바로 이어 간다(평타 초기화 - 착지하자마자 강화 평타). 아무 명령도 없을 때만 착지 동작.
+        const busy = !!(this.pendingMove || this.targetPos || this.pendingCast || (this.attackOrderActive && this.currentTarget && this.currentTarget.hp > 0));
+        if (!busy) this.playFirstAvailable(['Spell3_Into_IDLE'], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
         this._resumeAfterAction();
       }
     } };
@@ -362,19 +385,21 @@ CharacterController.prototype._gwenFireR = function(idx, dir, lvl) {
   const slowed = new Set(); // 이 시전에서 이미 첫 둔화를 받은 대상
   const delays = rd.needleDelaysSec[idx] || rd.needleDelaysSec[0];
   let origin = null;
-  for (const delay of delays) {
+  const offsets = rd.needleVisualOffsetsLol[idx] || [0];
+  delays.forEach((delay, n) => {
     this._champTimeout(() => {
       if (this.championId !== 'gwen' || !this._gwenIsAlive()) return; // 시전 도중 죽으면 남은 바늘은 나가지 않는다(위키)
       if (!origin) origin = this.root.position.clone().addScaledVector(dir, -lolRangeToWorld(rd.backOffset)).add(new THREE.Vector3(0, BASE_UNIT * 0.7, 0));
-      this._gwenSpawnNeedle(origin, dir, lvl, slowed);
+      this._gwenSpawnNeedle(origin, dir, lvl, slowed, offsets[n] || 0);
     }, delay * 1000);
-  }
+  });
   debugSkillHit(`Gwen R(바느질) ${idx + 1}번째`, this, { needles: delays.length });
 };
-CharacterController.prototype._gwenSpawnNeedle = function(origin, dir, lvl, slowed) {
+// 판정은 모두 가운데 직선, 보이는 바늘만 좌우로 벌려 그린다(위키: 보이는 출발점이 가운데에서 70·110 옆).
+CharacterController.prototype._gwenSpawnNeedle = function(origin, dir, lvl, slowed, visualOffsetLol = 0) {
   const rd = this._champData().R;
   const proj = projectiles.spawn({
-    from: origin.clone(), speed: lolRangeToWorld(rd.missileSpeed), color: 0xcfeaff, realmId: this.realmId,
+    from: origin.clone(), speed: lolRangeToWorld(rd.missileSpeed), color: 0xcfeaff, realmId: this.realmId, hidden: true,
     line: { dir: dir.clone(), maxDist: lolRangeToWorld(rd.range), halfWidth: lolRangeToWorld(rd.width) * 0.5, pierce: true,
       filter: (u) => this._gwenSpellTarget(u) },
     onHit: (u) => {
@@ -389,6 +414,13 @@ CharacterController.prototype._gwenSpawnNeedle = function(origin, dir, lvl, slow
     },
   });
   this._gwenFx.needles.push(proj);
+  if (typeof scene !== 'undefined') {
+    const len = lolRangeToWorld(70), mesh = new THREE.Mesh(new THREE.CylinderGeometry(lolRangeToWorld(2), lolRangeToWorld(4), len, 6), new THREE.MeshBasicMaterial({ color: 0xdff4ff, transparent: true, opacity: 0.95, depthWrite: false }));
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+    mesh.name = 'gwenNeedle';
+    scene.add(mesh);
+    this._gwenFx.needleViz.push({ proj, mesh, side: new THREE.Vector3(-dir.z, 0, dir.x).normalize().multiplyScalar(lolRangeToWorld(visualOffsetLol)) });
+  }
 };
 // 바늘 폭은 0.5초 날아갈 때마다 140씩 준다(240 → 30, 위키) - 매 프레임 투사체 판정 폭을 줄인다.
 CharacterController.prototype._gwenTickNeedles = function() {
@@ -400,6 +432,18 @@ CharacterController.prototype._gwenTickNeedles = function() {
     const widthLol = Math.max(rd.widthEnd, rd.width - perLol * worldDistanceToLol(p.line.traveled || 0));
     p.line.halfWidth = lolRangeToWorld(widthLol) * 0.5;
   }
+  const viz = this._gwenFx.needleViz;
+  for (let i = viz.length - 1; i >= 0; i--) {
+    const v = viz[i];
+    if (!v.proj || v.proj.done) { this._gwenDisposeNeedle(v); viz.splice(i, 1); continue; }
+    v.mesh.position.copy(v.proj.mesh.position).add(v.side);
+    if (typeof netMirror === 'function') netMirror(v.mesh);
+  }
+};
+CharacterController.prototype._gwenDisposeNeedle = function(v) {
+  if (!v || !v.mesh) return;
+  if (v.mesh.parent) v.mesh.parent.remove(v.mesh);
+  v.mesh.geometry.dispose(); v.mesh.material.dispose();
 };
 
 /* ---------------- 매 프레임 / 정리 ---------------- */
@@ -422,10 +466,11 @@ CharacterController.prototype._gwenOnDeath = function() {
 };
 CharacterController.prototype._gwenReset = function() {
   const fx = this._gwenFx;
+  if (fx && fx.needleViz) for (const v of fx.needleViz) this._gwenDisposeNeedle(v);
   if (fx && fx.mist) {
     if (fx.mist.parent) fx.mist.parent.remove(fx.mist);
     fx.mist.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
   }
-  this._gwenFx = { mist: null, needles: [], qMinionHit: null, eCdTotal: 0, qSerial: 0 };
+  this._gwenFx = { mist: null, needles: [], needleViz: [], qMinionHit: null, eCdTotal: 0, qSerial: 0 };
   this._gwen = { snips: 0, snipsUntil: 0, q: null, mist: null, wInside: false, eUntil: 0, eLvl: 1, eRefundPending: false, r: null };
 };

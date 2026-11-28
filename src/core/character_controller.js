@@ -367,7 +367,7 @@ class CharacterController {
     if (typeof clearStatusesFromSource === 'function' && typeof listEntities === 'function') clearStatusesFromSource(this, listEntities()); // 94차
     if (typeof this._shenReset === 'function' && this._shenFx && this._shenFx.blade) this._shenReset(); // 105차: 쉔 영혼의 검(씬 메시) - 교체·봇 제거 때 남지 않게
     if (typeof this._gwenReset === 'function' && this._gwenFx && this._gwenFx.mist) this._gwenReset(); // 107차: 그웬 안개 메시
-    if (typeof this._aatroxReset === 'function' && this._aatroxFx && this._aatroxFx.chain) this._aatroxReset(); // 107차: 아트록스 사슬 메시
+    if (typeof this._aatroxReset === 'function' && this._aatroxFx && (this._aatroxFx.chain || this._aatroxFx.wings)) this._aatroxReset(); // 107차: 아트록스 사슬 메시
     // 챔피언 교체/재선택 중 이전 레넥톤의 지속 R 오라가 남지 않도록 정리한다.
     if (this._renekton?.rAuraVfx && typeof vfx !== 'undefined') {
       vfx.stopRenektonRAura(this._renekton.rAuraVfx);

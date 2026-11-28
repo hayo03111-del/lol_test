@@ -912,7 +912,7 @@ const CHAMPION_DATA = {
     },
     E: {
       name: '돌격가위', cooldown: [13, 12.5, 12, 11.5, 11], mana: 35,
-      range: 350, dashSpeed: 800, // 돌진 속도는 위키에 없어 CommunityDragon(gwen.bin GwenE DashSpeed 800) 값
+      range: 350, dashSpeed: 800, dashSpeedMsRatio: 1, // 위키에 없어 CommunityDragon(gwen.bin GwenE DashSpeed 800) + 이동 속도(해석 - GLB 돌진 동작 0.27초와 맞는다)
       buffDurationSec: 4, onHitDamage: 15, onHitApRatio: 0.2, bonusRange: 75,
       bonusAttackSpeedPercentByLevel: [30, 42.5, 55, 67.5, 80], cdRefundPercentByLevel: [25, 35, 45, 55, 65],
     },
@@ -924,6 +924,7 @@ const CHAMPION_DATA = {
       range: 1350, backOffset: 100, missileSpeed: 1800, width: 240, widthEnd: 30, // 폭은 0.5초 날아갈 때마다 140씩 준다(240 → 30)
       castTimeFirstSec: 0.25, castTimeRecastSec: 0.5,
       needleDelaysSec: [[0.25], [0.25, 0.35, 0.45], [0.25, 0.3125, 0.375, 0.4375, 0.5]], // 1·3·5개
+      needleVisualOffsetsLol: [[0], [0, -70, 70], [0, -70, 70, -110, 110]], // 보이는 바늘만 옆으로(판정은 가운데 직선 - 위키)
       damageType: 'MAGICAL',
     },
   },
@@ -950,8 +951,10 @@ const CHAMPION_DATA = {
       damageByLevel: [10, 25, 40, 55, 70], adRatioByLevel: [0.6, 0.675, 0.75, 0.825, 0.9], castDamageStep: 0.25, // 2·3번째 +25%·+50%
       sweetspotMultiplier: 1.75, knockupSec: 0.25,
       minionDamagePercent: { breakpoints: [1, 6, 11, 16], values: [55, 60, 65, 70] },
-      q1: { length: 625, width: 180, sweetDepth: 150 }, // 강타 지점 깊이(먼 끝 150)는 위키에 없다 - 추정
-      q2: { back: 100, front: 475, backWidth: 300, frontWidth: 500, sweetDepth: 150 }, // 강타 지점 깊이 추정
+      // 강타 지점은 따로 있는 "대상 중심" 판정 영역과 겹치는 곳(위키 Aatrox hitbox areas 그림에서 잰 값 - 1타 450부터·폭 약 370,
+      // 2타 300부터·폭 약 545 → 620). 108차: 예전엔 먼 끝 150으로 추정했다.
+      q1: { length: 625, width: 180, sweetFrom: 450, sweetTo: 752, sweetWidth: 370 },
+      q2: { back: 100, front: 475, backWidth: 300, frontWidth: 500, sweetFrom: 300, sweetTo: 614, sweetWidthFrom: 545, sweetWidthTo: 620 },
       q3: { offset: 200, radius: 300, sweetRadius: 180 },
       range: 625, damageType: 'PHYSICAL',
     },

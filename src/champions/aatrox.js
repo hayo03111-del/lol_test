@@ -121,12 +121,13 @@ CharacterController.prototype._aatroxQHits = function(stage, origin, dir) {
     if (stage === 1) {
       const a = q.q1;
       if (along < -rL || along > a.length + rL || lateral > a.width / 2 + rL) continue;
-      out.push({ unit: u, sweet: along >= a.length - a.sweetDepth && along <= a.length && lateral <= a.width / 2 });
+      out.push({ unit: u, sweet: along >= a.sweetFrom && along <= a.sweetTo && lateral <= a.sweetWidth / 2 }); // 강타 지점은 대상 중심(위키)
     } else if (stage === 2) {
       const a = q.q2, total = a.back + a.front;
       const halfAt = (al) => (a.backWidth + (a.frontWidth - a.backWidth) * Math.max(0, Math.min(1, (al + a.back) / total))) / 2;
       if (along < -a.back - rL || along > a.front + rL || lateral > halfAt(along) + rL) continue;
-      out.push({ unit: u, sweet: along >= a.front - a.sweetDepth && along <= a.front && lateral <= halfAt(along) });
+      const sf = Math.max(0, Math.min(1, (along - a.sweetFrom) / (a.sweetTo - a.sweetFrom)));
+      out.push({ unit: u, sweet: along >= a.sweetFrom && along <= a.sweetTo && lateral <= (a.sweetWidthFrom + (a.sweetWidthTo - a.sweetWidthFrom) * sf) / 2 });
     } else {
       const a = q.q3;
       const cx = origin.x + dir.x * lolRangeToWorld(a.offset), cz = origin.z + dir.z * lolRangeToWorld(a.offset);
@@ -174,7 +175,8 @@ CharacterController.prototype._aatroxCastQ = function(mouseWorldPoint, free = fa
   const clip = clipName ? this.findAnimation(clipName) : null;
   if (clip) {
     this.playFirstAvailable([clipName], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
-    if (this.currentAction && clip.duration > 0) this.currentAction.timeScale = Math.max(1, clip.duration / (q.castTimeSec + 0.45)); // 휘두르는 순간이 판정 시각 근처에 오게
+    const impact = db.Q.impactSec && db.Q.impactSec[stage - 1]; // 검이 땅에 닿는 클립 시각 → 판정 시각(0.6초)에 맞춘다
+    if (this.currentAction && impact) this.currentAction.timeScale = impact / q.castTimeSec;
   }
   const fire = this._champTimeout(() => {
     if (!this._aatrox || this._aatrox.qCast !== cast) return;
@@ -224,6 +226,7 @@ CharacterController.prototype._aatroxCastW = function(mouseWorldPoint, free = fa
   this.targetPos = null; this.isChasing = false;
   this.currentActionKey = 'aatroxW'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
   this.setState(STATE.W_CAST);
+  this.playFirstAvailable(['Spike_Test'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true }); // 108차: 검을 땅에 꽂는 자세(원작 W)
   const fire = this._champTimeout(() => {
     if (this.currentActionKey !== 'aatroxW' || !this._aatroxIsAlive()) return;
     this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
@@ -405,6 +408,44 @@ function aatroxOnTakedown(ctrl) {
   ctrl._asActor ? ctrl._asActor(() => ctrl._aatroxUnleash()) : ctrl._aatroxUnleash();
 }
 
+/* ---------------- R 날개 ---------------- */
+// 108차: GLB에 날개 뼈(L/R_Wing2~4·Tip·Outer·Inner)와 동작은 있지만 날개 형상(정점)이 빠져 있어 R 동안 날개가 보이지 않았다.
+// 뼈를 이어 날개 막을 만들고 매 프레임 뼈 위치를 따라가게 한다(변신 동작 Spell4의 날개 펼침·R 대기·달리기·평타 날갯짓을 그대로 따른다).
+const AATROX_WING_BONES = ['Wing2', 'Wing4', 'Wing_Outer2_skn', 'Wing_Outer3_skn', 'Wing_Inner3_skn', 'Wing_Inner2_skn', 'Wing_Inner1_skn', 'Wing3'];
+CharacterController.prototype._aatroxEnsureWings = function() {
+  const fx = this._aatroxFx;
+  if (fx.wings || typeof scene === 'undefined' || !this.model) return fx.wings || null;
+  const sides = [];
+  for (const side of ['L', 'R']) {
+    const bones = AATROX_WING_BONES.map((n) => this.model.getObjectByName(`${side}_${n}`));
+    if (bones.some((b) => !b)) return null;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bones.length * 3), 3));
+    const idx = []; for (let i = 1; i < bones.length - 1; i++) idx.push(0, i, i + 1); // 어깨(Wing2)에서 부채꼴로
+    geo.setIndex(idx);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x4a0b10, emissive: 0x1c0204, side: THREE.DoubleSide }));
+    mesh.name = 'aatroxWing'; mesh.frustumCulled = false; mesh.visible = false;
+    scene.add(mesh);
+    sides.push({ mesh, bones });
+  }
+  fx.wings = sides;
+  return sides;
+};
+CharacterController.prototype._aatroxTickWings = function() {
+  const s = this._aatrox, show = this._aatroxIsAlive() && (((s.rUntil || 0) > performance.now()) || this.currentClipKey === 'Spell4');
+  if (!show) { if (this._aatroxFx.wings) for (const w of this._aatroxFx.wings) w.mesh.visible = false; return; }
+  const wings = this._aatroxEnsureWings(); if (!wings) return;
+  const v = new THREE.Vector3();
+  for (const w of wings) {
+    const pos = w.mesh.geometry.attributes.position;
+    w.bones.forEach((b, i) => { b.getWorldPosition(v); pos.setXYZ(i, v.x, v.y, v.z); });
+    pos.needsUpdate = true;
+    w.mesh.geometry.computeVertexNormals();
+    w.mesh.visible = true;
+    if (typeof netMirror === 'function') netMirror(w.mesh);
+  }
+};
+
 /* ---------------- 매 프레임 / 정리 ---------------- */
 CharacterController.prototype._aatroxUpdate = function(dt) {
   if (this.championId !== 'aatrox' || !this._aatrox) return;
@@ -418,6 +459,7 @@ CharacterController.prototype._aatroxUpdate = function(dt) {
   this._aatroxSyncPassiveOverride();
   this._aatroxTickChain();
   this._aatroxTickR();
+  this._aatroxTickWings();
 };
 CharacterController.prototype._aatroxOnDeath = function() {
   if (!this._aatrox) return;
@@ -429,12 +471,13 @@ CharacterController.prototype._aatroxOnDeath = function() {
 };
 CharacterController.prototype._aatroxReset = function() {
   const fx = this._aatroxFx;
+  if (fx && fx.wings) for (const w of fx.wings) { if (w.mesh.parent) w.mesh.parent.remove(w.mesh); w.mesh.geometry.dispose(); w.mesh.material.dispose(); }
   if (fx && fx.chain) {
     if (fx.chain.parent) fx.chain.parent.remove(fx.chain);
     fx.chain.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
   }
   if (typeof setUnitSizeMod === 'function' && this._sizeMods && this._sizeMods.aatroxR) setUnitSizeMod(this, 'aatroxR', 1);
-  this._aatroxFx = { chain: null, wTarget: null };
+  this._aatroxFx = { chain: null, wTarget: null, wings: null };
   this._aatrox = { passiveReadyAt: 0, passiveNoClip: false, q: null, qCast: null, w: null, rUntil: 0, rLvl: 1, rMsAt: 0 };
   if (typeof this.clearAttackOverride === 'function') { this.clearAttackOverride('aatroxP'); this.clearAttackOverride('aatroxR'); }
 };

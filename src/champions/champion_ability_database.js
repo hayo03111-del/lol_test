@@ -277,7 +277,7 @@ const championAbilityDatabase = {
     idleAnimationNames: ['Idle.anm'],
     moveAnimationNames: ['Run.anm'],
     attackAnimationNames: ['Attack1', 'Attack2', 'Attack3'],
-    Q: { animationNames: ['Spell1_0'], animationPatterns: [/^spell1_0$/i] },
+    Q: { animationNames: ['Spell1_0', 'Spell1_B', 'Spell1_C.anm'], animationPatterns: [/^spell1_(0|b|c\.anm)$/i] }, // 첫·추가·마지막 가위질
     W: { animationNames: ['Spell2'], animationPatterns: [/^spell2$/i] },
     E: { animationNames: ['Spell3_Dash'], animationPatterns: [/^spell3_dash$/i], exitClips: { idle: 'Spell3_Into_IDLE', move: 'Spell3_to_Run.anm' } },
     R: { animationNames: ['Spell4_0', 'Spell4.anm'], animationPatterns: [/^spell4_0$/i, /^spell4\.anm$/i] },
@@ -290,8 +290,8 @@ const championAbilityDatabase = {
     moveAnimationNames: ['Run_Base'],
     attackAnimationNames: ['Attack1', 'Attack2', 'Attack3'],
     passiveAttackClip: 'Passive_Attack',
-    Q: { animationNames: ['Q1_Ult', 'Q2_Ult', 'Q3_Ult'], animationPatterns: [/^q[123]_ult$/i], castClips: ['Q1_Ult', 'Q2_Ult', 'Q3_Ult'] },
-    W: { animationNames: [], animationPatterns: [] },
+    Q: { animationNames: ['Q1_Ult', 'Q2_Ult', 'Q3_Ult'], animationPatterns: [/^q[123]_ult$/i], castClips: ['Q1_Ult', 'Q2_Ult', 'Q3_Ult'], impactSec: [0.733, 0.767, 0.7] }, // 검 끝이 땅에 닿는 시각(뼈 높이로 잰 값)
+    W: { animationNames: ['Spike_Test'], animationPatterns: [/^spike_test$/i] }, // 108차: 검을 땅에 꽂는 자세 - 원작 W 동작
     E: { animationNames: ['Spell3'], animationPatterns: [/^spell3$/i], ultClip: 'Spell3_ULT' },
     R: { animationNames: ['Spell4'], animationPatterns: [/^spell4$/i], ultAttackClips: ['Attack1_Ult', 'Attack2_Ult'],
       substateLocomotion: { idleClips: ['Idle_Ult_Base'], moveClips: ['Run_Ult'] } },
