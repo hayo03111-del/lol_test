@@ -5666,6 +5666,7 @@ const championAbilityDatabase = {
     E: { animationNames: ['Spell3_Dash'], animationPatterns: [/^spell3_dash$/i], exitClips: { idle: 'Spell3_Into_IDLE', move: 'Spell3_to_Run.anm' } },
     R: { animationNames: ['Spell4_0', 'Spell4.anm'], animationPatterns: [/^spell4_0$/i, /^spell4\.anm$/i] },
   },
+  // 109차: 날개 하위 메시(Wings 재질·텍스처)가 든 GLB로 교체 - 날개는 평소 접혀 있고 R 동작(Spell4·Idle_Ult_Base 등)이 펼친다.
   // 107차: 아트록스.glb(103클립) - 기본 Q·W 클립(Spell1·Spell2)이 없다. Q는 3단 휘두르기 Q1_Ult·Q2_Ult·Q3_Ult(같은 동작의 변신판)를,
   // W는 시전 동작 없이(0.25초 시전) 방향만 돌린다. E Spell3, R Spell4(포효). 패시브 강화 평타 Passive_Attack.
   // R 중에는 대기·이동·평타가 변신 동작(Idle_Ult_Base·Run_Ult·Attack1_Ult/2_Ult)으로 바뀐다(서브 상태 R).
@@ -13043,7 +13044,7 @@ class CharacterController {
     if (typeof clearStatusesFromSource === 'function' && typeof listEntities === 'function') clearStatusesFromSource(this, listEntities()); // 94차
     if (typeof this._shenReset === 'function' && this._shenFx && this._shenFx.blade) this._shenReset(); // 105차: 쉔 영혼의 검(씬 메시) - 교체·봇 제거 때 남지 않게
     if (typeof this._gwenReset === 'function' && this._gwenFx && this._gwenFx.mist) this._gwenReset(); // 107차: 그웬 안개 메시
-    if (typeof this._aatroxReset === 'function' && this._aatroxFx && (this._aatroxFx.chain || this._aatroxFx.wings)) this._aatroxReset(); // 107차: 아트록스 사슬 메시
+    if (typeof this._aatroxReset === 'function' && this._aatroxFx && this._aatroxFx.chain) this._aatroxReset(); // 107차: 아트록스 사슬 메시
     // 챔피언 교체/재선택 중 이전 레넥톤의 지속 R 오라가 남지 않도록 정리한다.
     if (this._renekton?.rAuraVfx && typeof vfx !== 'undefined') {
       vfx.stopRenektonRAura(this._renekton.rAuraVfx);
@@ -29335,44 +29336,6 @@ function aatroxOnTakedown(ctrl) {
   ctrl._asActor ? ctrl._asActor(() => ctrl._aatroxUnleash()) : ctrl._aatroxUnleash();
 }
 
-/* ---------------- R 날개 ---------------- */
-// 108차: GLB에 날개 뼈(L/R_Wing2~4·Tip·Outer·Inner)와 동작은 있지만 날개 형상(정점)이 빠져 있어 R 동안 날개가 보이지 않았다.
-// 뼈를 이어 날개 막을 만들고 매 프레임 뼈 위치를 따라가게 한다(변신 동작 Spell4의 날개 펼침·R 대기·달리기·평타 날갯짓을 그대로 따른다).
-const AATROX_WING_BONES = ['Wing2', 'Wing4', 'Wing_Outer2_skn', 'Wing_Outer3_skn', 'Wing_Inner3_skn', 'Wing_Inner2_skn', 'Wing_Inner1_skn', 'Wing3'];
-CharacterController.prototype._aatroxEnsureWings = function() {
-  const fx = this._aatroxFx;
-  if (fx.wings || typeof scene === 'undefined' || !this.model) return fx.wings || null;
-  const sides = [];
-  for (const side of ['L', 'R']) {
-    const bones = AATROX_WING_BONES.map((n) => this.model.getObjectByName(`${side}_${n}`));
-    if (bones.some((b) => !b)) return null;
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(bones.length * 3), 3));
-    const idx = []; for (let i = 1; i < bones.length - 1; i++) idx.push(0, i, i + 1); // 어깨(Wing2)에서 부채꼴로
-    geo.setIndex(idx);
-    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x4a0b10, emissive: 0x1c0204, side: THREE.DoubleSide }));
-    mesh.name = 'aatroxWing'; mesh.frustumCulled = false; mesh.visible = false;
-    scene.add(mesh);
-    sides.push({ mesh, bones });
-  }
-  fx.wings = sides;
-  return sides;
-};
-CharacterController.prototype._aatroxTickWings = function() {
-  const s = this._aatrox, show = this._aatroxIsAlive() && (((s.rUntil || 0) > performance.now()) || this.currentClipKey === 'Spell4');
-  if (!show) { if (this._aatroxFx.wings) for (const w of this._aatroxFx.wings) w.mesh.visible = false; return; }
-  const wings = this._aatroxEnsureWings(); if (!wings) return;
-  const v = new THREE.Vector3();
-  for (const w of wings) {
-    const pos = w.mesh.geometry.attributes.position;
-    w.bones.forEach((b, i) => { b.getWorldPosition(v); pos.setXYZ(i, v.x, v.y, v.z); });
-    pos.needsUpdate = true;
-    w.mesh.geometry.computeVertexNormals();
-    w.mesh.visible = true;
-    if (typeof netMirror === 'function') netMirror(w.mesh);
-  }
-};
-
 /* ---------------- 매 프레임 / 정리 ---------------- */
 CharacterController.prototype._aatroxUpdate = function(dt) {
   if (this.championId !== 'aatrox' || !this._aatrox) return;
@@ -29386,7 +29349,6 @@ CharacterController.prototype._aatroxUpdate = function(dt) {
   this._aatroxSyncPassiveOverride();
   this._aatroxTickChain();
   this._aatroxTickR();
-  this._aatroxTickWings();
 };
 CharacterController.prototype._aatroxOnDeath = function() {
   if (!this._aatrox) return;
@@ -29398,13 +29360,12 @@ CharacterController.prototype._aatroxOnDeath = function() {
 };
 CharacterController.prototype._aatroxReset = function() {
   const fx = this._aatroxFx;
-  if (fx && fx.wings) for (const w of fx.wings) { if (w.mesh.parent) w.mesh.parent.remove(w.mesh); w.mesh.geometry.dispose(); w.mesh.material.dispose(); }
   if (fx && fx.chain) {
     if (fx.chain.parent) fx.chain.parent.remove(fx.chain);
     fx.chain.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
   }
   if (typeof setUnitSizeMod === 'function' && this._sizeMods && this._sizeMods.aatroxR) setUnitSizeMod(this, 'aatroxR', 1);
-  this._aatroxFx = { chain: null, wTarget: null, wings: null };
+  this._aatroxFx = { chain: null, wTarget: null };
   this._aatrox = { passiveReadyAt: 0, passiveNoClip: false, q: null, qCast: null, w: null, rUntil: 0, rLvl: 1, rMsAt: 0 };
   if (typeof this.clearAttackOverride === 'function') { this.clearAttackOverride('aatroxP'); this.clearAttackOverride('aatroxR'); }
 };

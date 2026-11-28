@@ -282,6 +282,7 @@ const championAbilityDatabase = {
     E: { animationNames: ['Spell3_Dash'], animationPatterns: [/^spell3_dash$/i], exitClips: { idle: 'Spell3_Into_IDLE', move: 'Spell3_to_Run.anm' } },
     R: { animationNames: ['Spell4_0', 'Spell4.anm'], animationPatterns: [/^spell4_0$/i, /^spell4\.anm$/i] },
   },
+  // 109차: 날개 하위 메시(Wings 재질·텍스처)가 든 GLB로 교체 - 날개는 평소 접혀 있고 R 동작(Spell4·Idle_Ult_Base 등)이 펼친다.
   // 107차: 아트록스.glb(103클립) - 기본 Q·W 클립(Spell1·Spell2)이 없다. Q는 3단 휘두르기 Q1_Ult·Q2_Ult·Q3_Ult(같은 동작의 변신판)를,
   // W는 시전 동작 없이(0.25초 시전) 방향만 돌린다. E Spell3, R Spell4(포효). 패시브 강화 평타 Passive_Attack.
   // R 중에는 대기·이동·평타가 변신 동작(Idle_Ult_Base·Run_Ult·Attack1_Ult/2_Ult)으로 바뀐다(서브 상태 R).
