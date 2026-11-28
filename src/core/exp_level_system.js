@@ -421,6 +421,7 @@ function isValidChampionTarget(minion, champion) {
   if (typeof champion === 'undefined' || !champion) return false;
   if (isAllyUnit(minion, champion)) return false; // 아군 챔피언은 공격 불가(요청 20-B) - champion.team(플레이어는 PLAYER_TEAM)과 generic 비교
   if (champion.hp <= 0 || champion.state === STATE.DEAD || champion.isUntargetable) return false;
+  if (typeof gwenMistHides === 'function' && gwenMistHides(champion, minion)) return false; // 107차: 그웬 안개
   if (!canRealmInteract(minion, champion)) return false;
   const range = lolRangeToWorld(minion.attackRange) + getCollisionRadius(minion) + getCollisionRadius(champion); // 44차: 가장자리 기준
   return getHorizontalDistance(minion.mesh.position, getWorldPosition(champion)) <= range;
@@ -445,6 +446,7 @@ function minionAcquireRangeWorld(minion, target) {
 function isAliveEnemyForMinion(minion, target) {
   if (!target || target.isTrainingDummy || target.hp <= 0 || target.isDead || target.destroyed || target.isUntargetable) return false;
   if (target.state === STATE.DEAD) return false;
+  if (typeof gwenMistHides === 'function' && gwenMistHides(target, minion)) return false; // 107차: 그웬 안개 밖 미니언은 그웬을 노리지 못한다
   if (!target.team || target.team === minion.team) return false;
   return canRealmInteract(minion, target);
 }

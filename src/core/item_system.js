@@ -235,6 +235,7 @@ function recomputeItemStats(ctrl) {
 const IMMOBILIZING_SKILL_SLOTS = {
   ahri: ['E'], ashe: ['R'], chogath: ['Q'], leesin: ['R'], nautilus: ['Q', 'R'], nilah: ['R'],
   renekton: ['W'], sett: ['E', 'R'], varus: ['R'], yasuo: ['Q'], yone: ['Q', 'R'], rammus: ['Q', 'E', 'R'], lux: ['Q'], shen: ['E'],
+  aatrox: ['Q', 'W'], // 107차: Q 강타 지점 공중에 뜸, W 끌어오기
 };
 function abilityHasteCooldown(ctrl, baseCd, slot) {
   // itemDynamicAbilityHaste - 끝없는 갈망(기아)처럼 추가 공격력에 비례해

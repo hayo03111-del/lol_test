@@ -224,6 +224,16 @@ function getSkillRecastState(c, key) {
     }
     case 'renekton':
       return key === 'E' && c._renekton ? win(c._renekton.eSecondReadyUntil || 0, 4) : null;
+    case 'gwen': { // 107차: W 안개(남은 시간), R 재시전 창(남은 횟수)
+      const s = c._gwen; if (!s) return null;
+      if (key === 'W' && s.mist) return win(s.mist.activeUntil || 0, cd.W.durationSec || 4, s.mist.recastUsed ? { keepCd: true } : {});
+      if (key === 'R' && s.r) return win(s.r.windowUntil || 0, cd.R.recastWindowSec || 8, { count: 3 - s.r.casts });
+      return null;
+    }
+    case 'aatrox': { // 107차: Q 재시전 창(다음 단계)
+      const q = key === 'Q' && c._aatrox && c._aatrox.q;
+      return q ? win(q.windowUntil || 0, cd.Q.recastWindowSec || 4) : null;
+    }
     default: return null;
   }
 }
@@ -234,6 +244,9 @@ function getSkillIconStage(c, key, recast) {
   const now = performance.now();
   if (key === 'Q' && c.championId === 'yasuo' && c._yasuo && c._yasuo.qStackExpiresAt > now) return c._yasuo.qStacks >= 2 ? '3' : (c._yasuo.qStacks === 1 ? '2' : '');
   if (key === 'Q' && c.championId === 'yone' && c._yone && c._yone.qStackExpiresAt > now && c._yone.qStacks >= 2) return '3';
+  if (key === 'Q' && c.championId === 'aatrox') return recast && c._aatrox && c._aatrox.q ? String(Math.min(3, c._aatrox.q.stage)) : ''; // 107차: 2·3타 그림
+  if (key === 'R' && c.championId === 'gwen') return recast && c._gwen && c._gwen.r ? String(Math.min(3, c._gwen.r.casts + 1)) : ''; // 107차: 3개·5개 바늘 그림
+  if (key === 'W' && c.championId === 'gwen') return recast && c._gwen && c._gwen.mist && !c._gwen.mist.recastUsed ? '2' : ''; // 107차: 안개 부르기 그림
   return recast ? '2' : '';
 }
 // 재시전: 금빛 테두리·고리·↻, 칸 그림은 단계 그림이 있으면 그것(원작 단계·재시전 그림은 Data Dragon에 없어 사용자가 준 것만).

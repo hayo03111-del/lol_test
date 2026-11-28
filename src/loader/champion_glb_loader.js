@@ -68,6 +68,14 @@ function disposeCurrentChampion() {
    건드리지 않고 CharacterController.stats 쪽에 독립적으로 유지된다.
    ============================================================ */
 
+// 107차: 그웬 GLB의 가위 잔상(Scissors_A_Smear 재질) 메시는 원작에서 휘두를 때만 잠깐 보이는 효과다. 늘 보이면 대기 자세에서
+// 아래로 길게 늘어져(스킨 메시 높이 약 500) 바닥 맞춤(groundModelOnIdlePose)이 몸을 공중에 띄웠다 - 숨긴다.
+const CHAMPION_HIDDEN_MATERIALS = { gwen: /smear/i };
+function hideChampionEffectMeshes(model, championId) {
+  const re = CHAMPION_HIDDEN_MATERIALS[championId];
+  if (!re || !model) return;
+  model.traverse((o) => { if (o.isMesh && o.material && re.test(o.material.name || '')) o.visible = false; });
+}
 /* ============================================================
    NILAH WEAPON RIG / URUMI VISIBILITY INTEGRITY
    ------------------------------------------------------------
@@ -152,8 +160,11 @@ function groundModelOnIdlePose(ctrl) {
   model.traverse((o) => {
     if (!o.isSkinnedMesh || o.visible === false) return;
     o.skeleton.update();
-    const ps = o.geometry.attributes.position;
-    for (let i = 0; i < ps.count; i += 2) { o.getVertexPosition(i, v); o.localToWorld(v); if (v.y < minY) minY = v.y; }
+    // 107차: 그 메시가 실제로 그리는 정점(인덱스)만 본다 - 여러 하위 메시가 정점 버퍼 하나를 나눠 쓰는 GLB에서 숨긴 하위 메시
+    // (그웬 가위 잔상)의 정점까지 세어 몸이 떠 있었다. 하위 메시가 모두 보이는 챔피언은 결과가 같다.
+    const ps = o.geometry.attributes.position, idx = o.geometry.index;
+    const n = idx ? idx.count : ps.count;
+    for (let k = 0; k < n; k += 2) { o.getVertexPosition(idx ? idx.getX(k) : k, v); o.localToWorld(v); if (v.y < minY) minY = v.y; }
   });
   if (!isFinite(minY)) return 0;
   const drop = minY - ctrl.root.position.y;
@@ -246,6 +257,7 @@ async function bootstrapChampion(gltf, fileName) {
   // 본체 애니메이션 믹서가 BladeA/BladeB 본을 움직이므로 Q/E/R 모션과
   // 무기 움직임이 동일한 애니메이션 타이밍으로 따라간다.
   if (championId === 'nilah') ensureNilahWeaponRig(gltf.scene);
+  hideChampionEffectMeshes(gltf.scene, championId); // 107차
 
   // GLB 원본 model 및 내부 hierarchy(스켈레톤/애니메이션)는 그대로
   // 유지한 채, 위치(중앙/바닥)만 정렬한다 - 크기는 전혀 바꾸지 않는다.
@@ -447,6 +459,7 @@ const CHAMPION_MODEL_LIBRARY = [
   ['yone', '요네'], ['sett', '세트'], ['mordekaiser', '모데카이저'], ['renekton', '레넥톤'], ['nilah', '닐라'], ['chogath', '초가스'],
   ['ezreal', '이즈리얼'], ['ashe', '애쉬'], ['varus', '바루스'], ['ahri', '아리'], ['vex', '벡스'], ['rammus', '람머스'], ['lux', '럭스'],
   ['shen', '쉔'], // 105차
+  ['gwen', '그웬'], ['aatrox', '아트록스'], // 107차
 ];
 const CHAMPION_MODEL_DIR = 'assets/champions/';
 function loadChampionFromLibrary(id) {

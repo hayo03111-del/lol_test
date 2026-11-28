@@ -1657,6 +1657,8 @@ const CHAMPION_UNIT_SIZE_LOL = {
   // × 100 × 1.5 = 128로 같은 파일의 SelectionHeight 130과 맞는다. 예전엔 등록이 없어 기본 1.0(원작의 2/3 크기)이었다.
   rammus:      { pathing: 35, selection: 120, skinScale: 1.5, verified: true },
   shen:        { gameplay: 65, pathing: 35, selection: 100, verified: true }, // 105차: 위키 Shen(판정 65·이동 35·선택 100·선택 높이 175 - GLB 키 1.83 × 100과 맞아 스킨 배율 1.0)
+  gwen:        { gameplay: 65, pathing: 35, selection: 100 }, // 107차: 위키 Gwen(이동 35·선택 100·선택 높이 120). 판정은 원작 기본 65, 스킨 배율은 미확인(기본 1.0)
+  aatrox:      { gameplay: 65, pathing: 35, selection: 135 }, // 107차: 위키 Aatrox(이동 35·선택 135·선택 높이 180). 판정은 원작 기본 65, 스킨 배율은 미확인(기본 1.0)
   lux:         { pathing: 35, selection: 100, skinScale: 1.5, verified: true }, // 47차: LeagueSandbox Lux.json SkinScale 1.5(기본 1.0이라 작아 보였다)
   yasuo:       { pathing: 32, selection: 75, skinScale: 0.93, verified: true },
   mordekaiser: {},
@@ -2296,6 +2298,7 @@ function applyDamage(target, result) {
   // "피해 받은 시각"(워모그 등 비전투 타이머)과 공격자의 흡혈·아이템 효과가 먼저 처리됐다. 이미 걸린 지속 피해(점화 등)는 원작처럼 계속 들어간다.
   if ((target.isUntargetable && !result.isStatusTick) || (typeof target.takeDamage === 'function' && typeof STATE !== 'undefined' && target.state === STATE.DEAD)) return 0;
   if (typeof shenRefugeBlocks === 'function' && shenRefugeBlocks(target, result)) return 0; // 105차: 쉔 W(영혼의 피난처) 안의 아군은 기본 공격을 막는다
+  if (typeof gwenMistBlocksDamage === 'function' && gwenMistBlocksDamage(target, result)) return 0; // 107차: 그웬 W 안개 안의 그웬은 안개 밖 적(포탑 제외)의 피해를 받지 않는다
   const finalDmg = calculateDamage({ ...result, target });
   target._lastDamageTakenAmount = finalDmg;
   // 워모그의 갑옷(워모그의 심장) - "챔피언이 아닌 대상에게는 3초"처럼
@@ -2345,6 +2348,7 @@ function applyDamage(target, result) {
   else damageEnemy(target, finalDmg, result);
   if (typeof _evDamage === 'function') _evDamage(dmgSource, target, finalDmg, result); // 93차: 게임 이벤트(보호막 흡수 전 피해, 적용 뒤 체력)
   if (typeof leesinOmnivampOnDamage === 'function') leesinOmnivampOnDamage(dmgSource, target, vampBase, result); // 94차: 리 신 W2 모든 피해 흡혈
+  if (typeof aatroxOnDamageDealt === 'function') aatroxOnDamageDealt(dmgSource, target, vampBase, result); // 107차: 아트록스 E 기본 지속(챔피언 피해 회복)
   const lethal = hpBefore > 0 && (target.hp <= 0 || (target.isTrainingDummy && !wasFloored && isFlooredTrainingDummy(target) && finalDmg >= hpBefore));
   if (lethal) {
     markExecute(target, finalDmg);
@@ -2712,7 +2716,8 @@ function getHealReceivedMultiplier(target) {
   if (!target) return 1;
   // 83차: 칼바람 챔피언별 치유 보정(이 연습장에서 챔피언이 받는 치유는 전부 자기 치유라 받는 쪽에 곱한다).
   const bal = typeof getAramBalance === 'function' ? getAramBalance(target) : null;
-  return (1 + (target.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(target)) * (1 + ((bal && bal.healing) || 0));
+  const aatroxAmp = typeof aatroxHealAmp === 'function' ? aatroxHealAmp(target) : 0; // 107차: 아트록스 R 받는 회복 +50~100%
+  return (1 + (target.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(target)) * (1 + ((bal && bal.healing) || 0)) * (1 + aatroxAmp);
 }
 // 받는 보호막 배율(정령의형상/월석재생기 등의 "보호막 효과 증가") - 아이템
 // 보호막은 이미 이 필드를 곱하고 있었다. 챔피언 스킬 보호막도 같은 배율을 쓴다.
@@ -2899,7 +2904,7 @@ function getAllEnemyUnits(ignoreRealm = false) { // ignoreRealm: 죽음의 세�
   }
   // 챔피언(플레이어·적 챔피언 봇): 살아 있고 팀이 다르면.
   if (typeof listChampionUnits === 'function') {
-    for (const c of listChampionUnits()) if (c !== me && foe(c) && isChampionAlive(c)) list.push(c);
+    for (const c of listChampionUnits()) if (c !== me && foe(c) && isChampionAlive(c) && !(typeof gwenMistHides === 'function' && gwenMistHides(c, me))) list.push(c); // 107차: 그웬 안개 밖에서는 대상으로 못 잡는다
   }
   // 아군/적군/플레이어 시스템 - 적 진영 미니언/포탑/억제기/넥서스("team이 다르면 적" - isEnemyUnit과 같은 원칙).
   // 아군(같은 팀) 미니언/구조물은 후보에 들어가지 않으므로 "아군은 공격 불가"(요청 20-B)가 자동으로 만족된다.
@@ -4157,6 +4162,105 @@ const CHAMPION_DATA = {
       placeDistance: 175, enemySearchRange: 2000, // 가장 가까운 적 챔피언(2000 안) 쪽으로 아군에게서 175
     },
   },
+  gwen: {
+    displayName: '그웬',
+    // 107차. 수치 출처: 리그 오브 레전드 위키(Module:ChampionData의 Gwen, Template:Data Gwen/* - 마지막 변경 V26.16).
+    // "{{ap|a to b}}"는 랭크별 균등 분할, "{{pplevel|a to b}}"는 1~18레벨 선형으로 풀었다. 위키에 없는 값만 "추정".
+    stats: {
+      hp: 620, hpGrowth: 115, hpRegen: 9, hpRegenGrowth: 0.9,
+      ad: 63, adGrowth: 3, attackSpeed: 0.69, attackSpeedRatio: 0.69, attackSpeedGrowthPercent: 2.25,
+      armor: 39, armorGrowth: 4.9, mr: 32, mrGrowth: 2.05,
+      range: 150, moveSpeed: 340,
+      mana: 330, manaGrowth: 40, manaRegen: 7.5, manaRegenGrowth: 0.7,
+      windupPercent: 0.19672, // 평타 시전 0.3초 / 전체 1.525초(위키 attack_cast_time·attack_total_time)
+    },
+    passive: {
+      name: '가위 난도질',
+      desc: '기본 공격(적중 시)·Q 가운데·R 바늘이 대상 최대 체력의 1%(+주문력 100당 0.6%) 추가 마법 피해. 챔피언에게 준 피해의 67%만큼 회복(한 번에 12~40 + 주문력 7%까지).',
+      maxHpPercent: 1, maxHpPercentPer100Ap: 0.6,
+      healPercentVsChampions: 67, healCapAt1: 12, healCapAt18: 40, healCapApRatio: 0.07,
+      minionLowHpThreshold: 0.4, minionBonusAt1: 8, minionBonusAt18: 30, // 체력 40% 미만 미니언에게 추가 마법 피해 8~30
+    },
+    Q: {
+      name: '싹둑싹둑!', cooldown: [6.5, 5.75, 5, 4.25, 3.5], mana: 40, range: 450,
+      maxStacks: 4, stackDurationSec: 6, // 기본 공격 적중마다 가위질 중첩(최대 4, 6초 - 다시 치면 갱신)
+      snipDamageByLevel: [10, 14, 18, 22, 26], snipApRatio: 0.05,
+      finalDamageByLevel: [60, 85, 110, 135, 160], finalApRatio: 0.35,
+      trueDamageConversion: 0.5, minionDamageMultiplier: 0.8, minionExecuteThreshold: 0.2,
+      castTimeSec: 0.5, firstSnipSec: 0.13, bonusSnipTimesSec: [0.45, 0.4, 0.35, 0.23], // 첫 가위질 0.13초, 마지막은 시전 끝(0.5초)
+      backOffset: 50, length: 515, nearWidth: 75, farWidth: 360, centerWidth: 25, circleRadius: 515, // 사다리꼴(그웬 뒤 50 ~ 앞 465) ∩ 원(뒤 50 중심, 515)
+      damageType: 'MAGICAL',
+    },
+    W: {
+      name: '신성한 안개', cooldown: [22, 21, 20, 19, 18], mana: 60, // 재사용 대기시간은 효과가 끝난 뒤 돈다
+      radius: 480, durationSec: 4, recastDelaySec: 0.5, mistSpeed: 2000, recastOvershoot: 75, teleportBeyond: 1000, // 1000: 멀리 순간 이동하면 안개도 순간 이동(거리 추정)
+      bonusResistByLevel: [22, 24, 26, 28, 30], bonusResistApRatio: 0.07,
+    },
+    E: {
+      name: '돌격가위', cooldown: [13, 12.5, 12, 11.5, 11], mana: 35,
+      range: 350, dashSpeed: 800, // 돌진 속도는 위키에 없어 CommunityDragon(gwen.bin GwenE DashSpeed 800) 값
+      buffDurationSec: 4, onHitDamage: 15, onHitApRatio: 0.2, bonusRange: 75,
+      bonusAttackSpeedPercentByLevel: [30, 42.5, 55, 67.5, 80], cdRefundPercentByLevel: [25, 35, 45, 55, 65],
+    },
+    R: {
+      name: '바느질', cooldown: [120, 100, 80], mana: 100,
+      recastWindowSec: 8, recastLockoutSec: 1, // 8초 안에 2번 더(재시전마다 창 갱신), 재시전 사이 고정 1초
+      damageByLevel: [30, 50, 70], apRatio: 0.1, // 바늘 하나당 + 가위 난도질
+      slowPercentByLevel: [40, 50, 60], subsequentSlowPercentByLevel: [15, 20, 25], slowDurationSec: 1.5,
+      range: 1350, backOffset: 100, missileSpeed: 1800, width: 240, widthEnd: 30, // 폭은 0.5초 날아갈 때마다 140씩 준다(240 → 30)
+      castTimeFirstSec: 0.25, castTimeRecastSec: 0.5,
+      needleDelaysSec: [[0.25], [0.25, 0.35, 0.45], [0.25, 0.3125, 0.375, 0.4375, 0.5]], // 1·3·5개
+      damageType: 'MAGICAL',
+    },
+  },
+  aatrox: {
+    displayName: '아트록스',
+    // 107차. 수치 출처: 리그 오브 레전드 위키(Module:ChampionData의 Aatrox, Template:Data Aatrox/* - 마지막 변경 V26.19).
+    // 자원 없음(피의 샘은 표시만 - 원작도 비용 없음). 위키에 없는 값만 "추정".
+    stats: {
+      hp: 650, hpGrowth: 114, hpRegen: 3, hpRegenGrowth: 0.5,
+      ad: 60, adGrowth: 5, attackSpeed: 0.651, attackSpeedRatio: 0.651, attackSpeedGrowthPercent: 2.5,
+      armor: 38, armorGrowth: 4.8, mr: 32, mrGrowth: 2.05,
+      range: 175, moveSpeed: 345, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      windupPercent: 0.19737, // 평타 시전 0.3초 / 전체 1.52초
+    },
+    passive: {
+      name: '사신 태세',
+      desc: '주기적으로 다음 기본 공격이 사거리 +50, 대상 최대 체력 4~10% 추가 마법 피해, 준 추가 피해만큼 회복(미니언 25%). 챔피언에게 평타·스킬을 맞히면 재사용 대기시간 2초(Q 강타 지점 4초) 감소.',
+      cooldownAt1: 22, cooldownAt18: 10, bonusRange: 50, maxHpPercentAt1: 4, maxHpPercentAt18: 10,
+      minionHealRatio: 0.25, cdReduceOnHitSec: 2, cdReduceSweetspotSec: 4,
+    },
+    Q: {
+      name: '다르킨의 검', cooldown: [14, 12, 10, 8, 6], // 마지막 시전부터 돈다(위키 "재시전마다 다시 시작")
+      recastWindowSec: 4, recastLockoutSec: 1, castTimeSec: 0.6,
+      damageByLevel: [10, 25, 40, 55, 70], adRatioByLevel: [0.6, 0.675, 0.75, 0.825, 0.9], castDamageStep: 0.25, // 2·3번째 +25%·+50%
+      sweetspotMultiplier: 1.75, knockupSec: 0.25,
+      minionDamagePercent: { breakpoints: [1, 6, 11, 16], values: [55, 60, 65, 70] },
+      q1: { length: 625, width: 180, sweetDepth: 150 }, // 강타 지점 깊이(먼 끝 150)는 위키에 없다 - 추정
+      q2: { back: 100, front: 475, backWidth: 300, frontWidth: 500, sweetDepth: 150 }, // 강타 지점 깊이 추정
+      q3: { offset: 200, radius: 300, sweetRadius: 180 },
+      range: 625, damageType: 'PHYSICAL',
+    },
+    W: {
+      name: '지옥사슬', cooldown: [18, 16.5, 15, 13.5, 12],
+      range: 825, missileSpeed: 1800, width: 160, castTimeSec: 0.25,
+      damageByLevel: [30, 40, 50, 60, 70], adRatio: 0.4, minionMultiplier: 2,
+      slowPercentByLevel: [25, 27.5, 30, 32.5, 35], slowDurationSec: 1.5,
+      tetherSec: 1.5, zoneRadius: 300, pullSec: 0.3, // 영역 반경·끌려가는 시간은 위키에 없다 - 추정
+      damageType: 'PHYSICAL',
+    },
+    E: {
+      name: '파멸의 돌진', cooldown: [9, 8, 7, 6, 5],
+      range: 300, rangeMin: 75, dashSpeed: 800,
+      healPercent: 16, healPercentPer100BonusHp: 1.3, // 기본 지속: 챔피언에게 준 피해(지속 피해 제외)의 16%(+추가 체력 100당 1.3%) 회복
+    },
+    R: {
+      name: '세계의 종결자', cooldown: [120, 100, 80], durationSec: 10, castTimeSec: 0.25,
+      fearRadius: 600, fearSec: 3, fearMaxSlow: 0.99, // 주변 미니언 3초 공포(둔화가 99%까지 점점)
+      bonusMsPercentByLevel: [60, 80, 100], msDecayPerTick: 0.1, msDecayTickSec: 0.25, // 0.25초마다 남은 추가 이동 속도의 10%씩 준다
+      bonusAdPercentByLevel: [20, 30, 40], healAmpPercentByLevel: [50, 75, 100], sizeBonus: 0.05, takedownExtendSec: 5,
+    },
+  },
   leesin: {
     displayName: '리 신',
     stats: {
@@ -4804,6 +4908,8 @@ const ARAM_BALANCE = {
   leesin: { dmgDealt: 0.05, dmgTaken: -0.05, healing: 0.10, shielding: 0.20, energyRegen: 0.20 }, // 기력 재생은 위키 요약에만(신뢰도 중간)
   lux: { dmgDealt: -0.10, dmgTaken: 0.10, shielding: -0.10 },
   shen: { dmgDealt: -0.05, dmgTaken: 0.05 }, // 105차: 위키 Shen 문서 특수 수치
+  gwen: { dmgDealt: 0.02 }, // 107차: 위키 Module:ChampionData(aram dmg_dealt 1.02)
+  aatrox: { dmgDealt: 0.05 }, // 107차: 위키 Module:ChampionData(aram dmg_dealt 1.05, dmg_taken 1)
   ashe: { dmgDealt: 0.05 },
   ahri: { healing: -0.10 },
   vex: { dmgDealt: -0.05 },
@@ -7001,6 +7107,31 @@ const championAbilityDatabase = {
     E: { animationNames: ['Spell3'], animationPatterns: [/^spell3$/i] },
     R: { animationNames: ['Spell4'], animationPatterns: [/^spell4$/i] },
   },
+  // 107차: 그웬.glb(96클립) - 평타 Attack1~3 + Crit. Q는 Spell1_0(앞), W Spell2, E Spell3_Dash(돌진) → Spell3_to_Run/Into_IDLE,
+  // R은 첫 시전 Spell4_0·재시전 Spell4.anm. 대기·이동은 Idle.anm·Run.anm(Idle2·3, Run2·3은 감정 표현 변형).
+  gwen: {
+    idleAnimationNames: ['Idle.anm'],
+    moveAnimationNames: ['Run.anm'],
+    attackAnimationNames: ['Attack1', 'Attack2', 'Attack3'],
+    Q: { animationNames: ['Spell1_0'], animationPatterns: [/^spell1_0$/i] },
+    W: { animationNames: ['Spell2'], animationPatterns: [/^spell2$/i] },
+    E: { animationNames: ['Spell3_Dash'], animationPatterns: [/^spell3_dash$/i], exitClips: { idle: 'Spell3_Into_IDLE', move: 'Spell3_to_Run.anm' } },
+    R: { animationNames: ['Spell4_0', 'Spell4.anm'], animationPatterns: [/^spell4_0$/i, /^spell4\.anm$/i] },
+  },
+  // 107차: 아트록스.glb(103클립) - 기본 Q·W 클립(Spell1·Spell2)이 없다. Q는 3단 휘두르기 Q1_Ult·Q2_Ult·Q3_Ult(같은 동작의 변신판)를,
+  // W는 시전 동작 없이(0.25초 시전) 방향만 돌린다. E Spell3, R Spell4(포효). 패시브 강화 평타 Passive_Attack.
+  // R 중에는 대기·이동·평타가 변신 동작(Idle_Ult_Base·Run_Ult·Attack1_Ult/2_Ult)으로 바뀐다(서브 상태 R).
+  aatrox: {
+    idleAnimationNames: ['Idle1'],
+    moveAnimationNames: ['Run_Base'],
+    attackAnimationNames: ['Attack1', 'Attack2', 'Attack3'],
+    passiveAttackClip: 'Passive_Attack',
+    Q: { animationNames: ['Q1_Ult', 'Q2_Ult', 'Q3_Ult'], animationPatterns: [/^q[123]_ult$/i], castClips: ['Q1_Ult', 'Q2_Ult', 'Q3_Ult'] },
+    W: { animationNames: [], animationPatterns: [] },
+    E: { animationNames: ['Spell3'], animationPatterns: [/^spell3$/i], ultClip: 'Spell3_ULT' },
+    R: { animationNames: ['Spell4'], animationPatterns: [/^spell4$/i], ultAttackClips: ['Attack1_Ult', 'Attack2_Ult'],
+      substateLocomotion: { idleClips: ['Idle_Ult_Base'], moveClips: ['Run_Ult'] } },
+  },
   rammus: {
     idleAnimationNames: ['Idle1'],
     moveAnimationNames: ['Run'],
@@ -7301,6 +7432,13 @@ const SKILL_TIMING_DATABASE = {
   shen: {
     R: { eventTime: 0, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
   },
+  // 107차: 그웬·아트록스 GLB에도 Channel 클립이 있지만 R은 채널형이 아니다(실제 시전은 gwen.js·aatrox.js) - 자동 채널 추정을 끈다.
+  gwen: {
+    R: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: false, lockAbility: false },
+  },
+  aatrox: {
+    R: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: false, lockAbility: false },
+  },
   ashe: {
     W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
@@ -7352,6 +7490,8 @@ const CHAMPION_ALIASES = {
   'rammus':'rammus', '람머스':'rammus',
   'lux':'lux', '럭스':'lux',
   'shen':'shen', '쉔':'shen',
+  'gwen':'gwen', '그웬':'gwen',
+  'aatrox':'aatrox', '아트록스':'aatrox',
   'blitzcrank':'blitzcrank', '블리츠크랭크':'blitzcrank',
   'leesin':'leesin', '리신':'leesin',
   'masteryi':'masteryi', '마스터이':'masteryi',
@@ -7690,6 +7830,11 @@ function buildActionData(resolver, abilityResolver) {
     const existing = asheAttackNames.filter((n) => resolver.clipByName(n));
     if (existing.length) attackVariants = existing;
   }
+  // 107차: 그웬·아트록스 평타는 Attack1~3(전환 클립 Attack1_To_Idle·변신 평타 Attack1_Ult 제외).
+  if (abilityResolver.championId === 'gwen' || abilityResolver.championId === 'aatrox') {
+    const existing = (championAbilityDatabase[abilityResolver.championId].attackAnimationNames || []).filter((n) => resolver.clipByName(n));
+    if (existing.length) attackVariants = existing;
+  }
   // 버그 수정(실제 GLB로 직접 확인함 - 1차 수정에서 실수했던 부분을
   // duration까지 확인하고 정정함): 범용 "attack" 역할 매칭은 이름에
   // "attack1"/"attack2"가 들어간 클립을 전부 같은 점수(100점)로 채점하고
@@ -7918,6 +8063,13 @@ function buildActionData(resolver, abilityResolver) {
     const adb = championAbilityDatabase.ashe;
     if (resolver.clipByName(adb.idleAnimationNames?.[0])) data.idle = { clips: [adb.idleAnimationNames[0]] };
     if (resolver.clipByName(adb.moveAnimationNames?.[0])) data.move = { clips: [adb.moveAnimationNames[0]] };
+  }
+  // 107차: 그웬·아트록스 - 이름에 idle/run/attack이 들어간 전환·변신·감정 표현 클립(Spell3_Into_IDLE, Idle_Ult_Base, Run_Ult,
+  // Attack1_To_Idle, Attack1_Ult 등)이 많아 자동 채점이 엉뚱한 것을 고를 수 있다 - DB에 적은 진짜 반복 클립으로 고정한다.
+  if (abilityResolver.championId === 'gwen' || abilityResolver.championId === 'aatrox') {
+    const gdb = championAbilityDatabase[abilityResolver.championId];
+    if (resolver.clipByName(gdb.idleAnimationNames?.[0])) data.idle = { clips: [gdb.idleAnimationNames[0]] };
+    if (resolver.clipByName(gdb.moveAnimationNames?.[0])) data.move = { clips: [gdb.moveAnimationNames[0]] };
   }
 
   // 야스오 정지 모션은 사용자가 지정한 Idle1_Raw를 고정 사용한다(요청 9:
@@ -12527,6 +12679,11 @@ const SKILL_AIM_STYLE = {
 //       rectAtPoint(지점에서 시전자 쪽으로 직사각형) | cone | trapezoid | dash(고정 거리 돌진) | blink(지점 이동) |
 //       wall(야스오 W) | unit(적 대상) | ally(아군 대상, 없으면 자기 시전) | selfAim(자기 중심 원 + 방향) | charge(바루스 Q)
 // instantIf(c): 재시전 등으로 지금은 조준 없이 바로 나가는 상태.
+// 107차: 아트록스 Q 다음 시전 단계(1~3) - 조준·사거리 표시가 단계별 모양을 따른다.
+function aatroxAimStage(c) {
+  const q = c && c._aatrox && c._aatrox.q;
+  return q && performance.now() < (q.windowUntil || 0) ? Math.min(3, q.stage || 1) : 1;
+}
 const SKILL_AIM = {
   garen: { Q: { type: 'instant' }, W: { type: 'instant' }, E: { type: 'instant' }, R: { type: 'unit', range: (c, d) => d.range } },
   darius: {
@@ -12585,6 +12742,19 @@ const SKILL_AIM = {
     Q: { type: 'instant' }, W: { type: 'instant' },
     E: { type: 'dash', range: (c, d) => d.rangeMax, width: (c, d) => 2 * d.halfWidth },
     R: { type: 'ally', range: () => 25000, pickLol: 3000 },
+  },
+  gwen: { // 107차 - Q 사다리꼴(앞 465), W 즉시(재사용 포함), E 지점 돌진(350), R 직선 1350(뒤 100에서)
+    Q: { type: 'trapezoid', range: (c, d) => d.length - d.backOffset, centerHalfWidth: (c, d) => d.nearWidth / 2, startHalfWidth: (c, d) => d.nearWidth / 2, endHalfWidth: (c, d) => d.farWidth / 2 },
+    W: { type: 'instant' },
+    E: { type: 'blink', range: (c, d) => d.range },
+    R: { type: 'line', range: (c, d) => d.range - d.backOffset, width: (c, d) => d.width },
+  },
+  aatrox: { // 107차 - Q는 단계별 모양(1타 직선 625×180, 2타 사다리꼴, 3타 앞 200 원 300), W 직선 825, E 돌진 300, R 즉시
+    Q: { type: 'line', range: (c, d) => aatroxAimStage(c) === 3 ? d.q3.offset + d.q3.radius : aatroxAimStage(c) === 2 ? d.q2.front : d.q1.length,
+      width: (c, d) => aatroxAimStage(c) === 2 ? d.q2.frontWidth : aatroxAimStage(c) === 3 ? d.q3.radius * 2 : d.q1.width },
+    W: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
+    E: { type: 'blink', range: (c, d) => d.range },
+    R: { type: 'instant' },
   },
   rammus: { // 38차
     Q: { type: 'instant' }, W: { type: 'instant' },
@@ -13347,6 +13517,8 @@ const ATTACK_SEQUENCE_OVERRIDES = {
   rammus: ['attack1', 'attack2'], // 38차: 실제 GLB 평타 2개(+Crit)
   lux: ['attack1', 'attack2'], // 47차: 실제 GLB 평타 2개(+Crit)
   shen: ['attack1', 'attack2'], // 105차: 실제 GLB 평타 2개(+Crit)
+  gwen: ['attack1', 'attack2', 'attack3'], // 107차: 실제 GLB 평타 3개(+Crit)
+  aatrox: ['attack1', 'attack2', 'attack3'], // 107차: 실제 GLB 평타 3개(+Crit)
 };
 // 시퀀스 배열에서의 위치를 챔피언 고유의 "손/방향" 의미로 변환한다.
 // 새 챔피언이 추가되면 이 매핑만 확장하면 된다 - 애니메이션 선택 로직
@@ -13420,6 +13592,8 @@ const SKILL_HITBOX_SHAPE = {
   vex: { Q: { type: 'line', widthField: 'widthAfterAccel' }, R: { type: 'line', widthField: 'width' } },
   ahri: { Q: { type: 'line', widthField: 'width' }, E: { type: 'line', widthField: 'width' } },
   lux: { Q: { type: 'line', widthField: 'width' }, W: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' } },
+  gwen: { R: { type: 'line', widthField: 'width' } }, // 107차
+  aatrox: { W: { type: 'line', widthField: 'width' } }, // 107차
 };
 // 45차: 링 길이를 범용 필드(range/range1/radius…)로 못 맞추는 스킬. 숫자(LoL) = 그 길이, null = 표시 안 함(사거리가 없는 스킬).
 // 예전엔 실제로 쓰이지 않는 필드(야스오 W 400, 레넥톤 W 175, 초가스 E 500, 아리 W 600, 바루스 W 750)를 그리거나,
@@ -13431,6 +13605,8 @@ const SKILL_RING_RANGE = {
   chogath: { E: () => null },
   rammus: { R: (c) => (typeof c._rammusRRangeLol === 'function' ? c._rammusRRangeLol() : null) },
   shen: { Q: () => null, W: (c, d) => d.radius, R: () => null }, // 105차: Q는 사거리 없음(검을 불러들임), R은 전 맵
+  gwen: { Q: (c, d) => d.length - d.backOffset, W: (c, d) => d.radius }, // 107차: Q 앞 465, W 안개 반경
+  aatrox: { Q: (c, d) => aatroxAimStage(c) === 3 ? d.q3.offset + d.q3.radius : aatroxAimStage(c) === 2 ? d.q2.front : d.q1.length, R: (c, d) => d.fearRadius }, // 107차
   nilah: { R: (c, d) => d.damageRadius },
   varus: { Q: (c, d) => d.maxRange, W: () => null },
   ahri: { W: (c, d) => d.acquisitionRange, R: (c, d) => d.dashDistance },
@@ -14257,6 +14433,8 @@ class CharacterController {
     this._rammus = { roll: null, wUntil: 0, wStartedAt: 0, wArmor: 0, wMr: 0, jump: null, aftershocks: null, spin: null }; // 38차 람머스(rammus.js)
     if (typeof this._luxReset === 'function') this._luxReset(); else this._lux = null; // 47차 럭스(lux.js) - 남은 구체·영역 메시 정리
     if (typeof this._shenReset === 'function') this._shenReset(); else this._shen = null; // 105차 쉔(shen.js) - 영혼의 검·피난처 메시 정리
+    if (typeof this._gwenReset === 'function') this._gwenReset(); else this._gwen = null; // 107차 그웬(gwen.js) - 안개 메시 정리
+    if (typeof this._aatroxReset === 'function') this._aatroxReset(); else this._aatrox = null; // 107차 아트록스(aatrox.js) - 사슬 메시·크기 정리
     this._nautilus = {
       passiveReadyAt: new Map(),
       qPending: null, qTravel: null, qPull: null,
@@ -14316,6 +14494,8 @@ class CharacterController {
     this.pendingMove = null; this.pendingCast = null; this.targetPos = null; this._approachCast = null;
     if (typeof clearStatusesFromSource === 'function' && typeof listEntities === 'function') clearStatusesFromSource(this, listEntities()); // 94차
     if (typeof this._shenReset === 'function' && this._shenFx && this._shenFx.blade) this._shenReset(); // 105차: 쉔 영혼의 검(씬 메시) - 교체·봇 제거 때 남지 않게
+    if (typeof this._gwenReset === 'function' && this._gwenFx && this._gwenFx.mist) this._gwenReset(); // 107차: 그웬 안개 메시
+    if (typeof this._aatroxReset === 'function' && this._aatroxFx && this._aatroxFx.chain) this._aatroxReset(); // 107차: 아트록스 사슬 메시
     // 챔피언 교체/재선택 중 이전 레넥톤의 지속 R 오라가 남지 않도록 정리한다.
     if (this._renekton?.rAuraVfx && typeof vfx !== 'undefined') {
       vfx.stopRenektonRAura(this._renekton.rAuraVfx);
@@ -14475,9 +14655,11 @@ class CharacterController {
       this.stats.windupPercent = base.windupPercent != null ? base.windupPercent : 0.4;
       this.stats.windupModifier = base.windupModifier != null ? base.windupModifier : 1;
       this.stats.attackSpeedRatio = base.attackSpeedRatio || base.baseAttackSpeed;
-      this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0) + (this.runeArmor || 0);
+      if (this.championId === 'aatrox' && typeof this._aatroxRAdPercent === 'function') this.stats.attackDamage *= 1 + this._aatroxRAdPercent() / 100; // 107차: 아트록스 R 공격력 +20~40%
+      const gwenRes = (this.championId === 'gwen' && typeof this._gwenMistResist === 'function') ? this._gwenMistResist() : 0; // 107차: 그웬 W 안개 안 방어력·마법 저항력
+      this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0) + (this.runeArmor || 0) + gwenRes;
       this.stats.baseArmor = base.armor;
-      this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0) + (this.itemTempMrBonus || 0) + (this.runeMr || 0);
+      this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0) + (this.itemTempMrBonus || 0) + (this.runeMr || 0) + gwenRes;
       // 민첩성의 망토(치명타확률 15%) 등 - 이 프로젝트의 기본 챔피언 스탯에는
       // 애초에 크리티컬 확률이 없고(요네/야스오만 자체 패시브로 매 프레임
       // stats.critChance를 1로 강제 재설정 - _yoneTick/_yasuoTick 참고),
@@ -15301,7 +15483,9 @@ class CharacterController {
     const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
     const chogathRange = (this.championId === 'chogath' && typeof chogathFeastBonus === 'function') ? chogathFeastBonus(this).attackRangeLol : 0; // 81차: 포식 중첩 평타 사거리
     const shenRange = (this.championId === 'shen' && typeof this._shenQRangeBonusLol === 'function') ? this._shenQRangeBonusLol() : 0; // 105차: 황혼의 습격 강화 평타 사거리 +75
-    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange + shenRange);
+    const gwenRange = (this.championId === 'gwen' && typeof this._gwenRangeBonusLol === 'function') ? this._gwenRangeBonusLol() : 0; // 107차: 그웬 E 강화 평타 사거리 +75
+    const aatroxRange = (this.championId === 'aatrox' && typeof this._aatroxRangeBonusLol === 'function') ? this._aatroxRangeBonusLol() : 0; // 107차: 아트록스 패시브 강화 평타 사거리 +50
+    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange + shenRange + gwenRange + aatroxRange);
     // 83차: 공격 속도 감소(얼어붙은 심장 등)는 "총 공격 속도"에 곱한다(출처끼리 곱연산) - 예전엔 추가 공속에서 뺐다.
     this.stats.attackSpeedMultiplier = typeof getAttackSpeedReductionMultiplier === 'function' ? getAttackSpeedReductionMultiplier(this) : 1;
     // 바루스 패시브(살아있는 복수) 중에는 공격 속도 상한 3.33(원작).
@@ -15443,6 +15627,8 @@ class CharacterController {
     if (typeof this._rammusUpdate === 'function') this._rammusUpdate(dt);
     if (typeof this._luxUpdate === 'function') this._luxUpdate(dt);
     if (typeof this._shenUpdate === 'function') this._shenUpdate(dt);
+    if (typeof this._gwenUpdate === 'function') this._gwenUpdate(dt);
+    if (typeof this._aatroxUpdate === 'function') this._aatroxUpdate(dt);
     if (typeof itemSystemTick === 'function') itemSystemTick(this, dt);
   }
 }
@@ -16250,6 +16436,8 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
     if (this.championId === 'renekton') this._renektonOnBasicAttackHit(target);
     if (this.championId === 'lux') this._luxOnBasicAttackHit(target); // 47차: 광채 표식 터뜨리기
     if (this.championId === 'shen') this._shenOnBasicAttackHit(target); // 105차: 황혼의 습격 강화 평타
+    if (this.championId === 'gwen') this._gwenOnBasicAttackHit(target); // 107차: 가위 난도질·가위질 중첩·E 강화 평타
+    if (this.championId === 'aatrox') this._aatroxOnBasicAttackHit(target, overrideId); // 107차: 사신 태세
     // 아리: 여우불의 "아리가 공격한 적" 우선순위 판정에 쓸 마지막 평타
     // 대상/시각을 기록한다(공식 설명 "3초 내 마지막 평타 대상"과 동일).
     if (this.championId === 'ahri' && this._ahri) { this._ahri.lastAttackTarget = target; this._ahri.lastAttackAt = performance.now(); }
@@ -17261,6 +17449,14 @@ const CHAMPION_DIRECT_CASTS = {
     Q: (c, m, f) => c._shenCastQ(m, f), W: (c, m, f) => c._shenCastW(m, f),
     E: (c, m, f) => c._shenCastE(m, f), R: (c, m, f) => c._shenCastR(m, f),
   },
+  gwen: { // 107차
+    Q: (c, m, f) => c._gwenCastQ(m, f), W: (c, m, f) => c._gwenCastW(m, f),
+    E: (c, m, f) => c._gwenCastE(m, f), R: (c, m, f) => c._gwenCastR(m, f),
+  },
+  aatrox: { // 107차
+    Q: (c, m, f) => c._aatroxCastQ(m, f), W: (c, m, f) => c._aatroxCastW(m, f),
+    E: (c, m, f) => c._aatroxCastE(m, f), R: (c, m, f) => c._aatroxCastR(m, f),
+  },
   rammus: {
     Q: (c, m, f) => c._rammusCastQ(m, f), W: (c, m, f) => c._rammusCastW(f),
     E: (c, m, f) => c._rammusCastE(f), R: (c, m, f) => c._rammusCastR(m, f),
@@ -17615,6 +17811,12 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
     }
     // 105차: 쉔 Q(검 불러들이기)·W(피난처)는 시전 시간이 없다 - 평타 중에도 바로.
     if (this.championId === 'shen' && (slot === 'Q' || slot === 'W')) {
+      this._dispatchCast(slot, mouseWorldPoint, false);
+      return;
+    }
+    // 107차: 그웬 W(시전 시간 없음)·E(다른 스킬 도중에도 쓰고 그 스킬을 끊지 않는다)·R(시전 중 이동 가능, 재시전), 아트록스 E(Q·W 도중에도)·
+    // R(시전 중 이동 가능)은 행동 게이트를 거치지 않는다(위키). 사용 가능 여부(군중 제어·침묵·비용)는 각 시전 함수가 확인한다.
+    if ((this.championId === 'gwen' && (slot === 'W' || slot === 'E' || slot === 'R')) || (this.championId === 'aatrox' && (slot === 'E' || slot === 'R'))) {
       this._dispatchCast(slot, mouseWorldPoint, false);
       return;
     }
@@ -19193,7 +19395,7 @@ CharacterController.prototype._isMovementAbility = function(slot) {
   const id = this.championId, now = performance.now();
   switch (id) {
     case 'yasuo': return slot === 'E';
-    case 'renekton': case 'nilah': case 'ezreal': return slot === 'E';
+    case 'renekton': case 'nilah': case 'ezreal': case 'gwen': case 'aatrox': return slot === 'E'; // 107차: 그웬·아트록스 E 돌진
     case 'ahri': return slot === 'R';
     case 'darius': case 'sett': return slot === 'R';
     case 'leesin':
@@ -19399,6 +19601,8 @@ CharacterController.prototype._die = function() {
     if (this.championId === 'rammus' && typeof this._rammusReset === 'function') this._rammusReset();
     if (this.championId === 'lux' && typeof this._luxReset === 'function') this._luxReset();
     if (this.championId === 'shen' && typeof this._shenOnDeath === 'function') this._shenOnDeath(); // 105차: 강화 평타·궁극기 집중·피난처 정리(검은 남는다)
+    if (this.championId === 'gwen' && typeof this._gwenOnDeath === 'function') this._gwenOnDeath(); // 107차: 안개·재시전 창 정리
+    if (this.championId === 'aatrox' && typeof this._aatroxOnDeath === 'function') this._aatroxOnDeath(); // 107차: Q 창·사슬·R 정리
     // 세트 R 도중 사망: 위 _clearActionTimers()가 시퀀스를 끊으면 잡힌 대상의 제압(isGrabbedBySett)이
     // 풀리지 않고 영구히 남았다 - 정상 종료 함수로 대상을 먼저 풀어준다.
     if (this._sett?.rSeq) { this.pendingMove = null; this.pendingCast = null; this.currentTarget = null; this._settEndR(this._sett.rSeq, true); }
@@ -29694,6 +29898,881 @@ CharacterController.prototype._luxReset = function() {
   this._lux = { marks: new Map(), orbs: [], wands: [], zone: null, serial: 0 };
 };
 
+/* ===== src/champions/gwen.js ===== */
+/* ============================================================
+   그웬(Gwen) 전투 로직 - 107차
+   ------------------------------------------------------------
+   쉔·럭스와 같은 패턴 - CharacterController.prototype 확장. 수치는 전부 champion_data.js의 gwen 항목
+   (리그 오브 레전드 위키 Gwen 문서). 상태는 둘로 나눈다:
+     this._gwen   - 평범한 값만(온라인 대전에서 참가자에게 그대로 보낸다 - NET_CHAMP_STATE_KEY). 시각 필드는 …At/…Until.
+     this._gwenFx - 씬 메시·투사체·Set(보내지 않는다 - 안개 메시는 netMirror로 복제)
+
+   원작 규칙(위키) 그대로:
+   - 패시브(가위 난도질): 기본 공격 적중·Q 가운데·R 바늘이 대상 최대 체력 1%(+주문력 100당 0.6%) 추가 마법 피해.
+     챔피언에게 준 그 피해의 67%만큼 회복(한 번에 12~40 + 주문력 7%까지). 체력 40% 미만 미니언에게 8~30 추가. 구조물 제외.
+   - Q(싹둑싹둑!): 평타 적중마다 가위질 중첩(최대 4, 6초). 0.5초 동안 최소 2번(첫 0.13초·마지막 0.5초) + 중첩마다 1번 더 자른다.
+     범위는 사다리꼴(뒤 50 ~ 앞 465, 폭 75 → 360) ∩ 원(뒤 50 중심, 515) 또는 그웬 몸. 가운데(폭 25)는 피해의 50%가 고정 피해 +
+     패시브. 미니언에게 80%, 체력 20% 미만 미니언은 첫 타에 처치.
+   - W(신성한 안개): 4초 동안 반경 480 안개. 안의 그웬은 유체화·방어력·마법 저항력 22~30(+주문력 7%) 증가, 안개 밖의 적
+     (포탑 제외)에게 대상으로 지정되지 않는다(피해도 받지 않는다). 0.5초 뒤 한 번 다시 써서 안개를 부를 수 있고, 처음으로
+     안개를 떠나려 하면 저절로 다시 쓴다(안개는 그웬 너머 75로 속도 2000). 그다음 안개를 떠나면 효과가 끝난다(Data Dragon 설명).
+     재사용 대기시간은 효과가 끝난 뒤 돈다.
+   - E(돌격가위): 350 지점으로 돌진(평타 초기화), 4초 동안 평타 공속 30~80%·사거리 +75·적중 시 15(+주문력 20%) 마법 피해.
+     첫 적중이 재사용 대기시간 25~65%를 돌려준다. 다른 스킬 도중에도 쓰며 그 스킬을 끊지 않는다(Q 가위질은 그대로).
+   - R(바느질): 1·3·5개 바늘(8초 안에 2번 재시전, 사이 1초). 바늘은 뒤 100에서 1350 날아가며 지나간 적 모두에게 피해 + 패시브,
+     첫 바늘은 1.5초 둔화 40~60%, 같은 시전의 다음 바늘은 15~25%. 폭은 날아가며 240 → 30. 시전 중에도 움직일 수 있다.
+   원작과 다른 점(명시): E 돌진 속도(800)는 위키에 없어 CommunityDragon 게임 데이터 값. 안개가 멀리 떨어지면 순간 이동하는
+   거리(1000)도 추정. 안개 밖에서 이미 날아오던 미니언 투사체도 막는다(원작은 미니언 투사체는 맞는다).
+   ============================================================ */
+
+CharacterController.prototype._gwenIsAlive = function() {
+  return this.hp > 0 && this.state !== STATE.DEAD && this.state !== STATE.RESPAWN;
+};
+CharacterController.prototype._gwenLevelLerp = function(at1, at18) {
+  const lvl = Math.max(1, Math.min(18, this.champLevel || 1));
+  return at1 + (at18 - at1) * (lvl - 1) / 17;
+};
+CharacterController.prototype._gwenAimDir = function(mouseWorldPoint) {
+  const dir = mouseWorldPoint
+    ? new THREE.Vector3(mouseWorldPoint.x - this.root.position.x, 0, mouseWorldPoint.z - this.root.position.z)
+    : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion).setY(0);
+  if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1).applyQuaternion(this.root.quaternion).setY(0);
+  return dir.normalize();
+};
+CharacterController.prototype._gwenHealSelf = function(amount) {
+  if (!(amount > 0) || !(this.hp > 0)) return;
+  this.hp = Math.min(this.maxHp, this.hp + amount * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(this) : 1));
+  updateBars(this);
+};
+CharacterController.prototype._gwenSpellTarget = function(u) {
+  return !!u && u.hp > 0 && !u.isStructure && !u.isWard && !u.isUntargetable && !(typeof canRealmInteract === 'function' && !canRealmInteract(this, u));
+};
+
+/* ---------------- 패시브 - 가위 난도질 ---------------- */
+// fromAttack: 기본 공격 적중(평타 추가 피해로 분류) / 아니면 스킬(Q 가운데·R 바늘)
+CharacterController.prototype._gwenPassiveProc = function(target, fromAttack) {
+  if (!target || !(target.hp > 0) || target.isStructure || target.isWard) return 0;
+  const p = this._champData().passive, ap = this.stats.abilityPower || 0;
+  let raw = (target.maxHp || 0) * (p.maxHpPercent + p.maxHpPercentPer100Ap * ap / 100) / 100;
+  if (target.isMinion && target.hp < (target.maxHp || 0) * p.minionLowHpThreshold) raw += this._gwenLevelLerp(p.minionBonusAt1, p.minionBonusAt18);
+  const dealt = applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1,
+    isBasicAttack: !!fromAttack, isOnHitBonus: !!fromAttack, isAbility: !fromAttack, source: this }) || 0;
+  if (target.isChampion && dealt > 0) {
+    const cap = this._gwenLevelLerp(p.healCapAt1, p.healCapAt18) + p.healCapApRatio * ap;
+    this._gwenHealSelf(Math.min(cap, dealt * p.healPercentVsChampions / 100));
+  }
+  return dealt;
+};
+// controller_combat.js _onBasicAttackHit()에서: 가위질 중첩 + 패시브 + E 강화 평타
+CharacterController.prototype._gwenOnBasicAttackHit = function(target) {
+  const s = this._gwen;
+  if (!s || !target || target.isWard) return;
+  const now = performance.now(), d = this._champData();
+  if (!target.isStructure) {
+    s.snips = Math.min(d.Q.maxStacks, ((s.snipsUntil || 0) > now ? s.snips : 0) + 1);
+    s.snipsUntil = now + d.Q.stackDurationSec * 1000;
+    this._gwenPassiveProc(target, true);
+  }
+  if ((s.eUntil || 0) > now && target.hp > 0 && !target.isStructure) {
+    applyDamage(target, { rawDamage: d.E.onHitDamage + d.E.onHitApRatio * (this.stats.abilityPower || 0), damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this });
+  }
+  if ((s.eUntil || 0) > now && s.eRefundPending) { // 지속 시간 안의 첫 적중이 E 재사용 대기시간을 돌려준다
+    s.eRefundPending = false;
+    const total = (this._gwenFx && this._gwenFx.eCdTotal) || 0;
+    if (this.cooldowns.E > 0 && total > 0) this.cooldowns.E = Math.max(0, this.cooldowns.E - total * skillVal(d.E.cdRefundPercentByLevel, s.eLvl || 1) / 100);
+  }
+};
+
+/* ---------------- Q - 싹둑싹둑! ---------------- */
+// 판정: 사다리꼴(뒤 backOffset ~ 앞 length-backOffset, 폭 nearWidth → farWidth) ∩ 원(뒤 backOffset 중심, circleRadius), 또는 그웬 몸.
+// 가운데(폭 centerWidth 직사각형)에 닿으면 center. 대상의 판정 반경만큼 여유(가장자리 판정).
+CharacterController.prototype._gwenQHits = function(origin, dir) {
+  const q = this._champData().Q, out = [];
+  const back = q.backOffset, front = q.length - q.backOffset;
+  const cx = origin.x - dir.x * lolRangeToWorld(back), cz = origin.z - dir.z * lolRangeToWorld(back);
+  const myR = getCollisionRadius(this);
+  for (const u of getAllEnemyUnits()) {
+    if (!this._gwenSpellTarget(u)) continue;
+    const p = getWorldPosition(u); if (!p) continue;
+    const r = getCollisionRadius(u), rL = worldDistanceToLol(r);
+    const dx = p.x - origin.x, dz = p.z - origin.z;
+    const along = worldDistanceToLol(dx * dir.x + dz * dir.z);
+    const lateral = worldDistanceToLol(Math.abs(-dx * dir.z + dz * dir.x));
+    const inLength = along >= -back - rL && along <= front + rL;
+    const t = Math.max(0, Math.min(1, (along + back) / q.length));
+    const inTrap = inLength && lateral <= (q.nearWidth + (q.farWidth - q.nearWidth) * t) / 2 + rL;
+    const inCircle = Math.hypot(p.x - cx, p.z - cz) <= lolRangeToWorld(q.circleRadius) + r;
+    const inBody = Math.hypot(dx, dz) <= myR + r;
+    if (!((inTrap && inCircle) || inBody)) continue;
+    out.push({ unit: u, center: inLength && lateral <= q.centerWidth / 2 + rL });
+  }
+  return out;
+};
+CharacterController.prototype._gwenCastQ = function(mouseWorldPoint, free = false) {
+  if (!this._gwenIsAlive() || isSilenced(this) || isCrowdControlled(this) || this._gwen.q) return;
+  const q = this._champData().Q;
+  const dir = this._gwenAimDir(mouseWorldPoint);
+  if (!this._payCost('Q', free)) return;
+  const s = this._gwen, now = performance.now();
+  const stacks = (s.snipsUntil || 0) > now ? (s.snips || 0) : 0;
+  s.snips = 0; s.snipsUntil = 0;
+  const cast = { serial: (this._gwenFx.qSerial = (this._gwenFx.qSerial || 0) + 1), dirX: dir.x, dirZ: dir.z, lvl: Math.max(1, this.skillLevels.Q || 1), stacks };
+  s.q = cast;
+  this._gwenFx.qMinionHit = new Set(); // 미니언 처치 판정은 "첫 피해"에서만
+  this.faceDirectionInstant(dir);
+  this._clearActionTimers();
+  this.targetPos = null; this.isChasing = false;
+  this.currentActionKey = 'gwenQ'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
+  this.setState(STATE.Q_CAST);
+  this.playFirstAvailable(['Spell1_0'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
+  // 가위질 시각: 첫 0.13초, 중첩 수만큼 0.45·0.4·0.35·0.23초, 마지막(강한 가위질)은 시전 끝.
+  const times = [q.firstSnipSec, ...q.bonusSnipTimesSec.slice(0, stacks)].sort((a, b) => a - b);
+  for (const t of times) this._champTimeout(() => this._gwenQSnip(cast, false), t * 1000);
+  const fin = this._champTimeout(() => {
+    this._gwenQSnip(cast, true);
+    if (this._gwen && this._gwen.q === cast) this._gwen.q = null;
+    if (this.currentActionKey !== 'gwenQ') return;
+    this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
+    if (this._dashState) { this.currentActionKey = 'gwenE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false; return; } // Q 도중 쓴 E 돌진이 아직 진행 중
+    if (this.pendingMove || this.pendingCast || this.attackOrderActive) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+  }, q.castTimeSec * 1000);
+  this._actionTimers.push(fin);
+  const clip = this.findAnimation('Spell1_0');
+  const done = this._champTimeout(() => {
+    if (this.currentActionKey === 'gwenQ') { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+  }, Math.max(q.castTimeSec + 0.05, Math.min(1.0, clip ? clip.duration : 0.8)) * 1000);
+  this._actionTimers.push(done);
+  debugSkillHit('Gwen Q(싹둑싹둑!)', this, { stacks, snips: times.length + 1 });
+};
+CharacterController.prototype._gwenQSnip = function(cast, final) {
+  if (this.championId !== 'gwen' || !this._gwenIsAlive() || !this._gwen || this._gwen.q !== cast || this.currentActionKey !== 'gwenQ') return; // 기절 등으로 끊기면 남은 가위질은 없다
+  const q = this._champData().Q, ap = this.stats.abilityPower || 0;
+  const raw = final ? skillVal(q.finalDamageByLevel, cast.lvl) + q.finalApRatio * ap : skillVal(q.snipDamageByLevel, cast.lvl) + q.snipApRatio * ap;
+  const dir = new THREE.Vector3(cast.dirX, 0, cast.dirZ);
+  const minionHit = this._gwenFx.qMinionHit || (this._gwenFx.qMinionHit = new Set());
+  for (const { unit: u, center } of this._gwenQHits(this.root.position, dir)) {
+    if (u.isMinion && !minionHit.has(u)) {
+      minionHit.add(u);
+      if (u.hp < (u.maxHp || 0) * q.minionExecuteThreshold) { // 체력 20% 미만 미니언은 첫 피해에 처치(위키)
+        applyDamage(u, { rawDamage: (u.maxHp || 1000) * 10, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isAbility: true, isAoE: true, source: this });
+        continue;
+      }
+    }
+    const dmg = raw * (u.isMinion ? q.minionDamageMultiplier : 1);
+    const trueShare = center ? dmg * q.trueDamageConversion : 0;
+    applyDamage(u, { rawDamage: dmg - trueShare, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isAbility: true, isAoE: true, source: this });
+    if (center && u.hp > 0) {
+      applyDamage(u, { rawDamage: trueShare, damageType: DAMAGE_TYPE.TRUE, isCritical: false, critMultiplier: 1, isAbility: true, isAoE: true, source: this });
+      this._gwenPassiveProc(u, false);
+    }
+  }
+  if (typeof vfx !== 'undefined') {
+    const at = this.root.position.clone().addScaledVector(dir, lolRangeToWorld(final ? 300 : 220)).add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
+    vfx.spawn('hit', at, undefined, { color: final ? 0xd9f4ff : 0x9fdcff });
+  }
+};
+
+/* ---------------- W - 신성한 안개 ---------------- */
+function gwenMistActive(gwen) {
+  const z = gwen && gwen._gwen && gwen._gwen.mist;
+  return !!z && gwen.hp > 0 && performance.now() < (z.activeUntil || 0);
+}
+// 그웬이 자기 안개 안에 있는가(안개가 그웬에게 날아가는 중이면 안에 있는 것으로 친다)
+function gwenInsideMist(gwen) {
+  if (!gwenMistActive(gwen)) return false;
+  const z = gwen._gwen.mist, p = getWorldPosition(gwen);
+  return !!z.moveTo || Math.hypot(p.x - z.x, p.z - z.z) <= lolRangeToWorld(CHAMPION_DATA.gwen.W.radius);
+}
+// observer(적)가 안개 밖에 있어서 그웬을 대상으로 지정할 수 없는가 - 포탑·구조물은 예외(위키)
+function gwenMistHides(target, observer) {
+  if (!target || target.championId !== 'gwen' || !observer || observer === target) return false;
+  if (observer.isTurret || observer.isStructure) return false;
+  if (observer.team && target.team && observer.team === target.team) return false;
+  if (!gwenInsideMist(target)) return false;
+  const op = getWorldPosition(observer); if (!op) return false;
+  const z = target._gwen.mist;
+  return Math.hypot(op.x - z.x, op.z - z.z) > lolRangeToWorld(CHAMPION_DATA.gwen.W.radius);
+}
+// 공용 피해 진입점(applyDamage)에서: 안개 안의 그웬은 안개 밖 적의 피해를 받지 않는다(이미 걸린 지속 피해는 들어간다)
+function gwenMistBlocksDamage(target, result) {
+  if (!target || target.championId !== 'gwen' || !result || result.isStatusTick) return false;
+  const src = typeof resolveDamageSource === 'function' ? resolveDamageSource(result.source, target) : result.source;
+  return !!src && gwenMistHides(target, src);
+}
+CharacterController.prototype._gwenMistResist = function() {
+  const s = this._gwen;
+  if (!s || !s.wInside) return 0;
+  const w = this._champData().W;
+  return skillVal(w.bonusResistByLevel, Math.max(1, (s.mist && s.mist.lvl) || this.skillLevels.W || 1)) + w.bonusResistApRatio * (this.stats.abilityPower || 0);
+};
+CharacterController.prototype._gwenCastW = function(mouseWorldPoint, free = false) {
+  if (!this._gwenIsAlive()) return;
+  const s = this._gwen, w = this._champData().W, now = performance.now();
+  if (s.mist && gwenMistActive(this)) { // 재사용: 안개를 부른다(한 번, 0.5초 뒤부터)
+    if (s.mist.recastUsed) { showSkillToast('W - 안개는 이미 한 번 불렀습니다'); return; }
+    if (now < (s.mist.recastAt || 0)) return;
+    this._gwenRecastW(this.root.position);
+    return;
+  }
+  if (isSilenced(this) || isCrowdControlled(this)) return;
+  if (!this._payCost('W', free)) return;
+  const lvl = Math.max(1, this.skillLevels.W || 1);
+  this.cooldowns.W = 0; // 재사용 대기시간은 효과가 끝난 뒤(위키 cdstart post-effect)
+  const p = this.root.position;
+  s.mist = { x: p.x, z: p.z, lvl, activeUntil: now + w.durationSec * 1000, recastAt: now + w.recastDelaySec * 1000, recastUsed: false, moveTo: null, cdSec: free ? 0 : skillVal(w.cooldown, lvl) };
+  if (!this.currentActionKey && !this._dashState) this.playFirstAvailable(['Spell2'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: false });
+  this._gwenTickMist(0);
+  debugSkillHit('Gwen W(신성한 안개)', this, { radius: w.radius });
+};
+// 안개를 point 너머 75로 부른다(원작 - 옛 중심에서 point를 지나는 직선 위)
+CharacterController.prototype._gwenRecastW = function(point) {
+  const z = this._gwen && this._gwen.mist;
+  if (!z || z.recastUsed) return false;
+  const w = this._champData().W;
+  const dx = point.x - z.x, dz = point.z - z.z, d = Math.hypot(dx, dz), over = lolRangeToWorld(w.recastOvershoot);
+  z.moveTo = d > 1e-6 ? { x: point.x + dx / d * over, z: point.z + dz / d * over } : { x: point.x, z: point.z };
+  z.recastUsed = true;
+  return true;
+};
+CharacterController.prototype._gwenEndMist = function() {
+  const s = this._gwen; if (!s || !s.mist) return;
+  const z = s.mist; s.mist = null;
+  if (z.cdSec > 0) this.cooldowns.W = abilityHasteCooldown(this, z.cdSec, 'W');
+  clearStatus(this, 'gwenW_ghost');
+  if (s.wInside) { s.wInside = false; if (typeof this.recomputeStats === 'function') this.recomputeStats(); }
+};
+CharacterController.prototype._gwenEnsureMistMesh = function() {
+  const fx = this._gwenFx;
+  if (fx.mist || typeof scene === 'undefined') return fx.mist || null;
+  const r = lolRangeToWorld(CHAMPION_DATA.gwen.W.radius);
+  const g = new THREE.Group(); g.name = 'gwenHallowedMist';
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 48), new THREE.MeshBasicMaterial({ color: 0xcfe6ff, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide }));
+  disc.rotation.x = -Math.PI / 2; g.add(disc);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(r * 0.96, r, 64), new THREE.MeshBasicMaterial({ color: 0xeaf6ff, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.002; g.add(ring);
+  scene.add(g);
+  fx.mist = g;
+  return g;
+};
+CharacterController.prototype._gwenTickMist = function(dt) {
+  const s = this._gwen, w = this._champData().W, now = performance.now();
+  const z = s.mist;
+  if (z && (!this._gwenIsAlive() || now >= z.activeUntil)) { this._gwenEndMist(); return this._gwenTickMist(dt); }
+  if (!z) {
+    if (s.wInside) { s.wInside = false; if (typeof this.recomputeStats === 'function') this.recomputeStats(); }
+    if (this._gwenFx.mist) this._gwenFx.mist.visible = false;
+    return;
+  }
+  if (z.moveTo) { // 안개가 그웬 쪽으로(속도 2000, 너무 멀면 순간 이동)
+    const dx = z.moveTo.x - z.x, dz = z.moveTo.z - z.z, d = Math.hypot(dx, dz), step = lolRangeToWorld(w.mistSpeed) * dt;
+    if (d <= step || d > lolRangeToWorld(w.teleportBeyond)) { z.x = z.moveTo.x; z.z = z.moveTo.z; z.moveTo = null; }
+    else { z.x += dx / d * step; z.z += dz / d * step; }
+  }
+  const me = this.root.position;
+  const inside = Math.hypot(me.x - z.x, me.z - z.z) <= lolRangeToWorld(w.radius);
+  if (!inside && !z.moveTo) {
+    if (!z.recastUsed) this._gwenRecastW(me); // 처음으로 안개를 떠나려 하면 저절로 다시 쓴다
+    else { this._gwenEndMist(); return this._gwenTickMist(dt); } // 그다음에 떠나면 효과가 끝난다
+  }
+  const covered = gwenInsideMist(this);
+  if (covered) applyStatus(this, { id: 'gwenW_ghost', type: 'GHOST', duration: 0.25, value: 1, source: this });
+  if (covered !== !!s.wInside) { s.wInside = covered; if (typeof this.recomputeStats === 'function') this.recomputeStats(); }
+  const mesh = this._gwenEnsureMistMesh();
+  if (mesh) {
+    mesh.position.set(z.x, me.y + 0.03, z.z);
+    mesh.visible = true;
+    if (typeof netMirror === 'function') netMirror(mesh);
+  }
+};
+
+/* ---------------- E - 돌격가위 ---------------- */
+CharacterController.prototype._gwenRangeBonusLol = function() {
+  const s = this._gwen;
+  return s && (s.eUntil || 0) > performance.now() ? this._champData().E.bonusRange : 0;
+};
+CharacterController.prototype._gwenCastE = function(mouseWorldPoint, free = false) {
+  if (!this._gwenIsAlive() || isCrowdControlled(this) || isRooted(this) || this._dashState) return;
+  const e = this._champData().E, s = this._gwen;
+  const from = this.root.position.clone();
+  const dir = this._gwenAimDir(mouseWorldPoint);
+  const want = mouseWorldPoint ? Math.hypot(mouseWorldPoint.x - from.x, mouseWorldPoint.z - from.z) : lolRangeToWorld(e.range);
+  if (!this._payCost('E', free)) return;
+  const lvl = Math.max(1, this.skillLevels.E || 1);
+  this._gwenFx.eCdTotal = this.cooldowns.E || 0;
+  // 기본 공격 도중이면 그 공격은 끊는다(Q·R 같은 스킬은 끊지 않는다 - 위키)
+  const inAttack = !!this.currentActionKey && (this.currentActionKey.startsWith('attack') || this.currentActionKey === 'crit');
+  if (inAttack) { this._clearActionTimers(); this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false; }
+  const travel = Math.min(lolRangeToWorld(e.range), want); // 최소 거리 없음, 사거리 밖이면 최대
+  let to = from.clone().addScaledVector(dir, travel);
+  if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap && howlingAbyssMap.clampPosition) to = howlingAbyssMap.clampPosition(to);
+  to.y = from.y;
+  // 안개 안에서 돌진해 밖으로 나가면 안개가 돌진 끝 지점으로 온다(위키)
+  if (s.mist && gwenMistActive(this) && !s.mist.recastUsed && Math.hypot(to.x - s.mist.x, to.z - s.mist.z) > lolRangeToWorld(this._champData().W.radius)) this._gwenRecastW(to);
+  this.faceDirectionInstant(dir);
+  if (typeof this.resetAttackTimer === 'function') this.resetAttackTimer(); // 평타 초기화
+  const duringQ = this.currentActionKey === 'gwenQ';
+  if (!duringQ) {
+    this._clearActionTimers();
+    this.currentActionKey = 'gwenE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
+    this.targetPos = null; this.isChasing = false;
+    this.setState(STATE.E_CAST);
+    this.playFirstAvailable(['Spell3_Dash'], { loop: THREE.LoopOnce, fade: 0.04, clampWhenFinished: true });
+  }
+  const dist = worldDistanceToLol(getHorizontalDistance(from, to));
+  this._dashState = { from, to, duration: Math.max(0.05, dist / e.dashSpeed), elapsed: 0, faceDir: dir.clone(),
+    onArrive: () => {
+      if (this.championId !== 'gwen' || !this._gwen) return;
+      const now = performance.now();
+      this._gwen.eUntil = now + e.buffDurationSec * 1000; this._gwen.eLvl = lvl; this._gwen.eRefundPending = true;
+      applyStatus(this, { id: 'gwenE_as', type: 'AS_BUFF', duration: e.buffDurationSec, value: skillVal(e.bonusAttackSpeedPercentByLevel, lvl) / 100, source: this });
+      if (this.currentActionKey === 'gwenE') {
+        this.currentActionKey = null; this.currentPhase = null; this.setState(STATE.IDLE);
+        const moving = !!(this.pendingMove || this.targetPos);
+        this.playFirstAvailable([moving ? 'Spell3_to_Run.anm' : 'Spell3_Into_IDLE'], { loop: THREE.LoopOnce, fade: 0.08, clampWhenFinished: true });
+        this._resumeAfterAction();
+      }
+    } };
+  debugSkillHit('Gwen E(돌격가위)', this, { dist: Math.round(dist) });
+};
+
+/* ---------------- R - 바느질 ---------------- */
+CharacterController.prototype._gwenCastR = function(mouseWorldPoint, free = false) {
+  if (!this._gwenIsAlive() || isSilenced(this) || isCrowdControlled(this)) return;
+  const s = this._gwen, rd = this._champData().R, now = performance.now();
+  const dir = this._gwenAimDir(mouseWorldPoint);
+  if (s.r && now < (s.r.windowUntil || 0) && s.r.casts < 3) { // 재시전(비용 없음, 사이 고정 1초)
+    if (now < (s.r.nextAt || 0)) return;
+    s.r.casts += 1;
+    s.r.windowUntil = now + rd.recastWindowSec * 1000;
+    s.r.nextAt = now + rd.recastLockoutSec * 1000;
+    const idx = s.r.casts - 1, lvl = s.r.lvl;
+    if (s.r.casts >= 3) s.r = null;
+    this._gwenFireR(idx, dir, lvl);
+    return;
+  }
+  if (!this._payCost('R', free)) return;
+  const lvl = Math.max(1, this.skillLevels.R || 1);
+  s.r = { casts: 1, lvl, windowUntil: now + rd.recastWindowSec * 1000, nextAt: now + rd.recastLockoutSec * 1000 };
+  this._gwenFireR(0, dir, lvl);
+};
+// idx번째 시전(0·1·2): 시전 0.25초 시점의 그웬 위치(뒤 100)에서 정해진 시각마다 바늘을 같은 직선으로 날린다.
+CharacterController.prototype._gwenFireR = function(idx, dir, lvl) {
+  const rd = this._champData().R;
+  if (!this.currentActionKey && !this._dashState && !this.targetPos) this.playFirstAvailable([idx === 0 ? 'Spell4_0' : 'Spell4.anm'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: false });
+  this.faceDirectionInstant(dir);
+  const slowed = new Set(); // 이 시전에서 이미 첫 둔화를 받은 대상
+  const delays = rd.needleDelaysSec[idx] || rd.needleDelaysSec[0];
+  let origin = null;
+  for (const delay of delays) {
+    this._champTimeout(() => {
+      if (this.championId !== 'gwen' || !this._gwenIsAlive()) return; // 시전 도중 죽으면 남은 바늘은 나가지 않는다(위키)
+      if (!origin) origin = this.root.position.clone().addScaledVector(dir, -lolRangeToWorld(rd.backOffset)).add(new THREE.Vector3(0, BASE_UNIT * 0.7, 0));
+      this._gwenSpawnNeedle(origin, dir, lvl, slowed);
+    }, delay * 1000);
+  }
+  debugSkillHit(`Gwen R(바느질) ${idx + 1}번째`, this, { needles: delays.length });
+};
+CharacterController.prototype._gwenSpawnNeedle = function(origin, dir, lvl, slowed) {
+  const rd = this._champData().R;
+  const proj = projectiles.spawn({
+    from: origin.clone(), speed: lolRangeToWorld(rd.missileSpeed), color: 0xcfeaff, realmId: this.realmId,
+    line: { dir: dir.clone(), maxDist: lolRangeToWorld(rd.range), halfWidth: lolRangeToWorld(rd.width) * 0.5, pierce: true,
+      filter: (u) => this._gwenSpellTarget(u) },
+    onHit: (u) => {
+      if (this.championId !== 'gwen' || !u || !(u.hp > 0)) return;
+      const raw = skillVal(rd.damageByLevel, lvl) + rd.apRatio * (this.stats.abilityPower || 0);
+      applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isAbility: true, isUltimate: true, source: this });
+      if (u.hp > 0) this._gwenPassiveProc(u, false);
+      if (u.hp > 0) {
+        if (!slowed.has(u)) { slowed.add(u); applyStatus(u, { id: 'gwenR_slow', type: 'SLOW', duration: rd.slowDurationSec, value: skillVal(rd.slowPercentByLevel, lvl) / 100, source: this }); }
+        else applyStatus(u, { id: 'gwenR_slow2', type: 'SLOW', duration: rd.slowDurationSec, value: skillVal(rd.subsequentSlowPercentByLevel, lvl) / 100, source: this });
+      }
+    },
+  });
+  this._gwenFx.needles.push(proj);
+};
+// 바늘 폭은 0.5초 날아갈 때마다 140씩 준다(240 → 30, 위키) - 매 프레임 투사체 판정 폭을 줄인다.
+CharacterController.prototype._gwenTickNeedles = function() {
+  const rd = this._champData().R, list = this._gwenFx.needles;
+  const perLol = 140 / (rd.missileSpeed * 0.5);
+  for (let i = list.length - 1; i >= 0; i--) {
+    const p = list[i];
+    if (!p || p.done || !p.line) { list.splice(i, 1); continue; }
+    const widthLol = Math.max(rd.widthEnd, rd.width - perLol * worldDistanceToLol(p.line.traveled || 0));
+    p.line.halfWidth = lolRangeToWorld(widthLol) * 0.5;
+  }
+};
+
+/* ---------------- 매 프레임 / 정리 ---------------- */
+CharacterController.prototype._gwenUpdate = function(dt) {
+  if (this.championId !== 'gwen' || !this._gwen) return;
+  const s = this._gwen, now = performance.now();
+  if (s.snips > 0 && (s.snipsUntil || 0) <= now) { s.snips = 0; s.snipsUntil = 0; }
+  if (s.eUntil && s.eUntil <= now) { s.eUntil = 0; s.eRefundPending = false; }
+  if (s.r && now >= (s.r.windowUntil || 0)) s.r = null;
+  if (s.q && this.currentActionKey !== 'gwenQ') s.q = null; // 끊긴 Q가 다음 Q를 막지 않게
+  this._gwenTickMist(dt);
+  this._gwenTickNeedles();
+};
+CharacterController.prototype._gwenOnDeath = function() {
+  if (!this._gwen) return;
+  this._gwenEndMist();
+  const s = this._gwen;
+  s.q = null; s.r = null; s.snips = 0; s.snipsUntil = 0; s.eUntil = 0; s.eRefundPending = false;
+  if (this._gwenFx.mist) this._gwenFx.mist.visible = false;
+};
+CharacterController.prototype._gwenReset = function() {
+  const fx = this._gwenFx;
+  if (fx && fx.mist) {
+    if (fx.mist.parent) fx.mist.parent.remove(fx.mist);
+    fx.mist.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  }
+  this._gwenFx = { mist: null, needles: [], qMinionHit: null, eCdTotal: 0, qSerial: 0 };
+  this._gwen = { snips: 0, snipsUntil: 0, q: null, mist: null, wInside: false, eUntil: 0, eLvl: 1, eRefundPending: false, r: null };
+};
+
+/* ===== src/champions/aatrox.js ===== */
+/* ============================================================
+   아트록스(Aatrox) 전투 로직 - 107차
+   ------------------------------------------------------------
+   쉔·그웬과 같은 패턴 - CharacterController.prototype 확장. 수치는 전부 champion_data.js의 aatrox 항목
+   (리그 오브 레전드 위키 Aatrox 문서). 상태는 둘로 나눈다:
+     this._aatrox   - 평범한 값만(온라인 대전에서 그대로 보낸다 - NET_CHAMP_STATE_KEY). 시각 필드는 …At/…Until.
+     this._aatroxFx - 씬 메시·대상 참조(보내지 않는다)
+
+   원작 규칙(위키) 그대로:
+   - 패시브(사신 태세): 재사용 대기시간(22~10초, 고정)이 끝나면 다음 기본 공격이 사거리 +50, 대상 최대 체력 4~10% 추가 마법 피해
+     (구조물 제외), 준 추가 피해만큼 회복(미니언 25%). 강화 평타 동작은 GLB의 Passive_Attack.
+     적 챔피언에게 평타·스킬을 맞히면 남은 재사용 대기시간 2초 감소(Q 강타 지점 4초).
+   - Q(다르킨의 검): 3번까지(사이 고정 1초, 4초 안에 다시 쓰지 않으면 끝). 0.6초 시전 뒤 판정 - 시전 방향은 고정, 위치는 시전
+     끝의 아트록스. 1타 625×180 직사각형(먼 끝 강타), 2타 뒤 100 ~ 앞 475 사다리꼴(폭 300 → 500, 먼 끝 강타), 3타 앞 200 중심 원
+     300(가운데 180 강타). 피해 10~70 + 총 공격력 60~90%, 2·3타 +25%·+50%, 강타 지점 ×1.75 + 0.25초 공중에 뜸.
+     미니언에게 55~70%. 재사용 대기시간은 마지막 시전부터 돈다. 시전 중 E는 쓸 수 있고 다른 스킬은 막힌다.
+   - W(지옥사슬): 0.25초 뒤 825 직선(폭 160, 속도 1800) 첫 적에게 물리 피해 30~70 + 총 공격력 40%(미니언 2배), 1.5초 둔화.
+     챔피언이면 1.5초 사슬 - 끝까지 영역 안에 있으면 같은 피해를 한 번 더 주고 가운데로 끌어온다.
+   - E(파멸의 돌진): 기본 지속 - 챔피언에게 준 피해(지속 피해 제외)의 16%(+추가 체력 100당 1.3%) 회복.
+     사용 - 75~300 돌진(속도 800), 평타 초기화, Q·W·R 도중에도 쓰며 그 스킬을 끊지 않는다.
+   - R(세계의 종결자): 10초 동안 공격력 +20~40%, 크기 +5%, 유체화, 받는 회복 +50~100%, 추가 이동 속도 60~100%(0.25초마다
+     남은 값의 10%씩 감소). 주변 600 적 미니언 3초 공포(둔화가 99%까지 점점). 챔피언 처치 관여마다 5초 연장(최대 10초), 다시 해방.
+   원작과 다른 점(명시): Q 1·2타 강타 지점 깊이(먼 끝 150)와 W 영역 반경(300)·끌어오는 시간(0.3초)은 위키·게임 데이터
+   (CommunityDragon)에 없어 추정. 기본 Q·W 시전 동작(Spell1·Spell2)이 GLB에 없어 Q는 변신판 휘두르기(Q1~3_Ult)를 쓰고 W는 동작 없이 시전한다.
+   ============================================================ */
+
+CharacterController.prototype._aatroxIsAlive = function() {
+  return this.hp > 0 && this.state !== STATE.DEAD && this.state !== STATE.RESPAWN;
+};
+CharacterController.prototype._aatroxLevelLerp = function(at1, at18) {
+  const lvl = Math.max(1, Math.min(18, this.champLevel || 1));
+  return at1 + (at18 - at1) * (lvl - 1) / 17;
+};
+CharacterController.prototype._aatroxAimDir = function(mouseWorldPoint) {
+  const dir = mouseWorldPoint
+    ? new THREE.Vector3(mouseWorldPoint.x - this.root.position.x, 0, mouseWorldPoint.z - this.root.position.z)
+    : new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion).setY(0);
+  if (dir.lengthSq() < 1e-8) dir.set(0, 0, 1).applyQuaternion(this.root.quaternion).setY(0);
+  return dir.normalize();
+};
+CharacterController.prototype._aatroxHealSelf = function(amount) {
+  if (!(amount > 0) || !(this.hp > 0)) return;
+  this.hp = Math.min(this.maxHp, this.hp + amount * (typeof getHealReceivedMultiplier === 'function' ? getHealReceivedMultiplier(this) : 1));
+  updateBars(this);
+};
+CharacterController.prototype._aatroxBonusHp = function() {
+  const base = (typeof computeChampionStats === 'function' && computeChampionStats('aatrox', this.champLevel || 1)?.maxHp) || CHAMPION_DATA.aatrox.stats.hp;
+  return Math.max(0, (this.maxHp || 0) - base);
+};
+CharacterController.prototype._aatroxSpellTarget = function(u) {
+  return !!u && u.hp > 0 && !u.isStructure && !u.isWard && !u.isUntargetable && !(typeof canRealmInteract === 'function' && !canRealmInteract(this, u));
+};
+
+/* ---------------- 패시브 - 사신 태세 ---------------- */
+CharacterController.prototype._aatroxPassiveReady = function() {
+  return !!this._aatrox && performance.now() >= (this._aatrox.passiveReadyAt || 0);
+};
+CharacterController.prototype._aatroxRangeBonusLol = function() {
+  return this._aatroxPassiveReady() ? this._champData().passive.bonusRange : 0;
+};
+// 적 챔피언을 맞히면 남은 재사용 대기시간을 줄인다(강타 지점이면 두 배)
+CharacterController.prototype._aatroxPassiveReduce = function(sweetspot = false) {
+  const s = this._aatrox, p = this._champData().passive, now = performance.now();
+  if (!s || !(s.passiveReadyAt > now)) return;
+  s.passiveReadyAt = Math.max(now, s.passiveReadyAt - (sweetspot ? p.cdReduceSweetspotSec : p.cdReduceOnHitSec) * 1000);
+};
+// 강화 평타 동작(Passive_Attack) - 준비되면 다음 평타 하나를 그 동작으로(우선순위가 R 변신 평타보다 높다)
+CharacterController.prototype._aatroxSyncPassiveOverride = function() {
+  const ready = this._aatroxPassiveReady() && this._aatroxIsAlive();
+  const has = (this.attackOverrides || []).some((o) => o.id === 'aatroxP');
+  if (ready && !has) {
+    const db = this._championAbilityDbEntry(), clip = db && db.passiveAttackClip;
+    if (clip && this.findAnimation && this.findAnimation(clip)) this.registerAttackOverride({ id: 'aatroxP', clips: [clip], priority: 20, oneShot: true, uses: 1 });
+    else this._aatrox.passiveNoClip = true;
+  } else if (!ready && has) this.clearAttackOverride('aatroxP');
+};
+// controller_combat.js _onBasicAttackHit()에서. overrideId === 'aatroxP'면 이번 평타가 강화 평타(스윙을 시작할 때 준비돼 있었다 - 위키:
+// 평타 준비 동작 도중 준비된 패시브는 그 평타에 쓰이지 않는다).
+CharacterController.prototype._aatroxOnBasicAttackHit = function(target, overrideId) {
+  const s = this._aatrox;
+  if (!s || !target || target.isWard) return;
+  if (target.isChampion) this._aatroxPassiveReduce(false);
+  const empowered = overrideId === 'aatroxP' || (s.passiveNoClip && this._aatroxPassiveReady());
+  if (!empowered) return;
+  if (target.isStructure) { this.clearAttackOverride('aatroxP'); return; } // 구조물에는 터지지 않는다 - 다음 평타에 다시 준비
+  const p = this._champData().passive;
+  if (target.hp > 0) {
+    const raw = (target.maxHp || 0) * this._aatroxLevelLerp(p.maxHpPercentAt1, p.maxHpPercentAt18) / 100;
+    const dealt = applyDamage(target, { rawDamage: raw, damageType: DAMAGE_TYPE.MAGICAL, isCritical: false, critMultiplier: 1, isBasicAttack: true, isOnHitBonus: true, isAbility: false, source: this }) || 0;
+    this._aatroxHealSelf(dealt * (target.isMinion ? p.minionHealRatio : 1));
+    if (typeof vfx !== 'undefined') vfx.spawn('hit', getWorldPosition(target).clone().add(new THREE.Vector3(0, BASE_UNIT * 0.8, 0)), undefined, { color: 0xff3a2a });
+  }
+  s.passiveReadyAt = performance.now() + this._aatroxLevelLerp(p.cooldownAt1, p.cooldownAt18) * 1000; // 고정 재사용 대기시간(스킬 가속 무관)
+  this.clearAttackOverride('aatroxP');
+};
+// 공용 피해 진입점(applyDamage)에서: E 기본 지속 - 챔피언에게 준 피해(지속 피해 제외)의 16%(+추가 체력 100당 1.3%) 회복
+function aatroxOnDamageDealt(source, target, dealt, result) {
+  if (!source || source.championId !== 'aatrox' || !source._aatrox || !target || !target.isChampion || target === source) return;
+  if (!(dealt > 0) || (result && result.isStatusTick) || !(source.hp > 0)) return;
+  if (!((source.skillLevels && source.skillLevels.E) >= 1)) return;
+  const e = CHAMPION_DATA.aatrox.E;
+  source._aatroxHealSelf(dealt * (e.healPercent + e.healPercentPer100BonusHp * source._aatroxBonusHp() / 100) / 100);
+}
+// 받는 회복 배율(getHealReceivedMultiplier)에 곱한다 - R 중 회복 +50~100%
+function aatroxHealAmp(unit) {
+  const s = unit && unit.championId === 'aatrox' && unit._aatrox;
+  if (!s || !((s.rUntil || 0) > performance.now())) return 0;
+  return skillVal(CHAMPION_DATA.aatrox.R.healAmpPercentByLevel, s.rLvl || 1) / 100;
+}
+
+/* ---------------- Q - 다르킨의 검 ---------------- */
+// stage(1~3)의 판정. 반환: [{ unit, sweet }]. 1·2타는 대상 판정 반경까지(가장자리), 3타와 강타 지점은 대상 중심(위키).
+CharacterController.prototype._aatroxQHits = function(stage, origin, dir) {
+  const q = this._champData().Q, out = [];
+  for (const u of getAllEnemyUnits()) {
+    if (!this._aatroxSpellTarget(u)) continue;
+    const p = getWorldPosition(u); if (!p) continue;
+    const rL = worldDistanceToLol(getCollisionRadius(u));
+    const dx = p.x - origin.x, dz = p.z - origin.z;
+    const along = worldDistanceToLol(dx * dir.x + dz * dir.z), lateral = worldDistanceToLol(Math.abs(-dx * dir.z + dz * dir.x));
+    if (stage === 1) {
+      const a = q.q1;
+      if (along < -rL || along > a.length + rL || lateral > a.width / 2 + rL) continue;
+      out.push({ unit: u, sweet: along >= a.length - a.sweetDepth && along <= a.length && lateral <= a.width / 2 });
+    } else if (stage === 2) {
+      const a = q.q2, total = a.back + a.front;
+      const halfAt = (al) => (a.backWidth + (a.frontWidth - a.backWidth) * Math.max(0, Math.min(1, (al + a.back) / total))) / 2;
+      if (along < -a.back - rL || along > a.front + rL || lateral > halfAt(along) + rL) continue;
+      out.push({ unit: u, sweet: along >= a.front - a.sweetDepth && along <= a.front && lateral <= halfAt(along) });
+    } else {
+      const a = q.q3;
+      const cx = origin.x + dir.x * lolRangeToWorld(a.offset), cz = origin.z + dir.z * lolRangeToWorld(a.offset);
+      const d = worldDistanceToLol(Math.hypot(p.x - cx, p.z - cz));
+      if (d > a.radius) continue;
+      out.push({ unit: u, sweet: d <= a.sweetRadius });
+    }
+  }
+  return out;
+};
+CharacterController.prototype._aatroxQCooldownTotal = function(cdSec) {
+  return cdSec > 0 ? abilityHasteCooldown(this, cdSec, 'Q') : 0;
+};
+CharacterController.prototype._aatroxCastQ = function(mouseWorldPoint, free = false) {
+  if (!this._aatroxIsAlive() || isSilenced(this) || isCrowdControlled(this)) return;
+  const s = this._aatrox, q = this._champData().Q, now = performance.now();
+  if (s.qCast) return;
+  let stage;
+  if (s.q && now < (s.q.windowUntil || 0)) {
+    if (now < (s.q.nextAt || 0)) return; // 재시전 사이 고정 1초
+    stage = s.q.stage;
+  } else {
+    if (!this._payCost('Q', free)) return;
+    this.cooldowns.Q = 0; // 재사용 대기시간은 마지막 시전부터(아래)
+    s.q = { stage: 1, lvl: Math.max(1, this.skillLevels.Q || 1), windowUntil: 0, nextAt: 0, lastCastAt: 0, cdSec: free ? 0 : skillVal(q.cooldown, Math.max(1, this.skillLevels.Q || 1)) };
+    stage = 1;
+  }
+  const dir = this._aatroxAimDir(mouseWorldPoint);
+  const lvl = s.q.lvl;
+  s.q.lastCastAt = now; s.q.nextAt = now + q.recastLockoutSec * 1000; s.q.windowUntil = now + q.recastWindowSec * 1000;
+  s.q.stage = stage + 1;
+  if (stage >= 3) { // 마지막 시전 - 재사용 대기시간 시작
+    this.cooldowns.Q = this._aatroxQCooldownTotal(s.q.cdSec);
+    s.q = null;
+  }
+  const cast = { stage, dirX: dir.x, dirZ: dir.z, lvl };
+  s.qCast = cast;
+  this.faceDirectionInstant(dir);
+  this._clearActionTimers();
+  this.targetPos = null; this.isChasing = false;
+  this.currentActionKey = 'aatroxQ'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
+  this.setState(STATE.Q_CAST);
+  const db = this._championAbilityDbEntry();
+  const clipName = db && db.Q && db.Q.castClips ? db.Q.castClips[stage - 1] : null;
+  const clip = clipName ? this.findAnimation(clipName) : null;
+  if (clip) {
+    this.playFirstAvailable([clipName], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: true });
+    if (this.currentAction && clip.duration > 0) this.currentAction.timeScale = Math.max(1, clip.duration / (q.castTimeSec + 0.45)); // 휘두르는 순간이 판정 시각 근처에 오게
+  }
+  const fire = this._champTimeout(() => {
+    if (!this._aatrox || this._aatrox.qCast !== cast) return;
+    this._aatrox.qCast = null;
+    if (this.currentActionKey !== 'aatroxQ' || !this._aatroxIsAlive()) return;
+    this._aatroxResolveQ(cast);
+    this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
+    if (this._dashState) return; // 시전 중 쓴 E 돌진이 끝나며 마무리
+    if (this.pendingMove || this.pendingCast || this.attackOrderActive) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+  }, q.castTimeSec * 1000);
+  this._actionTimers.push(fire);
+  const done = this._champTimeout(() => {
+    if (this.currentActionKey === 'aatroxQ' && !this._dashState) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+  }, (q.castTimeSec + 0.35) * 1000);
+  this._actionTimers.push(done);
+  debugSkillHit(`Aatrox Q(다르킨의 검) ${stage}타`, this, {});
+};
+CharacterController.prototype._aatroxResolveQ = function(cast) {
+  const q = this._champData().Q;
+  const dir = new THREE.Vector3(cast.dirX, 0, cast.dirZ);
+  const ad = this.stats.attackDamage || 0;
+  const base = (skillVal(q.damageByLevel, cast.lvl) + skillVal(q.adRatioByLevel, cast.lvl) * ad) * (1 + q.castDamageStep * (cast.stage - 1));
+  const minionPct = valueByBreakpoints(q.minionDamagePercent, this.champLevel || 1) / 100;
+  let champHit = false, champSweet = false;
+  for (const { unit: u, sweet } of this._aatroxQHits(cast.stage, this.root.position, dir)) {
+    const raw = base * (sweet ? q.sweetspotMultiplier : 1) * (u.isMinion ? minionPct : 1);
+    applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, isAoE: true, source: this });
+    if (sweet && u.hp > 0) applyStatus(u, { id: 'aatroxQ_knockup', type: 'KNOCKUP', duration: q.knockupSec, value: 1, source: this });
+    if (u.isChampion) { champHit = true; if (sweet) champSweet = true; }
+  }
+  if (champHit) this._aatroxPassiveReduce(champSweet);
+  if (typeof vfx !== 'undefined') {
+    const reach = cast.stage === 1 ? q.q1.length - 80 : cast.stage === 2 ? q.q2.front - 80 : q.q3.offset;
+    vfx.spawn('hit', this.root.position.clone().addScaledVector(dir, lolRangeToWorld(reach)).add(new THREE.Vector3(0, BASE_UNIT * 0.3, 0)), undefined, { color: 0xff4a30 });
+  }
+};
+
+/* ---------------- W - 지옥사슬 ---------------- */
+CharacterController.prototype._aatroxCastW = function(mouseWorldPoint, free = false) {
+  if (!this._aatroxIsAlive() || isSilenced(this) || isCrowdControlled(this)) return;
+  const w = this._champData().W;
+  const dir = this._aatroxAimDir(mouseWorldPoint);
+  if (!this._payCost('W', free)) return;
+  const lvl = Math.max(1, this.skillLevels.W || 1);
+  this.faceDirectionInstant(dir);
+  this._clearActionTimers();
+  this.targetPos = null; this.isChasing = false;
+  this.currentActionKey = 'aatroxW'; this.currentPhase = 'STARTUP'; this.phaseCancelable = false;
+  this.setState(STATE.W_CAST);
+  const fire = this._champTimeout(() => {
+    if (this.currentActionKey !== 'aatroxW' || !this._aatroxIsAlive()) return;
+    this.currentPhase = 'RECOVERY'; this.phaseCancelable = true;
+    const from = this.root.position.clone().add(new THREE.Vector3(0, BASE_UNIT * 0.6, 0));
+    projectiles.spawn({
+      from, speed: lolRangeToWorld(w.missileSpeed), color: 0xc0392b, realmId: this.realmId,
+      line: { dir, maxDist: lolRangeToWorld(w.range), halfWidth: lolRangeToWorld(w.width) * 0.5, filter: (u) => this._aatroxSpellTarget(u),
+        onMiss: () => debugSkillMiss('Aatrox W(지옥사슬)', '맞은 대상 없음') },
+      onHit: (u) => { if (this.championId === 'aatrox') this._aatroxChainHit(u, lvl); },
+    });
+    if (!this._dashState) { this.currentActionKey = null; this.currentPhase = null; this._resumeAfterAction(); }
+  }, w.castTimeSec * 1000);
+  this._actionTimers.push(fire);
+};
+CharacterController.prototype._aatroxWDamage = function(u, lvl) {
+  const w = this._champData().W;
+  const raw = (skillVal(w.damageByLevel, lvl) + w.adRatio * (this.stats.attackDamage || 0)) * (u.isMinion ? w.minionMultiplier : 1);
+  applyDamage(u, { rawDamage: raw, damageType: DAMAGE_TYPE.PHYSICAL, isCritical: false, critMultiplier: 1, isAbility: true, source: this });
+};
+CharacterController.prototype._aatroxChainHit = function(u, lvl) {
+  if (!u || !(u.hp > 0)) return;
+  const w = this._champData().W;
+  this._aatroxWDamage(u, lvl);
+  if (!(u.hp > 0)) return;
+  applyStatus(u, { id: 'aatroxW_slow', type: 'SLOW', duration: w.slowDurationSec, value: skillVal(w.slowPercentByLevel, lvl) / 100, source: this });
+  if (!u.isChampion) return;
+  this._aatroxPassiveReduce(false);
+  const p = getWorldPosition(u);
+  this._aatrox.w = { x: p.x, z: p.z, lvl, untilAt: performance.now() + w.tetherSec * 1000 };
+  this._aatroxFx.wTarget = u;
+  if (typeof visionSystem !== 'undefined' && visionSystem && typeof visionSystem.grantVision === 'function') visionSystem.grantVision(p.clone(), 300, w.tetherSec); // 사슬 동안 드러난다
+  debugSkillHit('Aatrox W(지옥사슬) 사슬', u, {});
+};
+CharacterController.prototype._aatroxTickChain = function() {
+  const s = this._aatrox, fx = this._aatroxFx, w = this._champData().W;
+  const t = fx.wTarget;
+  if (!s.w || !t || !(t.hp > 0) || t.isDead || !this._aatroxIsAlive()) { s.w = null; fx.wTarget = null; this._aatroxSetChainMesh(null); return; }
+  const p = getWorldPosition(t);
+  this._aatroxSetChainMesh(p);
+  if (performance.now() < s.w.untilAt) return;
+  const anchor = new THREE.Vector3(s.w.x, p.y, s.w.z), lvl = s.w.lvl;
+  s.w = null; fx.wTarget = null; this._aatroxSetChainMesh(null);
+  if (getHorizontalDistance(p, anchor) > lolRangeToWorld(w.zoneRadius)) { debugSkillMiss('Aatrox W(지옥사슬)', '사슬을 끊고 빠져나감'); return; }
+  this._aatroxWDamage(t, lvl);
+  if (!(t.hp > 0) || !t.mesh) return;
+  // 가운데로 끌어온다(위키: 원래 자리보다 아트록스 쪽으로 조금 - 50 추정)
+  const toMe = new THREE.Vector3(this.root.position.x - anchor.x, 0, this.root.position.z - anchor.z);
+  if (toMe.lengthSq() > 1e-6) anchor.addScaledVector(toMe.normalize(), Math.min(lolRangeToWorld(50), toMe.length()));
+  t._pullState = { from: t.mesh.position.clone(), to: new THREE.Vector3(anchor.x, t.mesh.position.y, anchor.z), duration: w.pullSec, elapsed: 0 };
+  debugSkillHit('Aatrox W(지옥사슬) 끌어오기', t, {});
+};
+CharacterController.prototype._aatroxSetChainMesh = function(targetPos) {
+  const fx = this._aatroxFx;
+  if (!targetPos) { if (fx.chain) fx.chain.visible = false; return; }
+  if (typeof scene === 'undefined') return;
+  if (!fx.chain) {
+    const g = new THREE.Group(); g.name = 'aatroxInfernalChain';
+    const r = lolRangeToWorld(CHAMPION_DATA.aatrox.W.zoneRadius);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(r * 0.93, r, 48), new THREE.MeshBasicMaterial({ color: 0xb3241a, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2; g.add(ring);
+    const link = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0x7a120c, transparent: true, opacity: 0.85, depthWrite: false }));
+    link.name = 'link'; g.add(link);
+    scene.add(g); fx.chain = g;
+  }
+  const s = this._aatrox.w; if (!s) return;
+  const g = fx.chain, link = g.getObjectByName('link');
+  g.position.set(s.x, targetPos.y + 0.03, s.z);
+  const dx = targetPos.x - s.x, dz = targetPos.z - s.z, len = Math.max(1e-3, Math.hypot(dx, dz)), th = lolRangeToWorld(10);
+  link.scale.set(th, th, len);
+  link.position.set(dx / 2, BASE_UNIT * 0.3, dz / 2);
+  link.rotation.set(0, Math.atan2(dx, dz), 0);
+  g.visible = true;
+  if (typeof netMirror === 'function') netMirror(g);
+};
+
+/* ---------------- E - 파멸의 돌진 ---------------- */
+CharacterController.prototype._aatroxCastE = function(mouseWorldPoint, free = false) {
+  if (!this._aatroxIsAlive() || isCrowdControlled(this) || isRooted(this) || this._dashState) return;
+  const e = this._champData().E;
+  const from = this.root.position.clone();
+  const dir = this._aatroxAimDir(mouseWorldPoint);
+  const want = mouseWorldPoint ? Math.hypot(mouseWorldPoint.x - from.x, mouseWorldPoint.z - from.z) : lolRangeToWorld(e.range);
+  if (!this._payCost('E', free)) return;
+  const inAttack = !!this.currentActionKey && (this.currentActionKey.startsWith('attack') || this.currentActionKey === 'crit');
+  if (inAttack) { this._clearActionTimers(); this.currentActionKey = null; this.currentPhase = null; this.phaseCancelable = false; }
+  const travel = Math.max(lolRangeToWorld(e.rangeMin), Math.min(lolRangeToWorld(e.range), want)); // 75~300, 밖이면 최대
+  let to = from.clone().addScaledVector(dir, travel);
+  if (typeof howlingAbyssMap !== 'undefined' && howlingAbyssMap && howlingAbyssMap.clampPosition) to = howlingAbyssMap.clampPosition(to);
+  to.y = from.y;
+  if (typeof this.resetAttackTimer === 'function') this.resetAttackTimer(); // 평타 초기화
+  const keep = this.currentActionKey === 'aatroxQ' || this.currentActionKey === 'aatroxW'; // 시전 중인 스킬은 끊지 않는다
+  if (!keep) {
+    this._clearActionTimers();
+    this.currentActionKey = 'aatroxE'; this.currentPhase = 'ACTIVE'; this.phaseCancelable = false;
+    this.targetPos = null; this.isChasing = false;
+    this.setState(STATE.E_CAST);
+  }
+  if (!keep || this.currentActionKey === 'aatroxW') {
+    const ult = (this._aatrox.rUntil || 0) > performance.now();
+    this.playFirstAvailable(ult ? ['Spell3_ULT', 'Spell3'] : ['Spell3'], { loop: THREE.LoopOnce, fade: 0.04, clampWhenFinished: true });
+  }
+  if (!keep) this.faceDirectionInstant(dir);
+  const dist = worldDistanceToLol(getHorizontalDistance(from, to));
+  this._dashState = { from, to, duration: Math.max(0.05, dist / e.dashSpeed), elapsed: 0, faceDir: keep ? null : dir.clone(),
+    onArrive: () => {
+      if (this.currentActionKey === 'aatroxE' || ((this.currentActionKey === 'aatroxQ' || this.currentActionKey === 'aatroxW') && this.currentPhase === 'RECOVERY')) {
+        this.currentActionKey = null; this.currentPhase = null; this.setState(STATE.IDLE); this._resumeAfterAction();
+      }
+    } };
+  debugSkillHit('Aatrox E(파멸의 돌진)', this, { dist: Math.round(dist) });
+};
+
+/* ---------------- R - 세계의 종결자 ---------------- */
+CharacterController.prototype._aatroxCastR = function(mouseWorldPoint, free = false) {
+  if (!this._aatroxIsAlive() || isSilenced(this) || isCrowdControlled(this)) return;
+  if (!this._payCost('R', free)) return;
+  const r = this._champData().R, lvl = Math.max(1, this.skillLevels.R || 1);
+  if (!this.currentActionKey && !this._dashState && !this.targetPos) this.playFirstAvailable(['Spell4'], { loop: THREE.LoopOnce, fade: 0.06, clampWhenFinished: false });
+  this._champTimeout(() => { // 0.25초 시전(움직일 수 있다) - 끝난 자리에서 해방
+    if (this.championId !== 'aatrox' || !this._aatroxIsAlive()) return;
+    const s = this._aatrox, now = performance.now();
+    s.rLvl = lvl; s.rUntil = now + r.durationSec * 1000;
+    this._aatroxUnleash();
+    this.setSubState('R', r.durationSec);
+    const db = this._championAbilityDbEntry();
+    const clips = ((db && db.R && db.R.ultAttackClips) || []).filter((c) => this.findAnimation(c));
+    if (clips.length) this.registerAttackOverride({ id: 'aatroxR', clips: [clips[0]], sequenceClips: clips, priority: 5, oneShot: false, durationSec: r.durationSec });
+    if (typeof setUnitSizeMod === 'function') setUnitSizeMod(this, 'aatroxR', 1 + r.sizeBonus);
+    if (typeof this.recomputeStats === 'function') this.recomputeStats(); // 공격력 +%
+    debugSkillHit('Aatrox R(세계의 종결자)', this, { lvl });
+  }, r.castTimeSec * 1000);
+};
+// 해방: 추가 이동 속도 다시 최대로 + 주변 적 미니언 공포
+CharacterController.prototype._aatroxUnleash = function() {
+  const s = this._aatrox, r = this._champData().R, now = performance.now();
+  s.rMsAt = now;
+  const start = now, me = this;
+  for (const u of getAllEnemyUnits()) {
+    if (!u || !u.isMinion || !(u.hp > 0) || !isInCircle(u, this.root.position, lolRangeToWorld(r.fearRadius))) continue;
+    applyStatus(u, { id: 'aatroxR_fear', type: 'FEAR', duration: r.fearSec, value: 1, source: me,
+      fearSlowAt: () => Math.min(r.fearMaxSlow, r.fearMaxSlow * (performance.now() - start) / (r.fearSec * 1000)) });
+  }
+};
+CharacterController.prototype._aatroxRAdPercent = function() {
+  const s = this._aatrox;
+  return s && (s.rUntil || 0) > performance.now() ? skillVal(this._champData().R.bonusAdPercentByLevel, s.rLvl || 1) : 0;
+};
+CharacterController.prototype._aatroxEndR = function() {
+  const s = this._aatrox; if (!s) return;
+  const was = (s.rUntil || 0) > 0;
+  s.rUntil = 0; s.rMsAt = 0;
+  this.clearSubState('R');
+  this.clearAttackOverride('aatroxR');
+  clearStatus(this, 'aatroxR_ms'); clearStatus(this, 'aatroxR_ghost');
+  if (typeof setUnitSizeMod === 'function') setUnitSizeMod(this, 'aatroxR', 1);
+  if (was && typeof this.recomputeStats === 'function') this.recomputeStats();
+  if (was && !this.currentActionKey && this.state !== STATE.DEAD && typeof this._returnToLocomotion === 'function') this._returnToLocomotion();
+};
+CharacterController.prototype._aatroxTickR = function() {
+  const s = this._aatrox, r = this._champData().R, now = performance.now();
+  if (!s.rUntil) return;
+  if (now >= s.rUntil || !this._aatroxIsAlive()) { this._aatroxEndR(); return; }
+  // 추가 이동 속도: 0.25초마다 남은 값의 10%씩 줄어든다
+  const ticks = Math.floor((now - (s.rMsAt || now)) / (r.msDecayTickSec * 1000));
+  const ms = skillVal(r.bonusMsPercentByLevel, s.rLvl || 1) / 100 * Math.pow(1 - r.msDecayPerTick, ticks);
+  applyStatus(this, { id: 'aatroxR_ms', type: 'MS_BUFF', duration: 0.3, value: ms, source: this });
+  applyStatus(this, { id: 'aatroxR_ghost', type: 'GHOST', duration: 0.3, value: 1, source: this });
+  this.setSubState('R', (s.rUntil - now) / 1000);
+};
+// 챔피언 처치 관여(reward_system.js rewardChampionKill에서): R 지속 시간 5초 연장(처음 길이까지) + 다시 해방
+function aatroxOnTakedown(ctrl) {
+  const s = ctrl && ctrl.championId === 'aatrox' && ctrl._aatrox;
+  const now = performance.now();
+  if (!s || !((s.rUntil || 0) > now)) return;
+  const r = CHAMPION_DATA.aatrox.R;
+  s.rUntil = Math.min(now + r.durationSec * 1000, s.rUntil + r.takedownExtendSec * 1000);
+  const ov = (ctrl.attackOverrides || []).find((o) => o.id === 'aatroxR');
+  if (ov) ov.expiresAt = s.rUntil;
+  ctrl._asActor ? ctrl._asActor(() => ctrl._aatroxUnleash()) : ctrl._aatroxUnleash();
+}
+
+/* ---------------- 매 프레임 / 정리 ---------------- */
+CharacterController.prototype._aatroxUpdate = function(dt) {
+  if (this.championId !== 'aatrox' || !this._aatrox) return;
+  const s = this._aatrox, now = performance.now();
+  if (s.q && now >= (s.q.windowUntil || 0)) { // 재시전 창이 지나면 마지막 시전부터 센 재사용 대기시간
+    const total = this._aatroxQCooldownTotal(s.q.cdSec);
+    this.cooldowns.Q = Math.max(0, total - (now - s.q.lastCastAt) / 1000);
+    s.q = null;
+  }
+  if (s.qCast && this.currentActionKey !== 'aatroxQ') s.qCast = null; // 끊긴 Q
+  this._aatroxSyncPassiveOverride();
+  this._aatroxTickChain();
+  this._aatroxTickR();
+};
+CharacterController.prototype._aatroxOnDeath = function() {
+  if (!this._aatrox) return;
+  const s = this._aatrox, now = performance.now();
+  if (s.q) { this.cooldowns.Q = Math.max(0, this._aatroxQCooldownTotal(s.q.cdSec) - (now - s.q.lastCastAt) / 1000); s.q = null; }
+  s.qCast = null; s.w = null; this._aatroxFx.wTarget = null; this._aatroxSetChainMesh(null);
+  this._aatroxEndR();
+  this.clearAttackOverride('aatroxP');
+};
+CharacterController.prototype._aatroxReset = function() {
+  const fx = this._aatroxFx;
+  if (fx && fx.chain) {
+    if (fx.chain.parent) fx.chain.parent.remove(fx.chain);
+    fx.chain.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  }
+  if (typeof setUnitSizeMod === 'function' && this._sizeMods && this._sizeMods.aatroxR) setUnitSizeMod(this, 'aatroxR', 1);
+  this._aatroxFx = { chain: null, wTarget: null };
+  this._aatrox = { passiveReadyAt: 0, passiveNoClip: false, q: null, qCast: null, w: null, rUntil: 0, rLvl: 1, rMsAt: 0 };
+  if (typeof this.clearAttackOverride === 'function') { this.clearAttackOverride('aatroxP'); this.clearAttackOverride('aatroxR'); }
+};
+
 /* ===== src/core/controller_post_class_helpers.js ===== */
 /* ============================================================
    2. UI HELPERS
@@ -29871,6 +30950,11 @@ function updateSkillUI(cooldowns) {
     } else {
       if (cdEl) cdEl.remove();
       slot.classList.add('ready');
+    }
+    // 107차: 그웬 Q 가위질 중첩(0~4) 배지
+    if (key === 'Q' && typeof controller !== 'undefined' && controller && controller.championId === 'gwen' && controller._gwen) {
+      const st = controller._gwen, n = (st.snipsUntil || 0) > performance.now() ? (st.snips || 0) : 0;
+      if (n > 0) { const b = document.createElement('div'); b.className = 'charges'; b.textContent = `${n}/${controller._champData().Q.maxStacks}`; slot.appendChild(b); }
     }
     if (typeof controller !== 'undefined' && controller && controller.championId === 'renekton' && ['Q','W','E'].includes(key)) {
       const empowered = (controller._renekton?.rage || 0) >= 50;
@@ -32536,6 +33620,7 @@ function isValidChampionTarget(minion, champion) {
   if (typeof champion === 'undefined' || !champion) return false;
   if (isAllyUnit(minion, champion)) return false; // 아군 챔피언은 공격 불가(요청 20-B) - champion.team(플레이어는 PLAYER_TEAM)과 generic 비교
   if (champion.hp <= 0 || champion.state === STATE.DEAD || champion.isUntargetable) return false;
+  if (typeof gwenMistHides === 'function' && gwenMistHides(champion, minion)) return false; // 107차: 그웬 안개
   if (!canRealmInteract(minion, champion)) return false;
   const range = lolRangeToWorld(minion.attackRange) + getCollisionRadius(minion) + getCollisionRadius(champion); // 44차: 가장자리 기준
   return getHorizontalDistance(minion.mesh.position, getWorldPosition(champion)) <= range;
@@ -32560,6 +33645,7 @@ function minionAcquireRangeWorld(minion, target) {
 function isAliveEnemyForMinion(minion, target) {
   if (!target || target.isTrainingDummy || target.hp <= 0 || target.isDead || target.destroyed || target.isUntargetable) return false;
   if (target.state === STATE.DEAD) return false;
+  if (typeof gwenMistHides === 'function' && gwenMistHides(target, minion)) return false; // 107차: 그웬 안개 밖 미니언은 그웬을 노리지 못한다
   if (!target.team || target.team === minion.team) return false;
   return canRealmInteract(minion, target);
 }
@@ -33422,6 +34508,7 @@ function rewardChampionKill(victim) {
     paid += g;
     killer._bounty = Math.min(CHAMPION_BOUNTY_MAX, (killer._bounty || 0) + g / 2);
     if (typeof recordChampionTakedown === 'function') recordChampionTakedown(killer, true);
+    if (typeof aatroxOnTakedown === 'function') aatroxOnTakedown(killer); // 107차: 아트록스 R 연장
   }
   if (assisters.length) {
     const each = CHAMPION_ASSIST_GOLD_POOL / assisters.length;
@@ -33430,6 +34517,7 @@ function rewardChampionKill(victim) {
       paid += g;
       a._bounty = Math.min(CHAMPION_BOUNTY_MAX, (a._bounty || 0) + g / 2);
       if (typeof recordChampionTakedown === 'function') recordChampionTakedown(a, false);
+      if (typeof aatroxOnTakedown === 'function') aatroxOnTakedown(a); // 107차
     }
   }
   victim._bounty = Math.max(0, bounty - paid / 4);
@@ -33745,6 +34833,7 @@ function recomputeItemStats(ctrl) {
 const IMMOBILIZING_SKILL_SLOTS = {
   ahri: ['E'], ashe: ['R'], chogath: ['Q'], leesin: ['R'], nautilus: ['Q', 'R'], nilah: ['R'],
   renekton: ['W'], sett: ['E', 'R'], varus: ['R'], yasuo: ['Q'], yone: ['Q', 'R'], rammus: ['Q', 'E', 'R'], lux: ['Q'], shen: ['E'],
+  aatrox: ['Q', 'W'], // 107차: Q 강타 지점 공중에 뜸, W 끌어오기
 };
 function abilityHasteCooldown(ctrl, baseCd, slot) {
   // itemDynamicAbilityHaste - 끝없는 갈망(기아)처럼 추가 공격력에 비례해
@@ -38992,6 +40081,35 @@ const CHAMPION_ICON_META = {
    "E2",
    "Q3"
   ]
+ },
+ "gwen": {
+  "passiveName": "가위 난도질",
+  "passiveDesc": "그웬의 기본 공격이 대상의 체력에 비례해 추가 마법 피해를 입힙니다. 챔피언을 상대로 기본 공격 시 해당 피해의 일부만큼 체력을 회복합니다.",
+  "spellNames": {
+   "Q": "싹둑싹둑!",
+   "W": "신성한 안개",
+   "E": "돌격가위",
+   "R": "바느질"
+  },
+  "iconVariants": [
+   "R2",
+   "R3",
+   "W2"
+  ]
+ },
+ "aatrox": {
+  "passiveName": "사신 태세",
+  "passiveDesc": "주기적으로 아트록스의 기본 공격이 대상 최대 체력에 비례하여 추가 마법 피해를 입히고 자신의 체력을 회복합니다.",
+  "spellNames": {
+   "Q": "다르킨의 검",
+   "W": "지옥사슬",
+   "E": "파멸의 돌진",
+   "R": "세계의 종결자"
+  },
+  "iconVariants": [
+   "Q2",
+   "Q3"
+  ]
  }
 };
 
@@ -39508,7 +40626,7 @@ const RUNE_SHARD_ROWS = [
    ============================================================ */
 const RUNE_STORAGE_KEY = 'lolsim.runePage.v1';
 // 적응형 능력치가 주문력으로 가는 챔피언(아이템 추가 공격력·주문력이 같을 때) - 원작은 챔피언마다 기본값이 있다.
-const RUNE_ADAPTIVE_AP_CHAMPS = new Set(['ahri', 'lux', 'vex', 'mordekaiser', 'chogath']);
+const RUNE_ADAPTIVE_AP_CHAMPS = new Set(['ahri', 'lux', 'vex', 'mordekaiser', 'chogath', 'gwen']); // 107차: 그웬(위키 adaptivetype Magic)
 const RUNE_SHARD_EFFECTS = {
   adaptive: { adaptive: 9 }, as: { asPercent: 0.10 }, ah: { ah: 8 }, ms: { msPercent: 0.02 },
   hpScale: { hpScale: [10, 180] }, hp: { hp: 65 }, tenacity: { tenacity: 0.15, slowResist: 0.15 }, // 83차: V25.22부터 강인함·둔화 저항 각 15%
@@ -40078,6 +41196,16 @@ function getSkillRecastState(c, key) {
     }
     case 'renekton':
       return key === 'E' && c._renekton ? win(c._renekton.eSecondReadyUntil || 0, 4) : null;
+    case 'gwen': { // 107차: W 안개(남은 시간), R 재시전 창(남은 횟수)
+      const s = c._gwen; if (!s) return null;
+      if (key === 'W' && s.mist) return win(s.mist.activeUntil || 0, cd.W.durationSec || 4, s.mist.recastUsed ? { keepCd: true } : {});
+      if (key === 'R' && s.r) return win(s.r.windowUntil || 0, cd.R.recastWindowSec || 8, { count: 3 - s.r.casts });
+      return null;
+    }
+    case 'aatrox': { // 107차: Q 재시전 창(다음 단계)
+      const q = key === 'Q' && c._aatrox && c._aatrox.q;
+      return q ? win(q.windowUntil || 0, cd.Q.recastWindowSec || 4) : null;
+    }
     default: return null;
   }
 }
@@ -40088,6 +41216,9 @@ function getSkillIconStage(c, key, recast) {
   const now = performance.now();
   if (key === 'Q' && c.championId === 'yasuo' && c._yasuo && c._yasuo.qStackExpiresAt > now) return c._yasuo.qStacks >= 2 ? '3' : (c._yasuo.qStacks === 1 ? '2' : '');
   if (key === 'Q' && c.championId === 'yone' && c._yone && c._yone.qStackExpiresAt > now && c._yone.qStacks >= 2) return '3';
+  if (key === 'Q' && c.championId === 'aatrox') return recast && c._aatrox && c._aatrox.q ? String(Math.min(3, c._aatrox.q.stage)) : ''; // 107차: 2·3타 그림
+  if (key === 'R' && c.championId === 'gwen') return recast && c._gwen && c._gwen.r ? String(Math.min(3, c._gwen.r.casts + 1)) : ''; // 107차: 3개·5개 바늘 그림
+  if (key === 'W' && c.championId === 'gwen') return recast && c._gwen && c._gwen.mist && !c._gwen.mist.recastUsed ? '2' : ''; // 107차: 안개 부르기 그림
   return recast ? '2' : '';
 }
 // 재시전: 금빛 테두리·고리·↻, 칸 그림은 단계 그림이 있으면 그것(원작 단계·재시전 그림은 Data Dragon에 없어 사용자가 준 것만).
@@ -41257,6 +42388,14 @@ function disposeCurrentChampion() {
    건드리지 않고 CharacterController.stats 쪽에 독립적으로 유지된다.
    ============================================================ */
 
+// 107차: 그웬 GLB의 가위 잔상(Scissors_A_Smear 재질) 메시는 원작에서 휘두를 때만 잠깐 보이는 효과다. 늘 보이면 대기 자세에서
+// 아래로 길게 늘어져(스킨 메시 높이 약 500) 바닥 맞춤(groundModelOnIdlePose)이 몸을 공중에 띄웠다 - 숨긴다.
+const CHAMPION_HIDDEN_MATERIALS = { gwen: /smear/i };
+function hideChampionEffectMeshes(model, championId) {
+  const re = CHAMPION_HIDDEN_MATERIALS[championId];
+  if (!re || !model) return;
+  model.traverse((o) => { if (o.isMesh && o.material && re.test(o.material.name || '')) o.visible = false; });
+}
 /* ============================================================
    NILAH WEAPON RIG / URUMI VISIBILITY INTEGRITY
    ------------------------------------------------------------
@@ -41341,8 +42480,11 @@ function groundModelOnIdlePose(ctrl) {
   model.traverse((o) => {
     if (!o.isSkinnedMesh || o.visible === false) return;
     o.skeleton.update();
-    const ps = o.geometry.attributes.position;
-    for (let i = 0; i < ps.count; i += 2) { o.getVertexPosition(i, v); o.localToWorld(v); if (v.y < minY) minY = v.y; }
+    // 107차: 그 메시가 실제로 그리는 정점(인덱스)만 본다 - 여러 하위 메시가 정점 버퍼 하나를 나눠 쓰는 GLB에서 숨긴 하위 메시
+    // (그웬 가위 잔상)의 정점까지 세어 몸이 떠 있었다. 하위 메시가 모두 보이는 챔피언은 결과가 같다.
+    const ps = o.geometry.attributes.position, idx = o.geometry.index;
+    const n = idx ? idx.count : ps.count;
+    for (let k = 0; k < n; k += 2) { o.getVertexPosition(idx ? idx.getX(k) : k, v); o.localToWorld(v); if (v.y < minY) minY = v.y; }
   });
   if (!isFinite(minY)) return 0;
   const drop = minY - ctrl.root.position.y;
@@ -41435,6 +42577,7 @@ async function bootstrapChampion(gltf, fileName) {
   // 본체 애니메이션 믹서가 BladeA/BladeB 본을 움직이므로 Q/E/R 모션과
   // 무기 움직임이 동일한 애니메이션 타이밍으로 따라간다.
   if (championId === 'nilah') ensureNilahWeaponRig(gltf.scene);
+  hideChampionEffectMeshes(gltf.scene, championId); // 107차
 
   // GLB 원본 model 및 내부 hierarchy(스켈레톤/애니메이션)는 그대로
   // 유지한 채, 위치(중앙/바닥)만 정렬한다 - 크기는 전혀 바꾸지 않는다.
@@ -41636,6 +42779,7 @@ const CHAMPION_MODEL_LIBRARY = [
   ['yone', '요네'], ['sett', '세트'], ['mordekaiser', '모데카이저'], ['renekton', '레넥톤'], ['nilah', '닐라'], ['chogath', '초가스'],
   ['ezreal', '이즈리얼'], ['ashe', '애쉬'], ['varus', '바루스'], ['ahri', '아리'], ['vex', '벡스'], ['rammus', '람머스'], ['lux', '럭스'],
   ['shen', '쉔'], // 105차
+  ['gwen', '그웬'], ['aatrox', '아트록스'], // 107차
 ];
 const CHAMPION_MODEL_DIR = 'assets/champions/';
 function loadChampionFromLibrary(id) {
@@ -42998,7 +44142,7 @@ function botCanSee(bot, unit) {
 // 상대 팀 챔피언(살아 있고 대상 지정 가능, 봇 팀에게 보임) - 가까운 순.
 function botEnemyChampions(bot) {
   return listChampionUnits()
-    .filter((c) => c && c !== bot && c.team !== bot.team && isChampionAlive(c) && !c.isUntargetable && botCanSee(bot, c)
+    .filter((c) => c && c !== bot && c.team !== bot.team && isChampionAlive(c) && !c.isUntargetable && !(typeof gwenMistHides === 'function' && gwenMistHides(c, bot)) && botCanSee(bot, c)
       && (typeof canRealmInteract !== 'function' || canRealmInteract(bot, c)))
     .sort((a, b) => _botDist(bot, a) - _botDist(bot, b));
 }
@@ -43407,6 +44551,7 @@ async function spawnEnemyBot(championId, opts = {}) {
 function _buildEnemyBot(gltf, championId, opts) {
   const model = gltf.scene;
   if (championId === 'nilah') ensureNilahWeaponRig(model);
+  if (typeof hideChampionEffectMeshes === 'function') hideChampionEffectMeshes(model, championId); // 107차
   alignModelOrigin(model);
   const originCorrection = MODEL_ORIGIN_CORRECTION[championId];
   if (originCorrection) { model.position.x += originCorrection.x; model.position.z += originCorrection.z; }
@@ -44194,7 +45339,7 @@ function _netHiddenFrom(u, team) {
 }
 function _netHiddenFromGuest(u) { return _netHiddenFrom(u, 'RED'); }
 // 100차: 챔피언 내부 상태(재시전 창·충전·중첩·표식·아이템 재사용 대기 등) - 참가자 화면의 조준·스킬 칸·표식이 방장과 같게.
-const NET_CHAMP_STATE_KEY = /^_(ahri|ashe|chogath|darius|ezreal|garen\w*|leesin|lux|masteryi|morde|nautilus|nilah|rammus\w*|renekton|sett|shen|varus|vex|yasuo\w*|yone|summonerMark|itemActiveCooldownUntil|rune)$/;
+const NET_CHAMP_STATE_KEY = /^_(ahri|ashe|chogath|darius|ezreal|garen\w*|leesin|lux|masteryi|morde|nautilus|nilah|rammus\w*|renekton|sett|shen|gwen|aatrox|varus|vex|yasuo\w*|yone|summonerMark|itemActiveCooldownUntil|rune)$/;
 function _netChampState(st, c) {
   const out = {}; let any = false;
   if (!st.csSent) st.csSent = new Map();

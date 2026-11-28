@@ -28,6 +28,7 @@ async function spawnEnemyBot(championId, opts = {}) {
 function _buildEnemyBot(gltf, championId, opts) {
   const model = gltf.scene;
   if (championId === 'nilah') ensureNilahWeaponRig(model);
+  if (typeof hideChampionEffectMeshes === 'function') hideChampionEffectMeshes(model, championId); // 107차
   alignModelOrigin(model);
   const originCorrection = MODEL_ORIGIN_CORRECTION[championId];
   if (originCorrection) { model.position.x += originCorrection.x; model.position.z += originCorrection.z; }

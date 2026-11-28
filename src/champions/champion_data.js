@@ -876,6 +876,105 @@ const CHAMPION_DATA = {
       placeDistance: 175, enemySearchRange: 2000, // 가장 가까운 적 챔피언(2000 안) 쪽으로 아군에게서 175
     },
   },
+  gwen: {
+    displayName: '그웬',
+    // 107차. 수치 출처: 리그 오브 레전드 위키(Module:ChampionData의 Gwen, Template:Data Gwen/* - 마지막 변경 V26.16).
+    // "{{ap|a to b}}"는 랭크별 균등 분할, "{{pplevel|a to b}}"는 1~18레벨 선형으로 풀었다. 위키에 없는 값만 "추정".
+    stats: {
+      hp: 620, hpGrowth: 115, hpRegen: 9, hpRegenGrowth: 0.9,
+      ad: 63, adGrowth: 3, attackSpeed: 0.69, attackSpeedRatio: 0.69, attackSpeedGrowthPercent: 2.25,
+      armor: 39, armorGrowth: 4.9, mr: 32, mrGrowth: 2.05,
+      range: 150, moveSpeed: 340,
+      mana: 330, manaGrowth: 40, manaRegen: 7.5, manaRegenGrowth: 0.7,
+      windupPercent: 0.19672, // 평타 시전 0.3초 / 전체 1.525초(위키 attack_cast_time·attack_total_time)
+    },
+    passive: {
+      name: '가위 난도질',
+      desc: '기본 공격(적중 시)·Q 가운데·R 바늘이 대상 최대 체력의 1%(+주문력 100당 0.6%) 추가 마법 피해. 챔피언에게 준 피해의 67%만큼 회복(한 번에 12~40 + 주문력 7%까지).',
+      maxHpPercent: 1, maxHpPercentPer100Ap: 0.6,
+      healPercentVsChampions: 67, healCapAt1: 12, healCapAt18: 40, healCapApRatio: 0.07,
+      minionLowHpThreshold: 0.4, minionBonusAt1: 8, minionBonusAt18: 30, // 체력 40% 미만 미니언에게 추가 마법 피해 8~30
+    },
+    Q: {
+      name: '싹둑싹둑!', cooldown: [6.5, 5.75, 5, 4.25, 3.5], mana: 40, range: 450,
+      maxStacks: 4, stackDurationSec: 6, // 기본 공격 적중마다 가위질 중첩(최대 4, 6초 - 다시 치면 갱신)
+      snipDamageByLevel: [10, 14, 18, 22, 26], snipApRatio: 0.05,
+      finalDamageByLevel: [60, 85, 110, 135, 160], finalApRatio: 0.35,
+      trueDamageConversion: 0.5, minionDamageMultiplier: 0.8, minionExecuteThreshold: 0.2,
+      castTimeSec: 0.5, firstSnipSec: 0.13, bonusSnipTimesSec: [0.45, 0.4, 0.35, 0.23], // 첫 가위질 0.13초, 마지막은 시전 끝(0.5초)
+      backOffset: 50, length: 515, nearWidth: 75, farWidth: 360, centerWidth: 25, circleRadius: 515, // 사다리꼴(그웬 뒤 50 ~ 앞 465) ∩ 원(뒤 50 중심, 515)
+      damageType: 'MAGICAL',
+    },
+    W: {
+      name: '신성한 안개', cooldown: [22, 21, 20, 19, 18], mana: 60, // 재사용 대기시간은 효과가 끝난 뒤 돈다
+      radius: 480, durationSec: 4, recastDelaySec: 0.5, mistSpeed: 2000, recastOvershoot: 75, teleportBeyond: 1000, // 1000: 멀리 순간 이동하면 안개도 순간 이동(거리 추정)
+      bonusResistByLevel: [22, 24, 26, 28, 30], bonusResistApRatio: 0.07,
+    },
+    E: {
+      name: '돌격가위', cooldown: [13, 12.5, 12, 11.5, 11], mana: 35,
+      range: 350, dashSpeed: 800, // 돌진 속도는 위키에 없어 CommunityDragon(gwen.bin GwenE DashSpeed 800) 값
+      buffDurationSec: 4, onHitDamage: 15, onHitApRatio: 0.2, bonusRange: 75,
+      bonusAttackSpeedPercentByLevel: [30, 42.5, 55, 67.5, 80], cdRefundPercentByLevel: [25, 35, 45, 55, 65],
+    },
+    R: {
+      name: '바느질', cooldown: [120, 100, 80], mana: 100,
+      recastWindowSec: 8, recastLockoutSec: 1, // 8초 안에 2번 더(재시전마다 창 갱신), 재시전 사이 고정 1초
+      damageByLevel: [30, 50, 70], apRatio: 0.1, // 바늘 하나당 + 가위 난도질
+      slowPercentByLevel: [40, 50, 60], subsequentSlowPercentByLevel: [15, 20, 25], slowDurationSec: 1.5,
+      range: 1350, backOffset: 100, missileSpeed: 1800, width: 240, widthEnd: 30, // 폭은 0.5초 날아갈 때마다 140씩 준다(240 → 30)
+      castTimeFirstSec: 0.25, castTimeRecastSec: 0.5,
+      needleDelaysSec: [[0.25], [0.25, 0.35, 0.45], [0.25, 0.3125, 0.375, 0.4375, 0.5]], // 1·3·5개
+      damageType: 'MAGICAL',
+    },
+  },
+  aatrox: {
+    displayName: '아트록스',
+    // 107차. 수치 출처: 리그 오브 레전드 위키(Module:ChampionData의 Aatrox, Template:Data Aatrox/* - 마지막 변경 V26.19).
+    // 자원 없음(피의 샘은 표시만 - 원작도 비용 없음). 위키에 없는 값만 "추정".
+    stats: {
+      hp: 650, hpGrowth: 114, hpRegen: 3, hpRegenGrowth: 0.5,
+      ad: 60, adGrowth: 5, attackSpeed: 0.651, attackSpeedRatio: 0.651, attackSpeedGrowthPercent: 2.5,
+      armor: 38, armorGrowth: 4.8, mr: 32, mrGrowth: 2.05,
+      range: 175, moveSpeed: 345, mana: 0, manaGrowth: 0, manaRegen: 0, manaRegenGrowth: 0,
+      windupPercent: 0.19737, // 평타 시전 0.3초 / 전체 1.52초
+    },
+    passive: {
+      name: '사신 태세',
+      desc: '주기적으로 다음 기본 공격이 사거리 +50, 대상 최대 체력 4~10% 추가 마법 피해, 준 추가 피해만큼 회복(미니언 25%). 챔피언에게 평타·스킬을 맞히면 재사용 대기시간 2초(Q 강타 지점 4초) 감소.',
+      cooldownAt1: 22, cooldownAt18: 10, bonusRange: 50, maxHpPercentAt1: 4, maxHpPercentAt18: 10,
+      minionHealRatio: 0.25, cdReduceOnHitSec: 2, cdReduceSweetspotSec: 4,
+    },
+    Q: {
+      name: '다르킨의 검', cooldown: [14, 12, 10, 8, 6], // 마지막 시전부터 돈다(위키 "재시전마다 다시 시작")
+      recastWindowSec: 4, recastLockoutSec: 1, castTimeSec: 0.6,
+      damageByLevel: [10, 25, 40, 55, 70], adRatioByLevel: [0.6, 0.675, 0.75, 0.825, 0.9], castDamageStep: 0.25, // 2·3번째 +25%·+50%
+      sweetspotMultiplier: 1.75, knockupSec: 0.25,
+      minionDamagePercent: { breakpoints: [1, 6, 11, 16], values: [55, 60, 65, 70] },
+      q1: { length: 625, width: 180, sweetDepth: 150 }, // 강타 지점 깊이(먼 끝 150)는 위키에 없다 - 추정
+      q2: { back: 100, front: 475, backWidth: 300, frontWidth: 500, sweetDepth: 150 }, // 강타 지점 깊이 추정
+      q3: { offset: 200, radius: 300, sweetRadius: 180 },
+      range: 625, damageType: 'PHYSICAL',
+    },
+    W: {
+      name: '지옥사슬', cooldown: [18, 16.5, 15, 13.5, 12],
+      range: 825, missileSpeed: 1800, width: 160, castTimeSec: 0.25,
+      damageByLevel: [30, 40, 50, 60, 70], adRatio: 0.4, minionMultiplier: 2,
+      slowPercentByLevel: [25, 27.5, 30, 32.5, 35], slowDurationSec: 1.5,
+      tetherSec: 1.5, zoneRadius: 300, pullSec: 0.3, // 영역 반경·끌려가는 시간은 위키에 없다 - 추정
+      damageType: 'PHYSICAL',
+    },
+    E: {
+      name: '파멸의 돌진', cooldown: [9, 8, 7, 6, 5],
+      range: 300, rangeMin: 75, dashSpeed: 800,
+      healPercent: 16, healPercentPer100BonusHp: 1.3, // 기본 지속: 챔피언에게 준 피해(지속 피해 제외)의 16%(+추가 체력 100당 1.3%) 회복
+    },
+    R: {
+      name: '세계의 종결자', cooldown: [120, 100, 80], durationSec: 10, castTimeSec: 0.25,
+      fearRadius: 600, fearSec: 3, fearMaxSlow: 0.99, // 주변 미니언 3초 공포(둔화가 99%까지 점점)
+      bonusMsPercentByLevel: [60, 80, 100], msDecayPerTick: 0.1, msDecayTickSec: 0.25, // 0.25초마다 남은 추가 이동 속도의 10%씩 준다
+      bonusAdPercentByLevel: [20, 30, 40], healAmpPercentByLevel: [50, 75, 100], sizeBonus: 0.05, takedownExtendSec: 5,
+    },
+  },
   leesin: {
     displayName: '리 신',
     stats: {
@@ -1523,6 +1622,8 @@ const ARAM_BALANCE = {
   leesin: { dmgDealt: 0.05, dmgTaken: -0.05, healing: 0.10, shielding: 0.20, energyRegen: 0.20 }, // 기력 재생은 위키 요약에만(신뢰도 중간)
   lux: { dmgDealt: -0.10, dmgTaken: 0.10, shielding: -0.10 },
   shen: { dmgDealt: -0.05, dmgTaken: 0.05 }, // 105차: 위키 Shen 문서 특수 수치
+  gwen: { dmgDealt: 0.02 }, // 107차: 위키 Module:ChampionData(aram dmg_dealt 1.02)
+  aatrox: { dmgDealt: 0.05 }, // 107차: 위키 Module:ChampionData(aram dmg_dealt 1.05, dmg_taken 1)
   ashe: { dmgDealt: 0.05 },
   ahri: { healing: -0.10 },
   vex: { dmgDealt: -0.05 },

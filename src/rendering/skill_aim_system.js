@@ -25,6 +25,11 @@ const SKILL_AIM_STYLE = {
 //       rectAtPoint(지점에서 시전자 쪽으로 직사각형) | cone | trapezoid | dash(고정 거리 돌진) | blink(지점 이동) |
 //       wall(야스오 W) | unit(적 대상) | ally(아군 대상, 없으면 자기 시전) | selfAim(자기 중심 원 + 방향) | charge(바루스 Q)
 // instantIf(c): 재시전 등으로 지금은 조준 없이 바로 나가는 상태.
+// 107차: 아트록스 Q 다음 시전 단계(1~3) - 조준·사거리 표시가 단계별 모양을 따른다.
+function aatroxAimStage(c) {
+  const q = c && c._aatrox && c._aatrox.q;
+  return q && performance.now() < (q.windowUntil || 0) ? Math.min(3, q.stage || 1) : 1;
+}
 const SKILL_AIM = {
   garen: { Q: { type: 'instant' }, W: { type: 'instant' }, E: { type: 'instant' }, R: { type: 'unit', range: (c, d) => d.range } },
   darius: {
@@ -83,6 +88,19 @@ const SKILL_AIM = {
     Q: { type: 'instant' }, W: { type: 'instant' },
     E: { type: 'dash', range: (c, d) => d.rangeMax, width: (c, d) => 2 * d.halfWidth },
     R: { type: 'ally', range: () => 25000, pickLol: 3000 },
+  },
+  gwen: { // 107차 - Q 사다리꼴(앞 465), W 즉시(재사용 포함), E 지점 돌진(350), R 직선 1350(뒤 100에서)
+    Q: { type: 'trapezoid', range: (c, d) => d.length - d.backOffset, centerHalfWidth: (c, d) => d.nearWidth / 2, startHalfWidth: (c, d) => d.nearWidth / 2, endHalfWidth: (c, d) => d.farWidth / 2 },
+    W: { type: 'instant' },
+    E: { type: 'blink', range: (c, d) => d.range },
+    R: { type: 'line', range: (c, d) => d.range - d.backOffset, width: (c, d) => d.width },
+  },
+  aatrox: { // 107차 - Q는 단계별 모양(1타 직선 625×180, 2타 사다리꼴, 3타 앞 200 원 300), W 직선 825, E 돌진 300, R 즉시
+    Q: { type: 'line', range: (c, d) => aatroxAimStage(c) === 3 ? d.q3.offset + d.q3.radius : aatroxAimStage(c) === 2 ? d.q2.front : d.q1.length,
+      width: (c, d) => aatroxAimStage(c) === 2 ? d.q2.frontWidth : aatroxAimStage(c) === 3 ? d.q3.radius * 2 : d.q1.width },
+    W: { type: 'line', range: (c, d) => d.range, width: (c, d) => d.width },
+    E: { type: 'blink', range: (c, d) => d.range },
+    R: { type: 'instant' },
   },
   rammus: { // 38차
     Q: { type: 'instant' }, W: { type: 'instant' },

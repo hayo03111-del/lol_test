@@ -13,7 +13,7 @@ const startServer = require('./server.js');
   await page.waitForFunction(() => window.__e2e, null, { timeout: 60000 });
   await page.evaluate(() => { const s = document.getElementById('libraryChampSelect'); s.value = 'garen'; s.dispatchEvent(new Event('change')); });
   await page.waitForFunction(() => window.controller && window.controller.championId === 'garen', null, { timeout: 60000 }); await page.waitForTimeout(800);
-  const champs = (process.env.CHAMPS || 'garen darius masteryi leesin nautilus yasuo yone sett mordekaiser renekton nilah chogath ezreal ashe varus ahri vex rammus lux').split(' ');
+  const champs = (process.env.CHAMPS || 'garen darius masteryi leesin nautilus yasuo yone sett mordekaiser renekton nilah chogath ezreal ashe varus ahri vex rammus lux shen gwen aatrox').split(' ');
   const res = [];
   for (const ch of champs) {
     errors.length = 0;

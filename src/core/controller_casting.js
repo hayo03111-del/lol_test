@@ -44,6 +44,14 @@ const CHAMPION_DIRECT_CASTS = {
     Q: (c, m, f) => c._shenCastQ(m, f), W: (c, m, f) => c._shenCastW(m, f),
     E: (c, m, f) => c._shenCastE(m, f), R: (c, m, f) => c._shenCastR(m, f),
   },
+  gwen: { // 107차
+    Q: (c, m, f) => c._gwenCastQ(m, f), W: (c, m, f) => c._gwenCastW(m, f),
+    E: (c, m, f) => c._gwenCastE(m, f), R: (c, m, f) => c._gwenCastR(m, f),
+  },
+  aatrox: { // 107차
+    Q: (c, m, f) => c._aatroxCastQ(m, f), W: (c, m, f) => c._aatroxCastW(m, f),
+    E: (c, m, f) => c._aatroxCastE(m, f), R: (c, m, f) => c._aatroxCastR(m, f),
+  },
   rammus: {
     Q: (c, m, f) => c._rammusCastQ(m, f), W: (c, m, f) => c._rammusCastW(f),
     E: (c, m, f) => c._rammusCastE(f), R: (c, m, f) => c._rammusCastR(m, f),
@@ -398,6 +406,12 @@ CharacterController.prototype._castAbilityImpl = function(slot, mouseWorldPoint)
     }
     // 105차: 쉔 Q(검 불러들이기)·W(피난처)는 시전 시간이 없다 - 평타 중에도 바로.
     if (this.championId === 'shen' && (slot === 'Q' || slot === 'W')) {
+      this._dispatchCast(slot, mouseWorldPoint, false);
+      return;
+    }
+    // 107차: 그웬 W(시전 시간 없음)·E(다른 스킬 도중에도 쓰고 그 스킬을 끊지 않는다)·R(시전 중 이동 가능, 재시전), 아트록스 E(Q·W 도중에도)·
+    // R(시전 중 이동 가능)은 행동 게이트를 거치지 않는다(위키). 사용 가능 여부(군중 제어·침묵·비용)는 각 시전 함수가 확인한다.
+    if ((this.championId === 'gwen' && (slot === 'W' || slot === 'E' || slot === 'R')) || (this.championId === 'aatrox' && (slot === 'E' || slot === 'R'))) {
       this._dispatchCast(slot, mouseWorldPoint, false);
       return;
     }
@@ -1976,7 +1990,7 @@ CharacterController.prototype._isMovementAbility = function(slot) {
   const id = this.championId, now = performance.now();
   switch (id) {
     case 'yasuo': return slot === 'E';
-    case 'renekton': case 'nilah': case 'ezreal': return slot === 'E';
+    case 'renekton': case 'nilah': case 'ezreal': case 'gwen': case 'aatrox': return slot === 'E'; // 107차: 그웬·아트록스 E 돌진
     case 'ahri': return slot === 'R';
     case 'darius': case 'sett': return slot === 'R';
     case 'leesin':

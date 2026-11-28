@@ -186,6 +186,8 @@ CharacterController.prototype._die = function() {
     if (this.championId === 'rammus' && typeof this._rammusReset === 'function') this._rammusReset();
     if (this.championId === 'lux' && typeof this._luxReset === 'function') this._luxReset();
     if (this.championId === 'shen' && typeof this._shenOnDeath === 'function') this._shenOnDeath(); // 105차: 강화 평타·궁극기 집중·피난처 정리(검은 남는다)
+    if (this.championId === 'gwen' && typeof this._gwenOnDeath === 'function') this._gwenOnDeath(); // 107차: 안개·재시전 창 정리
+    if (this.championId === 'aatrox' && typeof this._aatroxOnDeath === 'function') this._aatroxOnDeath(); // 107차: Q 창·사슬·R 정리
     // 세트 R 도중 사망: 위 _clearActionTimers()가 시퀀스를 끊으면 잡힌 대상의 제압(isGrabbedBySett)이
     // 풀리지 않고 영구히 남았다 - 정상 종료 함수로 대상을 먼저 풀어준다.
     if (this._sett?.rSeq) { this.pendingMove = null; this.pendingCast = null; this.currentTarget = null; this._settEndR(this._sett.rSeq, true); }

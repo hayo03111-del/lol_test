@@ -271,6 +271,31 @@ const championAbilityDatabase = {
     E: { animationNames: ['Spell3'], animationPatterns: [/^spell3$/i] },
     R: { animationNames: ['Spell4'], animationPatterns: [/^spell4$/i] },
   },
+  // 107차: 그웬.glb(96클립) - 평타 Attack1~3 + Crit. Q는 Spell1_0(앞), W Spell2, E Spell3_Dash(돌진) → Spell3_to_Run/Into_IDLE,
+  // R은 첫 시전 Spell4_0·재시전 Spell4.anm. 대기·이동은 Idle.anm·Run.anm(Idle2·3, Run2·3은 감정 표현 변형).
+  gwen: {
+    idleAnimationNames: ['Idle.anm'],
+    moveAnimationNames: ['Run.anm'],
+    attackAnimationNames: ['Attack1', 'Attack2', 'Attack3'],
+    Q: { animationNames: ['Spell1_0'], animationPatterns: [/^spell1_0$/i] },
+    W: { animationNames: ['Spell2'], animationPatterns: [/^spell2$/i] },
+    E: { animationNames: ['Spell3_Dash'], animationPatterns: [/^spell3_dash$/i], exitClips: { idle: 'Spell3_Into_IDLE', move: 'Spell3_to_Run.anm' } },
+    R: { animationNames: ['Spell4_0', 'Spell4.anm'], animationPatterns: [/^spell4_0$/i, /^spell4\.anm$/i] },
+  },
+  // 107차: 아트록스.glb(103클립) - 기본 Q·W 클립(Spell1·Spell2)이 없다. Q는 3단 휘두르기 Q1_Ult·Q2_Ult·Q3_Ult(같은 동작의 변신판)를,
+  // W는 시전 동작 없이(0.25초 시전) 방향만 돌린다. E Spell3, R Spell4(포효). 패시브 강화 평타 Passive_Attack.
+  // R 중에는 대기·이동·평타가 변신 동작(Idle_Ult_Base·Run_Ult·Attack1_Ult/2_Ult)으로 바뀐다(서브 상태 R).
+  aatrox: {
+    idleAnimationNames: ['Idle1'],
+    moveAnimationNames: ['Run_Base'],
+    attackAnimationNames: ['Attack1', 'Attack2', 'Attack3'],
+    passiveAttackClip: 'Passive_Attack',
+    Q: { animationNames: ['Q1_Ult', 'Q2_Ult', 'Q3_Ult'], animationPatterns: [/^q[123]_ult$/i], castClips: ['Q1_Ult', 'Q2_Ult', 'Q3_Ult'] },
+    W: { animationNames: [], animationPatterns: [] },
+    E: { animationNames: ['Spell3'], animationPatterns: [/^spell3$/i], ultClip: 'Spell3_ULT' },
+    R: { animationNames: ['Spell4'], animationPatterns: [/^spell4$/i], ultAttackClips: ['Attack1_Ult', 'Attack2_Ult'],
+      substateLocomotion: { idleClips: ['Idle_Ult_Base'], moveClips: ['Run_Ult'] } },
+  },
   rammus: {
     idleAnimationNames: ['Idle1'],
     moveAnimationNames: ['Run'],

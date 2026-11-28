@@ -20,7 +20,7 @@ MIRROR = 'https://raw.githubusercontent.com/InFinity54/LoL_DDragon/master/latest
 CHAMPS = {
     'garen': 'Garen', 'darius': 'Darius', 'masteryi': 'MasterYi', 'leesin': 'LeeSin', 'nautilus': 'Nautilus', 'yasuo': 'Yasuo',
     'yone': 'Yone', 'sett': 'Sett', 'mordekaiser': 'Mordekaiser', 'renekton': 'Renekton', 'nilah': 'Nilah', 'chogath': 'Chogath',
-    'ezreal': 'Ezreal', 'ashe': 'Ashe', 'varus': 'Varus', 'ahri': 'Ahri', 'vex': 'Vex', 'rammus': 'Rammus', 'lux': 'Lux',
+    'ezreal': 'Ezreal', 'ashe': 'Ashe', 'varus': 'Varus', 'ahri': 'Ahri', 'vex': 'Vex', 'rammus': 'Rammus', 'lux': 'Lux', 'shen': 'Shen', 'gwen': 'Gwen', 'aatrox': 'Aatrox',
 }
 
 

@@ -305,6 +305,8 @@ class CharacterController {
     this._rammus = { roll: null, wUntil: 0, wStartedAt: 0, wArmor: 0, wMr: 0, jump: null, aftershocks: null, spin: null }; // 38차 람머스(rammus.js)
     if (typeof this._luxReset === 'function') this._luxReset(); else this._lux = null; // 47차 럭스(lux.js) - 남은 구체·영역 메시 정리
     if (typeof this._shenReset === 'function') this._shenReset(); else this._shen = null; // 105차 쉔(shen.js) - 영혼의 검·피난처 메시 정리
+    if (typeof this._gwenReset === 'function') this._gwenReset(); else this._gwen = null; // 107차 그웬(gwen.js) - 안개 메시 정리
+    if (typeof this._aatroxReset === 'function') this._aatroxReset(); else this._aatrox = null; // 107차 아트록스(aatrox.js) - 사슬 메시·크기 정리
     this._nautilus = {
       passiveReadyAt: new Map(),
       qPending: null, qTravel: null, qPull: null,
@@ -364,6 +366,8 @@ class CharacterController {
     this.pendingMove = null; this.pendingCast = null; this.targetPos = null; this._approachCast = null;
     if (typeof clearStatusesFromSource === 'function' && typeof listEntities === 'function') clearStatusesFromSource(this, listEntities()); // 94차
     if (typeof this._shenReset === 'function' && this._shenFx && this._shenFx.blade) this._shenReset(); // 105차: 쉔 영혼의 검(씬 메시) - 교체·봇 제거 때 남지 않게
+    if (typeof this._gwenReset === 'function' && this._gwenFx && this._gwenFx.mist) this._gwenReset(); // 107차: 그웬 안개 메시
+    if (typeof this._aatroxReset === 'function' && this._aatroxFx && this._aatroxFx.chain) this._aatroxReset(); // 107차: 아트록스 사슬 메시
     // 챔피언 교체/재선택 중 이전 레넥톤의 지속 R 오라가 남지 않도록 정리한다.
     if (this._renekton?.rAuraVfx && typeof vfx !== 'undefined') {
       vfx.stopRenektonRAura(this._renekton.rAuraVfx);
@@ -523,9 +527,11 @@ class CharacterController {
       this.stats.windupPercent = base.windupPercent != null ? base.windupPercent : 0.4;
       this.stats.windupModifier = base.windupModifier != null ? base.windupModifier : 1;
       this.stats.attackSpeedRatio = base.attackSpeedRatio || base.baseAttackSpeed;
-      this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0) + (this.runeArmor || 0);
+      if (this.championId === 'aatrox' && typeof this._aatroxRAdPercent === 'function') this.stats.attackDamage *= 1 + this._aatroxRAdPercent() / 100; // 107차: 아트록스 R 공격력 +20~40%
+      const gwenRes = (this.championId === 'gwen' && typeof this._gwenMistResist === 'function') ? this._gwenMistResist() : 0; // 107차: 그웬 W 안개 안 방어력·마법 저항력
+      this.stats.armor = base.armor + (this.bonusArmor || 0) + (this.itemBonusArmor || 0) + (this.itemTempArmorBonus || 0) + (this.runeArmor || 0) + gwenRes;
       this.stats.baseArmor = base.armor;
-      this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0) + (this.itemTempMrBonus || 0) + (this.runeMr || 0);
+      this.stats.magicResist = base.magicResist + (this.bonusMr || 0) + (this.itemBonusMr || 0) + (this.itemTempMrBonus || 0) + (this.runeMr || 0) + gwenRes;
       // 민첩성의 망토(치명타확률 15%) 등 - 이 프로젝트의 기본 챔피언 스탯에는
       // 애초에 크리티컬 확률이 없고(요네/야스오만 자체 패시브로 매 프레임
       // stats.critChance를 1로 강제 재설정 - _yoneTick/_yasuoTick 참고),
@@ -1349,7 +1355,9 @@ class CharacterController {
     const renektonRRange = (this.championId === 'renekton' && this._renekton && this._renekton.rActive) ? (CHAMPION_DATA.renekton.R.bonusAttackRange || 0) : 0;
     const chogathRange = (this.championId === 'chogath' && typeof chogathFeastBonus === 'function') ? chogathFeastBonus(this).attackRangeLol : 0; // 81차: 포식 중첩 평타 사거리
     const shenRange = (this.championId === 'shen' && typeof this._shenQRangeBonusLol === 'function') ? this._shenQRangeBonusLol() : 0; // 105차: 황혼의 습격 강화 평타 사거리 +75
-    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange + shenRange);
+    const gwenRange = (this.championId === 'gwen' && typeof this._gwenRangeBonusLol === 'function') ? this._gwenRangeBonusLol() : 0; // 107차: 그웬 E 강화 평타 사거리 +75
+    const aatroxRange = (this.championId === 'aatrox' && typeof this._aatroxRangeBonusLol === 'function') ? this._aatroxRangeBonusLol() : 0; // 107차: 아트록스 패시브 강화 평타 사거리 +50
+    this.stats.attackRange = (this._attackRangeBaseWorld || this.stats.attackRange) + lolRangeToWorld((this._itemTempAttackRangeBonusLol || 0) + renektonRRange + chogathRange + shenRange + gwenRange + aatroxRange);
     // 83차: 공격 속도 감소(얼어붙은 심장 등)는 "총 공격 속도"에 곱한다(출처끼리 곱연산) - 예전엔 추가 공속에서 뺐다.
     this.stats.attackSpeedMultiplier = typeof getAttackSpeedReductionMultiplier === 'function' ? getAttackSpeedReductionMultiplier(this) : 1;
     // 바루스 패시브(살아있는 복수) 중에는 공격 속도 상한 3.33(원작).
@@ -1491,6 +1499,8 @@ class CharacterController {
     if (typeof this._rammusUpdate === 'function') this._rammusUpdate(dt);
     if (typeof this._luxUpdate === 'function') this._luxUpdate(dt);
     if (typeof this._shenUpdate === 'function') this._shenUpdate(dt);
+    if (typeof this._gwenUpdate === 'function') this._gwenUpdate(dt);
+    if (typeof this._aatroxUpdate === 'function') this._aatroxUpdate(dt);
     if (typeof itemSystemTick === 'function') itemSystemTick(this, dt);
   }
 }

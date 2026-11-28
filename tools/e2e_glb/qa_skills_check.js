@@ -2,7 +2,7 @@
 // 사용법: THREE_DIR=<three package> E2E_HIDE_MAP=1 node tools/e2e_glb/qa_skills_check.js [챔피언ID...]  → JSON(챔피언별 결과) 출력
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const startServer = require('./server.js');
-const ALL = ['garen', 'darius', 'masteryi', 'leesin', 'nautilus', 'yasuo', 'yone', 'sett', 'mordekaiser', 'renekton', 'nilah', 'chogath', 'ezreal', 'ashe', 'varus', 'ahri', 'vex', 'rammus', 'lux'];
+const ALL = ['garen', 'darius', 'masteryi', 'leesin', 'nautilus', 'yasuo', 'yone', 'sett', 'mordekaiser', 'renekton', 'nilah', 'chogath', 'ezreal', 'ashe', 'varus', 'ahri', 'vex', 'rammus', 'lux', 'shen', 'gwen', 'aatrox'];
 const SLOTS = ['Q', 'W', 'E', 'R'];
 // 조준 방식(skill_aim_system.js의 skillAimSpec 결과). unit = 커서 아래 적을 대상으로 잡고 시전(실제 입력 경로 skillAim.cast와 같게 currentTarget을 잡는다)
 const UNIT = new Set(['garenR', 'dariusR', 'settR', 'yasuoE', 'yasuoR', 'nilahE', 'mordekaiserR', 'nautilusR', 'masteryiQ', 'rammusE', 'chogathR', 'leesinR', 'leesinQ2']);

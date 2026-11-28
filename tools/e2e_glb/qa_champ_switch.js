@@ -24,7 +24,7 @@ const startServer = require('./server.js');
     const c = window.controller, E = window.__e2e;
     let meshes = 0, objs = 0; E.scene.traverse((o) => { objs++; if (o.isMesh || o.isSprite || o.isPoints || o.isLine) meshes++; });
     const domBars = document.querySelectorAll('.champBar, #enemyLabel, .enemyLabel').length;
-    const ownStates = Object.keys(c).filter((k) => /^_(nilah|yone|renekton|chogath|morde|sett|garen|darius|leesin|yasuo|masteryi|vex|ahri|ashe|varus|ezreal|lux|rammus|nautilus)$/.test(k) && c[k]);
+    const ownStates = Object.keys(c).filter((k) => /^_(nilah|yone|renekton|chogath|morde|sett|garen|darius|leesin|yasuo|masteryi|vex|ahri|ashe|varus|ezreal|lux|rammus|nautilus|shen|gwen|aatrox)$/.test(k) && c[k]);
     return {
       champ: c.championId, state: c.state, key: c.currentActionKey, phase: c.currentPhase, target: !!c.currentTarget, pendingCast: !!c.pendingCast, pendingMove: !!c.pendingMove,
       attackMove: !!c._attackMoveDest, ccBuf: !!c._ccBufferedMove, dash: !!c._dashState, timers: (c._actionTimers || []).length,

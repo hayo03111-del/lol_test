@@ -151,6 +151,7 @@ function rewardChampionKill(victim) {
     paid += g;
     killer._bounty = Math.min(CHAMPION_BOUNTY_MAX, (killer._bounty || 0) + g / 2);
     if (typeof recordChampionTakedown === 'function') recordChampionTakedown(killer, true);
+    if (typeof aatroxOnTakedown === 'function') aatroxOnTakedown(killer); // 107차: 아트록스 R 연장
   }
   if (assisters.length) {
     const each = CHAMPION_ASSIST_GOLD_POOL / assisters.length;
@@ -159,6 +160,7 @@ function rewardChampionKill(victim) {
       paid += g;
       a._bounty = Math.min(CHAMPION_BOUNTY_MAX, (a._bounty || 0) + g / 2);
       if (typeof recordChampionTakedown === 'function') recordChampionTakedown(a, false);
+      if (typeof aatroxOnTakedown === 'function') aatroxOnTakedown(a); // 107차
     }
   }
   victim._bounty = Math.max(0, bounty - paid / 4);

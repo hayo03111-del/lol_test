@@ -304,7 +304,8 @@ function getHealReceivedMultiplier(target) {
   if (!target) return 1;
   // 83차: 칼바람 챔피언별 치유 보정(이 연습장에서 챔피언이 받는 치유는 전부 자기 치유라 받는 쪽에 곱한다).
   const bal = typeof getAramBalance === 'function' ? getAramBalance(target) : null;
-  return (1 + (target.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(target)) * (1 + ((bal && bal.healing) || 0));
+  const aatroxAmp = typeof aatroxHealAmp === 'function' ? aatroxHealAmp(target) : 0; // 107차: 아트록스 R 받는 회복 +50~100%
+  return (1 + (target.itemHealingReceivedBonusPercent || 0)) * (1 - getGrievousPercent(target)) * (1 + ((bal && bal.healing) || 0)) * (1 + aatroxAmp);
 }
 // 받는 보호막 배율(정령의형상/월석재생기 등의 "보호막 효과 증가") - 아이템
 // 보호막은 이미 이 필드를 곱하고 있었다. 챔피언 스킬 보호막도 같은 배율을 쓴다.

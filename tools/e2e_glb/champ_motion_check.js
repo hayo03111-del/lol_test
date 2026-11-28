@@ -10,7 +10,7 @@ const startServer = require('./server.js');
 (async () => {
   const srv = await startServer(); const port = srv.address().port;
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--disable-gpu-vsync', '--disable-frame-rate-limit'] });
-  const ids = process.argv.slice(2).length ? process.argv.slice(2) : ['garen', 'darius', 'masteryi', 'leesin', 'nautilus', 'yasuo', 'yone', 'sett', 'mordekaiser', 'renekton', 'nilah', 'chogath', 'ezreal', 'ashe', 'varus', 'ahri', 'vex', 'rammus', 'lux'];
+  const ids = process.argv.slice(2).length ? process.argv.slice(2) : ['garen', 'darius', 'masteryi', 'leesin', 'nautilus', 'yasuo', 'yone', 'sett', 'mordekaiser', 'renekton', 'nilah', 'chogath', 'ezreal', 'ashe', 'varus', 'ahri', 'vex', 'rammus', 'lux', 'shen', 'gwen', 'aatrox'];
   const shotDir = null;
   const all = {};
   for (const id of ids) {

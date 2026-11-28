@@ -175,6 +175,11 @@ function updateSkillUI(cooldowns) {
       if (cdEl) cdEl.remove();
       slot.classList.add('ready');
     }
+    // 107차: 그웬 Q 가위질 중첩(0~4) 배지
+    if (key === 'Q' && typeof controller !== 'undefined' && controller && controller.championId === 'gwen' && controller._gwen) {
+      const st = controller._gwen, n = (st.snipsUntil || 0) > performance.now() ? (st.snips || 0) : 0;
+      if (n > 0) { const b = document.createElement('div'); b.className = 'charges'; b.textContent = `${n}/${controller._champData().Q.maxStacks}`; slot.appendChild(b); }
+    }
     if (typeof controller !== 'undefined' && controller && controller.championId === 'renekton' && ['Q','W','E'].includes(key)) {
       const empowered = (controller._renekton?.rage || 0) >= 50;
       slot.classList.toggle('empowered', empowered);

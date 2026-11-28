@@ -43,7 +43,7 @@ function botCanSee(bot, unit) {
 // 상대 팀 챔피언(살아 있고 대상 지정 가능, 봇 팀에게 보임) - 가까운 순.
 function botEnemyChampions(bot) {
   return listChampionUnits()
-    .filter((c) => c && c !== bot && c.team !== bot.team && isChampionAlive(c) && !c.isUntargetable && botCanSee(bot, c)
+    .filter((c) => c && c !== bot && c.team !== bot.team && isChampionAlive(c) && !c.isUntargetable && !(typeof gwenMistHides === 'function' && gwenMistHides(c, bot)) && botCanSee(bot, c)
       && (typeof canRealmInteract !== 'function' || canRealmInteract(bot, c)))
     .sort((a, b) => _botDist(bot, a) - _botDist(bot, b));
 }

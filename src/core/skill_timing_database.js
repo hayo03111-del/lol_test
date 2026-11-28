@@ -88,6 +88,13 @@ const SKILL_TIMING_DATABASE = {
   shen: {
     R: { eventTime: 0, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
   },
+  // 107차: 그웬·아트록스 GLB에도 Channel 클립이 있지만 R은 채널형이 아니다(실제 시전은 gwen.js·aatrox.js) - 자동 채널 추정을 끈다.
+  gwen: {
+    R: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: false, lockAbility: false },
+  },
+  aatrox: {
+    R: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: false, lockAbility: false },
+  },
   ashe: {
     W: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
     E: { eventTime: 0.25, recovery: ENGINE_BUFFER, lockMove: true, lockAbility: true },
@@ -139,6 +146,8 @@ const CHAMPION_ALIASES = {
   'rammus':'rammus', '람머스':'rammus',
   'lux':'lux', '럭스':'lux',
   'shen':'shen', '쉔':'shen',
+  'gwen':'gwen', '그웬':'gwen',
+  'aatrox':'aatrox', '아트록스':'aatrox',
   'blitzcrank':'blitzcrank', '블리츠크랭크':'blitzcrank',
   'leesin':'leesin', '리신':'leesin',
   'masteryi':'masteryi', '마스터이':'masteryi',

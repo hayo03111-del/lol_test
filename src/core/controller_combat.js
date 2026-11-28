@@ -181,6 +181,8 @@ CharacterController.prototype._onBasicAttackHit = function(target, overrideId, w
     if (this.championId === 'renekton') this._renektonOnBasicAttackHit(target);
     if (this.championId === 'lux') this._luxOnBasicAttackHit(target); // 47차: 광채 표식 터뜨리기
     if (this.championId === 'shen') this._shenOnBasicAttackHit(target); // 105차: 황혼의 습격 강화 평타
+    if (this.championId === 'gwen') this._gwenOnBasicAttackHit(target); // 107차: 가위 난도질·가위질 중첩·E 강화 평타
+    if (this.championId === 'aatrox') this._aatroxOnBasicAttackHit(target, overrideId); // 107차: 사신 태세
     // 아리: 여우불의 "아리가 공격한 적" 우선순위 판정에 쓸 마지막 평타
     // 대상/시각을 기록한다(공식 설명 "3초 내 마지막 평타 대상"과 동일).
     if (this.championId === 'ahri' && this._ahri) { this._ahri.lastAttackTarget = target; this._ahri.lastAttackAt = performance.now(); }

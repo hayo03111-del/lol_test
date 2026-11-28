@@ -66,6 +66,8 @@
     "src/champions/rammus.js",
     "src/champions/shen.js",
     "src/champions/lux.js",
+    "src/champions/gwen.js",
+    "src/champions/aatrox.js",
     "src/core/controller_post_class_helpers.js",
     "src/world/dummy_enemy.js",
     "src/world/ally_dummy.js",

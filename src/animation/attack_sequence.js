@@ -59,6 +59,8 @@ const ATTACK_SEQUENCE_OVERRIDES = {
   rammus: ['attack1', 'attack2'], // 38차: 실제 GLB 평타 2개(+Crit)
   lux: ['attack1', 'attack2'], // 47차: 실제 GLB 평타 2개(+Crit)
   shen: ['attack1', 'attack2'], // 105차: 실제 GLB 평타 2개(+Crit)
+  gwen: ['attack1', 'attack2', 'attack3'], // 107차: 실제 GLB 평타 3개(+Crit)
+  aatrox: ['attack1', 'attack2', 'attack3'], // 107차: 실제 GLB 평타 3개(+Crit)
 };
 // 시퀀스 배열에서의 위치를 챔피언 고유의 "손/방향" 의미로 변환한다.
 // 새 챔피언이 추가되면 이 매핑만 확장하면 된다 - 애니메이션 선택 로직
@@ -132,6 +134,8 @@ const SKILL_HITBOX_SHAPE = {
   vex: { Q: { type: 'line', widthField: 'widthAfterAccel' }, R: { type: 'line', widthField: 'width' } },
   ahri: { Q: { type: 'line', widthField: 'width' }, E: { type: 'line', widthField: 'width' } },
   lux: { Q: { type: 'line', widthField: 'width' }, W: { type: 'line', widthField: 'width' }, R: { type: 'line', widthField: 'width' } },
+  gwen: { R: { type: 'line', widthField: 'width' } }, // 107차
+  aatrox: { W: { type: 'line', widthField: 'width' } }, // 107차
 };
 // 45차: 링 길이를 범용 필드(range/range1/radius…)로 못 맞추는 스킬. 숫자(LoL) = 그 길이, null = 표시 안 함(사거리가 없는 스킬).
 // 예전엔 실제로 쓰이지 않는 필드(야스오 W 400, 레넥톤 W 175, 초가스 E 500, 아리 W 600, 바루스 W 750)를 그리거나,
@@ -143,6 +147,8 @@ const SKILL_RING_RANGE = {
   chogath: { E: () => null },
   rammus: { R: (c) => (typeof c._rammusRRangeLol === 'function' ? c._rammusRRangeLol() : null) },
   shen: { Q: () => null, W: (c, d) => d.radius, R: () => null }, // 105차: Q는 사거리 없음(검을 불러들임), R은 전 맵
+  gwen: { Q: (c, d) => d.length - d.backOffset, W: (c, d) => d.radius }, // 107차: Q 앞 465, W 안개 반경
+  aatrox: { Q: (c, d) => aatroxAimStage(c) === 3 ? d.q3.offset + d.q3.radius : aatroxAimStage(c) === 2 ? d.q2.front : d.q1.length, R: (c, d) => d.fearRadius }, // 107차
   nilah: { R: (c, d) => d.damageRadius },
   varus: { Q: (c, d) => d.maxRange, W: () => null },
   ahri: { W: (c, d) => d.acquisitionRange, R: (c, d) => d.dashDistance },

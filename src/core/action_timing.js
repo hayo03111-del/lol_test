@@ -109,6 +109,11 @@ function buildActionData(resolver, abilityResolver) {
     const existing = asheAttackNames.filter((n) => resolver.clipByName(n));
     if (existing.length) attackVariants = existing;
   }
+  // 107차: 그웬·아트록스 평타는 Attack1~3(전환 클립 Attack1_To_Idle·변신 평타 Attack1_Ult 제외).
+  if (abilityResolver.championId === 'gwen' || abilityResolver.championId === 'aatrox') {
+    const existing = (championAbilityDatabase[abilityResolver.championId].attackAnimationNames || []).filter((n) => resolver.clipByName(n));
+    if (existing.length) attackVariants = existing;
+  }
   // 버그 수정(실제 GLB로 직접 확인함 - 1차 수정에서 실수했던 부분을
   // duration까지 확인하고 정정함): 범용 "attack" 역할 매칭은 이름에
   // "attack1"/"attack2"가 들어간 클립을 전부 같은 점수(100점)로 채점하고
@@ -337,6 +342,13 @@ function buildActionData(resolver, abilityResolver) {
     const adb = championAbilityDatabase.ashe;
     if (resolver.clipByName(adb.idleAnimationNames?.[0])) data.idle = { clips: [adb.idleAnimationNames[0]] };
     if (resolver.clipByName(adb.moveAnimationNames?.[0])) data.move = { clips: [adb.moveAnimationNames[0]] };
+  }
+  // 107차: 그웬·아트록스 - 이름에 idle/run/attack이 들어간 전환·변신·감정 표현 클립(Spell3_Into_IDLE, Idle_Ult_Base, Run_Ult,
+  // Attack1_To_Idle, Attack1_Ult 등)이 많아 자동 채점이 엉뚱한 것을 고를 수 있다 - DB에 적은 진짜 반복 클립으로 고정한다.
+  if (abilityResolver.championId === 'gwen' || abilityResolver.championId === 'aatrox') {
+    const gdb = championAbilityDatabase[abilityResolver.championId];
+    if (resolver.clipByName(gdb.idleAnimationNames?.[0])) data.idle = { clips: [gdb.idleAnimationNames[0]] };
+    if (resolver.clipByName(gdb.moveAnimationNames?.[0])) data.move = { clips: [gdb.moveAnimationNames[0]] };
   }
 
   // 야스오 정지 모션은 사용자가 지정한 Idle1_Raw를 고정 사용한다(요청 9:

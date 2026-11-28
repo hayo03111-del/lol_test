@@ -14,7 +14,7 @@
    ============================================================ */
 const RUNE_STORAGE_KEY = 'lolsim.runePage.v1';
 // 적응형 능력치가 주문력으로 가는 챔피언(아이템 추가 공격력·주문력이 같을 때) - 원작은 챔피언마다 기본값이 있다.
-const RUNE_ADAPTIVE_AP_CHAMPS = new Set(['ahri', 'lux', 'vex', 'mordekaiser', 'chogath']);
+const RUNE_ADAPTIVE_AP_CHAMPS = new Set(['ahri', 'lux', 'vex', 'mordekaiser', 'chogath', 'gwen']); // 107차: 그웬(위키 adaptivetype Magic)
 const RUNE_SHARD_EFFECTS = {
   adaptive: { adaptive: 9 }, as: { asPercent: 0.10 }, ah: { ah: 8 }, ms: { msPercent: 0.02 },
   hpScale: { hpScale: [10, 180] }, hp: { hp: 65 }, tenacity: { tenacity: 0.15, slowResist: 0.15 }, // 83차: V25.22부터 강인함·둔화 저항 각 15%

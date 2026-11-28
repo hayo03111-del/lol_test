@@ -46,7 +46,7 @@ function getAllEnemyUnits(ignoreRealm = false) { // ignoreRealm: 죽음의 세�
   }
   // 챔피언(플레이어·적 챔피언 봇): 살아 있고 팀이 다르면.
   if (typeof listChampionUnits === 'function') {
-    for (const c of listChampionUnits()) if (c !== me && foe(c) && isChampionAlive(c)) list.push(c);
+    for (const c of listChampionUnits()) if (c !== me && foe(c) && isChampionAlive(c) && !(typeof gwenMistHides === 'function' && gwenMistHides(c, me))) list.push(c); // 107차: 그웬 안개 밖에서는 대상으로 못 잡는다
   }
   // 아군/적군/플레이어 시스템 - 적 진영 미니언/포탑/억제기/넥서스("team이 다르면 적" - isEnemyUnit과 같은 원칙).
   // 아군(같은 팀) 미니언/구조물은 후보에 들어가지 않으므로 "아군은 공격 불가"(요청 20-B)가 자동으로 만족된다.
